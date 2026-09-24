@@ -98,9 +98,9 @@ export function FacetAvatar({ actor, showName }: { actor: Actor; showName?: bool
  * being struck through. It stops propagation itself: it always sits inside a row or card whose own click
  * selects the task, and changing status must not double as selecting.
  *
- * `rejected` is the one option that does not write on being picked: it asks for the reason first
- * ({@link RejectReasonModal}), and hands it on with the status. Cancelling writes nothing, and the
- * control snaps back to the status it is set to.
+ * The two terminals do not write on being picked: each asks for its text first ({@link CloseTaskModal}) —
+ * `rejected` the reason, `done` the report (`AMB-D-963`) — and hands it on with the status. Cancelling
+ * writes nothing, and the control snaps back to the status it is set to.
  *
  * A task still being created is the one case with no control at all: its status cannot move anywhere
  * (`AMB-D-846`), so drawing a pull-down would only be a door that refuses. The status is written out
@@ -109,9 +109,10 @@ export function FacetAvatar({ actor, showName }: { actor: Actor; showName?: bool
 export function StatusSelect({ id, status, onStatus, premiseChange, draft, className = "inlineselect" }: {
   id: number;
   status: Status;
-  // The reason rides along with the status because one status requires it: `rejected` is refused
-  // without it, both here and in the write layer (`AMB-D-397`). It is absent for every other value.
-  onStatus: (id: number, status: Status, reason?: string) => void;
+  // The text rides along with the status because the two terminals require it: `rejected` its reason
+  // (`AMB-D-397`), `done` its report (`AMB-D-963`), refused without it both here and in the write layer.
+  // It is absent for every other value.
+  onStatus: (id: number, status: Status, text?: string) => void;
   // The holder-side safety net of `AMB-D-366`: the premises pinned on after this task was reserved, if any.
   // Leaving `in_progress` (finishing, blocking) is the moment that must not be missed — so on that
   // transition, with a change present, a firm toast fires before the change is handed on. The transition is
@@ -124,17 +125,17 @@ export function StatusSelect({ id, status, onStatus, premiseChange, draft, class
   // detail pane's action row — but it is one control, so the styling is the only thing a caller may vary.
   className?: string;
 }) {
-  const [rejecting, setRejecting] = useState(false);
-  const commit = (next: Status, reason?: string) => {
+  const [closing, setClosing] = useState<ClosingStatus | null>(null);
+  const commit = (next: Status, text?: string) => {
     if (status === "in_progress" && next !== "in_progress" && premiseChange) {
       pushNotice(tf("premise.warn", { detail: premiseChangeDetail(premiseChange) }));
     }
-    onStatus(id, next, reason);
+    onStatus(id, next, text);
   };
-  // Picking `rejected` opens the question instead of writing: the toast above fires on the way to the
-  // write, so it must not go off for a rejection that is still being reconsidered.
+  // Picking a terminal opens the question instead of writing: the toast above fires on the way to the
+  // write, so it must not go off for an ending that is still being reconsidered.
   const change = (next: Status) => {
-    if (next === "rejected") setRejecting(true);
+    if (next === "rejected" || next === "done") setClosing(next);
     else commit(next);
   };
   // The status still reads — a row keeps the column it has, and a card the footer it has — but there is
@@ -157,64 +158,75 @@ export function StatusSelect({ id, status, onStatus, premiseChange, draft, class
           <option key={s} value={s}>{statusLabel(s)}</option>
         ))}
       </select>
-      {rejecting && (
-        <RejectReasonModal
+      {closing && (
+        <CloseTaskModal
           id={id}
-          onCancel={() => setRejecting(false)}
-          onReject={(reason) => { setRejecting(false); commit("rejected", reason); }}
+          status={closing}
+          onCancel={() => setClosing(null)}
+          onClose={(text) => { setClosing(null); commit(closing, text); }}
         />
       )}
     </>
   );
 }
 
+/** The two statuses that end a task, each asked for its text before it is written. */
+export type ClosingStatus = "done" | "rejected";
+
 /**
- * What the pull-down asks before a task is rejected: why it will not be done. The reason is **required**,
- * and this is the surface that makes it so — the confirm button is dead until something is typed, so there
- * is no path from the pull-down to `rejected` that skips it (`AMB-D-397`; the CLI's `--reason` is required
- * for the same reason, and the command refuses an empty one whichever door it came through).
+ * What is asked before a task ends: for `rejected`, why it will not be done (`AMB-D-397`); for `done`, what
+ * was done (`AMB-D-963`). The text is **required**, and this is the surface that makes it so — the confirm
+ * button is dead until something is typed, so there is no path to either terminal that skips it (the CLI's
+ * `--reason` and `--report` land the same way, and the commands refuse an empty one whichever door it came
+ * through). The status pull-down asks it, and so does the board when a card is let go over the done column.
  *
  * It is a modal and not a native `prompt()`, which the Tauri webview does not implement (see `core/dialog`,
  * where the confirmation dialog had to go native for the same reason — there is no native text prompt to
  * delegate to). Esc and the cancel button both write nothing.
  */
-function RejectReasonModal({ id, onCancel, onReject }: {
+export function CloseTaskModal({ id, status, onCancel, onClose }: {
   id: number;
+  status: ClosingStatus;
   onCancel: () => void;
-  onReject: (reason: string) => void;
+  onClose: (text: string) => void;
 }) {
   const [text, setText] = useState("");
-  const reason = text.trim();
-  const submit = () => { if (reason) onReject(reason); };
+  const body = text.trim();
+  const submit = () => { if (body) onClose(body); };
+  // Spelled out per status rather than assembled, so every key stays a literal the source-key gate reads.
+  const words = status === "done"
+    ? { title: tf("done.title", { ref: taskRef(id) }), why: t("done.why"), placeholder: t("done.placeholder"), confirm: t("done.confirm"), cancel: t("done.cancel") }
+    : { title: tf("reject.title", { ref: taskRef(id) }), why: t("reject.why"), placeholder: t("reject.placeholder"), confirm: t("reject.confirm"), cancel: t("reject.cancel") };
   return createPortal(
     <div
       className="modal__overlay modal__overlay--raised"
       onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onCancel(); }}
     >
-      <div className="rejectask__modal" role="dialog" aria-modal="true" aria-labelledby="rejectask-title">
-        <div className="rejectask__title" id="rejectask-title">{tf("reject.title", { ref: taskRef(id) })}</div>
-        <div className="rejectask__why">{t("reject.why")}</div>
+      <div className="closeask__modal" role="dialog" aria-modal="true" aria-labelledby="closeask-title">
+        <div className="closeask__title" id="closeask-title">{words.title}</div>
+        <div className="closeask__why">{words.why}</div>
         <textarea
           {...asTyped}
-          className="rejectask__input"
+          className="closeask__input"
           autoFocus
           rows={4}
           value={text}
-          placeholder={t("reject.placeholder")}
+          placeholder={words.placeholder}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             // ⌘/Ctrl+Enter submits, as every other multi-line body in the app does — a bare Enter is a
-            // newline, and a reason worth keeping is often more than one line.
+            // newline, and a reason or a report worth keeping is often more than one line.
             if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
             if (e.key === "Escape") onCancel();
           }}
         />
         <div className="buttonrow">
-          <button className="btn btn--primary" disabled={!reason} onClick={submit}>
-            {t("reject.confirm")}
+          <button className="btn btn--primary" disabled={!body} onClick={submit}>
+            {words.confirm}
           </button>
-          <button className="btn" onClick={onCancel}>{t("reject.cancel")}</button>
+          <button className="btn" onClick={onCancel}>{words.cancel}</button>
         </div>
       </div>
     </div>,

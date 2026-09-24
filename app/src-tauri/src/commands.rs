@@ -2097,6 +2097,35 @@ pub fn task_status(id: i64, status: String) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["tasks"]).task(id))
 }
 
+/// Mark a task done with its completion report (`AMB-D-963`) — the same shape as the CLI's
+/// `task done <id> --report <what was done>`, and [`task_reject`]'s sibling: the report is to `done`
+/// what the reason is to `rejected`. It lands as a comment in the **same write** as the transition
+/// (core's `complete_task_with_report`), written while the task is still open, so it is never left to a
+/// comment after the task has closed.
+///
+/// Every surface that can reach `done` collects the report before it calls, so an empty one is a slip
+/// rather than a choice: it is refused here, and nothing is written. `task_status` can still reach
+/// `done`, as it can `rejected`; the GUI does not take that road.
+#[tauri::command]
+pub fn task_done(id: i64, report: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let report = report.trim();
+        if report.is_empty() {
+            return Err(amenbo_core::Error::invalid("a task is done with its report — say what was done").into());
+        }
+        let old = store.task(id)?.map(|t| t.status).unwrap_or_default();
+        if old == TaskStatus::Done {
+            // Idempotent, and the report is not piled on: re-marking changes nothing, so it has nothing
+            // new to report (the CLI's `task done --report` behaves the same).
+            return Ok(());
+        }
+        store.complete_task_with_report(id, Some(report), ActorKind::Human)?;
+        emit(store, id, amenbo_core::activity_log::event::task_status_changed(old.as_str(), TaskStatus::Done.as_str()));
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]).task(id))
+}
+
 /// End a task that will not be done, with the reasoning kept (`AMB-D-397`) — the same shape as the
 /// CLI's `task reject <id> --reason <why>`. `task_status` above can reach `rejected` too, and this
 /// exists for what that path cannot ask for: **the reason, which is required**. It is the part worth
@@ -6068,6 +6097,54 @@ pub(crate) mod tests {
         assert!(c.blocked_by_decisions.is_empty(), "a settled premise no longer holds it back");
         assert_eq!(c.linked_decisions.len(), 1, "the link itself remains (traceability)");
         task_status(task, "in_progress".into()).expect("reservation succeeds once the premise settles");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// `task_done` carries the completion report (`AMB-D-963`): it lands on the timeline in the same
+    /// write as the transition, an empty one is refused with nothing written, and re-marking a done task
+    /// does not pile a second copy on.
+    #[test]
+    fn task_done_keeps_the_report_and_refuses_an_empty_one() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("done-report");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let task = task_add(Some(project_id), "やり終えた作業".into(), None, None, None).unwrap().tasks[0];
+        finish_creating(task);
+        let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
+
+        let err = task_done(task, "   ".into()).err().expect("an empty report must be refused");
+        assert_eq!(err.code, "invalid_value", "the refusal carries core's code, not a GUI-local one");
+        assert_eq!(card(task).status, "todo", "and nothing was written — the status did not move");
+        assert_eq!(card(task).comments, 0, "nor was a blank comment left behind");
+
+        let ack = task_done(task, "  入口を足して、テストで押さえた  ".into()).unwrap();
+        assert_eq!(ack.tasks, vec![task], "the done acks its task");
+        let c = card(task);
+        assert_eq!(c.status, "done");
+        assert!(c.completed_at.is_some(), "carried out — the completion time is set");
+        assert_eq!(c.comments, 1, "the report is kept, as a comment");
+        let body = {
+            let store = Store::open().unwrap();
+            store.comment_list(task, None, None).unwrap().comments[0].text.clone()
+        };
+        assert_eq!(body, "入口を足して、テストで押さえた", "trimmed, and otherwise as it was given");
+
+        task_done(task, "二度目の報告".into()).unwrap();
+        assert_eq!(card(task).comments, 1, "re-marking changes nothing, so it reports nothing twice");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

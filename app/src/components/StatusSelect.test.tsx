@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// The pull-down is the GUI's only door to `rejected`, and the door is what is under test: the reason is
-// asked for before anything is written, an unanswered question writes nothing, and every other value
-// still lands on the first pick. Only the snapshot boundary is stubbed (the language i18n reads, and the
-// facet roster); the control's own branching runs for real.
+// The pull-down is a door to the two terminals, and the door is what is under test: the reason for
+// `rejected` and the report for `done` are asked for before anything is written, an unanswered question
+// writes nothing, and every other value still lands on the first pick. Only the snapshot boundary is
+// stubbed (the language i18n reads, and the facet roster); the control's own branching runs for real.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -76,10 +76,27 @@ describe("StatusSelect", () => {
     expect(values).toEqual(["todo", "in_progress", "blocked", "done", "rejected"]);
   });
 
-  it("writes the ordinary values on the pick itself, with no reason attached", async () => {
+  it("writes the ordinary values on the pick itself, with no text attached", async () => {
+    await render();
+    await pick("blocked");
+    expect(calls).toEqual([[7, "blocked", undefined]]);
+    expect(dialog()).toBeNull();
+  });
+
+  it("asks for the report before marking done, and hands it on with the status", async () => {
     await render();
     await pick("done");
-    expect(calls).toEqual([[7, "done", undefined]]);
+    expect(calls).toEqual([]); // Nothing is written while the question is still up (`AMB-D-963`).
+    expect(dialog()).not.toBeNull();
+
+    const input = document.querySelector<HTMLTextAreaElement>("[role=dialog] textarea")!;
+    // The confirm is dead until something is typed — this is what makes the report required.
+    expect(button("完了にする").disabled).toBe(true);
+    await type(input, "  入口を足して、テストで押さえた  ");
+    expect(button("完了にする").disabled).toBe(false);
+    await act(async () => button("完了にする").click());
+
+    expect(calls).toEqual([[7, "done", "入口を足して、テストで押さえた"]]);
     expect(dialog()).toBeNull();
   });
 

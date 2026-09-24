@@ -375,6 +375,27 @@ export async function setStatus(id: number, status: Status): Promise<void> {
 }
 
 /**
+ * Mark a task done with its completion report (`AMB-D-963`) — the write behind every surface's `done`. The
+ * report is to `done` what the reason is to `rejected`: this is what `setStatus` cannot ask for, and the CLI
+ * draws the same line with `task done --report`. It lands as a comment in the same write as the transition.
+ */
+export async function completeTask(id: number, report: string): Promise<void> {
+  if (inTauri()) return invokeAck("task_done", { id, report });
+  // The mock trims and refuses as the command does, so browser iteration is not the one place a task can
+  // be marked done with nothing said about what was done.
+  const text = report.trim();
+  if (!text) {
+    throw mockErr("invalid_value", "a task is done with its report — say what was done");
+  }
+  const t = getSnapshot().tasks.find((x) => x.id === id);
+  if (!t) return;
+  if (t.status === "done") return; // Idempotent, and the report is not piled on a second time.
+  // The report first, while the task is still open — the order core writes them in.
+  await addComment(id, text);
+  await setStatus(id, "done");
+}
+
+/**
  * End a task that will not be done, with the reasoning kept (`AMB-D-397`) — the write behind the pull-down's
  * `rejected`. The reason is **required**: this is what `setStatus` cannot ask for, and the whole point of the
  * separate door (the CLI draws the same line, `task reject --reason` beside `task status`). It lands as a

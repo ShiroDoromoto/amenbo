@@ -41,6 +41,7 @@ function run(id: number): AutomationRunCardDto {
     automationName: "Morning round",
     status: "completed",
     pauseRequested: false,
+    waiting: false,
     stepsDone: 3,
     endedAt: "2026-09-23T00:00:00Z",
   };

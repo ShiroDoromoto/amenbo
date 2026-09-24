@@ -310,6 +310,7 @@ function heldRun(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     automationName: "Night round",
     status: "running",
     pauseRequested: false,
+    waiting: false,
     stepsDone: 1,
     ...over,
   };

@@ -388,7 +388,12 @@ task?: AutomationRunTaskDto,
 /**
  * Whether it has been carried out. False while Amenbo is still at it.
  */
-finished: boolean, };
+finished: boolean, 
+/**
+ * **Whether it is waiting for something to turn up** rather than being carried out — a built-in
+ * set to wait, with nothing yet for it (`AMB-D-969`).
+ */
+waiting: boolean, };
 
 /**
  * **One automation in the list** — what the "automations" tab draws a row from.
@@ -622,7 +627,12 @@ endedAt?: string,
  * still `running` — this is the gap between the button and the pause
  * ([`amenbo_core::ops::automation_stop::pause`]).
  */
-pauseRequested: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | null, 
+pauseRequested: boolean, 
+/**
+ * **Whether it stands before a built-in that is waiting** for something to turn up — still
+ * `running`, with nothing under way (`AMB-D-969`).
+ */
+waiting: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | null, 
 /**
  * The step it is on, or the last one it ran. Absent before the first step has opened.
  */

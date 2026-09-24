@@ -617,6 +617,27 @@ pub(crate) fn paginate<T>(mut items: Vec<T>, offset: Option<usize>, limit: Optio
     (total, items)
 }
 
+/// **Whether any task matches this `task list` filter** — the read for asking "is there one yet?" over
+/// and over, where [`list`] would count every match and sort them to answer. The filter is read, and
+/// the reach folded in, exactly as [`list`] does it.
+pub fn any(conn: &rusqlite::Connection, reach: crate::reach::Reach, filter_expr: &str) -> Result<bool> {
+    use crate::store_engine::{self, TaskQuery};
+
+    let today = time::today();
+    let mut filter = Filter::parse(filter_expr, today)?;
+    filter.resolve(conn)?;
+    if filter.project_id.is_some() {
+        reach.refuse_project_choice("the `project:` filter")?;
+    }
+    let project_id = reach.narrow(None)?;
+    filter.project_id = reach.narrow(filter.project_id)?;
+    store_engine::any_task(
+        conn,
+        &TaskQuery { reach, project_id, filter: &filter, sort: "", today, limit: None, offset: None },
+    )
+    .map_err(crate::error::engine_on(conn))
+}
+
 /// The `task list` read. Selection (filter / project / sort / total) is computed by **indexed SQL**
 /// over the engine read-model ([`crate::store_engine::list_task_ids`]): placement, dependency and
 /// sort are all index-served `WHERE` / `ORDER BY` terms. Only the ids that made it onto the page are

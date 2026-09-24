@@ -370,11 +370,17 @@ pub fn resume(tx: &WriteTx<'_>, run_id: i64) -> Result<Resumed> {
 }
 
 /// The step a paused run opens next: the one the last finished step's way out leads to.
+///
+/// **A run paused before its first step opened starts at its entry.** That is a run whose entry is a
+/// built-in waiting for something to turn up (`AMB-D-969`): waiting writes nothing, so the pause took
+/// hold with no step behind it.
 fn next_after_the_pause(
     conn: &Connection,
     run: &AutomationRun,
 ) -> Result<Option<AutomationRunDef>> {
-    let Some(last) = read::automation_run_steps_of(conn, run.id)?.pop() else { return Ok(None) };
+    let Some(last) = read::automation_run_steps_of(conn, run.id)?.pop() else {
+        return crate::ops::automation_run::entry_def(conn, run.id);
+    };
     let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { return Ok(None) };
     Ok(match crate::ops::automation_run::onward(conn, &def, last.exit_id)? {
         crate::ops::automation_run::Onward::Go { def, .. } => Some(*def),
@@ -561,7 +567,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         }
     }
@@ -1199,7 +1205,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         }
     }

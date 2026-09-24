@@ -272,7 +272,19 @@ pub fn check(
     }
     for placement in placements.iter().filter(|p| live.contains(&p.id)) {
         let name = action_name(conn, placement.action_id)?;
+        let settings = settings_of(conn, placement)?;
+        // A built-in set to wait never leaves by the way out it waits instead of (`AMB-D-969`), so
+        // nothing has to follow it.
+        let never_taken = match read::automation_action(conn, placement.action_id)?.and_then(|a| a.builtin) {
+            Some(key) => crate::ops::automation_builtin::never_leaves_by(&key, |setting| {
+                settings.iter().find(|cfg| cfg.name == setting).and_then(|cfg| cfg.value.as_deref())
+            }),
+            None => None,
+        };
         for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+            if never_taken.is_some() && exit.name.as_deref() == never_taken {
+                continue;
+            }
             // The error way out is the one nobody has to answer for. Every step and every action is
             // born carrying it (crate::ops::automation), so asking for an edge on each of them
             // would put one more thing to write on every action somebody places — for the case that
@@ -295,7 +307,7 @@ pub fn check(
                 unmet.push(Unmet::UnwiredInput { step: name.clone(), port: port.name });
             }
         }
-        for cfg in settings_of(conn, placement)? {
+        for cfg in settings {
             if cfg.required && cfg.value.is_none() {
                 unmet.push(Unmet::UnansweredCfg { step: name.clone(), cfg: cfg.name });
             }
@@ -1056,6 +1068,15 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     })
 }
 
+/// **Whether this run stands before a built-in that is waiting** for something to turn up
+/// (`AMB-D-969`) — `running`, with nothing under way, and the step it would open next set to wait
+/// with nothing yet for it. Asked by a face that says so beside the run.
+pub fn is_waiting(conn: &Connection, run_id: i64) -> Result<bool> {
+    let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(false) };
+    let Some(run) = read::automation_run(conn, run_id)? else { return Ok(false) };
+    crate::ops::automation_builtin::waiting(conn, &run, &def)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1637,7 +1658,7 @@ mod tests {
                 crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                     panic!("cannot start {agent}")
                 }
-                crate::ops::automation_step::Opened::Carried { .. } => panic!("not a built-in"),
+                crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } => panic!("not a built-in"),
                 crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             };
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
@@ -1739,7 +1760,7 @@ mod tests {
             crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                 panic!("cannot start {agent}")
             }
-            crate::ops::automation_step::Opened::Carried { .. } => panic!("not a built-in"),
+            crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } => panic!("not a built-in"),
             crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         };
         let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));

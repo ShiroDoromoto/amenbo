@@ -509,6 +509,7 @@ describe("an automation a run is going on (AMB-D-961)", () => {
     automationName: "Morning round",
     status: "paused",
     pauseRequested: false,
+    waiting: false,
     stepsDone: 2,
   };
   async function openHeld(heldBy: AutomationRunCardDto[] = [run]) {

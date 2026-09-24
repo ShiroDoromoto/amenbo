@@ -1,0 +1,147 @@
+# The built-in that takes a task can be set to wait for one rather than leave by the way out that
+# says there was none. A run or a session closing a task can make another ready, and so can a new one
+# being filed, so a run set that way does not end on an empty filter: it stays running, and Amenbo
+# looks again until a task turns up — then reserves it and goes on, as it would have at the start.
+#
+# Nothing follows the way out for no task here, on purpose. Set to wait, the built-in never leaves by
+# it, so the launch asks no line of it; a build that still did would refuse to start this one.
+#
+# The road is the screen's alone. A run started at a terminal opens no step (`automation start`), so
+# a built-in is only ever carried out on a run the window started.
+id: wait-for-a-task-with-the-built-in-that-takes-one
+title: The built-in that takes a task, set to wait, keeps its run going until a task turns up and then takes it
+description: >
+  Place the built-in "タスクに着手する" as an automation's entry, answer its setting "着手できるタスクが無いとき"
+  with "着手できるタスクが出るまで待つ", and draw nothing after the way out that found none. Start it while
+  no task is handed to the AI, and read the run still running. Hand a task to the AI, and read the task
+  gone to in_progress and the agent's step in the run's pane working it.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+
+  # Left unhanded: the built-in's filter, unanswered, takes the tasks given to the AI, so this one is
+  # not a task the run can take until it is handed over. Its creation is left open for the same reason.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the waiting built-in takes }, as: seed }
+
+  # The step the taken task goes on to: an agent's, so the run's pane stands on a terminal working it.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: build, prompt: work the task }, as: build }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: build } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: build, exit_to: "" } }
+
+  # The built-in, placed by its key. Only the way out that took a task goes anywhere: the road sets it
+  # to wait on the screen before it starts.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that waits for a task" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: build, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  # Started with nothing handed to the AI: nothing to take, and the start is not refused.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # Set to wait, on the placement, off the pulldown under the setting.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: タスクに着手する
+
+  - type: action
+    domain: automation
+    op: answer-choice
+    with:
+      setting: 着手できるタスクが無いとき
+      value: 着手できるタスクが出るまで待つ
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # Still going, and not over: it waits rather than leave by the way out that found none.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: running
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  # Handed to the AI, and written through: the task the waiting run can now take.
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: seed
+      assignee: me-ai
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+  # Reserved by the run that was waiting, with nobody starting it again.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: build
+      action: work
+      task: seed
+      present: true

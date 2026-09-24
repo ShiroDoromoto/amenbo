@@ -30,7 +30,8 @@ which an agent writes through the CLI and you read in the desktop app.
   not reset when the agent you are working with changes. It is one SQLite file on your
   machine, and `amenbo export` writes all of it out whenever you want.
 - **Connected records** — tasks carry dependency edges, decisions cross-link to the tasks
-  they bear on, and `task reject --reason` keeps why something was dropped.
+  they bear on, `task done --report` keeps what was done, and `task reject --reason` keeps why
+  something was dropped.
 - **The spec is in the binary** — `amenbo agent --json` is what an agent reads to work
   here: how to work in this folder, plus every command's flags, arguments and examples.
   It ships with the build, so there is no command reference to drift out of date.
@@ -188,10 +189,12 @@ amenbo task depend <n> --on <m>            # <n> waits on <m> (dependency, not a
 # (`--at` on add or update, `--clear-at` to take it back) — only what you name lands,
 # and it refuses nothing: nothing is stopped for being worked somewhere else
 amenbo task add --title "Fix the mail face" --project "Website refresh" --at website-mailer
-amenbo task done <n>
-# A task ends one of two ways. Work you decided against ends here, not at `done`
-# (a history that claims what never happened) or `delete` (the reasoning gone with
-# the row) — the reason is required, and lands on the timeline as a comment
+# A task ends one of two ways. Work you carried out ends at `done`, with a report of
+# what was done — it lands on the timeline as a comment, in the same write as the end
+amenbo task done <n> --report "wireframes for all three pages, linked in the notes"
+# Work you decided against ends here, not at `done` (a history that claims what never
+# happened) or `delete` (the reasoning gone with the row) — the reason is required,
+# and lands on the timeline as a comment
 amenbo task reject <n> --reason "measured it — too thin to be worth the change"
 
 # Dimensions: user-defined classification axes (categories, phases, or anything

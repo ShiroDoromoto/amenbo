@@ -651,6 +651,41 @@ fn rejecting_a_task_demands_a_reason_and_keeps_it_on_the_timeline() {
     assert_eq!(re["task"]["status"], "todo");
 }
 
+/// `task done --report` is `task done`'s counterpart to `task reject --reason` (`AMB-D-963`): the report
+/// lands on the timeline in the same write as the transition, so it is never left to a comment after the
+/// task has closed. Optional for now — a plain `task done` still ends the task.
+#[test]
+fn done_with_a_report_keeps_it_on_the_timeline() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+    let tid = id_str(&cli.json(&["task", "add", "--title", "報告つきの完了", "--project", &pid, "--json"])["task"]["id"]);
+    cli.finish_creating(&tid);
+
+    // An empty report is refused, and moves nothing.
+    let (err, code) = cli.run_err(&["task", "done", &tid, "--report", "   ", "--json"]);
+    assert_eq!(code, 2, "an empty report is refused: {err}");
+    assert_eq!(cli.json(&["task", "show", &tid, "--json"])["status"], "todo", "a refused done moves nothing");
+
+    // With a report: done, and the report is a comment on the task.
+    let dn = cli.json(&["task", "done", &tid, "--report", "報告の引数を足し、README も揃えた", "--json"]);
+    assert_eq!(dn["task"]["status"], "done");
+    let comments = cli.json(&["comment", "list", &tid, "--json"]);
+    let texts: Vec<_> = comments["comments"].as_array().unwrap().iter().map(|c| c["text"].clone()).collect();
+    assert_eq!(texts, vec![serde_json::json!("報告の引数を足し、README も揃えた")], "the report is kept as a comment: {comments}");
+
+    // Re-done is an idempotent no-op, and does not pile a second report on.
+    let again = cli.json(&["task", "done", &tid, "--report", "二度目の報告", "--json"]);
+    assert_eq!(again["noop"], true);
+    assert_eq!(cli.json(&["comment", "list", &tid, "--json"])["comments"].as_array().unwrap().len(), 1);
+
+    // Without --report, done still ends the task and writes nothing on the timeline.
+    let other = id_str(&cli.json(&["task", "add", "--title", "報告なしの完了", "--project", &pid, "--json"])["task"]["id"]);
+    cli.finish_creating(&other);
+    assert_eq!(cli.json(&["task", "done", &other, "--json"])["task"]["status"], "done");
+    assert!(cli.json(&["comment", "list", &other, "--json"])["comments"].as_array().unwrap().is_empty());
+}
+
 /// The holder-side surface of `AMB-D-366`: after a task is reserved (`in_progress`), a premise pinned on
 /// afterwards silently drops its readiness. An ordinary `task show` (the early warning) and completing it
 /// (the safety net) both surface the added premise; a fresh reservation and a plain `todo` task show

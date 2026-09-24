@@ -372,8 +372,8 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             write_envelope(flags, "task.update", "task", serde_json::to_value(&detail).unwrap(), Some(changed), false, format!("✓ Updated task: {}", task_label(t.id)));
         }
         TaskCmd::FinishCreating { id } => return task_finish_creating(store, flags, &id),
-        TaskCmd::Done { id } => return task_complete(store, flags, &id, true),
-        TaskCmd::Reopen { id } => return task_complete(store, flags, &id, false),
+        TaskCmd::Done { id, report } => return task_complete(store, flags, &id, true, body_arg_opt(report)?),
+        TaskCmd::Reopen { id } => return task_complete(store, flags, &id, false, None),
         TaskCmd::Status { id, status } => return task_set_status(store, flags, &id, &status),
         TaskCmd::Block { id, reason } => return task_block(store, flags, &id, body_arg_opt(reason)?),
         TaskCmd::Reject { id, reason } => return task_reject(store, flags, &id, body_arg(reason)?),
@@ -555,7 +555,23 @@ fn unassigned_hint(flags: &Flags, detail: &amenbo_core::view::TaskDetail) -> Opt
     ))
 }
 
-fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) -> Result<i32, CliError> {
+/// `task done <id> [--report <what was done>]` and `task reopen <id>`. The report is `task done`'s
+/// counterpart to `task reject --reason` (`AMB-D-963`): it lands as a comment in the same write as the
+/// transition, so the report is never left to a second command after the task has closed.
+fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool, report: Option<String>) -> Result<i32, CliError> {
+    // A `--report` given but empty is a report that says nothing — refused, as `task reject` refuses an
+    // empty reason, rather than read as "no report".
+    let report = match report.map(|r| r.trim().to_string()) {
+        Some(r) if r.is_empty() => {
+            return Err(CliError {
+                code: "invalid_value",
+                message: "--report is empty — say what was done".to_string(),
+                hint: Some("Pass the report, or `-` to read it from stdin.".to_string()),
+                exit: 2,
+            });
+        }
+        r => r,
+    };
     let tid = resolve_task(store, id).map_err(CliError::from)?;
     let before = store.task(tid).map_err(CliError::from)?;
     let old = before.map(|t| t.status).unwrap_or_default();
@@ -566,7 +582,8 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) ->
     let already_there = if completed { old == TaskStatus::Done } else { !old.is_closed() };
     let action = if completed { "task.done" } else { "task.reopen" };
     if already_there {
-        // Idempotent: already in the target state. Report success, as a no-op.
+        // Idempotent: already in the target state. Report success, as a no-op — and do **not** add the
+        // report: a re-done changes nothing, so it has nothing new to report (`task reject` likewise).
         let detail = store.task_detail(tid).map_err(CliError::from)?;
         write_envelope(flags, action, "task", serde_json::to_value(&detail).unwrap(), Some(vec![]), true, format!("(no change) {}", task_label(tid)));
         return Ok(0);
@@ -574,7 +591,11 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool) ->
     // Safety net (`AMB-D-366`): completing a reserved task is the moment not to miss — read the premises pinned on
     // after the reservation *before* the transition retires the in_progress clock they are measured against.
     let pc = premise_change_when(store, tid, completed && old == TaskStatus::InProgress);
-    let t = store.set_task_completed(tid, completed, flags.facet()?).map_err(CliError::from)?;
+    let t = if completed {
+        store.complete_task_with_report(tid, report.as_deref(), flags.facet()?).map_err(CliError::from)?
+    } else {
+        store.set_task_completed(tid, false, flags.facet()?).map_err(CliError::from)?
+    };
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
     // Ending the task — carried out or decided against — may have made dependents ready; emit the
     // unblock signal if so.

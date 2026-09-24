@@ -567,6 +567,30 @@ impl Store {
         })
     }
 
+    /// Done with its report (`AMB-D-963`): the report lands as a comment and the task goes to `done`, in
+    /// **one** transaction. The comment is written first, while the task is still open — a closed task takes
+    /// no new comment, so a report written after the transition would be refused. With no report this is
+    /// [`Self::set_task_completed`] to `done`.
+    pub fn complete_task_with_report(
+        &mut self,
+        id: i64,
+        report: Option<&str>,
+        actor: crate::model::ActorKind,
+    ) -> Result<crate::model::Task> {
+        self.write_one(&[WriteTarget::Task(id)], |tx| {
+            let before = crate::store_engine::read::task_status(tx.conn(), id)?;
+            if let Some(text) = report {
+                let comment = crate::ops::comment::add_comment(tx, id, actor, text)?;
+                emit_comment_added(tx, &comment, actor)?;
+            }
+            let task = crate::ops::task::set_completed(tx, id, true)?;
+            if let Some(before) = before {
+                emit_task_status(tx, &task, before, actor)?;
+            }
+            Ok(task)
+        })
+    }
+
     /// Delete a task — a hard delete (one operation = one transaction). The task row and its
     /// dependency edges go in the same transaction (leave one behind and you have a dangling edge).
     /// Blobs the delete orphaned are reclaimed after the commit ([`Self::reclaim_after_delete`]). The

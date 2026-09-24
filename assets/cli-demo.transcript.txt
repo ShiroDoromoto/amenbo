@@ -40,13 +40,18 @@ $ amenbo agent --command 'task done'
     }
   ],
   "examples": [
-    "amenbo task done AMB-T-<n>"
+    "amenbo task done AMB-T-<n> --report \"fixed the empty-title crash; a test covers it\""
   ],
-  "flags": [],
+  "flags": [
+    {
+      "help": "what was done (recorded as a comment). Pass `-` to read it from stdin (a shell eats code spans out of a quoted argument).",
+      "name": "--report <str>"
+    }
+  ],
   "name": "task done",
-  "summary": "Marks a task done."
+  "summary": "Marks a task done — the terminal for work carried out, beside task reject. --report is the completion report, reject's --reason for work that was done: it lands as a comment in the same write as the transition. Idempotent — re-marking a done task changes nothing and does not pile the report on."
 }
 
-$ amenbo task done 2 --actor ai
+$ amenbo task done 2 --report 'Signed, notarized and uploaded' --actor ai
 ✓ Marked done: AMB-T-2 · recorded as ai
 

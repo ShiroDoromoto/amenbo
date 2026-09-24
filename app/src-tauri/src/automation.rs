@@ -1414,6 +1414,8 @@ fn run_card(
         started_at: run.started_at.map(|at| at.to_rfc3339_z()),
         ended_at: run.ended_at.map(|at| at.to_rfc3339_z()),
         pause_requested: run.pause_requested,
+        waiting: run.status == amenbo_core::model::AutomationRunStatus::Running
+            && amenbo_core::ops::automation_run::is_waiting(conn, run.id)?,
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
         step_name,
         action_name,
@@ -1549,8 +1551,12 @@ fn open_one(
     // **A built-in is told before it is carried out**, so the run's pane says what Amenbo is doing
     // for as long as it takes — a worktree cut from a fetch is not instant (`AMB-D-964`). Carried out,
     // it is told again below, in the same place.
+    //
+    // **Not while it waits** (`AMB-D-969`): the watch opens a waiting built-in on every look, and the
+    // pane already stands on the card that says it is waiting.
     if let Some(def) = read::automation_run_def(store.read_model().conn(), def_id)?
         .filter(|def| def.builtin.is_some())
+        .filter(|_| standing_wait(app, run_id).is_none())
     {
         let (project, builtin) = builtin_about_to(store, run_id, &def)?;
         // The card takes the pane over from the step before, whose program would otherwise go on with
@@ -1618,6 +1624,27 @@ fn open_one(
             log::warn!("run {run_id} went for its next task with the last one still in progress");
             (run.project_id, None, None, Vec::new())
         }
+        // A built-in set to wait found nothing to act on, and nothing was written (`AMB-D-969`). The
+        // pane stands on the card that says it is waiting — told once, since the watch opens it again
+        // on every look. A pause asked for while it waited took hold here instead, and the paused
+        // run has no pane to stand on until it is picked up again.
+        Opened::Waiting { run } => {
+            use amenbo_core::model::AutomationRunStatus::Running;
+            match (run.status, standing_wait(app, run_id)) {
+                (Running, Some(told)) => return Ok(told),
+                (Running, None) => {
+                    let def = read::automation_run_def(store.read_model().conn(), def_id)?.ok_or_else(|| {
+                        CmdError::from(amenbo_core::error::Error::not_found(format!(
+                            "step '{def_id}' of run '{run_id}' not found"
+                        )))
+                    })?;
+                    let (project, mut builtin) = builtin_about_to(store, run_id, &def)?;
+                    builtin.waiting = true;
+                    (project, None, Some(builtin), Vec::new())
+                }
+                _ => (run.project_id, None, None, Vec::new()),
+            }
+        }
         // A built-in has already been carried out and has reported (`AMB-D-964`), so there is no
         // terminal to stand a pane on. The run is now standing between two steps — or has ended — and
         // the watch woken below reads which, the same as after an agent's report. What the pane is
@@ -1647,6 +1674,7 @@ fn open_one(
                 action_name: placed_action_name(store, def.placement_id)?,
                 task: worked_task(store, run_step.run_task_id)?,
                 finished: true,
+                waiting: false,
             };
             (run.project_id, None, Some(builtin), Vec::new())
         }
@@ -1654,7 +1682,12 @@ fn open_one(
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
     // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,
     // where it costs nothing: that loop is about to come round anyway.
-    crate::automation_watch::wake();
+    //
+    // **Except where nothing moved**: a built-in that is waiting is opened again on every look, and
+    // waking the watch from there would have it look again at once, round and round without a pause.
+    if !matches!(builtin, Some(AutomationBuiltinRunDto { waiting: true, .. })) {
+        crate::automation_watch::wake();
+    }
     let dto = AutomationStepOpenDto { run: run_id, project, step, builtin, missing };
     tell(app, dto.clone());
     Ok(dto)
@@ -1676,6 +1709,13 @@ fn tell(app: &tauri::AppHandle, dto: AutomationStepOpenDto) {
     if let Err(e) = app.emit(STEP_EVENT, dto) {
         log::warn!("failed to emit {STEP_EVENT}: {e}");
     }
+}
+
+/// What this run's pane stands on, where that is the card of a built-in that is waiting.
+fn standing_wait(app: &tauri::AppHandle, run_id: i64) -> Option<AutomationStepOpenDto> {
+    let standing = app.state::<StepsStanding>();
+    let standing = standing.0.lock().expect("steps standing lock");
+    standing.get(&run_id).filter(|one| one.builtin.as_ref().is_some_and(|b| b.waiting)).cloned()
 }
 
 /// **A built-in about to be carried out**, as its pane is told before Amenbo starts on it — and which
@@ -1709,6 +1749,7 @@ fn builtin_about_to(
         action_name: placed_action_name(store, def.placement_id)?,
         task: worked_task(store, stretch)?,
         finished: false,
+        waiting: false,
     }))
 }
 

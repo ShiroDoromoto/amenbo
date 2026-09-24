@@ -3695,6 +3695,9 @@ pub struct AutomationBuiltinRunDto {
     pub(crate) task: Option<AutomationRunTaskDto>,
     /// Whether it has been carried out. False while Amenbo is still at it.
     pub(crate) finished: bool,
+    /// **Whether it is waiting for something to turn up** rather than being carried out — a built-in
+    /// set to wait, with nothing yet for it (`AMB-D-969`).
+    pub(crate) waiting: bool,
 }
 
 /// **One step of a run, as its pane draws it.**
@@ -3854,6 +3857,9 @@ pub struct AutomationRunCardDto {
     /// still `running` — this is the gap between the button and the pause
     /// ([`amenbo_core::ops::automation_stop::pause`]).
     pub(crate) pause_requested: bool,
+    /// **Whether it stands before a built-in that is waiting** for something to turn up — still
+    /// `running`, with nothing under way (`AMB-D-969`).
+    pub(crate) waiting: bool,
     #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | null")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

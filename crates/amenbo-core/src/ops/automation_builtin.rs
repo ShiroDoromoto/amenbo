@@ -21,7 +21,11 @@
 //!
 //! **Nobody is chosen to carry one out.** A built-in step names no agent, so the launch check asks no
 //! agent of it (`AMB-D-960`) and a placement refuses one for it.
+//!
+//! **One can be set to wait** ([`Waits`], `AMB-D-969`). Until what it waits for turns up, opening it
+//! writes nothing, and the run stands before it as `running`; the watch opens it again on every look.
 
+use rusqlite::Connection;
 use serde::Serialize;
 
 use crate::error::{Error, Result};
@@ -54,6 +58,9 @@ pub struct Builtin {
     /// The ways out it leaves by, each with what it hands on. The error way out every step carries is
     /// not listed: a built-in that could not finish leaves by it, as any step does.
     pub exits: &'static [BuiltinExit],
+    /// How it waits, for one that can be set to ([`Waits`]).
+    #[serde(skip)]
+    pub waits: Option<Waits>,
     /// The work itself ([`Carry`]).
     #[serde(skip)]
     pub run: fn(&Carry<'_, '_>) -> Result<Carried>,
@@ -84,6 +91,61 @@ pub struct BuiltinExit {
     pub outs: &'static [BuiltinPort],
 }
 
+/// **How a built-in waits** where it is set to, rather than leave by the way out that says there was
+/// nothing to do.
+///
+/// **Waiting writes nothing.** The step is not opened until what it waits for has turned up, so the
+/// run stands before it — `running`, with no execution under way — and every look of the watch asks
+/// again ([`waiting`]). A pause or a stop acts on that run as on any other.
+///
+/// **What is asked is only whether one has turned up** ([`Waits::turned_up`]): it is asked once a
+/// second, and a count or a list of every candidate would be asked of every task there is.
+pub struct Waits {
+    /// The setting that says whether it waits, and the choice on it that means it does.
+    pub setting: &'static str,
+    pub answer: &'static str,
+    /// The way out it would otherwise leave by. Set to wait, it never does, so the launch check asks
+    /// no line of it.
+    pub instead_of: &'static str,
+    /// Whether what it waits for is there now, read from the answers where it was placed.
+    pub turned_up: fn(&Connection, &AutomationRun, &[RunDefCfg]) -> Result<bool>,
+}
+
+impl Waits {
+    /// Whether the answer written for [`Waits::setting`] is the one that means it waits. Left
+    /// unanswered, it does not.
+    pub fn chosen(&self, answer: Option<&str>) -> bool {
+        answer.and_then(|value| serde_json::from_str::<String>(value).ok()).as_deref() == Some(self.answer)
+    }
+}
+
+/// The answer written for one setting where the step was placed — JSON, as `automation_cfg.value`
+/// holds it — or `None` where nobody answered it.
+pub fn answer<'c>(cfg: &'c [RunDefCfg], name: &str) -> Option<&'c str> {
+    cfg.iter().find(|c| c.name == name).and_then(|c| c.value.as_deref())
+}
+
+/// **Whether this copy of a step waits** rather than be opened now: a built-in set to wait, with
+/// nothing yet for it to act on ([`Waits`]). Anything else — an agent's step, a built-in that never
+/// waits, a key this build does not know — is opened as it always is.
+pub fn waiting(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -> Result<bool> {
+    let Some(waits) = def.builtin.as_deref().and_then(find).and_then(|b| b.waits.as_ref()) else {
+        return Ok(false);
+    };
+    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    if !waits.chosen(answer(&cfg, waits.setting)) {
+        return Ok(false);
+    }
+    Ok(!(waits.turned_up)(conn, run, &cfg)?)
+}
+
+/// **The way out a placed built-in never leaves by**, as it is set there — the launch check asks no
+/// line of it. `answer` reads the placement's answer to one setting.
+pub fn never_leaves_by<'a>(key: &str, answer: impl Fn(&str) -> Option<&'a str>) -> Option<&'static str> {
+    let waits = find(key)?.waits.as_ref()?;
+    waits.chosen(answer(waits.setting)).then_some(waits.instead_of)
+}
+
 /// **What a built-in is handed while it runs**: the store, the run and the execution it is carried
 /// out under, the task the stretch is about, and the answers it reads.
 pub struct Carry<'a, 't> {
@@ -106,7 +168,7 @@ impl Carry<'_, '_> {
     /// The answer written for one setting where the step was placed — JSON, as `automation_cfg.value`
     /// holds it — or `None` where nobody answered it.
     pub fn setting(&self, name: &str) -> Option<&str> {
-        self.cfg.iter().find(|c| c.name == name).and_then(|c| c.value.as_deref())
+        answer(self.cfg, name)
     }
 
     /// **Put down one thing this built-in hands on**, on the output of that name on the way out it is
@@ -422,6 +484,7 @@ mod tests {
             },
             BuiltinExit { name: None, outs: &[] },
         ],
+        waits: None,
         run: |carry| {
             let stamp = carry.setting("stamp").unwrap_or("\"ok\"");
             let note = carry.input("note").unwrap_or("nothing");
@@ -439,6 +502,7 @@ mod tests {
         settings: &[],
         ins: &[],
         exits: &[BuiltinExit { name: None, outs: &[] }],
+        waits: None,
         run: |_| Err(Error::invalid("the floor gave way")),
     };
 

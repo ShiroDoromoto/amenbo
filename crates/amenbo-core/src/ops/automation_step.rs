@@ -53,7 +53,7 @@ pub struct Opening {
     pub folder: Option<String>,
 }
 
-/// The five ways opening a step can end.
+/// The six ways opening a step can end.
 #[derive(Clone, Debug)]
 pub enum Opened {
     /// Open a terminal on this.
@@ -72,6 +72,11 @@ pub enum Opened {
     /// **This step takes a fresh task while the one before is still in progress**, so no terminal was
     /// opened and the run was failed with [`AutomationStoppedReason::LeftTaskOpen`] (`AMB-D-967`).
     LeftTaskOpen { run: AutomationRun },
+    /// **The step is a built-in set to wait, and nothing has turned up for it yet** (`AMB-D-969`).
+    /// Nothing was written, so the run still stands before this step and the next look opens it again.
+    /// Where a pause had been asked for, `run` has been paused here instead: a waiting step never
+    /// reports, so this is where the pause takes hold.
+    Waiting { run: AutomationRun },
 }
 
 /// `<what> '<id>' not found`, the uncoded refusal the automation entities take
@@ -160,6 +165,15 @@ pub fn open(
     if !missing.is_empty() {
         let stopped = stop(tx, run)?;
         return Ok(Opened::Stopped { run: stopped.run, missing });
+    }
+    // Asked before anything is written, so a built-in that is waiting leaves no execution behind it
+    // on each look (`super::automation_builtin::Waits`).
+    if super::automation_builtin::waiting(conn, &run, &def)? {
+        let run = match run.pause_requested {
+            true => super::automation_stop::settle(tx, run)?.run,
+            false => run,
+        };
+        return Ok(Opened::Waiting { run });
     }
 
     let now = Timestamp::now();
@@ -764,7 +778,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | Opened::Waiting { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         }
     }
@@ -1156,7 +1170,7 @@ mod tests {
                     );
                 }
                 Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-                Opened::Carried { .. } => panic!("not a built-in"),
+                Opened::Carried { .. } | Opened::Waiting { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             }
             assert_eq!(
@@ -1182,7 +1196,7 @@ mod tests {
             let here = ["codex".to_string()];
             match open(tx, run.id, def_of(tx, &run, &p.first).id, Some(&here)).expect("open") {
                 Opened::Ready(_) => panic!("nothing here can start claude"),
-                Opened::Carried { .. } => panic!("not a built-in"),
+                Opened::Carried { .. } | Opened::Waiting { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
                 Opened::NoAgent { run: stopped, agent } => {

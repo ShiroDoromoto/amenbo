@@ -13,7 +13,9 @@
 //!
 //! **What one look costs.** One read of the runs that are running, and one read per run of what it is
 //! waiting for — two more where a step is under way, for the task it may have taken. Every run is one somebody pressed start on, so a look is a handful of small reads on
-//! tables with tens of rows in them, through a connection the thread keeps.
+//! tables with tens of rows in them, through a connection the thread keeps. A run standing before a
+//! built-in that waits (`AMB-D-969`) has that step opened on every look, which asks one row of the
+//! tasks — whether there is one to take yet — and writes nothing until there is.
 //!
 //! **And how often.** `WHILE_GOING` while anything is running, because a step is a person-scale
 //! thing and a second is under the noticing; `WHILE_IDLE` otherwise, so a machine with no

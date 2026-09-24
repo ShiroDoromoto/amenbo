@@ -306,6 +306,30 @@ pub fn waiting_on_start(conn: &Connection, q: &TaskQuery) -> Result<Option<(usiz
     Ok((count > 0).then_some((count as usize, earliest)))
 }
 
+/// **Whether `q` matches any task at all** — one id read, with no count and no order. For a caller
+/// that asks the same question again and again and only needs a yes: a page would count every match
+/// and sort them to hand back the first. `q.sort`, `q.limit` and `q.offset` are not read.
+pub fn any_task(conn: &Connection, q: &TaskQuery) -> Result<bool> {
+    let started = std::time::Instant::now();
+    let scope = [q.reach.project(), q.project_id]
+        .into_iter()
+        .flatten()
+        .map(|pid| Pred::eq(T.project_id, pid));
+    let pred = Pred::all(scope.chain(filter_preds(q)));
+
+    let mut sel = Select::new();
+    let id = sel.col(T.id);
+    let mut sql = Sql::from(&sel, T.table);
+    sql.push_where(pred.as_ref()).limit(1);
+    let found = conn
+        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| id.get(r))
+        .optional()
+        .map_err(StoreEngineError::from)?
+        .is_some();
+    crate::perf::record_query("engine.any_task", usize::from(found), usize::from(found), started.elapsed());
+    Ok(found)
+}
+
 pub fn list_task_ids(conn: &Connection, q: &TaskQuery) -> Result<TaskPage> {
     let started = std::time::Instant::now();
 

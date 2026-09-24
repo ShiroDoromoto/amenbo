@@ -142,6 +142,7 @@ function builtin(over: Partial<BuiltinRun> = {}): BuiltinRun {
     key: "worktree_cut",
     task: { id: 5252, ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 1 },
     finished: false,
+    waiting: false,
     ...over,
   };
 }

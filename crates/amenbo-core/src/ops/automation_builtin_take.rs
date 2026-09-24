@@ -16,10 +16,19 @@
 //! It leaves by [`TAKEN`] with the task it reserved, or by [`NONE_TO_TAKE`] with nothing —
 //! the step that went looking and found none, which owes no report and keeps no stretch
 //! ([`super::automation_report::done`]).
+//!
+//! **Or it waits for one** (`AMB-D-969`), where [`WHEN_NONE`] is answered [`WAIT`]. A run or a session
+//! closing a task can make another one ready, and so can a new one being filed, so there is no point at
+//! which none will ever turn up: it waits until a person pauses or stops the run. Left unanswered it
+//! does not wait, so a run nobody chose to keep open does not stay open.
+
+use rusqlite::Connection;
 
 use crate::error::Result;
-use crate::model::{AutomationCfgKind, AutomationPortKind};
-use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry};
+use crate::model::{AutomationCfgKind, AutomationPortKind, AutomationRun, RunDefCfg};
+use crate::ops::automation_builtin::{
+    answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Waits,
+};
 use crate::ops::automation_report;
 use crate::ops::automation_step::{taskfilter_expr, taskfilter_sort, TASKFILTER_SORT_DEFAULT};
 use crate::query::{self, ListParams};
@@ -33,6 +42,12 @@ pub const NONE_TO_TAKE: &str = "着手できるタスクが無い";
 pub const FILTER: &str = "絞り込み";
 /// The output the reserved task is handed on through.
 pub const TASK: &str = "タスク";
+/// The setting that says what it does when there is no task to take.
+pub const WHEN_NONE: &str = "着手できるタスクが無いとき";
+/// The choice on [`WHEN_NONE`] that waits for one.
+pub const WAIT: &str = "着手できるタスクが出るまで待つ";
+/// The choice on [`WHEN_NONE`] that leaves by [`NONE_TO_TAKE`] — also what it does left unanswered.
+pub const GO_ON: &str = "待たずに終了条件「着手できるタスクが無い」へ進む";
 
 /// What every search adds to the filter, whatever the setting says.
 const TAKEABLE: &str = "status:todo ready:yes";
@@ -46,7 +61,15 @@ pub(super) const TAKE_TASK: Builtin = Builtin {
     key: "take_task",
     name: "タスクに着手する",
     does: "絞り込みに合う未着手で ready のタスクを並び順どおりに探し、先頭から予約して進行中にする",
-    settings: &[BuiltinSetting { name: FILTER, kind: AutomationCfgKind::TaskFilter, required: false, options: None }],
+    settings: &[
+        BuiltinSetting { name: FILTER, kind: AutomationCfgKind::TaskFilter, required: false, options: None },
+        BuiltinSetting {
+            name: WHEN_NONE,
+            kind: AutomationCfgKind::Choice,
+            required: false,
+            options: Some(r#"["待たずに終了条件「着手できるタスクが無い」へ進む","着手できるタスクが出るまで待つ"]"#),
+        },
+    ],
     ins: &[],
     exits: &[
         BuiltinExit {
@@ -55,27 +78,16 @@ pub(super) const TAKE_TASK: Builtin = Builtin {
         },
         BuiltinExit { name: Some(NONE_TO_TAKE), outs: &[] },
     ],
+    waits: Some(Waits { setting: WHEN_NONE, answer: WAIT, instead_of: NONE_TO_TAKE, turned_up }),
     run: take,
 };
 
 fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
     let answer = carry.setting(FILTER);
     let expr = expression(answer);
-    let sort = answer.map(taskfilter_sort).unwrap_or_else(|| TASKFILTER_SORT_DEFAULT.to_string());
-    let reach = Reach::binding(carry.run.project_id);
     let mut offset = 0;
     loop {
-        let page = query::list(
-            carry.tx.conn(),
-            reach,
-            ListParams {
-                filter_expr: Some(expr.clone()),
-                sort: sort.clone(),
-                limit: Some(PAGE),
-                offset: Some(offset),
-                ..Default::default()
-            },
-        )?;
+        let page = search(carry.tx.conn(), carry.run, answer, PAGE, offset)?;
         for candidate in &page.tasks {
             match automation_report::take(carry.tx, carry.run_step.id, candidate.id) {
                 Ok(task) => {
@@ -95,6 +107,34 @@ fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
         offset += PAGE;
     }
     Ok(Carried { exit: Some(NONE_TO_TAKE), report: format!("no task `{expr}` lists could be taken") })
+}
+
+/// **Whether there is a task to take now** — the one question asked while it waits. One row is read,
+/// however many the filter matches, and none is counted or sorted.
+fn turned_up(conn: &Connection, run: &AutomationRun, cfg: &[RunDefCfg]) -> Result<bool> {
+    query::any(conn, Reach::binding(run.project_id), &expression(answer(cfg, FILTER)))
+}
+
+/// One page of the tasks the filter answered with lists, in the order it asks for.
+fn search(
+    conn: &Connection,
+    run: &AutomationRun,
+    answer: Option<&str>,
+    limit: usize,
+    offset: usize,
+) -> Result<query::TaskListResult> {
+    let sort = answer.map(taskfilter_sort).unwrap_or_else(|| TASKFILTER_SORT_DEFAULT.to_string());
+    query::list(
+        conn,
+        Reach::binding(run.project_id),
+        ListParams {
+            filter_expr: Some(expression(answer)),
+            sort,
+            limit: Some(limit),
+            offset: Some(offset),
+            ..Default::default()
+        },
+    )
 }
 
 /// **The filter it searches with**: the parts the setting chose, less `status:` and `ready:`, and the
@@ -128,8 +168,9 @@ mod tests {
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
-    use crate::ops::automation_run::{launch, nothing_asked, Launcher};
+    use crate::ops::automation_run::{check, is_waiting, launch, next_def, nothing_asked, Launcher, Unmet, Waiting};
     use crate::ops::automation_step::{open, Opened};
+    use crate::ops::automation_stop;
     use crate::ops::task::{self, TaskPatch};
     use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, way_out, with_tx};
     use crate::store_engine::{read, WriteTx};
@@ -266,6 +307,129 @@ mod tests {
             let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(run.status, AutomationRunStatus::Completed);
         });
+    }
+
+    /// The same picture, set to wait: nothing follows [`NONE_TO_TAKE`], since it is never taken.
+    fn waiting_picture(tx: &WriteTx<'_>, project: i64) -> Automation {
+        let automation =
+            automation::add(tx, project, NewAutomation { name: "wait".into(), ..Default::default() })
+                .expect("automation");
+        let written = action(tx, "take_task").expect("the built-in's action");
+        let spot = automation::placement_add(tx, automation.id, written.id).expect("place it");
+        let on = AutomationPictureOwner::Automation;
+        let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
+        automation::edge_add(tx, on, spot.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
+        automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("closes");
+        automation::cfg_set(tx, spot.id, WHEN_NONE, Some(&format!("\"{WAIT}\""))).expect("wait");
+        automation::set_entry(tx, automation.id, Some(spot.id)).expect("entry")
+    }
+
+    fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
+        let claude = ["claude".to_string()];
+        let by = Launcher {
+            startable: Some(&claude),
+            models: nothing_asked(),
+            workspace_open: Some(true),
+            by: Some(ActorKind::Ai),
+        };
+        launch(tx, automation.id, &by).expect("launch")
+    }
+
+    fn open_entry(tx: &WriteTx<'_>, run: &AutomationRun) -> Opened {
+        let Waiting::Step(entry) = next_def(tx.conn(), run.id).expect("next") else {
+            panic!("the run stands before its entry");
+        };
+        assert_eq!(entry.builtin.as_deref(), Some("take_task"));
+        open(tx, run.id, entry.id, Some(&[])).expect("open")
+    }
+
+    /// **Set to wait, with nothing to take, it writes nothing and the run stands before it** — opened
+    /// again on the next look, and the task that has turned up since is the one it takes.
+    #[test]
+    fn set_to_wait_it_stands_until_a_task_turns_up_and_then_takes_it() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+            let startable = ["claude".to_string()];
+            let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked()).expect("check");
+            assert!(unmet.is_empty(), "nothing has to follow the way out it never takes: {unmet:?}");
+
+            let run = launched(tx, &automation);
+            for _ in 0..2 {
+                match open_entry(tx, &run) {
+                    Opened::Waiting { run: still } => assert_eq!(still.status, AutomationRunStatus::Running),
+                    other => panic!("with nothing to take it waits, not {other:?}"),
+                }
+            }
+            assert!(read::automation_run_steps_of(tx.conn(), run.id).expect("steps").is_empty(), "nothing written");
+            assert!(read::automation_run_task_last(tx.conn(), run.id).expect("read").is_none(), "no stretch");
+            assert!(is_waiting(tx.conn(), run.id).expect("waiting"));
+
+            let turned_up = for_ai(tx, "new", project, None);
+            let run_step_id = match open_entry(tx, &run) {
+                Opened::Carried { run_step_id, .. } => run_step_id,
+                other => panic!("the task that turned up is taken, not {other:?}"),
+            };
+            assert_eq!(status(tx, turned_up), TaskStatus::InProgress);
+            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+            assert_eq!(ran.exit_id, way_out(tx, run_step_id, TAKEN));
+            assert!(!is_waiting(tx.conn(), run.id).expect("waiting"));
+        });
+    }
+
+    /// **A pause takes hold while it waits**, since a waiting step never reports; picked up again, the
+    /// run starts at its entry as though it had just been launched.
+    #[test]
+    fn a_pause_takes_hold_while_it_waits_and_a_resume_starts_it_again() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+            let run = launched(tx, &automation);
+            assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
+
+            automation_stop::pause(tx, run.id).expect("pause");
+            match open_entry(tx, &run) {
+                Opened::Waiting { run: paused } => {
+                    assert_eq!(paused.status, AutomationRunStatus::Paused);
+                    assert!(!paused.pause_requested);
+                }
+                other => panic!("the pause takes hold, not {other:?}"),
+            }
+            assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
+
+            let resumed = automation_stop::resume(tx, run.id).expect("resume");
+            assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at its entry");
+            assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
+        });
+    }
+
+    /// **Left unanswered, or answered not to wait, it does not** — and then the way out that says
+    /// there was nothing to take is one the launch check asks a line of.
+    #[test]
+    fn not_set_to_wait_the_way_out_for_nothing_to_take_needs_a_line() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+            let spot = automation.entry_placement_id.expect("entry");
+            let startable = ["claude".to_string()];
+            for answer in [None, Some(format!("\"{GO_ON}\""))] {
+                automation::cfg_set(tx, spot, WHEN_NONE, answer.as_deref()).expect("answer");
+                let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked()).expect("check");
+                assert!(
+                    unmet.iter().any(|u| matches!(u, Unmet::OpenExit { exit: Some(e), .. } if e == NONE_TO_TAKE)),
+                    "{answer:?}: {unmet:?}",
+                );
+            }
+        });
+    }
+
+    /// The choices written out on the setting are the two the code reads, the one it does unanswered
+    /// first.
+    #[test]
+    fn the_choices_offered_are_the_ones_it_reads() {
+        let options = TAKE_TASK.settings.iter().find(|s| s.name == WHEN_NONE).and_then(|s| s.options);
+        let offered: Vec<String> = serde_json::from_str(options.expect("a choice list")).expect("JSON");
+        assert_eq!(offered, vec![GO_ON, WAIT]);
     }
 
     #[test]

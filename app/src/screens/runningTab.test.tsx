@@ -57,6 +57,7 @@ function run(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
     automationName: "Morning round",
     status: "running",
     pauseRequested: false,
+    waiting: false,
     stepsDone: 2,
     ...over,
   };

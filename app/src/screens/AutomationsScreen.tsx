@@ -51,7 +51,7 @@
 // there is anything to write them about (`AutomationNew`).
 import { useState } from "react";
 import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
-import { AutomationActionsTab } from "./AutomationActionsTab";
+import { AutomationActionsTab, firstLine } from "./AutomationActionsTab";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { HistoryTab } from "./HistoryTab";
 import { RunningTab } from "./RunningTab";
@@ -274,6 +274,7 @@ function EveryAutomationRow({
             <span className="autoid">{tf("auto.id", { id: card.id })}</span>
             {card.name}
             {card.archived && <span className="autolist__tag">{t("auto.archived")}</span>}
+            {firstLine(card.notes) !== "" && <span className="auto__note">{firstLine(card.notes)}</span>}
           </span>
           <span className="autolist__project">{row.projectName}</span>
           <span className="autolist__meta">{tf("auto.stepCount", { count: card.placements })}</span>
@@ -322,6 +323,7 @@ function AutomationRow({
         <span className="autoid">{tf("auto.id", { id: automation.id })}</span>
         {automation.name}
         {automation.archived && <span className="autolist__tag">{t("auto.archived")}</span>}
+        {firstLine(automation.notes) !== "" && <span className="auto__note">{firstLine(automation.notes)}</span>}
       </span>
       <span className="autolist__meta">{tf("auto.stepCount", { count: automation.placements })}</span>
       {/* Nothing until the check answers: a guess either way would be a word the build screen may

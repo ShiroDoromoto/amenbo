@@ -7,6 +7,7 @@
 // **how far in it is names the action the step was opened from**, two spots standing on the same
 // action running steps of the same names (`AMB-D-949`), **and falls back to the step alone where that
 // spot has been taken off the picture**;
+// **a run with no task says it has not taken one yet, and only while it still can**;
 // **a pause that has been asked for reads as neither of the two states it sits between**, since a run
 // told "running" would be pressed again and one told "paused" is not stopped yet; **the buttons match
 // the state** — a paused run is picked up rather than paused again, and a failure carries only the
@@ -113,6 +114,12 @@ describe("the running tab", () => {
     // The tab crosses projects, so each row says which one it is about.
     expect(row).toContain("amenbo");
     expect(row).toContain(t("auto.run.running"));
+  });
+
+  it("says a run that has not taken a task yet has not, and says nothing of one that ended without", async () => {
+    await render([run({ run: 1 }), run({ run: 2, status: "paused" }), run({ run: 3, status: "failed" })]);
+    const tasks = [...container.querySelectorAll(".autorun__task")].map((one) => one.textContent);
+    expect(tasks).toEqual([t("auto.run.noTask"), t("auto.run.noTask"), ""]);
   });
 
   /// A spot taken off the picture while its run walks on leaves the step with nothing to be inside

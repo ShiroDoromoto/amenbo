@@ -368,6 +368,47 @@ function walk(graph: PicGraph): Walk {
   return { laps, live, back };
 }
 
+/** How the picture reads its boxes: the number each is shown with, and which lines go back. */
+export type PicOrder = {
+  /** Counted from 1, stretch by stretch and row by row — top to bottom, left to right. */
+  numberOf: ReadonlyMap<number, number>;
+  /** A line to a row no lower than the one it leaves — the one the picture draws dashed. */
+  goesBack: (fromId: number, toId: number) => boolean;
+  /** The box begins a stretch of its own, the next task being what it goes and finds. */
+  takesTask: (boxId: number) => boolean;
+};
+
+/**
+ * Read the picture's order off the same walk it is laid out by, so that a list naming the boxes
+ * numbers them as the picture does and calls back the lines the picture draws going back.
+ */
+export function pictureOrder(graph: PicGraph): PicOrder {
+  const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
+  const numberOf = new Map<number, number>();
+  const at = new Map<number, { lap: number; row: number }>();
+  walk(graph).laps.forEach((lap, nth) =>
+    lap.rows.forEach((row, depth) =>
+      row.forEach((boxId) => {
+        numberOf.set(boxId, numberOf.size + 1);
+        at.set(boxId, { lap: nth, row: depth });
+      }),
+    ),
+  );
+  return {
+    numberOf,
+    goesBack: (fromId, toId) => {
+      const a = at.get(fromId);
+      const b = at.get(toId);
+      if (a === undefined || b === undefined) return false;
+      return b.lap < a.lap || (b.lap === a.lap && b.row <= a.row);
+    },
+    takesTask: (boxId) => {
+      const box = boxes.get(boxId);
+      return box !== undefined && takesTask(box);
+    },
+  };
+}
+
 /**
  * Whether anything actually reaches one required input — **core's rule, read off the same three
  * conditions** (`amenbo_core::ops::automation_run::fed`): the wire comes from a box a run

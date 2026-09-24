@@ -1202,6 +1202,11 @@ const ui = {
   "auto.step.nextGo": "Open {name}",
   "auto.step.maxTimes": "Taken at most",
   "auto.step.maxTimesNone": "No limit",
+  "auto.step.nextGoBack": "Open {name} (goes back)",
+  "auto.step.nextGroupPlacement": "Open a placement",
+  "auto.step.nextGroupStep": "Open a step",
+  "auto.step.nextGroupExit": "End with an output of this action",
+  "auto.step.nextGroupEnd": "End here",
   "auto.step.placementRemove": "Take this placement off",
   "auto.step.placementRemoveWhat": "The action itself stays in the library",
   "auto.step.placementRemoveConfirm": "This takes the placement off, with the settings answered on it and every line naming it. It cannot be undone.",
@@ -1350,6 +1355,7 @@ const ui = {
   "auto.run.halted": "a way out called for a person",
   "auto.run.step": "Step {n} · {step}",
   "auto.run.inAction": "{step} in {action}",
+  "auto.run.noTask": "No task taken yet",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,

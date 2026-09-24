@@ -39,6 +39,7 @@ import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../co
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth, SIDEBAR_COMPACT } from "../core/sidebarWidth";
 import { getSidebarCompact, setSidebarCompact } from "../core/sidebarCompact";
 import { RefNavProvider } from "../core/refNav";
+import { PaneSlotProvider } from "./paneSlot";
 import { writesOn } from "../core/unwritten";
 import { currentLang, errLabel, t, type CmdError } from "../core/i18n";
 import { Icon } from "../components/Icon";
@@ -368,6 +369,15 @@ export function AppShell() {
   }, [setShape]);
 
   const rightpaneRef = useRef<HTMLDivElement>(null);
+  // A build screen's panel, drawn into the same column (`./paneSlot`): how many panels are asking for
+  // it, and the element they are portalled into once the column stands.
+  const [paneClaims, setPaneClaims] = useState(0);
+  const [paneSlotEl, setPaneSlotEl] = useState<HTMLElement | null>(null);
+  const claimPane = useCallback(() => {
+    setPaneClaims((n) => n + 1);
+    return () => setPaneClaims((n) => n - 1);
+  }, []);
+  const paneSlot = useMemo(() => ({ slot: paneSlotEl, claim: claimPane }), [paneSlotEl, claimPane]);
   // The right pane's width (a device-local, persisted UI setting). Dragging the left-edge handle widens it, up to
   // ~50% of the window; core/rightpaneWidth owns the default and the bounds.
   const [rightWidth, setRightWidth] = useState(() => getRightpaneWidth());
@@ -600,13 +610,20 @@ export function AppShell() {
   // Search shows the pane for the same reason activity does: its rows name tasks and decisions both, and
   // the excerpt is a pointer — pressing it has to land somewhere that holds the whole of what it points at.
   const isSearchScreen = nav.type === "view" && nav.id === "search";
-  const showRight = (isTaskScreen || isActivityScreen || isSearchScreen)
+  const hasDetail = (isTaskScreen || isActivityScreen || isSearchScreen)
     && (selectedTaskId !== null || compose !== null || selectedDecisionId !== null);
+  // A panel asking for the column wins it over a detail left open: it is what the reader just pressed.
+  // The detail is hidden rather than taken down, so what was typed into it is there when the panel closes.
+  const paneClaimed = paneClaims > 0;
+  const showDetail = hasDetail && !paneClaimed;
+  const showRight = paneClaimed || hasDetail;
 
   const refNav = useMemo(() => ({ selectTask, selectDecision }), [selectTask, selectDecision]);
 
+  // Only the detail closes on a blank-space click. A build panel sits beside a picture whose every box
+  // and line is a press, and it closes with its own ×.
   useEffect(() => {
-    if (!showRight) return;
+    if (!showDetail) return;
     const onDown = (e: PointerEvent) => {
       if (isBlankSpaceClose(e.target as Node | null, rightpaneRef.current)) {
         void requestCloseRight(); // A blank-space click closes the pane (confirming the discard if there is unsaved input)
@@ -614,10 +631,11 @@ export function AppShell() {
     };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
-  }, [showRight]);
+  }, [showDetail]);
 
   return (
     <RefNavProvider value={refNav}>
+    <PaneSlotProvider value={paneSlot}>
     <div className="shell" key={lang}>
       <TopBar
         onBack={goBack}
@@ -773,43 +791,46 @@ export function AppShell() {
               title={t("pane.resize")}
               onPointerDown={startResize}
             />
-            <div className="rightpane">
-              <PaneHeader onClose={() => void requestCloseRight()} />
-              {compose ? (
-                <TaskComposePane
-                  projectId={compose.projectId}
-                  label={compose.label}
-                  onCreated={afterCreate}
-                  onCancel={() => void requestCloseRight()}
-                  onDirtyChange={setRightDirty}
-                />
-              ) : selectedTaskId ? (
-                <TaskDetailPane
-                  taskId={selectedTaskId}
-                  onDeleted={closeRight}
-                  onDirtyChange={setRightDirty}
-                  onSelectDecision={selectDecision}
-                  onGoToPane={goToPane}
-                  focusCommentAt={replyFocus?.taskId === selectedTaskId ? replyFocus.nonce : undefined}
-                  editCommentAt={editFocus?.taskId === selectedTaskId
-                    ? { commentId: editFocus.commentId, nonce: editFocus.nonce }
-                    : undefined}
-                />
-              ) : selectedDecisionId ? (
-                <DecisionDetailPane
-                  decisionId={selectedDecisionId}
-                  onOpenTask={selectTask}
-                  onOpenDecision={selectDecision}
-                  onGoToPane={goToPane}
-                  focusCommentAt={decisionReplyFocus?.decisionId === selectedDecisionId
-                    ? decisionReplyFocus.nonce
-                    : undefined}
-                  editCommentAt={decisionEditFocus?.decisionId === selectedDecisionId
-                    ? { commentId: decisionEditFocus.commentId, nonce: decisionEditFocus.nonce }
-                    : undefined}
-                />
-              ) : null}
-            </div>
+            {paneClaimed && <div className="rightpane" ref={setPaneSlotEl} />}
+            {hasDetail && (
+              <div className="rightpane" hidden={paneClaimed}>
+                <PaneHeader onClose={() => void requestCloseRight()} />
+                {compose ? (
+                  <TaskComposePane
+                    projectId={compose.projectId}
+                    label={compose.label}
+                    onCreated={afterCreate}
+                    onCancel={() => void requestCloseRight()}
+                    onDirtyChange={setRightDirty}
+                  />
+                ) : selectedTaskId ? (
+                  <TaskDetailPane
+                    taskId={selectedTaskId}
+                    onDeleted={closeRight}
+                    onDirtyChange={setRightDirty}
+                    onSelectDecision={selectDecision}
+                    onGoToPane={goToPane}
+                    focusCommentAt={replyFocus?.taskId === selectedTaskId ? replyFocus.nonce : undefined}
+                    editCommentAt={editFocus?.taskId === selectedTaskId
+                      ? { commentId: editFocus.commentId, nonce: editFocus.nonce }
+                      : undefined}
+                  />
+                ) : selectedDecisionId ? (
+                  <DecisionDetailPane
+                    decisionId={selectedDecisionId}
+                    onOpenTask={selectTask}
+                    onOpenDecision={selectDecision}
+                    onGoToPane={goToPane}
+                    focusCommentAt={decisionReplyFocus?.decisionId === selectedDecisionId
+                      ? decisionReplyFocus.nonce
+                      : undefined}
+                    editCommentAt={decisionEditFocus?.decisionId === selectedDecisionId
+                      ? { commentId: decisionEditFocus.commentId, nonce: decisionEditFocus.nonce }
+                      : undefined}
+                  />
+                ) : null}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -825,6 +846,7 @@ export function AppShell() {
           done yet. `hooksAsked` is that turn being over, the same latch the setup banner waits on. */}
       {hooksAsked && <NudgeHost />}
     </div>
+    </PaneSlotProvider>
     </RefNavProvider>
   );
 }

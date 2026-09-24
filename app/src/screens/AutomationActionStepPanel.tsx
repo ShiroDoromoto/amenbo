@@ -378,7 +378,7 @@ export function AutomationActionStepPanel({
         {t("auto.step.history")}
       </label>
 
-      <div className="settings__row">
+      <div className="actpanel__foot">
         <button type="button" className="btn btn--danger" onClick={() => void remove()}>
           {t("auto.act.stepRemove")}
         </button>

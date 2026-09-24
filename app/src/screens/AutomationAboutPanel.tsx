@@ -118,7 +118,7 @@ export function AutomationAboutPanel({
       </label>
       <div className="autostep__said">{t("auto.about.archiveWhat")}</div>
 
-      <div className="settings__row">
+      <div className="actpanel__foot">
         <button type="button" className="btn btn--danger" onClick={() => void remove()}>
           {t("auto.about.remove")}
         </button>

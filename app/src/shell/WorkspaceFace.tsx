@@ -1640,6 +1640,7 @@ export function WorkspaceFace({
                     // values, neither of them the agent's word about itself (`AMB-D-858`).
                     run={frame.run === null || step === undefined ? null : {
                       run: frame.run,
+                      automation: step.automationName,
                       seq: step.seq,
                       step: step.name,
                       // Which spot of the picture this step was opened from, said by the action

@@ -584,7 +584,12 @@ export type AutomationRunStartedDto = { run: number, };
  * on it — because what a run's pane says about a task is never the agent's word for it
  * (`AMB-D-858`).
  */
-export type AutomationRunTaskDto = { id: number, ref: string, title: string, };
+export type AutomationRunTaskDto = { id: number, ref: string, title: string, 
+/**
+ * **Which task of the run this is**, counted from 1 (`automation_run_task.seq`). A run works one
+ * stretch per task, so this and not the step count says how many tasks in a reader is.
+ */
+seq: number, };
 
 /**
  * **One step inside an action**: the terminal it stands up, and what it declares inside the picture.
@@ -642,6 +647,12 @@ runStep: number,
  * same step several times, so it is the count and not the step that says how far in a reader is.
  */
 seq: number, 
+/**
+ * **The automation the run was launched from**, by the name it holds now. It is what heads the
+ * row above the pane: a run's pane stands for the run, not for a place a person named
+ * (`app/src/talk/plate.ts`). Empty where the automation has since been deleted.
+ */
+automationName: string, 
 /**
  * What the step is called, as the row above its pane says it (`app/src/talk/nameplate.ts`).
  */

@@ -610,6 +610,7 @@ export const pl: Translation = {
     "face.auto": "Automatyczny",
     "face.runStep": "Krok {n}",
     "face.runNo": "Uruchomienie {n}",
+    "face.runTask": "Zadanie {n}",
     "face.dropRunConfirm": "Usunąć ten panel? Uruchomienie zostanie zatrzymane, zadanie, nad którym pracowało, wróci na Do zrobienia, a wiersz na tym zadaniu to odnotuje.",
     "quit.confirm": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, ale to, co w nich działało — nie.",
     "quit.confirmNotAll": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, poza panelami z {names}. To, co w nich działało, też nie wróci.",

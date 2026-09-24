@@ -594,6 +594,7 @@ export const zhHant: Translation = {
     "face.auto": "自動",
     "face.runStep": "第 {n} 步",
     "face.runNo": "執行 {n}",
+    "face.runTask": "第 {n} 個任務",
     "face.dropRunConfirm": "要移除此窗格嗎？執行會停下，它正在處理的任務回到待辦，並在那條任務上留下一行說明。",
     "quit.confirm": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，正在跑的東西不會。",
     "quit.confirmNotAll": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，但跑著 {names} 的窗格不會。正在跑的東西也不會。",

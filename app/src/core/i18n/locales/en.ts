@@ -656,8 +656,9 @@ const ui = {
   "face.dropConfirm": "Remove this pane? The terminal in it ends, and the way back into what was said here goes with the place.",
   // The pane an automation run is drawn in (`app/src/talk/nameplate.ts`). The mark beside the name
   // says this pane is a run's, and the line under it says where the run has got to: which step is
-  // running, how many moves in that is, which run it is, and the task the run is working. Every one
-  // is a value Amenbo holds, never the agent's word about itself (`AMB-D-858`).
+  // running, how many moves in that is, which run it is, how many tasks in the run is, and the task
+  // it is working. Every one is a value Amenbo holds, never the agent's word about itself
+  // (`AMB-D-858`).
   //
   // **And the way out is the other act.** There is no conversation to lose here — a step opens one of
   // its own and leaves nothing of it behind — so what the question is about is the run: it stops, the
@@ -665,6 +666,7 @@ const ui = {
   "face.auto": "Automated",
   "face.runStep": "Step {n}",
   "face.runNo": "Run {n}",
+  "face.runTask": "Task {n}",
   "face.dropRunConfirm": "Remove this pane? The run is stopped, the task it was working goes back to To do, and a line on that task says so.",
   // The way out of the whole app, which ends every terminal at once and is asked about for the same
   // reason one pane is (`app/src/shell/openPanes.ts`, `crate::quit`). It is its own sentence rather

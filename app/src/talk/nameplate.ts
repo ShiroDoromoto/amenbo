@@ -12,9 +12,11 @@
 // measurement of the stream and says nothing about what the stream means — a pane printing nothing
 // may be building, thinking, or waiting on somebody (`AMB-D-858`).
 //
-// **A run's pane is drawn as its own kind of pane** (`AMB-T-5252`). Beside the name is a mark saying
-// nobody is typing in this one, and under it a line of four: which step is running, how many moves in
-// the run that is, which run it is, and the task the run is working. Every one of those is a value
+// **A run's pane is drawn as its own kind of pane** (`AMB-T-5252`). It is headed with the automation
+// the run was launched from rather than with the place's name (`./plate`), beside that is a mark
+// saying nobody is typing in this one, and under it a line: which step is running, how many moves in
+// the run that is, which run it is, how many tasks in the run it is, and the task the run is working
+// — by reference and by title. Every one of those is a value
 // Amenbo holds — the execution rows and the ledger — so none of it is the agent's word about itself,
 // which is the whole of what this row stopped saying (`AMB-D-858`). **What the step printed is not
 // here**: that is in the terminal under the row, where a reader can scroll it.
@@ -31,8 +33,8 @@
 // back to: the panel drops under the header, wraps inside the pane's own width, and takes no pointer
 // events, so what is under it goes on being a terminal. It is dropped by a pointer resting on the row
 // and by the keyboard reaching the controls beside it — the row itself is no tab stop. A run's task
-// is given back there too: the row has room for the reference and not for the title, and the title is
-// what says which task it is without going to look.
+// is given back there too: the title on the row is the first thing given up as a pane narrows, and
+// the panel says it whole.
 
 import { t, tf } from "../core/i18n";
 
@@ -61,21 +63,28 @@ export function faceOf(moving: boolean): Face {
 /**
  * **The task a run is working**, as the ledger holds it (`AutomationRunTaskDto`).
  *
- * The reference is what the row draws and the title is what the panel gives back: a reference is
- * short enough to survive a narrow pane, and a title is what says which task it is.
+ * The row draws both halves and gives the title up first as a pane narrows: a reference is short
+ * enough to survive a narrow pane, and a title is what says which task it is.
  */
 export type Worked = {
   readonly ref: string;
   readonly title: string;
+  /** Which task of the run this is, counted from 1. A run works one stretch per task, so this and not
+   *  the move count is how many tasks in a reader is. */
+  readonly seq: number;
 };
 
 /**
- * **Where the run a pane is drawing has got to** — the four values the row says about it.
+ * **Where the run a pane is drawing has got to** — the values the row says about it.
  *
- * All four are Amenbo's own: three are the execution row this step is running under, and the fourth
- * is the task the run reserved. Nothing an agent said about itself is among them (`AMB-D-858`).
+ * All of them are Amenbo's own: the automation's name, the execution row this step is running
+ * under, and the task the run reserved. Nothing an agent said about itself is among them
+ * (`AMB-D-858`).
  */
 export type Say = {
+  /** The automation the run was launched from, by the name it holds now. It heads the row in place of
+   *  the place's name (`./plate`); empty where the automation has since been deleted. */
+  readonly automation: string;
   /** Which run it is — the handle a person has on it from anywhere else. */
   readonly run: number;
   /** How many moves in this one is, counted from 1. A run may walk the same step several times, so
@@ -131,8 +140,8 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   auto.textContent = t("face.auto");
   host.append(row);
 
-  // The four values, on a line of their own under the name. It is a second row and not more of the
-  // first one because the first is one line by construction, and four values elided into a pane's
+  // The run's values, on a line of their own under the name. It is a second row and not more of the
+  // first one because the first is one line by construction, and five values elided into a pane's
   // width would each be a word and a half (`../styles/global.css`).
   const runRow = document.createElement("div");
   runRow.className = "plate-run";
@@ -145,7 +154,9 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   const stepName = runPart("step");
   const seq = runPart("seq");
   const runNo = runPart("no");
+  const nth = runPart("nth");
   const taskRef = runPart("task");
+  const taskTitle = runPart("title");
   host.append(runRow);
 
   // The panel the name is read in full in. It is a sibling of the row rather than a child of it,
@@ -194,8 +205,10 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
         : tf("auto.run.inAction", { action: plate.run.action, step: plate.run.step });
       seq.textContent = tf("face.runStep", { n: plate.run.seq });
       runNo.textContent = tf("face.runNo", { n: plate.run.run });
+      nth.textContent = plate.run.task === null ? "" : tf("face.runTask", { n: plate.run.task.seq });
       taskRef.textContent = plate.run.task?.ref ?? "";
-      taskRef.hidden = plate.run.task === null;
+      taskTitle.textContent = plate.run.task?.title ?? "";
+      nth.hidden = taskRef.hidden = taskTitle.hidden = plate.run.task === null;
     }
     peekTask.textContent = plate.run?.task
       ? `${plate.run.task.ref} ${plate.run.task.title}`

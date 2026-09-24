@@ -606,6 +606,7 @@ export const es: Translation = {
     "face.auto": "Automatizado",
     "face.runStep": "Paso {n}",
     "face.runNo": "Ejecución {n}",
+    "face.runTask": "Tarea {n}",
     "face.dropRunConfirm": "¿Quitar este panel? La ejecución se detiene, la tarea en la que estaba vuelve a Pendiente, y una línea en esa tarea lo dice.",
     "quit.confirm": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque; lo que estaban ejecutando, no.",
     "quit.confirmNotAll": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque, salvo en los paneles con {names}. Lo que estaban ejecutando tampoco vuelve.",

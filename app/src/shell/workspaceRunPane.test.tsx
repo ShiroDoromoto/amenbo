@@ -123,8 +123,9 @@ function step(over: Partial<StepRun> = {}): StepRun {
   return {
     runStep: 1,
     seq: 1,
+    automationName: "家計簿の開発ループ",
     name: "取る",
-    task: { id: 5252, ref: "AMB-T-5252", title: "ペインのヘッダを描く" },
+    task: { id: 5252, ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 1 },
     session: "step-1",
     agent: "claude",
     folder: "/work/a",
@@ -238,7 +239,10 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     expect(q(".plate-run__seq")[0]?.textContent).toContain("1");
     expect(q(".plate-run__no")[0]?.textContent).toContain("7");
     expect(q(".plate-run__task")[0]?.textContent).toBe("AMB-T-5252");
+    expect(q(".plate-run__title")[0]?.textContent).toBe("ペインのヘッダを描く");
     expect(q(".plate__auto")[0]?.hidden).toBe(false);
+    // Headed with the automation the run is running, not with the folder the place stands in.
+    expect(q(".plate__name")[0]?.textContent).toBe("家計簿の開発ループ");
   });
 
   it("stops the run when the pane is closed, and takes the place away", async () => {

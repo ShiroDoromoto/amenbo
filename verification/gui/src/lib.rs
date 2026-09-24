@@ -6343,11 +6343,12 @@ impl Instructor {
                     }
                 ),
             },
-            // The pane a run is drawn in, and the four things the line over it carries. `label`
-            // reads a pane's name and nothing else, which is why this one is here.
+            // The pane a run is drawn in, and the four things its header carries — the run on the
+            // name's own line and the task on the line under it. `label` reads a pane's name and
+            // nothing else, which is why this one is here.
             (Domain::Automation, "run-pane") => match present(with) {
                 true => format!(
-                    "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands beside its name, and that the line over it carries four things: which step it is on{}, how many tasks in it is{}, the run's own number and the number of the task it is working{}.",
+                    "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands in front of its name, and that its header carries four things: on the name's line the run's own number, which step it is on{} and how many tasks in it is{}, and on the line under it the number of the task it is working{}.",
                     // The step and the action it was opened from are one value on the screen, in the
                     // order the reader's language puts them — so the line names both and leaves the
                     // order to the eye.

@@ -729,7 +729,7 @@ export function TerminalPane({
   return (
     <div
       className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}${
-        held ? " slot--held" : ""}`}
+        held ? " slot--held" : ""}${run === null ? "" : " slot--run"}`}
       style={at}
       data-hand={frame}
       onMouseDown={pressedOn}

@@ -60,10 +60,10 @@ INKS = [
 ]
 # The grounds an ink can land on — the three steps, the hover laid over them, and the pane frame the
 # rows under a terminal are written on.
-GROUNDS = ["--c-bg", "--c-surface", "--c-sunken", "--c-hover", "--c-pane-frame"]
+GROUNDS = ["--c-bg", "--c-surface", "--c-sunken", "--c-hover", "--c-pane-frame", "--c-ai-weak"]
 # A fill and the ink it carries; the pair is read together and travels together.
 FILLS = [("--c-accent", "--c-on-accent"), ("--c-heed", "--c-on-heed"), ("--c-stop", "--c-on-stop"),
-         ("--c-done", "--c-on-done")]
+         ("--c-done", "--c-on-done"), ("--c-ai", "--c-on-ai")]
 # The colours a file's own text is drawn in, and the two grounds a file is read on.
 CODE_INKS = [
     "--c-code-attribute", "--c-code-comment", "--c-code-constant", "--c-code-function",

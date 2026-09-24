@@ -18,7 +18,7 @@ import {
   panesOf, reordered, resized, restored, runFrameId, slotsOf, stoodForRun, writing,
   type Layout, type Size,
 } from "../talk/layout";
-import { onStep, standingSteps, type StepRun } from "../talk/automationStep";
+import { onStep, standingSteps, type BuiltinRun, type StepOpened, type StepRun } from "../talk/automationStep";
 import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
 import {
@@ -87,6 +87,14 @@ type Reading = {
 /** What a project nobody has opened a file on is holding, and what the face draws while it is on no
  *  project at all. */
 const NOTHING_OPEN: Reading = { open: [], showing: null, typed: {} };
+
+/** The map without the entry of this key — the same map where it had none, so nothing redraws. */
+function droppedFrom<T>(had: ReadonlyMap<string, T>, key: string): ReadonlyMap<string, T> {
+  if (!had.has(key)) return had;
+  const left = new Map(had);
+  left.delete(key);
+  return left;
+}
 
 /** The same record without the named keys — and the record itself where it holds none of them, so
  *  that letting go of what was never held draws nothing again. */
@@ -376,6 +384,11 @@ export function WorkspaceFace({
    */
   const [steps, setSteps] = useState<ReadonlyMap<string, StepRun>>(new Map());
   /**
+   * **The built-in each run's pane is showing instead**, by the pane's id (`AMB-D-964`). A pane is on
+   * one or the other: a step arriving takes the card away, and a built-in arriving takes the step.
+   */
+  const [builtins, setBuiltins] = useState<ReadonlyMap<string, BuiltinRun>>(new Map());
+  /**
    * The arrangement as it stands, read by what arrives from outside a render.
    *
    * A step of a run is told to the window as an event, and what hears it has to know what is already
@@ -604,6 +617,38 @@ export function WorkspaceFace({
     }, LANDED_MS);
   }, []);
 
+  // What `builtinArrived` reads the cards already up from — a closure over the state would answer
+  // with the cards as they were when the listener was made, as `standing` says of the arrangement.
+  const builtinsNow = useRef(builtins);
+  builtinsNow.current = builtins;
+
+  /**
+   * **A built-in is being carried out on a run, or has been** (`AMB-D-964`): stand the run's pane if
+   * it has none, take the step before it off, and let the pane show what Amenbo is doing in place of
+   * a terminal.
+   *
+   * It is told twice — as it starts and as it is done — and the second is the same card written over,
+   * not a new arrival: the ring goes up once, as the card first takes the place. The host has already
+   * ended the terminal of the step before (`crate::pty::end_steps_of`); what comes off here is the
+   * frame's hold on it.
+   */
+  const builtinArrived = useCallback((
+    run: number,
+    project: number,
+    builtin: BuiltinRun,
+    before: string | null,
+  ) => {
+    const id = runFrameId(run);
+    const fresh = !builtinsNow.current.has(id);
+    setSteps((had) => droppedFrom(had, id));
+    setBuiltins((had) => new Map(had).set(id, builtin));
+    setLayout((was) => {
+      const cleared = before === null ? was : closedIn(was, before);
+      return stoodForRun(cleared, project, run).layout;
+    });
+    if (fresh) landOn(id);
+  }, [landOn]);
+
   /**
    * **A step of a run is ready**: stand the run's pane if it has none, give up the terminal of the
    * step before it, and let the pane open one on this step (`../talk/automationStep`).
@@ -624,11 +669,16 @@ export function WorkspaceFace({
    * the run is read on. It rides this road at all because one answer carries both outcomes, and the
    * press that started the run is owed the other one (`crate::automation`).
    */
-  const stepArrived = useCallback((one: { run: number; project: number; step?: StepRun }) => {
-    if (one.step === undefined) return;
+  const stepArrived = useCallback((one: StepOpened) => {
     const id = runFrameId(one.run);
     const before = standing.current.frames.find((frame) => frame.id === id)?.session ?? null;
+    if (one.builtin !== undefined) {
+      builtinArrived(one.run, one.project, one.builtin, before);
+      return;
+    }
+    if (one.step === undefined) return;
     const step = one.step;
+    setBuiltins((had) => droppedFrom(had, id));
     setSteps((had) => new Map(had).set(id, step));
     // **The step standing already, told again** because it took its task (`AMB-T-5427`,
     // `crate::automation::retell_task`). Its terminal is the one on the frame, so nothing comes off
@@ -640,7 +690,7 @@ export function WorkspaceFace({
       return openedIn(stood, id, step.session, step.folder ?? null, step.agent);
     });
     landOn(id);
-  }, [landOn]);
+  }, [landOn, builtinArrived]);
 
   useEffect(() => onStep(stepArrived), [stepArrived]);
 
@@ -1600,13 +1650,19 @@ export function WorkspaceFace({
                 {slots.map(({ frame, across, down }, slot) => {
                   // The step this place is standing on, where it is a run's (`../talk/automationStep`).
                   const step = steps.get(frame.id);
+                  // Or the built-in Amenbo is carrying out there instead (`builtinArrived`).
+                  const builtin = step === undefined ? builtins.get(frame.id) : undefined;
+                  // Whichever of the two the row above the pane is about.
+                  const on = step ?? builtin;
                   return (
                   <TerminalPane
                     // A run's pane is keyed by the step as well as by the place, which is what swaps
                     // the terminal: the place is the same one and what is drawn in it is taken down
                     // and built again. Keyed by the place alone, the emulator would be handed a
                     // second session to draw while still holding the first one's screen.
-                    key={step === undefined ? frame.id : `${frame.id}:${step.runStep}`}
+                    key={step !== undefined
+                      ? `${frame.id}:${step.runStep}`
+                      : builtin !== undefined ? `${frame.id}:builtin` : frame.id}
                     frame={frame.id}
                     // Where this pane sits on the page's grid, worked out from the order rather than
                     // held against the pane (`../talk/layout`).
@@ -1642,16 +1698,17 @@ export function WorkspaceFace({
                     // What the row says under the name, on a run's pane (`../talk/nameplate`). It is
                     // the run the place is standing for and the step it is on — both Amenbo's own
                     // values, neither of them the agent's word about itself (`AMB-D-858`).
-                    run={frame.run === null || step === undefined ? null : {
+                    run={frame.run === null || on === undefined ? null : {
                       run: frame.run,
-                      automation: step.automationName,
-                      seq: step.seq,
-                      step: step.name,
+                      automation: on.automationName,
+                      seq: on.seq,
+                      step: on.name,
                       // Which spot of the picture this step was opened from, said by the action
                       // standing there (`AMB-D-949`). Null where that spot has since been taken off.
-                      action: step.actionName ?? null,
-                      task: step.task ?? null,
+                      action: on.actionName ?? null,
+                      task: on.task ?? null,
                     }}
+                    builtin={builtin ?? null}
                     // A place that came back holding a way into what was running in it is opened
                     // without being pressed — that press is what `AMB-D-869` is about.
                     // A run's pane is never pressed to open: the step arrived by itself, and a way
@@ -1690,12 +1747,8 @@ export function WorkspaceFace({
                       // A run's pane takes its step with it. The run was stopped on the way out
                       // (`./TerminalPane`), and a step left here would put the row back the moment a
                       // pane of that id stood again.
-                      setSteps((had) => {
-                        if (!had.has(id)) return had;
-                        const left = new Map(had);
-                        left.delete(id);
-                        return left;
-                      });
+                      setSteps((had) => droppedFrom(had, id));
+                      setBuiltins((had) => droppedFrom(had, id));
                     }}
                     onName={named}
                     onFocus={(id) => setLayout((was) => focusOn(was, id))}

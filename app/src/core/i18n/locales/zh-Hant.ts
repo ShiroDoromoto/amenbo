@@ -600,6 +600,8 @@ export const zhHant: Translation = {
     "quit.confirmNotAll": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，但跑著 {names} 的窗格不會。正在跑的東西也不會。",
 
     "face.ended": "此終端機中的程式已結束。",
+    "face.builtinDoing": "Amenbo 正在執行",
+    "face.builtinDone": "Amenbo 已執行",
 
     "face.endedGeminiUnset": "Gemini CLI 尚未設定驗證方式。它列出的路徑只屬於此窗格，會隨之捨棄——要設定的是你自己的 ~/.gemini/settings.json。",
     "face.noWayBack": "這段對話已經打不開了。",

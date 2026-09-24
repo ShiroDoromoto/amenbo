@@ -34,6 +34,8 @@ import { hostOs } from "../core/platform";
 import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
+import { BuiltinCard } from "./BuiltinCard";
+import type { BuiltinRun } from "../talk/automationStep";
 import type { Size } from "../talk/layout";
 
 /**
@@ -100,7 +102,7 @@ async function handOver(session: string, paths: string[]) {
  */
 export function TerminalPane({
   frame, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
-  inserted = [], composeOpen, held = false, goes = null, run = null, onGrab, onStretch, size, onSize,
+  inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, onGrab, onStretch, size, onSize,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
@@ -127,6 +129,11 @@ export function TerminalPane({
    * run's pane is stopping the run** (`drop`).
    */
   run?: Say | null;
+  /**
+   * The built-in Amenbo is carrying out on this run's pane, or null (`./BuiltinCard`). While there is
+   * one, it stands where the terminal would, and nothing is started here.
+   */
+  builtin?: BuiltinRun | null;
   /** True for the slot that puts a terminal up without being asked — the one the face comes up with,
    *  and the one a person has just pressed the way in on. */
   autoStart: boolean;
@@ -584,6 +591,26 @@ export function TerminalPane({
     // different key (`./WorkspaceFace`). The one exception is the run's task, told below.
   }, [running]);
 
+  // **The row above a built-in's card** (`./BuiltinCard`). There is no terminal for the effect above
+  // to put it up with, and the row is still what says which run this is and how far in it has got.
+  // The card is a pane of its own key (`./WorkspaceFace`), so this is put up once and taken down with it.
+  const onBuiltin = builtin !== null;
+  useEffect(() => {
+    const label = labelRef.current;
+    if (!onBuiltin || !label) return;
+    const plate = mountPlate(label, frame, hue, run);
+    // A row is drawn only on a pane something has run in, and a built-in is that: Amenbo is running
+    // it here. There is no folder to head the row with, and a run's row is headed with its automation.
+    plate.opened(null);
+    plateRef.current = plate;
+    on.current.onRow?.(frame, plate.read);
+    return () => {
+      plate.stop();
+      plateRef.current = null;
+      on.current.onRow?.(frame, null);
+    };
+  }, [onBuiltin]);
+
   // The keyboard, at the moment a terminal opens here and at every fold after it. What a person does
   // next in a place they just opened is type, and where that lands is whether the box is open
   // (`AMB-D-864`, `AMB-D-889`) — left to itself the keyboard is on the page, and the first thing
@@ -884,7 +911,7 @@ export function TerminalPane({
             onPointerDown={onStretch}
           />
         )}
-        {running
+        {builtin !== null ? <BuiltinCard builtin={builtin} /> : running
           ? (
             <>
               {ended && (

@@ -779,6 +779,24 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 }
 .slot__open:disabled:hover { filter: none; }
 
+/* What Amenbo is doing on a run's pane while it carries a built-in out (`../shell/BuiltinCard`). It
+   stands where the terminal would and takes the same room, so the pane does not change size between a
+   step and a built-in. One thing is said, in the middle: which built-in, and the task under it. */
+.slot__builtin {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--s-2); padding: var(--s-4);
+  text-align: center;
+}
+.slot__builtin-state { color: var(--c-text-muted); font-size: var(--fs-xs); }
+.slot__builtin-name { font-size: var(--fs-xl); font-weight: 600; }
+.slot__builtin-task {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2);
+  max-width: 100%; color: var(--c-text-muted); font-size: var(--fs-md);
+}
+.slot__builtin-ref { font-variant-numeric: tabular-nums; }
+.slot__builtin-title { overflow-wrap: anywhere; }
+
 /* The question and the row under it, kept together: the words are what say the pills are an offer, so
    they sit closer to the row than the row sits to the press that acts on it. */
 .slot__pick {

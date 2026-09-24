@@ -315,6 +315,11 @@ heldBy: Array<AutomationRunCardDto>, };
  */
 export type AutomationCardDto = { id: number, name: string, 
 /**
+ * What it is for, as written on the build screen. The row shows its first line under the name —
+ * two automations of like names are told apart by it.
+ */
+notes: string, 
+/**
  * How many actions are placed on it. The row says it because "what is this" and "is it built
  * yet" are the two things a list is read for.
  */

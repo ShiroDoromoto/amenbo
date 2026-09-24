@@ -1790,6 +1790,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autolist__row:hover { background: var(--c-hover); }
 .autolist__name { min-width: 0; overflow-wrap: anywhere; font-weight: var(--fw-bold); }
 .autolist__row--archived .autolist__name { color: var(--c-text-muted); }
+/* The notes' first line under the name (`.auto__note`), which is not the name's weight. */
+.autolist__name .auto__note { font-weight: var(--fw-normal); }
 .autolist__tag {
   margin-inline-start: var(--s-2); padding: 0 var(--s-2); border-radius: 999px; vertical-align: 1px;
   border: var(--border-w) var(--border-style) var(--c-edge); background: var(--c-sunken-pic) var(--c-sunken);

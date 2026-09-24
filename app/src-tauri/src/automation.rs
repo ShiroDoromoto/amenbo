@@ -84,6 +84,7 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
         .map(|card| AutomationCardDto {
             id: card.automation.id,
             name: card.automation.name,
+            notes: card.automation.notes,
             placements: card.placements,
             archived: card.automation.archived,
         })
@@ -108,6 +109,7 @@ pub fn automation_page_everywhere() -> Result<Vec<EveryAutomationCardDto>, CmdEr
             card: AutomationCardDto {
                 id: one.card.automation.id,
                 name: one.card.automation.name,
+                notes: one.card.automation.notes,
                 placements: one.card.placements,
                 archived: one.card.automation.archived,
             },

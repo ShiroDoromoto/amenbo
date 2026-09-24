@@ -161,20 +161,64 @@ fn branch_exists(root: &Path, branch: &str) -> bool {
 /// Cut the worktree and its branch. `base` is what the branch is cut from; the name actually used comes
 /// back, since it is what the account on screen names.
 pub fn start(cut: &Cut, base: Option<&str>) -> Result<String, Refusal> {
+    nothing_standing(cut)?;
+    let from = cut_from(&cut.root, base);
+    add(cut, &from, &[])?;
+    Ok(from)
+}
+
+/// **Cut the worktree from the newest of the remote's default branch** — what an automation's built-in
+/// cuts from (`AMB-D-964`). Whatever the repository is standing on is not asked: the main worktree may
+/// be on any branch, and it is neither switched nor pulled.
+///
+/// The branch does not track `origin/<default>`. It is pushed under its own name, and one that tracked
+/// the trunk would read as ahead of it for as long as it lives.
+pub fn start_from_origin(cut: &Cut) -> Result<String, Refusal> {
+    nothing_standing(cut)?;
+    let from = origin_default(&cut.root)?;
+    add(cut, &from, &["--no-track"])?;
+    Ok(from)
+}
+
+/// **The remote's default branch, fetched fresh** — `origin/<name>`, read from `refs/remotes/origin/HEAD`
+/// rather than from the forge, so no account and no forge's tool is needed to know it. A clone records
+/// that ref; a repository that was given its remote by hand may not have, and git has the one command
+/// that records it.
+pub fn origin_default(root: &Path) -> Result<String, Refusal> {
+    git(root, &["fetch", "--quiet", "origin"])?;
+    git_raw(root, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).map_err(|f| {
+        if f.said == NO_GIT {
+            return Refusal::NoGit;
+        }
+        Refusal::Git(format!(
+            "origin's default branch is not recorded in {} — `git remote set-head origin --auto` records it ({})",
+            root.display(),
+            f.said,
+        ))
+    })
+}
+
+/// Refuse a cut where one is standing already: the worktree, or its branch on its own.
+fn nothing_standing(cut: &Cut) -> Result<(), Refusal> {
     if cut.worktree.exists() {
         return Err(Refusal::WorktreeExists(cut.worktree.clone()));
     }
     if branch_exists(&cut.root, &cut.branch) {
         return Err(Refusal::BranchExists(cut.branch.clone()));
     }
+    Ok(())
+}
+
+/// `git worktree add` itself, into the sibling directory made for it.
+fn add(cut: &Cut, from: &str, flags: &[&str]) -> Result<(), Refusal> {
     std::fs::create_dir_all(&cut.parent)
         .map_err(|e| Refusal::Io(format!("{}: {e}", cut.parent.display())))?;
-    let from = cut_from(&cut.root, base);
-    git(
-        &cut.root,
-        &["worktree", "add", &cut.worktree.to_string_lossy(), "-b", &cut.branch, &from],
-    )?;
-    Ok(from)
+    let worktree = cut.worktree.to_string_lossy();
+    let mut args = vec!["worktree", "add"];
+    args.extend_from_slice(flags);
+    args.extend_from_slice(&[&worktree, "-b", &cut.branch, from]);
+    git(&cut.root, &args)?;
+    Ok(())
 }
 
 /// Is every change on `branch` already in `base`, so that deleting it loses nothing?

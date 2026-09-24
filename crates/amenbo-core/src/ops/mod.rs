@@ -28,6 +28,7 @@ pub mod attachment;
 pub mod automation;
 pub mod automation_builtin;
 pub mod automation_builtin_close;
+pub mod automation_builtin_cut;
 pub mod automation_builtin_take;
 pub mod automation_report;
 pub mod automation_run;

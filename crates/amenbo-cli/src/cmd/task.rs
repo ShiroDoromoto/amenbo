@@ -17,7 +17,7 @@ use crate::cmd::labels::{decision_label, task_label};
 use crate::cmd::place::made_in_line;
 use crate::cmd::outbox::{emit_event, emit_unblocks, newly_ready_or_warn};
 use crate::cmd::place::{made_in, project_or_bound, resolve_bound_folder, resolve_dim_pairs};
-use crate::cmd::premise::{attach_premise_change, premise_change, premise_change_lines, premise_change_when, warn_if_premise_added_to_reserved, warn_premise_change};
+use crate::cmd::premise::{attach_comments_since, attach_premise_change, comments_since_when, premise_change, premise_change_lines, premise_change_when, warn_comments_since, warn_if_premise_added_to_reserved, warn_premise_change};
 use crate::output::{confirm, count_header, human, print_json, warn_body, write_envelope, CliError, Flags};
 
 /// Resolve a task reference (`AMB-T-n`, or the bare `T-n` / `#n` / `n`). The numbers are globally unique on the device, so no
@@ -591,6 +591,7 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool, re
     // Safety net (`AMB-D-366`): completing a reserved task is the moment not to miss — read the premises pinned on
     // after the reservation *before* the transition retires the in_progress clock they are measured against.
     let pc = premise_change_when(store, tid, completed && old == TaskStatus::InProgress);
+    let unread = comments_since_when(store, tid, completed && old == TaskStatus::InProgress);
     let t = if completed {
         store.complete_task_with_report(tid, report.as_deref(), flags.facet()?).map_err(CliError::from)?
     } else {
@@ -606,8 +607,10 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool, re
     let msg = if completed { "✓ Marked done" } else { "✓ Reopened" };
     let mut resource = serde_json::to_value(&detail).unwrap();
     attach_premise_change(&mut resource, &pc);
+    attach_comments_since(&mut resource, &unread);
     write_envelope(flags, action, "task", resource, Some(vec!["completed".to_string(), "status".to_string()]), false, format!("{msg}: {}", task_label(t.id)));
     warn_premise_change(&pc);
+    warn_comments_since(&unread);
     Ok(0)
 }
 
@@ -636,11 +639,9 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
     // Safety net (`AMB-D-366`): leaving in_progress to complete or block is the not-to-miss moment; read the
     // premises acquired since the reservation before the transition retires the clock. Handing it back to
     // todo needs no warn — the holder is stepping off anyway.
-    let pc = premise_change_when(
-        store,
-        tid,
-        old == TaskStatus::InProgress && (new_status.is_closed() || new_status == TaskStatus::Blocked),
-    );
+    let leaving = old == TaskStatus::InProgress && (new_status.is_closed() || new_status == TaskStatus::Blocked);
+    let pc = premise_change_when(store, tid, leaving);
+    let unread = comments_since_when(store, tid, leaving);
     let t = store.set_task_status(tid, new_status, flags.facet()?).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), new_status.as_str()));
     // Ending the task — carried out or decided against — may have made dependents ready; emit the
@@ -651,8 +652,10 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
     let mut resource = serde_json::to_value(&detail).unwrap();
     attach_premise_change(&mut resource, &pc);
+    attach_comments_since(&mut resource, &unread);
     write_envelope(flags, "task.status", "task", resource, Some(vec!["status".to_string(), "completed".to_string()]), false, format!("✓ Set status to {}: {}", new_status.as_str(), task_label(t.id)));
     warn_premise_change(&pc);
+    warn_comments_since(&unread);
     Ok(0)
 }
 
@@ -663,6 +666,7 @@ fn task_block(store: &mut Store, flags: &Flags, id: &str, reason: Option<String>
     // Safety net (`AMB-D-366`): interrupting a reserved task — read the premises acquired since the reservation
     // before the transition retires the in_progress clock.
     let pc = premise_change_when(store, tid, old == TaskStatus::InProgress);
+    let unread = comments_since_when(store, tid, old == TaskStatus::InProgress);
     let t = store.set_task_status(tid, TaskStatus::Blocked, flags.facet()?).map_err(CliError::from)?;
     if old != TaskStatus::Blocked {
         emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), "blocked"));
@@ -675,8 +679,10 @@ fn task_block(store: &mut Store, flags: &Flags, id: &str, reason: Option<String>
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
     let mut resource = serde_json::to_value(&detail).unwrap();
     attach_premise_change(&mut resource, &pc);
+    attach_comments_since(&mut resource, &unread);
     write_envelope(flags, "task.block", "task", resource, Some(vec!["status".to_string()]), false, format!("✓ Set to blocked: {}", task_label(t.id)));
     warn_premise_change(&pc);
+    warn_comments_since(&unread);
     Ok(0)
 }
 
@@ -711,6 +717,7 @@ fn task_reject(store: &mut Store, flags: &Flags, id: &str, reason: String) -> Re
     // Safety net (`AMB-D-366`): ending a reserved task is the moment not to miss — read the premises pinned
     // on after the reservation before the transition retires the in_progress clock they are measured against.
     let pc = premise_change_when(store, tid, old == TaskStatus::InProgress);
+    let unread = comments_since_when(store, tid, old == TaskStatus::InProgress);
     let t = store.set_task_status(tid, TaskStatus::Rejected, flags.facet()?).map_err(CliError::from)?;
     emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
     // A blocker decided against is a blocker no longer — dependents may have just become ready.
@@ -719,7 +726,9 @@ fn task_reject(store: &mut Store, flags: &Flags, id: &str, reason: String) -> Re
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
     let mut resource = serde_json::to_value(&detail).unwrap();
     attach_premise_change(&mut resource, &pc);
+    attach_comments_since(&mut resource, &unread);
     write_envelope(flags, "task.reject", "task", resource, Some(vec!["status".to_string()]), false, format!("✓ Rejected: {}", task_label(t.id)));
     warn_premise_change(&pc);
+    warn_comments_since(&unread);
     Ok(0)
 }

@@ -686,6 +686,39 @@ fn done_with_a_report_keeps_it_on_the_timeline() {
     assert!(cli.json(&["comment", "list", &other, "--json"])["comments"].as_array().unwrap().is_empty());
 }
 
+/// The holder-side comment surface of `AMB-D-963`: a comment posted after a task was reserved has not been
+/// read by the session holding it, so leaving `in_progress` for a closing or stalling status hands it back —
+/// in the JSON envelope and on stderr. One from before the reservation was read when the work started and is
+/// not repeated, and handing the task back to `todo` says nothing: the next holder reads the timeline anyway.
+/// Timestamps are whole seconds, so the test waits past the reservation second before commenting.
+#[test]
+fn comments_posted_after_reservation_surface_when_the_task_is_closed() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+    let a = id_str(&cli.json(&["task", "add", "--title", "閉じるタスク", "--project", &pid, "--json"])["task"]["id"]);
+    let b = id_str(&cli.json(&["task", "add", "--title", "手放すタスク", "--project", &pid, "--json"])["task"]["id"]);
+    cli.finish_creating(&a);
+    cli.finish_creating(&b);
+    cli.json(&["comment", "add", &a, "--text", "予約の前に書いたこと", "--json"]);
+
+    cli.json(&["task", "status", &a, "in_progress", "--json"]);
+    cli.json(&["task", "status", &b, "in_progress", "--json"]);
+    std::thread::sleep(std::time::Duration::from_millis(2000));
+    cli.json(&["comment", "add", &a, "--text", "予約のあとに書いたこと", "--json"]);
+    cli.json(&["comment", "add", &b, "--text", "手放す前に書いたこと", "--json"]);
+
+    // Closing it: only the comment from after the reservation comes back.
+    let done = cli.json(&["task", "done", &a, "--json"]);
+    let unread = done["task"]["comments_since_reserved"].as_array().unwrap_or_else(|| panic!("the key is there: {done}"));
+    let texts: Vec<_> = unread.iter().map(|c| c["text"].as_str().unwrap()).collect();
+    assert_eq!(texts, vec!["予約のあとに書いたこと"]);
+
+    // Handing it back to todo: nothing — the next holder reads the timeline when it starts.
+    let back = cli.json(&["task", "status", &b, "todo", "--json"]);
+    assert!(back["task"].get("comments_since_reserved").is_none(), "todo says nothing: {back}");
+}
+
 /// The holder-side surface of `AMB-D-366`: after a task is reserved (`in_progress`), a premise pinned on
 /// afterwards silently drops its readiness. An ordinary `task show` (the early warning) and completing it
 /// (the safety net) both surface the added premise; a fresh reservation and a plain `todo` task show

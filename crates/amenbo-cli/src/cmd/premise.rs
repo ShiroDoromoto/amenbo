@@ -158,6 +158,44 @@ pub(crate) fn attach_premise_change(resource: &mut serde_json::Value, pc: &amenb
     }
 }
 
+/// The comments the holder has not read (`AMB-D-963`): posted after the task's current status began, which
+/// on a reserved task means after the session holding it read its timeline and started. Read only when
+/// `applies` — leaving `in_progress` for `done`, `rejected` or `blocked` — and read **before** the transition,
+/// which moves the clock they are measured against. Handing a task back to `todo` does not ask: the next
+/// session to reserve it reads the timeline when it starts. A read error yields none — this is additive
+/// context, never a reason to fail the command.
+pub(crate) fn comments_since_when(store: &Store, tid: i64, applies: bool) -> Vec<amenbo_core::query::CommentItem> {
+    if applies {
+        store.comments_since(tid).unwrap_or_default()
+    } else {
+        Vec::new()
+    }
+}
+
+/// Fold the unread comments into a write command's JSON resource, beside `premise_change`. Absent when there
+/// are none, so the key appears exactly when there is something to read.
+pub(crate) fn attach_comments_since(resource: &mut serde_json::Value, comments: &[amenbo_core::query::CommentItem]) {
+    if comments.is_empty() {
+        return;
+    }
+    if let Some(obj) = resource.as_object_mut() {
+        obj.insert("comments_since_reserved".to_string(), serde_json::to_value(comments).unwrap_or(json!(null)));
+    }
+}
+
+/// Show the unread comments on stderr, in full: they are what the holder is closing the task without having
+/// read, so a preview that cut one short would defeat the point. Like [`warn_premise_change`], it never
+/// blocks the transition.
+pub(crate) fn warn_comments_since(comments: &[amenbo_core::query::CommentItem]) {
+    if comments.is_empty() {
+        return;
+    }
+    eprintln!("⚠ Comments were added after you reserved this task — read them (AMB-D-963):");
+    for c in comments {
+        eprintln!("{}", crate::cmd::comment::comment_line(amenbo_core::idref::RefKind::TaskComment, c));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

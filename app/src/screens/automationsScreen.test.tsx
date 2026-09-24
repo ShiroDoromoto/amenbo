@@ -37,6 +37,7 @@ vi.mock("../core/automations", () => ({
   useAutomation: () => hoisted.detail,
   useLaunchCheck: () => hoisted.check,
   useAutomationActions: () => [],
+  useAutomationBuiltins: () => [],
   useAutomationAction: () => null,
   insertAutomationAction: () => Promise.resolve(),
   placeAutomationAction: () => Promise.resolve(),

@@ -288,6 +288,11 @@ note: string,
  */
 global: boolean, 
 /**
+ * **The built-in this action is**, by its key (`AMB-D-964`). Its rows are Amenbo's own and are
+ * not edited, so the screen that opens it reads the definition rather than building it.
+ */
+builtin?: string, 
+/**
  * How many automations place it: what a rewrite here reaches.
  */
 usedBy: number, 
@@ -309,6 +314,43 @@ settings: Array<AutomationCfgDto>,
  * project that automation is in (`AMB-D-961`). Read for [`AutomationDetailDto::held_by`]'s reason.
  */
 heldBy: Array<AutomationRunCardDto>, };
+
+/**
+ * **One built-in, as Amenbo defines it** (`AMB-D-964`) — what the library draws under its own head,
+ * beside the device's actions and the project's, and what opening one reads.
+ *
+ * It is read off the code's definition ([`amenbo_core::ops::automation_builtin::all`]) rather than off
+ * a stored action, because the library action is only written the first time one is placed: a
+ * built-in nobody has placed yet is still one a reader can pick. So nothing here carries an id —
+ * `key` is what placing one names.
+ *
+ * `used_by` is how many automations place it, counted off the library action where one was written —
+ * the same number an action's row carries.
+ */
+export type AutomationBuiltinDto = { key: string, name: string, 
+/**
+ * What it does, in a sentence a person building with it reads.
+ */
+does: string, 
+/**
+ * The settings it reads, answered where it is placed. None carries an answer.
+ */
+settings: Array<AutomationCfgDto>, inputs: Array<AutomationPortDto>, 
+/**
+ * The ways out it leaves by, each with what it hands on. The error way out every step carries is
+ * not among them.
+ */
+exits: Array<AutomationBuiltinExitDto>, usedBy: number, };
+
+/**
+ * **A way out of a built-in**, and what leaving through it hands on — [`AutomationExitDto`] without
+ * the row id, since the definition is not a row.
+ */
+export type AutomationBuiltinExitDto = { 
+/**
+ * Absent is the unnamed way out.
+ */
+name?: string, outputs: Array<AutomationPortDto>, };
 
 /**
  * **A built-in step of a run, as its pane draws it** — the one card Amenbo puts up in place of a
@@ -494,6 +536,11 @@ name: string, actionId: number,
  * box says under its name, as the library list does. False where the action is gone.
  */
 global: boolean, 
+/**
+ * **The built-in the action standing here is**, by its key (`AMB-D-964`) — what the box says under
+ * its name in place of the reach, and what opening it reads instead of an action to build.
+ */
+builtin?: string, 
 /**
  * The step this spot opens first. Absent where the action holds no step yet, which the launch
  * check names.

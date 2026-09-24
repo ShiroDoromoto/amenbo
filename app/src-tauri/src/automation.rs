@@ -49,6 +49,7 @@ use amenbo_core::model::{
     AutomationWire,
 };
 use amenbo_core::ops::automation::{ActionShelf, EdgeTarget, NewAutomation, NewStep};
+use amenbo_core::ops::automation_builtin;
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::ops::automation_stop::Ended;
@@ -58,7 +59,8 @@ use amenbo_core::store_engine::read;
 
 use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
-    AutomationActionCardDto, AutomationActionDetailDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
+    AutomationActionCardDto, AutomationActionDetailDto, AutomationBuiltinDto,
+    AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacementDto, AutomationPlacementStepDto, AutomationPortDto,
     AutomationRunCardDto,
@@ -212,7 +214,9 @@ pub fn automation_action_page(
     let conn = store.read_model().conn();
     let cards = automation_view::action_cards(conn, project_id)?;
     let mut out = Vec::with_capacity(cards.len());
-    for card in cards {
+    // A built-in's library action is kept on the device's shelf, but it is not one of the device's
+    // actions: it is listed under its own head, from the definition (`automation_builtin_page`).
+    for card in cards.into_iter().filter(|card| card.action.builtin.is_none()) {
         out.push(AutomationActionCardDto {
             id: card.action.id,
             name: card.action.name,
@@ -225,6 +229,80 @@ pub fn automation_action_page(
         });
     }
     Ok(out)
+}
+
+/// **The built-ins** (`AMB-D-964`), in the order the library lists them — read off Amenbo's own
+/// definition ([`amenbo_core::ops::automation_builtin::all`]), which is what the library draws under its
+/// own head and what opening one reads.
+///
+/// A built-in's library action is only written the first time one is placed, so the definition is
+/// what is listed; the action, where one was written, only says how many automations place it.
+#[tauri::command]
+pub fn automation_builtin_page() -> Result<Vec<AutomationBuiltinDto>, CmdError> {
+    let store = open_store_read()?;
+    let conn = store.read_model().conn();
+    let mut out = Vec::new();
+    for one in automation_builtin::all() {
+        let used_by = match read::automation_action_builtin(conn, one.key)? {
+            Some(action) => automation_view::used_by(conn, action.id)?,
+            None => 0,
+        };
+        out.push(AutomationBuiltinDto {
+            key: one.key.to_string(),
+            name: one.name.to_string(),
+            does: one.does.to_string(),
+            settings: one
+                .settings
+                .iter()
+                .map(|s| AutomationCfgDto {
+                    name: s.name.to_string(),
+                    kind: s.kind.as_str(),
+                    required: s.required,
+                    options: s.options.map(str::to_string),
+                    value: None,
+                })
+                .collect(),
+            inputs: one.ins.iter().map(builtin_port_dto).collect(),
+            exits: one
+                .exits
+                .iter()
+                .map(|e| AutomationBuiltinExitDto {
+                    name: e.name.map(str::to_string),
+                    outputs: e.outs.iter().map(builtin_port_dto).collect(),
+                })
+                .collect(),
+            used_by,
+        });
+    }
+    Ok(out)
+}
+
+fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto {
+    AutomationPortDto { name: port.name.to_string(), kind: port.kind.as_str(), required: port.required }
+}
+
+/// **Put a built-in on a picture**, standing on its own ([`automation_placement_add`] for a built-in):
+/// its library action is written from the definition the first time any automation places it
+/// ([`amenbo_core::ops::automation_builtin::action`]).
+#[tauri::command]
+pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_builtin_place(automation_id, &key)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Put a built-in in on a line** ([`automation_step_insert`] for a built-in) — the way out that was
+/// pressed comes to point at the new placement, in one transaction with the library action written
+/// where none was yet.
+#[tauri::command]
+pub fn automation_builtin_insert(edge_id: i64, key: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_builtin_insert(edge_id, &key)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Make a library action** — a name, and which library it lands in.
@@ -1808,6 +1886,7 @@ fn action_detail_dto(
         name: action.name,
         note: action.note,
         global: action.project_id.is_none(),
+        builtin: action.builtin,
         used_by: view.used_by,
         entry_step_id: action.entry_step_id,
         steps: view.steps.into_iter().map(step_dto).collect(),
@@ -1897,6 +1976,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         name: action.as_ref().map(|one| one.name.clone()).unwrap_or_default(),
         action_id: placement.action_id,
         global: action.as_ref().is_some_and(|one| one.project_id.is_none()),
+        builtin: action.as_ref().and_then(|one| one.builtin.clone()),
         step_id: opens.as_ref().map(|s| s.id),
         prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),
         interactive: opens.as_ref().is_some_and(|s| s.interactive),

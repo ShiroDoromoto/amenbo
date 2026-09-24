@@ -36,6 +36,10 @@
 // screen holds itself shut the way it does for a global action, and names those runs over the picture
 // with the way to each one's pane (`./AutomationHeldBy`).
 //
+// **A built-in's action is read as its definition** (`./AutomationBuiltinScreen`). Its rows are Amenbo's
+// own and core refuses every edit of them (`AMB-D-964`), so a box on a picture opening one lands on the
+// screen that draws what it does rather than on steps nobody can change.
+//
 // **Which step is pressed is the screen's, not the picture's**, for the automation screen's reason:
 // the picture marks that box and the panel draws that step, so it is held where both can see it. A
 // step that is deleted takes the panel's selection with it.
@@ -43,6 +47,7 @@ import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AutomationActionDeclaresPanel } from "./AutomationActionDeclaresPanel";
 import { AutomationActionStepPanel } from "./AutomationActionStepPanel";
+import { AutomationBuiltinScreen } from "./AutomationBuiltinScreen";
 import { AutomationHeldBy } from "./AutomationHeldBy";
 import { ReachChip } from "./AutomationActionsTab";
 import { AutomationPicture } from "./AutomationPicture";
@@ -217,6 +222,10 @@ export function AutomationActionBuildScreen({
     in: t("auto.pic.actionIn"),
     out: t("auto.pic.actionOut"),
   };
+
+  if (action?.builtin !== undefined) {
+    return <AutomationBuiltinScreen builtinKey={action.builtin} onBack={onBack} />;
+  }
 
   return (
     <div className="actbuild">

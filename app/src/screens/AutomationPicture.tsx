@@ -345,10 +345,13 @@ export function AutomationPicture({
                     <span>{tf("auto.pic.unfed", { names: listLabel([...node.unfed]) })}</span>
                   </span>
                 ) : (
-                  // Which library the action standing here comes from, on an automation's picture.
+                  // Which library the action standing here comes from, on an automation's picture — a
+                  // built-in's is Amenbo's own, though it is kept on the device's shelf.
                   node.global !== undefined && (
                     <span className="autopic__lib">
-                      {t(node.global ? "auto.actions.reachGlobal" : "auto.actions.reachProject")}
+                      {node.builtin !== undefined
+                        ? t("auto.actions.reachBuiltin")
+                        : t(node.global ? "auto.actions.reachGlobal" : "auto.actions.reachProject")}
                     </span>
                   )
                 )}

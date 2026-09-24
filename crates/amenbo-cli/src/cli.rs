@@ -2176,7 +2176,8 @@ pub enum AutomationCmd {
         /// end the run failed (halted) and call a person
         #[arg(long)]
         halt: bool,
-        /// how often this edge may be taken for one task (left out: 10, the standing limit)
+        /// how often this edge may be taken for one task (left out: 10, the standing limit) — counted only
+        /// while the edge goes back
         #[arg(long, value_name = "N", conflicts_with = "no_max")]
         max_times: Option<i64>,
         /// let it be taken as often as the run reaches it

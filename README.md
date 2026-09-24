@@ -354,7 +354,7 @@ amenbo automation place-add 3 --action 7               # put that action on the 
 amenbo automation agent-set 31 --step 11 --agent claude # who carries that step out at this spot (--model too)
 amenbo automation exit-add --action 7 --name "something to fix" # a way out a placement may leave by
 amenbo automation port-add --exit 21 --name report --kind file  # what that way out hands on
-amenbo automation edge-add --from "31:something to fix" --to 32 --max-times 3 # what happens after it
+amenbo automation edge-add --from "31:something to fix" --to 32 # what happens after it (--max-times caps a way back)
 amenbo automation wire-add --from "31:something to fix" --from-port report --to 32 --to-port report
 amenbo automation edge-add --in-action --from 11:approved --exit-to approved # inside an action: leave it by a way out it declares
 amenbo automation wire-add --in-action --from 0 --from-port task --to 11 --to-port task # `0` is the action itself: what it takes in, handed to a step

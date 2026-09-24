@@ -1170,7 +1170,8 @@ datasets! {
     // `max_times` is how often this edge may be taken **for one task**: the count is kept per
     // `automation_run_task` row and starts again at the next task, so a loop that goes back to fix
     // something cannot spin forever on the same one. NULL is no limit, which is the right answer for
-    // an edge into a box that takes a fresh task.
+    // an edge into a box that takes a fresh task. Only an edge that goes back is counted
+    // (`ops::automation::lines_back`); an edge going down carries the standing limit uncounted.
     automation_edge {
         owner_kind: enum_col("automation", "action"),
         // Polymorphic, all three of them — see `automation_cfg`'s note.

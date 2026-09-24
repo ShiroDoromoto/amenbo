@@ -40,7 +40,7 @@ use crate::model::{
     AutomationRunStepStatus, AutomationStep, AutomationEdge,
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
 };
-use crate::ops::emit_create;
+use crate::ops::{automation, emit_create};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -802,7 +802,7 @@ fn line_after(
             AutomationEnds::Go => inner.to_id,
             _ => None,
         };
-        return Ok((Some(kept(&inner, Some(placement.id).filter(|_| step.is_some()), step)), None));
+        return Ok((Some(kept(conn, &inner, Some(placement.id).filter(|_| step.is_some()), step)?), None));
     }
     let Some(action_exit) = inner.exit_to_id else { return Ok((None, None)) };
     let outer =
@@ -822,15 +822,28 @@ fn line_after(
                 }
                 _ => (None, None),
             };
-            Some(kept(&outer, to, step))
+            Some(kept(conn, &outer, to, step)?)
         }
     };
     Ok((line, Some(action_exit)))
 }
 
 /// One live line as the copy keeps it, going on to `placement_id` / `step_id` where it goes on at all.
-fn kept(edge: &AutomationEdge, placement_id: Option<i64>, step_id: Option<i64>) -> RunDefLine {
-    RunDefLine {
+///
+/// **The limit is kept on a line that goes back, and on no other** ([`automation::lines_back_on`]). A
+/// line going down carries the standing limit it was drawn with, and nobody is shown it — so counting
+/// it would stop a loop drawn to go round twenty times at the ten its way down happened to carry.
+fn kept(
+    conn: &Connection,
+    edge: &AutomationEdge,
+    placement_id: Option<i64>,
+    step_id: Option<i64>,
+) -> Result<RunDefLine> {
+    let goes_back = match edge.max_times {
+        Some(_) => automation::lines_back_on(conn, edge.owner_kind, edge.owner_id)?.contains(&edge.id),
+        None => false,
+    };
+    Ok(RunDefLine {
         edge_id: edge.id,
         picture: edge.owner_kind,
         from_id: edge.from_id,
@@ -838,8 +851,8 @@ fn kept(edge: &AutomationEdge, placement_id: Option<i64>, step_id: Option<i64>) 
         ends: edge.ends,
         placement_id,
         step_id,
-        max_times: edge.max_times,
-    }
+        max_times: edge.max_times.filter(|_| goes_back),
+    })
 }
 
 /// **Every step output the wires join to one input of one step**, followed across the action's edge —

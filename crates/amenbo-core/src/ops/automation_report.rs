@@ -485,7 +485,8 @@ fn failed(tx: &WriteTx<'_>, run: AutomationRun, reason: AutomationStoppedReason)
 ///
 /// An edge with no limit is never over its turns — which is the right answer for one leading into a
 /// spot that takes a fresh task, since that edge is walked once per task by design
-/// ([`crate::model::AutomationEdge::max_times`]).
+/// ([`crate::model::AutomationEdge::max_times`]). **Nor is a line that went down** when the run was
+/// launched: the copy keeps a limit on a way back alone ([`crate::ops::automation::lines_back`]).
 ///
 /// The execution that has just reported is counted with the rest: it is already stamped `done` and
 /// carrying its way out by the time this is asked, so the count is how many times the edge would have

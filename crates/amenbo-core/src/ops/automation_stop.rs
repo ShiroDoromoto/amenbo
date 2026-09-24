@@ -1042,6 +1042,61 @@ mod tests {
         });
     }
 
+    /// **A line going down is never counted, whatever limit it carries** (`AMB-T-5440`). A loop that
+    /// goes back from the second step to the first takes the line down between them once per turn, so
+    /// counting that line too would stop the loop at its limit rather than at the way back's.
+    #[test]
+    fn a_line_going_down_inside_a_loop_does_not_stop_the_run() {
+        with_tx(|tx| {
+            use crate::model::AutomationPictureOwner::Action;
+            let p = two_steps_inside(tx, false);
+            let down = read::automation_edge_for_exit(
+                tx.conn(),
+                Action,
+                p.write.id,
+                exit_id(tx, crate::model::AutomationOwner::Step, p.write.id, None),
+            )
+            .expect("read")
+            .expect("the line down to the second step");
+            automation::edge_update(tx, down.id, None, Some(Some(1))).expect("a limit of one");
+            automation::exit_add(tx, crate::model::AutomationOwner::Step, p.review.id, Some("again"))
+                .expect("way back");
+            automation::edge_add(tx, Action, p.review.id, Some("again"), EdgeTarget::Go(p.write.id), Some(3))
+                .expect("back to the first step");
+
+            let run = a_run(tx, &p.automation);
+            let back_copy = copy_of(tx, &run, &p.second, &p.review);
+            let lines: Vec<crate::model::RunDefExit> =
+                serde_json::from_str(&back_copy.exits).expect("exits");
+            let again = lines.iter().find(|e| e.name.as_deref() == Some("again")).expect("again");
+            assert_eq!(again.then.as_ref().and_then(|l| l.max_times), Some(3), "the way back keeps its limit");
+            let down_copy: Vec<crate::model::RunDefExit> =
+                serde_json::from_str(&copy_of(tx, &run, &p.second, &p.write).exits).expect("exits");
+            assert_eq!(
+                down_copy.iter().find(|e| e.name.is_none()).and_then(|e| e.then.as_ref()).and_then(|l| l.max_times),
+                None,
+                "the line down keeps none",
+            );
+
+            let first = opened(tx, &run, &p.first);
+            a_task_in_hand(tx, p.project, first.run_step.id);
+            let mut next = stepped_to(done(tx, first.run_step.id, None, "Looked.").expect("done"));
+            for turn in 0..2 {
+                let write = opened_step(tx, &run, &next);
+                next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
+                assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "down again, turn {turn}");
+                let review = opened_step(tx, &run, &next);
+                next = stepped_to(
+                    done(tx, review.run_step.id, way_out(tx, review.run_step.id, "again"), "Not yet.")
+                        .expect("done"),
+                );
+            }
+            let write = opened_step(tx, &run, &next);
+            let next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
+            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "the third time down too");
+        });
+    }
+
     /// **A way back drawn inside an action is held to its limit there**, counted on the step it leaves
     /// within the placement the run is walking.
     #[test]

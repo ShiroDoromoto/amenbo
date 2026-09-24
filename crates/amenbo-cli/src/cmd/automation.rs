@@ -26,7 +26,7 @@ use amenbo_core::model::{
 use amenbo_core::model::AttachmentTarget;
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::model::AutomationPictureOwner;
-use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep};
+use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewStep};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::Launcher;
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
@@ -994,6 +994,8 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
 /// each way out.
 fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementView) {
     let row = &placement.placement;
+    let boxes: Vec<i64> = view.placements.iter().map(|p| p.placement.id).collect();
+    let back = lines_back(view.automation.entry_placement_id, &boxes, &view.edges);
     let named = match &placement.action {
         Some(action) => format!("action {} ({})", action.id, action.name),
         None => "no action".to_string(),
@@ -1021,7 +1023,7 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
             human(flags, format!("        hands on  {}", one_port(port)));
         }
         for edge in view.edges.iter().filter(|e| e.from_id == row.id && e.exit_id == exit.exit.id) {
-            human(flags, format!("        then  {}", one_edge(edge, &[])));
+            human(flags, format!("        then  {}", one_edge(edge, &[], &back)));
         }
         for wire in
             view.wires.iter().filter(|w| w.from_id == row.id && w.from_exit_id == Some(exit.exit.id))
@@ -1047,7 +1049,7 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
             format!(
                 "    way out [{}] — no longer declared\n        then  {}",
                 edge.exit_id,
-                one_edge(edge, &[])
+                one_edge(edge, &[], &back)
             ),
         );
     }
@@ -1108,6 +1110,8 @@ fn render_action(flags: &Flags, view: &ActionView) {
 /// One step inside an action: the prompt it runs on, what it takes, and what happens after each way
 /// out.
 fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
+    let boxes: Vec<i64> = view.steps.iter().map(|s| s.step.id).collect();
+    let back = lines_back(view.action.entry_step_id, &boxes, &view.edges);
     let row = &step.step;
     let mut marks = Vec::new();
     if row.interactive {
@@ -1140,7 +1144,7 @@ fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
             human(flags, format!("        hands on  {}", one_port(port)));
         }
         for edge in view.edges.iter().filter(|e| e.from_id == row.id && e.exit_id == exit.exit.id) {
-            human(flags, format!("        then  {}", one_edge(edge, &view.exits)));
+            human(flags, format!("        then  {}", one_edge(edge, &view.exits, &back)));
         }
         for wire in
             view.wires.iter().filter(|w| w.from_id == row.id && w.from_exit_id == Some(exit.exit.id))
@@ -1210,10 +1214,12 @@ fn one_cfg(cfg: &amenbo_core::model::AutomationCfg) -> String {
 
 /// What happens after a way out is taken, as one phrase. `action_exits` are the ways out of the action
 /// the picture is inside, which a line leaving the action is read against — empty on an automation's
-/// picture, where no line leaves anything.
+/// picture, where no line leaves anything. `back` are the picture's lines that go back: the limit is
+/// written on those alone, since a line going down carries one that is never counted.
 fn one_edge(
     edge: &amenbo_core::model::AutomationEdge,
     action_exits: &[amenbo_core::ops::automation_view::ExitView],
+    back: &std::collections::BTreeSet<i64>,
 ) -> String {
     let where_to = match (edge.ends, edge.to_id) {
         (amenbo_core::model::AutomationEnds::Go, Some(next)) => format!("box {next}"),
@@ -1230,7 +1236,7 @@ fn one_edge(
         (amenbo_core::model::AutomationEnds::Done, _) => "the run is done".to_string(),
         (amenbo_core::model::AutomationEnds::Halt, _) => "the run stops for a person".to_string(),
     };
-    match edge.max_times {
+    match edge.max_times.filter(|_| back.contains(&edge.id)) {
         Some(times) => format!("{where_to}  (at most {times} time(s) per task)"),
         None => where_to,
     }

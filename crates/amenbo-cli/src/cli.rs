@@ -2108,27 +2108,9 @@ pub enum AutomationCmd {
         /// `text`: the text
         #[arg(long, value_name = "STR")]
         text: Option<String>,
-        /// `taskfilter`: the status a task is in (repeat for any-of)
-        #[arg(long, value_name = "VALUE")]
-        status: Vec<String>,
-        /// `taskfilter`: the priority (repeat for any-of)
-        #[arg(long, value_name = "VALUE")]
-        priority: Vec<String>,
-        /// `taskfilter`: who it is assigned to — none | me | me-ai (repeat for any-of)
-        #[arg(long, value_name = "VALUE")]
-        assignee: Vec<String>,
-        /// `taskfilter`: a classification, `<axis>=<value>` (repeat the same axis for any-of)
-        #[arg(long, value_name = "AXIS=VALUE")]
-        dim: Vec<String>,
-        /// `taskfilter`: whether the premises it declared are met — yes | no
-        #[arg(long, value_name = "VALUE")]
-        ready: Vec<String>,
-        /// `taskfilter`: whether it is closed — true | false
-        #[arg(long, value_name = "VALUE")]
-        done: Vec<String>,
-        /// `taskfilter`: when it is due — today | overdue | week | none | YYYY-MM-DD
-        #[arg(long, value_name = "VALUE")]
-        due: Vec<String>,
+        /// the parts of a `taskfilter` answer, and the order its tasks are taken in
+        #[command(flatten)]
+        filter: Box<TaskFilterArgs>,
     },
     /// Choose who carries one step out at one placement — the agent, and the model where one is named.
     /// A step nobody is chosen for is refused at launch
@@ -2312,6 +2294,39 @@ pub enum AutomationCmd {
         #[arg(long = "out", value_name = "ID=VALUE")]
         outs: Vec<String>,
     },
+}
+
+/// **The options a `taskfilter` answer is built from** (`automation cfg-set`): the parts that say which
+/// tasks are in, and the order they are taken in. They are one struct, boxed where they are flattened, so
+/// the command that carries them stays the size of its neighbours.
+#[derive(clap::Args, Debug)]
+pub struct TaskFilterArgs {
+    /// `taskfilter`: the status a task is in (repeat for any-of)
+    #[arg(long, value_name = "VALUE")]
+    pub status: Vec<String>,
+    /// `taskfilter`: the priority (repeat for any-of)
+    #[arg(long, value_name = "VALUE")]
+    pub priority: Vec<String>,
+    /// `taskfilter`: who it is assigned to — none | me | me-ai (repeat for any-of)
+    #[arg(long, value_name = "VALUE")]
+    pub assignee: Vec<String>,
+    /// `taskfilter`: a classification, `<axis>=<value>` (repeat the same axis for any-of)
+    #[arg(long, value_name = "AXIS=VALUE")]
+    pub dim: Vec<String>,
+    /// `taskfilter`: whether the premises it declared are met — yes | no
+    #[arg(long, value_name = "VALUE")]
+    pub ready: Vec<String>,
+    /// `taskfilter`: whether it is closed — true | false
+    #[arg(long, value_name = "VALUE")]
+    pub done: Vec<String>,
+    /// `taskfilter`: when it is due — today | overdue | week | none | YYYY-MM-DD
+    #[arg(long, value_name = "VALUE")]
+    pub due: Vec<String>,
+    /// `taskfilter`: the order its tasks are taken in, the keys `task list --sort` takes
+    /// (order | due | priority | created | completed | title; `-` for descending). Left out, the
+    /// highest priority comes first
+    #[arg(long, value_name = "KEY", allow_hyphen_values = true)]
+    pub sort: Option<String>,
 }
 
 

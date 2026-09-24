@@ -272,6 +272,30 @@ fn a_task_filter_is_answered_in_parts_and_read_before_it_is_written() {
     assert_ne!(code, 0, "a status nothing accepts is refused here: {refused}");
 }
 
+/// A task filter's order rides beside its parts, in the keys `task list --sort` takes. A key the list
+/// has no order for is refused before it is written, and so is an order with no parts to put in it.
+#[test]
+fn a_task_filter_names_the_order_its_tasks_are_taken_in() {
+    let cli = Cli::new();
+    let (_, _, action, placement) = an_automation(&cli);
+    cli.json(&["automation", "cfg-add", "--action", &action, "--name", "queue", "--kind", "taskfilter", "--json"]);
+
+    let set = cli.json(&[
+        "automation", "cfg-set", &placement, "--name", "queue", "--status", "todo", "--sort", "-due", "--json",
+    ]);
+    let written: Value = serde_json::from_str(set["automation_cfg"]["value"].as_str().unwrap()).unwrap();
+    assert_eq!(written["status"], serde_json::json!(["todo"]));
+    assert_eq!(written["sort"], serde_json::json!("-due"));
+
+    let (unknown, code) = cli.run_err(&[
+        "automation", "cfg-set", &placement, "--name", "queue", "--status", "todo", "--sort", "sideways", "--json",
+    ]);
+    assert_eq!(code, 2, "an order `task list` does not have is refused: {unknown}");
+
+    let (alone, code) = cli.run_err(&["automation", "cfg-set", &placement, "--name", "queue", "--sort", "due", "--json"]);
+    assert_eq!(code, 2, "an order with no parts narrows nothing: {alone}");
+}
+
 /// A setting takes one answer, in the shape its kind takes. Two shapes at once is a caller who has not
 /// decided which setting they are answering; none at all is one who said nothing.
 #[test]

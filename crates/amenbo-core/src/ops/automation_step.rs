@@ -194,6 +194,9 @@ fn unquoted(value: &str) -> String {
 /// values of one part comma-joined (any-of), and the parts space-joined (both). A part written as one
 /// string rather than a list is read as a list of one.
 ///
+/// The order the tasks are taken in is kept beside the parts, under [`TASKFILTER_SORT_KEY`], and is not
+/// one of them: it says which comes first, not which are in ([`taskfilter_sort`]).
+///
 /// `None` is an answer that is not an object of parts, or one with no part in it. Nothing is checked
 /// against the grammar here: `automation cfg-set` parses the expression before it writes the answer.
 pub fn taskfilter_expr(value: &str) -> Option<String> {
@@ -202,6 +205,9 @@ pub fn taskfilter_expr(value: &str) -> Option<String> {
     };
     let mut out = Vec::new();
     for (key, part) in parts {
+        if key == TASKFILTER_SORT_KEY {
+            continue;
+        }
         let values: Vec<String> = match part {
             serde_json::Value::String(one) => vec![one],
             serde_json::Value::Array(many) => many
@@ -215,6 +221,24 @@ pub fn taskfilter_expr(value: &str) -> Option<String> {
         }
     }
     (!out.is_empty()).then(|| out.join(" "))
+}
+
+/// The key a task filter's answer keeps its order under — the value `task list --sort` takes.
+pub const TASKFILTER_SORT_KEY: &str = "sort";
+
+/// The order a task filter is taken in when its answer names none: the highest priority first, which is
+/// what "the top one" means to a person reading a queue.
+pub const TASKFILTER_SORT_DEFAULT: &str = "priority";
+
+/// **The order a task filter's answer takes its tasks in**, as `task list --sort` spells it. An answer
+/// that names none — or is not an object at all — is taken highest priority first
+/// ([`TASKFILTER_SORT_DEFAULT`]), so a step always runs a list whose top is the same one every time.
+pub fn taskfilter_sort(value: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(value)
+        .ok()
+        .and_then(|v| v.get(TASKFILTER_SORT_KEY)?.as_str().map(str::to_string))
+        .filter(|sort| !sort.is_empty())
+        .unwrap_or_else(|| TASKFILTER_SORT_DEFAULT.to_string())
 }
 
 /// One value standing ready for one input: the port it fills, and the row it is copied from.
@@ -517,6 +541,10 @@ fn one_value(handed: &Handed) -> String {
 ///
 /// **A task filter is written as the command that lists what it means.** The agent reads the queue with
 /// `task list` anyway, and an expression it can pass along as it stands is one it cannot mistranscribe.
+/// The order is always spelled, the default included: a list without one comes back in the board's own
+/// order, and "the top one" would then be whichever task somebody last dragged up.
+/// It is joined with `=`, because a descending order starts with `-` and would otherwise be read as an
+/// option of its own.
 /// Every other kind is the text of its answer. A setting nobody answered says so, rather than being left
 /// out: a prompt that names it would otherwise be pointing at nothing.
 fn one_setting(cfg: &RunDefCfg) -> String {
@@ -527,7 +555,8 @@ fn one_setting(cfg: &RunDefCfg) -> String {
     match (cfg.kind, taskfilter_expr(value)) {
         (AutomationCfgKind::TaskFilter, Some(expr)) => {
             let cli = crate::config::Paths::command_name();
-            format!("{name}: the tasks `{cli} task list --filter \"{expr}\"` lists")
+            let sort = taskfilter_sort(value);
+            format!("{name}: the tasks `{cli} task list --filter \"{expr}\" --sort={sort}` lists, in that order")
         }
         _ => format!("{name}: {}", unquoted(value)),
     }
@@ -877,7 +906,7 @@ mod tests {
             assert!(text.contains("## Your settings"), "{text}");
             assert!(
                 text.contains(&format!(
-                    "- 受信箱: the tasks `{cli} task list --filter \"assignee:me-ai status:todo,blocked\"` lists"
+                    "- 受信箱: the tasks `{cli} task list --filter \"assignee:me-ai status:todo,blocked\" --sort=priority` lists, in that order"
                 )),
                 "{text}"
             );
@@ -911,6 +940,36 @@ mod tests {
         assert_eq!(taskfilter_expr(r#"{"status":[]}"#), None, "no part left");
         assert_eq!(taskfilter_expr(r#""todo""#), None, "not an object of parts");
         assert_eq!(taskfilter_expr("status:todo"), None, "not JSON");
+    }
+
+    /// **The order rides beside the parts, not among them** (`AMB-T-5411`): it says which task comes
+    /// first, and a `sort:` in the filter expression would be refused as a key `--filter` does not have.
+    /// An answer that names no order is taken highest priority first.
+    #[test]
+    fn a_task_filter_answer_keeps_its_order_apart_from_its_parts() {
+        let answer = r#"{"status":["todo"],"sort":"-due"}"#;
+        assert_eq!(taskfilter_expr(answer).as_deref(), Some("status:todo"));
+        assert_eq!(taskfilter_sort(answer), "-due");
+        assert_eq!(taskfilter_sort(r#"{"status":["todo"]}"#), "priority", "none named");
+        assert_eq!(taskfilter_sort(r#"{"status":["todo"],"sort":""}"#), "priority", "an empty order is none");
+        assert_eq!(taskfilter_expr(r#"{"sort":"due"}"#), None, "an order alone narrows nothing");
+    }
+
+    /// The order an answer names is the one the step is handed, spelled after the filter.
+    #[test]
+    fn the_settings_line_spells_the_order_the_answer_names() {
+        let cfg = RunDefCfg {
+            name: "受信箱".to_string(),
+            kind: crate::model::AutomationCfgKind::TaskFilter,
+            required: true,
+            options: None,
+            value: Some(r#"{"status":["todo"],"sort":"-created"}"#.to_string()),
+        };
+        let cli = crate::config::Paths::command_name();
+        assert_eq!(
+            one_setting(&cfg),
+            format!("受信箱: the tasks `{cli} task list --filter \"status:todo\" --sort=-created` lists, in that order")
+        );
     }
 
     /// **The preamble is Amenbo's, not the automation's** (`AMB-D-952`). No row carries it, so every

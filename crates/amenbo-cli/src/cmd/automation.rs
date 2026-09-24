@@ -126,7 +126,8 @@ fn edge_target(to: Option<i64>, exit_to: Option<String>, done: bool, halt: bool)
 /// The answer to a setting, in the shape its kind takes. **A task filter is never one string**: it is
 /// built from the options that name each part, where the same option twice is any-of and two different
 /// options are both — which is the same reading `--filter` gives a `key:a,b key2:c` expression, and it
-/// is validated by parsing that expression before the answer is written.
+/// is validated by parsing that expression before the answer is written. The order its tasks are taken
+/// in (`--sort`) rides beside the parts, checked against the keys `task list --sort` takes.
 ///
 /// What the JSON's own type says is which kind answered it: an object for a task filter, a number for a
 /// number, a string for the other three. Nothing here reads the declaration — no command lists one — so
@@ -151,7 +152,7 @@ fn cfg_value(o: &CfgAnswer) -> Result<Option<Value>, CliError> {
     ];
     let single: Vec<Value> = singles.into_iter().flatten().collect();
     if o.clear {
-        if !single.is_empty() || !filtered.is_empty() {
+        if !single.is_empty() || !filtered.is_empty() || o.sort.is_some() {
             return Err(CliError {
                 code: "invalid_value",
                 message: "--clear leaves the setting unanswered, so it takes no answer beside it.".to_string(),
@@ -169,6 +170,16 @@ fn cfg_value(o: &CfgAnswer) -> Result<Option<Value>, CliError> {
             exit: 2,
         });
     }
+    if o.sort.is_some() && filtered.is_empty() {
+        // An order is the order of a task filter's tasks, so it goes with the parts that say which
+        // tasks — alone it narrows nothing, and beside another kind's answer it means nothing.
+        return Err(CliError {
+            code: "invalid_value",
+            message: "--sort orders a task filter, so it takes the task-filter options beside it.".to_string(),
+            hint: Some("Pass --status, --priority, --assignee, --dim, --ready, --done or --due with --sort.".to_string()),
+            exit: 2,
+        });
+    }
     if let Some(v) = single.into_iter().next() {
         return Ok(Some(v));
     }
@@ -183,6 +194,17 @@ fn cfg_value(o: &CfgAnswer) -> Result<Option<Value>, CliError> {
     let mut map = serde_json::Map::new();
     for (k, v) in filtered {
         map.insert(k.to_string(), json!(v));
+    }
+    if let Some(sort) = &o.sort {
+        if !amenbo_core::store_engine::read::is_task_sort(sort) {
+            return Err(CliError {
+                code: "invalid_value",
+                message: format!("'{sort}' is not an order `task list --sort` takes."),
+                hint: Some("Specify one of: order | due | priority | created | completed | title (- for descending).".to_string()),
+                exit: 2,
+            });
+        }
+        map.insert(amenbo_core::ops::automation_step::TASKFILTER_SORT_KEY.to_string(), json!(sort));
     }
     let value = Value::Object(map);
     // Read as the filter it will be run as — the same expression the step's prompt spells — so a value
@@ -207,6 +229,7 @@ struct CfgAnswer {
     ready: Vec<String>,
     done: Vec<String>,
     due: Vec<String>,
+    sort: Option<String>,
 }
 
 /// **Where one of these verbs may be typed** (`AMB-D-948`): inside the terminal a run opened for a
@@ -590,8 +613,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let c = store.automation_cfg_update(id, name.as_deref(), kind, required, options).map_err(CliError::from)?;
             write_envelope(flags, "automation.cfg-update", "automation_cfg", serde_json::to_value(&c).unwrap(), None, false, format!("✓ Updated setting: {} ({})", c.name, c.id));
         }
-        AutomationCmd::CfgSet { placement, name, clear, folder, choice, number, text, status, priority, assignee, dim, ready, done, due } => {
-            let answer = CfgAnswer { clear, folder, choice, number, text, status, priority, assignee, dim, ready, done, due };
+        AutomationCmd::CfgSet { placement, name, clear, folder, choice, number, text, filter } => {
+            let TaskFilterArgs { status, priority, assignee, dim, ready, done, due, sort } = *filter;
+            let answer = CfgAnswer { clear, folder, choice, number, text, status, priority, assignee, dim, ready, done, due, sort };
             let value = cfg_value(&answer)?;
             let value = value.map(|v| v.to_string());
             let c = store.automation_cfg_set(placement, &name, value.as_deref()).map_err(CliError::from)?;

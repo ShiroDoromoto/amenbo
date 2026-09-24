@@ -185,12 +185,17 @@ describe("what happens after a way out", () => {
     steps: [step(), step({ id: 12, name: "Review", exits: [{ id: 30, outputs: [] }] })],
   });
 
-  it("offers the other steps, and sends the line on this picture", async () => {
+  it("offers the other steps, numbered as the picture draws them, and sends the line on this picture", async () => {
     await render({ action: two, stepId: 11, onRemoved: () => undefined });
     const next = nextPicks()[0]!;
-    expect([...next.options].map((one) => one.textContent)).toContain(
-      t("auto.step.nextGo").replace("{name}", "Review"),
-    );
+    const offered = [...next.options].map((one) => one.textContent);
+    expect(offered).toContain(t("auto.step.nextGo").replace("{name}", "2. Review"));
+    expect(offered.some((one) => one?.includes("1. "))).toBe(false);
+    expect([...next.querySelectorAll("optgroup")].map((one) => one.label)).toEqual([
+      t("auto.step.nextGroupStep"),
+      t("auto.step.nextGroupExit"),
+      t("auto.step.nextGroupEnd"),
+    ]);
     await pick(next, "go:12");
     expect(hoisted.addEdge).toHaveBeenCalledWith(
       "action",

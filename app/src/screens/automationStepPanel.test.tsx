@@ -368,33 +368,89 @@ describe("the panel of one spot", () => {
     );
 
     const said = detail({
+      placements: [spot(), spot({ id: 2, name: "Do it" })],
       edges: [{ id: 8, fromId: 1, ends: "done" }],
     });
     await render({ automation: said, placementId: 1 });
-    await pick(nextFor(t("auto.step.exitUnnamed")), "go:1");
-    expect(hoisted.editEdge).toHaveBeenCalledWith(8, { ends: "go", to: 1 });
+    await pick(nextFor(t("auto.step.exitUnnamed")), "go:2");
+    expect(hoisted.editEdge).toHaveBeenCalledWith(8, { ends: "go", to: 2 });
 
     await render({ automation: said, placementId: 1 });
     await pick(nextFor(t("auto.step.exitUnnamed")), "");
     expect(hoisted.removeEdge).toHaveBeenCalledWith(8);
   });
 
-  /// The limit is a `go` edge's alone: an edge that closes the task or stops the run is taken once,
-  /// and core refuses one there.
-  it("writes the limit of a go edge, and draws none on one that ends the task", async () => {
-    const looping = detail({
-      edges: [{ id: 8, fromId: 1, ends: "go", toId: 1, maxTimes: 10 }],
+  /// The boxes are offered as the picture numbers them, under the heading of what picking one does,
+  /// and the one this way out leaves is not among them. A line back up the picture says so.
+  it("offers the other spots numbered as the picture draws them, and says which go back", async () => {
+    const three = detail({
+      placements: [spot(), spot({ id: 2, name: "Do it" }), spot({ id: 3, name: "Check it" })],
+      edges: [
+        { id: 8, fromId: 1, ends: "go", toId: 2 },
+        { id: 9, fromId: 2, ends: "go", toId: 3 },
+      ],
     });
-    await render({ automation: looping, placementId: 1 });
+    await render({ automation: three, placementId: 2 });
+    const next = nextFor(t("auto.step.exitUnnamed"));
+    const groups = [...next.querySelectorAll("optgroup")].map((one) => one.label);
+    expect(groups).toEqual([t("auto.step.nextGroupPlacement"), t("auto.step.nextGroupEnd")]);
+    const offered = [...next.querySelectorAll("optgroup")[0]!.querySelectorAll("option")].map(
+      (one) => one.textContent,
+    );
+    expect(offered).toEqual([
+      t("auto.step.nextGoBack").replace("{name}", "1. Take the next task"),
+      t("auto.step.nextGo").replace("{name}", "3. Check it"),
+    ]);
+  });
+
+  /// The limit caps a loop, so it is drawn on a line that goes back within one task and nowhere
+  /// else: a line on down is taken once, and an edge that closes the task or stops the run carries
+  /// none, which core refuses.
+  it("writes the limit of a line that goes back, and draws none on one that goes on", async () => {
+    const two = [spot({ exits: [{ id: 10, outputs: [] }] }), spot({ id: 2, name: "Do it" })];
+    const looping = detail({
+      placements: two,
+      edges: [
+        { id: 7, fromId: 1, ends: "go", toId: 2 },
+        { id: 8, fromId: 2, ends: "go", toId: 1, maxTimes: 10 },
+      ],
+    });
+    await render({ automation: looping, placementId: 2 });
     const limit = boxes().find((b) => b.type === "number")!;
     expect(limit.value).toBe("10");
     await typeInto(limit, "");
     await act(async () => limit.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
     expect(hoisted.editEdge).toHaveBeenCalledWith(8, { maxTimes: null });
 
+    // Core writes the standing limit on every line that goes on to a box, the ones going on down too.
+    await render({
+      automation: detail({ ...looping, edges: [{ ...looping.edges[0]!, maxTimes: 10 }] }),
+      placementId: 1,
+    });
+    expect(boxes().some((b) => b.type === "number")).toBe(false);
+
     await render({
       automation: detail({ edges: [{ id: 8, fromId: 1, ends: "done" }] }),
       placementId: 1,
+    });
+    expect(boxes().some((b) => b.type === "number")).toBe(false);
+  });
+
+  /// Going back to the spot that takes a task starts the next task rather than trying this one
+  /// again, so there is no loop to cap there.
+  it("draws no limit on a line back to the spot that takes the next task", async () => {
+    const taking = spot({
+      exits: [{ id: 10, outputs: [{ name: "task", kind: "task_take", required: true }] }],
+    });
+    await render({
+      automation: detail({
+        placements: [taking, spot({ id: 2, name: "Do it" })],
+        edges: [
+          { id: 7, fromId: 1, ends: "go", toId: 2 },
+          { id: 8, fromId: 2, ends: "go", toId: 1 },
+        ],
+      }),
+      placementId: 2,
     });
     expect(boxes().some((b) => b.type === "number")).toBe(false);
   });

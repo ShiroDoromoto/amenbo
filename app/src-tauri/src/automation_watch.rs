@@ -12,7 +12,7 @@
 //! have to rebuild.
 //!
 //! **What one look costs.** One read of the runs that are running, and one read per run of what it is
-//! waiting for. Every run is one somebody pressed start on, so a look is a handful of small reads on
+//! waiting for — two more where a step is under way, for the task it may have taken. Every run is one somebody pressed start on, so a look is a handful of small reads on
 //! tables with tens of rows in them, through a connection the thread keeps.
 //!
 //! **And how often.** `WHILE_GOING` while anything is running, because a step is a person-scale
@@ -114,7 +114,8 @@ fn sleep(how_long: Duration) {
 /// at all — which is what decides how long to wait before the next one.
 ///
 /// A run answers one of three things ([`amenbo_core::ops::automation_run::Waiting`]) and each is acted
-/// on here. A step waiting to be opened is opened. A run with a step under way is left alone. A run
+/// on here. A step waiting to be opened is opened. A run with a step under way is only checked for the
+/// task that step may have taken since it opened. A run
 /// with nowhere left to go is ended — it would otherwise be read again every second for the rest of
 /// the session, holding a task nobody is working.
 ///
@@ -141,7 +142,14 @@ fn advance(app: &tauri::AppHandle) -> Result<bool, crate::error::CmdError> {
                     log::warn!("run {run} could not open step {}: {}", def.id, e.message_en);
                 }
             }
-            Waiting::Nothing => {}
+            // A step under way may have taken its task since it was opened, and the pane was told
+            // about it before then (`crate::automation::retell_task`).
+            Waiting::Nothing => {
+                let store = crate::commands::open_store_read()?;
+                if let Err(e) = crate::automation::retell_task(app, &store, *run) {
+                    log::warn!("run {run} could not say which task its step took: {}", e.message_en);
+                }
+            }
             // Ended here rather than by whatever changed the definition: what a run can still do is
             // read off the run's own copies, and an edit that leaves one of a dozen runs with nowhere
             // to go does not know which. A stop hands the task back with a comment saying how far it

@@ -1531,6 +1531,47 @@ fn open_one(
     Ok(dto)
 }
 
+/// **Tell the window again about a step whose task was taken after it was opened** (`AMB-T-5427`).
+///
+/// A step that takes its task opens with none — which task it is about is what the step is there to
+/// find out, and it says so with `automation step-take` from inside its terminal. That is the CLI, another
+/// process, so nothing reaches here when it happens. What the watch does see is the run with its step
+/// under way, once a second (`crate::automation_watch`), and this is where it compares what the window
+/// was told with what the stretch holds now.
+///
+/// **The same event and the same step**, with only its task changed. The workspace reads a step it is
+/// already standing on as the same terminal told again, so nothing is closed or opened for it and only
+/// the row above the pane moves (`app/src/shell/WorkspaceFace.tsx`). What is kept for a face coming up
+/// later ([`StepsStanding`]) is updated with it, so that face is not handed the empty one.
+///
+/// The lock is held across the read so a step opened meanwhile is not overwritten with the one before
+/// it; nothing that takes it reads the store while holding it, so there is no order to go wrong.
+pub(crate) fn retell_task(
+    app: &tauri::AppHandle,
+    store: &amenbo_core::Store,
+    run_id: i64,
+) -> Result<(), CmdError> {
+    let dto = {
+        let standing = app.state::<StepsStanding>();
+        let mut standing = standing.0.lock().expect("steps standing lock");
+        let Some(dto) = standing.get_mut(&run_id) else { return Ok(()) };
+        let Some(step) = dto.step.as_mut() else { return Ok(()) };
+        let Some(run_step) = read::automation_run_step(store.read_model().conn(), step.run_step)? else {
+            return Ok(());
+        };
+        let task = worked_task(store, run_step.run_task_id)?;
+        if task == step.task {
+            return Ok(());
+        }
+        step.task = task;
+        dto.clone()
+    };
+    if let Err(e) = app.emit(STEP_EVENT, dto) {
+        log::warn!("failed to emit {STEP_EVENT}: {e}");
+    }
+    Ok(())
+}
+
 /// **Where a step that names no folder is carried out**: the folder its project is bound to.
 ///
 /// A pane opened by a person asks which one where the project has several (`app/src/talk/agent.ts`),

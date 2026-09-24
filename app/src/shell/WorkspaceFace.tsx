@@ -630,6 +630,10 @@ export function WorkspaceFace({
     const before = standing.current.frames.find((frame) => frame.id === id)?.session ?? null;
     const step = one.step;
     setSteps((had) => new Map(had).set(id, step));
+    // **The step standing already, told again** because it took its task (`AMB-T-5427`,
+    // `crate::automation::retell_task`). Its terminal is the one on the frame, so nothing comes off
+    // or goes on and no ring is drawn: what changed is the row above the pane, which reads the step.
+    if (before === step.session) return;
     setLayout((was) => {
       const cleared = before === null ? was : closedIn(was, before);
       const stood = stoodForRun(cleared, one.project, one.run).layout;

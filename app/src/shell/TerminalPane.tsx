@@ -581,7 +581,7 @@ export function TerminalPane({
     };
     // Only `running` is a reason to do any of this again. `start`, `frame` and `run` are what this
     // pane *is* — a change of any of them would be a different pane, and the face gives that one a
-    // different key (`./WorkspaceFace`).
+    // different key (`./WorkspaceFace`). The one exception is the run's task, told below.
   }, [running]);
 
   // The keyboard, at the moment a terminal opens here and at every fold after it. What a person does
@@ -614,6 +614,14 @@ export function TerminalPane({
   useEffect(() => {
     plateRef.current?.named(names);
   }, [names]);
+
+  // **The task a run's step took after it opened** (`AMB-T-5427`). The step is the same one and so is
+  // its terminal, so the pane is not built again for it and the row is told instead. Keyed on what
+  // the task is rather than on `run`, which is a value made afresh at every render of the face.
+  const took = run?.task ?? null;
+  useEffect(() => {
+    plateRef.current?.took(took);
+  }, [took?.ref, took?.title, took?.seq]);
 
   // The name as it stands, ready to be typed over. A box opened on a pane already called something is
   // opened to change that name, and a reader who has to clear it first is being asked to type the old

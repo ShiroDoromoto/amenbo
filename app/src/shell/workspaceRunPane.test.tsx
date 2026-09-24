@@ -245,6 +245,24 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     expect(q(".plate__name")[0]?.textContent).toBe("家計簿の開発ループ");
   });
 
+  it("says the task a step took after it opened, on the same terminal", async () => {
+    // A step that takes its task opens with none, and the host tells the window again once it has
+    // taken one (`crate::automation::retell_task`, `AMB-T-5427`). The step and its terminal are the
+    // same ones, so the pane is not built again: only the row moves.
+    await mount();
+    await arrive({ step: step({ task: undefined }) });
+    expect(q(".plate-run__task")[0]?.textContent ?? "").toBe("");
+    const openings = hoisted.opened.length;
+
+    await arrive();
+
+    expect(q(".plate-run__task")[0]?.textContent).toBe("AMB-T-5252");
+    expect(q(".plate-run__title")[0]?.textContent).toBe("ペインのヘッダを描く");
+    expect(panes()).toHaveLength(1);
+    expect(hoisted.opened).toHaveLength(openings);
+    expect(hoisted.ended).toEqual([]);
+  });
+
   it("stops the run when the pane is closed, and takes the place away", async () => {
     // A run left going with its pane gone is one nobody can see, reach or stop. What it was holding
     // is handed back by core, which is why nothing of that is worked out here (`AMB-T-5247`).

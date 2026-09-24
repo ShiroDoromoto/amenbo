@@ -1947,7 +1947,7 @@ pub enum AutomationCmd {
         prompt: Option<String>,
         /// put in one of Amenbo's built-ins instead — it carries its own name, ways out and ports, and
         /// no prompt (`automation builtin-list` names them)
-        #[arg(long, value_name = "KEY", conflicts_with_all = ["name", "prompt", "interactive", "work_dir", "report_to_task", "no_history"])]
+        #[arg(long, value_name = "KEY", conflicts_with_all = ["name", "prompt", "interactive", "work_dir", "report_to_task", "no_history", "no_task_context"])]
         builtin: Option<String>,
         /// let this step wait for a person
         #[arg(long)]
@@ -1961,6 +1961,10 @@ pub enum AutomationCmd {
         /// do not hand this step the run's story so far (it is handed on unless this is passed)
         #[arg(long)]
         no_history: bool,
+        /// do not hand this step the task the run is on — its notes, the decisions linked to it and its
+        /// comments (it is handed on unless this is passed)
+        #[arg(long)]
+        no_task_context: bool,
     },
     /// Change a step (only the given fields change)
     StepUpdate {
@@ -1986,6 +1990,10 @@ pub enum AutomationCmd {
         /// whether this step is handed the run's story so far (`--history true|false`)
         #[arg(long)]
         history: Option<bool>,
+        /// whether this step is handed the task the run is on — its notes, the decisions linked to it
+        /// and its comments (`--task-context true|false`)
+        #[arg(long)]
+        task_context: Option<bool>,
     },
     /// Delete a step with its declarations and every edge and wire naming it — confirms unless -y
     StepRm {

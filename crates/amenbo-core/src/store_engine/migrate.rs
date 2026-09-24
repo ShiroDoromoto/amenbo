@@ -969,6 +969,23 @@ pub const STEPS: &[Step] = &[
         name: "copy what follows each way out into a run's copies, and mark the one it starts at",
         apply: Apply::Custom(copy_the_lines_into_the_run),
     },
+    Step {
+        to: 67,
+        name: "add the task comment's intent column, seeded from when each row was written",
+        // `AMB-D-963`. A comment posted while a task is held is shown to the holder when they close it,
+        // and "while held" is a comparison against the task's `status_changed_at` — which a comment had
+        // no intent column to stand on (`AMB-D-372` keeps `created_at` out of it). The seed is
+        // `created_at` for the reason v7's and v8's are: a comment row is written once and an edit
+        // moves `updated_at` and `edited_at`, never the instant it was posted.
+        //
+        // `NULLIF` guards the `''` a row caught mid-create carries: the column's `CHECK` admits an instant
+        // or NULL, and `''` is neither. Spelled in frozen text, as every step's is.
+        apply: Apply::Sql(
+            "ALTER TABLE task_comment ADD COLUMN posted_at TEXT \
+                 CHECK(posted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');
+             UPDATE task_comment SET posted_at = NULLIF(created_at, '');",
+        ),
+    },
 ];
 
 /// v66: a run's copy of a step holds what follows each of its ways out, and the copy the run starts at
@@ -6719,6 +6736,38 @@ mod tests {
             vec![(1, Some("2026-03-04T05:06:07Z".to_string()))],
             "a link is seeded at the instant it was drawn"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v67 in full, on the store shape v66 left behind: task comments with no intent column. Seeded from
+    /// `created_at`, and NULL rather than the `''` a row caught mid-create carries — without the seed every
+    /// comment in the backlog would be undatable, and a holder closing a task would be shown none of them.
+    #[test]
+    fn the_task_comment_is_seeded_from_when_it_was_posted() {
+        let dir = scratch("comment-intent-column");
+        let engine = store_at(&dir, 66);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 't', 'todo', 1);
+                 INSERT INTO task_comment (id, task_id, text, created_at, updated_at) VALUES
+                     (1, 1, 'posted', '2026-04-05T06:07:08Z', '2026-05-01T00:00:00Z'),
+                     (2, 1, 'mid-create', '', '');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let mut stmt = conn.prepare("SELECT id, posted_at FROM task_comment ORDER BY id").unwrap();
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Option<String>>(1)?))).unwrap();
+        assert_eq!(
+            rows.filter_map(|r| r.ok()).collect::<Vec<_>>(),
+            vec![(1, Some("2026-04-05T06:07:08Z".to_string())), (2, None)],
+            "a comment is seeded at the instant it was posted, not when it was last edited, and `''` is no instant"
+        );
+        drop(stmt);
         std::fs::remove_dir_all(&dir).ok();
     }
 

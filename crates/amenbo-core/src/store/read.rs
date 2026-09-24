@@ -203,6 +203,13 @@ impl Store {
         crate::query::premise_change_since(self.engine.conn(), task_id)
     }
 
+    /// The read behind the holder-side comment surface of `AMB-D-963`: comments posted **after the task's
+    /// current status began**, which the session holding it has not read. Read-only, and read *before* a
+    /// closing transition, which moves the clock it compares against. Pass an already-resolved `task_id`.
+    pub fn comments_since(&self, task_id: i64) -> Result<Vec<crate::query::CommentItem>> {
+        crate::query::comments_since(self.engine.conn(), task_id)
+    }
+
     /// Resolve a `task` reference (`AMB-T-n`, or the bare `T-n` / `#n` / `n`) to a single live task id. Served by indexed SQL
     /// ([`crate::query::resolve_task_ref`]), so the lookup a write does first is not an O(n) full scan.
     /// Numbers are **globally unique on this machine**, so no project context is needed.

@@ -91,7 +91,8 @@
 //! | v63 | `ca5a1b51` | byte-identical to v62 — v63's step rewrites a JSON column |
 //! | v64 | `60cd2476` | |
 //! | v65 | `e0eef244` | |
-//! | v66 | this commit | held equal to the live registry by the test below |
+//! | v66 | `c21c7b73` | |
+//! | v67 | this commit | held equal to the live registry by the test below |
 //!
 //! [`super::migrate::BASELINE_VERSION`] itself is **not** here: this repository's history begins with the
 //! chain already at [`OLDEST_FROZEN_VERSION`], so no build in it ever emitted a v2 store and there is no
@@ -179,6 +180,7 @@ pub fn frozen(version: i64) -> Option<&'static str> {
         64 => include_str!("schema_frozen/v64.sql"),
         65 => include_str!("schema_frozen/v65.sql"),
         66 => include_str!("schema_frozen/v66.sql"),
+        67 => include_str!("schema_frozen/v67.sql"),
         _ => return None,
     })
 }

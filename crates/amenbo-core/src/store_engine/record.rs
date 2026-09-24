@@ -450,6 +450,7 @@ pub fn task_comment(c: &TaskComment) -> Record {
                 ("task_id", kv(c.task_id)),
                 ("author_kind", kov(&c.author_kind)),
                 ("text", tv(&c.text)),
+                ("posted_at", tsov(&c.posted_at)),
                 ("edited_at", tsov(&c.edited_at)),
                 ("automation_run_step_id", kv_opt(&c.automation_run_step_id)),
             ],

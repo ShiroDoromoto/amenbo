@@ -3346,6 +3346,9 @@ pub struct AutomationPlacementDto {
     pub(crate) name: String,
     #[ts(type = "number")]
     pub(crate) action_id: i64,
+    /// The action standing here is held by the device rather than by this project — the reach the
+    /// box says under its name, as the library list does. False where the action is gone.
+    pub(crate) global: bool,
     /// The step this spot opens first. Absent where the action holds no step yet, which the launch
     /// check names.
     #[serde(skip_serializing_if = "Option::is_none")]

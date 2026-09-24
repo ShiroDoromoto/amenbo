@@ -153,9 +153,10 @@ describe("the action build screen", () => {
     });
     await render();
     expect(nodes().map((one) => one.textContent)).toEqual([
-      // The step a placement opens first wears the mark the automation picture puts on its entry.
-      `${t("auto.pic.entry")}Take the next task`,
-      "Review",
+      // Numbered as a list naming them does, and the step a placement opens first wears the mark
+      // the automation picture puts on its entry.
+      `1${t("auto.pic.entry")}Take the next task`,
+      "2Review",
     ]);
   });
 

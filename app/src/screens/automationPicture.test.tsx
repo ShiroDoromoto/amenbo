@@ -26,6 +26,7 @@ function step(
 ): AutomationPlacementDto {
   return {
     actionId: 900 + over.id,
+    global: false,
     prompt: "",
     interactive: false,
     reportToTask: false,
@@ -170,5 +171,62 @@ describe("the picture of the steps", () => {
     await render({ graph: detail() });
     expect(container.querySelectorAll(".autopic__lap")).toHaveLength(1);
     expect(container.textContent).toContain(t("auto.pic.lap"));
+  });
+});
+
+describe("what the picture marks, as the mock draws it", () => {
+  /** Take a task, then check it, which either sends it back to be fixed or on to be shipped. */
+  const branching = () =>
+    detail({
+      placements: [
+        step({ id: 1, name: "take", global: true }),
+        step({
+          id: 2,
+          name: "check",
+          exits: [
+            { id: 21, name: "fix it", outputs: [] },
+            { id: 22, name: "ship it", outputs: [] },
+            { id: 23, name: "*", outputs: [] },
+          ],
+        }),
+        step({ id: 3, name: "fix", exits: [{ id: 30, outputs: [] }] }),
+        step({ id: 4, name: "ship", exits: [{ id: 40, outputs: [] }] }),
+      ],
+      edges: [
+        { id: 1, fromId: 1, toId: 2, ends: "go" },
+        { id: 2, fromId: 2, exitName: "fix it", toId: 3, ends: "go" },
+        { id: 3, fromId: 2, exitName: "ship it", toId: 4, ends: "go" },
+        { id: 4, fromId: 2, exitName: "*", ends: "halt" },
+      ],
+    });
+  it("numbers each box, marks the one that takes the task, and says which library it comes from", async () => {
+    await render({ graph: branching() });
+    expect(nodes().map((one) => one.querySelector(".autopic__no")?.textContent)).toEqual(["1", "2", "3", "4"]);
+    // Over the box that takes the task, and over no other.
+    const takes = [...container.querySelectorAll<HTMLElement>(".autopic__takes")];
+    expect(takes.map((one) => one.textContent)).toEqual([t("auto.step.takesTask")]);
+    expect(takes[0]!.style.top).toBe(nodes()[0]!.style.top);
+    expect(nodes()[0]!.querySelector(".autopic__lib")?.textContent).toBe(t("auto.actions.reachGlobal"));
+    expect(nodes()[1]!.querySelector(".autopic__lib")?.textContent).toBe(t("auto.actions.reachProject"));
+  });
+
+  it("colours a line by what it is, ends it in an arrow, and says what the colours mean", async () => {
+    await render({ graph: branching() });
+    const drawn = [...container.querySelectorAll<SVGPolylineElement>("polyline")].map((one) => ({
+      cls: one.getAttribute("class") ?? "",
+      head: one.getAttribute("marker-end"),
+    }));
+    // In the order the layout lists them: the edges in the order they were made.
+    expect(drawn[0]!.cls).toContain("autopic__line--next");
+    expect(drawn[1]!.cls).toContain("autopic__line--branch");
+    expect(drawn[2]!.cls).toContain("autopic__line--branch");
+    expect(drawn[3]!.cls).toContain("autopic__line--error");
+    // Into a box it ends in a head; one that stops the run ends in its words instead.
+    expect(drawn[0]!.head).toMatch(/^url\(#.*-next\)$/);
+    expect(drawn[3]!.head).toBeNull();
+    const legend = container.querySelector(".autopic__legend")!;
+    for (const key of ["auto.pic.legendNext", "auto.pic.legendBack", "auto.pic.legendBranch", "auto.pic.legendWire"]) {
+      expect(legend.textContent).toContain(t(key));
+    }
   });
 });

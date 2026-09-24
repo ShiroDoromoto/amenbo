@@ -452,6 +452,11 @@ export type AutomationPlacementDto = { id: number,
  */
 name: string, actionId: number, 
 /**
+ * The action standing here is held by the device rather than by this project — the reach the
+ * box says under its name, as the library list does. False where the action is gone.
+ */
+global: boolean, 
+/**
  * The step this spot opens first. Absent where the action holds no step yet, which the launch
  * check names.
  */

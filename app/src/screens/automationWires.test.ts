@@ -25,7 +25,7 @@ function step(
   return {
     id,
     name,
-    actionId: 900 + id,
+    actionId: 900 + id, global: false,
     prompt: "",
     interactive: false,
     reportToTask: false,

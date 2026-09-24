@@ -1513,6 +1513,17 @@ fn open_one(
             log::info!("run {run_id} asked for {agent}, which this machine cannot start");
             (run.project_id, None, Vec::new())
         }
+        // A built-in has already been carried out and has reported (`AMB-D-964`), so there is no
+        // terminal to stand a pane on. The run is now standing between two steps — or has ended — and
+        // the watch woken below reads which, the same as after an agent's report.
+        Opened::Carried { run_step_id, .. } => {
+            log::info!("run {run_id} carried out built-in step {run_step_id}");
+            let run = read::automation_run(store.read_model().conn(), run_id)?
+                .ok_or_else(|| CmdError::from(amenbo_core::error::Error::not_found(
+                    format!("run '{run_id}' not found"),
+                )))?;
+            (run.project_id, None, Vec::new())
+        }
     };
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
     // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,

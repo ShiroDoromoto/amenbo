@@ -985,8 +985,30 @@ pub const STEPS: &[Step] = &[
                  CHECK(posted_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');
              UPDATE task_comment SET posted_at = NULLIF(created_at, '');",
         ),
+    },    Step {
+        to: 68,
+        name: "mark the actions, the steps and a run's copies of them that are Amenbo's own built-ins",
+        // `AMB-D-964`. A built-in is a kind of step Amenbo carries out itself rather than an agent in a
+        // terminal. The key is NULL on every row already written: none of them is a built-in, since
+        // no build before this one had any.
+        apply: Apply::Custom(mark_the_builtins),
     },
 ];
+
+/// v68: the column that marks a built-in, on the library action, the step and a run's copy of it.
+///
+/// **Each column is appended only where it is missing**, v53's guard and for its reason: the three
+/// tables arrived after the oldest store this build opens, so genesis creates them complete — column
+/// and all — on a store that predates them, before this chain runs.
+fn mark_the_builtins(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for table in ["automation_action", "automation_action_step", "automation_run_def"] {
+        if !column_names(tx, table)?.iter().any(|c| c == "builtin") {
+            tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN builtin TEXT;"))?;
+        }
+    }
+    Ok(())
+}
 
 /// v66: a run's copy of a step holds what follows each of its ways out, and the copy the run starts at
 /// is marked (`AMB-D-961`).

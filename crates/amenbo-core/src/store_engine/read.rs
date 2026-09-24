@@ -6297,6 +6297,19 @@ pub fn automation_action(conn: &Connection, id: i64) -> Result<Option<crate::mod
     super::hydrate::row_by_id(conn, "automation_action", id, super::hydrate::automation_action_row)
 }
 
+/// **The library action written for one built-in** (`AMB-D-964`), or `None` where nobody has placed
+/// that built-in on this store yet. There is one per key; the oldest is taken if a race ever wrote two.
+pub fn automation_action_builtin(
+    conn: &Connection,
+    key: &str,
+) -> Result<Option<crate::model::AutomationAction>> {
+    const A: col::automation_action::Cols = col::automation_action::ALL;
+    let pred = Pred::eq(A.builtin, key);
+    Ok(automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_action_row)?
+        .into_iter()
+        .next())
+}
+
 /// The `automation` record with this id.
 pub fn automation(conn: &Connection, id: i64) -> Result<Option<crate::model::Automation>> {
     super::hydrate::row_by_id(conn, "automation", id, super::hydrate::automation_row)

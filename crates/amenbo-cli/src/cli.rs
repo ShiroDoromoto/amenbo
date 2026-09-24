@@ -1853,8 +1853,11 @@ pub enum AutomationCmd {
         /// automation id
         automation: i64,
         /// the library action to place
-        #[arg(long, value_name = "ID")]
-        action: i64,
+        #[arg(long, value_name = "ID", required_unless_present = "builtin", conflicts_with = "builtin")]
+        action: Option<i64>,
+        /// place one of Amenbo's built-ins instead (`automation builtin-list` names them)
+        #[arg(long, value_name = "KEY")]
+        builtin: Option<String>,
     },
     /// Take a placement off its automation with the answers and lines hanging on it — confirms unless -y
     PlaceRm {
@@ -1890,6 +1893,9 @@ pub enum AutomationCmd {
         /// action id
         id: i64,
     },
+    /// Amenbo's built-ins: steps it carries out itself, with what each does, the settings it reads, what
+    /// it takes in and the ways out it leaves by. They are read, placed and put in, never edited
+    BuiltinList,
     /// Rename a library action, or rewrite what it is for (only the given fields change)
     ActionUpdate {
         /// action id
@@ -1934,11 +1940,15 @@ pub enum AutomationCmd {
         /// action id
         action: i64,
         /// what this step is called
-        #[arg(long)]
-        name: String,
+        #[arg(long, required_unless_present = "builtin")]
+        name: Option<String>,
         /// the prompt this step runs on (`-` reads it from stdin)
-        #[arg(long)]
-        prompt: String,
+        #[arg(long, required_unless_present = "builtin")]
+        prompt: Option<String>,
+        /// put in one of Amenbo's built-ins instead — it carries its own name, ways out and ports, and
+        /// no prompt (`automation builtin-list` names them)
+        #[arg(long, value_name = "KEY", conflicts_with_all = ["name", "prompt", "interactive", "work_dir", "report_to_task", "no_history"])]
+        builtin: Option<String>,
         /// let this step wait for a person
         #[arg(long)]
         interactive: bool,

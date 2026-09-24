@@ -53,11 +53,15 @@ pub struct Opening {
     pub folder: Option<String>,
 }
 
-/// The three ways opening a step can end.
+/// The four ways opening a step can end.
 #[derive(Clone, Debug)]
 pub enum Opened {
     /// Open a terminal on this.
     Ready(Box<Opening>),
+    /// **The step was a built-in, and it has been carried out** (`AMB-D-964`). No terminal is opened:
+    /// the step has already reported, and `next` is what its way out leads to — read and acted on
+    /// exactly as a report from an agent's step would be ([`super::automation_report::Next`]).
+    Carried { run_step_id: i64, next: super::automation_report::Next },
     /// A required input had nothing wired into it that has actually been produced, so no terminal was
     /// opened and the run was stopped. `missing` names the inputs, for the sentence a person reads,
     Stopped { run: AutomationRun, missing: Vec<String> },
@@ -112,7 +116,8 @@ pub fn open(
     // as its work takes — an agent uninstalled in the middle of one leaves every step after it with
     // nothing to open. A run left `running` on that would hold its task for the rest of the session,
     // so it is ended here with the reason that says which of the five this is.
-    if let Some(startable) = startable {
+    // A built-in names no agent: Amenbo carries it out itself.
+    if let (Some(startable), None) = (startable, def.builtin.as_ref()) {
         if !startable.iter().any(|id| id == &def.agent) {
             let stopped = gave_up(tx, run)?;
             return Ok(Opened::NoAgent { run: stopped.run, agent: def.agent });
@@ -152,6 +157,13 @@ pub fn open(
     let run_step = new_execution(tx, &run, &def, stretch.as_ref(), now)?;
     for found in &handed {
         write_in(tx, &run_step, found, now)?;
+    }
+    if def.builtin.is_some() {
+        let ins: Vec<(String, Option<String>)> =
+            handed.iter().map(|h| (h.port.name.clone(), h.from.value.clone())).collect();
+        let task_id = stretch.as_ref().and_then(|s| s.task_id);
+        let next = super::automation_builtin::carry_out(tx, &run, &run_step, &def, &exits, &ins, task_id)?;
+        return Ok(Opened::Carried { run_step_id: run_step.id, next });
     }
     let text = compose(tx, &def, &exits, &handed, stretch.as_ref())?;
     let folder = working_folder(&def, &handed)?;
@@ -738,6 +750,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
+            Opened::Carried { .. } => panic!("not a built-in"),
         }
     }
 
@@ -1128,6 +1141,7 @@ mod tests {
                     );
                 }
                 Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
+                Opened::Carried { .. } => panic!("not a built-in"),
             }
             assert_eq!(
                 read::automation_run_steps_of(tx.conn(), run.id).expect("read").len(),
@@ -1152,6 +1166,7 @@ mod tests {
             let here = ["codex".to_string()];
             match open(tx, run.id, def_of(tx, &run, &p.first).id, Some(&here)).expect("open") {
                 Opened::Ready(_) => panic!("nothing here can start claude"),
+                Opened::Carried { .. } => panic!("not a built-in"),
                 Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
                 Opened::NoAgent { run: stopped, agent } => {
                     assert_eq!(agent, "claude");

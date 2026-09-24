@@ -1031,6 +1031,11 @@ datasets! {
         name: col(REQ),
         note: col(REQ),
         entry_step_id: fk_opt("automation_action_step", "RESTRICT"),
+        // The key of the built-in this action stands for (`AMB-D-964`), or NULL for one a person wrote.
+        // A built-in's rows are written from Amenbo's own definition (`crate::ops::automation_builtin`)
+        // and never edited: the ways out and the outputs they declare have to be the ones the code
+        // leaves by.
+        builtin: col(OPT),
         order_key: col(ORDER_KEY),
     }
 
@@ -1082,6 +1087,10 @@ datasets! {
         action_id: fk("automation_action", "RESTRICT"),
         name: col(REQ),
         prompt: col(REQ),
+        // The key of the built-in this step is (`AMB-D-964`), or NULL for a step an agent carries out.
+        // A built-in step opens no terminal: Amenbo carries it out where the step is opened. Its ways
+        // out and ports are written from the definition and cannot be edited.
+        builtin: col(OPT),
         interactive: bool_col,
         work_dir_ref: col(OPT),
         report_to_task: bool_col,
@@ -1262,6 +1271,9 @@ datasets! {
         step_id: fk_opt("automation_action_step", "SET NULL"),
         name: col(REQ),
         prompt: col(OPT),
+        // The built-in the step was, copied with it — what tells `automation_step::open` to carry it out
+        // rather than open a terminal. `agent` is `''` on such a copy: nobody is chosen for it.
+        builtin: col(OPT),
         agent: col(REQ),
         model: col(OPT),
         interactive: bool_col,

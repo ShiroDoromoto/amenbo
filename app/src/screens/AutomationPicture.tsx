@@ -52,7 +52,10 @@ function endWord(line: PicLine): string {
   return "";
 }
 
-/** What a line is, in a sentence — the one thing a reader who cannot see the drawing is left with. */
+/**
+ * What a line is, in a sentence: the words written beside an edge, and the one thing a reader who
+ * cannot see the drawing is left with.
+ */
 function lineTitle(line: PicLine): string {
   if (line.kind === "wire" && line.hands !== undefined) {
     return tf("auto.pic.hands", { from: line.hands.from, to: line.hands.to });
@@ -136,14 +139,9 @@ export function AutomationPicture({
                   .join(" ")}
                 points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
               />
-              {line.kind === "edge" && exitWord(line) !== "" && (
-                <text className="autopic__word" x={line.at.x} y={line.at.y}>
-                  {exitWord(line)}
-                </text>
-              )}
-              {line.endAt !== undefined && (
-                <text className="autopic__word" x={line.endAt.x} y={line.endAt.y}>
-                  {endWord(line)}
+              {line.kind === "edge" && lineTitle(line) !== "" && (
+                <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
+                  {lineTitle(line)}
                 </text>
               )}
             </g>

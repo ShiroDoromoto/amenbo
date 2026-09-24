@@ -129,9 +129,14 @@ describe("the picture of an automation", () => {
     const picture = layOut(one);
     expect(at(picture, 2).y).toBe(at(picture, 3).y);
     expect(at(picture, 2).x).not.toBe(at(picture, 3).x);
-    // Two ways out of one step leave a finger apart, so their names are written a step apart too.
-    const word = (key: string) => picture.lines.find((line) => line.key === key)!.at;
-    expect(word("edge-1").y).not.toBe(word("edge-2").y);
+    // Each name is written over the middle of its own line's leg across, not stacked under the step.
+    for (const key of ["edge-1", "edge-2"]) {
+      const line = picture.lines.find((one) => one.key === key)!;
+      const [, turn, across] = line.points;
+      expect(line.align).toBe("middle");
+      expect(line.at.x).toBe(Math.round((turn!.x + across!.x) / 2));
+      expect(line.at.y).toBeLessThan(turn!.y);
+    }
   });
 
   it("outlines the steps one task is worked by, and starts a new outline at the next taker", () => {
@@ -356,11 +361,112 @@ describe("the picture of an automation", () => {
     expect(line.ends).toBe("done");
     expect(line.points).toHaveLength(2);
     expect(line.points[1]!.y).toBeGreaterThan(at(picture, 1).y + at(picture, 1).h);
-    // The ending is written at the foot of the stub, under the way out's own name.
-    expect(line.endAt!.y).toBeGreaterThanOrEqual(line.points[1]!.y);
-    // ...and beside the stub, not off to its left where the neighbouring names are.
-    expect(line.endAt!.x).toBeGreaterThan(line.points[1]!.x);
-    expect(line.endAt!.x - line.points[1]!.x).toBeLessThan(20);
+    // The way out and its ending are written under the foot of the stub, starting at the stub.
+    expect(line.at.y).toBeGreaterThan(line.points[1]!.y);
+    expect(line.align).toBe("start");
+    expect(Math.abs(line.at.x - line.points[1]!.x)).toBeLessThan(10);
+  });
+
+  it("writes the endings of two ways out that go nowhere on rows of their own", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", {
+            exits: [
+              { id: 91, outputs: [port("task", "task_take")] },
+              { id: 92, name: "*", outputs: [] },
+            ],
+          }),
+        ],
+        edges: [edge({ id: 1, fromId: 1, ends: "done" }), edge({ id: 2, fromId: 1, exitName: "*", ends: "halt" })],
+      }),
+    );
+    const [left, right] = [...picture.lines].sort((a, b) => a.points[0]!.x - b.points[0]!.x);
+    // The one on the left runs further down, so its words pass under the shorter one's foot.
+    expect(left!.points[1]!.y).toBeGreaterThan(right!.at.y);
+    expect(left!.at.y).toBeGreaterThan(right!.at.y);
+  });
+
+  it("ties a named way out first when the ways out before it have no line", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", {
+            exits: [
+              { id: 90, outputs: [] },
+              { id: 91, name: "*", outputs: [] },
+              { id: 92, name: "found", outputs: [port("task", "task_take")] },
+            ],
+          }),
+          step({ id: 2, name: "work" }),
+        ],
+        edges: [edge({ id: 1, fromId: 1, exitName: "found", toId: 2 })],
+      }),
+    );
+    const line = picture.lines.find((one) => one.key === "edge-1")!;
+    const box = at(picture, 1);
+    // Where the first way out is tied, as the line into the next step is tied to that one.
+    expect(line.points[0]!.x - box.x).toBe(line.points[3]!.x - at(picture, 2).x);
+  });
+
+  it("writes the name of a line straight down on its left, and staggers the + of lines side by side in the margin", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({
+            id: 2,
+            name: "work",
+            exits: [
+              { id: 80, outputs: [] },
+              { id: 81, name: "*", outputs: [] },
+              { id: 82, name: "again", outputs: [] },
+            ],
+          }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, exitName: "next", toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 1 }),
+          edge({ id: 3, fromId: 2, exitName: "again", toId: 1 }),
+        ],
+      }),
+    );
+    const down = picture.lines.find((one) => one.key === "edge-1")!;
+    expect(down.align).toBe("end");
+    expect(down.at.x).toBeLessThan(down.points[0]!.x);
+    expect(down.at.x - "next".length * 7).toBeGreaterThanOrEqual(0);
+    const plus = (id: number) => picture.inserts.find((one) => one.edgeId === id)!;
+    expect(plus(2).x).not.toBe(plus(3).x);
+    expect(Math.abs(plus(2).y - plus(3).y)).toBeGreaterThanOrEqual(20);
+  });
+
+  it("puts the + on the line: over its leg across, or on its lane in the margin", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [taker(1, "take"), step({ id: 2, name: "work" }), step({ id: 3, name: "check" })],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 3, exitName: "again", toId: 2 }),
+        ],
+      }),
+    );
+    const plus = (id: number) => picture.inserts.find((one) => one.edgeId === id)!;
+    const across = picture.lines.find((one) => one.key === "edge-1")!;
+    expect(plus(1).y).toBe(across.points[1]!.y);
+    const lane = picture.lines.find((one) => one.key === "edge-3")!;
+    const [, , turn, foot] = lane.points;
+    expect(plus(3).x).toBe(turn!.x);
+    expect(plus(3).y).toBeGreaterThan(Math.min(turn!.y, foot!.y));
+    expect(plus(3).y).toBeLessThan(Math.max(turn!.y, foot!.y));
+    // The name is written outside the lane, where there are no steps, and the picture keeps room for it.
+    expect(lane.align).toBe("end");
+    expect(lane.at.x).toBeLessThan(turn!.x);
+    expect(lane.at.x - "again".length * 7).toBeGreaterThanOrEqual(0);
   });
 
   it("puts a + on every edge and on no wire", () => {

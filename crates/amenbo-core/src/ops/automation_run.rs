@@ -35,7 +35,8 @@ use rusqlite::Connection;
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
-    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPortDirection,
+    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
+    AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationEdge,
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
@@ -305,7 +306,8 @@ pub fn check(
             continue;
         }
         push_new(&mut unmet, inside(conn, placement, &steps, &live, &by_id)?);
-        for step in &steps {
+        // A built-in names no agent and no model: Amenbo carries it out itself (`AMB-D-964`).
+        for step in steps.iter().filter(|step| step.builtin.is_none()) {
             let mut found = Vec::new();
             let Some(chosen) = read::automation_placement_step_for(conn, placement.id, step.id)? else {
                 found.push(Unmet::AgentUnchosen { step: step.name.clone() });
@@ -712,7 +714,8 @@ fn not_ready(name: &str, unmet: &[Unmet]) -> Error {
 ///
 /// **A step nobody is chosen for is not copied**, and `None` says so. The launch check refuses a run
 /// that could open one ([`Unmet::AgentUnchosen`]), so the only such step left here stands on a
-/// placement no run reaches — copied, it would need an agent it does not have.
+/// placement no run reaches — copied, it would need an agent it does not have. A built-in is copied
+/// with nobody named and no prompt: Amenbo carries it out itself (`AMB-D-964`).
 ///
 /// No cycle can be met here: an action places no action (`AMB-D-949`), so opening a placement goes one
 /// level down and stops. A loop drawn inside an action is a way back between its steps, walked at run
@@ -726,8 +729,13 @@ fn snapshot(
     now: Timestamp,
 ) -> Result<Option<AutomationRunDef>> {
     let conn = tx.conn();
-    let Some(chosen) = read::automation_placement_step_for(conn, placement.id, step.id)? else {
-        return Ok(None);
+    // A built-in is carried out by Amenbo, so nobody was chosen for it and its copy names nobody.
+    let chosen = match &step.builtin {
+        Some(_) => AutomationPlacementStep::default(),
+        None => match read::automation_placement_step_for(conn, placement.id, step.id)? {
+            Some(chosen) => chosen,
+            None => return Ok(None),
+        },
     };
     let mut exits = Vec::new();
     for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
@@ -762,7 +770,8 @@ fn snapshot(
         placement_id: Some(placement.id),
         step_id: Some(step.id),
         name: step.name.clone(),
-        prompt: Some(step.prompt.clone()),
+        prompt: step.builtin.is_none().then(|| step.prompt.clone()),
+        builtin: step.builtin.clone(),
         agent: chosen.agent,
         model: chosen.model,
         interactive: step.interactive,
@@ -1627,6 +1636,7 @@ mod tests {
                 crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                     panic!("cannot start {agent}")
                 }
+                crate::ops::automation_step::Opened::Carried { .. } => panic!("not a built-in"),
             };
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
 
@@ -1724,6 +1734,7 @@ mod tests {
             crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                 panic!("cannot start {agent}")
             }
+            crate::ops::automation_step::Opened::Carried { .. } => panic!("not a built-in"),
         };
         let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
         crate::ops::automation_report::take(tx, opening.run_step.id, task).expect("take");

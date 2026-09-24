@@ -122,11 +122,15 @@ fn live_wire(tx: &WriteTx<'_>, id: i64) -> Result<AutomationWire> {
 
 // ───────────────────────────── a definition a run is going on ─────────────────────────────
 
-/// The definition an op is about to rewrite: an automation's picture, or a library action's insides.
+/// The definition an op is about to rewrite: an automation's picture, a library action's insides, or
+/// what one step of an action declares.
 #[derive(Clone, Copy, Debug)]
 enum Def {
     Automation(i64),
     Action(i64),
+    /// One step's own declarations — its fields, its ways out and its ports. It is the action's for the
+    /// runs that hold it, and the step's own for whether it is a built-in.
+    Step(i64),
 }
 
 /// **A definition a run is going on is not rewritten** (`AMB-D-961`) — not while a run launched from it
@@ -145,23 +149,64 @@ fn not_under_a_run(tx: &WriteTx<'_>, def: Def) -> Result<()> {
     if PAST_THE_GUARD.with(std::cell::Cell::get) {
         return Ok(());
     }
+    not_built_in(tx, def)?;
+    let def = match def {
+        Def::Step(id) => Def::Action(live_step(tx, id)?.action_id),
+        other => other,
+    };
     // The same answer a build screen reads to hold its fields shut, so the two cannot disagree.
     let runs = match def {
         Def::Automation(id) => automation_view::run_ids_holding_automation(tx.conn(), id)?,
-        Def::Action(id) => automation_view::run_ids_holding_action(tx.conn(), id)?,
+        Def::Action(id) | Def::Step(id) => automation_view::run_ids_holding_action(tx.conn(), id)?,
     };
     if runs.is_empty() {
         return Ok(());
     }
     let what = match def {
         Def::Automation(id) => format!("automation '{}'", live_automation(tx, id)?.name),
-        Def::Action(id) => format!("action '{}'", live_action(tx, id)?.name),
+        Def::Action(id) | Def::Step(id) => format!("action '{}'", live_action(tx, id)?.name),
     };
     let named = runs.iter().map(i64::to_string).collect::<Vec<_>>().join(", ");
     Err(Error::conflict(format!(
         "{what} is in use by run {named}, which is running or paused — its definition cannot change \
          until the run ends. Stop it with `automation stop <run>`, or let it finish, then edit."
     )))
+}
+
+/// **A built-in is not rewritten by hand** (`AMB-D-964`). Its ways out, its outputs and its settings are
+/// the ones Amenbo's code leaves by and reads ([`crate::ops::automation_builtin`]), so a rename here would
+/// leave the picture naming a way out the code never takes.
+///
+/// A built-in action refuses every rewrite of its insides. A built-in step placed inside an action
+/// somebody wrote refuses a rewrite of what it declares; the lines drawn to and from it are that
+/// action's, and so is taking it off.
+///
+/// The rows are written from the definition before the key is set on them, which is how the writes
+/// that build a built-in get past this.
+fn not_built_in(tx: &WriteTx<'_>, def: Def) -> Result<()> {
+    let refused = match def {
+        Def::Automation(_) => None,
+        Def::Action(id) => {
+            let action = live_action(tx, id)?;
+            action.builtin.map(|_| format!("action '{}'", action.name))
+        }
+        Def::Step(id) => {
+            let step = live_step(tx, id)?;
+            match step.builtin {
+                Some(_) => Some(format!("step '{}'", step.name)),
+                None => live_action(tx, step.action_id)?
+                    .builtin
+                    .map(|_| format!("step '{}'", step.name)),
+            }
+        }
+    };
+    match refused {
+        None => Ok(()),
+        Some(what) => Err(Error::invalid(format!(
+            "{what} is built into Amenbo — what it does, its ways out and its settings are Amenbo's own \
+             and cannot be edited"
+        ))),
+    }
 }
 
 #[cfg(test)]
@@ -184,7 +229,10 @@ pub(crate) fn past_the_guard<T>(rewrite: impl FnOnce() -> T) -> T {
 /// is its own.
 fn def_of_declarer(tx: &WriteTx<'_>, owner_kind: AutomationOwner, owner_id: i64) -> Result<Def> {
     Ok(match owner_kind {
-        AutomationOwner::Step => Def::Action(live_step(tx, owner_id)?.action_id),
+        AutomationOwner::Step => {
+            live_step(tx, owner_id)?;
+            Def::Step(owner_id)
+        }
         AutomationOwner::Action => Def::Action(owner_id),
     })
 }
@@ -399,6 +447,7 @@ pub fn action_add(
         name,
         note: note.to_string(),
         entry_step_id: None,
+        builtin: None,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1002,6 +1051,12 @@ pub fn placement_step_set(
     let placement = live_placement(tx, placement_id)?;
     not_under_a_run(tx, Def::Automation(placement.automation_id))?;
     checked_step_of_placement(tx, &placement, step_id)?;
+    if let Some(key) = live_step(tx, step_id)?.builtin {
+        return Err(Error::invalid(format!(
+            "step '{step_id}' is the built-in '{key}', which Amenbo carries out itself — nobody is \
+             chosen to carry it out"
+        )));
+    }
     let agent = checked_name("agent", agent)?;
     let model = match model {
         Some(model) => Some(checked_name("model", model)?),
@@ -1120,6 +1175,7 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
         action_id,
         name,
         prompt: new.prompt,
+        builtin: None,
         interactive: new.interactive,
         work_dir_ref: new.work_dir_ref,
         report_to_task: new.report_to_task,
@@ -1221,7 +1277,7 @@ pub fn step_update(
     show_history: Option<bool>,
 ) -> Result<AutomationStep> {
     let before = live_step(tx, id)?;
-    not_under_a_run(tx, Def::Action(before.action_id))?;
+    not_under_a_run(tx, Def::Step(id))?;
     let mut after = before.clone();
     if let Some(name) = name {
         after.name = checked_name("step", name)?;

@@ -1610,6 +1610,11 @@ pub struct AutomationAction {
     /// automation that places it is refused at the launch check, not here.
     #[serde(default)]
     pub entry_step_id: Option<i64>,
+    /// **The built-in this action stands for**, by its key, or `None` for one a person wrote
+    /// (`AMB-D-964`). Its rows are written from Amenbo's own definition and are not edited
+    /// ([`crate::ops::automation_builtin`]).
+    #[serde(default)]
+    pub builtin: Option<String>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -1664,6 +1669,11 @@ pub struct AutomationStep {
     pub action_id: i64,
     pub name: String,
     pub prompt: String,
+    /// **The built-in this step is**, by its key, or `None` for a step an agent carries out in a
+    /// terminal (`AMB-D-964`). A built-in step has no prompt and nobody is chosen for it: Amenbo carries
+    /// it out where the step is opened ([`crate::ops::automation_builtin`]).
+    #[serde(default)]
+    pub builtin: Option<String>,
     /// May this step wait for a person? A step that does not say so is not left standing on one.
     #[serde(default)]
     pub interactive: bool,
@@ -1961,6 +1971,10 @@ pub struct AutomationRunDef {
     /// The prompt as it read at launch.
     #[serde(default)]
     pub prompt: Option<String>,
+    /// The built-in the step was, or `None` for one an agent carries out — what makes opening it carry
+    /// it out in place rather than open a terminal. `agent` is empty on such a copy.
+    #[serde(default)]
+    pub builtin: Option<String>,
     pub agent: String,
     #[serde(default)]
     pub model: Option<String>,

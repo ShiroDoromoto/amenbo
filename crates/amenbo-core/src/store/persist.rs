@@ -1774,6 +1774,28 @@ impl Store {
         })
     }
 
+    /// **Put a built-in on an automation** (one operation = one transaction): its library action is
+    /// written from Amenbo's definition the first time any automation here places it, and found again
+    /// after that ([`crate::ops::automation_builtin::action`]).
+    ///
+    /// The device's shelf is not declared as a target, although the action lands there. What is written
+    /// on it is Amenbo's own, from its definition and never edited, not something a person puts on that
+    /// shelf — so a session bound to one project may place a built-in as it may place its own actions
+    /// (`AMB-D-964`).
+    pub fn automation_builtin_place(
+        &mut self,
+        automation_id: i64,
+        key: &str,
+    ) -> Result<crate::model::AutomationPlacement> {
+        self.write_one(
+            &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
+            |tx| {
+                let action = crate::ops::automation_builtin::action(tx, key)?;
+                crate::ops::automation::placement_add(tx, automation_id, action.id)
+            },
+        )
+    }
+
     /// Make an empty action and put it on a picture, standing on its own (one operation = one
     /// transaction) — [`Self::automation_placement_insert_new`] for a picture that has no line to put
     /// one in on.
@@ -1998,6 +2020,19 @@ impl Store {
     ) -> Result<crate::model::AutomationStep> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, action_id)], |tx| {
             crate::ops::automation::step_add(tx, action_id, new)
+        })
+    }
+
+    /// Put a built-in in as a step of a library action (one operation = one transaction) — its ways out
+    /// and ports written from Amenbo's definition, and the settings it reads declared on the action
+    /// where it declares none of that name ([`crate::ops::automation_builtin::step_add`]).
+    pub fn automation_builtin_step_add(
+        &mut self,
+        action_id: i64,
+        key: &str,
+    ) -> Result<crate::model::AutomationStep> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, action_id)], |tx| {
+            crate::ops::automation_builtin::step_add(tx, action_id, key)
         })
     }
 

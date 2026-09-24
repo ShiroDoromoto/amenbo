@@ -26,6 +26,7 @@
 
 pub mod attachment;
 pub mod automation;
+pub mod automation_builtin;
 pub mod automation_report;
 pub mod automation_run;
 pub mod automation_step;

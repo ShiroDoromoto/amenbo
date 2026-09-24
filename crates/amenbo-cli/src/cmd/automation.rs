@@ -267,6 +267,7 @@ fn typed_in(sub: &AutomationCmd) -> Where {
         | AutomationCmd::Show { .. }
         | AutomationCmd::ActionList { .. }
         | AutomationCmd::ActionShow { .. }
+        | AutomationCmd::BuiltinList
         | AutomationCmd::RunList { .. }
         | AutomationCmd::RunShow { .. } => Where::EitherSide,
 
@@ -394,9 +395,19 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             };
             write_envelope(flags, "automation.entry-set", "automation", serde_json::to_value(&a).unwrap(), Some(vec!["entry_placement_id".to_string()]), false, line);
         }
-        AutomationCmd::PlaceAdd { automation, action } => {
-            let p = store.automation_placement_add(automation, action).map_err(CliError::from)?;
-            write_envelope(flags, "automation.place-add", "automation_placement", serde_json::to_value(&p).unwrap(), None, false, format!("✓ Placed action {action} on automation {automation} ({})", p.id));
+        AutomationCmd::PlaceAdd { automation, action, builtin } => {
+            // clap holds exactly one of the two: `--action` is required unless `--builtin` is given.
+            let (p, what) = match (action, builtin) {
+                (_, Some(key)) => {
+                    let p = store.automation_builtin_place(automation, &key).map_err(CliError::from)?;
+                    (p, format!("the built-in '{key}'"))
+                }
+                (Some(action), None) => {
+                    (store.automation_placement_add(automation, action).map_err(CliError::from)?, format!("action {action}"))
+                }
+                (None, None) => unreachable!("clap requires --action or --builtin"),
+            };
+            write_envelope(flags, "automation.place-add", "automation_placement", serde_json::to_value(&p).unwrap(), None, false, format!("✓ Placed {what} on automation {automation} ({})", p.id));
         }
         AutomationCmd::PlaceRm { id } => {
             if !confirm(flags, "take placement off")? {
@@ -461,6 +472,20 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 render_action(flags, &view);
             }
         }
+        AutomationCmd::BuiltinList => {
+            let builtins = amenbo_core::ops::automation_builtin::all();
+            if flags.json {
+                print_json(&json!({
+                    "count": builtins.len(),
+                    "builtins": serde_json::to_value(builtins).unwrap(),
+                }));
+            } else {
+                human(flags, format!("{} built-in(s)", builtins.len()));
+                for one in builtins {
+                    human(flags, format!("  {}  {} — {}", one.key, one.name, one.does));
+                }
+            }
+        }
         AutomationCmd::ActionUpdate { id, name, note } => {
             let note = body_arg_opt(note)?;
             let a =
@@ -504,7 +529,15 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_action_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-rm", "automation_action", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted action: {id}"));
         }
-        AutomationCmd::StepAdd { action, name, prompt, interactive, work_dir, report_to_task, no_history } => {
+        AutomationCmd::StepAdd { action, builtin: Some(key), .. } => {
+            let s = store.automation_builtin_step_add(action, &key).map_err(CliError::from)?;
+            write_envelope(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Put in the built-in '{key}': {} ({})", s.name, s.id));
+        }
+        AutomationCmd::StepAdd { action, name, prompt, interactive, work_dir, report_to_task, no_history, builtin: None } => {
+            // clap requires both unless `--builtin` is given, and that arm is above.
+            let (Some(name), Some(prompt)) = (name, prompt) else {
+                unreachable!("clap requires --name and --prompt without --builtin")
+            };
             let prompt = body_arg(prompt)?;
             let new = NewStep {
                 name,

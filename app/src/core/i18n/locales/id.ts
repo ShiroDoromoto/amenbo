@@ -989,6 +989,7 @@ export const id: Translation = {
     "auto.step.folderNone": "di mana panel proyek ini terbuka",
     "auto.step.interactive": "Boleh berhenti dan menunggu orang",
     "auto.step.reportToTask": "Laporannya juga tinggal di tugas",
+    "auto.step.reportToTaskNote": "Tidak pada tugas yang sudah \"Selesai\" atau \"Ditolak\". Laporannya tetap ada di riwayat jalannya.",
     "auto.step.history": "Ia diberi jalannya eksekusi sejauh ini",
     "auto.step.ready": "Prasyarat",
     "auto.step.readyYes": "Tidak ada yang menghalangi",

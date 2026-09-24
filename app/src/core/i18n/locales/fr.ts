@@ -1000,6 +1000,7 @@ export const fr: Translation = {
     "auto.step.folderNone": "là où s'ouvre un volet de ce projet",
     "auto.step.interactive": "Elle peut s'arrêter et attendre une personne",
     "auto.step.reportToTask": "Son compte rendu reste aussi sur la tâche",
+    "auto.step.reportToTaskNote": "Pas sur une tâche déjà « Terminée » ou « Écartée ». Le compte rendu reste dans l'historique de l'exécution.",
     "auto.step.history": "Elle reçoit le déroulé de l'exécution jusqu'ici",
     "auto.step.ready": "Prémisses",
     "auto.step.readyYes": "Rien ne bloque",

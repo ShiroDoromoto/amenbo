@@ -989,6 +989,7 @@ export const vi: Translation = {
     "auto.step.folderNone": "nơi một khung của dự án này mở ra",
     "auto.step.interactive": "Có thể dừng lại và chờ người",
     "auto.step.reportToTask": "Báo cáo của nó cũng nằm trên công việc",
+    "auto.step.reportToTaskNote": "Không ghi lên công việc đã \"Xong\" hoặc \"Bị bác\". Báo cáo vẫn nằm trong lịch sử của lần chạy.",
     "auto.step.history": "Nó được trao lại diễn biến của lần chạy đến lúc này",
     "auto.step.ready": "Tiền đề",
     "auto.step.readyYes": "Không có gì cản",

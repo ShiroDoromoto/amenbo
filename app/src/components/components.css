@@ -1567,6 +1567,8 @@ button.feed__target:hover { color: var(--c-accent); }
    step that says nothing about it stops the run and calls a person, which is already the answer. */
 .autostep__exiterr { color: var(--c-text-muted); }
 .autostep__check { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); }
+/* What a tick box leaves undone, in small words right under it. */
+.autostep__note { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* A button that adds a row to the field it is in takes its own width. The field is a column, so
    without this it would stretch the width of the panel and read as the field itself. */
 .autostep__field > .btn { align-self: flex-start; }

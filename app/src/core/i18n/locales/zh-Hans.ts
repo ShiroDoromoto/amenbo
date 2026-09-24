@@ -990,6 +990,7 @@ export const zhHans: Translation = {
     "auto.step.folderNone": "这个项目的窗格打开的地方",
     "auto.step.interactive": "可以停下来等人",
     "auto.step.reportToTask": "报告也留在任务上",
+    "auto.step.reportToTaskNote": "任务已是“已完成”或“已否决”时不留。报告留在运行记录里。",
     "auto.step.history": "把到目前为止的经过交给它",
     "auto.step.ready": "前提",
     "auto.step.readyYes": "没有被挡住",

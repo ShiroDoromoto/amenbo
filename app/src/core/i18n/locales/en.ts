@@ -1231,6 +1231,7 @@ const ui = {
   "auto.step.folderNone": "wherever a pane of this project opens",
   "auto.step.interactive": "It may stop and wait for a person",
   "auto.step.reportToTask": "Its report also lands on the task",
+  "auto.step.reportToTaskNote": "Not on a task that is already Done or Rejected. The report stays in the run's history.",
   "auto.step.history": "It is handed the run's story so far",
   "auto.step.ready": "Premises",
   "auto.step.readyYes": "Nothing in the way",

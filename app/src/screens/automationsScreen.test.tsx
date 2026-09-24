@@ -193,6 +193,32 @@ describe("the automations screen", () => {
     expect(container.textContent).toContain(t("auto.build.picture"));
     expect(container.querySelector(".actpanel")).toBeNull();
   });
+
+  // The tabs stay over the build screen (`AMB-T-5419`), with the automation's own tab lit.
+  it("keeps the tabs over the build screen, and moves to another tab in one press", async () => {
+    hoisted.automations = [card()];
+    hoisted.detail = detail();
+    hoisted.check = { ready: true, blocks: [] };
+    await render();
+    await act(async () => { button("Morning round").click(); });
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
+    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+    await act(async () => { tabs[2].click(); });
+    expect(container.textContent).not.toContain(t("auto.build.picture"));
+    expect(container.textContent).toContain(t("auto.running.empty"));
+  });
+
+  it("goes back to the list from the lit tab, as back does", async () => {
+    hoisted.automations = [card()];
+    hoisted.detail = detail();
+    hoisted.check = { ready: true, blocks: [] };
+    await render();
+    await act(async () => { button("Morning round").click(); });
+    const lit = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
+    await act(async () => { lit?.click(); });
+    expect(container.querySelector(".autolist")).not.toBeNull();
+    expect(container.textContent).not.toContain(t("auto.build.picture"));
+  });
 });
 
 // The sidebar's entrance (`AMB-D-954`): every project's definitions, each with its project; started
@@ -276,7 +302,8 @@ describe("arriving on the sidebar with a global action", () => {
     await act(async () => {
       root.render(createElement(AutomationsScreen, { projectId: null, openingAction: 4, workspaceOpen: true }));
     });
-    expect(container.querySelector(".autotabs")).toBeNull();
+    const lit = () => container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
+    expect(lit()?.textContent).toBe(t("auto.tab.actions"));
     await act(async () => { button(t("auto.build.back")).click(); });
     const on = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
     expect(on?.textContent).toBe(t("auto.tab.actions"));

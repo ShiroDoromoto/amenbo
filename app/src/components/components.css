@@ -1271,6 +1271,8 @@ button.feed__target:hover { color: var(--c-accent); }
    are rows read across — names, steps, tasks — and a reading measure would only cut them to "…". It
    is not the settings screen's frame (`.settings`), which is a column of forms and keeps its 720px. */
 .autoscreen { padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
+/* A build screen under the tabs sits in the screen's padding, so its own margin would double it. */
+.autoscreen--build > .actbuild { margin: 0; }
 /* The four tabs, left to right on a rule, the one open underlined in the accent. Each is as wide as
    its word: they name lists, and a tab stretched to a quarter of the screen would be read as a field. */
 .autotabs {

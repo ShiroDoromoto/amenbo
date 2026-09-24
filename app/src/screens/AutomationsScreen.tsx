@@ -32,6 +32,11 @@
 // screen opens one as well — the action it has just made on the spot, to be built (`AMB-D-956`) —
 // and "back" from there lands on that build screen again, which is still open underneath.
 //
+// **The tabs stay over a build screen** (`AMB-T-5419`), so another tab is one press away rather than
+// "back" and then the tab. The tab lit is the one the open screen belongs to — "actions" over an
+// action, "automations" over an automation — and a press on any tab, that one included, closes what is
+// open and lands on that tab's list, as "back" does.
+//
 // **A row leads with the automation's ID**, the number the terminal names it by
 // (`amenbo automation start <ID>`): a name can be changed, so the ID is what ties a row on this
 // screen to a line typed there.
@@ -105,47 +110,66 @@ export function AutomationsScreen({
   const automations = useAutomations(projectId);
   const folders = useBoundFolders(projectId).live.map((one) => one.path);
 
+  // The tab the reader sees lit: the open screen's own while one is open, the chosen one otherwise.
+  const lit: Tab = openAction !== null ? "actions" : open !== null ? "automations" : tab;
+
+  function choose(next: Tab) {
+    setOpenAction(null);
+    setOpen(null);
+    setTab(next);
+  }
+
+  const tabs = (
+    <div className="autotabs" role="tablist" aria-label={t("auto.title")}>
+      {TABS.map((one) => (
+        <button
+          key={one.id}
+          type="button"
+          role="tab"
+          aria-selected={lit === one.id}
+          className={`autotabs__tab ${lit === one.id ? "autotabs__tab--on" : ""}`}
+          onClick={() => choose(one.id)}
+        >
+          {one.label()}
+        </button>
+      ))}
+    </div>
+  );
+
   if (openAction !== null) {
     return (
-      <AutomationActionBuildScreen
-        id={openAction}
-        projectId={projectId}
-        onBack={() => setOpenAction(null)}
-        onGoToGlobal={onGoToGlobalAction}
-        onGoToRun={onGoToRun}
-      />
+      <div className="autoscreen autoscreen--build">
+        {tabs}
+        <AutomationActionBuildScreen
+          id={openAction}
+          projectId={projectId}
+          onBack={() => setOpenAction(null)}
+          onGoToGlobal={onGoToGlobalAction}
+          onGoToRun={onGoToRun}
+        />
+      </div>
     );
   }
 
   if (open !== null) {
     return (
-      <AutomationBuildScreen
-        id={open}
-        projectId={projectId}
-        workspaceOpen={workspaceOpen}
-        onBack={() => setOpen(null)}
-        onOpenAction={setOpenAction}
-        onGoToRun={onGoToRun}
-      />
+      <div className="autoscreen autoscreen--build">
+        {tabs}
+        <AutomationBuildScreen
+          id={open}
+          projectId={projectId}
+          workspaceOpen={workspaceOpen}
+          onBack={() => setOpen(null)}
+          onOpenAction={setOpenAction}
+          onGoToRun={onGoToRun}
+        />
+      </div>
     );
   }
 
   return (
     <div className="autoscreen">
-      <div className="autotabs" role="tablist" aria-label={t("auto.title")}>
-        {TABS.map((one) => (
-          <button
-            key={one.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === one.id}
-            className={`autotabs__tab ${tab === one.id ? "autotabs__tab--on" : ""}`}
-            onClick={() => setTab(one.id)}
-          >
-            {one.label()}
-          </button>
-        ))}
-      </div>
+      {tabs}
 
       {everywhere && (tab === "running" || tab === "history") && (
         <div className="autotabs__head">

@@ -973,7 +973,7 @@ mod tests {
     fn a_step_built_to_report_to_its_task_leaves_the_line_with_its_provenance() {
         with_tx(|tx| {
             let p = picture(tx, false);
-            automation::step_update(tx, p.first.id, None, None, None, None, Some(true), None)
+            automation::step_update(tx, p.first.id, None, None, None, None, Some(true), None, None)
             .expect("report to task");
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);
@@ -1002,7 +1002,7 @@ mod tests {
     fn a_step_that_closed_its_task_finishes_without_a_line_on_it() {
         with_tx(|tx| {
             let p = picture(tx, false);
-            automation::step_update(tx, p.first.id, None, None, None, None, Some(true), None)
+            automation::step_update(tx, p.first.id, None, None, None, None, Some(true), None, None)
                 .expect("report to task");
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);

@@ -778,6 +778,7 @@ fn snapshot(
         work_dir_ref: step.work_dir_ref.clone(),
         report_to_task: step.report_to_task,
         show_history: step.show_history,
+        show_task: step.show_task,
         exits: serde_json::to_string(&exits).map_err(Error::from)?,
         ins: serde_json::to_string(&ins).map_err(Error::from)?,
         cfg: serde_json::to_string(&cfg).map_err(Error::from)?,
@@ -1600,7 +1601,7 @@ mod tests {
                 .expect("stop");
             automation::action_update(tx, action.id, Some("取り直す"), None)
                 .expect("edit the definition once the run is over");
-            automation::step_update(tx, step.id, None, Some("take another"), None, None, None, None)
+            automation::step_update(tx, step.id, None, Some("take another"), None, None, None, None, None)
             .expect("rewrite the prompt once the run is over");
             let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             assert_eq!(defs[0].name, "取る", "the copy is what the run reads from here on");

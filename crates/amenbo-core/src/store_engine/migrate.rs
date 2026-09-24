@@ -998,7 +998,37 @@ pub const STEPS: &[Step] = &[
         name: "admit left_task_open as a reason a run failed",
         apply: Apply::Custom(admit_the_run_that_left_its_task_open),
     },
+    Step {
+        to: 70,
+        name: "hand a step the task it is on, with the switch on the step and a run's copy of it",
+        // `AMB-D-965`. The switch starts on, so every step already written is turned on with it.
+        apply: Apply::Custom(hand_the_task_to_the_steps),
+    },
 ];
+
+/// v70: the switch that hands a step the task it is on — its notes, the decisions linked to it and its
+/// comments — on the library step and a run's copy of it (`AMB-D-965`).
+///
+/// **On, on every row already written.** The product default is on, and a step written before this
+/// build was never asked, so it reads as a step that was left where it starts. The `0` in the
+/// declaration is the not-yet-written sentinel every flag carries, which is why the rows are written
+/// after the column is added rather than by its default.
+///
+/// **Each column is appended only where it is missing**, v68's guard and for v53's reason. A table
+/// genesis created complete on a store that predates it has no rows, so there is nothing to turn on.
+fn hand_the_task_to_the_steps(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for table in ["automation_action_step", "automation_run_def"] {
+        if !column_names(tx, table)?.iter().any(|c| c == "show_task") {
+            tx.execute_batch(&format!(
+                "ALTER TABLE {table} ADD COLUMN show_task BOOLEAN NOT NULL DEFAULT 0 \
+                     CHECK(show_task IN (0, 1));
+                 UPDATE {table} SET show_task = 1;"
+            ))?;
+        }
+    }
+    Ok(())
+}
 
 /// v69: `automation_run.stopped_reason` admits `left_task_open` (`AMB-D-967`).
 ///
@@ -6819,6 +6849,41 @@ mod tests {
             vec![(1, Some("2026-03-04T05:06:07Z".to_string()))],
             "a link is seeded at the instant it was drawn"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v70 in full, on the store shape v69 left behind: steps with no switch for the task. Every step
+    /// already written arrives with it on — the product default, and what a step never asked reads as —
+    /// rather than at the `0` the declaration carries as its not-yet-written sentinel.
+    #[test]
+    fn every_step_already_written_is_handed_its_task() {
+        let dir = scratch("step-show-task");
+        let engine = store_at(&dir, 69);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO automation_action (id, name) VALUES (1, 'a');
+                 INSERT INTO automation_action_step (id, action_id, name, prompt, show_history) VALUES
+                     (1, 1, 'one', 'p', 1),
+                     (2, 1, 'two', 'p', 0);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let mut stmt = conn.prepare("SELECT id, show_task FROM automation_action_step ORDER BY id").unwrap();
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, bool>(1)?))).unwrap();
+        assert_eq!(rows.filter_map(|r| r.ok()).collect::<Vec<_>>(), vec![(1, true), (2, true)]);
+        drop(stmt);
+        let on_the_copy: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('automation_run_def') WHERE name = 'show_task'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(on_the_copy, 1, "a run's copy carries the switch too");
         std::fs::remove_dir_all(&dir).ok();
     }
 

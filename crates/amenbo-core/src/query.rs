@@ -2126,6 +2126,18 @@ pub fn premise_change_since(
     })
 }
 
+/// Comments posted **after a task's current status began** (`AMB-D-963`), oldest first — the read a caller
+/// invokes before closing a held task, to show the holder what arrived while they held it. Read it before
+/// the transition: the transition moves the clock it compares against. A missing task is `not_found`; a
+/// task never stamped (an older store) reports none.
+pub fn comments_since(conn: &rusqlite::Connection, task_id: i64) -> Result<Vec<CommentItem>> {
+    use crate::store_engine::read;
+    let rows = read::comments_since(conn, task_id)
+        .map_err(crate::error::engine_on(conn))?
+        .ok_or_else(|| Error::not_found(format!("task '{task_id}' not found")))?;
+    Ok(rows.into_iter().map(comment_item).collect())
+}
+
 /// Orders the fetched rows by the sort key (for [`decision_list`]). Decision ordering is deliberately
 /// not pushed down to SQL: the count is bounded per project, so sorting in memory is more direct than
 /// assembling an `ORDER BY`.

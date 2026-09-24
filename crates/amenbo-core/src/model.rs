@@ -1092,6 +1092,11 @@ pub struct TaskComment {
     #[serde(default)]
     pub author_kind: Option<ActorKind>,
     pub text: String,
+    /// When the comment was posted — the intent column a holder's "what arrived since I reserved" is dated
+    /// by, against [`Task::status_changed_at`] (`AMB-D-963`, `AMB-D-372`). Fixed at insert; an edit does
+    /// not move it. `None` only on a row no write and no backfill ever stamped.
+    #[serde(default)]
+    pub posted_at: Option<Timestamp>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
     /// When the body was edited in place afterwards; `None` if it never was. `updated_at` cannot stand in

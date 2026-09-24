@@ -422,6 +422,7 @@ pub(super) fn task_comment_row(r: &Row) -> rusqlite::Result<TaskComment> {
         task_id: get(r, C.task_id)?,
         author_kind: enum_opt(r, C.author_kind, ActorKind::parse)?,
         text: get(r, C.text)?,
+        posted_at: ts_opt(r, C.posted_at)?,
         created_at,
         updated_at,
         edited_at: ts_opt(r, C.edited_at)?,
@@ -972,6 +973,7 @@ mod tests {
                 task_id: 42,
                 author_kind: Some(ActorKind::Ai),
                 text: "looks good".to_string(),
+                posted_at: Some(now),
                 created_at: now,
                 updated_at: now,
                 // The fact that it was edited round-trips too — a column the projection never wrote

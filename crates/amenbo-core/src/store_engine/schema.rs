@@ -661,6 +661,14 @@ datasets! {
         task_id: fk("task", "RESTRICT"),
         author_kind: actor_kind,
         text: col(REQ),
+        // When the comment was posted — the intent column that dates it against the task's
+        // `status_changed_at`, so a holder can be shown what arrived after they reserved (`AMB-D-963`).
+        // `created_at` stays out of that judgement for the reason the premise edges' columns exist
+        // (`AMB-D-372`): it is a record column an out-of-band batch or restore may rewrite. Fixed at
+        // insert (`ops::comment`) and never rewritten — an edit moves `edited_at`, not this. Nullable
+        // because `ALTER TABLE ADD COLUMN` starts every existing row at NULL; the step that adds it
+        // seeds them in the same transaction.
+        posted_at: ts_opt,
         // When the body was rewritten in place, if it ever was — the "edited" mark a reader needs to
         // see that the line no longer says what it said. `updated_at` cannot answer this: an instant is
         // second-resolution, so an edit within the same second leaves it equal to `created_at`.

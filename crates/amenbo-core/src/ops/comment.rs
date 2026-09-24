@@ -70,6 +70,7 @@ fn write_comment(
         task_id,
         author_kind: Some(author_kind),
         text: text.to_string(),
+        posted_at: Some(now),
         created_at: now,
         updated_at: now,
         edited_at: None,

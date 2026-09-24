@@ -249,6 +249,7 @@ pub fn seed(bulk: usize) -> Seeded {
             task_id: id,
             author_kind: Some(ActorKind::Ai),
             text: format!("bulk comment {i}"),
+            posted_at: Some(now),
             created_at: now,
             updated_at: now,
             edited_at: None,

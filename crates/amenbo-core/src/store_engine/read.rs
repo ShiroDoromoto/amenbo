@@ -3502,6 +3502,50 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
     Ok(Some(PremiseChangeRow { added_blockers, added_decisions, reopened_decisions }))
 }
 
+/// Comments posted **after a task's current status began** (`AMB-D-963`), oldest first — what a holder has
+/// not read yet, since a session reads a task's comments when it reserves it and not again. `None` when the
+/// task does not exist; empty when it was never stamped (a store predating the `status_changed_at` column —
+/// nothing to compare against), the same as [`premise_change_since`]. Read-only, and blind to what the
+/// status is: the caller reads it *before* the transition it reports on, because the transition moves the
+/// clock this compares against.
+///
+/// Dated by `posted_at`, never `created_at` (`AMB-D-372`). A comment whose `posted_at` no write and no
+/// backfill ever set reads as predating the status, for the reason an undated premise does: `NULL > ?` is
+/// not true, and erring quiet is the safe side.
+pub fn comments_since(conn: &Connection, task_id: i64) -> Result<Option<Vec<CommentRow>>> {
+    let started = std::time::Instant::now();
+    let Some(t) = task(conn, task_id)? else {
+        return Ok(None);
+    };
+    let Some(since) = t.status_changed_at else {
+        return Ok(Some(Vec::new()));
+    };
+    const C: col::task_comment::Cols = col::task_comment::of("c");
+    let mut sel = Select::new();
+    let (id, author_kind, text, created_at, edited_at) =
+        (sel.col(C.id), sel.col(C.author_kind), sel.col(C.text), sel.col(C.created_at), sel.col(C.edited_at));
+    // Columns store the `to_rfc3339_z` form (fixed-width UTC), so a lexicographic `>` is chronological.
+    let pred = Pred::eq(C.task_id, task_id).and(Pred::cmp(C.posted_at, ">", since.to_rfc3339_z()));
+    let mut sql = Sql::from(&sel, C.table);
+    sql.push_where(Some(&pred)).order_by([Sort::by(C.posted_at), Sort::by(C.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok(CommentRow {
+                id: id.get(r)?,
+                author_kind: author_kind.get(r)?,
+                text: text.get(r)?,
+                created_at: created_at.get(r)?,
+                edited_at: edited_at.get(r)?,
+            })
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<CommentRow>>>()
+        .map_err(StoreEngineError::from)?;
+    crate::perf::record_query("engine.comments_since", rows.len(), rows.len(), started.elapsed());
+    Ok(Some(rows))
+}
+
 /// How many comments the task carries — the count a detail row and a card both show.
 fn comment_count(conn: &Connection, task_id: i64) -> Result<usize> {
     const C: col::task_comment::Cols = col::task_comment::ALL;
@@ -7730,6 +7774,51 @@ mod tests {
         // A store predating the column (no stamp) has no instant to compare against → no change, not an error.
         tx.set_field("task", held, "status_changed_at", Value::Null).unwrap();
         assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
+    }
+
+    /// `comments_since` (`AMB-D-963`): a missing task is `None`; a comment posted after the status clock is
+    /// returned oldest first, and one posted before it is not; the judgement reads `posted_at`, so neither
+    /// an edit nor a rewritten `created_at` moves a comment across the line (`AMB-D-372`); and a task never
+    /// stamped reports none rather than erroring. Instants are pinned so second-resolution ties cannot flake.
+    #[test]
+    fn comments_since_returns_what_was_posted_after_the_status_began_only() {
+        use crate::model::ActorKind;
+        use crate::ops::comment;
+        use crate::ops::test_support::{mk_project, mk_task_in};
+
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let tx = engine.write().unwrap();
+        let pid = mk_project(&tx, "amenbo 開発");
+        let held = mk_task_in(&tx, "held", Some(pid));
+        let other = mk_task_in(&tx, "other", Some(pid));
+
+        assert!(comments_since(tx.conn(), 9999).unwrap().is_none());
+
+        let before = comment::add_comment(&tx, held, ActorKind::Human, "読んでから取った").unwrap();
+        tx.set_field("task_comment", before.id, "posted_at", text("2020-01-01T00:00:00Z")).unwrap();
+        tx.set_field("task", held, "status_changed_at", text("2020-06-01T00:00:00Z")).unwrap();
+        let later = comment::add_comment(&tx, held, ActorKind::Human, "後から付いた").unwrap();
+        tx.set_field("task_comment", later.id, "posted_at", text("2020-09-01T00:00:00Z")).unwrap();
+        let first = comment::add_comment(&tx, held, ActorKind::Ai, "先に付いた").unwrap();
+        tx.set_field("task_comment", first.id, "posted_at", text("2020-07-01T00:00:00Z")).unwrap();
+        // Another task's comment never leaks in.
+        comment::add_comment(&tx, other, ActorKind::Human, "別のタスク").unwrap();
+
+        let ids = |rows: Vec<CommentRow>| rows.into_iter().map(|r| r.id).collect::<Vec<_>>();
+        assert_eq!(ids(comments_since(tx.conn(), held).unwrap().unwrap()), vec![first.id, later.id]);
+
+        // An edit and a rewritten record column leave the posting instant where it was.
+        comment::edit_comment(&tx, before.id, "書き直した").unwrap();
+        tx.set_field("task_comment", before.id, "created_at", text("2999-01-01T00:00:00Z")).unwrap();
+        assert_eq!(ids(comments_since(tx.conn(), held).unwrap().unwrap()), vec![first.id, later.id]);
+
+        // A comment no write and no backfill ever dated reads as predating the status.
+        tx.set_field("task_comment", later.id, "posted_at", Value::Null).unwrap();
+        assert_eq!(ids(comments_since(tx.conn(), held).unwrap().unwrap()), vec![first.id]);
+
+        // A store predating the status clock has no instant to compare against → none, not an error.
+        tx.set_field("task", held, "status_changed_at", Value::Null).unwrap();
+        assert!(comments_since(tx.conn(), held).unwrap().unwrap().is_empty());
     }
 
     /// The reopen axis (`AMB-D-373`): a ground that was settled when the task was reserved, and stopped

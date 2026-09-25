@@ -601,9 +601,6 @@ export const zhHans: Translation = {
     "quit.confirmNotAll": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，但跑着 {names} 的窗格不会。正在跑的东西也不会。",
 
     "face.ended": "此终端中的程序已退出。",
-    "face.builtinDoing": "Amenbo 正在执行",
-    "face.builtinDone": "Amenbo 已执行",
-    "face.builtinExit": "出口：{exit}",
 
     "face.endedGeminiUnset": "Gemini CLI 尚未设置身份验证方式。它给出的路径只属于此窗格，会随之丢弃——要设置的是你自己的 ~/.gemini/settings.json。",
     "face.noWayBack": "这段对话已经打不开了。",
@@ -1135,7 +1132,6 @@ export const zhHans: Translation = {
     "auto.run.step": "步骤 {n} · {step}",
     "auto.run.inAction": "{action} 的 {step}",
     "auto.run.reportWithheld": "任务已关闭，未留下报告：{steps}",
-    "auto.run.waitingForTask": "正在等待可领取的任务",
     "auto.run.taskWait": "等待任务",
 
     "mcp.title": "通过 MCP 连接",

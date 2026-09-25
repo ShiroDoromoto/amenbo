@@ -62,10 +62,10 @@ export function PaneOrder({ panes, names, rows, onClose, onOrder }: {
    * The hue the lamp is drawn in is not taken from the row: it belongs to the slot the card is in,
    * and the cards here are being dragged between slots (`../talk/moving`).
    */
-  function rowOf(frame: Frame): { name: string | null; face: Face } {
+  function rowOf(frame: Frame): { name: string | null; face: Face; state: string | null } {
     const drawn = rows.get(frame.id)?.() ?? null;
-    if (drawn !== null) return { name: drawn.name, face: drawn.dot.face };
-    return { name: frameLabel(names, frame.id, frame.folder), face: faceOf(false) };
+    if (drawn !== null) return { name: drawn.name, face: drawn.dot.face, state: drawn.run?.state?.word ?? null };
+    return { name: frameLabel(names, frame.id, frame.folder), face: faceOf(false), state: null };
   }
   // Read once, as the modal opens. What is drawn in here is a proposal about an arrangement, not a
   // second screen for watching the panes on: a card that moved under the hand carrying it would be
@@ -214,12 +214,19 @@ export function PaneOrder({ panes, names, rows, onClose, onOrder }: {
                       {frame.folder !== null && (
                         <span className="paneorder__folder" title={frame.folder}>{frame.folder}</span>
                       )}
-                      {/* Nothing is running here any more. The screen cannot show it — what a
-                          finished shell leaves behind looks exactly like one waiting to be typed at
-                          — and a person putting the panes in order is deciding which of them to keep
-                          in front of them. */}
-                      {frame.session === null && (
-                        <span className="paneorder__ended">{t("face.orderEnded")}</span>
+                      {/* A run's pane says where the run stands, as its row does: a built-in has no
+                          session and is not over for that — Amenbo is carrying it out, or waiting
+                          for a task. */}
+                      {frame.run !== null ? (
+                        row?.state != null && <span className="paneorder__state">{row.state}</span>
+                      ) : (
+                        // Nothing is running here any more. The screen cannot show it — what a
+                        // finished shell leaves behind looks exactly like one waiting to be typed at
+                        // — and a person putting the panes in order is deciding which of them to keep
+                        // in front of them.
+                        frame.session === null && (
+                          <span className="paneorder__ended">{t("face.orderEnded")}</span>
+                        )
                       )}
                       {was !== undefined && was !== at + 1 && (
                         <span className="paneorder__from">{tf("face.orderFrom", { n: was })}</span>

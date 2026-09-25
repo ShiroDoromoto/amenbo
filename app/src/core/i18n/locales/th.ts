@@ -604,9 +604,6 @@ export const th: Translation = {
     "quit.confirmNotAll": "ออกจาก Amenbo ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง บทสนทนาจะกลับมาในการเปิดครั้งถัดไป ยกเว้นบานหน้าต่างที่รัน {names} สิ่งที่กำลังทำงานอยู่ก็จะไม่กลับมาเช่นกัน",
 
     "face.ended": "โปรแกรมในเทอร์มินัลนี้จบการทำงานแล้ว",
-    "face.builtinDoing": "Amenbo กำลังดำเนินการ",
-    "face.builtinDone": "Amenbo ดำเนินการเสร็จแล้ว",
-    "face.builtinExit": "ทางออก: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI ยังไม่ได้ตั้งค่าวิธียืนยันตัวตน เส้นทางที่แสดงเป็นของแผงนี้เท่านั้นและจะถูกลบไปพร้อมกัน — ไฟล์ที่ต้องตั้งค่าคือ ~/.gemini/settings.json ของคุณเอง",
     "face.noWayBack": "เปิดบทสนทนานี้อีกไม่ได้แล้ว",
@@ -1134,7 +1131,6 @@ export const th: Translation = {
     "auto.run.step": "ขั้นตอน {n} · {step}",
     "auto.run.inAction": "{step} ใน {action}",
     "auto.run.reportWithheld": "ไม่ได้ทิ้งรายงานไว้ที่งาน เพราะงานปิดแล้ว: {steps}",
-    "auto.run.waitingForTask": "กำลังรองานที่รับได้",
     "auto.run.taskWait": "รองาน",
 
     "mcp.title": "เชื่อมต่อผ่าน MCP",

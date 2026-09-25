@@ -617,9 +617,6 @@ export const uk: Translation = {
     "quit.confirmNotAll": "Завершити Amenbo? Усі відкриті термінали завершаться. Розмови повернуться під час наступного запуску, окрім панелей із {names}. Те, що в них виконувалося, теж не повернеться.",
 
     "face.ended": "Програму в цьому терміналі завершено.",
-    "face.builtinDoing": "Amenbo виконує це",
-    "face.builtinDone": "Amenbo виконав це",
-    "face.builtinExit": "Вихід: {exit}",
 
     "face.endedGeminiUnset": "Для Gemini CLI не задано спосіб автентифікації. Вказаний шлях належить лише цій панелі й зникне разом із нею — задати його потрібно у вашому власному ~/.gemini/settings.json.",
     "face.noWayBack": "Цю розмову більше не відкрити.",
@@ -1150,7 +1147,6 @@ export const uk: Translation = {
     "auto.run.step": "Крок {n} · {step}",
     "auto.run.inAction": "{step} у {action}",
     "auto.run.reportWithheld": "Звіт не залишено в завданні, бо воно було закрите: {steps}",
-    "auto.run.waitingForTask": "Чекає на завдання, яке можна взяти",
     "auto.run.taskWait": "Чекає завдання",
 
     "mcp.title": "Підключення через MCP",

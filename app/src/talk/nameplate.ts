@@ -103,6 +103,10 @@ export type Say = {
   readonly run: number;
   /** The step running now, by the name it was built under. */
   readonly step: string;
+  /** The step is a built-in Amenbo carries out itself (`AMB-D-964`), which the row marks with the chip
+   *  every screen marks one with — its name is said here and nowhere else on the pane
+   *  (`../shell/BuiltinCard`). */
+  readonly builtin: boolean;
   /** The action the spot this step was opened from stands on, or null where that spot has been taken
    *  off the picture since — and then the row says the step alone, as it does where the action is
    *  named after the step. */
@@ -188,6 +192,13 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   into.textContent = "›";
   into.setAttribute("aria-hidden", "true");
   const step = part("step");
+  // The chip a built-in is marked with, where the step is one. It is the chip the actions list draws
+  // (`../screens/automationParts`'s `ReachChip`), built here out of the same classes.
+  const builtin = part("builtin");
+  builtin.classList.add("actscope", "actscope--builtin");
+  const builtinDot = document.createElement("em");
+  builtinDot.setAttribute("aria-hidden", "true");
+  builtin.append(builtinDot, t("auto.actions.reachBuiltin"));
   // The run's state, last on the line: it is what the rest of the line is doing, and the pane's own
   // controls for it stand straight after it (`../shell/TerminalPane`).
   const state = part("state");
@@ -252,6 +263,7 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     // A run's pane is drawn as its own kind of pane, and an ordinary one is left exactly as it was:
     // the mark is away, the second row is down, and the panel says only the name.
     auto.hidden = runNo.hidden = into.hidden = step.hidden = plate.run === null;
+    builtin.hidden = plate.run?.builtin !== true;
     state.hidden = plate.run?.state == null;
     row.classList.toggle("plate--run", plate.run !== null);
     if (plate.run !== null) {

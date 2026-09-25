@@ -692,9 +692,6 @@ const ui = {
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.
   "face.ended": "The program in this terminal has exited.",
-  "face.builtinDoing": "Amenbo is carrying this out",
-  "face.builtinDone": "Amenbo carried this out",
-  "face.builtinExit": "Exit: {exit}",
   "face.endedGeminiUnset": "Gemini CLI has no authentication method set. The path it names is this pane's own and goes with it — the one to set is your own ~/.gemini/settings.json.",
   "face.noWayBack": "This conversation cannot be opened again.",
   "face.projects": "Projects",
@@ -1378,7 +1375,6 @@ const ui = {
   "auto.run.step": "Step {n} · {step}",
   "auto.run.inAction": "{step} in {action}",
   "auto.run.reportWithheld": "Report kept off the task, which was closed: {steps}",
-  "auto.run.waitingForTask": "Waiting for a task it can take",
   "auto.run.taskWait": "Waiting for a task",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead

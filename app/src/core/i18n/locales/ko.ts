@@ -600,9 +600,6 @@ export const ko: Translation = {
     "quit.confirmNotAll": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, {names} 페인은 돌아오지 않습니다. 그 안에서 돌던 것도 돌아오지 않습니다.",
 
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
-    "face.builtinDoing": "Amenbo가 실행하고 있습니다",
-    "face.builtinDone": "Amenbo가 실행했습니다",
-    "face.builtinExit": "출구: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI에 인증 방법이 설정되어 있지 않습니다. 표시된 경로는 이 창만의 것이라 함께 사라지므로, 설정할 파일은 본인의 ~/.gemini/settings.json입니다.",
     "face.noWayBack": "이 대화는 더 이상 열 수 없습니다.",
@@ -1130,7 +1127,6 @@ export const ko: Translation = {
     "auto.run.step": "단계 {n} · {step}",
     "auto.run.inAction": "{action}의 {step}",
     "auto.run.reportWithheld": "작업이 닫혀 있어 보고를 남기지 않음: {steps}",
-    "auto.run.waitingForTask": "가져올 수 있는 작업을 기다리는 중",
     "auto.run.taskWait": "작업 대기",
 
     "mcp.title": "MCP로 연결",

@@ -129,7 +129,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { WorkspaceFace } from "./WorkspaceFace";
-import { t, tf } from "../core/i18n";
+import { statusLabel, t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -544,10 +544,12 @@ describe("a built-in on a run's pane", () => {
 
     expect(panes()).toHaveLength(1);
     expect(card()).toHaveLength(1);
-    expect(q(".slot__builtin-name")[0]?.textContent).toBe("worktree を切る");
     expect(hoisted.opened).toHaveLength(0);
-    // The row above says the run and the built-in, as it says a step.
+    // The row above says the run and the built-in, as it says a step, and marks it as a built-in. The
+    // card does not say its name again.
     expect(q(".plate__step b")[0]?.textContent).toBe("worktree を切る");
+    expect(q(".plate__builtin")[0]?.hidden).toBe(false);
+    expect(card()[0]?.textContent).not.toContain("worktree を切る");
     expect(q(".slot--run")).toHaveLength(1);
   });
 
@@ -559,25 +561,29 @@ describe("a built-in on a run's pane", () => {
     expect(panes()).toHaveLength(1);
     expect(card()).toHaveLength(1);
     expect(q(".workspace__face")).toHaveLength(0);
-    expect(q(".slot__builtin-ref")[0]?.textContent).toBe("AMB-T-5252");
-    const doing = q(".slot__builtin-state")[0]?.textContent;
+    // The task is the row's to say, on its second line.
+    expect(q(".plate-run__task")[0]?.textContent).toBe("AMB-T-5252");
+    expect(q(".slot__builtin-spin")).toHaveLength(1);
+    expect(q(".slot__builtin-done")).toHaveLength(0);
 
     await arrive({ step: undefined, builtin: builtin({ finished: true }) });
 
-    // One card, said again — not a second one stacked under it.
+    // One card, said again — not a second one stacked under it — with the tick in place of the turn.
     expect(card()).toHaveLength(1);
-    expect(q(".slot__builtin-state")[0]?.textContent).not.toBe(doing);
+    expect(q(".slot__builtin-spin")).toHaveLength(0);
+    expect(q(".slot__builtin-done")[0]?.getAttribute("aria-label")).toBe(t("auto.run.completed"));
   });
 
   it("says which way out a built-in left by once it has been carried out", async () => {
     await mount();
     await arrive({ step: undefined, builtin: builtin() });
-    expect(q(".slot__builtin-exit")).toHaveLength(0);
+    expect(card()[0]!.querySelectorAll(".actport")).toHaveLength(0);
 
     await arrive({ step: undefined, builtin: builtin({ finished: true, exitName: "*" }) });
 
-    expect(q(".slot__builtin-exit")[0]?.textContent)
-      .toBe(tf("face.builtinExit", { exit: t("auto.pic.errorExit") }));
+    // The mark the picture draws the error way out with, and no sentence around it.
+    const mark = card()[0]!.querySelector(".actport--error");
+    expect(mark?.textContent).toBe(t("auto.pic.errorExit"));
   });
 
   it("says it is waiting and what for, and names no task, while a built-in waits for one", async () => {
@@ -594,9 +600,16 @@ describe("a built-in on a run's pane", () => {
     });
 
     expect(card()).toHaveLength(1);
-    expect(q(".slot__builtin-state")[0]?.textContent).toBe("Waiting for a task it can take");
-    expect(q(".slot__builtin-filter")[0]?.textContent).toBe("assignee:me-ai status:todo ready:yes");
-    expect(q(".slot__builtin-task")).toHaveLength(0);
+    expect(q(".slot__builtin-spin")[0]?.getAttribute("aria-label")).toBe(t("auto.run.taskWait"));
+    // What it looks for, as the chips the placement's panel answers it with rather than the expression.
+    const chips = [...card()[0]!.querySelectorAll(".filterchips .chip")].map((one) => one.textContent);
+    expect(chips).toEqual([
+      t("filter.opt.assignee.meAi"),
+      statusLabel("todo"),
+      t("auto.step.readyYes"),
+    ]);
+    // And no task: the one it closed before is not the one it is on.
+    expect(q(".plate-run")[0]?.hidden).toBe(true);
   });
 
   it("gives the pane back to a terminal when the next step arrives", async () => {

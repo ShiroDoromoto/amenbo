@@ -602,9 +602,6 @@ export const hi: Translation = {
     "quit.confirmNotAll": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे। बातचीत अगली बार वापस आ जाएगी, पर {names} वाले पैन वापस नहीं आएँगे। उनमें जो चल रहा था वह भी वापस नहीं आएगा।",
 
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",
-    "face.builtinDoing": "Amenbo इसे चला रहा है",
-    "face.builtinDone": "Amenbo ने इसे चला दिया",
-    "face.builtinExit": "निकास: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI के लिए कोई प्रमाणीकरण विधि सेट नहीं है। जो पथ दिखाया गया है वह केवल इसी पैन का है और इसके साथ हट जाता है — सेट करनी है आपकी अपनी ~/.gemini/settings.json में।",
     "face.noWayBack": "यह बातचीत अब नहीं खोली जा सकती।",
@@ -1133,7 +1130,6 @@ export const hi: Translation = {
     "auto.run.step": "चरण {n} · {step}",
     "auto.run.inAction": "{action} का {step}",
     "auto.run.reportWithheld": "कार्य बंद था, इसलिए रिपोर्ट उस पर नहीं छोड़ी गई: {steps}",
-    "auto.run.waitingForTask": "लेने योग्य कार्य की प्रतीक्षा में",
     "auto.run.taskWait": "कार्य की प्रतीक्षा",
 
     "mcp.title": "MCP से जोड़ें",

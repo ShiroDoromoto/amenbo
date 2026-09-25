@@ -2039,19 +2039,6 @@ impl Store {
         })
     }
 
-    /// Put a built-in in as a step of a library action (one operation = one transaction) — its ways out
-    /// and ports written from Amenbo's definition, and the settings it reads declared on the action
-    /// where it declares none of that name ([`crate::ops::automation_builtin::step_add`]).
-    pub fn automation_builtin_step_add(
-        &mut self,
-        action_id: i64,
-        key: &str,
-    ) -> Result<crate::model::AutomationStep> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, action_id)], |tx| {
-            crate::ops::automation_builtin::step_add(tx, action_id, key)
-        })
-    }
-
     /// Change a step (one operation = one transaction).
     #[allow(clippy::too_many_arguments)]
     pub fn automation_step_update(

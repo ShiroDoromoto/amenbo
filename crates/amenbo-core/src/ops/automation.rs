@@ -177,8 +177,9 @@ fn not_under_a_run(tx: &WriteTx<'_>, def: Def) -> Result<()> {
 /// the ones Amenbo's code leaves by and reads ([`crate::ops::automation_builtin`]), so a rename here would
 /// leave the picture naming a way out the code never takes.
 ///
-/// A built-in action refuses every rewrite of its insides. A built-in step placed inside an action
-/// somebody wrote refuses a rewrite of what it declares; the lines drawn to and from it are that
+/// A built-in action refuses every rewrite of its insides. A built-in step is only ever written inside
+/// one (`AMB-D-969`), but a store kept from before that may hold one inside an action somebody wrote:
+/// that step still refuses a rewrite of what it declares, while the lines drawn to and from it are that
 /// action's, and so is taking it off.
 ///
 /// The rows are written from the definition before the key is set on them, which is how the writes

@@ -1940,15 +1940,11 @@ pub enum AutomationCmd {
         /// action id
         action: i64,
         /// what this step is called
-        #[arg(long, required_unless_present = "builtin")]
-        name: Option<String>,
+        #[arg(long)]
+        name: String,
         /// the prompt this step runs on (`-` reads it from stdin)
-        #[arg(long, required_unless_present = "builtin")]
-        prompt: Option<String>,
-        /// put in one of Amenbo's built-ins instead — it carries its own name, ways out and ports, and
-        /// no prompt (`automation builtin-list` names them)
-        #[arg(long, value_name = "KEY", conflicts_with_all = ["name", "prompt", "interactive", "work_dir", "report_to_task", "no_history", "no_task_context"])]
-        builtin: Option<String>,
+        #[arg(long)]
+        prompt: String,
         /// let this step wait for a person
         #[arg(long)]
         interactive: bool,

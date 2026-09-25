@@ -55,6 +55,11 @@ pub struct WriteTx<'a> {
     /// version onto. A set: the same project named twice is one project, and the order is nobody's.
     /// `RefCell` because the write methods take `&self`, not because two threads reach it.
     projects: std::cell::RefCell<std::collections::BTreeSet<i64>>,
+    /// **The language the reader chose**, for the sentences core writes into the store itself — the
+    /// line a stopped run leaves on its task (`AMB-D-976`). Read off the config when the write opens,
+    /// and kept as the text is, so changing the setting later rewrites nothing. A transaction nobody
+    /// named one for — a test, a migration — writes English.
+    language: String,
 }
 
 impl<'a> WriteTx<'a> {
@@ -65,7 +70,7 @@ impl<'a> WriteTx<'a> {
         // rows and nothing else — a rolled-back batch leaves its collected rows behind, and they must not
         // be attributed to the next one.
         engine.take_changes();
-        Ok(WriteTx { engine, tx, projects: Default::default() })
+        Ok(WriteTx { engine, tx, projects: Default::default(), language: "en".to_string() })
     }
 
     /// Declare that this operation touches `project`, so [`commit`](Self::commit) moves that project's
@@ -78,6 +83,16 @@ impl<'a> WriteTx<'a> {
     /// write path to remember.
     pub fn touches_project(&self, project: i64) {
         self.projects.borrow_mut().insert(project);
+    }
+
+    /// Say which language this transaction writes its own sentences in ([`language`](Self::language)).
+    pub fn write_in(&mut self, language: &str) {
+        self.language = language.to_string();
+    }
+
+    /// The language core words what it writes in, when the text is its own rather than somebody's.
+    pub fn language(&self) -> &str {
+        &self.language
     }
 
     /// The connection this transaction runs on — the **read half of a read-then-write**. Every

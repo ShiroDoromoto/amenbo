@@ -180,6 +180,15 @@ pub(crate) mod test_support {
         f(&tx);
     }
 
+    /// [`with_tx`], with the transaction opened in `language` — what the store's write door does from
+    /// the reader's settings ([`crate::store_engine::WriteTx::write_in`]).
+    pub(crate) fn with_tx_in(language: &str, f: impl FnOnce(&WriteTx<'_>)) {
+        let engine = new_engine();
+        let mut tx = engine.write().expect("write transaction");
+        tx.write_in(language);
+        f(&tx);
+    }
+
     /// **Open one step of a run, the work outside the store and all**, in the one transaction a test
     /// runs in ([`crate::ops::automation_step::open`] takes that work done beforehand).
     pub(crate) fn open(

@@ -11,7 +11,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { AutomationPicture } from "./AutomationPicture";
 import { automationGraph, type PicGraph } from "./automationLayout";
 import type { AutomationDetailDto, AutomationPlacementDto } from "../bindings/bindings";
@@ -79,9 +79,10 @@ afterEach(() => {
 });
 
 describe("the picture of the steps", () => {
-  it("says so where there is nothing to draw", async () => {
+  /// The screen puts its "+ first …" where the picture would be, so an empty one says nothing itself.
+  it("draws nothing where there is nothing to draw", async () => {
     await render({ graph: detail({ placements: [] }) });
-    expect(container.textContent).toContain(t("auto.pic.empty"));
+    expect(container.textContent).toBe("");
     expect(nodes()).toHaveLength(0);
   });
 
@@ -143,8 +144,32 @@ describe("the picture of the steps", () => {
     });
     await render({ graph: one });
     const review = nodes().find((node) => node.textContent?.includes("Review"))!;
-    expect(review.textContent).toContain("draft");
     expect(review.className).toContain("autopic__node--unfed");
+    // A mark with the count; the names it is missing are said on hover, and the second line keeps
+    // saying where the action comes from.
+    const mark = review.querySelector(".autopic__unfed")!;
+    expect(mark.textContent).toBe("1");
+    expect(mark.getAttribute("title")).toBe(tf("auto.pic.unfed", { names: "draft" }));
+    expect(review.querySelector(".autopic__lib")?.textContent).toBe(t("auto.actions.reachProject"));
+    expect(nodes()[0]!.querySelector(".autopic__unfed")).toBeNull();
+  });
+
+  /// An action with nothing in it cannot be started on, which the box says as a dashed outline and a
+  /// mark — never for a built-in, which Amenbo carries out itself.
+  it("marks the action with nothing in it, and not one with a step or a built-in", async () => {
+    const one = detail({
+      placements: [
+        step({ id: 1, name: "hollow" }),
+        step({ id: 2, name: "full", steps: [{ stepId: 5, name: "do" }] }),
+        step({ id: 3, name: "take_task", builtin: "take_task" }),
+      ],
+    });
+    await render({ graph: one });
+    const box = (name: string) => nodes().find((node) => node.textContent?.includes(name))!;
+    expect(box("hollow").className).toContain("autopic__node--empty");
+    expect(box("hollow").textContent).toContain(t("auto.pic.emptyMark"));
+    expect(box("full").className).not.toContain("autopic__node--empty");
+    expect(nodes().filter((node) => node.className.includes("autopic__node--empty"))).toHaveLength(1);
   });
 
   /// Which box a launch enters by cannot be read off the lines: two stretches nothing joins are
@@ -167,7 +192,7 @@ describe("the picture of the steps", () => {
 
   it("marks nothing while no placement is named the entry", async () => {
     await render({ graph: detail({ entryPlacementId: undefined }) });
-    expect(container.querySelectorAll(".autopic__entry")).toHaveLength(0);
+    expect(container.querySelectorAll(".autopic__node .autopic__entry")).toHaveLength(0);
   });
 
   it("outlines the span of one task and names it", async () => {
@@ -228,8 +253,18 @@ describe("what the picture marks, as the mock draws it", () => {
     expect(drawn[0]!.head).toMatch(/^url\(#.*-next\)$/);
     expect(drawn[3]!.head).toBeNull();
     const legend = container.querySelector(".autopic__legend")!;
-    for (const key of ["auto.pic.legendNext", "auto.pic.legendBack", "auto.pic.legendBranch", "auto.pic.legendWire"]) {
+    for (const key of [
+      "auto.pic.legendNext",
+      "auto.pic.legendBack",
+      "auto.pic.legendBranch",
+      "auto.pic.legendWire",
+      "auto.pic.lap",
+      "auto.pic.entry",
+      "auto.pic.legendUnfed",
+    ]) {
       expect(legend.textContent).toContain(t(key));
     }
+    // Only an action's picture has lines leaving it by one of its ways out.
+    expect(legend.textContent).not.toContain(t("auto.pic.legendLeaves"));
   });
 });

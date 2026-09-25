@@ -1375,6 +1375,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__swatch--branch { border-top-color: var(--c-heed); }
 .autopic__swatch--error { border-top-color: var(--c-stop); }
 .autopic__swatch--wire { border-top-color: var(--c-text-faint); border-top-style: dotted; }
+.autopic__swatch--leaves { border-top-color: var(--c-accent); }
+/* The span of one task: a small dashed outline, as the picture draws it round the boxes. */
+.autopic__swatch--lap { width: 14px; height: 10px; border: 1px dashed var(--c-rule); border-radius: 3px; }
 /* One placement. A button because that is what it is: pressing it is what puts the spot's contents in
    the panel beside the picture. */
 .autopic__node {
@@ -1386,9 +1389,13 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autopic__node:disabled { cursor: default; }
 .autopic__node:enabled:hover { background: var(--c-hover); }
-/* A required input nothing reaches. The border is the box saying it, and the line under the name
-   says which input — a mark on its own would send the reader to the panel to find out. */
-.autopic__node--unfed { border-color: var(--c-stop); }
+/* A required input nothing reaches. The border is the box saying it, and the "⚠ n" beside the name
+   how many; which ones is said on hover and in the panel, so the line under the name keeps saying
+   where the action comes from. */
+.autopic__node--unfed { border-color: var(--c-heed); }
+/* An action with nothing in it yet: dashed in the heed colour, with the "empty" mark beside the name. */
+.autopic__node--empty { border-color: var(--c-heed); border-style: dashed; }
+.autopic__emptymark { flex: none; font-size: var(--fs-xs); color: var(--c-heed); }
 .autopic__node--on { background: var(--c-accent-faint); border-color: var(--c-accent); }
 /* Two lines: the number and the name, and under them where the action comes from — or what it is
    missing, which takes that line's place. */
@@ -1415,11 +1422,9 @@ button.feed__target:hover { color: var(--c-accent); }
   border-radius: var(--r-sm); padding: 0 var(--s-1); font-size: var(--fs-xs);
 }
 .autopic__unfed {
-  display: flex; align-items: center; gap: var(--s-1);
-  font-size: var(--fs-xs); color: var(--c-stop); min-width: 0;
+  flex: none; display: inline-flex; align-items: center; gap: 2px;
+  font-size: var(--fs-xs); color: var(--c-heed); font-variant-numeric: tabular-nums;
 }
-.autopic__unfed .icon { flex: none; }
-.autopic__unfed > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Put an action in on this line. It sits on the line's first leg, under the box it leaves. */
 .autopic__plus {
   position: absolute; transform: translate(-50%, -50%);
@@ -1894,6 +1899,9 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 /* The picture stands in the middle of the place it is drawn in, as the mock has it; a picture wider
    than the place scrolls from its left edge as before. */
 .actbuild__canvas .autopic__sheet { margin-inline: auto; }
+/* An empty picture draws nothing, and the "+ first …" is all the place holds: it stands in the middle,
+   with room above and below where the picture would be. */
+.actbuild__canvas > .btn:only-child { margin-block: var(--s-6); }
 /* The panel fills the right pane (`.rightpane`), which holds the border, the ground and the one scroll.
    The head stays at the top of that scroll, so the close is in reach under a long body. */
 .actpanel { display: flex; flex-direction: column; min-width: 0; }

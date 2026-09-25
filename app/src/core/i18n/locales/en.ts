@@ -1168,7 +1168,6 @@ const ui = {
   // The picture of the steps on the build screen: what it says about a step, and what it writes
   // beside a line. `auto.pic.lap` names the span of one task, which is what the dashed outline
   // around a group of steps is.
-  "auto.pic.empty": "Nothing is placed on it yet",
   "auto.pic.lap": "One task",
   "auto.pic.insert": "Put an action in here",
   "auto.pic.errorExit": "error",
@@ -1181,6 +1180,9 @@ const ui = {
   "auto.pic.legendBack": "Goes back",
   "auto.pic.legendBranch": "Branches",
   "auto.pic.legendWire": "Handed on",
+  "auto.pic.legendLeaves": "Leaves by an exit",
+  "auto.pic.legendUnfed": "Input nothing reaches",
+  "auto.pic.emptyMark": "Empty",
   "auto.pic.place": "Place an action",
   "auto.pic.placeDo": "Place",
   "auto.pic.first": "＋ Place the first action",
@@ -1341,7 +1343,6 @@ const ui = {
   "auto.act.about": "This action",
   "auto.act.step": "Step",
   "auto.act.stepNone": "Press a step in the picture and what it holds shows here",
-  "auto.act.empty": "No steps inside it yet",
   "auto.act.insert": "Put a step in here",
   "auto.act.addTitle": "Put a step in",
   "auto.act.firstStep": "＋ First step",

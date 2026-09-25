@@ -282,7 +282,6 @@ describe("the action build screen", () => {
   it("offers the first step while the picture is empty, and not once there is one", async () => {
     hoisted.action = action({ steps: [], entryStepId: undefined });
     await render();
-    expect(container.textContent).toContain(t("auto.act.empty"));
     expect(has(t("auto.act.firstStep"))).toBe(true);
 
     hoisted.action = action();

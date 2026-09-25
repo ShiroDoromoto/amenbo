@@ -16,6 +16,11 @@
 // **Where each of them goes is `./automationLayout`'s answer**, which holds no element and no
 // stylesheet — so what the reader sees can be checked without a screen.
 //
+// **What a box is missing is a mark, not a sentence** (`AMB-T-5527`). A required input nothing reaches
+// is a "⚠ n" at the box's top right, the names it is missing said on hover; an action with nothing in
+// it is a dashed box marked "empty". Neither takes the second line, which keeps saying where the
+// action comes from. An empty picture draws nothing: the screen puts its "+ first …" in the middle.
+//
 // **It scrolls, and it does nothing else.** No zoom, no folding a stretch away: an automation is
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
 // every time the definition is read again.
@@ -85,11 +90,13 @@ function headOf(line: PicLine): Head {
 }
 
 /**
- * What the colours and dashes on the lines mean, under the picture (`AMB-T-5424`). One swatch per
- * kind of line the picture draws, in the colour the line itself is — so the legend is the stylesheet
- * read aloud, and never a second list of colours to keep in step with it.
+ * What the lines and marks on the picture mean, under it (`AMB-T-5424`, `AMB-T-5527`). One swatch per
+ * kind of line, in the colour the line itself is — so the legend is the stylesheet read aloud, and
+ * never a second list of colours to keep in step with it — then the marks a box or a stretch wears,
+ * drawn with the same classes as on the picture. A line leaving by one of the action's ways out is
+ * only ever drawn on an action's picture, so it is listed there alone.
  */
-function Legend() {
+function Legend({ inAction }: { inAction: boolean }) {
   const one = (kind: string, word: string) => (
     <span className="autopic__legenditem">
       <i className={`autopic__swatch autopic__swatch--${kind}`} aria-hidden="true" />
@@ -103,13 +110,21 @@ function Legend() {
       {one("branch", t("auto.pic.legendBranch"))}
       {one("error", t("auto.pic.errorExit"))}
       {one("wire", t("auto.pic.legendWire"))}
+      {inAction && one("leaves", t("auto.pic.legendLeaves"))}
+      {one("lap", t("auto.pic.lap"))}
+      <span className="autopic__legenditem">
+        <span className="autopic__entry">{t("auto.pic.entry")}</span>
+      </span>
+      <span className="autopic__legenditem autopic__unfed">
+        <Icon name="warning" />
+        {t("auto.pic.legendUnfed")}
+      </span>
     </div>
   );
 }
 
 export function AutomationPicture({
   graph,
-  empty,
   insertLabel,
   selectedBoxId,
   onPickBox,
@@ -119,11 +134,10 @@ export function AutomationPicture({
 }: {
   graph: PicGraph | null;
   /**
-   * What an empty picture says, and what the `+` on a line is called. Both name what goes in a box,
-   * which is the one thing the two pictures do not share — an automation takes actions, an action
-   * takes steps — so the screen says it and the drawing stays the same.
+   * What the `+` on a line is called. It names what goes in a box, which is the one thing the two
+   * pictures do not share — an automation takes actions, an action takes steps — so the screen says
+   * it and the drawing stays the same.
    */
-  empty?: string;
   insertLabel?: string;
   /** The box whose contents the panel beside this is showing (`AMB-T-5256`). */
   selectedBoxId?: number;
@@ -145,9 +159,7 @@ export function AutomationPicture({
   const ids = useId();
   const head = (kind: Head) => `url(#${ids}-${kind})`;
   const picture = layOut(graph);
-  if (picture.nodes.length === 0) {
-    return <div className="auto__empty">{empty ?? t("auto.pic.empty")}</div>;
-  }
+  if (picture.nodes.length === 0) return null;
 
   return (
     <>
@@ -327,6 +339,7 @@ export function AutomationPicture({
               className={[
                 "autopic__node",
                 node.unfed.length > 0 ? "autopic__node--unfed" : "",
+                node.empty === true ? "autopic__node--empty" : "",
                 node.boxId === selectedBoxId ? "autopic__node--on" : "",
               ]
                 .filter((one) => one !== "")
@@ -351,25 +364,29 @@ export function AutomationPicture({
                   <span className="autopic__entry">{t("auto.pic.entry")}</span>
                 )}
                 <span className="autopic__nodename">{node.name}</span>
-              </span>
-              <span className="autopic__nodesub">
-                {node.unfed.length > 0 ? (
-                  <span className="autopic__unfed">
+                {node.unfed.length > 0 && (
+                  <span
+                    className="autopic__unfed"
+                    title={tf("auto.pic.unfed", { names: listLabel([...node.unfed]) })}
+                    aria-label={tf("auto.pic.unfed", { names: listLabel([...node.unfed]) })}
+                  >
                     <Icon name="warning" />
-                    <span>{tf("auto.pic.unfed", { names: listLabel([...node.unfed]) })}</span>
+                    {node.unfed.length}
                   </span>
-                ) : (
-                  // Which library the action standing here comes from, on an automation's picture — a
-                  // built-in's is Amenbo's own, though it is kept on the device's shelf.
-                  node.global !== undefined && (
-                    <span className="autopic__lib">
-                      {node.builtin !== undefined
-                        ? t("auto.actions.reachBuiltin")
-                        : t(node.global ? "auto.actions.reachGlobal" : "auto.actions.reachProject")}
-                    </span>
-                  )
                 )}
+                {node.empty === true && <span className="autopic__emptymark">{t("auto.pic.emptyMark")}</span>}
+              </span>
+              {/* Which library the action standing here comes from, on an automation's picture — a
+                  built-in's is Amenbo's own, though it is kept on the device's shelf. */}
+              {node.global !== undefined && (
+                <span className="autopic__nodesub">
+                  <span className="autopic__lib">
+                    {node.builtin !== undefined
+                      ? t("auto.actions.reachBuiltin")
+                      : t(node.global ? "auto.actions.reachGlobal" : "auto.actions.reachProject")}
+                  </span>
                 </span>
+              )}
             </button>
           ))}
 
@@ -389,7 +406,7 @@ export function AutomationPicture({
         </div>
       </div>
       {/* Under the picture rather than on its sheet, so it stays in view however far it is scrolled. */}
-      <Legend />
+      <Legend inAction={graph?.boundary !== undefined} />
     </>
   );
 }

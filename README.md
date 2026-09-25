@@ -37,8 +37,10 @@ which an agent writes through the CLI and you read in the desktop app.
   It ships with the build, so there is no command reference to drift out of date.
 - **Automations** — a picture drawn once and walked by agents: each step is a prompt and
   an agent to carry it out, and the way out a step leaves through decides what runs next.
-  Taking a task, closing it and cutting its worktree are Amenbo's own built-ins, so a prompt
-  is left with what needs an agent's judgement.
+  Taking a task, filing one, closing it, fetching what a run starts from, splitting by a
+  classification and cutting a worktree are Amenbo's own built-ins, so a prompt is left with what
+  needs an agent's judgement. A run starts from a task it takes, from what a person hands it, or
+  from what it goes and fetches.
   A run opens one terminal per step and reads back what the step reports, so what has been
   done and what comes next is in the store rather than in an agent's memory of it.
 
@@ -350,13 +352,18 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # Who carries a step out is chosen where its action is placed. An edge says what happens after each
 # way out is taken, and a wire hands one spot's result to the next. A run opens a terminal per step and
 # waits for that step to report, so the loop belongs to the store.
-# Taking a task, closing it, and cutting and folding its worktree are Amenbo's built-ins: actions it
-# carries out itself, with no terminal and no prompt. One is placed on a picture as an action of its
+# Taking a task, filing one, closing it, fetching, splitting by a classification, and cutting and
+# folding a worktree are Amenbo's built-ins: actions it carries out itself, with no terminal and no
+# prompt. One is placed on a picture as an action of its
 # own, never put inside an action you wrote. A prompt is left with what needs an agent's judgement:
 # the work itself, a review, how a PR and its CI are handled. A name in <angle brackets> below is a
 # built-in's own, as `builtin-list` prints it.
+# A run comes in by one of three entrances, and each ends up working a task: take_task takes one its
+# filter finds; `start --text/--file` hands the first step what a person gives it; fetch goes to a URL,
+# a file path or a command set beforehand. What is handed over or fetched is filed through make_task,
+# which can take the task as it files it — the example below takes the first entrance.
 amenbo automation add --name "Work the queue"          # the picture itself; what every step is told first is Amenbo's own
-amenbo automation builtin-list                         # take_task, cut_worktree, fold_worktree, close_task, fetch — with the names of what each reads, hands on and leaves by
+amenbo automation builtin-list                         # take_task, make_task, fetch, split_by_dim, cut_worktree, fold_worktree, close_task — with the names of what each reads, hands on and leaves by
 amenbo automation place-add 3 --builtin take_task      # 31: reserves the first task its filter finds
 amenbo automation cfg-set 31 --name "<filter>" --assignee me-ai --dim "Area=Core" # which tasks it takes (unanswered: the ones handed to the AI)
 amenbo automation cfg-set 31 --name "<when none>" --choice "<wait>" # or wait for one to turn up, until a person pauses or stops the run
@@ -388,6 +395,7 @@ amenbo automation show 3                               # one whole definition, e
 amenbo automation action-list                          # the library this project reaches
 amenbo automation action-show 7                        # one action, and the picture inside it
 amenbo automation start 3                              # away it goes
+amenbo automation start 4 --text - --file ./issue.md   # ...or hand the first step a text and files, for it to file as a task
 amenbo automation pause 7                              # ...at the end of the step under way
 amenbo automation stop 7                               # ...now, handing the task back to todo
 # Inside a step's own terminal, the agent carrying it out reports through three more:

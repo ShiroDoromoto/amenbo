@@ -368,7 +368,7 @@ pub fn check(
 
     let mut unmet = Vec::new();
     if let Some(entry) = by_id.get(&entry_id) {
-        if !takes_a_task(conn, entry.action_id)? {
+        if !takes_a_task(conn, entry)? {
             unmet.push(Unmet::EntryTakesNoTask {
                 step: action_name(conn, entry.action_id)?,
                 builtin: action_builtin(conn, entry.action_id)?,
@@ -379,15 +379,10 @@ pub fn check(
     for placement in placements.iter().filter(|p| live.contains(&p.id)) {
         let name = action_name(conn, placement.action_id)?;
         let builtin = action_builtin(conn, placement.action_id)?;
+        // A built-in set to wait never leaves by the way out it waits instead of (`AMB-D-969`), and one
+        // whose setting chooses its way out never by the other, so nothing has to follow it.
+        let never_taken = never_taken(conn, placement)?;
         let settings = settings_of(conn, placement)?;
-        // A built-in set to wait never leaves by the way out it waits instead of (`AMB-D-969`), so
-        // nothing has to follow it.
-        let never_taken = match &builtin {
-            Some(key) => crate::ops::automation_builtin::never_leaves_by(key, |setting| {
-                settings.iter().find(|cfg| cfg.name == setting).and_then(|cfg| cfg.value.as_deref())
-            }),
-            None => None,
-        };
         for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
             if never_taken.is_some() && Some(exit.name.as_str()) == never_taken {
                 continue;
@@ -501,6 +496,9 @@ fn leaves_task_open(
         let Some(placement) = by_id.get(&start) else { continue };
         let mut lines = Vec::new();
         for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+            if Some(exit.name.as_str()) == never_taken(conn, placement)? {
+                continue;
+            }
             if outs_of(conn, &exit)?.iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
                 lines.push((*placement, exit));
             }
@@ -537,7 +535,7 @@ fn leaves_task_open(
             if closes_the_task(conn, to.action_id)? {
                 continue;
             }
-            if takes_a_task(conn, to.action_id)? {
+            if takes_a_task(conn, to)? {
                 push_new(
                     &mut unmet,
                     vec![Unmet::LeavesTaskOpen {
@@ -806,11 +804,15 @@ fn decided(
     })
 }
 
-/// Whether an action declares a `task_take` output on any of its ways out — the thing that makes a
-/// placement of it usable as an entry, since the task it comes out holding is what the run is about
-/// from there on.
-fn takes_a_task(conn: &Connection, action_id: i64) -> Result<bool> {
-    for exit in read::automation_exits_of(conn, AutomationOwner::Action, action_id)? {
+/// Whether the action on a placement declares a `task_take` output on any of the ways out it can leave by
+/// there — the thing that makes the placement usable as an entry, since the task it comes out holding is
+/// what the run is about from there on.
+fn takes_a_task(conn: &Connection, placement: &AutomationPlacement) -> Result<bool> {
+    let never = never_taken(conn, placement)?;
+    for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+        if Some(exit.name.as_str()) == never {
+            continue;
+        }
         if outs_of(conn, &exit)?.iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
             return Ok(true);
         }
@@ -863,6 +865,18 @@ fn fed(
 /// the same pair and must not put them back together a second way. The action declares and carries no
 /// answer; the placement answers on a row of its own under the same name
 /// ([`crate::ops::automation::cfg_set`]), so the two have to be put back together here.
+/// **The way out a placement never leaves by**, as it is set there
+/// ([`crate::ops::automation_builtin::never_leaves_by`]) — `None` for an action somebody wrote.
+fn never_taken(conn: &Connection, placement: &AutomationPlacement) -> Result<Option<&'static str>> {
+    let Some(key) = action_builtin(conn, placement.action_id)? else {
+        return Ok(None);
+    };
+    let settings = settings_of(conn, placement)?;
+    Ok(crate::ops::automation_builtin::never_leaves_by(&key, |setting| {
+        settings.iter().find(|cfg| cfg.name == setting).and_then(|cfg| cfg.value.as_deref())
+    }))
+}
+
 pub fn settings_of(conn: &Connection, placement: &AutomationPlacement) -> Result<Vec<AutomationCfg>> {
     let declared = read::automation_cfgs_of(conn, AutomationCfgOwner::Action, placement.action_id)?;
     let mut out = Vec::with_capacity(declared.len());

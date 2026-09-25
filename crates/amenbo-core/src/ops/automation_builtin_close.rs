@@ -34,6 +34,7 @@ pub(crate) const CLOSE_TASK: Builtin = Builtin {
     ins: &[BuiltinPort { name: COMMIT, kind: AutomationPortKind::Value, required: false }],
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
     waits: None,
+    chooses: None,
     work: Work::InStore(close),
 };
 

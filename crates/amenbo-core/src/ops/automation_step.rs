@@ -143,8 +143,11 @@ pub fn open(
 
     // The stretch this execution belongs to, decided before anything is written: a step that takes a
     // fresh task starts one, and every other step joins whatever is under way.
+    // A built-in set never to leave by the way out that takes one does not (`Chooses`).
+    let never = super::automation_builtin::never_leaves_by_def(&def)?;
     let opens_a_stretch = exits
         .iter()
+        .filter(|e| Some(e.name.as_str()) != never)
         .any(|e| e.outs.iter().any(|p| p.kind == AutomationPortKind::TaskTake));
     let current = read::automation_run_task_last(conn, run_id)?;
     // **The task before is closed before the next is taken** (`AMB-D-967`). The launch check refuses
@@ -163,7 +166,7 @@ pub fn open(
     let mut handed: Vec<Handed> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
     for input in &ins {
-        match latest_for(tx, input, current.as_ref(), opens_a_stretch)? {
+        match latest_for(tx, run_id, input, current.as_ref())? {
             Some(found) => handed.push(found),
             None if input.port.required => missing.push(input.port.name.clone()),
             None => {}
@@ -314,29 +317,36 @@ struct Handed {
 }
 
 /// **What is standing ready for one input.** Only what a wire joined to it at launch counts
-/// ([`RunDefIn::from`]), and only what was produced within the stretch under way — a value from the
-/// task before this one is about a task this step is not working on.
+/// ([`RunDefIn::from`]), and only what was produced within the stretch under way — a value from a task
+/// before that one is about a task this step is not working on. Before the run has taken any task, what
+/// counts is what the steps before the first stretch produced.
 ///
 /// Where several wires feed one input — two ways out that cannot both be taken, or a step visited
 /// twice — the newest wins, `seq` being the move number the producing execution was.
 ///
-/// A step that opens a stretch of its own is handed nothing: the stretch it would read from has not
-/// begun, and the one before it belongs to another task.
+/// **A step that opens a stretch of its own reads the one under way too**, the stretch it is about to
+/// close. What it is handed there is what a person wired into it — the title of the task a built-in
+/// files and takes, what a step before it fetched — and the launch check counts that wire as feeding
+/// it, so handing it nothing would stop at run time a run the check let through.
 fn latest_for(
     tx: &WriteTx<'_>,
+    run_id: i64,
     input: &RunDefIn,
     stretch: Option<&AutomationRunTask>,
-    opens_a_stretch: bool,
 ) -> Result<Option<Handed>> {
     let conn = tx.conn();
-    let (Some(stretch), false) = (stretch, opens_a_stretch) else {
-        return Ok(None);
-    };
     if input.from.is_empty() {
         return Ok(None);
     }
+    let executions = match stretch {
+        Some(stretch) => read::automation_run_steps_of_task(conn, stretch.id)?,
+        None => read::automation_run_steps_of(conn, run_id)?
+            .into_iter()
+            .filter(|execution| execution.run_task_id.is_none())
+            .collect(),
+    };
     let mut best: Option<(i64, AutomationRunValue)> = None;
-    for execution in read::automation_run_steps_of_task(conn, stretch.id)? {
+    for execution in executions {
         let Some(from_def) = read::automation_run_def(conn, execution.run_def_id)? else {
             continue;
         };

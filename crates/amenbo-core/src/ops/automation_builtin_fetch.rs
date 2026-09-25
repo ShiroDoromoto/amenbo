@@ -84,6 +84,7 @@ pub(super) const FETCH: Builtin = Builtin {
         BuiltinExit { name: NOT_FOUND, outs: &[] },
     ],
     waits: None,
+    chooses: None,
     work: Work::Outside(fetch),
 };
 

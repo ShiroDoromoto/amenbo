@@ -43,6 +43,7 @@ pub(super) const CUT_WORKTREE: Builtin = Builtin {
         outs: &[BuiltinPort { name: WORKTREE, kind: AutomationPortKind::Value, required: true }],
     }],
     waits: None,
+    chooses: None,
     work: Work::Outside(cut),
 };
 

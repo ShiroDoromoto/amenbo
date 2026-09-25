@@ -964,6 +964,7 @@ export const zhHans: Translation = {
     "auto.step.entryWhat": "运行最先打开的放置。一条自动化只有一个。",
     "auto.step.next": "接下来做什么",
     "auto.step.nextNothing": "还没有确定",
+    "auto.step.nextErrorNothing": "停下来叫人（默认）",
     "auto.step.nextGo": "打开 {name}",
     "auto.step.maxTimes": "最多次数",
     "auto.step.maxTimesNone": "不限",

@@ -959,6 +959,7 @@ export const ko: Translation = {
     "auto.step.entryWhat": "실행이 가장 먼저 여는 배치. 오토메이션 하나에 하나.",
     "auto.step.next": "다음에 할 일",
     "auto.step.nextNothing": "아직 정하지 않음",
+    "auto.step.nextErrorNothing": "멈추고 사람을 부릅니다 (기본값)",
     "auto.step.nextGo": "{name} 열기",
     "auto.step.maxTimes": "최대 횟수",
     "auto.step.maxTimesNone": "제한 없음",

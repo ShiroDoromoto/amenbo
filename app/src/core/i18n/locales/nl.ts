@@ -962,6 +962,7 @@ export const nl: Translation = {
     "auto.step.entryWhat": "De plaatsing die een run als eerste opent. Eén automatisering heeft er één.",
     "auto.step.next": "Wat daarna gebeurt",
     "auto.step.nextNothing": "Nog niets gezegd",
+    "auto.step.nextErrorNothing": "stoppen en iemand erbij halen (standaard)",
     "auto.step.nextGo": "{name} openen",
     "auto.step.maxTimes": "Hoogstens",
     "auto.step.maxTimesNone": "Geen limiet",

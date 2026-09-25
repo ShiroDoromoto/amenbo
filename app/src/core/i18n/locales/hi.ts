@@ -962,6 +962,7 @@ export const hi: Translation = {
     "auto.step.entryWhat": "वह प्लेसमेंट जिसे रन सबसे पहले खोलता है। हर ऑटोमेशन में एक।",
     "auto.step.next": "इसके बाद क्या होता है",
     "auto.step.nextNothing": "अभी कुछ तय नहीं",
+    "auto.step.nextErrorNothing": "रुककर किसी व्यक्ति को बुलाएँ (डिफ़ॉल्ट)",
     "auto.step.nextGo": "{name} खोलें",
     "auto.step.maxTimes": "ज़्यादा से ज़्यादा",
     "auto.step.maxTimesNone": "कोई सीमा नहीं",

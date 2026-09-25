@@ -964,6 +964,7 @@ export const zhHant: Translation = {
     "auto.step.entryWhat": "執行最先開啟的放置。一條自動化只有一個。",
     "auto.step.next": "接下來做什麼",
     "auto.step.nextNothing": "還沒有決定",
+    "auto.step.nextErrorNothing": "停下來叫人（預設）",
     "auto.step.nextGo": "開啟 {name}",
     "auto.step.maxTimes": "最多次數",
     "auto.step.maxTimesNone": "不限",

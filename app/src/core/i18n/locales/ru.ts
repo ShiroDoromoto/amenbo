@@ -979,6 +979,7 @@ export const ru: Translation = {
     "auto.step.entryWhat": "Размещение, которое запуск открывает первым. У одной автоматизации оно одно.",
     "auto.step.next": "Что дальше",
     "auto.step.nextNothing": "Пока ничего не задано",
+    "auto.step.nextErrorNothing": "остановиться и позвать человека (по умолчанию)",
     "auto.step.nextGo": "Открыть {name}",
     "auto.step.maxTimes": "Не больше",
     "auto.step.maxTimesNone": "Без ограничения",

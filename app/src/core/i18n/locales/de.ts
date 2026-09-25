@@ -966,6 +966,7 @@ export const de: Translation = {
     "auto.step.entryWhat": "Die Platzierung, die ein Lauf zuerst öffnet. Eine Automatisierung hat eine.",
     "auto.step.next": "Was danach passiert",
     "auto.step.nextNothing": "Noch nichts festgelegt",
+    "auto.step.nextErrorNothing": "anhalten und eine Person rufen (Standard)",
     "auto.step.nextGo": "{name} öffnen",
     "auto.step.maxTimes": "Höchstens so oft",
     "auto.step.maxTimesNone": "Kein Limit",

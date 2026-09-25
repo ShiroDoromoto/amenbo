@@ -319,7 +319,11 @@ export function NextRow({
         value={edgeKey(edge)}
         onChange={(e) => pick(e.target.value)}
       >
-        <option value="">{t("auto.step.nextNothing")}</option>
+        {/* Nothing said on the error way out still has an answer: the run stops and calls a person
+            (`AMB-D-966`), so the row says that rather than reading as a way out with nowhere to go. */}
+        <option value="">
+          {t(exitName === ERROR_EXIT ? "auto.step.nextErrorNothing" : "auto.step.nextNothing")}
+        </option>
         <optgroup
           label={t(
             graph.boundary === undefined ? "auto.step.nextGroupPlacement" : "auto.step.nextGroupStep",

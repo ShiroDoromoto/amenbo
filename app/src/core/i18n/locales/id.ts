@@ -963,6 +963,7 @@ export const id: Translation = {
     "auto.step.entryWhat": "Penempatan yang dibuka run lebih dulu. Satu otomasi punya satu.",
     "auto.step.next": "Apa yang terjadi setelahnya",
     "auto.step.nextNothing": "Belum ditentukan",
+    "auto.step.nextErrorNothing": "berhenti dan panggil orang (bawaan)",
     "auto.step.nextGo": "Buka {name}",
     "auto.step.maxTimes": "Paling banyak",
     "auto.step.maxTimesNone": "Tanpa batas",

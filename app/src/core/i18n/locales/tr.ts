@@ -962,6 +962,7 @@ export const tr: Translation = {
     "auto.step.entryWhat": "Bir çalıştırmanın ilk açtığı yerleşim. Her otomasyonda bir tane olur.",
     "auto.step.next": "Sonra ne olacak",
     "auto.step.nextNothing": "Henüz belirlenmedi",
+    "auto.step.nextErrorNothing": "dur ve birini çağır (varsayılan)",
     "auto.step.nextGo": "{name} aç",
     "auto.step.maxTimes": "En çok",
     "auto.step.maxTimesNone": "Sınır yok",

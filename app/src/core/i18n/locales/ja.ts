@@ -968,6 +968,7 @@ export const ja: Translation = {
     "auto.step.entryWhat": "実行が最初に開く配置。1本のオートメーションに1つ",
     "auto.step.next": "次にすること",
     "auto.step.nextNothing": "まだ決めていない",
+    "auto.step.nextErrorNothing": "止めて人を呼ぶ（既定）",
     "auto.step.nextGo": "{name} を開く",
     "auto.step.maxTimes": "繰り返しの上限",
     "auto.step.maxTimesNone": "上限なし",

@@ -975,6 +975,7 @@ export const ptBR: Translation = {
     "auto.step.entryWhat": "A colocação que uma execução abre primeiro. Cada automação tem uma.",
     "auto.step.next": "O que acontece depois",
     "auto.step.nextNothing": "Ainda não foi definido",
+    "auto.step.nextErrorNothing": "parar e chamar uma pessoa (padrão)",
     "auto.step.nextGo": "Abrir {name}",
     "auto.step.maxTimes": "No máximo",
     "auto.step.maxTimesNone": "Sem limite",

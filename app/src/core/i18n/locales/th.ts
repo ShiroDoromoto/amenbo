@@ -963,6 +963,7 @@ export const th: Translation = {
     "auto.step.entryWhat": "การวางที่การรันเปิดเป็นอันแรก ออโตเมชันหนึ่งชุดมีหนึ่งจุด",
     "auto.step.next": "สิ่งที่เกิดขึ้นต่อไป",
     "auto.step.nextNothing": "ยังไม่ได้กำหนด",
+    "auto.step.nextErrorNothing": "หยุดแล้วเรียกคน (ค่าเริ่มต้น)",
     "auto.step.nextGo": "เปิด {name}",
     "auto.step.maxTimes": "ไม่เกิน",
     "auto.step.maxTimesNone": "ไม่จำกัด",

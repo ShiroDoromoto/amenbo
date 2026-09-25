@@ -979,6 +979,7 @@ export const pl: Translation = {
     "auto.step.entryWhat": "Umieszczenie, które uruchomienie otwiera jako pierwsze. Jedna automatyzacja ma jedno.",
     "auto.step.next": "Co dzieje się dalej",
     "auto.step.nextNothing": "Nic jeszcze nie ustalono",
+    "auto.step.nextErrorNothing": "zatrzymaj się i zawołaj człowieka (domyślnie)",
     "auto.step.nextGo": "Otwórz {name}",
     "auto.step.maxTimes": "Najwyżej",
     "auto.step.maxTimesNone": "Bez limitu",

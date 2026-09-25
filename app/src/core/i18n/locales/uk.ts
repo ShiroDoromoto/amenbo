@@ -979,6 +979,7 @@ export const uk: Translation = {
     "auto.step.entryWhat": "Розміщення, яке запуск відкриває першим. В однієї автоматизації воно одне.",
     "auto.step.next": "Що далі",
     "auto.step.nextNothing": "Ще нічого не задано",
+    "auto.step.nextErrorNothing": "зупинитися й покликати людину (типово)",
     "auto.step.nextGo": "Відкрити {name}",
     "auto.step.maxTimes": "Не більше",
     "auto.step.maxTimesNone": "Без обмеження",

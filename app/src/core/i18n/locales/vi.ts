@@ -963,6 +963,7 @@ export const vi: Translation = {
     "auto.step.entryWhat": "Vị trí mà một lần chạy mở đầu tiên. Mỗi tự động hóa có một.",
     "auto.step.next": "Sau đó làm gì",
     "auto.step.nextNothing": "Chưa định",
+    "auto.step.nextErrorNothing": "dừng lại và gọi người (mặc định)",
     "auto.step.nextGo": "Mở {name}",
     "auto.step.maxTimes": "Nhiều nhất",
     "auto.step.maxTimesNone": "Không giới hạn",

@@ -974,6 +974,7 @@ export const fr: Translation = {
     "auto.step.entryWhat": "Le placement qu'une exécution ouvre en premier. Une automatisation en a un.",
     "auto.step.next": "Ce qui se passe ensuite",
     "auto.step.nextNothing": "Rien n'est encore dit",
+    "auto.step.nextErrorNothing": "s'arrêter et appeler quelqu'un (par défaut)",
     "auto.step.nextGo": "Ouvrir {name}",
     "auto.step.maxTimes": "Au plus",
     "auto.step.maxTimesNone": "Sans limite",

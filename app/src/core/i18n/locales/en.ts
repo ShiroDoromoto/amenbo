@@ -1205,6 +1205,7 @@ const ui = {
   "auto.step.entryWhat": "The placement a run opens first. One automation has one.",
   "auto.step.next": "What happens next",
   "auto.step.nextNothing": "Nothing said yet",
+  "auto.step.nextErrorNothing": "Stop and call a person (the default)",
   "auto.step.nextGo": "Open {name}",
   "auto.step.maxTimes": "Taken at most",
   "auto.step.maxTimesNone": "No limit",

@@ -340,10 +340,23 @@ pub fn done(
         )));
     }
 
+    // A step that closed its task with `task done --report` has already said its piece there; a closed
+    // task is read by nobody, so the report stays on the run's history alone, and the history says so
+    // (`AMB-D-963`).
+    let owed_to = stretch
+        .as_ref()
+        .and_then(|s| s.task_id)
+        .filter(|_| def.report_to_task && !report.trim().is_empty());
+    let withheld = match owed_to {
+        Some(task_id) => closed(tx, task_id)?,
+        None => false,
+    };
+
     let now = Timestamp::now();
     let mut ended = run_step.clone();
     ended.exit_id = Some(taken.id);
     ended.report = report.to_string();
+    ended.report_withheld = withheld;
     ended.status = AutomationRunStepStatus::Done;
     ended.ended_at = Some(now);
     ended.updated_at = now;
@@ -353,20 +366,8 @@ pub fn done(
         record::automation_run_step(&ended),
     )?;
 
-    // A step that closed its task with `task done --report` has already said its piece there; a closed
-    // task is read by nobody, and the report stays on the run's history (`AMB-D-963`).
-    if def.report_to_task && !report.trim().is_empty() {
-        if let Some(task_id) = stretch.as_ref().and_then(|s| s.task_id) {
-            if !closed(tx, task_id)? {
-                crate::ops::comment::add_report_comment(
-                    tx,
-                    task_id,
-                    ActorKind::Ai,
-                    report,
-                    ended.id,
-                )?;
-            }
-        }
+    if let Some(task_id) = owed_to.filter(|_| !withheld) {
+        crate::ops::comment::add_report_comment(tx, task_id, ActorKind::Ai, report, ended.id)?;
     }
     if !took_a_task {
         no_task_after_all(tx, &ended, stretch.as_ref(), now)?;
@@ -993,6 +994,8 @@ mod tests {
                 Some(step.run_step.id),
                 "which step of which run carried it",
             );
+            let ended = read::automation_run_step(tx.conn(), step.run_step.id).expect("read").expect("the step");
+            assert!(!ended.report_withheld, "it went where it was owed");
         });
     }
 
@@ -1023,6 +1026,26 @@ mod tests {
                 .expect("read")
                 .expect("the step");
             assert_eq!(ended.report, "Looked at it.", "the report stays on the run's history");
+            assert!(ended.report_withheld, "and the history says it was kept off the task");
+        });
+    }
+
+    /// **Only a report owed to the task can be kept off it.** A step not built to carry its report
+    /// there withheld nothing, whatever became of the task.
+    #[test]
+    fn a_step_not_built_to_report_to_its_task_withholds_nothing() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            let task = a_task(tx, p.project, "閉じる");
+            take(tx, step.run_step.id, task.id).expect("take");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("the agent closes it");
+
+            done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.").expect("done");
+
+            let ended = read::automation_run_step(tx.conn(), step.run_step.id).expect("read").expect("the step");
+            assert!(!ended.report_withheld);
         });
     }
 

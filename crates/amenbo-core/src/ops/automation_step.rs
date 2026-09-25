@@ -414,6 +414,7 @@ fn new_execution(
         seq: moves.iter().map(|s| s.seq).max().unwrap_or(0) + 1,
         exit_id: None,
         report: String::new(),
+        report_withheld: false,
         status: AutomationRunStepStatus::Running,
         started_at: Some(now),
         ended_at: None,

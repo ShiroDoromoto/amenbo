@@ -2261,7 +2261,7 @@ fn all_commands() -> Value {
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation step-done --report - --exit 21 --actor ai"])),
 
-        cmd("automation action-add", "Adds an action to the library — a unit worth using twice. It is born empty: `automation step-add` writes the steps it holds, and `automation action-entry-set` names the one a placement of it opens first. It names no agent and no model, those being chosen where it is placed (`automation agent-set`), and it carries the unnamed way out and the error one (`*`) from birth. --note is what it is for, drawn where it is built and never carried into a launch. --global puts it in the device's library, which every project on this machine reaches; that shelf is a human's to write, and an AI bound to a project is turned away from it.",
+        cmd("automation action-add", "Adds an action to the library — a unit worth using twice. It is born empty: `automation step-add` writes the steps it holds, and the first one written is the one a placement of it opens first (`automation action-entry-set` names another). It names no agent and no model, those being chosen where it is placed (`automation agent-set`), and it carries the unnamed way out and the error one (`*`) from birth. --note is what it is for, drawn where it is built and never carried into a launch. --global puts it in the device's library, which every project on this machine reaches; that shelf is a human's to write, and an AI bound to a project is turned away from it.",
             json!([{ "name": "--name <str>", "help": "what this action is called", "required": true },
                    { "name": "--note <text>", "help": "what it is for, in Markdown (`-` reads stdin) — shown where it is built, never carried into a launch" },
                    { "name": "--global", "help": "put it in the device's library rather than this project's (human only)" },
@@ -2299,7 +2299,7 @@ fn all_commands() -> Value {
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation action-rm 7 --yes"])),
 
-        cmd("automation step-add", "Adds a step to a library action — one step is one terminal, and it carries its own prompt. Who carries it out is not the step's: it is chosen where the action is placed (`automation agent-set`), so the same action can be run by different agents on two automations. It is born with the unnamed way out and the error one (`*`). --work-dir names the setting or the input the working folder is taken from: a name, not a path, and the name is one the action declares. A built-in is not put in here: it stands on a picture only as Amenbo's own action (`automation place-add --builtin`). Prints the id the action's own edge and wire commands take.",
+        cmd("automation step-add", "Adds a step to a library action — one step is one terminal, and it carries its own prompt. Who carries it out is not the step's: it is chosen where the action is placed (`automation agent-set`), so the same action can be run by different agents on two automations. It is born with the unnamed way out and the error one (`*`), and the first step of an action is the one the action opens first. --work-dir names the setting or the input the working folder is taken from: a name, not a path, and the name is one the action declares. A built-in is not put in here: it stands on a picture only as Amenbo's own action (`automation place-add --builtin`). Prints the id the action's own edge and wire commands take.",
             json!([{ "name": "<action>", "help": "action id", "required": true },
                    { "name": "--name <str>", "help": "what this step is called", "required": true },
                    { "name": "--prompt <text>", "help": "the prompt this step runs on (`-` reads stdin)", "required": true },
@@ -2324,7 +2324,7 @@ fn all_commands() -> Value {
                    { "name": "--task-decisions <true|false>", "help": "whether it is handed the decisions linked to the task the run is on" },
                    { "name": "--task-comments <true|false>", "help": "whether it is handed the comments on the task the run is on" }]),
             json!(["amenbo automation step-update 11 --interactive true"])),
-        cmd("automation step-rm", "Deletes a step with its declarations, and every edge and wire of its action naming it. Deleting the one the action opens first clears that too. Confirms unless --yes.",
+        cmd("automation step-rm", "Deletes a step with its declarations, and every edge and wire of its action naming it. Deleting the one the action opens first moves that to the first step left, in list order, or clears it with the last step. Confirms unless --yes.",
             json!([{ "name": "<id>", "help": "step id", "required": true },
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation step-rm 11 --yes"])),

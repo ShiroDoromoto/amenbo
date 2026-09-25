@@ -1006,13 +1006,38 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 71,
+        name: "record on a step execution that its report was kept off a closed task",
+        // `AMB-D-963`. Off on every row already written: whether an earlier report was kept off its task
+        // was never recorded, and nothing can tell now.
+        apply: Apply::Custom(record_the_withheld_report),
+    },
+    Step {
+        to: 72,
         name: "split the switch that hands a step its task into its notes, its decisions and its comments",
         // Each of the three starts where the one switch stood, so no step changes what it is handed.
         apply: Apply::Custom(split_the_task_handed_to_the_steps),
     },
 ];
 
-/// v71: the one switch that handed a step the task it is on (`show_task`) becomes three — its notes
+/// v71: `automation_run_step.report_withheld` — the step was built to carry its report onto the task, and
+/// the task was closed by then, so the report stayed on the run alone (`AMB-D-963`).
+///
+/// **Off on every row already written.** A build before this one kept such a report off the task and
+/// said nothing, so there is nothing to seed from; the `0` the declaration carries is what those rows read.
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason.
+fn record_the_withheld_report(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run_step")?.iter().any(|c| c == "report_withheld") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run_step ADD COLUMN report_withheld BOOLEAN NOT NULL DEFAULT 0 \
+                 CHECK(report_withheld IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
+
+/// v72: the one switch that handed a step the task it is on (`show_task`) becomes three — its notes
 /// (`show_notes`), the decisions linked to it (`show_decisions`) and its comments (`show_comments`) —
 /// on the library step and a run's copy of it.
 ///
@@ -6897,13 +6922,41 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v71 in full, on the store shape v70 left behind: one switch for the task. Each of the three it
+    /// v71 in full, on the store shape v70 left behind: step executions with nowhere to say a report was
+    /// kept off its task. Every one already written reads as a report that was not.
+    #[test]
+    fn every_step_execution_already_written_kept_nothing_back() {
+        let dir = scratch("run-step-report-withheld");
+        let engine = store_at(&dir, 70);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, name, prompt) VALUES (1, 1, 'one', 'p');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, seq, report, status) VALUES
+                     (1, 1, 1, 1, 'did it', 'done');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let withheld: bool = engine
+            .conn()
+            .query_row("SELECT report_withheld FROM automation_run_step WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert!(!withheld);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v72 in full, on the store shape v71 left behind: one switch for the task. Each of the three it
     /// becomes takes its value, on the library step and a run's copy alike, so a step turned off is
     /// handed none of the three and a step left on is handed all of them.
     #[test]
     fn the_switch_for_the_task_splits_into_three_that_each_keep_its_value() {
         let dir = scratch("step-split-show-task");
-        let engine = store_at(&dir, 70);
+        let engine = store_at(&dir, 71);
         engine
             .conn()
             .execute_batch(
@@ -6914,7 +6967,7 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, steps_through(71), &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(72), &mut crate::progress::ignore).unwrap();
 
         let conn = engine.conn();
         let mut stmt = conn

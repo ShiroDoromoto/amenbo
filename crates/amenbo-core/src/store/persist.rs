@@ -25,6 +25,22 @@ fn device_shelf(shelf: crate::ops::automation::ActionShelf) -> Option<WriteTarge
     }
 }
 
+/// Write the default agent onto a placement just made, reading the default for the project its
+/// automation belongs to ([`crate::wake::step_agent`]). Both the GUI's placing and `automation
+/// place-add` come through the wrappers that call this, so this is where the default takes effect.
+fn steps_default(
+    tx: &WriteTx<'_>,
+    config: &crate::config::Config,
+    placement: &crate::model::AutomationPlacement,
+) -> Result<()> {
+    let Some(automation) = crate::store_engine::read::automation(tx.conn(), placement.automation_id)?
+    else {
+        return Ok(());
+    };
+    let agent = crate::wake::step_agent(config, automation.project_id);
+    crate::ops::automation::placement_steps_default(tx, placement.id, agent.as_deref())
+}
+
 /// Take the next activity sequence number for a system event and mark it used **in the same
 /// transaction**. A system event has no row in the DB (only a line in the ledger), so the next
 /// `MAX(id)` would not see this id — without the high-water mark, two events in a row would be
@@ -1732,27 +1748,37 @@ impl Store {
         })
     }
 
-    /// Put an action on an automation (one operation = one transaction).
+    /// Put an action on an automation (one operation = one transaction), with the default agent
+    /// written onto each of its steps ([`crate::ops::automation::placement_steps_default`]).
     pub fn automation_placement_add(
         &mut self,
         automation_id: i64,
         action_id: i64,
     ) -> Result<crate::model::AutomationPlacement> {
+        let config = self.config.clone();
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation::placement_add(tx, automation_id, action_id),
+            |tx| {
+                let placement = crate::ops::automation::placement_add(tx, automation_id, action_id)?;
+                steps_default(tx, &config, &placement)?;
+                Ok(placement)
+            },
         )
     }
 
     /// Put an action in on a line (one operation = one transaction): the placement and the two edges
-    /// that leave nothing pointing at nothing.
+    /// that leave nothing pointing at nothing, with the default agent written onto each of its steps
+    /// as [`Self::automation_placement_add`] writes it.
     pub fn automation_placement_insert(
         &mut self,
         edge_id: i64,
         action_id: i64,
     ) -> Result<crate::model::AutomationPlacement> {
+        let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
-            crate::ops::automation::placement_insert(tx, edge_id, action_id)
+            let placement = crate::ops::automation::placement_insert(tx, edge_id, action_id)?;
+            steps_default(tx, &config, &placement)?;
+            Ok(placement)
         })
     }
 

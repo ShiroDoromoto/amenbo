@@ -204,7 +204,7 @@ export function AutomationsScreen({
       )}
 
       {tab === "automations" && everywhere && (
-        <EveryAutomationList workspaceOpen={workspaceOpen} onGoTo={onGoToAutomation} />
+        <EveryAutomationList workspaceOpen={workspaceOpen} onGoTo={onGoToAutomation} onGoToRun={onGoToRun} />
       )}
 
       {tab === "automations" && !everywhere && <AutomationNew projectId={projectId} onMade={setOpen} />}
@@ -235,9 +235,11 @@ export function AutomationsScreen({
 function EveryAutomationList({
   workspaceOpen,
   onGoTo,
+  onGoToRun,
 }: {
   workspaceOpen: boolean;
   onGoTo?: (project: number, automation: number) => void;
+  onGoToRun?: (project: number, run: number) => void;
 }) {
   const automations = useEveryAutomation();
   if (automations.length === 0) return <div className="auto__empty">{t("auto.emptyEverywhere")}</div>;
@@ -249,6 +251,7 @@ function EveryAutomationList({
             row={one}
             workspaceOpen={workspaceOpen}
             onGoTo={onGoTo && (() => onGoTo(one.projectId, one.card.id))}
+            onGoToRun={onGoToRun}
           />
         </li>
       ))}
@@ -269,15 +272,17 @@ function EveryAutomationRow({
   row,
   workspaceOpen,
   onGoTo,
+  onGoToRun,
 }: {
   row: EveryAutomationCardDto;
   workspaceOpen: boolean;
   onGoTo?: () => void;
+  onGoToRun?: (project: number, run: number) => void;
 }) {
   const { card, projectId } = row;
   const folders = useBoundFolders(projectId).live.map((one) => one.path);
   const check = useLaunchCheck(card.id, projectId, folders);
-  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen);
+  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
   return (
     <>
       <div className="autolist__line">

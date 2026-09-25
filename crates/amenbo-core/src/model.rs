@@ -1606,8 +1606,9 @@ pub struct AutomationAction {
     /// What this action is for, in the builder's own words. It is shown on the build screen and on
     /// the library's row, and a launch never carries it, the same way [`Automation::notes`] does not.
     pub note: String,
-    /// The step this action opens first. `None` while it is still being built; launching an
-    /// automation that places it is refused at the launch check, not here.
+    /// The step this action opens first. The first step written takes it, and deleting it hands it to
+    /// the first step left (`AMB-T-5517`), so it is `None` only while the action has no step or after
+    /// it is cleared; launching an automation that places it then is refused at the launch check, not here.
     #[serde(default)]
     pub entry_step_id: Option<i64>,
     /// **The built-in this action stands for**, by its key, or `None` for one a person wrote
@@ -2214,6 +2215,11 @@ pub struct AutomationRunStep {
     #[serde(default)]
     pub exit_id: Option<i64>,
     pub report: String,
+    /// **Whether the report was kept off the task it was owed to** — the step was built to carry its
+    /// report onto the task (`report_to_task`), and the task was closed by then, so nobody would have
+    /// read it there (`AMB-D-963`). The report itself is still [`AutomationRunStep::report`].
+    #[serde(default)]
+    pub report_withheld: bool,
     pub status: AutomationRunStepStatus,
     #[serde(default)]
     pub started_at: Option<Timestamp>,

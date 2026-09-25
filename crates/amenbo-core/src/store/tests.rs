@@ -1501,3 +1501,46 @@ fn a_tasks_folder_is_read_from_what_its_own_project_offers() {
 
     fs::remove_dir_all(&dir).ok();
 }
+
+/// **Placing an action writes the default agent onto its steps** — the one a pane would open with in
+/// the automation's project — both when it is put on its own and when it is put in on a line, and the
+/// value stays with the placement after the default moves on. With no default, nobody is chosen.
+#[test]
+fn placing_an_action_writes_the_default_agent_onto_its_steps() {
+    use crate::model::AutomationPictureOwner;
+    use crate::ops::automation::{EdgeTarget, NewAutomation, NewStep};
+
+    let (mut s, dir) = fresh_store("placement-default-agent");
+    let p = s.project_add(project("PJ")).unwrap();
+    let automation =
+        s.automation_add(p.id, NewAutomation { name: "回す".into(), ..Default::default() }).unwrap();
+    let action =
+        s.automation_action_from_prompt(Some(p.id), NewStep::new("調べる", "do it"), &[], &[]).unwrap();
+    let step = action.entry_step_id.unwrap();
+    let chosen = |s: &Store, placement: i64| {
+        crate::store_engine::read::automation_placement_step_for(s.engine.conn(), placement, step)
+            .unwrap()
+            .map(|c| c.agent)
+    };
+
+    let bare = s.automation_placement_add(automation.id, action.id).unwrap();
+    assert_eq!(chosen(&s, bare.id), None, "nobody has answered, so nobody is chosen");
+
+    s.config.last_agent = Some("codex-cli".to_string());
+    s.config.remember_agent(p.id, "claude-code");
+    let placed = s.automation_placement_add(automation.id, action.id).unwrap();
+    assert_eq!(chosen(&s, placed.id).as_deref(), Some("claude-code"), "the project's answer");
+
+    s.config.forget_agent(p.id);
+    let edge = s
+        .automation_edge_add(AutomationPictureOwner::Automation, placed.id, None, EdgeTarget::Done, None)
+        .unwrap();
+    let inserted = s.automation_placement_insert(edge.id, action.id).unwrap();
+    assert_eq!(chosen(&s, inserted.id).as_deref(), Some("codex-cli"), "else the person's");
+    assert_eq!(
+        chosen(&s, placed.id).as_deref(),
+        Some("claude-code"),
+        "what was written is the placement's, and the default moving on does not reach it",
+    );
+    fs::remove_dir_all(&dir).ok();
+}

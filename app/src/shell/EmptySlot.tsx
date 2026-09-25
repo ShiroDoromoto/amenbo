@@ -100,6 +100,7 @@ export function EmptySlot({
   folders,
   project,
   onOpen,
+  onGoToRun,
 }: {
   /** Where on the page's grid this sits — exactly where the pane it offers would land, at the size
    *  it would be (`../talk/layout`). Left out where this is drawn outside a page. */
@@ -111,6 +112,8 @@ export function EmptySlot({
    *  keep an answer against. */
   project: number | null;
   onOpen: (agent: string | null) => void;
+  /** Go to the pane of the run an automation started here is drawn in. */
+  onGoToRun?: (project: number, run: number) => void;
 }) {
   const folderKey = folders.join("\n");
   // What this machine can start, and what this project has settled on. Read once per project rather
@@ -651,7 +654,7 @@ export function EmptySlot({
       {/* The other thing a frame with room can be used for: starting an automation, whose own pane
           is where its steps are drawn (`../components/StartAutomation`). The workspace is standing —
           this frame is drawn in it — so the answer core needs is known here rather than asked for. */}
-      <StartAutomation projectId={project} folders={folders} workspaceOpen />
+      <StartAutomation projectId={project} folders={folders} workspaceOpen onGoToRun={onGoToRun} />
     </div>
   );
 }

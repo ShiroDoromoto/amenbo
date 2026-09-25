@@ -1298,6 +1298,10 @@ fn render_move(
     for line in m.report.lines().filter(|l| !l.trim().is_empty()) {
         human(flags, format!("      | {line}"));
     }
+    // Built to carry the report onto the task, which was closed by then (`AMB-D-963`).
+    if m.report_withheld {
+        human(flags, "      (not left on the task: it was closed)");
+    }
     Ok(())
 }
 

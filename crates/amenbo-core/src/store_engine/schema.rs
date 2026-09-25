@@ -1321,6 +1321,9 @@ datasets! {
     // `exit_id` is the way out it left by, NULL while it is running. It keys the way out as the run's
     // copy of the step does (`automation_run_def.exits`), and its name is read from there: the live
     // row may since have been renamed or deleted, and the record says what was declared then.
+    //
+    // `report_withheld` is set where the step was built to carry its report onto the task and the
+    // task was closed by then, so the report stayed here alone (`AMB-D-963`).
     automation_run_step {
         run_id: fk("automation_run", "RESTRICT"),
         run_def_id: fk("automation_run_def", "RESTRICT"),
@@ -1328,6 +1331,7 @@ datasets! {
         seq: col(COUNT),
         exit_id: col(KEY_REF_OPT),
         report: col(REQ),
+        report_withheld: bool_col,
         status: enum_col("running", "done", "failed", "stopped"),
         started_at: ts_opt,
         ended_at: ts_opt,

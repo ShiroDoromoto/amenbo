@@ -1089,6 +1089,33 @@ pub fn placement_step_set(
     Ok(chosen)
 }
 
+/// **Write the default agent onto every step of a placement that nobody has chosen for yet** — what
+/// placing an action leaves behind, so the steps do not each have to be chosen again before a launch
+/// will take them. `agent` is the answer a pane would open with ([`crate::wake::step_agent`]); `None`
+/// leaves the steps as they are, with nobody chosen.
+///
+/// **What is written belongs to the placement from then on.** It is an ordinary choice, the one
+/// [`placement_step_set`] writes, and a later change to the default does not reach it. The model is
+/// left out, which is the agent's own default. A built-in step is skipped: Amenbo carries it out
+/// itself (`AMB-D-964`).
+pub fn placement_steps_default(
+    tx: &WriteTx<'_>,
+    placement_id: i64,
+    agent: Option<&str>,
+) -> Result<()> {
+    let Some(agent) = agent else { return Ok(()) };
+    let placement = live_placement(tx, placement_id)?;
+    for step in read::automation_action_steps_of(tx.conn(), placement.action_id)? {
+        if step.builtin.is_some()
+            || read::automation_placement_step_for(tx.conn(), placement_id, step.id)?.is_some()
+        {
+            continue;
+        }
+        placement_step_set(tx, placement_id, step.id, agent, None)?;
+    }
+    Ok(())
+}
+
 /// **Take back the choice of who carries one step out at one placement**, leaving nobody chosen there.
 /// A launch that would open the step is then refused until somebody chooses again. Nothing chosen is
 /// nothing to take back, and that is not an error.
@@ -1171,8 +1198,11 @@ fn checked_action(tx: &WriteTx<'_>, automation: &Automation, action_id: i64) -> 
 }
 
 /// Add a step to a library action. It is born carrying the two ways out every declarer has.
+///
+/// **An action with no entry takes this step as its entry** (`AMB-T-5517`), so the first step written
+/// is the one a placement opens first, and an action with steps never stands there without one.
 pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<AutomationStep> {
-    live_action(tx, action_id)?;
+    let action = live_action(tx, action_id)?;
     not_under_a_run(tx, Def::Action(action_id))?;
     let name = checked_name("step", &new.name)?;
     let sibs = read::automation_action_step_siblings(tx.conn(), action_id, None)?;
@@ -1198,6 +1228,9 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
     };
     emit_create(tx, record::automation_action_step(&step))?;
     born_with_exits(tx, AutomationOwner::Step, id)?;
+    if action.entry_step_id.is_none() {
+        action_set_entry(tx, action_id, Some(id))?;
+    }
     Ok(step)
 }
 
@@ -1349,17 +1382,19 @@ pub fn step_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationS
 
 /// Delete a step, with its declarations and every edge and wire naming it at either end.
 ///
-/// **Deleting the entry clears it.** An action under construction has to be able to lose any step, and
-/// refusing here would strand whichever one was named the entry first; an action left without one is
-/// refused at the launch check, where a person is about to be let down by it.
+/// **Deleting the entry hands it to the first of the steps left** (`AMB-T-5517`), in the order the
+/// lists show them. An action under construction has to be able to lose any step, and refusing here
+/// would strand whichever one was named the entry first. Only the last step going leaves the action
+/// with no entry, and an action with nothing to open is refused at the launch check.
 pub fn step_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let step = live_step(tx, id)?;
     not_under_a_run(tx, Def::Action(step.action_id))?;
     let action = live_action(tx, step.action_id)?;
     // `entry_step_id` is `RESTRICT`, and that check bites at the statement rather than at the commit —
-    // so the reference is dropped before the row it names, not after.
+    // so the reference is moved off the row before the row goes, not after.
     if action.entry_step_id == Some(id) {
-        action_set_entry(tx, action.id, None)?;
+        let left = read::automation_action_step_siblings(tx.conn(), action.id, Some(id))?;
+        action_set_entry(tx, action.id, left.first().map(|(first, _)| *first))?;
     }
     delete_step_row(tx, id)
 }
@@ -3316,6 +3351,40 @@ mod tests {
         });
     }
 
+    /// `AMB-T-5517`: the first step written into an empty action becomes its entry, and a later one does
+    /// not take the entry away from it.
+    #[test]
+    fn the_first_step_of_an_action_is_its_entry() {
+        with_tx(|tx| {
+            let action = action_add(tx, None, "取る", "").expect("add action");
+            let first = step_add(tx, action.id, NewStep::new("一つ目", "one")).expect("add step");
+            assert_eq!(live_action(tx, action.id).unwrap().entry_step_id, Some(first.id));
+            step_add(tx, action.id, NewStep::new("二つ目", "two")).expect("add step");
+            assert_eq!(
+                live_action(tx, action.id).unwrap().entry_step_id,
+                Some(first.id),
+                "a second step leaves the entry where it was",
+            );
+        });
+    }
+
+    /// `AMB-T-5517`: deleting the entry hands it to the first of the steps left, in list order — not
+    /// to the oldest, and not to none.
+    #[test]
+    fn deleting_the_entry_step_hands_the_entry_to_the_first_one_left() {
+        with_tx(|tx| {
+            let action = action_add(tx, None, "取る", "").expect("add action");
+            let first = step_add(tx, action.id, NewStep::new("一つ目", "one")).expect("add step");
+            let second = step_add(tx, action.id, NewStep::new("二つ目", "two")).expect("add step");
+            let third = step_add(tx, action.id, NewStep::new("三つ目", "three")).expect("add step");
+            step_move(tx, third.id, Position::Top).expect("move the third to the top");
+            step_delete(tx, first.id).expect("delete the entry");
+            assert_eq!(live_action(tx, action.id).unwrap().entry_step_id, Some(third.id));
+            step_delete(tx, second.id).expect("delete a step that is not the entry");
+            assert_eq!(live_action(tx, action.id).unwrap().entry_step_id, Some(third.id));
+        });
+    }
+
     #[test]
     fn the_entry_is_a_placement_of_this_automation() {
         with_tx(|tx| {
@@ -3490,6 +3559,41 @@ mod tests {
             placement_step_clear(tx, there.id, step.id).expect("take it back");
             assert!(chosen(there.id).is_none());
             placement_step_clear(tx, there.id, step.id).expect("nothing chosen is nothing to take back");
+        });
+    }
+
+    /// **Placing writes the default onto the steps nobody has chosen for**, leaves a choice already
+    /// made alone, writes nothing where there is no default, and passes a built-in by.
+    #[test]
+    fn the_default_agent_is_written_only_where_nobody_has_chosen() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, here) = mk_placed(tx, &automation, "調べる");
+            let step = only_step(tx, &action);
+            let chosen = |p: i64| {
+                read::automation_placement_step_for(tx.conn(), p, step.id)
+                    .unwrap()
+                    .map(|c| (c.agent, c.model))
+            };
+
+            placement_steps_default(tx, here.id, None).expect("no default");
+            assert_eq!(chosen(here.id), None, "no default leaves nobody chosen");
+
+            placement_steps_default(tx, here.id, Some("claude-code")).expect("default");
+            assert_eq!(chosen(here.id), Some(("claude-code".to_string(), None)));
+
+            placement_step_set(tx, here.id, step.id, "codex-cli", Some("o3")).expect("choose");
+            placement_steps_default(tx, here.id, Some("claude-code")).expect("default again");
+            assert_eq!(
+                chosen(here.id),
+                Some(("codex-cli".to_string(), Some("o3".to_string()))),
+                "a choice already made stays",
+            );
+
+            let builtin = crate::ops::automation_builtin::action(tx, "take_task").expect("built-in");
+            let spot = placement_add(tx, automation.id, builtin.id).expect("place it");
+            placement_steps_default(tx, spot.id, Some("claude-code")).expect("a built-in is passed by");
+            assert!(read::automation_placement_step_ids(tx.conn(), spot.id).unwrap().is_empty());
         });
     }
 
@@ -3784,10 +3888,12 @@ mod held_by_a_run {
             // The order of a list, not a definition.
             "action_move",
             "move_to",
-            // Only through ops that ask: `action_add` then `step_add`, `placement_add`, `step_add`.
+            // Only through ops that ask: `action_add` then `step_add`, `placement_add`,
+            // `placement_step_set`, `step_add`.
             "action_from_prompt",
             "placement_insert",
             "placement_insert_new",
+            "placement_steps_default",
             "step_insert",
             // Reads a picture handed to it and writes nothing.
             "lines_back",

@@ -365,13 +365,13 @@ amenbo automation action-add --name "Implement"        # 7: a unit worth using t
 amenbo automation step-add 7 --name "Implement" --prompt - --work-dir worktree # 11: one step of it = one terminal, run in the folder it is handed
 amenbo automation port-add --action 7 --name worktree --kind value --required  # what the action takes in
 amenbo automation wire-add --in-action --from 0 --from-port worktree --to 11 --to-port worktree # `0` is the action itself: what it takes in, handed to a step
-amenbo automation action-entry-set 7 --step 11         # the step a placement of it opens first
+amenbo automation action-entry-set 7 --step 11         # the step a placement of it opens first (the first one written already is)
 amenbo automation exit-add --action 7 --name "gave up" # a way out a placement may leave by (every one has the unnamed one and `*`)
 amenbo automation edge-add --in-action --from 11: --exit-to # inside an action: leave it by a way out it declares
 amenbo automation edge-add --in-action --from "11:gave up" --exit-to "gave up"
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
-amenbo automation place-add 3 --action 7               # 33: put that action on the picture
-amenbo automation agent-set 33 --step 11 --agent claude # who carries that step out at this spot (--model too)
+amenbo automation place-add 3 --action 7               # 33: put that action on the picture; its steps start with the default agent
+amenbo automation agent-set 33 --step 11 --agent claude # who carries that step out at this spot, if not the default (--model too)
 amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in
 amenbo automation place-add 3 --builtin close_task     # 35: done, with the commit handed to it recorded
 amenbo automation edge-add --from "31:<taken>" --to 32 # what happens after each way out (--max-times caps a way back)

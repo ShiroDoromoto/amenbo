@@ -28,8 +28,18 @@ import { errText, t } from "../core/i18n";
  *
  * `refused` is core's sentence, cleared by the next press: what a reader is owed is the outcome of
  * the press they just made.
+ *
+ * **A run that starts is gone to** (`AMB-T-5530`): `onGoToRun` is handed the run the launch answered
+ * with, the same road a row of the "running" tab travels. Left where the press was made, the reader
+ * would have to go looking for where it is going on — and a run opens its own pane without moving the
+ * screen, because it may be one nobody here asked for (`../shell/WorkspaceFace`'s `stepArrived`).
+ * This one somebody did.
  */
-export function useAutomationStart(projectId: number | null, workspaceOpen: boolean) {
+export function useAutomationStart(
+  projectId: number | null,
+  workspaceOpen: boolean,
+  onGoToRun?: (project: number, run: number) => void,
+) {
   const [refused, setRefused] = useState<string | null>(null);
   // A press already out. The answer carries the pane the run opens in, so a second press before the
   // first lands would be a second run nobody asked for.
@@ -40,13 +50,14 @@ export function useAutomationStart(projectId: number | null, workspaceOpen: bool
     setRefused(null);
     setStarting(true);
     try {
-      await launchAutomation(id, projectId, folders, workspaceOpen);
+      const started = await launchAutomation(id, projectId, folders, workspaceOpen);
+      if (started !== null) onGoToRun?.(projectId, started.run);
     } catch (e) {
       setRefused(errText(e));
     } finally {
       setStarting(false);
     }
-  }, [projectId, workspaceOpen]);
+  }, [projectId, workspaceOpen, onGoToRun]);
 
   return { start, refused, starting };
 }
@@ -55,6 +66,7 @@ export function StartAutomation({
   projectId,
   folders,
   workspaceOpen,
+  onGoToRun,
 }: {
   /** The project whose automations these are, or null on a surface that has none. */
   projectId: number | null;
@@ -65,9 +77,11 @@ export function StartAutomation({
    * without one — and which window holds it is not a thing this component can see (`AMB-D-753`).
    */
   workspaceOpen: boolean;
+  /** Go to the pane the run a press started is drawn in. */
+  onGoToRun?: (project: number, run: number) => void;
 }) {
   const automations = useAutomations(projectId);
-  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen);
+  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
   const live = automations.filter((one) => !one.archived);
 
   if (live.length === 0) return null;

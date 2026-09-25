@@ -787,6 +787,7 @@ pub fn automation_run_step(s: &AutomationRunStep) -> Record {
                 ("seq", iv(s.seq)),
                 ("exit_id", kv_opt(&s.exit_id)),
                 ("report", tv(&s.report)),
+                ("report_withheld", bv(s.report_withheld)),
                 ("status", tv(s.status.as_str())),
                 ("started_at", tsov(&s.started_at)),
                 ("ended_at", tsov(&s.ended_at)),

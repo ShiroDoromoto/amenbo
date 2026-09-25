@@ -708,6 +708,21 @@ export function WorkspaceFace({
 
   useEffect(() => onStep(stepArrived), [stepArrived]);
 
+  /**
+   * **Go to a run's pane**, pressed from this face — the empty frame's start (`./EmptySlot`,
+   * `AMB-T-5530`). It is the road an `openIn` naming a run takes, without the trip through the
+   * shell: the press was made here, so the face that answers it is this one.
+   *
+   * Where the step has not arrived yet the pane is stood for the run, as that road does, and the
+   * step lands in it rather than standing a second one (`stoodForRun`).
+   */
+  const goToRun = useCallback((project: number, run: number) => {
+    setLayout((was) => {
+      const stood = stoodForRun(was, project, run);
+      return focusOn(stood.layout, stood.frame.id);
+    });
+  }, []);
+
   // **And the steps told before this face was up**, once the arrangement has been put back. The
   // workspace is built the first time it is asked for, and a run started before then — from the
   // command line, say — has its step's terminal running with nobody told (`crate::automation`'s
@@ -1814,6 +1829,7 @@ export function WorkspaceFace({
                     folders={boundPaths}
                     project={layout.project}
                     onOpen={(agent) => askToOpen(layout.project, agent)}
+                    onGoToRun={goToRun}
                   />
                 )}
                 {/* A full page draws no empty frame — there is no gap to draw — so the way in is put

@@ -768,6 +768,75 @@ mod tests {
         });
     }
 
+    /// **An error way out with no line after it calls a person too** (`AMB-D-966`), where the step's
+    /// error way out returns to the action's and the automation draws nothing after that — the shape
+    /// every action written from a prompt is born in, and the one a run walked into `no_way_on` before.
+    #[test]
+    fn an_error_way_out_nobody_drew_a_line_from_calls_a_person() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, first.run_step.id);
+            done(tx, first.run_step.id, None, "Looked at it.").expect("done");
+            let second = opened(tx, &run, &p.second);
+            let stopped = done(
+                tx,
+                second.run_step.id,
+                way_out(tx, second.run_step.id, ERROR_EXIT),
+                "The tests would not build.",
+            )
+            .expect("done");
+
+            let Next::Halted(ended) = stopped else { panic!("the run stops to call a person") };
+            assert_eq!(ended.run.stopped_reason, Some(AutomationStoppedReason::Halted));
+            let after = read::task(tx.conn(), task).expect("read").expect("the task");
+            assert_eq!(after.status, TaskStatus::Todo);
+            assert_eq!(after.assignee_kind, Some(ActorKind::Human), "it is the person's turn");
+            let said = comments_on(tx, task);
+            assert!(said.iter().any(|line| line.contains("The tests would not build.")), "{said:?}");
+        });
+    }
+
+    /// The same holds for the step's own error way out, with the line inside the action rubbed out.
+    #[test]
+    fn a_step_error_way_out_with_no_line_inside_calls_a_person() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let step = read::automation_action(tx.conn(), p.second.action_id)
+                .expect("read")
+                .expect("the action")
+                .entry_step_id
+                .expect("an entry step");
+            let error = read::automation_exits_of(tx.conn(), crate::model::AutomationOwner::Step, step)
+                .expect("exits")
+                .into_iter()
+                .find(|e| e.name.as_deref() == Some(ERROR_EXIT))
+                .expect("the error way out");
+            let inner = read::automation_edge_for_exit(
+                tx.conn(),
+                crate::model::AutomationPictureOwner::Action,
+                step,
+                error.id,
+            )
+            .expect("read")
+            .expect("the line it is born with");
+            automation::edge_delete(tx, inner.id).expect("rub it out");
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, first.run_step.id);
+            done(tx, first.run_step.id, None, "Looked at it.").expect("done");
+            let second = opened(tx, &run, &p.second);
+            let stopped =
+                done(tx, second.run_step.id, Some(error.id), "Stuck on it.").expect("done");
+
+            let Next::Halted(ended) = stopped else { panic!("the run stops to call a person") };
+            assert_eq!(ended.run.stopped_reason, Some(AutomationStoppedReason::Halted));
+            let after = read::task(tx.conn(), task).expect("read").expect("the task");
+            assert_eq!(after.assignee_kind, Some(ActorKind::Human), "it is the person's turn");
+        });
+    }
+
     /// A step that already carries its report onto the task is not said twice when it calls a person.
     #[test]
     fn a_report_already_on_the_task_is_not_said_again_when_the_run_calls_a_person() {

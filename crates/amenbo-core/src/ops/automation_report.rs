@@ -457,7 +457,8 @@ fn whats_next(
         Onward::Done => {
             Ok(Next::Closed(automation_stop::ended(tx, run, Ending::Completed)?))
         }
-        // The way out calls a person: an ending the author of the picture chose.
+        // The way out calls a person: an ending the author of the picture chose, or an error way out
+        // nobody drew a line from (`AMB-D-966`).
         Onward::Halt => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::Halted)?)),
         // Nothing says what follows the way out — or it leads somewhere the run never copied down,
         // such as a placement added after the launch. The run has no snapshot of that and will not

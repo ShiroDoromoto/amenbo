@@ -23,41 +23,10 @@ import { useState, type ReactNode } from "react";
 import { acknowledgeRun, pauseRun, resumeRun, stopRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
+import { runReasonWord, runStatusWord } from "../core/runWords";
 import { exactLabel, whenLabel } from "../core/i18n/format";
 import { ErrorNote } from "../components/ErrorNote";
 import type { AutomationRunCardDto } from "../bindings/bindings";
-
-/**
- * What the run is doing, in one word.
- *
- * A pause that has been asked for and not settled is its own line rather than either of the two it
- * sits between: the run is still `running` and a reader told only that would press pause again, and
- * told "paused" would believe the step had already stopped (`amenbo_core::ops::automation_stop`).
- */
-function statusText(run: AutomationRunCardDto): string {
-  if (run.status === "running" && run.pauseRequested) return t("auto.run.pausing");
-  switch (run.status) {
-    case "running": return t("auto.run.running");
-    case "paused": return t("auto.run.paused");
-    case "completed": return t("auto.run.completed");
-    case "failed": return t("auto.run.failed");
-    case "canceled": return t("auto.run.canceled");
-  }
-}
-
-/** Why it failed, where core named one. A failure with no reason on it says nothing rather than guessing. */
-function reasonText(run: AutomationRunCardDto): string | null {
-  switch (run.stoppedReason) {
-    case "crashed": return t("auto.run.crashed");
-    case "max_times": return t("auto.run.maxTimes");
-    case "no_agent": return t("auto.run.noAgent");
-    case "no_input": return t("auto.run.noInput");
-    case "no_way_on": return t("auto.run.noWayOn");
-    case "halted": return t("auto.run.halted");
-    case "left_task_open": return t("auto.run.leftTaskOpen");
-    default: return null;
-  }
-}
 
 /**
  * **One run on one line** — shared by the "running" tab and the "history" tab, so a run reads the same
@@ -81,7 +50,7 @@ export function RunLine({
   onGo?: () => void;
   acts?: ReactNode;
 }) {
-  const reason = run.status === "failed" ? reasonText(run) : null;
+  const reason = run.status === "failed" ? runReasonWord(run) : null;
   const at = run.endedAt ?? run.startedAt;
   return (
     <li className={`autorun autorun--${run.status}`}>
@@ -91,7 +60,7 @@ export function RunLine({
         disabled={!onGo}
         onClick={onGo}
       >
-        <span className="autorun__state">{statusText(run)}</span>
+        <span className="autorun__state">{runStatusWord(run)}</span>
         <span className="autorun__of">
           <span className="autorun__name">{run.automationName}</span>
           <span className="autoid">{tf("face.runNo", { n: run.run })}</span>

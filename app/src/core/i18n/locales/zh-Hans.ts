@@ -602,6 +602,8 @@ export const zhHans: Translation = {
     "face.ended": "此终端中的程序已退出。",
     "face.builtinDoing": "Amenbo 正在执行",
     "face.builtinDone": "Amenbo 已执行",
+    "face.builtinExit": "出口: {exit}",
+    "face.runFailedAt": "{step} · 出口: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI 尚未设置身份验证方式。它给出的路径只属于此窗格，会随之丢弃——要设置的是你自己的 ~/.gemini/settings.json。",
     "face.noWayBack": "这段对话已经打不开了。",

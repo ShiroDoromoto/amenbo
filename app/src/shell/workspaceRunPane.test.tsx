@@ -19,6 +19,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneStart } from "../talk/terminal";
 import type { BuiltinRun, StepOpened, StepRun } from "../talk/automationStep";
+import type { AutomationRunCardDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   /** Every opening the face asked for, in order. */
@@ -33,6 +34,8 @@ const hoisted = vi.hoisted(() => ({
   says: true,
   /** The steps the host says are running as the face comes up (`standingSteps`). */
   standing: [] as StepOpened[],
+  /** The runs the host answers the face's panes with (`useRunCards`). */
+  cards: [] as AutomationRunCardDto[],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -74,6 +77,7 @@ vi.mock("../talk/frames", async (importOriginal) => ({
 
 vi.mock("../core/automations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../core/automations")>()),
+  useRunCards: () => hoisted.cards,
   stopRun: (run: number) => {
     hoisted.stopped.push(run);
     return Promise.resolve(true);
@@ -99,6 +103,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { WorkspaceFace } from "./WorkspaceFace";
+import { t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -130,6 +135,23 @@ function step(over: Partial<StepRun> = {}): StepRun {
     agent: "claude",
     folder: "/work/a",
     interactive: false,
+    ...over,
+  };
+}
+
+/** Run 7, as the host reads it for the pane. */
+function runCard(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
+  return {
+    run: 7,
+    project: 1,
+    projectName: "amenbo",
+    automation: 3,
+    automationName: "家計簿の開発ループ",
+    status: "running",
+    pauseRequested: false,
+    waiting: false,
+    stepName: "取る",
+    stepsDone: 1,
     ...over,
   };
 }
@@ -171,6 +193,7 @@ beforeEach(() => {
   hoisted.stopped = [];
   hoisted.says = true;
   hoisted.standing = [];
+  hoisted.cards = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -278,6 +301,64 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     expect(hoisted.ended).toEqual([]);
   });
 
+  it("says nothing of the run's state before the run has been read", async () => {
+    await mount();
+    await arrive();
+
+    expect(q(".plate__state")[0]?.hidden).toBe(true);
+    expect(q(".plate-fail")[0]?.hidden).toBe(true);
+  });
+
+  it("says the run is running, and that it has completed once it has, on the same pane", async () => {
+    // A run's pane outlives its last step: a completed run's pane went on naming the step it ended
+    // on, and a reader took it for a run stopped partway (`AMB-T-5506`).
+    hoisted.cards = [runCard()];
+    await mount();
+    await arrive();
+    expect(q(".plate__state")[0]?.hidden).toBe(false);
+    expect(q(".plate__state")[0]?.textContent).toBe(t("auto.run.running"));
+    expect(q(".plate__state")[0]?.dataset.state).toBe("running");
+    const openings = hoisted.opened.length;
+
+    hoisted.cards = [runCard({ status: "completed", exitName: "" })];
+    await arrive();
+
+    expect(q(".plate__state")[0]?.textContent).toBe(t("auto.run.completed"));
+    expect(q(".plate__state")[0]?.dataset.state).toBe("completed");
+    expect(q(".plate-fail")[0]?.hidden).toBe(true);
+    // Only the row moved: the step and its terminal are the same ones.
+    expect(hoisted.opened).toHaveLength(openings);
+  });
+
+  it("says why a failed run failed, and at which step and way out", async () => {
+    hoisted.cards = [runCard({
+      status: "failed",
+      stoppedReason: "halted",
+      actionName: "下ごしらえ",
+      exitName: "*",
+    })];
+    await mount();
+    await arrive();
+
+    expect(q(".plate__state")[0]?.textContent).toBe(t("auto.run.failed"));
+    expect(q(".plate-fail")[0]?.hidden).toBe(false);
+    expect(q(".plate-fail__why")[0]?.textContent).toBe(t("auto.run.halted"));
+    expect(q(".plate-fail__where")[0]?.textContent).toBe(tf("face.runFailedAt", {
+      step: tf("auto.run.inAction", { action: "下ごしらえ", step: "取る" }),
+      exit: t("auto.pic.errorExit"),
+    }));
+  });
+
+  it("says the step alone where a failed run's step left by no way out", async () => {
+    // A program that exited before it reported left by none (`crashed`).
+    hoisted.cards = [runCard({ status: "failed", stoppedReason: "crashed" })];
+    await mount();
+    await arrive();
+
+    expect(q(".plate-fail__why")[0]?.textContent).toBe(t("auto.run.crashed"));
+    expect(q(".plate-fail__where")[0]?.textContent).toBe("取る");
+  });
+
   it("stops the run when the pane is closed, and takes the place away", async () => {
     // A run left going with its pane gone is one nobody can see, reach or stop. What it was holding
     // is handed back by core, which is why nothing of that is worked out here (`AMB-T-5247`).
@@ -357,6 +438,17 @@ describe("a built-in on a run's pane", () => {
     // One card, said again — not a second one stacked under it.
     expect(card()).toHaveLength(1);
     expect(q(".slot__builtin-state")[0]?.textContent).not.toBe(doing);
+  });
+
+  it("says which way out a built-in left by once it has been carried out", async () => {
+    await mount();
+    await arrive({ step: undefined, builtin: builtin() });
+    expect(q(".slot__builtin-exit")).toHaveLength(0);
+
+    await arrive({ step: undefined, builtin: builtin({ finished: true, exitName: "*" }) });
+
+    expect(q(".slot__builtin-exit")[0]?.textContent)
+      .toBe(tf("face.builtinExit", { exit: t("auto.pic.errorExit") }));
   });
 
   it("says it is waiting and what for, and names no task, while a built-in waits for one", async () => {

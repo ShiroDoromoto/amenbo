@@ -30,6 +30,14 @@
 // step" would be a name pointing at nothing. The step's own name is the one drawn heavier, because it
 // is the part that changes from one step to the next — the action and the count only move with it.
 //
+// **The run's state is on the row too** (`AMB-D-955`): running, paused, completed, failed or canceled,
+// said in the words the "running" and "history" tabs say it in (`../core/runWords`). A pane outlives
+// the step it was opened for, so without it a run that had finished and one that had stopped partway
+// looked the same — the row went on naming the last step either way. **Running is drawn moving**,
+// because it is the one state that is about now: the other four are over or held, and hold still. A
+// failure says why and where under it — the step it failed in, and the way out that step left by —
+// so the reader does not have to read what the step printed to learn that it failed.
+//
 // **A name too long for the row is elided, and given back in full by a panel of the row's own**
 // (`../styles/global.css`). A name is what the agent typed, so it is the one thing here worth a way
 // back to: the panel drops under the header, wraps inside the pane's own width, and takes no pointer
@@ -99,6 +107,27 @@ export type Say = {
   readonly action: string | null;
   /** The task the run is working, or null where it is on none yet. */
   readonly task: Worked | null;
+  /** Where the run stands, or null until the first answer about it lands — and then the row says
+   *  nothing about the state rather than guessing it from the step. */
+  readonly state: RunState | null;
+};
+
+/**
+ * **Where a run stands**, in the words the row says it with (`../core/runWords`).
+ *
+ * The words are worked out by whoever reads the run, not here: they are the tabs' words, and the tabs
+ * are what a reader goes to next.
+ */
+export type RunState = {
+  /** Which of the five it is (`AMB-D-955`) — what the mark is coloured and moved by. */
+  readonly status: "running" | "paused" | "completed" | "failed" | "canceled";
+  /** The state in one word, a pause asked for and not yet settled included. */
+  readonly word: string;
+  /** Why it failed, or null on anything but a failure and on one core gave no reason for. */
+  readonly why: string | null;
+  /** Where it failed — the step, and the way out that step left by where it left by one — or null
+   *  on anything but a failure. */
+  readonly where: string | null;
 };
 
 /** The whole row. */
@@ -145,7 +174,21 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   const runNo = part("no");
   const step = part("step");
   const nth = part("nth");
+  // The run's state, last on the line: it is what the rest of the line is doing, and a mark that
+  // reads "failed" at the end of it reads as the outcome of the step before it.
+  const state = part("state");
   host.append(row);
+
+  // Why and where a run failed, on a line of its own under the name. It is not squeezed onto the
+  // first line for the reason the task is not: that line is one line by construction.
+  const failRow = document.createElement("div");
+  failRow.className = "plate-fail";
+  failRow.setAttribute("role", "status");
+  const failWhy = document.createElement("span");
+  failWhy.className = "plate-fail__why";
+  const failWhere = document.createElement("span");
+  failWhere.className = "plate-fail__where";
+  failRow.append(failWhy, failWhere);
 
   // The task the run is working, on a line of its own under the name. It is a second row and not more
   // of the first one because the first is one line by construction, and a title elided into what
@@ -163,6 +206,7 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   const taskRef = runPart("task");
   const taskTitle = runPart("title");
   host.append(runRow);
+  host.append(failRow);
 
   // The panel the name is read in full in. It is a sibling of the row rather than a child of it,
   // because the row is one line by construction (`../styles/global.css`) and a box that dropped out
@@ -187,6 +231,7 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     // A run on no task yet has nothing for the second line to say, and an empty band under the first
     // would read as a task that is there and has no name.
     runRow.hidden = plate === null || plate.run?.task == null;
+    failRow.hidden = plate === null || plate.run?.state?.status !== "failed";
     if (plate === null) {
       // The panel comes down with the row it belongs to. It is said here as well as below because the
       // row being taken away is the one path that never reaches the name, and a panel left up is an
@@ -205,6 +250,7 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     // A run's pane is drawn as its own kind of pane, and an ordinary one is left exactly as it was:
     // the mark is away, the second row is down, and the panel says only the name.
     auto.hidden = runNo.hidden = step.hidden = nth.hidden = plate.run === null;
+    state.hidden = plate.run?.state == null;
     row.classList.toggle("plate--run", plate.run !== null);
     if (plate.run !== null) {
       runNo.textContent = tf("face.runNo", { n: plate.run.run });
@@ -216,6 +262,14 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
       nth.hidden = plate.run.task === null;
       taskRef.textContent = plate.run.task?.ref ?? "";
       taskTitle.textContent = plate.run.task?.title ?? "";
+      const now = plate.run.state;
+      state.textContent = now?.word ?? "";
+      if (now === null) delete state.dataset.state;
+      else state.dataset.state = now.status;
+      failWhy.textContent = now?.why ?? "";
+      failWhy.hidden = !now?.why;
+      failWhere.textContent = now?.where ?? "";
+      failWhere.hidden = !now?.where;
     }
     peekTask.textContent = plate.run?.task
       ? `${plate.run.task.ref} ${plate.run.task.title}`

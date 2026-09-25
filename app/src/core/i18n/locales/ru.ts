@@ -618,6 +618,8 @@ export const ru: Translation = {
     "face.ended": "Программа в этом терминале завершилась.",
     "face.builtinDoing": "Amenbo выполняет это",
     "face.builtinDone": "Amenbo выполнил это",
+    "face.builtinExit": "Выход: {exit}",
+    "face.runFailedAt": "{step} · Выход: {exit}",
 
     "face.endedGeminiUnset": "Для Gemini CLI не задан способ аутентификации. Указанный путь принадлежит только этой панели и исчезнет вместе с ней — задать его нужно в вашем собственном ~/.gemini/settings.json.",
     "face.noWayBack": "Этот разговор больше не открыть.",

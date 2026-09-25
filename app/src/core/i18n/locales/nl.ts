@@ -603,6 +603,8 @@ export const nl: Translation = {
     "face.ended": "Het programma in deze terminal is gestopt.",
     "face.builtinDoing": "Amenbo voert dit nu uit",
     "face.builtinDone": "Amenbo heeft dit uitgevoerd",
+    "face.builtinExit": "Uitgang: {exit}",
+    "face.runFailedAt": "{step} · Uitgang: {exit}",
 
     "face.endedGeminiUnset": "Voor Gemini CLI is geen authenticatiemethode ingesteld. Het genoemde pad hoort alleen bij dit deelvenster en verdwijnt ermee — in te stellen in uw eigen ~/.gemini/settings.json.",
     "face.noWayBack": "Dit gesprek kan niet meer worden geopend.",

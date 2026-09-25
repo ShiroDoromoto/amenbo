@@ -398,7 +398,12 @@ waiting: boolean,
  * **What it waits for**, as the filter a person answered it with reads — `task list --filter`'s
  * words. Absent while it is not waiting. What would match is neither listed nor counted.
  */
-looksFor?: string, };
+looksFor?: string, 
+/**
+ * **The way out it left through**, once it has been carried out — by the name its step declared
+ * it under, and empty for the unnamed one. Absent while Amenbo is still at it.
+ */
+exitName?: string, };
 
 /**
  * **One automation in the list** — what the "automations" tab draws a row from.
@@ -662,6 +667,13 @@ actionName?: string,
  * a reader asks of a run they are not watching.
  */
 stepsDone: number, 
+/**
+ * **The way out the last step left through**, by the name the run's copy declared it under,
+ * and empty for the unnamed one. Absent while that step is still under way, and where it ended
+ * without leaving by one — a program that exited before it reported. On a failure it is the
+ * half of "where did it fail" the step's name does not say.
+ */
+exitName?: string, 
 /**
  * The task it is working, where it is on one. A run walks a stretch per task
  * ([`amenbo_core::model::AutomationRunTask`]), and this is the one it is in now — the same

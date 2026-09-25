@@ -46,6 +46,8 @@ import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
+import { useRunCards } from "../core/automations";
+import { runStateOf } from "../core/runWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
@@ -389,6 +391,17 @@ export function WorkspaceFace({
    * one or the other: a step arriving takes the card away, and a built-in arriving takes the step.
    */
   const [builtins, setBuiltins] = useState<ReadonlyMap<string, BuiltinRun>>(new Map());
+  /**
+   * **The runs the panes on this face are drawing**, read by id (`AMB-T-5506`). What a step arrives
+   * with says which step and which task; whether the run is going, held or over is the run's, and it
+   * moves while a step's pane stands — the run ends with its last step still up.
+   */
+  const paneRuns = useMemo(
+    () => [...new Set(layout.frames.flatMap((frame) => frame.run === null ? [] : [frame.run]))].sort((a, b) => a - b),
+    [layout.frames],
+  );
+  const runCards = useRunCards(paneRuns);
+  const runCardOf = useMemo(() => new Map(runCards.map((one) => [one.run, one])), [runCards]);
   /**
    * The arrangement as it stands, read by what arrives from outside a render.
    *
@@ -1710,6 +1723,9 @@ export function WorkspaceFace({
                       // standing there (`AMB-D-949`). Null where that spot has since been taken off.
                       action: on.actionName === undefined ? null : builtinWord(builtin?.key, on.actionName),
                       task: on.task ?? null,
+                      // Whether the run is going, held or over, and where a failure failed
+                      // (`AMB-T-5506`). Null until it has been read.
+                      state: runStateOf(runCardOf.get(frame.run)),
                     }}
                     builtin={builtin ?? null}
                     // A place that came back holding a way into what was running in it is opened

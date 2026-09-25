@@ -618,6 +618,8 @@ export const pl: Translation = {
     "face.ended": "Program w tym terminalu zakończył działanie.",
     "face.builtinDoing": "Amenbo właśnie to wykonuje",
     "face.builtinDone": "Amenbo to wykonało",
+    "face.builtinExit": "Wyjście: {exit}",
+    "face.runFailedAt": "{step} · Wyjście: {exit}",
 
     "face.endedGeminiUnset": "Dla Gemini CLI nie ustawiono metody uwierzytelniania. Podana ścieżka należy tylko do tego panelu i znika wraz z nim — ustaw ją we własnym pliku ~/.gemini/settings.json.",
     "face.noWayBack": "Tej rozmowy nie da się już otworzyć.",

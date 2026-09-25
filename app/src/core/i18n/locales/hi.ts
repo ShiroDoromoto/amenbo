@@ -603,6 +603,8 @@ export const hi: Translation = {
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",
     "face.builtinDoing": "Amenbo इसे चला रहा है",
     "face.builtinDone": "Amenbo ने इसे चला दिया",
+    "face.builtinExit": "निकास: {exit}",
+    "face.runFailedAt": "{step} · निकास: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI के लिए कोई प्रमाणीकरण विधि सेट नहीं है। जो पथ दिखाया गया है वह केवल इसी पैन का है और इसके साथ हट जाता है — सेट करनी है आपकी अपनी ~/.gemini/settings.json में।",
     "face.noWayBack": "यह बातचीत अब नहीं खोली जा सकती।",

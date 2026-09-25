@@ -609,6 +609,8 @@ export const ja: Translation = {
     "face.ended": "この端末のプログラムは終了しました。",
     "face.builtinDoing": "Amenbo が実行しています",
     "face.builtinDone": "Amenbo が実行しました",
+    "face.builtinExit": "終了条件: {exit}",
+    "face.runFailedAt": "{step} · 終了条件: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI に認証方法が設定されていません。画面のパスはこのペイン専用で一緒に捨てられるので、直すのはご自分の ~/.gemini/settings.json です。",
     "face.noWayBack": "この会話はもう開けません。",

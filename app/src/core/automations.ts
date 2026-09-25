@@ -814,6 +814,30 @@ export function useLiveRuns(): AutomationRunCardDto[] {
   return data ?? [];
 }
 
+/**
+ * **The runs the workspace's panes are drawing**, by id — what the row over each pane says the run's
+ * state with (`../talk/nameplate`).
+ *
+ * Read by id rather than off `fetchLiveRuns`, because a pane outlives the run it draws: a completed or
+ * canceled run leaves the "running" tab, and its pane is still up saying how it ended.
+ */
+export async function fetchRunCards(runs: readonly number[]): Promise<AutomationRunCardDto[]> {
+  if (!inTauri() || runs.length === 0) return [];
+  return invoke<AutomationRunCardDto[]>("automation_run_cards", { runIds: runs });
+}
+
+/**
+ * Subscribing read of the runs named. It sits under the running tab's key, so a run moving — a step
+ * opened, a way out taken, the run ending — reads them again. Empty until the first answer lands.
+ */
+export function useRunCards(runs: readonly number[]): AutomationRunCardDto[] {
+  const { data } = useQuery<AutomationRunCardDto[]>(
+    ["automationRuns", "panes", runs.join(",")],
+    () => fetchRunCards(runs),
+  );
+  return data ?? [];
+}
+
 /** The one ending the "history" tab can be narrowed to, or all three. */
 export type RunHistoryFilter = "all" | "completed" | "failed" | "canceled";
 

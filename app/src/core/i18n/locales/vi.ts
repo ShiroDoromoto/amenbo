@@ -605,6 +605,8 @@ export const vi: Translation = {
     "face.ended": "Chương trình trong terminal này đã kết thúc.",
     "face.builtinDoing": "Amenbo đang thực hiện",
     "face.builtinDone": "Amenbo đã thực hiện xong",
+    "face.builtinExit": "Lối ra: {exit}",
+    "face.runFailedAt": "{step} · Lối ra: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI chưa được đặt phương thức xác thực. Đường dẫn được nêu chỉ thuộc về khung này và sẽ mất theo nó — tệp cần đặt là ~/.gemini/settings.json của riêng bạn.",
     "face.noWayBack": "Không thể mở lại cuộc trò chuyện này.",

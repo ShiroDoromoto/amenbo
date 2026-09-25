@@ -614,6 +614,8 @@ export const fr: Translation = {
     "face.ended": "Le programme de ce terminal s'est arrêté.",
     "face.builtinDoing": "Amenbo est en train de l'exécuter",
     "face.builtinDone": "Amenbo l'a exécuté",
+    "face.builtinExit": "Sortie: {exit}",
+    "face.runFailedAt": "{step} · Sortie: {exit}",
 
     "face.endedGeminiUnset": "Aucune méthode d'authentification n'est définie pour Gemini CLI. Le chemin indiqué appartient à ce volet et disparaît avec lui — celui à modifier est votre propre ~/.gemini/settings.json.",
     "face.noWayBack": "Cette conversation ne peut plus être ouverte.",

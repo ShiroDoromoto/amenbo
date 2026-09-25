@@ -650,6 +650,14 @@ export function TerminalPane({
     plateRef.current?.took(took);
   }, [took?.ref, took?.title, took?.seq]);
 
+  // **Where the run stands** (`AMB-T-5506`). It moves while a step's pane stands — the run ends, or is
+  // paused, with its last step still up — so the row is told rather than the pane built again. Keyed
+  // on the words, for `took`'s reason.
+  const stood = run?.state ?? null;
+  useEffect(() => {
+    plateRef.current?.stated(stood);
+  }, [stood?.status, stood?.word, stood?.why, stood?.where]);
+
   // The name as it stands, ready to be typed over. A box opened on a pane already called something is
   // opened to change that name, and a reader who has to clear it first is being asked to type the old
   // one back in whenever they only meant to add a word.

@@ -601,6 +601,8 @@ export const ko: Translation = {
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
     "face.builtinDoing": "Amenbo가 실행하고 있습니다",
     "face.builtinDone": "Amenbo가 실행했습니다",
+    "face.builtinExit": "출구: {exit}",
+    "face.runFailedAt": "{step} · 출구: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI에 인증 방법이 설정되어 있지 않습니다. 표시된 경로는 이 창만의 것이라 함께 사라지므로, 설정할 파일은 본인의 ~/.gemini/settings.json입니다.",
     "face.noWayBack": "이 대화는 더 이상 열 수 없습니다.",

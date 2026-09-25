@@ -223,6 +223,8 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
             " OR (target_type = 'automation_run_step' AND target_id IN (SELECT id FROM",
             " automation_run_step WHERE run_id IN",
             " (SELECT id FROM automation_run WHERE project_id = ?1)))",
+            " OR (target_type = 'automation_run'",
+            " AND target_id IN (SELECT id FROM automation_run WHERE project_id = ?1))",
         ),
 
         // ── automation ──
@@ -1128,9 +1130,16 @@ mod tests {
         let run = put(
             "INSERT INTO automation_run \
                  (automation_id, project_id, status, pause_requested, started_by_kind, \
-                  started_at, ended_at, created_at, updated_at) \
-             VALUES (?1, ?2, 'completed', 0, 'ai', ?3, ?3, ?3, ?3)",
+                  started_at, ended_at, handed, created_at, updated_at) \
+             VALUES (?1, ?2, 'completed', 0, 'ai', ?3, ?3, 'この issue を起票して', ?3, ?3)",
             rusqlite::params![automation, project, at],
+        );
+        // What was handed over at launch hangs off the run itself (`AMB-D-970`).
+        put(
+            "INSERT INTO attachment \
+                 (target_type, target_id, kind, url, created_by_kind, order_key, created_at, updated_at) \
+             VALUES ('automation_run', ?1, 'url', 'https://example.com/issue', 'human', 'a0', ?2, ?2)",
+            rusqlite::params![run, at],
         );
         let run_def = put(
             "INSERT INTO automation_run_def \
@@ -1185,6 +1194,11 @@ mod tests {
         doc["tables"][table].as_array().unwrap_or(&Vec::new()).clone()
     }
 
+    fn by_id(mut rows: Vec<serde_json::Value>) -> Vec<serde_json::Value> {
+        rows.sort_by_key(|r| r["id"].as_i64());
+        rows
+    }
+
     fn ids_of(rows: &[serde_json::Value]) -> Vec<i64> {
         rows.iter().map(|r| r["id"].as_i64().unwrap()).collect()
     }
@@ -1220,9 +1234,12 @@ mod tests {
                 dataset.name,
             );
             let read = read_back(&db, Reach::binding(mine), dataset.name, &ids_of(&rows));
+            // Neither road orders its rows, and the order is no part of what either says: the query
+            // plan picks it, and a polymorphic window read by id can walk another index than the whole
+            // table does. So the two are compared by id.
             assert_eq!(
-                carried(&read, dataset.name),
-                rows,
+                by_id(carried(&read, dataset.name)),
+                by_id(rows),
                 "`{}` does not read back as the snapshot carries it",
                 dataset.name,
             );

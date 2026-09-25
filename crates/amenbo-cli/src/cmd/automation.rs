@@ -736,7 +736,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 workspace_open: None,
                 by: Some(flags.facet()?),
             };
-            let r = store.automation_launch(id, &by).map_err(CliError::from)?;
+            let r = store.automation_launch(id, &by, &Default::default()).map_err(CliError::from)?;
             let line = format!("✓ Run {} started", r.id);
             write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
         }

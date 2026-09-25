@@ -1037,7 +1037,65 @@ pub const STEPS: &[Step] = &[
         name: "declare a way out's name NOT NULL",
         apply: Apply::Custom(hold_every_way_out_to_its_name),
     },
+    Step {
+        to: 77,
+        name: "let a run carry what a person handed over at launch, text and files",
+        apply: Apply::Custom(let_a_run_be_handed_things),
+    },
 ];
+
+/// v77: a run carries what a person handed over when launching it (`AMB-D-970`) — the text on
+/// `automation_run.handed`, and the files as attachments hanging off the run, which is a sixth kind
+/// `attachment.target_type` admits.
+///
+/// **Nothing is seeded.** No run before this one was handed anything, so the column is empty on every
+/// row already written and no attachment hangs off a run.
+///
+/// **Two writes, one step, because they are one meaning**: the text without the files would be half of
+/// what the launch hands over. The column is appended only where it is missing (v68's guard), and the
+/// `CHECK` is rewritten in place by v50's procedure, copied rather than called.
+fn let_a_run_be_handed_things(ctx: &Ctx<'_>) -> Result<()> {
+    /// The `target_type` set as every store from v50 to v76 declares it — frozen text.
+    const NARROW: &str = "CHECK(target_type IN ('', 'task', 'decision', 'task_comment', \
+         'decision_comment', 'automation_run_step'))";
+    /// The same set with the run a handed file hangs off.
+    const WIDE: &str = "CHECK(target_type IN ('', 'task', 'decision', 'task_comment', \
+         'decision_comment', 'automation_run_step', 'automation_run'))";
+
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run")?.iter().any(|c| c == "handed") {
+        tx.execute_batch("ALTER TABLE automation_run ADD COLUMN handed TEXT;")?;
+    }
+
+    let declared: String = tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'attachment'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains(WIDE) {
+        return Ok(());
+    }
+    if !declared.contains(NARROW) {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "attachment", expected: NARROW });
+    }
+    let widened = declared.replace(NARROW, WIDE);
+
+    let before = column_names(tx, "attachment")?;
+    tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'attachment'",
+        [&widened],
+    );
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the next statement sees
+    // the widened `CHECK` instead of the one this connection read at open.
+    tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    let after = column_names(tx, "attachment")?;
+    if before != after {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "attachment", expected: NARROW });
+    }
+    Ok(())
+}
 
 /// v76: `automation_exit.name` is declared NOT NULL (`AMB-T-5548`).
 ///
@@ -7147,6 +7205,38 @@ mod tests {
             .query_row("SELECT report_withheld FROM automation_run_step WHERE id = 1", [], |r| r.get(0))
             .unwrap();
         assert!(!withheld);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v77 in full, on the store shape v76 left behind: a run with nowhere to keep what it was handed.
+    /// It comes out handed nothing, and a file can then hang off it — the `CHECK` admits the new kind.
+    #[test]
+    fn a_run_already_written_was_handed_nothing_and_a_file_can_hang_off_one() {
+        let dir = scratch("run-handed");
+        let engine = store_at(&dir, 76);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let handed: Option<String> = engine
+            .conn()
+            .query_row("SELECT handed FROM automation_run WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(handed, None);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO attachment (id, target_type, target_id, kind, url, order_key)
+                 VALUES (1, 'automation_run', 1, 'url', 'https://example.com', 'a0');",
+            )
+            .expect("the widened CHECK admits a file on a run");
         std::fs::remove_dir_all(&dir).ok();
     }
 

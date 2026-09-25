@@ -1184,6 +1184,9 @@ pub enum AttachmentTarget {
     /// step produced, filed where it was produced. The run side has no model shape yet; this variant is
     /// what lets the column's fifth value be read back.
     AutomationRunStep,
+    /// Attached to a run as a whole (`automation_run`) — a file a person handed over when launching it,
+    /// read by the first step the run opens ([`AutomationRun::handed`] is the text that came with it).
+    AutomationRun,
 }
 
 impl AttachmentTarget {
@@ -1194,6 +1197,7 @@ impl AttachmentTarget {
             AttachmentTarget::TaskComment => "task_comment",
             AttachmentTarget::DecisionComment => "decision_comment",
             AttachmentTarget::AutomationRunStep => "automation_run_step",
+            AttachmentTarget::AutomationRun => "automation_run",
         }
     }
 
@@ -1204,6 +1208,7 @@ impl AttachmentTarget {
             "task_comment" => Some(AttachmentTarget::TaskComment),
             "decision_comment" => Some(AttachmentTarget::DecisionComment),
             "automation_run_step" => Some(AttachmentTarget::AutomationRunStep),
+            "automation_run" => Some(AttachmentTarget::AutomationRun),
             _ => None,
         }
     }
@@ -1213,15 +1218,16 @@ impl AttachmentTarget {
     /// the one place the column's values line up with [`crate::idref::RefKind`]; everything that has to
     /// name a target quotes it through here rather than spelling the cases again.
     ///
-    /// `None` for a step execution: it is named by the run it sits in, not by a number a person types
-    /// back, so there is no ref space to render it in ([`Self::target_ref`] says what is quoted instead).
+    /// `None` for a run and a step execution: a step execution is named by the run it sits in, and a
+    /// run by its number, not by a ref a person types back, so there is no ref space to render either in
+    /// ([`Self::target_ref`] says what is quoted instead).
     pub const fn ref_kind(self) -> Option<crate::idref::RefKind> {
         match self {
             AttachmentTarget::Task => Some(crate::idref::RefKind::Task),
             AttachmentTarget::Decision => Some(crate::idref::RefKind::Decision),
             AttachmentTarget::TaskComment => Some(crate::idref::RefKind::TaskComment),
             AttachmentTarget::DecisionComment => Some(crate::idref::RefKind::DecisionComment),
-            AttachmentTarget::AutomationRunStep => None,
+            AttachmentTarget::AutomationRunStep | AttachmentTarget::AutomationRun => None,
         }
     }
 
@@ -1972,6 +1978,12 @@ pub struct AutomationRun {
     /// stays at the top of the runs tab until it is (`AMB-D-955`).
     #[serde(default)]
     pub acknowledged_at: Option<Timestamp>,
+    /// **The text a person handed over when launching it** — the first step the run opens is told it,
+    /// with the files handed along with it, which hang off the run ([`AttachmentTarget::AutomationRun`]).
+    /// `None` for a launch that handed nothing, and where it did, the run starts as it always has
+    /// (`AMB-D-970`).
+    #[serde(default)]
+    pub handed: Option<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

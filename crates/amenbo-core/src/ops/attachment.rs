@@ -239,6 +239,8 @@ mod tests {
             AttachmentTarget::Decision,
             AttachmentTarget::TaskComment,
             AttachmentTarget::DecisionComment,
+            AttachmentTarget::AutomationRunStep,
+            AttachmentTarget::AutomationRun,
         ] {
             assert_eq!(AttachmentTarget::parse(t.as_str()), Some(t));
         }

@@ -651,6 +651,7 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         started_at: ts_opt(r, C.started_at)?,
         ended_at: ts_opt(r, C.ended_at)?,
         acknowledged_at: ts_opt(r, C.acknowledged_at)?,
+        handed: get(r, C.handed)?,
         created_at,
         updated_at,
     })

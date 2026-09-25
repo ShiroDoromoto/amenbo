@@ -193,6 +193,7 @@ pub(super) fn attach_target(
         AttachmentTarget::TaskComment => task_comment(conn, id),
         AttachmentTarget::DecisionComment => decision_comment(conn, id),
         AttachmentTarget::AutomationRunStep => automation_run_step(conn, id),
+        AttachmentTarget::AutomationRun => automation_run(conn, id),
     }
 }
 

@@ -19,6 +19,7 @@ import type {
   AutomationDetailDto,
   AutomationLaunchBlockDto,
   AutomationLaunchCheckDto,
+  AutomationPlacementDto,
   AutomationRunCardDto,
   EveryAutomationCardDto,
 } from "../bindings/bindings";
@@ -457,6 +458,49 @@ describe("the start press on the build screen's head", () => {
     // And every value the sentence is about reaches it, rather than leaving `{step}` on the screen.
     expect(blocks().some((line) => line?.includes("codex-cli"))).toBe(true);
     expect(blocks().every((line) => line && !line.includes("{"))).toBe(true);
+  });
+
+  it("opens the box a reason is about, and leaves a reason about the whole automation a line", async () => {
+    const read: AutomationPlacementDto = {
+      id: 4,
+      name: "Read",
+      actionId: 904,
+      global: false,
+      prompt: "",
+      interactive: false,
+      reportToTask: false,
+      showHistory: true,
+      showNotes: true,
+      showDecisions: true,
+      showComments: true,
+      exits: [],
+      inputs: [],
+      settings: [],
+      steps: [],
+    };
+    hoisted.automations = [card()];
+    hoisted.detail = detail({ placements: [read] });
+    hoisted.check = {
+      ready: false,
+      blocks: [
+        reason("not_ready_automation_unanswered_cfg", { step: "Read", cfg: "filter", placement: "4" }),
+        reason("not_ready_automation_no_entry"),
+      ],
+    };
+    await render();
+    await act(async () => { button("Morning round").click(); });
+
+    const lines = [...container.querySelectorAll(".autolaunch__blocks li")];
+    const go = lines[0].querySelector<HTMLButtonElement>(".autolaunch__go");
+    expect(go).not.toBeNull();
+    expect(go!.dataset.see).toBe(t("auto.launch.see"));
+    expect(lines[1].querySelector(".autolaunch__go")).toBeNull();
+    // What the line says is still only the reason: the pointer to the picture is drawn after it.
+    expect(blocks()[0]).toBe(errSentence(hoisted.check.blocks[0]));
+
+    expect(container.querySelector(".actpanel")).toBeNull();
+    await act(async () => { go!.click(); });
+    expect(container.querySelector(".actpanel")).not.toBeNull();
   });
 
   it("holds the button shut while anything is in the way", async () => {

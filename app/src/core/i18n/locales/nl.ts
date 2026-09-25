@@ -926,6 +926,7 @@ export const nl: Translation = {
     "auto.place.agentOf": "Wie {step} uitvoert",
     "auto.place.modelOf": "Model voor {step}",
     "auto.start": "Start",
+    "auto.launch.see": "Bekijk in het schema",
     "auto.startOne": "Een automatisering starten",
     "auto.pic.empty": "Er is nog niets geplaatst",
     "auto.pic.lap": "Eén taak",

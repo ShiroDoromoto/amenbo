@@ -175,9 +175,30 @@ export function AutomationBuildScreen({
               {/* Each reason names itself, so the sentence comes from the same place the press's
                   refusal writes its own from (`core/i18n`'s `errSentence`) — this list and that one
                   are the same words, and holding them apart is what let them drift. */}
-              {check.blocks.map((block, nth) => (
-                <li key={`${block.code}-${nth}`}>{errSentence(block)}</li>
-              ))}
+              {check.blocks.map((block, nth) => {
+                // A reason about one box opens that box, the way pressing it on the picture does. The
+                // two about the automation as a whole name no box, and stay a line to read.
+                const box = automation?.placements.find(
+                  (one) => String(one.id) === block.fields.placement,
+                );
+                return (
+                  <li key={`${block.code}-${nth}`}>
+                    {box === undefined ? (
+                      errSentence(block)
+                    ) : (
+                      <button
+                        type="button"
+                        className="autolaunch__go"
+                        data-see={t("auto.launch.see")}
+                        title={t("auto.launch.see")}
+                        onClick={() => setShowing({ kind: "box", id: box.id })}
+                      >
+                        {errSentence(block)}
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
           {refused !== null && <div className="autolaunch__refused">{refused}</div>}

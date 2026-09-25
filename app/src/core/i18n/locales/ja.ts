@@ -932,6 +932,7 @@ export const ja: Translation = {
     "auto.place.agentOf": "{step} を誰にやらせるか",
     "auto.place.modelOf": "{step} のモデル",
     "auto.start": "起動する",
+    "auto.launch.see": "図で見る",
     "auto.startOne": "オートメーションを起動する",
     "auto.pic.empty": "まだ何も置かれていません",
     "auto.pic.lap": "1件ぶん",

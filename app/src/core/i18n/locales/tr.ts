@@ -926,6 +926,7 @@ export const tr: Translation = {
     "auto.place.agentOf": "{step} adımını kim yürütür",
     "auto.place.modelOf": "{step} için model",
     "auto.start": "Başlat",
+    "auto.launch.see": "Şemada gör",
     "auto.startOne": "Bir otomasyon başlat",
     "auto.pic.empty": "Henüz bir şey yerleştirilmemiş",
     "auto.pic.lap": "Bir görev",

@@ -927,6 +927,7 @@ export const th: Translation = {
     "auto.place.agentOf": "ใครเป็นผู้ทำ {step}",
     "auto.place.modelOf": "โมเดลของ {step}",
     "auto.start": "เริ่ม",
+    "auto.launch.see": "ดูในแผนภาพ",
     "auto.startOne": "เริ่มออโตเมชัน",
     "auto.pic.empty": "ยังไม่ได้วางอะไรเลย",
     "auto.pic.lap": "หนึ่งงาน",

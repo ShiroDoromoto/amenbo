@@ -1136,6 +1136,7 @@ export const ptBR: Translation = {
     "auto.run.noWayOn": "não restava nada para abrir",
     "auto.run.noInput": "uma entrada obrigatória ficou vazia",
     "auto.run.halted": "uma saída chamou uma pessoa",
+    "auto.run.leftTaskOpen": "tentou seguir sem fechar sua tarefa",
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} em {action}",
     "auto.run.noTask": "Nenhuma tarefa pega ainda",

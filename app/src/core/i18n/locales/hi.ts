@@ -1123,6 +1123,7 @@ export const hi: Translation = {
     "auto.run.noWayOn": "खोलने के लिए कुछ नहीं बचा था",
     "auto.run.noInput": "एक ज़रूरी इनपुट खाली रह गया",
     "auto.run.halted": "एक निकास ने किसी व्यक्ति को बुलाया",
+    "auto.run.leftTaskOpen": "इसने अपना काम बंद किए बिना आगे बढ़ने की कोशिश की",
     "auto.run.step": "चरण {n} · {step}",
     "auto.run.inAction": "{action} का {step}",
     "auto.run.noTask": "अभी तक कोई कार्य नहीं लिया",

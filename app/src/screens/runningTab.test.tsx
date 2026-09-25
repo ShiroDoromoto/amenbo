@@ -171,6 +171,7 @@ describe("the running tab", () => {
       ["no_input", "auto.run.noInput"],
       ["no_way_on", "auto.run.noWayOn"],
       ["halted", "auto.run.halted"],
+      ["left_task_open", "auto.run.leftTaskOpen"],
     ] as const) {
       await render([run({ status: "failed", stoppedReason: reason })]);
       expect(container.querySelector(".autorun__why")?.textContent).toBe(t(key));

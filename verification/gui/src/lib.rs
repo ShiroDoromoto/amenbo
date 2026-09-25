@@ -6768,6 +6768,7 @@ fn run_ending(reason: &str) -> Result<&'static str, String> {
         "no_input" => "a required input had nothing to fill it",
         "no_way_on" => "there was nothing left to open",
         "halted" => "a way out called for a person",
+        "left_task_open" => "it tried to go on without closing its task",
         other => {
             return Err(format!(
                 "`reason` does not know `{other}` — it is one of the reasons a failed run is given"

@@ -1123,6 +1123,7 @@ export const nl: Translation = {
     "auto.run.noWayOn": "er viel niets meer te openen",
     "auto.run.noInput": "een verplichte invoer bleef leeg",
     "auto.run.halted": "een uitgang riep een mens erbij",
+    "auto.run.leftTaskOpen": "hij wilde verder zonder zijn taak te sluiten",
     "auto.run.step": "Stap {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
     "auto.run.noTask": "Nog geen taak opgepakt",

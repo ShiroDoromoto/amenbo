@@ -1368,6 +1368,7 @@ const ui = {
   "auto.run.noWayOn": "there was nothing left to open",
   "auto.run.noInput": "a required input had nothing to fill it",
   "auto.run.halted": "a way out called for a person",
+  "auto.run.leftTaskOpen": "it tried to go on without closing its task",
   "auto.run.step": "Step {n} · {step}",
   "auto.run.inAction": "{step} in {action}",
   "auto.run.noTask": "No task taken yet",

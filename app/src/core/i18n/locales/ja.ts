@@ -1129,6 +1129,7 @@ export const ja: Translation = {
     "auto.run.noWayOn": "開けるステップが無くなった",
     "auto.run.noInput": "必須の入力が埋まらなかった",
     "auto.run.halted": "人を呼ぶ出口で止まった",
+    "auto.run.leftTaskOpen": "タスクを閉じずに次へ進もうとした",
     "auto.run.step": "ステップ {n} · {step}",
     "auto.run.inAction": "{action} の {step}",
     "auto.run.noTask": "まだ取っていません",

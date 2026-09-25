@@ -118,6 +118,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     inputs: [],
     settings: [],
     heldBy: [],
+    placedOn: [],
     ...over,
   };
 }

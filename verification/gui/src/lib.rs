@@ -4279,14 +4279,15 @@ impl Instructor {
             // `open-part`, or a pressed step. A spot on an automation declares nothing (it reads what
             // its action declares), so a road declares after going to the action's own screen.
             //
-            // The three families are one shape on the screen — a row to
+            // The three families are one shape on the screen — a heading whose add opens a row to
             // write a name in, a kind to choose where the family has one, and a press — so the line
             // names the list it is under and what one of them is called, and the rest is the same
-            // sentence three times over.
+            // sentence three times over. What changes one already there is behind the "⋯" at the end
+            // of its row, so the other two lines open that first.
             (Domain::Automation, "declare") => {
                 let (list, one) = declared_family(req(with, "what")?)?;
                 format!(
-                    "In the panel open beside the picture, under {list}, write \"{}\" in the row that declares a new {one}{}, and press the button that adds it.",
+                    "In the panel open beside the picture, press the add on the heading of {list}, write \"{}\" in the row it opens to declare a new {one}{}, and press the button that adds it.",
                     req(with, "name")?,
                     match arg_str(with, "kind") {
                         Some(kind) => format!(", set what it carries to {}", declared_kind(req(with, "what")?, kind)?),
@@ -4331,7 +4332,7 @@ impl Instructor {
                     );
                 }
                 format!(
-                    "In the panel open beside the picture, under {list}, on the {one} \"{}\", {}.",
+                    "In the panel open beside the picture, under {list}, press the \"⋯\" at the end of the {one} \"{}\" to open what changes it, then {}.",
                     req(with, "name")?,
                     listed(&moves)
                 )
@@ -4339,7 +4340,7 @@ impl Instructor {
             (Domain::Automation, "undeclare") => {
                 let (list, one) = declared_family(req(with, "what")?)?;
                 format!(
-                    "In the panel open beside the picture, under {list}, on the {one} \"{}\", press the button that takes it away.",
+                    "In the panel open beside the picture, under {list}, press the \"⋯\" at the end of the {one} \"{}\", then press the button that takes it away.",
                     req(with, "name")?
                 )
             }

@@ -193,6 +193,7 @@ pub fn frozen(version: i64) -> Option<&'static str> {
         71 => include_str!("schema_frozen/v71.sql"),
         72 => include_str!("schema_frozen/v72.sql"),
         73 => include_str!("schema_frozen/v73.sql"),
+        74 => include_str!("schema_frozen/v74.sql"),
         _ => return None,
     })
 }

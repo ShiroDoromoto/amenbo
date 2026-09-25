@@ -53,6 +53,10 @@ use std::process::Command;
 
 use amenbo_scenario::{Args, BoundKind, Domain, Driver, Scenario, Step};
 
+/// The name of the way out every step and every action is born with — core's `DONE_EXIT`, spelled
+/// here because this crate reads the product from outside.
+const DONE_EXIT: &str = "完了";
+
 /// Starting the app under test and holding it — the pid every shot is aimed at comes from here.
 pub mod launch;
 /// The line the run stands on: only a bundle the release workflow produced is launched.
@@ -4368,7 +4372,7 @@ impl Instructor {
             (Domain::Automation, "fill-output") => format!(
                 "In the panel showing the action's output, under {}, set the output \"{}\" to what comes from \"{}\".",
                 match arg_str(with, "exit") {
-                    None => "its only way out".to_string(),
+                    None => format!("the way out \"{DONE_EXIT}\""),
                     Some("*") => "its error way out".to_string(),
                     Some(name) => format!("the way out \"{name}\""),
                 },
@@ -6671,14 +6675,11 @@ fn automation_tab(tab: &str) -> Result<&'static str, String> {
     })
 }
 
-/// The way out a box leaves by, said the way the panel and the picture both say it. The unnamed one
-/// is the one a box with a single way out has, and the error one is the name core fixes; neither is
-/// quoted, having no name a road gave it.
 /// The way out of the action an `exit` line returns to, as its output frame names it — `exit_to` left
-/// out is the unnamed one.
+/// out is the done way out every action is born with.
 fn action_output(with: &Args) -> String {
     match arg_str(with, "exit_to") {
-        None => "that stands for its only way out".to_string(),
+        None => format!("\"{DONE_EXIT}\""),
         Some("*") => "that stands for its error way out".to_string(),
         Some(name) => format!("\"{name}\""),
     }
@@ -6793,9 +6794,11 @@ fn box_named(with: &Args, name_key: &str, builtin_key: &str) -> Result<String, S
     }
 }
 
+/// The way out a box leaves by, said the way the panel and the picture both say it. Left out, it is
+/// the done way out every box is born with; the error one is the name core fixes and is not quoted.
 fn way_out(with: &Args) -> String {
     match arg_str(with, "exit") {
-        None => "its only way out".to_string(),
+        None => format!("its way out \"{DONE_EXIT}\""),
         Some("*") => "its error way out".to_string(),
         Some(name) => format!("its way out \"{name}\""),
     }

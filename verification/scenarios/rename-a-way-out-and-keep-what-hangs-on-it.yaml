@@ -53,7 +53,7 @@ given:
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
   - { type: action, domain: automation, op: wire-add, with: { target: at_take, exit: got one, from_port: note, to: at_work, to_port: note } }
-  # Both of `take`'s ways out go on to `work`. The unnamed one is what keeps `work` on the run's road
+  # Both of `take`'s ways out go on to `work`. The done one is what keeps `work` on the run's road
   # while the named one is being renamed — a placement a run cannot reach is judged for nothing, so the
   # mark this road reads on `work` would go with it.
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_work } }

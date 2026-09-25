@@ -202,8 +202,8 @@ steps_cli:
     op: action-listed
     with: { target: take, steps: 2, used_by: 1, reach: project }
 
-  # The automation's layer. The ways out are the two the action is born with — the unnamed one and
-  # the error one — and the one it declared; the setting answered on this placement reads back as the
+  # The automation's layer. The ways out are the two the action is born with — the done one and the
+  # error one — and the one it declared; the setting answered on this placement reads back as the
   # number that was written, and the one nobody answered reads back as unanswered, which is a state of
   # its own rather than an empty answer.
   - type: assert
@@ -212,7 +212,7 @@ steps_cli:
     with:
       target: auto
       name: SCENARIO SEED — take
-      exits: ["", "*", got one]
+      exits: [完了, "*", got one]
       inputs: [brief]
       settings: { how many: 3, where to work: ~ }
 
@@ -222,7 +222,7 @@ steps_cli:
     with:
       target: auto
       name: SCENARIO SEED — review
-      exits: ["", "*"]
+      exits: [完了, "*"]
       inputs: [note]
       settings: {}
 
@@ -252,7 +252,7 @@ steps_cli:
       target: take
       name: look
       prompt: look for the next task
-      exits: ["", "*", found]
+      exits: [完了, "*", found]
       inputs: [brief]
   - type: assert
     domain: automation
@@ -261,7 +261,7 @@ steps_cli:
       target: take
       name: claim
       prompt: take the task you found
-      exits: ["", "*", got one]
+      exits: [完了, "*", got one]
       inputs: []
   - type: assert
     domain: automation

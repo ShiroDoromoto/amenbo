@@ -1,0 +1,80 @@
+# A run can start by filing a task: the built-in that files one is the entry, and the person starting
+# the run hands it the title, the notes and the classification, since no step before it could. The
+# task is filed and taken the moment the run opens its first step, and from there the run goes on as
+# one that took a task does.
+#
+# The terminal meets the guards the start keeps in front of it. A title is required, an axis the
+# project requires needs a value when where the built-in is placed leaves it open, and a text is
+# turned away — the built-in files from a title, not from a text for an agent to read. Each is refused
+# before any run is made. A run started at a terminal opens no step, so what is read is the run it
+# started.
+id: start-a-run-by-handing-it-the-task-to-file
+title: A run whose entry files a task starts with the title and classification it is handed
+description: >
+  Place the built-in that files a task as an automation's entry, set to take the task it files, then
+  close it. Start it from the terminal handing a title, notes and a value on the axis the project
+  requires, and read the run under way. Start it with no title, with no value on that axis, and with
+  a text, and read each refused.
+given:
+  # The axis the road requires. Values first: an axis offering none cannot be required.
+  - { type: action, domain: dimension, op: create, with: { name: 職種 } }
+  - { type: action, domain: dimension, op: value-add, with: { dimension: 職種, value: エンジニア } }
+
+  # File and take, close.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one handed a task to file" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: make_task }, as: at_make }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_make, exit: 起票して着手した, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_make } }
+
+steps_cli:
+  # Every task has to carry a value on it from here on.
+  - { type: action, domain: dimension, op: required, with: { dimension: 職種, required: true } }
+  - { type: action, domain: automation, op: cfg-set, with: { target: at_make, name: 起票したタスク, choice: "進行中にして、出口「起票して着手した」へ進む" } }
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+      title: the login page loses the password field on a narrow window
+      notes: seen on a phone held upright
+      dim: 職種=エンジニア
+    as: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: running
+
+  # A task cannot be filed without a title.
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+      dim: 職種=エンジニア
+      refused: invalid
+
+  # The project requires the axis, and nothing where the built-in is placed answers it.
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+      title: one with no value on the axis
+      refused: invalid
+
+  # The built-in files from a title; a text is for an agent's step to read.
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+      title: one handed a text as well
+      text: nothing here reads this
+      dim: 職種=エンジニア
+      refused: invalid

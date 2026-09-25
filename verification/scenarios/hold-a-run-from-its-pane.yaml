@@ -1,7 +1,7 @@
 # A reader watching a run is in the pane it is drawn in, and the line over that pane carries the same
 # three controls as the running tab's row: hold the run, pick it up again, stop it. This is the road
-# that presses them there. Stopping from the line keeps the pane — that is what sets it apart from
-# the control that takes the pane away, which stops the run too and asks first.
+# that presses them there. Stopping from the line keeps the pane — the control that takes the pane
+# away cannot be pressed while the run is going or held, so this is the one way to end it from here.
 #
 # The picture is the one hold-a-run-and-let-it-go-again walks, for the reason given there: a hold
 # settles only when a step reports and the run has somewhere to go on to.

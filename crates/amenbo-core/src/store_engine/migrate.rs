@@ -1027,7 +1027,36 @@ pub const STEPS: &[Step] = &[
         name: "give every way out a name, the unnamed one taking the done way out's",
         apply: Apply::Custom(name_the_unnamed_ways_out),
     },
+    Step {
+        to: 75,
+        name: "give an action with steps and no entry the first of its steps as its entry",
+        apply: Apply::Custom(enter_each_action_at_its_first_step),
+    },
 ];
+
+/// v75: an action that has steps has an entry (`AMB-T-5533`).
+///
+/// Adding and deleting a step keep an entry on an action from `AMB-T-5517` on — the first step added
+/// becomes it, and deleting it hands it to the first of the steps left. An action written before that
+/// can still hold steps and no entry, and such an action is refused only at launch. This gives each one
+/// the step the lists show first: the lowest order key, the lower row id where two keys tie, so every
+/// device that runs it on the same rows lands on the same step. An action with no step keeps no entry,
+/// and one with an entry keeps it.
+///
+/// **Nothing is written to the change feed**, as with v74's rewrite of rows: each device runs the step
+/// on its own rows, and a carrier's next whole placement reads the entry off the row.
+fn enter_each_action_at_its_first_step(ctx: &Ctx<'_>) -> Result<()> {
+    ctx.tx.execute_batch(
+        "UPDATE automation_action
+            SET entry_step_id = (SELECT s.id FROM automation_action_step s
+                                  WHERE s.action_id = automation_action.id
+                                  ORDER BY s.order_key, s.id LIMIT 1)
+          WHERE entry_step_id IS NULL
+            AND EXISTS (SELECT 1 FROM automation_action_step s
+                         WHERE s.action_id = automation_action.id);",
+    )?;
+    Ok(())
+}
 
 /// v74: no way out goes without a name (`AMB-T-5516`).
 ///
@@ -9236,6 +9265,40 @@ mod tests {
         let kept = engine.get_meta("talk.layout").unwrap().expect("the arrangement");
         let row: serde_json::Value = serde_json::from_str(&kept).unwrap();
         assert_eq!(row["panes"][0]["size"].as_str(), Some("whole"));
+    }
+
+    /// v75 enters an action with steps and no entry at the first of its steps, by order key and then by
+    /// row id, and leaves alone an action with no step and one that already has an entry.
+    #[test]
+    fn an_action_with_steps_is_entered_at_the_first_of_them() {
+        let dir = scratch("enter-each-action");
+        let engine = store_at(&dir, 74);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO automation_action (id, name) VALUES
+                     (1, 'no entry'), (2, 'tied keys'), (3, 'entered'), (4, 'empty');
+                 INSERT INTO automation_action_step (id, action_id, name, order_key) VALUES
+                     (11, 1, 'second', 'b0'), (12, 1, 'first', 'a0'),
+                     (22, 2, 'later row', 'a0'), (21, 2, 'earlier row', 'a0'),
+                     (31, 3, 'first', 'a0'), (32, 3, 'chosen', 'b0');
+                 UPDATE automation_action SET entry_step_id = 32 WHERE id = 3;",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let entry = |id: i64| -> Option<i64> {
+            engine
+                .conn()
+                .query_row("SELECT entry_step_id FROM automation_action WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(entry(1), Some(12), "the lowest order key");
+        assert_eq!(entry(2), Some(21), "the lower row id where the keys tie");
+        assert_eq!(entry(3), Some(32), "an entry already chosen is kept");
+        assert_eq!(entry(4), None, "an action with no step has nothing to enter at");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// v74 gives every unnamed way out the done way out's name — on the rows and in a run's copies — and

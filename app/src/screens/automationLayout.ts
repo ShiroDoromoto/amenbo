@@ -56,6 +56,9 @@ export type PicBox = {
   global?: boolean;
   /** The built-in the action standing on this box is, by its key — said in place of the library. */
   builtin?: string;
+  /** Who carries out each step of the action standing here — one per step it holds. Absent on an
+   *  action's picture; on an automation's, none at all is an action with nothing in it yet. */
+  steps?: readonly unknown[];
 };
 
 /** One picture, whichever of the two it is: the boxes, the lines, and the box a run opens first. */
@@ -189,6 +192,8 @@ export type PicNode = {
   global?: boolean;
   /** The built-in standing here, by its key (`PicBox`). */
   builtin?: string;
+  /** The action standing here has nothing in it yet, so a run cannot be started on it. */
+  empty?: boolean;
 };
 
 /** The dashed outline around the boxes one task is worked by. */
@@ -646,6 +651,7 @@ export function layOut(graph: PicGraph | null): Picture {
           takes: takesTask(box),
           global: box.global,
           builtin: box.builtin,
+          empty: box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
           unfed: !live.has(boxId)
             ? []
             : box.inputs

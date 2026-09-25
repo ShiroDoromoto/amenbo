@@ -10,6 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NamedBy } from "../talk/frames";
 import type { PaneEvents } from "../talk/terminal";
+import { t } from "../core/i18n";
 import { TerminalPane } from "./TerminalPane";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -66,14 +67,18 @@ afterEach(() => {
   container.remove();
 });
 
-/** A pane on frame 1, called whatever `names` says. */
-async function pane(names: Map<string, string> = new Map()): Promise<void> {
+/** A pane on frame 1, called whatever `names` says — a run's where `run` is given. */
+async function pane(
+  names: Map<string, string> = new Map(),
+  run: Parameters<typeof TerminalPane>[0]["run"] = null,
+): Promise<void> {
   await act(async () => {
     root.render(createElement(TerminalPane, {
       frame: "1",
       hue: 199,
       project: 3,
       names,
+      run,
       start: { cwd: "/work/here" },
       autoStart: true,
       focused: true,
@@ -148,6 +153,19 @@ describe("naming a pane", () => {
     });
 
     expect(more(), "an empty frame offered a name it has nowhere to keep").toBeNull();
+  });
+
+  it("offers no name on a run's pane, whose row is headed with the automation", async () => {
+    // A name given there would be kept against the place and never drawn (`AMB-T-5529`).
+    await pane(new Map(), {
+      automation: "家計簿の開発ループ", run: 7, step: "取る", action: null, task: null, state: null,
+    });
+    await opened();
+
+    await act(async () => { more()?.click(); });
+    const items = [...document.querySelectorAll<HTMLButtonElement>(".menu__item")].map((b) => b.textContent);
+    expect(items.length, "the menu did not open").toBeGreaterThan(0);
+    expect(items.some((one) => one?.includes(t("face.rename")))).toBe(false);
   });
 
   it("puts the box in the line's place, with the name as it stands ready to type over", async () => {

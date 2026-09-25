@@ -1375,6 +1375,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__swatch--branch { border-top-color: var(--c-heed); }
 .autopic__swatch--error { border-top-color: var(--c-stop); }
 .autopic__swatch--wire { border-top-color: var(--c-text-faint); border-top-style: dotted; }
+.autopic__swatch--leaves { border-top-color: var(--c-accent); }
+/* The span of one task: a small dashed outline, as the picture draws it round the boxes. */
+.autopic__swatch--lap { width: 14px; height: 10px; border: 1px dashed var(--c-rule); border-radius: 3px; }
 /* One placement. A button because that is what it is: pressing it is what puts the spot's contents in
    the panel beside the picture. */
 .autopic__node {
@@ -1386,9 +1389,13 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autopic__node:disabled { cursor: default; }
 .autopic__node:enabled:hover { background: var(--c-hover); }
-/* A required input nothing reaches. The border is the box saying it, and the line under the name
-   says which input — a mark on its own would send the reader to the panel to find out. */
-.autopic__node--unfed { border-color: var(--c-stop); }
+/* A required input nothing reaches. The border is the box saying it, and the "⚠ n" beside the name
+   how many; which ones is said on hover and in the panel, so the line under the name keeps saying
+   where the action comes from. */
+.autopic__node--unfed { border-color: var(--c-heed); }
+/* An action with nothing in it yet: dashed in the heed colour, with the "empty" mark beside the name. */
+.autopic__node--empty { border-color: var(--c-heed); border-style: dashed; }
+.autopic__emptymark { flex: none; font-size: var(--fs-xs); color: var(--c-heed); }
 .autopic__node--on { background: var(--c-accent-faint); border-color: var(--c-accent); }
 /* Two lines: the number and the name, and under them where the action comes from — or what it is
    missing, which takes that line's place. */
@@ -1415,11 +1422,9 @@ button.feed__target:hover { color: var(--c-accent); }
   border-radius: var(--r-sm); padding: 0 var(--s-1); font-size: var(--fs-xs);
 }
 .autopic__unfed {
-  display: flex; align-items: center; gap: var(--s-1);
-  font-size: var(--fs-xs); color: var(--c-stop); min-width: 0;
+  flex: none; display: inline-flex; align-items: center; gap: 2px;
+  font-size: var(--fs-xs); color: var(--c-heed); font-variant-numeric: tabular-nums;
 }
-.autopic__unfed .icon { flex: none; }
-.autopic__unfed > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Put an action in on this line. It sits on the line's first leg, under the box it leaves. */
 .autopic__plus {
   position: absolute; transform: translate(-50%, -50%);
@@ -1526,10 +1531,6 @@ button.feed__target:hover { color: var(--c-accent); }
 /* A fact the panel states rather than takes: which task the step is about, and what a declaration
    holds where it holds nothing. */
 .autostep__said { font-size: var(--fs-md); color: var(--c-text-muted); }
-/* What a control does beyond taking a value — that switching where the prompt comes from moves the
-   declarations, that a prompt from the library is read here and written in the actions tab. It sits
-   under its control because it is read on the way back from the press, not on the way to it. */
-.autostep__note { font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autostep__prompt { width: 100%; }
 /* One setting: the name it was declared under, then the control its kind takes. */
 .autostep__cfg { display: flex; flex-direction: column; gap: var(--s-1); padding-block: var(--s-1); }
@@ -1563,8 +1564,6 @@ button.feed__target:hover { color: var(--c-accent); }
    step that says nothing about it stops the run and calls a person, which is already the answer. */
 .autostep__exiterr { color: var(--c-text-muted); }
 .autostep__check { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); }
-/* What a tick box leaves undone, in small words right under it. */
-.autostep__note { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* A button that adds a row to the field it is in takes its own width. The field is a column, so
    without this it would stretch the width of the panel and read as the field itself. */
 .autostep__field > .btn { align-self: flex-start; }
@@ -1600,14 +1599,6 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The count stands in the row of the select it caps, so it takes that select's height: with the
    form padding of every input it came out nearly twice as tall as the select beside it. */
 .autostep__limit input { width: 6rem; height: var(--tap-min); padding-block: 0; }
-.autostep__exitname { font-size: var(--fs-md); }
-.autostep__out {
-  display: inline-flex; align-items: baseline; gap: var(--s-1);
-  background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-sm);
-  padding: 0 var(--s-1); font-size: var(--fs-xs);
-}
-.autostep__outkind { color: var(--c-text-muted); }
-.autostep__outadd { padding: 0 var(--s-1); font-size: var(--fs-xs); }
 /* One section of the spot's panel: a small title over what it holds. A setting's title is its own
    name, with the "required" mark beside it. */
 .autostep__sec { display: flex; flex-direction: column; gap: var(--s-2); }
@@ -1658,6 +1649,92 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 .autostep__decl, .autostep__declare { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
 .autostep__declare { padding-block: var(--s-1); }
 .autostep__declname { flex: 1 1 8rem; min-width: 0; }
+
+/* ── The parts the action's panels are drawn with (`../screens/automationDeclParts`) ──
+   What each part is, is said by its shape rather than by a sentence under it (`AMB-T-5522`). */
+/* A part of a panel under its heading. The heading's "＋ add" stands at its far end, so the row it
+   opens lands under the heading it was pressed on. */
+.autosec { display: flex; flex-direction: column; gap: var(--s-2); }
+.autosec__head {
+  display: flex; align-items: center; gap: var(--s-2);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-muted);
+}
+.autosec__add {
+  margin-inline-start: auto; border: 0; background: none; padding: 0; cursor: pointer;
+  font: inherit; font-weight: normal; color: var(--c-accent-text);
+}
+/* An on/off, its label first and the switch at the far end. Framed where it stands apart — the entry,
+   which the picture marks on one box alone. */
+.autoswitch {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  font-size: var(--fs-md); cursor: pointer;
+}
+.autoswitch--box {
+  padding: var(--s-2) var(--s-3); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-rule);
+}
+.autoswitch__track { position: relative; flex: none; width: 34px; height: 20px; }
+.autoswitch__track input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.autoswitch__track i {
+  position: absolute; inset: 0; border-radius: 999px; background: var(--c-edge); pointer-events: none;
+  transition: background 0.15s;
+}
+.autoswitch__track i::after {
+  content: ""; position: absolute; inset-block-start: 2px; inset-inline-start: 2px;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--c-surface-pic) var(--c-surface);
+  transition: transform 0.15s;
+}
+.autoswitch__track input:checked + i { background: var(--c-accent); }
+.autoswitch__track input:checked + i::after { transform: translateX(14px); }
+.autoswitch__track input:focus-visible + i { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+/* On and held: the entry stays where it is until another step takes it. */
+.autoswitch__track input:disabled { cursor: default; }
+/* One declared row: what is read, and the "⋯" at its far end that opens what changes it. */
+.autodecl { display: flex; flex-direction: column; gap: var(--s-1); }
+.autodecl__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+.autodecl__row > select { flex: 1 1 8rem; min-width: 0; }
+.autodecl__chip { display: inline-flex; align-items: center; gap: var(--s-1); }
+.autodecl__req { font-size: var(--fs-xs); color: var(--c-heed); white-space: nowrap; }
+.autodecl__more {
+  margin-inline-start: auto; border: 0; background: none; padding: 0 var(--s-1); cursor: pointer;
+  font: inherit; color: var(--c-text-faint);
+}
+.autodecl__more:hover, .autodecl__more[aria-expanded="true"] { color: var(--c-text); }
+.autodecl__plus {
+  border: 0; background: none; padding: 0 var(--s-1); cursor: pointer;
+  font: inherit; font-size: var(--fs-xs); color: var(--c-accent-text);
+}
+/* Where a setting's answer would be — empty and dashed, because it is written where the action is placed. */
+.autodecl__slot {
+  font-size: var(--fs-xs); color: var(--c-text-faint); white-space: nowrap;
+  padding: 1px var(--s-2); border-radius: var(--r-sm);
+  border: var(--border-w) dashed var(--c-edge);
+}
+/* A way out is a card, so that its mark, what it hands on and where the run goes next read as one. */
+.autoexit {
+  padding: var(--s-2); border-radius: var(--r-md);
+  border: var(--border-w) var(--border-style) var(--c-rule);
+}
+.autoexit--error { border-style: dashed; border-color: color-mix(in srgb, var(--c-stop) 50%, transparent); }
+.autoexit .autostep__next { padding-inline-start: 0; }
+/* What a step is handed, as toggles: pressed is handed. */
+.autogive { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+.autogive__tog {
+  font: inherit; font-size: var(--fs-xs); cursor: pointer; padding: 3px var(--s-2);
+  border-radius: var(--r-sm); border: var(--border-w) var(--border-style) var(--c-edge);
+  background: none; color: var(--c-text-muted);
+}
+.autogive__tog--on { border-color: var(--c-accent); color: var(--c-accent-text); background: var(--c-accent-weak); }
+/* A word and its control side by side — the working folder, the reach. */
+.autostep__pair { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: center; gap: var(--s-2); }
+/* The automations an action is placed on, by name; a press goes to one. */
+.actplaced { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+.actplaced__one {
+  font: inherit; font-size: var(--fs-xs); padding: 2px var(--s-2); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-rule); background: none; color: var(--c-text);
+}
+.actplaced__one--go { cursor: pointer; }
+.actplaced__one--go:hover { border-color: var(--c-accent); }
 
 /* ── The library of actions (`../screens/AutomationActionsTab`) ── */
 /* A place is named by a small caps word over it, the way the build screen names its three. */
@@ -1822,6 +1899,9 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 /* The picture stands in the middle of the place it is drawn in, as the mock has it; a picture wider
    than the place scrolls from its left edge as before. */
 .actbuild__canvas .autopic__sheet { margin-inline: auto; }
+/* An empty picture draws nothing, and the "+ first …" is all the place holds: it stands in the middle,
+   with room above and below where the picture would be. */
+.actbuild__canvas > .btn:only-child { margin-block: var(--s-6); }
 /* The panel fills the right pane (`.rightpane`), which holds the border, the ground and the one scroll.
    The head stays at the top of that scroll, so the close is in reach under a long body. */
 .actpanel { display: flex; flex-direction: column; min-width: 0; }
@@ -1831,6 +1911,14 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
   background: var(--c-surface-pic) var(--c-surface);
 }
 .actpanel__title { font-size: var(--fs-md); font-weight: var(--fw-bold); overflow-wrap: anywhere; }
+/* The head as the box the name is typed in: read as the title, and underlined only where it is being
+   pointed at or typed in. */
+.actpanel__titlein {
+  flex: 1 1 auto; min-width: 0; padding: 0; background: none; color: var(--c-text);
+  font: inherit; font-size: var(--fs-md); font-weight: var(--fw-bold);
+  border: 0; border-block-end: var(--border-w) dashed transparent; border-radius: 0;
+}
+.actpanel__titlein:hover:not(:read-only), .actpanel__titlein:focus { border-block-end-color: var(--c-edge); outline: none; }
 .actpanel__close {
   margin-inline-start: auto; border: 0; background: none; color: var(--c-text-muted); cursor: pointer; padding: 0;
 }
@@ -1908,6 +1996,13 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
   font-size: var(--fs-md); color: var(--c-stop);
 }
 .autolaunch__blocks > li::before { content: "● "; font-size: var(--fs-xs); }
+/* A reason about one box: the sentence is the press that opens that box, and says so after it. */
+.autolaunch__go {
+  padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: start;
+  cursor: pointer;
+}
+.autolaunch__go::after { content: " → " attr(data-see); color: var(--c-accent-text); }
+.autolaunch__go:hover, .autolaunch__go:focus-visible { text-decoration: underline; }
 .autolaunch__refused { font-size: var(--fs-md); color: var(--c-stop); }
 
 /* The list of definitions: one bordered stack of rows, each the press that opens one. */

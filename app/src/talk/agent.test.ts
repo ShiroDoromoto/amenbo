@@ -377,30 +377,26 @@ describe("a frame opened for a step of an automation run", () => {
 
   it("starts nothing where the step's terminal ended before the frame was drawn", async () => {
     // The step was carried out once, while nobody was looking. Starting a terminal here would be the
-    // frame asking for an agent the step never asked for.
+    // frame asking for an agent the step never asked for — and there is no row offering to either
+    // (`AMB-T-5529`): the pane says how the run went, and is taken away when the reader is done.
     const root = await stepFrame(false);
 
     expect(hoisted.panes).toEqual([]);
-    // And the row's press is a person asking for a terminal like any other.
-    buttons(root).find((b) => b.textContent === "Open")?.click();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(hoisted.panes).toHaveLength(1);
-    expect(hoisted.panes[0]!.fresh).toBe(true);
+    expect(buttons(root).map((b) => b.textContent)).not.toContain("Open");
+    expect(root.querySelector("select"), "the frame offered something to open").toBeNull();
   });
 
-  it("opens what a person asks for after it on a session of its own", async () => {
-    // A row pressed after the step's own terminal ended is a person asking for a terminal, not the
-    // step being carried out again — and the place is still the run's.
+  it("puts up no row to open something else once the step's terminal ends", async () => {
+    // A terminal opened in the run's place would run under the run's header, which would go on naming
+    // it as the run's step.
     const root = await stepFrame(true);
     hoisted.running = [];
     hoisted.end?.();
-    buttons(root).find((b) => b.textContent === "Open")?.click();
     await new Promise((r) => setTimeout(r, 0));
 
-    const again = hoisted.panes[hoisted.panes.length - 1]!;
-    expect(hoisted.panes.length, "a second terminal was started").toBeGreaterThan(1);
-    expect(again.session ?? null, "the step's terminal was taken up again").toBe(null);
-    expect(again.fresh).toBe(true);
+    expect(buttons(root).map((b) => b.textContent)).not.toContain("Open");
+    expect(root.querySelector("select"), "the frame offered something to open").toBeNull();
+    expect(hoisted.panes).toHaveLength(1);
   });
 });
 

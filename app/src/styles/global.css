@@ -2894,8 +2894,10 @@ body.dragging-row { user-select: none; }
   color: var(--c-on-ai);
 }
 /* Spelled out for the reason `.plate[hidden]` is: the run's parts are drawn on the same row as an
-   ordinary pane's name, and are away there. */
-.plate__auto[hidden], .plate__no[hidden], .plate__into[hidden], .plate__step[hidden] { display: none; }
+   ordinary pane's name, and are away there. The built-in's chip is one of them twice over: it wears
+   `.actscope`'s `display`, and without this it was drawn on every step of a run (`AMB-T-5589`). */
+.plate__auto[hidden], .plate__no[hidden], .plate__into[hidden], .plate__step[hidden],
+.plate__builtin[hidden] { display: none; }
 
 /* **A run's pane is drawn in the run's colour** (`AMB-T-5428`): the frame is edged in it and the
    header is laid on its wash, so a run's pane is told from a person's at a glance across the page —

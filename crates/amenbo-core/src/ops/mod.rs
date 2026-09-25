@@ -379,6 +379,26 @@ pub(crate) mod test_support {
     }
 
     /// Create one inbox task (no project) and return its id.
+    /// **Close the task, then end the run**, after one way out of a placement: the built-in that closes
+    /// it placed on the automation, the line to it, and the line from it to the end. A run does not end
+    /// with the task it took still in progress (`AMB-D-967`), so this is what an automation that ends
+    /// after its work draws.
+    pub(crate) fn mk_closed_after(
+        tx: &WriteTx<'_>,
+        automation: &crate::model::Automation,
+        from: i64,
+        exit: Option<&str>,
+    ) -> crate::model::AutomationPlacement {
+        use crate::model::AutomationPictureOwner;
+        use crate::ops::automation::{edge_add, placement_add, EdgeTarget};
+        let close = crate::ops::automation_builtin::action(tx, "close_task").expect("the built-in's action");
+        let close = placement_add(tx, automation.id, close.id).expect("place it");
+        let on = AutomationPictureOwner::Automation;
+        edge_add(tx, on, from, exit, EdgeTarget::Go(close.id), None).expect("on to the close");
+        edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("and the end");
+        close
+    }
+
     pub(crate) fn mk_task(tx: &WriteTx<'_>, title: &str) -> i64 {
         mk_task_in(tx, title, None)
     }

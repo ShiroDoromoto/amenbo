@@ -399,6 +399,12 @@ pub enum ErrorCode {
     NotReadyAutomationAgentUnchosen,
     NotReadyAutomationAgentMissing,
     NotReadyAutomationModelMissing,
+    // A line that leaves the task a run took open (`AMB-D-967`) — on to another task, or to the run's
+    // end — each with the unnamed way out as a sentence of its own, as the open way out has.
+    NotReadyAutomationTaskLeftOpen,
+    NotReadyAutomationTaskLeftOpenUnnamed,
+    NotReadyAutomationTaskLeftOpenAtEnd,
+    NotReadyAutomationTaskLeftOpenAtEndUnnamed,
 }
 
 impl ErrorCode {
@@ -484,6 +490,12 @@ impl ErrorCode {
             ErrorCode::NotReadyAutomationAgentUnchosen => "not_ready_automation_agent_unchosen",
             ErrorCode::NotReadyAutomationAgentMissing => "not_ready_automation_agent_missing",
             ErrorCode::NotReadyAutomationModelMissing => "not_ready_automation_model_missing",
+            ErrorCode::NotReadyAutomationTaskLeftOpen => "not_ready_automation_task_left_open",
+            ErrorCode::NotReadyAutomationTaskLeftOpenUnnamed => "not_ready_automation_task_left_open_unnamed",
+            ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd => "not_ready_automation_task_left_open_at_end",
+            ErrorCode::NotReadyAutomationTaskLeftOpenAtEndUnnamed => {
+                "not_ready_automation_task_left_open_at_end_unnamed"
+            }
         }
     }
 
@@ -566,6 +578,10 @@ impl ErrorCode {
         ErrorCode::NotReadyAutomationAgentUnchosen,
         ErrorCode::NotReadyAutomationAgentMissing,
         ErrorCode::NotReadyAutomationModelMissing,
+        ErrorCode::NotReadyAutomationTaskLeftOpen,
+        ErrorCode::NotReadyAutomationTaskLeftOpenUnnamed,
+        ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
+        ErrorCode::NotReadyAutomationTaskLeftOpenAtEndUnnamed,
     ];
 }
 
@@ -779,6 +795,10 @@ mod tests {
             "not_ready_automation_agent_unchosen",
             "not_ready_automation_agent_missing",
             "not_ready_automation_model_missing",
+            "not_ready_automation_task_left_open",
+            "not_ready_automation_task_left_open_unnamed",
+            "not_ready_automation_task_left_open_at_end",
+            "not_ready_automation_task_left_open_at_end_unnamed",
         ]
         .into_iter()
         .collect();

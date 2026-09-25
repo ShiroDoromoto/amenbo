@@ -187,7 +187,7 @@ mod tests {
         let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
         automation::edge_add(tx, on, spot.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
         automation::edge_add(tx, on, spot.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
-        automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("closes");
+        crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
         let automation = automation::set_entry(tx, automation.id, Some(spot.id)).expect("entry");
         (automation, spot)
     }
@@ -319,7 +319,7 @@ mod tests {
         let on = AutomationPictureOwner::Automation;
         let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
         automation::edge_add(tx, on, spot.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
-        automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("closes");
+        crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
         automation::cfg_set(tx, spot.id, WHEN_NONE, Some(&format!("\"{WAIT}\""))).expect("wait");
         automation::set_entry(tx, automation.id, Some(spot.id)).expect("entry")
     }

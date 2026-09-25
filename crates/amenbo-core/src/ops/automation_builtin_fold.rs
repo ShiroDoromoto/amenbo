@@ -66,7 +66,7 @@ mod tests {
     use crate::ops::automation_builtin_cut::fixture::{bind, git, repositories};
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::automation_report::Next;
-    use crate::ops::automation_run::{launch, nothing_asked, Launcher};
+    use crate::ops::automation_run::{launch_leaving_the_task_open as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::{open, Opened};
     use crate::ops::test_support::{mk_project, mk_task_in, way_out, with_tx};
     use crate::store_engine::WriteTx;

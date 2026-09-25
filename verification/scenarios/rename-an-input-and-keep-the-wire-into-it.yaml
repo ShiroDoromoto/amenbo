@@ -49,6 +49,7 @@ given:
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
   - { type: action, domain: automation, op: wire-add, with: { target: at_take, exit: got one, from_port: note, to: at_work, to_port: note } }
   # Both of `take`'s ways out go on to `work`. The unnamed one is what keeps `work` on the run's road
@@ -56,7 +57,8 @@ given:
   # mark this road reads on `work` would go with it.
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_work } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_work } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:

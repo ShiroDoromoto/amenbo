@@ -511,7 +511,7 @@ mod tests {
 
     use crate::model::{ActorKind, Automation, AutomationPlacement, AutomationRunStatus, AutomationStep};
     use crate::ops::automation::NewAutomation;
-    use crate::ops::automation_run::{check, launch, nothing_asked, Launcher};
+    use crate::ops::automation_run::{check, launch_leaving_the_task_open as launch, nothing_asked, Launcher, Unmet};
     use crate::ops::automation_step::{open, Opened};
     use crate::ops::test_support::{mk_out, mk_placed, mk_project, mk_task_in, with_tx};
 
@@ -719,7 +719,9 @@ mod tests {
             let p = picture(tx, "test_stamp");
             let startable = vec!["claude".to_string()];
             let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
-            assert!(unmet.is_empty(), "nobody chosen for the built-in is not a gap: {unmet:?}");
+            // The picture ends with the task open, which is its own reason and not the one asked here.
+            let gaps: Vec<_> = unmet.iter().filter(|u| !matches!(u, Unmet::LeavesTaskOpen { .. })).collect();
+            assert!(gaps.is_empty(), "nobody chosen for the built-in is not a gap: {gaps:?}");
 
             automation::cfg_set(tx, p.builtin.id, "stamp", Some("\"seen\"")).expect("answer");
             let run = launched(tx, &p.automation);

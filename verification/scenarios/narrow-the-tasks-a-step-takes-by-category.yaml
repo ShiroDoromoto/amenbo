@@ -1,0 +1,58 @@
+# A task filter narrows the tasks a step may take by more than one category at once: one value on
+# each of two axes, both of which a task has to carry. The answer is written with `--dim` once per
+# value, and the step's task list reads each as a `dim:` token of its own — joined into one, a value
+# holding a comma would be read whole and name nothing, and the run would fall over at the list.
+#
+# The expression the step is handed is held by core's own tests (`amenbo_core::ops::automation_step`);
+# what a road can read is the answer, and the refusal of a value that is not there. That refusal comes
+# where the answer is written, not where a run later reads it.
+id: narrow-the-tasks-a-step-takes-by-category
+title: A task filter is answered with a value on each of two categories, and a value that is not there is refused
+description: >
+  Stand up an automation whose one placement takes a task through a task filter, and two categories
+  with a value each. From a terminal the filter is answered with one value on each category and read
+  back whole. Answering it with a value the category does not hold is refused on the spot, and the
+  answer already written stays as it was.
+given:
+  - { type: action, domain: dimension, op: create, with: { name: theme } }
+  - { type: action, domain: dimension, op: value-add, with: { dimension: theme, value: main } }
+  - { type: action, domain: dimension, op: create, with: { name: stage } }
+  - { type: action, domain: dimension, op: value-add, with: { dimension: stage, value: second } }
+
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: cfg-add, with: { action: take, name: which, kind: taskfilter, required: true } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — tasks by category" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+
+steps_cli:
+  # One value on each of two categories.
+  - type: action
+    domain: automation
+    op: cfg-set
+    with: { target: at_take, name: which, status: todo, dim: ["theme=main", "stage=second"] }
+
+  - type: assert
+    domain: automation
+    op: placement-read
+    with:
+      target: auto
+      name: take
+      settings: { which: { status: [todo], dim: ["theme=main", "stage=second"] } }
+
+  # A value the category does not hold is refused where it is written.
+  - type: action
+    domain: automation
+    op: cfg-set
+    with: { target: at_take, name: which, status: todo, dim: ["theme=main", "stage=third"], refused: not_found_dimension_value }
+
+  # The answer already written is left as it was.
+  - type: assert
+    domain: automation
+    op: placement-read
+    with:
+      target: auto
+      name: take
+      settings: { which: { status: [todo], dim: ["theme=main", "stage=second"] } }

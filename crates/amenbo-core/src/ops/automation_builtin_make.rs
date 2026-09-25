@@ -14,6 +14,13 @@
 //! urgent it is, the decisions it is linked to and the folder it is worked in. A task that is not to be picked up yet says so by
 //! those, never by `blocked` — that is for a task nobody can move (`AMB-D-966`).
 //!
+//! **What only reading the task can decide is the step before it's to choose** — a classification like
+//! the trade that is to work it. Where it is placed says which axes that step may choose on
+//! ([`AI_AXES`]), the step hands its choice in ([`CHOSEN`]), and a value off those axes is refused, the
+//! way a way out nobody declared is. Everything else the task is filed with is fixed where it is
+//! placed, and the step before it cannot change it: an axis already answered in [`CLASSIFY`] is not
+//! one it may choose on.
+//!
 //! **Its creation is finished here.** A task left being created is one nobody can reserve.
 //!
 //! **A setting it cannot follow files nothing.** A built-in that falls over leaves by the error way out
@@ -41,6 +48,9 @@ pub const TASK: &str = "タスク";
 pub const TITLE: &str = "タイトル";
 /// The input the task's notes are handed in through.
 pub const NOTES: &str = "本文";
+/// The input the step before it hands its choice of classification in through: one `axis=value` a
+/// line, each on an axis [`AI_AXES`] names.
+pub const CHOSEN: &str = "選んだ分類";
 /// The setting that says whether it takes the task it filed.
 pub const WHAT_THEN: &str = "起票したタスク";
 /// The choice on [`WHAT_THEN`] that leaves the task not started — also what it does left unanswered.
@@ -53,6 +63,9 @@ pub const DEPENDS_ON: &str = "依存させる相手";
 pub const THE_RUNS_TASK: &str = "この run が扱っているタスク";
 /// The setting that classifies it: one `axis=value` a line.
 pub const CLASSIFY: &str = "分類";
+/// The setting that names the axes the step before it chooses a value on: one axis a line. The step
+/// is shown their open values ([`choosable`]).
+pub const AI_AXES: &str = "AI に選ばせる軸";
 /// The setting that names tasks for it to depend on, one a line.
 pub const DEPENDS_ON_TASKS: &str = "依存させる既存のタスク";
 /// The setting that names decisions to link it to, one a line.
@@ -90,6 +103,7 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
         },
         BuiltinSetting { name: DEPENDS_ON_TASKS, kind: AutomationCfgKind::Text, required: false, options: None },
         BuiltinSetting { name: CLASSIFY, kind: AutomationCfgKind::Text, required: false, options: None },
+        BuiltinSetting { name: AI_AXES, kind: AutomationCfgKind::Text, required: false, options: None },
         BuiltinSetting {
             name: ASSIGNEE,
             kind: AutomationCfgKind::Choice,
@@ -108,6 +122,7 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
     ins: &[
         BuiltinPort { name: TITLE, kind: AutomationPortKind::Value, required: true },
         BuiltinPort { name: NOTES, kind: AutomationPortKind::Value, required: false },
+        BuiltinPort { name: CHOSEN, kind: AutomationPortKind::Value, required: false },
     ],
     exits: &[
         BuiltinExit {
@@ -135,7 +150,8 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     depends_on.extend(named(carry, DEPENDS_ON_TASKS, TypedKind::Task)?);
     let decisions = named(carry, DECISIONS, TypedKind::Decision)?;
     let at_binding_id = folder(carry)?;
-    let values = classification(carry)?;
+    let mut values = classification(carry)?;
+    values.extend(chosen(carry, &values)?);
     refusal(carry, &values, if takes { &depends_on } else { &[] })?;
     let assignee = match choice(carry, ASSIGNEE)?.as_deref() {
         Some(HUMAN) => Some(ActorKind::Human),
@@ -327,6 +343,90 @@ fn classification(carry: &Carry<'_, '_>) -> Result<Vec<(i64, i64)>> {
     Ok(values)
 }
 
+/// **The axes [`AI_AXES`] names**, each looked up among the project's axes the way [`CLASSIFY`]'s are,
+/// in the order they are written. An axis that is not there is refused rather than skipped: the step
+/// before it was shown nothing to choose on it, and a task filed without it is one the filters pass over.
+pub(crate) fn ai_axes(conn: &rusqlite::Connection, project_id: i64, written: &str) -> Result<Vec<i64>> {
+    let mut axes = Vec::new();
+    for axis in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let id = crate::ops::pick_id(read::resolve_dimension_in(conn, Some(project_id), axis)?, axis, || {
+            crate::ops::dimension::NOUN.not_found(axis)
+        })?;
+        if !axes.contains(&id) {
+            axes.push(id);
+        }
+    }
+    Ok(axes)
+}
+
+/// **The values the step before it chose** ([`CHOSEN`]), as (axis, value), refused where they step off
+/// what it was offered: an axis [`AI_AXES`] does not name, an axis already fixed where the built-in is
+/// placed (`fixed`), a value that axis does not have, and more than one value on one axis — it was
+/// asked to choose one.
+fn chosen(carry: &Carry<'_, '_>, fixed: &[(i64, i64)]) -> Result<Vec<(i64, i64)>> {
+    let Some(written) = carry.input(CHOSEN).filter(|w| !w.trim().is_empty()) else {
+        return Ok(Vec::new());
+    };
+    let conn = carry.tx.conn();
+    let offered = match choice(carry, AI_AXES)? {
+        Some(axes) => ai_axes(conn, carry.run.project_id, &axes)?,
+        None => Vec::new(),
+    };
+    let mut values: Vec<(i64, i64)> = Vec::new();
+    for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let Some((axis, value)) = line.split_once('=') else {
+            return Err(Error::invalid(format!("'{CHOSEN}' reads one `axis=value` a line, and '{line}' is not one")));
+        };
+        let (axis, value) = (axis.trim(), value.trim());
+        let axis_id = read::resolve_dimension_in(conn, Some(carry.run.project_id), axis)?
+            .into_iter()
+            .find(|id| offered.contains(id))
+            .ok_or_else(|| {
+                Error::invalid(format!("'{CHOSEN}' names the axis '{axis}', which '{AI_AXES}' does not offer"))
+            })?;
+        if fixed.iter().any(|(on, _)| *on == axis_id) {
+            return Err(Error::invalid(format!(
+                "'{CHOSEN}' names the axis '{axis}', which '{CLASSIFY}' already fixes where this is placed"
+            )));
+        }
+        if values.iter().any(|(on, _)| *on == axis_id) {
+            return Err(Error::invalid(format!("'{CHOSEN}' names more than one value on the axis '{axis}'")));
+        }
+        let value_id = crate::ops::pick_id(read::resolve_dimension_value_in(conn, axis_id, value)?, value, || {
+            crate::ops::dimension::VALUE_NOUN.not_found(format!("{axis}={value}"))
+        })?;
+        values.push((axis_id, value_id));
+    }
+    Ok(values)
+}
+
+/// **What the step before it may choose**, as the lines its prompt shows: for each axis [`AI_AXES`]
+/// names, the axis and its open values in the order the axis lists them. `written` is that setting's
+/// answer as it is kept (JSON). An axis that cannot be found is left out here — the built-in refuses it
+/// when it is carried out, and a prompt is no place to fail.
+pub(crate) fn choosable(conn: &rusqlite::Connection, project_id: i64, written: &str) -> Result<Vec<String>> {
+    let Ok(written) = serde_json::from_str::<String>(written) else {
+        return Ok(Vec::new());
+    };
+    let mut lines = Vec::new();
+    for axis in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let Ok(axes) = ai_axes(conn, project_id, axis) else { continue };
+        for axis_id in axes {
+            let Some(dimension) = read::dimension(conn, axis_id)? else { continue };
+            let mut values = Vec::new();
+            for id in read::open_dimension_value_ids(conn, axis_id)? {
+                if let Some(value) = read::dimension_value(conn, id)? {
+                    values.push(value);
+                }
+            }
+            values.sort_by(|a, b| a.order_key.cmp(&b.order_key).then(a.id.cmp(&b.id)));
+            let names: Vec<String> = values.into_iter().map(|v| v.name).collect();
+            lines.push(format!("{}: {}", dimension.name, names.join(", ")));
+        }
+    }
+    Ok(lines)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -364,11 +464,13 @@ mod tests {
         mk_out(tx, &first_action, Some("found"), "task", AutomationPortKind::TaskTake, true);
         mk_out(tx, &first_action, Some("found"), "title", AutomationPortKind::Value, true);
         mk_out(tx, &first_action, Some("found"), "notes", AutomationPortKind::Value, true);
+        mk_out(tx, &first_action, Some("found"), "trade", AutomationPortKind::Value, false);
         let written = action(tx, "make_task").expect("the built-in's action");
         let make = automation::placement_add(tx, automation.id, written.id).expect("place it");
         let on = AutomationPictureOwner::Automation;
         automation::wire_add(tx, on, first.id, Some("found"), "title", make.id, TITLE).expect("title");
         automation::wire_add(tx, on, first.id, Some("found"), "notes", make.id, NOTES).expect("notes");
+        automation::wire_add(tx, on, first.id, Some("found"), "trade", make.id, CHOSEN).expect("chosen");
         automation::edge_add(tx, on, first.id, Some("found"), EdgeTarget::Go(make.id), None).expect("on");
         automation::edge_add(tx, on, first.id, None, EdgeTarget::Done, None).expect("closes");
         let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
@@ -400,6 +502,16 @@ mod tests {
     /// built-in out. What comes back is the task the first step took, the built-in's execution and what
     /// the run does next.
     fn carried(tx: &WriteTx<'_>, p: &Picture, close_first: bool) -> (AutomationRun, i64, i64, Next) {
+        carried_choosing(tx, p, close_first, None)
+    }
+
+    /// [`carried`], with the first step handing a classification on to [`CHOSEN`] as well.
+    fn carried_choosing(
+        tx: &WriteTx<'_>,
+        p: &Picture,
+        close_first: bool,
+        chose: Option<&str>,
+    ) -> (AutomationRun, i64, i64, Next) {
         let run = launched(tx, &p.automation);
         let claude = ["claude".to_string()];
         let def_of = |placement: i64| {
@@ -415,7 +527,9 @@ mod tests {
         };
         let first = crate::ops::test_support::mk_task_in(tx, "the first", Some(p.project));
         automation_report::take(tx, opening.run_step.id, first).expect("take");
-        for (port, value) in [("title", "  a follow-up  "), ("notes", "what to do")] {
+        let handed = [("title", Some("  a follow-up  ")), ("notes", Some("what to do")), ("trade", chose)];
+        for (port, value) in handed {
+            let Some(value) = value else { continue };
             let id = crate::ops::test_support::out_port(tx, opening.run_step.id, None, port);
             automation_report::out(tx, opening.run_step.id, id, Produced::Value(value)).expect("out");
         }
@@ -607,6 +721,98 @@ mod tests {
             let filed = read::automation_run_values_of(tx.conn(), run_step_id).expect("values");
             assert!(filed.iter().all(|v| v.task_id.is_none()), "nothing handed on");
             assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "and nothing filed");
+        });
+    }
+
+    /// An axis with two values, the one the step before it may choose on.
+    fn trades(tx: &WriteTx<'_>, p: &Picture) -> (i64, i64) {
+        let axis = crate::ops::dimension::add(
+            tx,
+            p.project,
+            crate::ops::dimension::NewDimension { name: "職能".into(), ..Default::default() },
+        )
+        .expect("axis");
+        let build = crate::ops::dimension::value_add(tx, axis.id, "実装", None).expect("value");
+        crate::ops::dimension::value_add(tx, axis.id, "設計", None).expect("value");
+        (axis.id, build.id)
+    }
+
+    /// Carry the built-in out with `chose` handed in, and say it fell over naming `what`, filing nothing.
+    fn refused(tx: &WriteTx<'_>, p: &Picture, chose: &str, what: &str) {
+        let (_, first, run_step_id, next) = carried_choosing(tx, p, false, Some(chose));
+        assert!(matches!(next, Next::Halted(_)), "{next:?}");
+        let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+        assert!(ran.report.contains(what), "{}", ran.report);
+        assert_eq!(ran.exit_id, way_out(tx, run_step_id, crate::model::ERROR_EXIT));
+        assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
+    }
+
+    /// **A value the step before it chose, on an axis it was offered, is on the task it files**
+    /// (`AMB-D-971`).
+    #[test]
+    fn a_value_chosen_on_an_offered_axis_is_filed_with_the_task() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            let (_, build) = trades(tx, &p);
+            answer(tx, &p, AI_AXES, "職能");
+            let (_, _, run_step_id, _) = carried_choosing(tx, &p, false, Some("職能=実装\n"));
+            let (filed, exit) = handed(tx, run_step_id);
+            assert_eq!(exit, way_out(tx, run_step_id, MADE));
+            assert!(read::assignment_id(tx.conn(), filed.id, build).expect("read").is_some());
+        });
+    }
+
+    /// **What steps off the offer is refused**, and nothing is filed: an axis not offered, a value the
+    /// axis does not have, two values on one axis, and an axis fixed where it is placed.
+    #[test]
+    fn a_choice_off_what_was_offered_files_nothing() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            trades(tx, &p);
+            refused(tx, &p, "職能=実装", AI_AXES);
+        });
+        with_tx(|tx| {
+            let p = picture(tx);
+            trades(tx, &p);
+            answer(tx, &p, AI_AXES, "職能");
+            refused(tx, &p, "職能=営業", "営業");
+        });
+        with_tx(|tx| {
+            let p = picture(tx);
+            trades(tx, &p);
+            answer(tx, &p, AI_AXES, "職能");
+            refused(tx, &p, "職能=実装\n職能=設計", "more than one");
+        });
+        with_tx(|tx| {
+            let p = picture(tx);
+            trades(tx, &p);
+            answer(tx, &p, AI_AXES, "職能");
+            answer(tx, &p, CLASSIFY, "職能=設計");
+            refused(tx, &p, "職能=実装", CLASSIFY);
+        });
+    }
+
+    /// **The step before it is shown what it may choose**, under the output wired to [`CHOSEN`]: each
+    /// offered axis and its open values, in the axis's order.
+    #[test]
+    fn the_step_before_it_is_shown_what_it_may_choose() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            trades(tx, &p);
+            answer(tx, &p, AI_AXES, "職能");
+            let run = launched(tx, &p.automation);
+            let claude = ["claude".to_string()];
+            let def = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| d.placement_id == Some(p.first.id))
+                .expect("the first spot's copy");
+            let opening = match open(tx, run.id, def.id, Some(&claude)).expect("open") {
+                Opened::Ready(opening) => *opening,
+                other => panic!("{other:?}"),
+            };
+            assert!(opening.text.contains("trade takes one `axis=value` a line"), "{}", opening.text);
+            assert!(opening.text.contains("    - 職能: 実装, 設計"), "{}", opening.text);
         });
     }
 

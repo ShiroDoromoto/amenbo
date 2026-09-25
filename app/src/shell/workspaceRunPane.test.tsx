@@ -130,6 +130,7 @@ vi.mock("../core/boundFolders", () => ({
 
 import { WorkspaceFace } from "./WorkspaceFace";
 import { statusLabel, t, tf } from "../core/i18n";
+import { builtinWord } from "../core/builtinWords";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -612,6 +613,22 @@ describe("a built-in on a run's pane", () => {
     ]);
     // And no task: the one it closed before is not the one it is on.
     expect(q(".plate-run")[0]?.hidden).toBe(true);
+  });
+
+  it("names the second built-in in the row above when two come one after the other (AMB-T-5550)", async () => {
+    await mount();
+    await arrive({ step: undefined, builtin: builtin({ placement: 21, name: "タスクに着手する", key: "take_task" }) });
+    await arrive({
+      step: undefined,
+      builtin: builtin({ placement: 21, name: "タスクに着手する", key: "take_task", finished: true }),
+    });
+    await arrive({ step: undefined, builtin: builtin({ placement: 22, name: "タスクを閉じる", key: "close_task" }) });
+
+    // One pane and one card, and the row above it is about the built-in now standing there.
+    expect(panes()).toHaveLength(1);
+    expect(card()).toHaveLength(1);
+    expect(q(".plate__step b")).toHaveLength(1);
+    expect(q(".plate__step b")[0]?.textContent).toBe(builtinWord("close_task", "タスクを閉じる"));
   });
 
   it("gives the pane back to a terminal when the next step arrives", async () => {

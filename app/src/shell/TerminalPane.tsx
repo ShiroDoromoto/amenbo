@@ -612,7 +612,8 @@ export function TerminalPane({
 
   // **The row above a built-in's card** (`./BuiltinCard`). There is no terminal for the effect above
   // to put it up with, and the row is still what says which run this is and how far in it has got.
-  // The card is a pane of its own key (`./WorkspaceFace`), so this is put up once and taken down with it.
+  // The card is a pane of its own key, one per spot (`./WorkspaceFace`), so this is put up once and
+  // taken down with it — the next built-in in a row is the next pane.
   const onBuiltin = builtin !== null;
   useEffect(() => {
     const label = labelRef.current;

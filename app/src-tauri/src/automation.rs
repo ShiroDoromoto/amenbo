@@ -288,7 +288,7 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
 #[tauri::command]
 pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_place(automation_id, &key)?;
+        store.automation_builtin_place(automation_id, &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -300,7 +300,7 @@ pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<Write
 #[tauri::command]
 pub fn automation_builtin_insert(edge_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert(edge_id, &key)?;
+        store.automation_builtin_insert(edge_id, &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))

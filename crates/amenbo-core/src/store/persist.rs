@@ -1827,15 +1827,19 @@ impl Store {
     /// on it is Amenbo's own, from its definition and never edited, not something a person puts on that
     /// shelf — so a session bound to one project may place a built-in as it may place its own actions
     /// (`AMB-D-964`).
+    ///
+    /// `axis` is the axis a built-in that splits by one splits by, and nothing for any other: that one
+    /// is written once per axis, in the axis's project's library (`AMB-D-972`).
     pub fn automation_builtin_place(
         &mut self,
         automation_id: i64,
         key: &str,
+        axis: Option<i64>,
     ) -> Result<crate::model::AutomationPlacement> {
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
             |tx| {
-                let action = crate::ops::automation_builtin::action(tx, key)?;
+                let action = crate::ops::automation_builtin::action_on(tx, key, axis)?;
                 crate::ops::automation::placement_add(tx, automation_id, action.id)
             },
         )
@@ -1850,9 +1854,10 @@ impl Store {
         &mut self,
         edge_id: i64,
         key: &str,
+        axis: Option<i64>,
     ) -> Result<crate::model::AutomationPlacement> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
-            let action = crate::ops::automation_builtin::action(tx, key)?;
+            let action = crate::ops::automation_builtin::action_on(tx, key, axis)?;
             crate::ops::automation::placement_insert(tx, edge_id, action.id)
         })
     }

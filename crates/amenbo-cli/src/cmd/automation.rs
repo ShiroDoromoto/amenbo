@@ -309,11 +309,15 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             };
             write_envelope(flags, "automation.entry-set", "automation", serde_json::to_value(&a).unwrap(), Some(vec!["entry_placement_id".to_string()]), false, line);
         }
-        AutomationCmd::PlaceAdd { automation, action, builtin } => {
+        AutomationCmd::PlaceAdd { automation, action, builtin, axis } => {
             // clap holds exactly one of the two: `--action` is required unless `--builtin` is given.
             let (p, what) = match (action, builtin) {
                 (_, Some(key)) => {
-                    let p = store.automation_builtin_place(automation, &key).map_err(CliError::from)?;
+                    let axis = match axis {
+                        Some(axis) => Some(store.resolve_dimension(None, &axis).map_err(CliError::from)?),
+                        None => None,
+                    };
+                    let p = store.automation_builtin_place(automation, &key, axis).map_err(CliError::from)?;
                     (p, format!("the built-in '{key}'"))
                 }
                 (Some(action), None) => {

@@ -6709,6 +6709,11 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
         called: "the built-in that closes the task",
         words: &[("コミット", "the input for the commit it records")],
     },
+    BuiltinWords {
+        key: "split_by_dim",
+        called: "the built-in that splits the task by its value on one axis",
+        words: &[("分類なし", "the way out for a task with no value on that axis")],
+    },
 ];
 
 /// The built-in a road names by `key`, or why there is none.

@@ -372,6 +372,98 @@ fn delete_exit_row(tx: &WriteTx<'_>, exit_id: i64) -> Result<()> {
     Ok(())
 }
 
+/// **Make a built-in's ways out the ones named, in that order** — for the built-in whose ways out are an
+/// axis's values (`AMB-D-972`, [`crate::ops::automation_builtin_split`]). Both halves follow: the ways
+/// out of the one step inside the action and of the action itself, with the action's line that returns
+/// each from the step to the action. The error way out is left where it is.
+///
+/// `renamed` is a value renamed in the same stroke. Its way out is renamed rather than deleted and
+/// written again, so the lines an automation hangs on it stay (`AMB-D-961`).
+///
+/// **Written past both guards.** What it writes is Amenbo's own, from the axis, so the guard that
+/// refuses a person's edit to a built-in is not for it; and a run works from the copy it took at
+/// launch, so an axis that moves while a run holds the action has nothing of the run's to disturb.
+pub(crate) fn builtin_exits_follow(
+    tx: &WriteTx<'_>,
+    action_id: i64,
+    wanted: &[String],
+    renamed: Option<(&str, &str)>,
+) -> Result<()> {
+    let action = live_action(tx, action_id)?;
+    let step_id = action
+        .entry_step_id
+        .ok_or_else(|| Error::invalid(format!("the built-in action '{}' holds no step", action.name)))?;
+    let owners = [(AutomationOwner::Step, step_id), (AutomationOwner::Action, action_id)];
+    let named = |kind, id, name: &str| read::automation_exit_by_name(tx.conn(), kind, id, Some(name));
+    if let Some((from, to)) = renamed {
+        for (kind, id) in owners {
+            if let (Some(before), None) = (named(kind, id, from)?, named(kind, id, to)?) {
+                let after = AutomationExit { name: to.to_string(), updated_at: Timestamp::now(), ..before.clone() };
+                emit_update(tx, record::automation_exit(&before), record::automation_exit(&after))?;
+            }
+        }
+    }
+    for (kind, id) in owners {
+        for exit in read::automation_exits_of(tx.conn(), kind, id)? {
+            if exit.name != ERROR_EXIT && !wanted.contains(&exit.name) {
+                delete_exit_row(tx, exit.id)?;
+            }
+        }
+    }
+    for name in wanted {
+        let from = match named(AutomationOwner::Step, step_id, name)? {
+            Some(exit) => exit,
+            None => add_exit_row(tx, AutomationOwner::Step, step_id, name.clone())?,
+        };
+        let to = match named(AutomationOwner::Action, action_id, name)? {
+            Some(exit) => exit,
+            None => add_exit_row(tx, AutomationOwner::Action, action_id, name.clone())?,
+        };
+        if read::automation_edge_for_exit(tx.conn(), AutomationPictureOwner::Action, step_id, from.id)?.is_none() {
+            let sibs = read::automation_edge_siblings(tx.conn(), AutomationPictureOwner::Action, action_id, None)?;
+            let now = Timestamp::now();
+            let edge = AutomationEdge {
+                id: read::next_id(tx.conn(), "automation_edge")?,
+                owner_kind: AutomationPictureOwner::Action,
+                owner_id: action_id,
+                from_id: step_id,
+                exit_id: from.id,
+                to_id: None,
+                ends: AutomationEnds::Exit,
+                exit_to_id: Some(to.id),
+                max_times: None,
+                order_key: place(&sibs, &Position::Bottom)?,
+                created_at: now,
+                updated_at: now,
+            };
+            emit_create(tx, record::automation_edge(&edge))?;
+        }
+    }
+    // In the axis's order, after the error way out — only where it has moved, so a value added at the
+    // bottom rewrites nothing else.
+    for (kind, id) in owners {
+        let standing: Vec<String> = read::automation_exits_of(tx.conn(), kind, id)?
+            .into_iter()
+            .map(|e| e.name)
+            .filter(|n| n != ERROR_EXIT)
+            .collect();
+        if standing == wanted {
+            continue;
+        }
+        for name in wanted {
+            let before = named(kind, id, name)?.ok_or_else(|| Error::invalid("the way out was not written"))?;
+            let sibs = read::automation_exit_siblings(tx.conn(), kind, id, Some(before.id))?;
+            let after = AutomationExit {
+                order_key: place(&sibs, &Position::Bottom)?,
+                updated_at: Timestamp::now(),
+                ..before.clone()
+            };
+            emit_update(tx, record::automation_exit(&before), record::automation_exit(&after))?;
+        }
+    }
+    Ok(())
+}
+
 /// Delete every way out and port one owner declares — what goes when a step or an action does. The
 /// settings are swept apart from these, since an action's and a placement's are the two halves of one
 /// declaration ([`delete_cfgs`]).
@@ -449,6 +541,7 @@ pub fn action_add(
         note: note.to_string(),
         entry_step_id: None,
         builtin: None,
+        builtin_dimension_id: None,
         order_key,
         created_at: now,
         updated_at: now,

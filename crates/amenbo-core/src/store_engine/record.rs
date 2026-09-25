@@ -514,6 +514,7 @@ pub fn automation_action(a: &AutomationAction) -> Record {
                 ("note", tv(&a.note)),
                 ("entry_step_id", kv_opt(&a.entry_step_id)),
                 ("builtin", ov(&a.builtin)),
+                ("builtin_dimension_id", kv_opt(&a.builtin_dimension_id)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,

@@ -70,6 +70,7 @@ export function runStateOf(run: AutomationRunCardDto | undefined): RunState | nu
   return {
     status: run.status,
     word: runStatusWord(run),
+    pauseRequested: run.pauseRequested,
     why: failed ? runReasonWord(run) : null,
     where: failed ? runWhere(run) : null,
   };

@@ -477,6 +477,24 @@ input[type="color"] {
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .slot__end:hover { color: var(--c-text); }
+/* **A run's moves on its pane** (`../shell/TerminalPane`, `AMB-T-5507`): pause or resume, and stop.
+   Words rather than marks, because they are the "running" tab's words and a reader moving between the
+   two reads the same press. Drawn as quietly as the controls beside them — a face split four ways
+   draws this row four times. They never shrink: a narrow pane gives up the name before them. */
+.slot__runacts {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  margin-inline-start: var(--s-1);
+}
+.slot__runact {
+  flex: 0 0 auto;
+  padding: 0 var(--s-1);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1.4;
+}
+.slot__runact:hover:not(:disabled) { color: var(--c-text); }
+.slot__runact:disabled { opacity: 0.5; }
 /* The row's menu, which holds what the pane can be handed rather than what it can be rid of. It is
    drawn the same quiet way as the control beside it: a face split four ways draws this row four
    times, and two loud buttons in each would be eight things competing with the terminals. */

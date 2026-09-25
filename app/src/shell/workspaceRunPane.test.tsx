@@ -30,6 +30,10 @@ const hoisted = vi.hoisted(() => ({
   heard: null as ((one: StepOpened) => void) | null,
   /** The runs the pane asked to be stopped, in order. */
   stopped: [] as number[],
+  /** The runs the pane asked to be paused, in order. */
+  paused: [] as number[],
+  /** The runs the pane asked to be picked up again, in order. */
+  resumed: [] as number[],
   /** What the question above a removal is answered with. */
   says: true,
   /** The steps the host says are running as the face comes up (`standingSteps`). */
@@ -81,6 +85,14 @@ vi.mock("../core/automations", async (importOriginal) => ({
   stopRun: (run: number) => {
     hoisted.stopped.push(run);
     return Promise.resolve(true);
+  },
+  pauseRun: (run: number) => {
+    hoisted.paused.push(run);
+    return Promise.resolve();
+  },
+  resumeRun: (run: number) => {
+    hoisted.resumed.push(run);
+    return Promise.resolve();
   },
 }));
 
@@ -191,6 +203,8 @@ beforeEach(() => {
   hoisted.ended = [];
   hoisted.heard = null;
   hoisted.stopped = [];
+  hoisted.paused = [];
+  hoisted.resumed = [];
   hoisted.says = true;
   hoisted.standing = [];
   hoisted.cards = [];
@@ -357,6 +371,61 @@ describe("what the row above a run's pane says, and what closing it does", () =>
 
     expect(q(".plate-fail__why")[0]?.textContent).toBe(t("auto.run.crashed"));
     expect(q(".plate-fail__where")[0]?.textContent).toBe("取る");
+  });
+
+  it("holds and stops a going run from its pane, in the running tab's words", async () => {
+    // A reader watching a run is in its pane, and had to go to the running tab to act on it
+    // (`AMB-T-5507`). Stopping from here keeps the pane: that is the end control's, and it asks first.
+    hoisted.cards = [runCard()];
+    await mount();
+    await arrive();
+    const acts = () => q(".slot__runact");
+    expect(acts().map((b) => b.textContent)).toEqual([t("auto.run.pause"), t("auto.run.stop")]);
+
+    await act(async () => {
+      acts()[0]!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.paused).toEqual([7]);
+
+    await act(async () => {
+      acts()[1]!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.stopped).toEqual([7]);
+    expect(panes()).toHaveLength(1);
+  });
+
+  it("will not ask for a pause twice while one is on its way", async () => {
+    hoisted.cards = [runCard({ pauseRequested: true })];
+    await mount();
+    await arrive();
+
+    expect((q(".slot__runact")[0] as HTMLButtonElement).disabled).toBe(true);
+    expect((q(".slot__runact")[1] as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("picks a held run up again from its pane", async () => {
+    hoisted.cards = [runCard({ status: "paused" })];
+    await mount();
+    await arrive();
+    expect(q(".slot__runact").map((b) => b.textContent)).toEqual([t("auto.run.resume"), t("auto.run.stop")]);
+
+    await act(async () => {
+      q(".slot__runact")[0]!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.resumed).toEqual([7]);
+  });
+
+  it("offers no moves on a run that is over, or not read yet", async () => {
+    await mount();
+    await arrive();
+    expect(q(".slot__runact")).toHaveLength(0);
+
+    hoisted.cards = [runCard({ status: "completed", exitName: "" })];
+    await arrive();
+    expect(q(".slot__runact")).toHaveLength(0);
   });
 
   it("stops the run when the pane is closed, and takes the place away", async () => {

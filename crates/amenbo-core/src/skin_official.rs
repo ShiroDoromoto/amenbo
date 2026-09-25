@@ -125,7 +125,7 @@ mod tests {
         let taken = taken("high-contrast");
         let report = crate::skin_contrast::measure_at(&taken.skin, 7.0, 4.5);
         assert!(report.short.is_empty(), "{:?}", report.short);
-        assert_eq!(report.measured, 74, "both sides, every pairing");
+        assert_eq!(report.measured, 78, "both sides, every pairing");
     }
 
     /// The set is the set of kinds, not a set of looks: one that is only colour, one that reaches

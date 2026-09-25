@@ -433,7 +433,7 @@ export async function setAutomationActionEntry(
  * **Change the step one library action opens.** Only what is passed is written, and the answer comes
  * back as an ack, so the definition and the launch check are both re-read (`./mutations`).
  *
- * The fields are the step's: a prompt and the three flags are the terminal's, and an action holds
+ * The fields are the step's: a prompt and the flags are the terminal's, and an action holds
  * the steps. Writing one reaches every placement of that action, which is what the library is for.
  * Who carries the step out is not among them — that is chosen where the action is placed
  * (`chooseAutomationAgent`, `AMB-D-960`).
@@ -450,6 +450,7 @@ export async function editAutomationStep(
     workDir?: string | null;
     reportToTask?: boolean;
     history?: boolean;
+    taskContext?: boolean;
   },
 ): Promise<void> {
   if (!inTauri()) return;
@@ -462,6 +463,7 @@ export async function editAutomationStep(
     clearWorkDir: patch.workDir === null,
     reportToTask: patch.reportToTask ?? null,
     history: patch.history ?? null,
+    taskContext: patch.taskContext ?? null,
   });
 }
 

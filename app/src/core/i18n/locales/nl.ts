@@ -992,6 +992,7 @@ export const nl: Translation = {
     "auto.step.reportToTask": "Zijn verslag blijft ook bij de taak",
     "auto.step.reportToTaskNote": "Niet bij een taak die al ‘Klaar’ of ‘Afgewezen’ is. Het verslag blijft in de geschiedenis van de run.",
     "auto.step.history": "Hij krijgt het verloop van de run tot nu toe",
+    "auto.step.taskContext": "Hij krijgt de taak van de run — de notities, gekoppelde beslissingen en opmerkingen",
     "auto.step.ready": "Voorwaarden",
     "auto.step.readyYes": "Niets in de weg",
     "auto.step.readyNo": "Er staat iets in de weg",

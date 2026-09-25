@@ -1004,6 +1004,7 @@ export const es: Translation = {
     "auto.step.reportToTask": "Su informe también queda en la tarea",
     "auto.step.reportToTaskNote": "No en una tarea que ya está «Hecho» o «Descartado». El informe queda en el historial de la ejecución.",
     "auto.step.history": "Recibe lo ocurrido en la ejecución hasta ahora",
+    "auto.step.taskContext": "Recibe la tarea de la ejecución: sus notas, las decisiones vinculadas y los comentarios",
     "auto.step.ready": "Premisas",
     "auto.step.readyYes": "Nada lo bloquea",
     "auto.step.readyNo": "Algo lo bloquea",

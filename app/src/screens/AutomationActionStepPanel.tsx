@@ -383,6 +383,15 @@ export function AutomationActionStepPanel({
         {t("auto.step.history")}
       </label>
 
+      <label className="autostep__check">
+        <input
+          type="checkbox"
+          checked={step.showTask}
+          onChange={(e) => void run(editAutomationStep(step.id, { taskContext: e.target.checked }))}
+        />
+        {t("auto.step.taskContext")}
+      </label>
+
       <div className="actpanel__foot">
         <button type="button" className="btn btn--danger" onClick={() => void remove()}>
           {t("auto.act.stepRemove")}

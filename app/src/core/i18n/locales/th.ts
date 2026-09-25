@@ -993,6 +993,7 @@ export const th: Translation = {
     "auto.step.reportToTask": "รายงานของมันไปอยู่ที่งานด้วย",
     "auto.step.reportToTaskNote": "ไม่ลงที่งานที่ \"เสร็จแล้ว\" หรือ \"ตีตก\" ไปแล้ว รายงานยังอยู่ในประวัติของการรัน",
     "auto.step.history": "ได้รับสิ่งที่การรันทำมาถึงตอนนี้",
+    "auto.step.taskContext": "ได้รับงานที่การรันกำลังทำ — โน้ต การตัดสินใจที่ลิงก์ไว้ และความคิดเห็น",
     "auto.step.ready": "เงื่อนไขก่อนหน้า",
     "auto.step.readyYes": "ไม่มีอะไรติดขัด",
     "auto.step.readyNo": "มีบางอย่างติดขัด",

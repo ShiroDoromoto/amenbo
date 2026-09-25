@@ -1009,6 +1009,7 @@ export const uk: Translation = {
     "auto.step.reportToTask": "Його звіт залишається і на завданні",
     "auto.step.reportToTaskNote": "Не на завданні, яке вже «Готово» чи «Відхилено». Звіт лишається в історії запуску.",
     "auto.step.history": "Йому передається перебіг запуску дотепер",
+    "auto.step.taskContext": "Йому передається завдання запуску — його нотатки, пов'язані рішення та коментарі",
     "auto.step.ready": "Передумови",
     "auto.step.readyYes": "Нічого не заважає",
     "auto.step.readyNo": "Щось заважає",

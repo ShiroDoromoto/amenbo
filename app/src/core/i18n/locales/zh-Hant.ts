@@ -994,6 +994,7 @@ export const zhHant: Translation = {
     "auto.step.reportToTask": "報告也留在任務上",
     "auto.step.reportToTaskNote": "任務已是「已完成」或「已否決」時不留。報告留在執行記錄裡。",
     "auto.step.history": "把到目前為止的經過交給它",
+    "auto.step.taskContext": "把執行所處理任務的內文、連結的決定和留言交給它",
     "auto.step.ready": "前提",
     "auto.step.readyYes": "沒有被擋住",
     "auto.step.readyNo": "有東西擋著",

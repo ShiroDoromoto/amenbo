@@ -1005,6 +1005,7 @@ export const ptBR: Translation = {
     "auto.step.reportToTask": "O relatório também fica na tarefa",
     "auto.step.reportToTaskNote": "Não numa tarefa que já está “Concluída” ou “Recusada”. O relatório fica no histórico da execução.",
     "auto.step.history": "Recebe o que a execução fez até aqui",
+    "auto.step.taskContext": "Recebe a tarefa da execução: notas, decisões vinculadas e comentários",
     "auto.step.ready": "Premissas",
     "auto.step.readyYes": "Nada no caminho",
     "auto.step.readyNo": "Algo no caminho",

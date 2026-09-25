@@ -65,6 +65,7 @@ function step(over: Partial<AutomationStepDto> = {}): AutomationStepDto {
     interactive: false,
     reportToTask: false,
     showHistory: true,
+    showTask: true,
     exits: [{ id: 10, outputs: [] }, { id: 19, name: "*", outputs: [] }],
     inputs: [],
     ...over,

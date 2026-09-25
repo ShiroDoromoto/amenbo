@@ -993,6 +993,7 @@ export const id: Translation = {
     "auto.step.reportToTask": "Laporannya juga tinggal di tugas",
     "auto.step.reportToTaskNote": "Tidak pada tugas yang sudah \"Selesai\" atau \"Ditolak\". Laporannya tetap ada di riwayat jalannya.",
     "auto.step.history": "Ia diberi jalannya eksekusi sejauh ini",
+    "auto.step.taskContext": "Ia diberi tugas yang sedang dijalankan — catatannya, keputusan yang ditautkan, dan komentarnya",
     "auto.step.ready": "Prasyarat",
     "auto.step.readyYes": "Tidak ada yang menghalangi",
     "auto.step.readyNo": "Ada yang menghalangi",

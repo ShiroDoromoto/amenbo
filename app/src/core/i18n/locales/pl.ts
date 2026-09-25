@@ -1009,6 +1009,7 @@ export const pl: Translation = {
     "auto.step.reportToTask": "Jego raport zostaje też przy zadaniu",
     "auto.step.reportToTaskNote": "Nie przy zadaniu, które jest już „Gotowe” lub „Odrzucone”. Raport zostaje w historii przebiegu.",
     "auto.step.history": "Dostaje przebieg uruchomienia do tej pory",
+    "auto.step.taskContext": "Dostaje zadanie uruchomienia — jego notatki, powiązane decyzje i komentarze",
     "auto.step.ready": "Przesłanki",
     "auto.step.readyYes": "Nic nie stoi na przeszkodzie",
     "auto.step.readyNo": "Coś stoi na przeszkodzie",

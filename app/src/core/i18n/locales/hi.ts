@@ -992,6 +992,7 @@ export const hi: Translation = {
     "auto.step.reportToTask": "इसकी रिपोर्ट कार्य पर भी रहती है",
     "auto.step.reportToTaskNote": "जो कार्य पहले से \"पूरा\" या \"अस्वीकृत\" है, उस पर नहीं। रिपोर्ट रन के इतिहास में रहती है।",
     "auto.step.history": "अब तक का पूरा हाल इसे सौंपा जाता है",
+    "auto.step.taskContext": "रन जिस टास्क पर है, वह इसे सौंपा जाता है — उसके नोट्स, जुड़े फ़ैसले और टिप्पणियाँ",
     "auto.step.ready": "पूर्वशर्तें",
     "auto.step.readyYes": "कुछ नहीं अटका है",
     "auto.step.readyNo": "कुछ अटका है",

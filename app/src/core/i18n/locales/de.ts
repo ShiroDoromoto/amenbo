@@ -996,6 +996,7 @@ export const de: Translation = {
     "auto.step.reportToTask": "Sein Bericht landet auch an der Aufgabe",
     "auto.step.reportToTaskNote": "Nicht an einer Aufgabe, die schon „Erledigt“ oder „Verworfen“ ist. Der Bericht bleibt im Verlauf des Laufs.",
     "auto.step.history": "Er bekommt den bisherigen Verlauf des Laufs",
+    "auto.step.taskContext": "Er bekommt die Aufgabe des Laufs – ihre Notizen, verknüpften Entscheidungen und Kommentare",
     "auto.step.ready": "Voraussetzungen",
     "auto.step.readyYes": "Nichts steht im Weg",
     "auto.step.readyNo": "Etwas steht im Weg",

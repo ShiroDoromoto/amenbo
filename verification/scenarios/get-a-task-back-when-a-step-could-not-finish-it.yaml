@@ -1,0 +1,140 @@
+# Every step carries an error way out from birth, and the agent carrying it out may take it whenever
+# the step cannot finish. Hardly anybody draws a line from it inside an action, and the launch check
+# never asks for one. Until the run read an error way out with no line after it as calling a person,
+# a step that took one failed the run with nothing left to open — and the task went back to `todo`
+# still assigned to the AI, where the next run would take it straight back and stop in the same place.
+#
+# Now the run halts there, as it does on a way out drawn to call a person: the task goes to the
+# person who launched the run, with the step's report on it.
+id: get-a-task-back-when-a-step-could-not-finish-it
+title: A step that leaves by an error way out nobody drew a line from hands its task to a person
+description: >
+  Start a run whose step takes a task, then report the step done by its error way out, which has no
+  line drawn from it. The run fails because a way out called for a person, and the task is `todo`
+  again, assigned to a human, with the step's report on its timeline.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task a step cannot finish }, as: seed }
+
+  # The same one-step action that takes a task as get-back-the-task-a-stopped-run-had-taken. Nothing
+  # is drawn from the step's error way out: a step added on its own is born with one and no line.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one whose step cannot finish" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: action
+    domain: automation
+    op: take-in-pane
+    with:
+      target: run
+      task: seed
+
+  # The step cannot finish, and says why. `*` is the error way out's own name, which the step's text
+  # in the pane lists with its id.
+  - type: action
+    domain: automation
+    op: done-in-pane
+    with:
+      target: run
+      exit: "*"
+      report: the tests would not build
+
+  # The person's turn: back to `todo`, and on a human rather than the AI, so no run takes it again
+  # until somebody has looked.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: assignee_kind
+      equals: human
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: the tests would not build
+      present: true
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  # A failure nobody has acknowledged stays on the running tab, with the reason under its state.
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: failed
+      reason: halted

@@ -1186,12 +1186,12 @@ const ui = {
   "auto.pic.place": "Place an action",
   "auto.pic.placeDo": "Place",
   "auto.pic.first": "＋ Place the first action",
-  "auto.lib.makeWhat": "Not in the library? Make one and place it",
   "auto.lib.here": "Here",
+  "auto.lib.makeNew": "＋ Make a new one",
+  "auto.lib.makeNamed": "＋ Make a new one named “{name}”",
   "auto.lockMark": "Can’t be changed here",
-  "auto.lib.make": "Make a new one and place it",
-  "auto.make.go": "Make it and open the action",
-  "auto.make.said": "An empty action is placed where you pressed, and its build screen opens so you can build what is inside. Until it is built, this automation cannot be started.",
+  "auto.lib.make": "Make an action and place it",
+  "auto.make.go": "Make and open",
   // The panel beside the picture: what the pressed step holds, field by field. The three rows a
   // task filter is answered on borrow the words the board's filters already use
   // (`filter.dim.*`, `filter.opt.assignee.*`); only the premises row is this panel's own.

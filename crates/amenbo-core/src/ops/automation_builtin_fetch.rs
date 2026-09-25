@@ -281,7 +281,7 @@ mod tests {
     use crate::store_engine::{read, WriteTx};
 
     /// Take a task, fetch, and go on to an agent's step on what came back; nothing there goes on to
-    /// close the task. The entry takes the task because a run's entry has to (`EntryTakesNoTask`).
+    /// close the task.
     fn picture(tx: &WriteTx<'_>, project: i64, form: &str, target: &str) -> Automation {
         crate::ops::task::set_assignee(tx, mk_task_in(tx, "one", Some(project)), Some(ActorKind::Ai))
             .expect("give it to the AI");
@@ -305,6 +305,91 @@ mod tests {
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("work → done");
         automation::edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("close → done");
         automation::set_entry(tx, automation.id, Some(take.id)).expect("entry")
+    }
+
+    /// A run that starts at the fetch: what came back is filed as a task and taken, then closed; with
+    /// nothing there the run ends. `straight_to_an_agent` hands what came back to an agent's step
+    /// instead, the picture the launch refuses.
+    fn starting_at_the_fetch(tx: &WriteTx<'_>, project: i64, straight_to_an_agent: bool) -> Automation {
+        let automation =
+            automation::add(tx, project, NewAutomation { name: "inbox".into(), ..Default::default() })
+                .expect("automation");
+        let on = AutomationPictureOwner::Automation;
+        let place = |key: &str| {
+            automation::placement_add(tx, automation.id, action(tx, key).expect(key).id).expect("place")
+        };
+        let fetch = place("fetch");
+        automation::cfg_set(tx, fetch.id, FORM, Some(&serde_json::to_string(FILE_PATH).unwrap())).expect("form");
+        automation::cfg_set(tx, fetch.id, TARGET, Some("\"inbox.md\"")).expect("target");
+        automation::edge_add(tx, on, fetch.id, Some(NOT_FOUND), EdgeTarget::Done, None).expect("none");
+        if straight_to_an_agent {
+            let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
+            automation::edge_add(tx, on, fetch.id, Some(FETCHED), EdgeTarget::Go(work.id), None).expect("on");
+            automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("work → done");
+        } else {
+            use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, TITLE, WHAT_THEN};
+            let make = place("make_task");
+            let close = place("close_task");
+            automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).unwrap()))
+                .expect("take it");
+            automation::wire_add(tx, on, fetch.id, Some(FETCHED), CONTENT, make.id, TITLE).expect("wire");
+            automation::edge_add(tx, on, fetch.id, Some(FETCHED), EdgeTarget::Go(make.id), None).expect("on");
+            automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(close.id), None)
+                .expect("make → close");
+            automation::edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("close → done");
+        }
+        automation::set_entry(tx, automation.id, Some(fetch.id)).expect("entry")
+    }
+
+    fn entry_refused(tx: &WriteTx<'_>, automation: &Automation) -> bool {
+        let claude = ["claude".to_string()];
+        crate::ops::automation_run::check(tx.conn(), automation.id, Some(&claude), nothing_asked())
+            .expect("check")
+            .iter()
+            .any(|u| matches!(u, crate::ops::automation_run::Unmet::EntryTakesNoTask { .. }))
+    }
+
+    /// **A run can start at the fetch** where what it brings back is filed and taken before any step
+    /// works on it (`AMB-D-970`) — the launch lets it through, and the run files what it fetched.
+    #[test]
+    fn a_run_starts_at_the_fetch_where_a_task_is_taken_before_any_step() {
+        with_tx(|tx| {
+            let dir = amenbo_scratch::scratch("builtin-fetch-entry");
+            std::fs::write(dir.join("inbox.md"), "look at the login page").expect("write");
+            let project = mk_project(tx, "amenbo");
+            bind(tx, project, &[&dir]);
+            let automation = starting_at_the_fetch(tx, project, false);
+            assert!(!entry_refused(tx, &automation), "the fetch stands as the entry");
+
+            let claude = ["claude".to_string()];
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                workspace_open: Some(true),
+                by: Some(ActorKind::Ai),
+            };
+            let run = crate::ops::automation_run::launch(tx, automation.id, &by).expect("launched");
+            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| d.entry)
+                .expect("the entry");
+            let Opened::Carried { next, .. } = open(tx, run.id, entry.id, Some(&claude)).expect("fetch") else {
+                panic!("a built-in is carried out");
+            };
+            assert_eq!(went_to(&next), Some("make_task"), "what came back goes on to be filed");
+        });
+    }
+
+    /// **Going from the fetch straight to an agent's step is still refused**: that step would be about
+    /// no task.
+    #[test]
+    fn a_fetch_that_goes_straight_to_an_agent_is_no_entry() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = starting_at_the_fetch(tx, project, true);
+            assert!(entry_refused(tx, &automation));
+        });
     }
 
     /// Launch, take the task and carry out the fetch. Answers the fetch's execution and where the run

@@ -527,8 +527,8 @@ message_en: string,
 fields: { [key in string]: string }, };
 
 /**
- * **Whether this automation can be started, and what is in the way** — what the build screen's
- * launch place draws before anybody presses.
+ * **Whether this automation can be started, and what is in the way** — whether the build screen's
+ * start press can be pressed, and what it lists under its head while it cannot.
  *
  * It is core's own launch check ([`amenbo_core::ops::automation_run::check`]) and not a second
  * reading of it. A definition that passes here can still be refused at the press, by a machine that
@@ -687,6 +687,12 @@ exitName?: string,
  * shape the row over its pane says it in.
  */
 task?: AutomationRunTaskDto, 
+/**
+ * **The steps whose report was kept off the task**, by name, in the order they ran: each was
+ * built to carry its report onto the task, and the task was closed by then (`AMB-D-963`). Empty
+ * where every report went where it was owed.
+ */
+reportWithheld: Array<string>, 
 /**
  * **Whether somebody has said they saw the failure** — what moves a failed run off the
  * "running" tab and onto the "history" one. Only a failure is ever acknowledged, so it is false

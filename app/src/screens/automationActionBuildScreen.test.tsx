@@ -51,7 +51,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -317,6 +317,7 @@ function heldRun(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     pauseRequested: false,
     waiting: false,
     stepsDone: 1,
+    reportWithheld: [],
     acknowledged: false,
     ...over,
   };
@@ -341,9 +342,9 @@ describe("an action a run is going on (AMB-D-961)", () => {
 
   it("names the runs using it, and goes to a run's pane on its line", async () => {
     await renderHeld();
-    expect(container.textContent).toContain(t("auto.held.what"));
-    expect(container.textContent).toContain("Night round");
-    await act(async () => { container.querySelector<HTMLButtonElement>(".autoheld .autorun__go")!.click(); });
+    expect(container.querySelector(".autoheld")?.textContent).toContain(tf("auto.held.by", { run: 31 }));
+    expect(container.querySelector(".autoheld")?.textContent).toContain("Night round");
+    await act(async () => { [...container.querySelectorAll<HTMLButtonElement>(".autoheld .btn")].find((b) => b.textContent === t("auto.held.openPane"))!.click(); });
     expect(goToRun).toHaveBeenCalledWith(2, 31);
   });
 
@@ -361,7 +362,8 @@ describe("an action a run is going on (AMB-D-961)", () => {
   it("offers no way to add a step, and does not say it is changed from the sidebar", async () => {
     await renderHeld();
     expect(has(t("auto.act.stepAdd"))).toBe(false);
-    expect(container.querySelector('[data-icon="lock"]')).toBeNull();
+    // The held band carries its own lock; the one that says "changed from the sidebar" is the head's.
+    expect(container.querySelector('.actdecl [data-icon="lock"]')).toBeNull();
   });
 
   it("says nothing of runs, and holds nothing shut, while none is going", async () => {

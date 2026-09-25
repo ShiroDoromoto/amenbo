@@ -5,7 +5,7 @@
 // The picture, the panel and the add dialog are the same three (`./AutomationPicture`,
 // `./AutomationActionStepPanel`, `./AutomationStepAdd`), handed this picture instead of that one.
 //
-// **There is no launch place.** What is started is an automation, and an action is what one places —
+// **There is no start press.** What is started is an automation, and an action is what one places —
 // so what this screen has in that spot is the action's own name, what it is for, its reach, and what
 // a rewrite here reaches: every automation that places it. What it is for is written the way the
 // automation's notes are (`./AutomationAboutPanel`), and like them it reaches no launch (`AMB-D-952`).
@@ -134,7 +134,8 @@ export function Panel({
   children,
 }: {
   place: string;
-  title: string;
+  /** What the panel shows — a name, or the field that writes one where the name is changed here. */
+  title: ReactNode;
   onClose: () => void;
   /** Hold every field and press in the body shut — the head's close stays live. */
   readOnly?: boolean;
@@ -247,7 +248,7 @@ export function AutomationActionBuildScreen({
         />
       )}
 
-      {action !== null && <AutomationHeldBy runs={action.heldBy} onGoToRun={onGoToRun} />}
+      {action !== null && <AutomationHeldBy runs={action.heldBy} withAutomation onGoToRun={onGoToRun} />}
 
       <div className="actbuild__canvashead">
         <span className="actbuild__sec">{t("auto.act.stepsPlace")}</span>

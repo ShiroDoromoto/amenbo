@@ -1486,7 +1486,7 @@ mod tests {
                 checked(tx, &automation),
                 vec![Unmet::LeavesTaskOpen {
                     step: "直す".into(),
-                    exit: None,
+                    exit: Some(crate::model::DONE_EXIT.into()),
                     to: None,
                     builtin: None,
                     to_builtin: None,
@@ -1513,7 +1513,7 @@ mod tests {
                 checked(tx, &automation),
                 vec![Unmet::LeavesTaskOpen {
                     step: "直す".into(),
-                    exit: None,
+                    exit: Some(crate::model::DONE_EXIT.into()),
                     to: Some("取る".into()),
                     builtin: None,
                     to_builtin: None,
@@ -2235,8 +2235,8 @@ mod tests {
             a_second_step(tx, &action, &placement);
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::OpenExit { step: "見直す".into(), exit: None, builtin: None }],
-                "the second step's unnamed way out leads nowhere inside the action",
+                vec![Unmet::OpenExit { step: "見直す".into(), exit: Some(crate::model::DONE_EXIT.into()), builtin: None }],
+                "the second step's done way out leads nowhere inside the action",
             );
         });
     }
@@ -2285,7 +2285,7 @@ mod tests {
             let unmet =
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
             assert!(
-                unmet.contains(&Unmet::OpenExit { step: "見直す".into(), exit: None, builtin: None }),
+                unmet.contains(&Unmet::OpenExit { step: "見直す".into(), exit: Some(crate::model::DONE_EXIT.into()), builtin: None }),
                 "the line returning to it went with it: {unmet:?}",
             );
         });

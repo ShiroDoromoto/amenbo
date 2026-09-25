@@ -265,7 +265,7 @@ pub(crate) mod test_support {
             .unwrap_or_else(|| panic!("no input '{name}' on step execution {}", run_step.id))
     }
 
-    /// **The id of one way out a box declares**, by its name — `None` being the unnamed one.
+    /// **The id of one way out a box declares**, by its name — `None` being the done one.
     pub(crate) fn exit_id(
         tx: &WriteTx<'_>,
         owner: crate::model::AutomationOwner,

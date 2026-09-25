@@ -4375,7 +4375,8 @@ const REGISTRY: &[OpSpec] = &[
     // And taken away, which is the press at the end of the same row.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "undeclare", required: &["what", "name"], refs: &[], strings: &["what", "name"], binds: false },
     //
-    // The launch place, which is where a half-built definition is named as such. `ready` is the whole
+    // The build screen's start press and what it lists under its head, which is where a half-built
+    // definition is named as such. `ready` is the whole
     // answer and `reason` one line of what stands in the way, spelled as core names it
     // (`unwired_input`, `unanswered_cfg`, …) so a road says which refusal it is walking rather than
     // quoting a sentence the interface owns. `box` is the name the reason carries — the action on a
@@ -4487,9 +4488,6 @@ const REGISTRY: &[OpSpec] = &[
     // Pressing the row, which goes to the project the automation is in and opens its build screen
     // there — an automation is changed in its own project, and this list changes nothing.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "every-open", required: &["target", "project"], refs: &["target", "project"], strings: &[], binds: false },
-    // What the two run tabs say over their rows when the sidebar opened them: that they hold every
-    // run on this device, since no project narrowed them. `tab` is `running` or `history`.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "scope-said", required: &["tab"], refs: &[], strings: &["tab"], binds: false },
     //
     // **A definition a run is going on, on its build screen** — an automation's or a library
     // action's, whichever is open. While a run of it is running or paused, core refuses every rewrite,

@@ -1569,6 +1569,16 @@ impl AutomationEnds {
 /// [`AutomationEdge`] on it is how somebody says otherwise.
 pub const ERROR_EXIT: &str = "*";
 
+/// The name of the way out every step and every action is born with beside [`ERROR_EXIT`]: the one a
+/// step that finished leaves by when it has only one. It is an ordinary name — a person may rename it
+/// or delete it — and it is written at birth so that no way out goes without a name: a way out with
+/// none was drawn blank on its line and read as "the only one" even beside others.
+///
+/// **Left unsaid, a way out is this one.** Where a caller names no way out — `4:` on the command line,
+/// `step-done` with no `--exit`, a built-in that finished — it is the way out called this, on whatever
+/// owner is being read.
+pub const DONE_EXIT: &str = "完了";
+
 /// The number of times a way back may be taken for one task before the run is stopped
 /// ([`AutomationEdge::max_times`]). Ten, because the thing it guards against is a loop that never
 /// converges, not a review that goes round three times.
@@ -1743,8 +1753,8 @@ pub struct AutomationCfg {
 }
 
 /// **A way out of a step or an action**, named by whoever built it. Which one the agent took is the
-/// whole condition the next box is chosen by. `name` `None` is the unnamed way out, which is what an
-/// owner with only one has; [`ERROR_EXIT`] is the one every owner carries from birth.
+/// whole condition the next box is chosen by. Every owner is born with [`DONE_EXIT`] and
+/// [`ERROR_EXIT`]. `name` is `None` only on a row written before v71, which gave every way out a name.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AutomationExit {
     pub id: i64,
@@ -2042,7 +2052,7 @@ pub struct RunDefExit {
     /// The [`AutomationExit`] row this was copied from — what `step-done --exit` names and what the
     /// run's records key the way out by. Kept after the row itself is renamed or gone.
     pub id: i64,
-    /// `None` is the unnamed way out; [`ERROR_EXIT`] is the error one.
+    /// [`ERROR_EXIT`] is the error one. `None` only in a copy written before v71.
     #[serde(default)]
     pub name: Option<String>,
     pub outs: Vec<RunDefPort>,

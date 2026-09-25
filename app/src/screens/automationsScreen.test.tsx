@@ -1,16 +1,16 @@
 // @vitest-environment jsdom
-// The automations screen and the build screen's launch place (`AMB-T-5254`). Only the reads are
+// The automations screen and the build screen's start press (`AMB-T-5254`). Only the reads are
 // stubbed; the tabs, the list, the wording of each reason and what the button does all run for real.
 //
 // What these guard: **the screen is four tabs, from making to running, and opens on the
-// definitions**, so another tab cannot quietly become the one a reader lands on; **a row says whether its automation
-// could be started**, from the same check the launch place reads; **a row opens the build screen** in
-// place of the list rather than beside it; **the panel beside the picture is opened by what was
-// pressed** — the library by the press on an empty picture, the definition's own fields by "Edit" —
-// and by nothing else; **the launch place says what is in the way, in words**,
-// every reason the check can give taking a line a person can act on — including the unnamed way out,
-// which has no name to put in a sentence; and **the button is shut while anything is in the way**,
-// which is the whole of what the launch place is for.
+// definitions**, so another tab cannot quietly become the one a reader lands on; **a row's start is
+// shut while its automation could not be started**, from the same check the build screen reads; **a
+// row opens the build screen** in place of the list rather than beside it; **the panel beside the
+// picture is opened by what was pressed** — the library by the press on an empty picture, the
+// definition's own fields by "Edit" — and by nothing else; **what is in the way is listed under the
+// build screen's head, in words**, every reason the check can give taking a line a person can act on
+// — including the unnamed way out, which has no name to put in a sentence; and **the start press is
+// shut while anything is in the way**, which is the whole of what that list is for.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +29,7 @@ const hoisted = vi.hoisted(() => ({
   detail: null as AutomationDetailDto | null,
   check: null as AutomationLaunchCheckDto | null,
   launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
+  stop: vi.fn(async (..._args: unknown[]) => true),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -42,6 +43,7 @@ vi.mock("../core/automations", () => ({
   insertAutomationAction: () => Promise.resolve(),
   placeAutomationAction: () => Promise.resolve(),
   launchAutomation: hoisted.launch,
+  stopRun: hoisted.stop,
   // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
   // it is the tab being reachable that matters.
   useLiveRuns: () => [],
@@ -99,7 +101,7 @@ function button(label: string): HTMLButtonElement {
   if (!found) throw new Error(`no button labelled ${label}`);
   return found;
 }
-const blocks = () => [...container.querySelectorAll(".auto__blocks li")].map((li) => li.textContent);
+const blocks = () => [...container.querySelectorAll(".autolaunch__blocks li")].map((li) => li.textContent);
 
 beforeEach(() => {
   container = document.createElement("div");
@@ -148,20 +150,47 @@ describe("the automations screen", () => {
     expect(container.querySelector(".autohist__filter")).not.toBeNull();
   });
 
-  it("says a project with no automations has none", async () => {
+  // With none, the press that makes the first one is the whole tab (`AMB-T-5523`).
+  it("offers a project with no automations the press that makes the first one, and nothing else", async () => {
     await render();
-    expect(container.textContent).toContain(t("auto.empty"));
+    expect(container.querySelector(".autolist__first")?.textContent).toContain(t("auto.newFirst"));
+    expect(container.querySelector(".autolist")).toBeNull();
+    expect(container.querySelector(".auto__empty")).toBeNull();
   });
 
-  it("names each automation, how many actions are placed on it and whether it could start", async () => {
-    hoisted.automations = [card({ placements: 3 }), card({ id: 8, name: "Nightly", archived: true })];
-    hoisted.check = { ready: false, blocks: [] };
+  it("names each automation and how many actions are placed on it, and starts it from its row", async () => {
+    hoisted.automations = [card({ placements: 3 })];
+    hoisted.check = { ready: true, blocks: [] };
     await render();
     const rows = [...container.querySelectorAll(".autolist__row")].map((one) => one.textContent ?? "");
     expect(rows[0]).toContain("Morning round");
     expect(rows[0]).toContain(tf("auto.stepCount", { count: 3 }));
-    expect(rows[0]).toContain(t("auto.notReady"));
-    expect(rows[1]).toContain(t("auto.archived"));
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true);
+  });
+
+  // Whether it could start is the press's state, and why not is read off it (`AMB-T-5523`).
+  it("holds the row's start shut while something is in the way, and says what on hover", async () => {
+    hoisted.automations = [card()];
+    hoisted.check = { ready: false, blocks: [{ code: "automation_no_entry", message_en: "no entry", fields: {} }] };
+    await render();
+    expect(button(t("auto.start")).disabled).toBe(true);
+    expect(container.querySelector(".autolist__start")?.getAttribute("title")).toBe(
+      errSentence({ code: "automation_no_entry", message_en: "no entry", fields: {} }),
+    );
+  });
+
+  it("folds the archived ones at the end of the list, under their count", async () => {
+    hoisted.automations = [card({ id: 8, name: "Nightly", archived: true }), card()];
+    await render();
+    const names = () => [...container.querySelectorAll(".autolist__row")].map((one) => one.textContent ?? "");
+    expect(names()).toHaveLength(1);
+    expect(names()[0]).toContain("Morning round");
+    const fold = container.querySelector<HTMLButtonElement>(".autolist__fold");
+    expect(fold?.textContent).toContain(tf("auto.archivedFold", { count: 1 }));
+    await act(async () => { fold?.click(); });
+    expect(names()).toHaveLength(2);
+    expect(names()[1]).toContain("Nightly");
   });
 
   it("puts the first line of an automation's notes under its name, and nothing where there are none", async () => {
@@ -179,12 +208,10 @@ describe("the automations screen", () => {
     expect(id).toBe(tf("auto.id", { id: 12 }));
   });
 
-  it("says nothing of a row's readiness until the check answers", async () => {
+  it("holds a row's start shut until the check answers", async () => {
     hoisted.automations = [card()];
     await render();
-    const row = container.querySelector(".autolist__row")?.textContent ?? "";
-    expect(row).not.toContain(t("auto.ready"));
-    expect(row).not.toContain(t("auto.notReady"));
+    expect(button(t("auto.start")).disabled).toBe(true);
   });
 
   it("opens the build screen in place of the list, with no panel open", async () => {
@@ -194,7 +221,7 @@ describe("the automations screen", () => {
     await render();
     await act(async () => { button("Morning round").click(); });
     expect(container.querySelector(".autolist")).toBeNull();
-    expect(container.textContent).toContain(t("auto.build.launch"));
+    expect(container.querySelector(".actbuild__head")?.textContent).toContain(t("auto.start"));
     expect(container.textContent).toContain(t("auto.build.picture"));
     expect(container.querySelector(".actpanel")).toBeNull();
   });
@@ -260,7 +287,7 @@ describe("the automations screen opened from the sidebar", () => {
   it("says no project has one yet, rather than that this project has none", async () => {
     await renderEverywhere();
     expect(container.textContent).toContain(t("auto.emptyEverywhere"));
-    expect(container.textContent).not.toContain(t("auto.empty"));
+    expect(container.querySelector(".autolist__first")).toBeNull();
   });
 
   it("goes to the row's own project to open it, rather than opening it here", async () => {
@@ -366,6 +393,18 @@ describe("the panel beside the picture", () => {
     expect(container.querySelector(".actpanel")?.textContent).toContain("amenbo automation start 7");
   });
 
+  // The panel's head is the name, the archive is a switch, and the command is copied rather than
+  // explained (`AMB-T-5523`).
+  it("heads Edit with the name to write, and offers the archive as a switch", async () => {
+    await open();
+    await act(async () => { button(t("auto.build.edit")).click(); });
+    const name = container.querySelector<HTMLInputElement>(".actpanel__head .actpanel__titleinput");
+    expect(name?.value).toBe("Morning round");
+    expect(container.querySelector(".actpanel__body textarea")?.getAttribute("placeholder")).toBe(t("auto.about.notesHint"));
+    expect(container.querySelector(".actpanel__body input[role='switch']")).not.toBeNull();
+    expect(buttons().some((b) => b.textContent === t("auto.about.copy"))).toBe(true);
+  });
+
   it("closes from its own ×", async () => {
     await open();
     await act(async () => { button(t("auto.build.edit")).click(); });
@@ -376,7 +415,9 @@ describe("the panel beside the picture", () => {
   });
 });
 
-describe("the launch place", () => {
+// Whether it can be started is the start press on the head; what is in the way is listed under the
+// head only while there is something (`AMB-T-5523`).
+describe("the start press on the build screen's head", () => {
   async function open(check: AutomationLaunchCheckDto) {
     hoisted.automations = [card()];
     hoisted.detail = detail();
@@ -421,13 +462,13 @@ describe("the launch place", () => {
   it("holds the button shut while anything is in the way", async () => {
     await open({ ready: false, blocks: [reason("not_ready_automation_no_steps")] });
     expect(button(t("auto.start")).disabled).toBe(true);
-    expect(container.textContent).toContain(t("auto.notReady"));
+    expect(blocks()).toHaveLength(1);
   });
 
-  it("offers the button once nothing is in the way", async () => {
+  it("offers the button once nothing is in the way, and lists nothing under the head", async () => {
     await open({ ready: true, blocks: [] });
-    expect(container.textContent).toContain(t("auto.ready"));
     expect(button(t("auto.start")).disabled).toBe(false);
+    expect(container.querySelector(".autolaunch")).toBeNull();
   });
 });
 
@@ -533,6 +574,7 @@ describe("an automation a run is going on (AMB-D-961)", () => {
     pauseRequested: false,
     waiting: false,
     stepsDone: 2,
+    reportWithheld: [],
     acknowledged: false,
   };
   async function openHeld(heldBy: AutomationRunCardDto[] = [run]) {
@@ -545,11 +587,20 @@ describe("an automation a run is going on (AMB-D-961)", () => {
     });
   }
 
-  it("names the runs using it, and goes to a run's pane on its line", async () => {
+  it("names the run using it, and goes to its pane from the band", async () => {
     await openHeld();
-    expect(container.querySelector(".autoheld")?.textContent).toContain(t("auto.held.what"));
-    await act(async () => { container.querySelector<HTMLButtonElement>(".autoheld .autorun__go")!.click(); });
+    expect(container.querySelector(".autoheld")?.textContent).toContain(tf("auto.held.by", { run: 31 }));
+    await act(async () => { button(t("auto.held.openPane")).click(); });
     expect(goToRun).toHaveBeenCalledWith(1, 31);
+  });
+
+  it("stops the run from the band", async () => {
+    hoisted.stop.mockClear();
+    await openHeld();
+    const stop = container.querySelector<HTMLButtonElement>(".autoheld .btn--danger");
+    expect(stop?.textContent).toBe(t("auto.run.stop"));
+    await act(async () => { stop?.click(); });
+    expect(hoisted.stop).toHaveBeenCalledWith(31);
   });
 
   it("offers nothing to place, and opens its own fields with them shut", async () => {

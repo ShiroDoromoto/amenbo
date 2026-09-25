@@ -267,7 +267,7 @@ pub fn automation_builtin_page() -> Result<Vec<AutomationBuiltinDto>, CmdError> 
                 .exits
                 .iter()
                 .map(|e| AutomationBuiltinExitDto {
-                    name: e.name.map(str::to_string),
+                    name: Some(e.name.to_string()),
                     outputs: e.outs.iter().map(builtin_port_dto).collect(),
                 })
                 .collect(),
@@ -687,8 +687,8 @@ fn undeclared(what: &str, owner: AutomationOwner, owner_id: i64, name: &str) -> 
         .into()
 }
 
-/// One of this owner's ways out, by the name the panel holds it under. `None` is the unnamed one,
-/// which is a row like any other and is named by having no name.
+/// One of this owner's ways out, by the name the panel holds it under. `None` is the done one
+/// ([`amenbo_core::model::DONE_EXIT`]).
 fn exit_row(
     store: &amenbo_core::Store,
     owner: AutomationOwner,
@@ -697,13 +697,8 @@ fn exit_row(
 ) -> Result<i64, CmdError> {
     let found =
         read::automation_exit_by_name(store.read_model().conn(), owner, owner_id, name)?;
-    found.map(|one| one.id).ok_or_else(|| match name {
-        Some(name) => undeclared("way out", owner, owner_id, name),
-        None => amenbo_core::Error::not_found(format!(
-            "{} '{owner_id}' declares no unnamed way out",
-            owner.as_str()
-        ))
-        .into(),
+    found.map(|one| one.id).ok_or_else(|| {
+        undeclared("way out", owner, owner_id, name.unwrap_or(amenbo_core::model::DONE_EXIT))
     })
 }
 
@@ -769,7 +764,7 @@ fn port_kind(word: &str) -> Result<AutomationPortKind, CmdError> {
 }
 
 /// **Declare another way out of this action, or of one step inside it.** Both are born carrying the
-/// unnamed one and the error one, so this is the second and every one after it — and `*` is refused
+/// done one and the error one, so this is the second and every one after it — and `*` is refused
 /// as a name, that one being carried already ([`amenbo_core::ops::automation::exit_add`]).
 #[tauri::command]
 pub fn automation_exit_declare(
@@ -785,12 +780,9 @@ pub fn automation_exit_declare(
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
-/// **Rename one way out**, `to` being `null` for the unnamed one.
-///
-/// **Every edge and every wire that named the old name is parted from it.** They name a way out by
-/// name, and core leaves them pointing at a name nobody declares rather than rewriting the graph
-/// around them — the parting is then visible in the picture, which is where a reader can act on it
-/// ([`amenbo_core::ops::automation::exit_rename`]).
+/// **Rename one way out.** A way out keeps a name, so a `null` `to` is refused
+/// ([`amenbo_core::ops::automation::exit_rename`]). Every edge and every wire on it stays on it: core
+/// keys them by the way out's row, not its name.
 #[tauri::command]
 pub fn automation_exit_rename(
     owner: String,
@@ -1432,6 +1424,13 @@ fn run_card(
     let step_name = last_def.map(|def| def.name);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
     let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
+    // The steps that owed the task their report and could not leave it, the task being closed.
+    let mut report_withheld = Vec::new();
+    for step in steps.iter().filter(|one| one.report_withheld) {
+        if let Some(def) = read::automation_run_def(conn, step.run_def_id)? {
+            report_withheld.push(def.name);
+        }
+    }
     Ok(AutomationRunCardDto {
         run: run.id,
         project: run.project_id,
@@ -1454,6 +1453,7 @@ fn run_card(
         steps_done: steps.len(),
         exit_name,
         task: worked_task(store, stretch)?,
+        report_withheld,
         acknowledged: run.acknowledged_at.is_some(),
     })
 }

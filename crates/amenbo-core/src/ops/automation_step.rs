@@ -998,7 +998,7 @@ mod tests {
             let task = crate::ops::test_support::out_port(tx, opening.run_step.id, None, "タスク");
             assert!(text.contains(&format!("\"found\" — `{note}` note (value)")), "{text}");
             assert!(
-                text.contains(&format!("the unnamed way out — `{task}` タスク (task_take, required)")),
+                text.contains(&format!("\"完了\" — `{task}` タスク (task_take, required)")),
                 "{text}"
             );
             assert!(text.contains("the error way out — nothing to hand on"), "{text}");

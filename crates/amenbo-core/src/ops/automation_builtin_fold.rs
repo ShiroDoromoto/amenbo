@@ -19,6 +19,7 @@
 //! remote.
 
 use crate::error::{Error, Result};
+use crate::model::DONE_EXIT;
 use crate::ops::automation_builtin::{Builtin, BuiltinExit, Outside, Work, Worked};
 use crate::ops::automation_builtin_cut::{refused, repository};
 use crate::store_engine::read;
@@ -33,7 +34,7 @@ pub(super) const FOLD_WORKTREE: Builtin = Builtin {
     does: "いま扱っているタスクの worktree とブランチを片付ける。リモートの既定ブランチにまだ入っていない変更があれば、畳まずに「未マージ」から出る",
     settings: &[],
     ins: &[],
-    exits: &[BuiltinExit { name: None, outs: &[] }, BuiltinExit { name: Some(UNMERGED), outs: &[] }],
+    exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }, BuiltinExit { name: UNMERGED, outs: &[] }],
     waits: None,
     work: Work::Outside(fold),
 };
@@ -49,12 +50,12 @@ fn fold(outside: &Outside<'_>) -> Result<Worked> {
     let base = worktree_cut::origin_default(&root).map_err(refused)?;
     match worktree_cut::finish(&cut, Some(&base), false) {
         Ok(_) => Ok(Worked {
-            exit: None,
+            exit: DONE_EXIT,
             report: format!("folded {} and {}", cut.worktree.display(), cut.branch),
             hands: Vec::new(),
         }),
         Err(Refusal::Unmerged { branch, base }) => Ok(Worked {
-            exit: Some(UNMERGED),
+            exit: UNMERGED,
             report: format!("{branch} carries changes {base} does not have, so it was left standing"),
             hands: Vec::new(),
         }),

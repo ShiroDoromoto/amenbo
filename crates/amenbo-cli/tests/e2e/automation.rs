@@ -114,25 +114,25 @@ fn an_automation_carries_no_preamble_of_its_own() {
 
 /// `--from` is one token, `<box>:<way out>`, because a way out is named against whichever of the box
 /// and the action standing on it declares it — a name without its box names nothing. The colon with
-/// nothing after it is the unnamed way out, and `*` the error one. What the edge keeps is the way
+/// nothing after it is the done way out every box is born with, and `*` the error one. What the edge keeps is the way
 /// out's row (`AMB-D-961`), so two names give two keys.
 #[test]
 fn an_edge_names_its_way_out_on_the_box_it_leaves_from() {
     let cli = Cli::new();
     let (_, _, _, placement) = an_automation(&cli);
 
-    let unnamed = cli.json(&["automation", "edge-add", "--from", &format!("{placement}:"), "--halt", "--json"]);
-    let unnamed_exit = unnamed["automation_edge"]["exit_id"].as_i64().expect("keyed");
-    assert_eq!(unnamed["automation_edge"]["ends"].as_str(), Some("halt"));
+    let done = cli.json(&["automation", "edge-add", "--from", &format!("{placement}:"), "--halt", "--json"]);
+    let done_exit = done["automation_edge"]["exit_id"].as_i64().expect("keyed");
+    assert_eq!(done["automation_edge"]["ends"].as_str(), Some("halt"));
 
     let errored = cli.json(&["automation", "edge-add", "--from", &format!("{placement}:*"), "--done", "--json"]);
     let errored_exit = errored["automation_edge"]["exit_id"].as_i64().expect("keyed");
-    assert_ne!(unnamed_exit, errored_exit, "the unnamed way out and the error one are two rows");
+    assert_ne!(done_exit, errored_exit, "the done way out and the error one are two rows");
 
-    // No colon at all reads as the unnamed way out too — and that one already says what happens.
+    // No colon at all reads as the done way out too — and that one already says what happens.
     let (again, code) = cli.run_err(&["automation", "edge-add", "--from", &placement, "--done", "--json"]);
-    assert_ne!(code, 0, "the unnamed way out already says what happens after it");
-    assert!(again.contains("unnamed"), "{again}");
+    assert_ne!(code, 0, "the done way out already says what happens after it");
+    assert!(again.contains("already says what happens"), "{again}");
 
     let (refused, code) = cli.run_err(&["automation", "edge-add", "--from", "not-a-box", "--done", "--json"]);
     assert_eq!(code, 2, "{refused}");
@@ -169,7 +169,7 @@ fn a_line_is_drawn_on_an_automation_or_inside_an_action() {
 }
 
 /// Inside an action, a step's way out can leave the action by one the action declares (`--exit-to`,
-/// bare for its unnamed one), and `0` on a wire is the action itself: what it takes in is handed to a
+/// bare for its done one), and `0` on a wire is the action itself: what it takes in is handed to a
 /// step, and what a step hands on fills the way out of the action it returns to. Driven as the AI in its
 /// bound project, since the boundary is no step and must not be read as one outside its reach.
 #[test]
@@ -201,8 +201,8 @@ fn inside_an_action_a_step_returns_to_the_action_and_wires_reach_the_action_itse
 
     let bare = ai(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:"), "--exit-to"]);
     assert_eq!(bare["automation_edge"]["ends"].as_str(), Some("exit"));
-    let unnamed = bare["automation_edge"]["exit_to_id"].as_i64().expect("keyed");
-    assert_ne!(Some(unnamed), action_exit.parse().ok(), "bare is the action's unnamed way out");
+    let done = bare["automation_edge"]["exit_to_id"].as_i64().expect("keyed");
+    assert_ne!(Some(done), action_exit.parse().ok(), "bare is the action's done way out");
     let edge = id_of(&bare, "automation_edge");
     let moved = ai(&["automation", "edge-update", &edge, "--exit-to", "approved"]);
     assert_eq!(moved["automation_edge"]["exit_to_id"].as_i64(), action_exit.parse().ok());
@@ -434,7 +434,7 @@ fn a_definition_is_read_back_whole_with_each_placement_resolved() {
     // reader to go and look up.
     let first = &shown["placements"][0];
     assert_eq!(first["action"]["name"].as_str(), Some("Review"));
-    // Every declarer is born carrying the unnamed way out and the error one, so the one built here
+    // Every declarer is born carrying the done way out and the error one, so the one built here
     // is found by name rather than by where it sits.
     let found = first["exits"]
         .as_array()
@@ -504,7 +504,7 @@ fn the_library_is_one_list_and_global_narrows_it() {
     let shown = cli.json(&["automation", "action-show", &action, "--json"]);
     assert_eq!(shown["steps"][0]["step"]["prompt"].as_str(), Some("review it"));
     assert_eq!(shown["used_by"], serde_json::json!(1));
-    // Every declarer is born carrying the unnamed way out and the error one.
+    // Every declarer is born carrying the done way out and the error one.
     assert_eq!(shown["exits"].as_array().map(|x| x.len()), Some(2));
 }
 
@@ -585,7 +585,7 @@ fn a_launchable(cli: &Cli) -> (String, String, String) {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--json"]), "automation");
     let (action, step) = an_action(cli, &p, "take one", "take one");
-    // The step inside leaves the action by its unnamed way out — the launch check asks the picture
+    // The step inside leaves the action by its done way out — the launch check asks the picture
     // inside an action the same question it asks the automation's.
     cli.json(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:"), "--exit-to", "--json"]);
     let placement = id_of(

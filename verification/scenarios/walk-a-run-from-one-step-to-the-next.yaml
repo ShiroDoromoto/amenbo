@@ -180,7 +180,7 @@ steps_gui:
       present: true
 
   # The report, and the way out it was left by. The way out is what the run reads to decide where to
-  # go — a report with no way out named would leave by the unnamed one, which this step does not use.
+  # go — a report with no way out named would leave by the done way out, which this step does not use.
   - type: action
     domain: automation
     op: done-in-pane

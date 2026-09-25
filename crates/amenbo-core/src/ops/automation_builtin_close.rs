@@ -17,7 +17,9 @@
 //! leaves the same way; one decided against, or no task at all, leaves by the error way out.
 
 use crate::error::{Error, Result};
-use crate::model::{ActorKind, AutomationPortKind, AutomationRunStep, AutomationRunStepStatus, TaskStatus};
+use crate::model::{
+    ActorKind, AutomationPortKind, AutomationRunStep, AutomationRunStepStatus, TaskStatus, DONE_EXIT,
+};
 use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Carried, Carry, Work};
 use crate::store_engine::{read, WriteTx};
 
@@ -30,7 +32,7 @@ pub(crate) const CLOSE_TASK: Builtin = Builtin {
     does: "いま扱っているタスクを完了にする。コミットを受け取ったら、その SHA も記録する",
     settings: &[],
     ins: &[BuiltinPort { name: COMMIT, kind: AutomationPortKind::Value, required: false }],
-    exits: &[BuiltinExit { name: None, outs: &[] }],
+    exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
     waits: None,
     work: Work::InStore(close),
 };
@@ -44,7 +46,7 @@ fn close(carry: &Carry<'_, '_>) -> Result<Carried> {
         .ok_or_else(|| Error::not_found(format!("task AMB-T-{task_id}")))?;
     match task.status {
         TaskStatus::Done => {
-            return Ok(Carried { exit: None, report: format!("AMB-T-{task_id} was done already") });
+            return Ok(Carried { exit: DONE_EXIT, report: format!("AMB-T-{task_id} was done already") });
         }
         TaskStatus::Rejected => {
             return Err(Error::invalid(format!(
@@ -65,7 +67,7 @@ fn close(carry: &Carry<'_, '_>) -> Result<Carried> {
     }
     crate::ops::task::set_completed(tx, task_id, true)?;
     said.insert(0, format!("closed AMB-T-{task_id} {}", task.title));
-    Ok(Carried { exit: None, report: said.join(", ") })
+    Ok(Carried { exit: DONE_EXIT, report: said.join(", ") })
 }
 
 /// **The last report an agent gave in this stretch**, or `None` where no agent's step has reported
@@ -182,8 +184,8 @@ mod tests {
             automation_report::out(tx, run_step, port, Produced::Value(sha)).expect("hand the commit on");
         }
         let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&opening.run_def.exits).expect("exits");
-        let unnamed = exits.iter().find(|e| e.name.is_none()).map(|e| e.id);
-        let Next::Step(close) = automation_report::done(tx, run_step, unnamed, report).expect("report") else {
+        let done = exits.iter().find(|e| e.name.as_deref() == Some(DONE_EXIT)).map(|e| e.id);
+        let Next::Step(close) = automation_report::done(tx, run_step, done, report).expect("report") else {
             panic!("the work goes on to the close");
         };
         let Opened::Carried { next, .. } = open(tx, run.id, close.id, Some(&claude)).expect("close") else {

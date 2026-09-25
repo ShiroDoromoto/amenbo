@@ -1316,7 +1316,7 @@ pub fn automation_launch(
         by: Some(ActorKind::Human),
     };
     let run = with_store_mut(|store| {
-        let mut handed = automation_run::HandedAtLaunch { text, files: Vec::new() };
+        let mut handed = automation_run::HandedAtLaunch { text, ..Default::default() };
         for path in files.unwrap_or_default() {
             handed.files.push(handed_file(store, &path)?);
         }

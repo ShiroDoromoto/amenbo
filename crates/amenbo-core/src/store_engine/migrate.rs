@@ -1049,7 +1049,25 @@ pub const STEPS: &[Step] = &[
         // that splits by an axis.
         apply: Apply::Custom(name_the_axis_a_split_splits_by),
     },
+    Step {
+        to: 79,
+        name: "let a run carry the title, notes and classification of the task it starts by filing",
+        // `AMB-D-970`. NULL on every row already written: no run before this one was handed a task to file.
+        apply: Apply::Custom(let_a_run_be_handed_a_task_to_file),
+    },
 ];
+
+/// v79: the task a run whose entry files one starts by filing — its title, notes and classification, as
+/// a person handed them over at launch (`AMB-D-970`).
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason.
+fn let_a_run_be_handed_a_task_to_file(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run")?.iter().any(|c| c == "handed_task") {
+        tx.execute_batch("ALTER TABLE automation_run ADD COLUMN handed_task TEXT;")?;
+    }
+    Ok(())
+}
 
 /// v78: the axis a library action splits by, for the built-in whose ways out are an axis's values
 /// (`AMB-D-972`).

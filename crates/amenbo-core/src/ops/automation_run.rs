@@ -31,6 +31,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
@@ -285,6 +286,11 @@ pub struct Launcher<'a> {
 /// **What a person hands over when launching a run** — the entrance where a person hands something
 /// over (`AMB-D-970`). The first step the run opens is told it ([`crate::ops::automation_step`]).
 ///
+/// **What may be handed depends on the entry**, and a launch handing what its entry does not read is
+/// refused rather than left lying on the run where nothing reads it ([`entry_reads`]): an agent's step
+/// reads the text and the files, the built-in that files a task reads the title, the notes and the
+/// classification, and any other built-in reads nothing.
+///
 /// Nothing handed is the default, and a launch that hands nothing starts as it always has.
 #[derive(Clone, Debug, Default)]
 pub struct HandedAtLaunch {
@@ -294,6 +300,57 @@ pub struct HandedAtLaunch {
     /// the order they were handed over. Each is attached to the run in the launch's own transaction,
     /// so the first step never opens on a run the files have not reached yet.
     pub files: Vec<HandedFile>,
+    /// The title of the task an entry that files one files. Blank is the same as none.
+    pub title: Option<String>,
+    /// Its notes. Blank is the same as none.
+    pub notes: Option<String>,
+    /// Its classification, as (axis, value) by name, in the order handed.
+    pub classification: Vec<(String, String)>,
+}
+
+impl HandedAtLaunch {
+    fn text(&self) -> Option<&str> {
+        self.text.as_deref().filter(|t| !t.trim().is_empty())
+    }
+
+    fn title(&self) -> Option<&str> {
+        self.title.as_deref().map(str::trim).filter(|t| !t.is_empty())
+    }
+
+    fn notes(&self) -> Option<&str> {
+        self.notes.as_deref().filter(|t| !t.trim().is_empty())
+    }
+
+    /// What was handed for an agent's step to read: the text or a file.
+    fn for_a_step(&self) -> bool {
+        self.text().is_some() || !self.files.is_empty()
+    }
+
+    /// What was handed for a task to be filed from: a title, notes or a classification.
+    fn for_a_task(&self) -> bool {
+        self.title().is_some() || self.notes().is_some() || !self.classification.is_empty()
+    }
+}
+
+/// **The task a run starts by filing, as handed over at launch** — kept on the run as JSON
+/// (`automation_run.handed_task`) and read by the built-in that files it, as the inputs it would
+/// otherwise be wired
+/// ([`crate::ops::automation_builtin_make`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HandedTask {
+    pub title: String,
+    #[serde(default)]
+    pub notes: Option<String>,
+    /// One `axis=value` a line — the shape the built-in's input for a chosen classification reads.
+    #[serde(default)]
+    pub classification: Option<String>,
+}
+
+impl HandedTask {
+    /// The one kept on `run`, or `None` where it was handed none.
+    pub fn of(run: &AutomationRun) -> Result<Option<HandedTask>> {
+        run.handed_task.as_deref().map(|json| serde_json::from_str(json).map_err(Error::from)).transpose()
+    }
 }
 
 /// One file handed over at launch, as [`crate::ops::attachment::add_blob`] takes it.
@@ -413,7 +470,7 @@ pub fn check(
             placement.action_id,
             AutomationPortDirection::In,
         )? {
-            if port.required && !fed(conn, placement, port.id, &live, &by_id)? {
+            if port.required && !fed(conn, placement, port.id, entry_id, &live, &by_id)? {
                 unmet.push(Unmet::UnwiredInput {
                     step: name.clone(),
                     port: port.name,
@@ -437,7 +494,7 @@ pub fn check(
             unmet.push(Unmet::ActionEmpty { action: name.clone(), placement: placement.id });
             continue;
         }
-        push_new(&mut unmet, inside(conn, placement, &steps, &live, &by_id)?);
+        push_new(&mut unmet, inside(conn, placement, &steps, entry_id, &live, &by_id)?);
         // A built-in names no agent and no model: Amenbo carries it out itself (`AMB-D-964`).
         for step in steps.iter().filter(|step| step.builtin.is_none()) {
             let mut found = Vec::new();
@@ -624,6 +681,7 @@ fn inside(
     conn: &Connection,
     placement: &AutomationPlacement,
     steps: &[AutomationStep],
+    entry_id: i64,
     live: &BTreeSet<i64>,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
 ) -> Result<Vec<Unmet>> {
@@ -677,7 +735,7 @@ fn inside(
                     )?
                     .iter()
                     .any(|p| p.id == wire.from_port_id);
-                    declared && fed(conn, placement, wire.from_port_id, live, by_id)?
+                    declared && fed(conn, placement, wire.from_port_id, entry_id, live, by_id)?
                 } else if opened.contains(&wire.from_id) {
                     let exit = declared_exit(conn, wire.from_exit_id, AutomationOwner::Step, wire.from_id)?;
                     match exit {
@@ -885,13 +943,35 @@ fn outs_of(conn: &Connection, exit: &AutomationExit) -> Result<Vec<crate::model:
 /// A wire counts only where **both** halves hold: its far end is declared — that placement's way out
 /// really hands on the port it keys — and that placement is reachable from the entry. A wire from a
 /// placement no run reaches would never carry anything, so it feeds no input.
+///
+/// **An input the entry reads at launch is fed there** (`entry_id`): the built-in that files a task,
+/// placed as the entry, is handed its title, notes and classification by the person launching the run
+/// ([`crate::ops::automation_builtin_make::read_at_launch`]), and the launch refuses one that hands no
+/// title.
 fn fed(
     conn: &Connection,
     placement: &AutomationPlacement,
     port_id: i64,
+    entry_id: i64,
     live: &BTreeSet<i64>,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
 ) -> Result<bool> {
+    if placement.id == entry_id {
+        let builtin = action_builtin(conn, placement.action_id)?;
+        let port = read::automation_ports_of(
+            conn,
+            AutomationPortOwner::Action,
+            placement.action_id,
+            AutomationPortDirection::In,
+        )?
+        .into_iter()
+        .find(|p| p.id == port_id);
+        if port.is_some_and(|p| {
+            crate::ops::automation_builtin_make::read_at_launch(builtin.as_deref(), &p.name)
+        }) {
+            return Ok(true);
+        }
+    }
     for wire in read::automation_wires_to_port(
         conn,
         AutomationPictureOwner::Automation,
@@ -980,8 +1060,7 @@ pub fn launch_handing(
             ))
         }
     };
-    let text = handed.text.as_deref().filter(|t| !t.trim().is_empty());
-    let run = launch_asking(tx, automation_id, by, text, |_| true)?;
+    let run = launch_asking(tx, automation_id, by, handed, |_| true)?;
     if let Some(who) = who {
         for file in &handed.files {
             crate::ops::attachment::add_blob(
@@ -1008,15 +1087,18 @@ pub(crate) fn launch_leaving_the_task_open(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, None, |unmet| !matches!(unmet, Unmet::LeavesTaskOpen { .. }))
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), |unmet| {
+        !matches!(unmet, Unmet::LeavesTaskOpen { .. })
+    })
 }
 
-/// [`launch`], refusing only over what `counts` says counts, and keeping `handed` on the run.
+/// [`launch`], refusing only over what `counts` says counts, and keeping what was `handed` on the run.
+/// The files are the caller's to attach once the run exists.
 fn launch_asking(
     tx: &WriteTx<'_>,
     automation_id: i64,
     by: &Launcher<'_>,
-    handed: Option<&str>,
+    handed: &HandedAtLaunch,
     counts: impl Fn(&Unmet) -> bool,
 ) -> Result<AutomationRun> {
     let automation: Automation = read::automation(tx.conn(), automation_id)?
@@ -1046,6 +1128,9 @@ fn launch_asking(
             .coded(ErrorCode::InvalidAutomationWorkspaceClosed),
         ));
     }
+    let handed_task = entry_reads(tx.conn(), &automation, handed)?
+        .map(|task| serde_json::to_string(&task).map_err(Error::from))
+        .transpose()?;
     let now = Timestamp::now();
     let run = AutomationRun {
         id: read::next_id(tx.conn(), "automation_run")?,
@@ -1058,7 +1143,8 @@ fn launch_asking(
         started_at: Some(now),
         ended_at: None,
         acknowledged_at: None,
-        handed: handed.map(str::to_string),
+        handed: handed.text().map(str::to_string),
+        handed_task,
         created_at: now,
         updated_at: now,
     };
@@ -1074,6 +1160,72 @@ fn launch_asking(
         }
     }
     Ok(run)
+}
+
+/// **Whether the entry reads what was handed over at launch**, and the task to file where it files one.
+///
+/// Asked after the check, so the entry is there to be asked of. Each entry reads its own things:
+///
+/// - **An agent's step** reads the text and the files ([`crate::ops::automation_step`]).
+/// - **The built-in that files a task** reads a title — required, since a task cannot be filed without
+///   one — the notes and a classification, and those are checked here the way the built-in checks them
+///   when it files the task ([`crate::ops::automation_builtin_make::handed_at_launch`]). A launch that
+///   would only fall over at its first step is refused before a run is made.
+/// - **Any other built-in** reads nothing: it takes a task or fetches, from what it was set with.
+///
+/// Something handed that the entry does not read is refused: nothing would ever read it, and the
+/// person handing it would believe it went somewhere.
+fn entry_reads(
+    conn: &Connection,
+    automation: &Automation,
+    handed: &HandedAtLaunch,
+) -> Result<Option<HandedTask>> {
+    let entry = match automation.entry_placement_id {
+        Some(id) => read::automation_placement(conn, id)?,
+        None => None,
+    };
+    let Some(entry) = entry else {
+        return Ok(None);
+    };
+    let step = action_name(conn, entry.action_id)?;
+    let builtin = action_builtin(conn, entry.action_id)?;
+    let files_a_task = builtin.as_deref() == Some(crate::ops::automation_builtin_make::KEY);
+    let refused = |what: &str, reads: &str| {
+        Err(Error::invalid(format!(
+            "the entry '{step}' {reads}, and {what} was handed over at launch — it would never be read"
+        )))
+    };
+    match (builtin.is_some(), files_a_task) {
+        (false, _) if handed.for_a_task() => {
+            refused("a title, notes or a classification", "is an agent's step and reads the text and files")
+        }
+        (false, _) => Ok(None),
+        (true, true) if handed.for_a_step() => {
+            refused("a text or a file", "files a task and reads its title, notes and classification")
+        }
+        (true, true) => {
+            let Some(title) = handed.title() else {
+                return Err(Error::invalid(format!(
+                    "the entry '{step}' files a task, and no title for it was handed over at launch"
+                )));
+            };
+            let classification = crate::ops::automation_builtin_make::handed_at_launch(
+                conn,
+                &entry,
+                automation.project_id,
+                &handed.classification,
+            )?;
+            Ok(Some(HandedTask {
+                title: title.to_string(),
+                notes: handed.notes().map(str::to_string),
+                classification,
+            }))
+        }
+        (true, false) if handed.for_a_step() || handed.for_a_task() => {
+            refused("something", "reads nothing handed over at launch")
+        }
+        (true, false) => Ok(None),
+    }
 }
 
 /// Build the body of the `not_ready` refusal: one refusal over a list of reasons whose length is only
@@ -2140,6 +2292,7 @@ mod tests {
             let handed = HandedAtLaunch {
                 text: Some("この issue を起票して".into()),
                 files: vec![a_file("issue.md"), a_file("log.txt")],
+                ..Default::default()
             };
             let run = launch_handing(tx, automation.id, &here(&claude()), &handed).expect("launch");
 
@@ -2159,11 +2312,42 @@ mod tests {
     fn blank_text_handed_at_launch_is_none() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
-            let handed = HandedAtLaunch { text: Some("  \n".into()), files: Vec::new() };
+            let handed = HandedAtLaunch { text: Some("  \n".into()), ..Default::default() };
             let run = launch_handing(tx, automation.id, &here(&claude()), &handed).expect("launch");
             assert_eq!(run.handed, None);
             let bare = launch(tx, automation.id, &here(&claude())).expect("launch");
             assert_eq!(bare.handed, None);
+        });
+    }
+
+    /// **An entry refuses what it does not read** (`AMB-D-970`): an agent's step reads the text and the
+    /// files, not the title, notes or classification of a task to file, and a built-in that takes a
+    /// task reads nothing handed over at all. Refused before any run is made.
+    #[test]
+    fn an_entry_refuses_what_it_does_not_read() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let startable = claude();
+            let titled = HandedAtLaunch { title: Some("an issue".into()), ..Default::default() };
+            let err = launch_handing(tx, automation.id, &here(&startable), &titled).expect_err("not read");
+            assert!(err.to_string().contains("reads the text and files"), "{err}");
+            let classified =
+                HandedAtLaunch { classification: vec![("職能".into(), "実装".into())], ..Default::default() };
+            assert!(launch_handing(tx, automation.id, &here(&startable), &classified).is_err());
+            assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
+
+            let take = mk_automation(tx, "取るだけ");
+            let placed = crate::ops::automation::placement_add(
+                tx,
+                take.id,
+                crate::ops::automation_builtin::action(tx, "take_task").expect("the built-in's action").id,
+            )
+            .expect("place it");
+            let take = automation::set_entry(tx, take.id, Some(placed.id)).expect("entry");
+            let words = HandedAtLaunch { text: Some("words".into()), ..Default::default() };
+            let err = entry_reads(tx.conn(), &take, &words).expect_err("reads nothing");
+            assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
+            assert_eq!(entry_reads(tx.conn(), &take, &HandedAtLaunch::default()).expect("nothing"), None);
         });
     }
 
@@ -2175,7 +2359,7 @@ mod tests {
             let (automation, _, _) = launchable(tx);
             let startable = claude();
             let nobody = Launcher { by: None, ..here(&startable) };
-            let handed = HandedAtLaunch { text: None, files: vec![a_file("issue.md")] };
+            let handed = HandedAtLaunch { files: vec![a_file("issue.md")], ..Default::default() };
             assert!(launch_handing(tx, automation.id, &nobody, &handed).is_err());
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
         });

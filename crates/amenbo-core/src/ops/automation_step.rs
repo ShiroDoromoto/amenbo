@@ -162,10 +162,24 @@ pub fn open(
         return Ok(Opened::LeftTaskOpen { run: stopped.run });
     }
 
+    // **The first step the run opens is told what was handed over at launch** (`AMB-D-970`), and no
+    // step after it: it is that step's to hand on along a wire, as anything else it produces. Asked
+    // before its own execution is written, which would otherwise be the one found.
+    let first = read::automation_run_steps_of(conn, run_id)?.is_empty();
+    // The built-in that files a task, as the entry, reads its inputs from the launch rather than along
+    // a wire (`super::automation_builtin_make::read_at_launch`).
+    let launched = match first {
+        true => launched_ins(&run, def.builtin.as_deref())?,
+        false => Vec::new(),
+    };
+
     // Every input, and what is actually standing ready to fill it.
     let mut handed: Vec<Handed> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
     for input in &ins {
+        if launched.iter().any(|(name, _)| *name == input.port.name) {
+            continue;
+        }
         match latest_for(tx, run_id, input, current.as_ref())? {
             Some(found) => handed.push(found),
             None if input.port.required => missing.push(input.port.name.clone()),
@@ -186,11 +200,6 @@ pub fn open(
         return Ok(Opened::Waiting { run });
     }
 
-    // **The first step the run opens is told what was handed over at launch** (`AMB-D-970`), and no
-    // step after it: it is that step's to hand on along a wire, as anything else it produces. Asked
-    // before its own execution is written, which would otherwise be the one found.
-    let first = read::automation_run_steps_of(conn, run_id)?.is_empty();
-
     let now = Timestamp::now();
     let stretch = match (opens_a_stretch, &current) {
         (true, _) => Some(new_stretch(tx, run_id, current.as_ref(), now)?),
@@ -202,8 +211,11 @@ pub fn open(
         write_in(tx, &run_step, found, now)?;
     }
     if def.builtin.is_some() {
-        let ins: Vec<(String, Option<String>)> =
-            handed.iter().map(|h| (h.port.name.clone(), h.from.value.clone())).collect();
+        let ins: Vec<(String, Option<String>)> = handed
+            .iter()
+            .map(|h| (h.port.name.clone(), h.from.value.clone()))
+            .chain(launched)
+            .collect();
         let task_id = stretch.as_ref().and_then(|s| s.task_id);
         let next =
             super::automation_builtin::carry_out(tx, &run, &run_step, &def, &exits, &ins, task_id, outside)?;
@@ -216,6 +228,21 @@ pub fn open(
     let text = compose(tx, &def, &exits, &handed, at_launch.as_deref(), stretch.as_ref())?;
     let folder = working_folder(&def, &handed)?;
     Ok(Opened::Ready(Box::new(Opening { run_step, run_def: def, text, folder })))
+}
+
+/// **The inputs a built-in placed as the entry reads from the launch**, by name — the task a run starts
+/// by filing ([`super::automation_run::HandedTask`]). Empty for any other step, and for a run handed
+/// none.
+fn launched_ins(run: &AutomationRun, builtin: Option<&str>) -> Result<Vec<(String, Option<String>)>> {
+    use super::automation_builtin_make::{read_at_launch, CHOSEN, NOTES, TITLE};
+    let Some(task) = super::automation_run::HandedTask::of(run)? else {
+        return Ok(Vec::new());
+    };
+    Ok([(TITLE, Some(task.title)), (NOTES, task.notes), (CHOSEN, task.classification)]
+        .into_iter()
+        .filter(|(name, _)| read_at_launch(builtin, name))
+        .map(|(name, value)| (name.to_string(), value))
+        .collect())
 }
 
 /// **Where this step's terminal is opened.** `work_dir_ref` names a setting or an input rather than

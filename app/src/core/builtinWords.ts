@@ -38,7 +38,7 @@ export function builtinShown(builtin: AutomationBuiltinDto): AutomationBuiltinDt
     inputs: builtin.inputs.map((one) => ({ ...one, name: word(one.name) })),
     exits: builtin.exits.map((one) => ({
       ...one,
-      name: one.name === undefined ? undefined : word(one.name),
+      name: word(one.name),
       outputs: one.outputs.map((out) => ({ ...out, name: word(out.name) })),
     })),
   };

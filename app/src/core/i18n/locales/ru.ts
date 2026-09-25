@@ -1010,7 +1010,6 @@ export const ru: Translation = {
     "auto.step.inputs": "Входы",
     "auto.step.unwired": "до него ничего не доходит",
     "auto.step.exits": "Выходы",
-    "auto.step.exitUnnamed": "выход",
     "auto.step.modelDefault": "собственное значение агента по умолчанию",
     "auto.step.notHere": "{agent} — нет на этой машине",
     "auto.step.folder": "Где он выполняется",

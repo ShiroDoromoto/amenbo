@@ -995,7 +995,6 @@ export const zhHans: Translation = {
     "auto.step.inputs": "输入参数",
     "auto.step.unwired": "没有东西送到",
     "auto.step.exits": "出口",
-    "auto.step.exitUnnamed": "出口",
     "auto.step.modelDefault": "代理自己的默认值",
     "auto.step.notHere": "{agent}——这台机器上没有",
     "auto.step.folder": "运行的目录",

@@ -3335,10 +3335,7 @@ pub struct AutomationBuiltinDto {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationBuiltinExitDto {
-    /// Absent is the unnamed way out.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) name: Option<String>,
+    pub(crate) name: String,
     pub(crate) outputs: Vec<AutomationPortDto>,
 }
 
@@ -3538,11 +3535,9 @@ pub struct AutomationStepDto {
 pub struct AutomationExitDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
-    /// Absent is the unnamed way out, which is all a step with a single one needs.
-    /// `*` is the error one, which every owner carries from birth.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) name: Option<String>,
+    /// `*` is the error one, which every owner carries from birth beside
+    /// [`amenbo_core::model::DONE_EXIT`].
+    pub(crate) name: String,
     pub(crate) outputs: Vec<AutomationPortDto>,
 }
 
@@ -3590,9 +3585,7 @@ pub struct AutomationEdgeDto {
     pub(crate) id: i64,
     #[ts(type = "number")]
     pub(crate) from_id: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) exit_name: Option<String>,
+    pub(crate) exit_name: String,
     /// Where it goes, for `go`. Absent for the others, which open no box.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
@@ -3600,8 +3593,8 @@ pub struct AutomationEdgeDto {
     /// `exit` leaves the action a step is inside, by the way out of the action it returns to.
     #[ts(type = "\"go\" | \"exit\" | \"done\" | \"halt\"")]
     pub(crate) ends: &'static str,
-    /// Which way out of the action an `exit` edge returns to. Absent for the unnamed one, and for
-    /// every edge that is not `exit`.
+    /// Which way out of the action an `exit` edge returns to. Absent for every edge that is not
+    /// `exit`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) exit_to: Option<String>,
@@ -3621,6 +3614,8 @@ pub struct AutomationWireDto {
     pub(crate) id: i64,
     #[ts(type = "number")]
     pub(crate) from_id: i64,
+    /// The way out the value is handed on through. Absent on a wire from the action's own inputs,
+    /// which is handed nothing by a way out.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) from_exit_name: Option<String>,
@@ -3733,7 +3728,7 @@ pub struct AutomationBuiltinRunDto {
     #[ts(optional)]
     pub(crate) looks_for: Option<String>,
     /// **The way out it left through**, once it has been carried out — by the name its step declared
-    /// it under, and empty for the unnamed one. Absent while Amenbo is still at it.
+    /// it under. Absent while Amenbo is still at it.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) exit_name: Option<String>,
@@ -3840,7 +3835,7 @@ pub struct AutomationLaunchBlockDto {
     pub(crate) message_en: String,
     /// The values the sentence is built from, under the names its template interpolates them by —
     /// `step`, `exit`, `port`, `cfg`, `agent`, `model`. Empty for a reason about the automation as a
-    /// whole, and for the unnamed way out, which has no name to put in a sentence.
+    /// whole.
     ///
     /// Beside them, `builtin` is the key of the built-in `step` came from and `to_builtin` the one `to`
     /// came from (`AMB-D-964`): a built-in's names are the store's Japanese, and the front end writes
@@ -3959,8 +3954,8 @@ pub struct AutomationRunCardDto {
     /// a reader asks of a run they are not watching.
     #[ts(type = "number")]
     pub(crate) steps_done: usize,
-    /// **The way out the last step left through**, by the name the run's copy declared it under,
-    /// and empty for the unnamed one. Absent while that step is still under way, and where it ended
+    /// **The way out the last step left through**, by the name the run's copy declared it under.
+    /// Absent while that step is still under way, and where it ended
     /// without leaving by one — a program that exited before it reported. On a failure it is the
     /// half of "where did it fail" the step's name does not say.
     #[serde(skip_serializing_if = "Option::is_none")]

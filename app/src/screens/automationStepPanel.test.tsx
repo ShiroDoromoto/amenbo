@@ -77,7 +77,7 @@ function spot(over: Partial<AutomationPlacementDto> = {}): AutomationPlacementDt
     showNotes: true,
     showDecisions: true,
     showComments: true,
-    exits: [{ id: 10, outputs: [] }, { id: 11, name: "*", outputs: [] }],
+    exits: [{ id: 10, name: "完了", outputs: [] }, { id: 11, name: "*", outputs: [] }],
     inputs: [],
     settings: [],
     steps: [],
@@ -337,7 +337,7 @@ describe("the panel of one spot", () => {
   it("fills an input from what fits, and empties it back to nothing reaching it", async () => {
     const one = detail({
       placements: [
-        spot({ id: 1, exits: [{ id: 10, outputs: [{ name: "note", kind: "value", required: true }] }] }),
+        spot({ id: 1, exits: [{ id: 10, name: "完了", outputs: [{ name: "note", kind: "value", required: true }] }] }),
         spot({
           id: 2,
           name: "work",
@@ -372,20 +372,20 @@ describe("the panel of one spot", () => {
   /// error one has an answer when nothing is said, so it never is.
   it("marks a way out nothing is said after, and never the error one", async () => {
     await render({ automation: detail(), placementId: 1 });
-    expect(nextFor(t("auto.step.exitUnnamed")).className).toContain("autostep__unset");
+    expect(nextFor("完了").className).toContain("autostep__unset");
     expect(nextFor(t("auto.pic.errorExit")).className).not.toContain("autostep__unset");
     const said = detail({
-      edges: [{ id: 5, fromId: 1, ends: "done" }],
+      edges: [{ id: 5, fromId: 1, exitName: "完了", ends: "done" }],
     });
     await render({ automation: said, placementId: 1 });
-    expect(nextFor(t("auto.step.exitUnnamed")).className).not.toContain("autostep__unset");
+    expect(nextFor("完了").className).not.toContain("autostep__unset");
   });
 
   it("draws the error way out last, and offers neither a rename nor a delete on it", async () => {
     await render({ automation: detail(), placementId: 1 });
     const ways = [...container.querySelectorAll(".autostep__exits li")];
     expect(ways).toHaveLength(2);
-    expect(ways[0]!.textContent).toContain(t("auto.step.exitUnnamed"));
+    expect(ways[0]!.textContent).toContain("完了");
     expect(ways[1]!.className).toContain("autostep__exiterr");
     expect(ways[1]!.textContent).toContain(t("auto.pic.errorExit"));
     // It takes an edge like any other way out — what it does not take is a rename or a delete.
@@ -417,23 +417,23 @@ describe("the panel of one spot", () => {
   /// said, changing the one that is there, and taking it away for "nothing said yet".
   it("says what happens after a way out, changes it, and takes it back", async () => {
     await render({ automation: detail(), placementId: 1 });
-    await pick(nextFor(t("auto.step.exitUnnamed")), "done");
+    await pick(nextFor("完了"), "done");
     expect(hoisted.addEdge).toHaveBeenCalledWith(
       "automation",
-      { boxId: 1, exitName: undefined },
+      { boxId: 1, exitName: "完了" },
       { ends: "done" },
     );
 
     const said = detail({
       placements: [spot(), spot({ id: 2, name: "Do it" })],
-      edges: [{ id: 8, fromId: 1, ends: "done" }],
+      edges: [{ id: 8, fromId: 1, exitName: "完了", ends: "done" }],
     });
     await render({ automation: said, placementId: 1 });
-    await pick(nextFor(t("auto.step.exitUnnamed")), "go:2");
+    await pick(nextFor("完了"), "go:2");
     expect(hoisted.editEdge).toHaveBeenCalledWith(8, { ends: "go", to: 2 });
 
     await render({ automation: said, placementId: 1 });
-    await pick(nextFor(t("auto.step.exitUnnamed")), "");
+    await pick(nextFor("完了"), "");
     expect(hoisted.removeEdge).toHaveBeenCalledWith(8);
   });
 
@@ -443,12 +443,12 @@ describe("the panel of one spot", () => {
     const three = detail({
       placements: [spot(), spot({ id: 2, name: "Do it" }), spot({ id: 3, name: "Check it" })],
       edges: [
-        { id: 8, fromId: 1, ends: "go", toId: 2 },
-        { id: 9, fromId: 2, ends: "go", toId: 3 },
+        { id: 8, fromId: 1, exitName: "完了", ends: "go", toId: 2 },
+        { id: 9, fromId: 2, exitName: "完了", ends: "go", toId: 3 },
       ],
     });
     await render({ automation: three, placementId: 2 });
-    const next = nextFor(t("auto.step.exitUnnamed"));
+    const next = nextFor("完了");
     const groups = [...next.querySelectorAll("optgroup")].map((one) => one.label);
     expect(groups).toEqual([t("auto.step.nextGroupPlacement"), t("auto.step.nextGroupEnd")]);
     const offered = [...next.querySelectorAll("optgroup")[0]!.querySelectorAll("option")].map(
@@ -464,12 +464,12 @@ describe("the panel of one spot", () => {
   /// else: a line on down is taken once, and an edge that closes the task or stops the run carries
   /// none, which core refuses.
   it("writes the limit of a line that goes back, and draws none on one that goes on", async () => {
-    const two = [spot({ exits: [{ id: 10, outputs: [] }] }), spot({ id: 2, name: "Do it" })];
+    const two = [spot({ exits: [{ id: 10, name: "完了", outputs: [] }] }), spot({ id: 2, name: "Do it" })];
     const looping = detail({
       placements: two,
       edges: [
-        { id: 7, fromId: 1, ends: "go", toId: 2 },
-        { id: 8, fromId: 2, ends: "go", toId: 1, maxTimes: 10 },
+        { id: 7, fromId: 1, exitName: "完了", ends: "go", toId: 2 },
+        { id: 8, fromId: 2, exitName: "完了", ends: "go", toId: 1, maxTimes: 10 },
       ],
     });
     await render({ automation: looping, placementId: 2 });
@@ -487,7 +487,7 @@ describe("the panel of one spot", () => {
     expect(boxes().some((b) => b.type === "number")).toBe(false);
 
     await render({
-      automation: detail({ edges: [{ id: 8, fromId: 1, ends: "done" }] }),
+      automation: detail({ edges: [{ id: 8, fromId: 1, exitName: "完了", ends: "done" }] }),
       placementId: 1,
     });
     expect(boxes().some((b) => b.type === "number")).toBe(false);
@@ -497,14 +497,14 @@ describe("the panel of one spot", () => {
   /// again, so there is no loop to cap there.
   it("draws no limit on a line back to the spot that takes the next task", async () => {
     const taking = spot({
-      exits: [{ id: 10, outputs: [{ name: "task", kind: "task_take", required: true }] }],
+      exits: [{ id: 10, name: "完了", outputs: [{ name: "task", kind: "task_take", required: true }] }],
     });
     await render({
       automation: detail({
         placements: [taking, spot({ id: 2, name: "Do it" })],
         edges: [
-          { id: 7, fromId: 1, ends: "go", toId: 2 },
-          { id: 8, fromId: 2, ends: "go", toId: 1 },
+          { id: 7, fromId: 1, exitName: "完了", ends: "go", toId: 2 },
+          { id: 8, fromId: 2, exitName: "完了", ends: "go", toId: 1 },
         ],
       }),
       placementId: 2,

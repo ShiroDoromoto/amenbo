@@ -76,7 +76,7 @@ export function ExitMark({
   builtin,
   outputs = [],
 }: {
-  name: string | undefined;
+  name: string;
   builtin?: string | null;
   /** What the way out hands on, already in the words the screen shows. */
   outputs?: readonly string[];
@@ -84,7 +84,7 @@ export function ExitMark({
   const error = name === ERROR_EXIT;
   return (
     <span className={error ? "actport actport--error" : "actport actport--exit"}>
-      {exitLabel(name === undefined || error ? name : builtinWord(builtin, name))}
+      {exitLabel(error ? name : builtinWord(builtin, name))}
       {outputs.length > 0 && <span className="actport__kind">{outputs.join("・")}</span>}
     </span>
   );
@@ -96,6 +96,7 @@ export function ExitMark({
  */
 export type WhereTo = {
   box: string;
+  /** The way out it hangs on, or undefined while the line has not been read. */
   exit: string | undefined;
   builtin?: string | null;
   next?: string;
@@ -113,7 +114,7 @@ export function WhereMark({ where }: { where: WhereTo }) {
         <>
           <span className="wheremark__box">{where.box}</span>
           <span className="wheremark__line" aria-hidden="true">─</span>
-          <ExitMark name={where.exit} builtin={where.builtin} />
+          {where.exit !== undefined && <ExitMark name={where.exit} builtin={where.builtin} />}
           <span className="wheremark__line" aria-hidden="true">─▶</span>
         </>
       )}

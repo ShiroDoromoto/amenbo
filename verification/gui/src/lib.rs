@@ -1227,9 +1227,9 @@ impl Instructor {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
             // The way out's name, written along the line that leaves by it. It is the name the road
-            // gave that way out, so the picture is where it stands. A line leaving by the unnamed way
-            // out carries no name at all, and where it ends is the interface's own wording — an eye
-            // closes both of those. So is a line that is not there: the way out's name may still be
+            // gave that way out, so the picture is where it stands. A road that names no way out means
+            // the one every box is born with, and where a line ends is the interface's own wording —
+            // an eye closes both of those. So is a line that is not there: the way out's name may still be
             // written on the box it leaves, and a reading would find it and call the line drawn.
             (Domain::Automation, "line-pictured") if !present(with) => None,
             (Domain::Automation, "line-pictured") => {
@@ -4162,7 +4162,7 @@ impl Instructor {
                     (None, Some("done")) => "choose the line saying the run ends".to_string(),
                     (None, Some("halt")) => "choose the line saying the run stops and calls a person".to_string(),
                     // Inside an action, a step may end the action by one of its outputs — the way out
-                    // of the action it returns to, named in `exit_to` (left out, the unnamed one).
+                    // of the action it returns to, named in `exit_to` (left out, the done one).
                     (None, Some("exit")) => format!("choose the line that ends with the output {}", action_output(with)),
                     (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt / exit")),
                     (None, None) => "choose the line saying nothing is said yet".to_string(),
@@ -4429,8 +4429,8 @@ impl Instructor {
                 req(with, "report")?,
                 req(with, "exit")?
             ),
-            // A report is owed whichever way out is taken, and the way out left unsaid is the unnamed
-            // one — which is the shape of the command and not a default this writes in. A way out is
+            // A report is owed whichever way out is taken, and the way out left unsaid is the done one
+            // — which is the shape of the command and not a default this writes in. A way out is
             // typed by its id, which the store issues, so the road names the way out
             // and the step's own text in the pane is where its id is read — the gap `take-in-pane`
             // leaves for a task's ref, for the same reason.
@@ -4477,12 +4477,12 @@ impl Instructor {
             // own account, and the run's number off its row, the one place it is drawn outside the
             // pane this road leaves shut.
             //
-            // It leaves by the unnamed way out alone: any other is typed by its id, and the step's
+            // It leaves by the done way out alone: any other is typed by its id, and the step's
             // own text — the one place the ids are listed — is in the pane this road leaves shut.
             (Domain::Automation, "done-outside-pane") => {
                 if arg_str(with, "exit").is_some() {
                     return Err(
-                        "`done-outside-pane` leaves by the unnamed way out alone — another is typed by its id, and the step's text that lists the ids is in the pane this op leaves shut"
+                        "`done-outside-pane` leaves by the done way out alone — another is typed by its id, and the step's text that lists the ids is in the pane this op leaves shut"
                             .to_string(),
                     );
                 }

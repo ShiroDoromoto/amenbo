@@ -22,7 +22,7 @@ export type WireChoice = {
   boxName: string;
   /** The built-in the box is, by its key — its words are drawn in the screen's language (`builtinWord`). */
   builtin?: string;
-  /** The way out it leaves by. Absent is the unnamed one. */
+  /** The way out it leaves by. Absent on what the action itself was handed, which leaves by none. */
   exitName?: string;
   portName: string;
 };
@@ -99,7 +99,7 @@ export function wireInto(
  */
 export function boundaryChoices(
   graph: PicGraph,
-  exitName: string | undefined,
+  exitName: string,
   port: AutomationPortDto,
 ): WireChoice[] {
   const out: WireChoice[] = [];
@@ -126,7 +126,7 @@ export function boundaryChoices(
 /** The wire filling one output of a way out of the action now, or nothing where none is. */
 export function wireOutOf(
   graph: PicGraph,
-  exitName: string | undefined,
+  exitName: string,
   portName: string,
 ): AutomationWireDto | undefined {
   const all = graph.wires.filter(

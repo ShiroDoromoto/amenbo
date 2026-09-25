@@ -993,7 +993,6 @@ export const nl: Translation = {
     "auto.step.inputs": "Invoer",
     "auto.step.unwired": "er bereikt hem niets",
     "auto.step.exits": "Uitgangen",
-    "auto.step.exitUnnamed": "uitgang",
     "auto.step.modelDefault": "de eigen standaard van de agent",
     "auto.step.notHere": "{agent} — niet op deze machine",
     "auto.step.folder": "Waar hij draait",

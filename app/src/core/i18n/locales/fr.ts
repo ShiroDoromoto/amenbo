@@ -1005,7 +1005,6 @@ export const fr: Translation = {
     "auto.step.inputs": "Entrées",
     "auto.step.unwired": "rien ne l'atteint",
     "auto.step.exits": "Sorties",
-    "auto.step.exitUnnamed": "sortie",
     "auto.step.modelDefault": "la valeur par défaut de l'agent",
     "auto.step.notHere": "{agent} — absent de cette machine",
     "auto.step.folder": "Où elle s'exécute",

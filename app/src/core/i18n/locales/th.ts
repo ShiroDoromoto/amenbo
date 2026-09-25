@@ -994,7 +994,6 @@ export const th: Translation = {
     "auto.step.inputs": "อินพุต",
     "auto.step.unwired": "ไม่มีอะไรไปถึง",
     "auto.step.exits": "ทางออก",
-    "auto.step.exitUnnamed": "ทางออก",
     "auto.step.modelDefault": "ค่าเริ่มต้นของเอเจนต์เอง",
     "auto.step.notHere": "{agent} — ไม่มีบนเครื่องนี้",
     "auto.step.folder": "ที่ที่มันรัน",

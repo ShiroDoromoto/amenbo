@@ -999,7 +999,6 @@ export const ja: Translation = {
     "auto.step.inputs": "入力パラメータ",
     "auto.step.unwired": "何も届かない",
     "auto.step.exits": "出口",
-    "auto.step.exitUnnamed": "出口",
     "auto.step.modelDefault": "エージェントの既定",
     "auto.step.notHere": "{agent} — 手元にありません",
     "auto.step.folder": "働くフォルダ",

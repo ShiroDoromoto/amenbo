@@ -4111,7 +4111,7 @@ const REGISTRY: &[OpSpec] = &[
     // Where a run starts: the placement it opens first. A definition without one is refused at the
     // launch check rather than here.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "entry", required: &["target", "placement"], refs: &["target", "placement"], strings: &[], binds: false },
-    // A way out, beyond the two each is born with — the unnamed one and the error one. **Both a step
+    // A way out, beyond the two each is born with — the done one (`DONE_EXIT`) and the error one. **Both a step
     // and an action declare their own**: a step's are where a line inside the action leaves from, and
     // an action's are what its placements leave by — and a step's way out reaches the action's only
     // along an edge that says so (`edge-add`'s `exit_to`).
@@ -4132,12 +4132,12 @@ const REGISTRY: &[OpSpec] = &[
     // in — a key `task list --sort` takes — and rides beside the parts, never alone.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "cfg-set", required: &["target", "name"], refs: &["target"], strings: &["name", "folder", "choice", "text", "sort"], binds: false },
     // What happens after a way out is taken. The way out is named as the box and the name it carries,
-    // because that pair is what the edge hangs on — the unnamed one is the box with no `exit`, and `*`
+    // because that pair is what the edge hangs on — the done one is the box with no `exit`, and `*`
     // is the error one. The box is a placement, or with `in_action` a step.
     //
     // Where it goes is one of four: on to another box (`to`), the run closed (the default), the run
     // stopped for a person (`halt`), or — inside an action only — out by one of the action's own ways
-    // out (`exit_to`, where `""` is its unnamed one). That last is what carries a step's way out up to
+    // out (`exit_to`, where `""` is its done one). That last is what carries a step's way out up to
     // the automation's picture: without it, nothing a step does reaches the placement around it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "edge-add", required: &["target"], refs: &["target", "to"], strings: &["exit", "exit_to"], binds: true },
     // What is handed from one box to the next, port to port. **Inside an action the action itself is
@@ -4199,7 +4199,7 @@ const REGISTRY: &[OpSpec] = &[
     // reader sees on its box. `exits`, `inputs` and `settings` are **the whole of what it runs
     // under**, not a sample of it: the first two in the order the action declares them, the third as
     // a name → answer mapping, where a road writes `~` for one this placement has not answered. A way
-    // out is named the way `edge-add` names one — `""` is the unnamed one, `*` the error one.
+    // out is named the way `edge-add` names one — `""` is the done one, `*` the error one.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "placement-read", required: &["name"], refs: &["target"], strings: &["name"], binds: false },
     // One step inside an action (`target`), named the way the action names it: the prompt it runs on,
     // and the ways out and the inputs it declares, read whole for the reason a placement's are.
@@ -4423,7 +4423,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "take-in-pane", required: &["task"], refs: &["target", "task"], strings: &[], binds: false },
     // One thing the step produced, under the name the port carrying it was declared with.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "out-in-pane", required: &["name", "value"], refs: &["target"], strings: &["name", "value"], binds: false },
-    // The step finished: which way out it took — left out, the unnamed one — and the report it owes
+    // The step finished: which way out it took — left out, the done one — and the report it owes
     // whichever it took.
     // A way out the step does not declare — an empty one included — is turned away with
     // `invalid_value`, nothing written and the step still running, so a road writes `refused:` on it.

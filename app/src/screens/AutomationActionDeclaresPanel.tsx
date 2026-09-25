@@ -79,7 +79,7 @@ function OutputRow({
   run,
 }: {
   action: AutomationActionDetailDto;
-  exitName: string | undefined;
+  exitName: string;
   port: AutomationPortDto;
   run: Run;
 }) {
@@ -112,7 +112,11 @@ function OutputRow({
         <option value="">{t("auto.step.unwired")}</option>
         {choices.map((one) => (
           <option key={one.key} value={one.key}>
-            {`${one.boxName} · ${exitLabel(one.exitName)} · ${one.portName}`}
+            {/* What the action was handed comes in from the action itself, which leaves by no way
+                out — so it is named without one. */}
+            {one.exitName === undefined
+              ? `${one.boxName} · ${one.portName}`
+              : `${one.boxName} · ${exitLabel(one.exitName)} · ${one.portName}`}
           </option>
         ))}
       </select>

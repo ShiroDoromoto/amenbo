@@ -281,18 +281,18 @@ export type EdgeEnds = AutomationEdgeDto["ends"];
  *
  * A new `go` edge is born with the limit core's callers give the silence; nothing is passed here, and
  * the number is then a field on the panel. An `exit` edge — a step inside an action leaving it — names
- * the way out of the action it returns to in `exitTo`, absent for the unnamed one.
+ * the way out of the action it returns to in `exitTo`.
  */
 export async function addAutomationEdge(
   picture: Picture,
-  from: { boxId: number; exitName?: string },
+  from: { boxId: number; exitName: string },
   target: { ends: EdgeEnds; to?: number; exitTo?: string },
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_edge_add", {
     picture,
     fromId: from.boxId,
-    exitName: from.exitName ?? null,
+    exitName: from.exitName,
     ends: target.ends,
     toId: target.to ?? null,
     exitTo: target.exitTo ?? null,
@@ -517,8 +517,9 @@ export type Declarer = "action" | "step";
 /**
  * **Declare another way out** — of a library action, or of one step inside it.
  *
- * Both are born carrying the unnamed way out and the error one, so this is the second and every one
- * after it. `*` is refused as a name — every declarer is read as carrying that one already.
+ * Both are born carrying the done way out (core's `DONE_EXIT`) and the error one, so this is for
+ * the third and every one after it. `*` is refused as a name — every declarer is read as carrying
+ * that one already.
  *
  * The declaration families below name a row by **the owner and the name**, the way the panels hold
  * it: a setting and an input have no id on screen, a setting's declaration and each placement's
@@ -535,14 +536,14 @@ export async function declareAutomationExit(
 
 /**
  * **Rename one way out.** A way out keeps a name, so there is no renaming it to nothing — core refuses
- * it. `from` is `null` only for a way out written before every one was given a name.
+ * it.
  *
  * **Every edge and every wire on it stays on it.** Core keys them by the way out's row, not its name.
  */
 export async function renameAutomationExit(
   owner: Declarer,
   ownerId: number,
-  from: string | null,
+  from: string,
   to: string,
 ): Promise<void> {
   if (!inTauri()) return;
@@ -553,7 +554,7 @@ export async function renameAutomationExit(
 export async function removeAutomationExit(
   owner: Declarer,
   ownerId: number,
-  name: string | null,
+  name: string,
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_exit_remove", { owner, ownerId, name });

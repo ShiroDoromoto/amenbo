@@ -16,7 +16,7 @@ const take: AutomationBuiltinDto = {
   does: "reserves the first task the filter finds",
   settings: [{ name: "filter", kind: "taskfilter", required: true }],
   inputs: [{ name: "hint", kind: "value", required: false }],
-  exits: [{ name: "taken", outputs: [{ name: "task", kind: "task_take", required: true }] }, { outputs: [] }],
+  exits: [{ name: "taken", outputs: [{ name: "task", kind: "task_take", required: true }] }, { name: "完了", outputs: [] }],
   usedBy: 2,
 };
 
@@ -65,7 +65,7 @@ describe("a built-in, opened", () => {
     expect(text).toContain("reserves the first task the filter finds");
     expect(text).toContain(t("auto.actions.reachBuiltin"));
     expect(text).toContain(tn("auto.actions.usedBy", 2));
-    for (const word of ["filter", "hint", "taken", "task", t("auto.step.exitUnnamed")]) {
+    for (const word of ["filter", "hint", "taken", "task", "完了"]) {
       expect(text).toContain(word);
     }
   });

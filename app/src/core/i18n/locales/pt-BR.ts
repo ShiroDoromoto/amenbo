@@ -1006,7 +1006,6 @@ export const ptBR: Translation = {
     "auto.step.inputs": "Entradas",
     "auto.step.unwired": "nada chega",
     "auto.step.exits": "Saídas",
-    "auto.step.exitUnnamed": "saída",
     "auto.step.modelDefault": "o padrão do próprio agente",
     "auto.step.notHere": "{agent} — não está nesta máquina",
     "auto.step.folder": "Onde ele roda",

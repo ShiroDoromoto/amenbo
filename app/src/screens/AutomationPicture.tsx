@@ -30,7 +30,7 @@ import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { Icon } from "../components/Icon";
 
-/** The way out a line hangs on, in a word. Empty for the unnamed one, which has no name to write. */
+/** The way out a line hangs on, in a word. Empty where the line leaves by no way out. */
 function exitWord(line: PicLine): string {
   if (line.exitName === ERROR_EXIT) return t("auto.pic.errorExit");
   return lineWord(line) ?? "";
@@ -45,11 +45,11 @@ function wireWord(line: PicLine): string {
   return exit === "" ? (line.hands?.from ?? "") : `${exit} · ${line.hands?.from ?? ""}`;
 }
 
-/** One way out of the action, in words: the unnamed one and the error one have names of their own. */
+/** One way out of the action, in words: by its name, the error one in the screen's words. Only an
+ *  `out` mark is written this way, and it always has one. */
 function markWord(mark: PicMark): string {
-  if (mark.exitName === undefined) return t("auto.step.exitUnnamed");
-  if (mark.exitName === ERROR_EXIT) return t("auto.pic.errorExit");
-  return mark.exitName;
+  const name = mark.exitName ?? "";
+  return name === ERROR_EXIT ? t("auto.pic.errorExit") : name;
 }
 
 /** What the action takes in, on the input frame's second line: each name with its kind. */

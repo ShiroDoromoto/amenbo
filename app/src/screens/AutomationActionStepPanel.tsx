@@ -169,7 +169,7 @@ function InputRow({
           <option key={one.key} value={one.key}>
             {/* What the action was handed comes in from the action itself, which leaves by no way
                 out — so it is named without one. */}
-            {one.boxId === ACTION_BOUNDARY
+            {one.boxId === ACTION_BOUNDARY || one.exitName === undefined
               ? `${one.boxName} · ${one.portName}`
               : `${one.boxName} · ${exitLabel(one.exitName)} · ${one.portName}`}
           </option>

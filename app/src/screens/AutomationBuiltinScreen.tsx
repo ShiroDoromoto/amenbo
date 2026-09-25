@@ -71,7 +71,7 @@ export function BuiltinDecl({ builtin }: { builtin: AutomationBuiltinDto }) {
         {builtin.exits.length === 0
           ? none
           : builtin.exits.map((one) => (
-              <ExitMark key={one.name ?? ""} name={one.name ?? undefined} outputs={one.outputs.map((out) => out.name)} />
+              <ExitMark key={one.name} name={one.name} outputs={one.outputs.map((out) => out.name)} />
             ))}
       </span>
     </div>

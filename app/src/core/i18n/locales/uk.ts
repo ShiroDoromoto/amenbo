@@ -1010,7 +1010,6 @@ export const uk: Translation = {
     "auto.step.inputs": "Входи",
     "auto.step.unwired": "до нього нічого не доходить",
     "auto.step.exits": "Виходи",
-    "auto.step.exitUnnamed": "вихід",
     "auto.step.modelDefault": "власне типове значення агента",
     "auto.step.notHere": "{agent} — немає на цій машині",
     "auto.step.folder": "Де він виконується",

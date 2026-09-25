@@ -993,7 +993,6 @@ export const tr: Translation = {
     "auto.step.inputs": "Girdiler",
     "auto.step.unwired": "hiçbir şey ulaşmıyor",
     "auto.step.exits": "Çıkışlar",
-    "auto.step.exitUnnamed": "çıkış",
     "auto.step.modelDefault": "aracının kendi varsayılanı",
     "auto.step.notHere": "{agent} — bu makinede yok",
     "auto.step.folder": "Nerede çalışacağı",

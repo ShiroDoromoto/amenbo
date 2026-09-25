@@ -351,11 +351,7 @@ exits: Array<AutomationBuiltinExitDto>, usedBy: number, };
  * **A way out of a built-in**, and what leaving through it hands on — [`AutomationExitDto`] without
  * the row id, since the definition is not a row.
  */
-export type AutomationBuiltinExitDto = { 
-/**
- * Absent is the unnamed way out.
- */
-name?: string, outputs: Array<AutomationPortDto>, };
+export type AutomationBuiltinExitDto = { name: string, outputs: Array<AutomationPortDto>, };
 
 /**
  * **A built-in step of a run, as its pane draws it** — the one card Amenbo puts up in place of a
@@ -413,7 +409,7 @@ waiting: boolean,
 looksFor?: string, 
 /**
  * **The way out it left through**, once it has been carried out — by the name its step declared
- * it under, and empty for the unnamed one. Absent while Amenbo is still at it.
+ * it under. Absent while Amenbo is still at it.
  */
 exitName?: string, };
 
@@ -472,7 +468,7 @@ heldBy: Array<AutomationRunCardDto>, };
  * automation, a step inside an action ([`amenbo_core::model::AutomationPictureOwner`]). The picture
  * is the answer it arrives in, so the line itself carries no word for which of the two it is.
  */
-export type AutomationEdgeDto = { id: number, fromId: number, exitName?: string, 
+export type AutomationEdgeDto = { id: number, fromId: number, exitName: string, 
 /**
  * Where it goes, for `go`. Absent for the others, which open no box.
  */
@@ -482,8 +478,8 @@ toId?: number,
  */
 ends: "go" | "exit" | "done" | "halt", 
 /**
- * Which way out of the action an `exit` edge returns to. Absent for the unnamed one, and for
- * every edge that is not `exit`.
+ * Which way out of the action an `exit` edge returns to. Absent for every edge that is not
+ * `exit`.
  */
 exitTo?: string, 
 /**
@@ -496,10 +492,10 @@ maxTimes?: number, };
  */
 export type AutomationExitDto = { id: number, 
 /**
- * Absent is the unnamed way out, which is all a step with a single one needs.
- * `*` is the error one, which every owner carries from birth.
+ * `*` is the error one, which every owner carries from birth beside
+ * [`amenbo_core::model::DONE_EXIT`].
  */
-name?: string, outputs: Array<AutomationPortDto>, };
+name: string, outputs: Array<AutomationPortDto>, };
 
 /**
  * **One thing standing in the way of a launch**, as core named it
@@ -530,7 +526,7 @@ message_en: string,
 /**
  * The values the sentence is built from, under the names its template interpolates them by —
  * `step`, `exit`, `port`, `cfg`, `agent`, `model`. Empty for a reason about the automation as a
- * whole, and for the unnamed way out, which has no name to put in a sentence.
+ * whole.
  *
  * Beside them, `builtin` is the key of the built-in `step` came from and `to_builtin` the one `to`
  * came from (`AMB-D-964`): a built-in's names are the store's Japanese, and the front end writes
@@ -697,8 +693,8 @@ placement?: number,
  */
 stepsDone: number, 
 /**
- * **The way out the last step left through**, by the name the run's copy declared it under,
- * and empty for the unnamed one. Absent while that step is still under way, and where it ended
+ * **The way out the last step left through**, by the name the run's copy declared it under.
+ * Absent while that step is still under way, and where it ended
  * without leaving by one — a program that exited before it reported. On a failure it is the
  * half of "where did it fail" the step's name does not say.
  */
@@ -886,7 +882,12 @@ interactive: boolean, };
  * **What is handed from one box to the next**, on whichever picture it is drawn on —
  * [`AutomationEdgeDto`]'s two ends, read the same way.
  */
-export type AutomationWireDto = { id: number, fromId: number, fromExitName?: string, fromPortName: string, toId: number, toPortName: string, };
+export type AutomationWireDto = { id: number, fromId: number, 
+/**
+ * The way out the value is handed on through. Absent on a wire from the action's own inputs,
+ * which is handed nothing by a way out.
+ */
+fromExitName?: string, fromPortName: string, toId: number, toPortName: string, };
 
 /**
  * What [`run_backup`](crate::commands::run_backup) returns: the camelCase DTO of core's

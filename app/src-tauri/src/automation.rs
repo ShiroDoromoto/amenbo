@@ -268,7 +268,7 @@ pub fn automation_builtin_page() -> Result<Vec<AutomationBuiltinDto>, CmdError> 
                 .exits
                 .iter()
                 .map(|e| AutomationBuiltinExitDto {
-                    name: Some(e.name.to_string()),
+                    name: e.name.to_string(),
                     outputs: e.outs.iter().map(builtin_port_dto).collect(),
                 })
                 .collect(),
@@ -2063,7 +2063,8 @@ fn edge_dto(edge: AutomationEdge, names: &std::collections::HashMap<i64, String>
     AutomationEdgeDto {
         id: edge.id,
         from_id: edge.from_id,
-        exit_name: exit_name(names, Some(edge.exit_id)),
+        // A line is taken off with the way out it keys, so the name is always there to read.
+        exit_name: exit_name(names, Some(edge.exit_id)).unwrap_or_default(),
         to_id: edge.to_id,
         ends: edge.ends.as_str(),
         exit_to: exit_name(names, edge.exit_to_id),
@@ -2134,7 +2135,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
 fn exit_dto(view: automation_view::ExitView) -> AutomationExitDto {
     AutomationExitDto {
         id: view.exit.id,
-        name: Some(view.exit.name),
+        name: view.exit.name,
         outputs: view.outputs.into_iter().map(port_dto).collect(),
     }
 }

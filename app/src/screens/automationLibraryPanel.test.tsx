@@ -217,7 +217,7 @@ describe("the built-ins in the panel", () => {
     does: "reserves the first task the filter finds",
     settings: [{ name: "filter", kind: "taskfilter", required: true }],
     inputs: [],
-    exits: [{ name: "taken", outputs: [{ name: "task", kind: "task_take", required: true }] }, { outputs: [] }],
+    exits: [{ name: "taken", outputs: [{ name: "task", kind: "task_take", required: true }] }, { name: "完了", outputs: [] }],
     usedBy: 1,
   };
 
@@ -256,7 +256,7 @@ describe("the built-ins in the panel", () => {
     const keys = [...picked.querySelectorAll(".actdecl__key")].map((one) => one.textContent);
     expect(keys).toEqual([t("auto.pic.actionIn"), t("auto.step.exits")]);
     const exits = [...picked.querySelectorAll(".actport--exit, .actport--error")].map((one) => one.textContent);
-    expect(exits).toEqual(["takentask", t("auto.step.exitUnnamed"), t("auto.pic.errorExit")]);
+    expect(exits).toEqual(["takentask", "完了", t("auto.pic.errorExit")]);
   });
 
   it("put one in on the line by its key", async () => {

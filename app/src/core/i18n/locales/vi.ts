@@ -994,7 +994,6 @@ export const vi: Translation = {
     "auto.step.inputs": "Đầu vào",
     "auto.step.unwired": "không có gì đến được",
     "auto.step.exits": "Lối ra",
-    "auto.step.exitUnnamed": "lối ra",
     "auto.step.modelDefault": "mặc định của chính tác nhân",
     "auto.step.notHere": "{agent} — không có trên máy này",
     "auto.step.folder": "Nơi nó chạy",

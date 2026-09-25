@@ -32,7 +32,7 @@ function step(
     showComments: true,
     // What core writes at birth: the unnamed way out, and the error one nobody can delete.
     exits: [
-      { id: nextId++, outputs: [] },
+      { id: nextId++, name: "完了", outputs: [] },
       { id: nextId++, name: "*", outputs: [] },
     ],
     inputs: [],
@@ -65,7 +65,7 @@ function port(name: string, kind: AutomationPortDto["kind"], required = true): A
 }
 
 function edge(over: Partial<AutomationEdgeDto> & { id: number; fromId: number }): AutomationEdgeDto {
-  return { ends: "go", ...over };
+  return { ends: "go", exitName: "完了", ...over };
 }
 
 function wire(over: AutomationWireDto): AutomationWireDto {
@@ -232,12 +232,12 @@ describe("the picture of an automation", () => {
       entryPlacementId: 1,
       placements: [
         taker(1, "take", {
-          exits: [{ id: 91, outputs: [port("note", "value")] }, { id: 92, name: "*", outputs: [] }],
+          exits: [{ id: 91, name: "完了", outputs: [port("note", "value")] }, { id: 92, name: "*", outputs: [] }],
         }),
         step({ id: 2, name: "work", inputs: [port("note", "value")] }),
       ],
       edges: [edge({ id: 1, fromId: 1, toId: 2 })],
-      wires: [wire({ id: 1, fromId: 1, fromPortName: "note", toId: 2, toPortName: "note" })],
+      wires: [wire({ id: 1, fromId: 1, fromExitName: "完了", fromPortName: "note", toId: 2, toPortName: "note" })],
     });
     const picture = layOut(one);
     const middle = at(picture, 1).x + at(picture, 1).w / 2;
@@ -252,7 +252,7 @@ describe("the picture of an automation", () => {
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "work" }),
-        step({ id: 3, name: "check", exits: [{ id: 93, outputs: [] }, { id: 94, name: "again", outputs: [] }] }),
+        step({ id: 3, name: "check", exits: [{ id: 93, name: "完了", outputs: [] }, { id: 94, name: "again", outputs: [] }] }),
       ],
       edges: [
         edge({ id: 1, fromId: 1, toId: 2 }),
@@ -329,7 +329,7 @@ describe("the picture of an automation", () => {
 
   it("keeps lines that go back apart, the longest outermost and each into its own place", () => {
     const again = (id: number) => [
-      { id, outputs: [] },
+      { id, name: "完了", outputs: [] },
       { id: id + 1, name: "again", outputs: [] },
       { id: id + 2, name: "*", outputs: [] },
     ];
@@ -489,7 +489,7 @@ describe("the picture of an automation", () => {
         placements: [
           taker(1, "take", {
             exits: [
-              { id: 91, outputs: [port("task", "task_take")] },
+              { id: 91, name: "完了", outputs: [port("task", "task_take")] },
               { id: 92, name: "*", outputs: [] },
             ],
           }),
@@ -510,7 +510,7 @@ describe("the picture of an automation", () => {
         placements: [
           taker(1, "take", {
             exits: [
-              { id: 90, outputs: [] },
+              { id: 90, name: "完了", outputs: [] },
               { id: 91, name: "*", outputs: [] },
               { id: 92, name: "found", outputs: [port("task", "task_take")] },
             ],
@@ -536,7 +536,7 @@ describe("the picture of an automation", () => {
             id: 2,
             name: "work",
             exits: [
-              { id: 80, outputs: [] },
+              { id: 80, name: "完了", outputs: [] },
               { id: 81, name: "*", outputs: [] },
               { id: 82, name: "again", outputs: [] },
             ],
@@ -589,11 +589,11 @@ describe("the picture of an automation", () => {
       detail({
         entryPlacementId: 1,
         placements: [
-          taker(1, "take", { exits: [{ id: 91, outputs: [port("note", "value")] }] }),
+          taker(1, "take", { exits: [{ id: 91, name: "完了", outputs: [port("note", "value")] }] }),
           step({ id: 2, name: "work", inputs: [port("note", "value")] }),
         ],
         edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, ends: "done" })],
-        wires: [wire({ id: 1, fromId: 1, fromPortName: "note", toId: 2, toPortName: "note" })],
+        wires: [wire({ id: 1, fromId: 1, fromExitName: "完了", fromPortName: "note", toId: 2, toPortName: "note" })],
       }),
     );
     expect(picture.inserts.map((one) => one.edgeId).sort()).toEqual([1, 2]);
@@ -601,7 +601,7 @@ describe("the picture of an automation", () => {
 
   it("names the required inputs nothing reaches, and says nothing about the ones that are fed", () => {
     const steps = [
-      taker(1, "take", { exits: [{ id: 91, outputs: [port("note", "value")] }] }),
+      taker(1, "take", { exits: [{ id: 91, name: "完了", outputs: [port("note", "value")] }] }),
       step({
         id: 2,
         name: "Review",
@@ -614,7 +614,7 @@ describe("the picture of an automation", () => {
         entryPlacementId: 1,
         placements: steps,
         edges: [edge({ id: 1, fromId: 1, toId: 2 })],
-        wires: [wire({ id: 1, fromId: 1, fromPortName: "note", toId: 2, toPortName: "note" })],
+        wires: [wire({ id: 1, fromId: 1, fromExitName: "完了", fromPortName: "note", toId: 2, toPortName: "note" })],
       }),
     );
     expect(at(picture, 2).unfed).toEqual(["draft"]);
@@ -641,7 +641,7 @@ describe("the picture inside an action", () => {
       boundary: {
         inputs: [port("title", "value")],
         exits: [
-          { id: 31, outputs: [] },
+          { id: 31, name: "完了", outputs: [] },
           { id: 32, name: "*", outputs: [] },
           { id: 33, name: "gave up", outputs: [port("reason", "file")] },
         ],
@@ -654,7 +654,7 @@ describe("the picture inside an action", () => {
     const picture = layOut(inside());
     const marks = picture.marks.map((one) => `${one.kind}:${one.exitName ?? ""}`);
     // The error way out last, the way the declaration lists them.
-    expect(marks).toEqual(["in:", "out:", "out:gave up", "out:*"]);
+    expect(marks).toEqual(["in:", "out:完了", "out:gave up", "out:*"]);
     const lowest = Math.max(...picture.nodes.map((one) => one.y + one.h));
     for (const mark of picture.marks) {
       if (mark.kind === "in") expect(mark.y + mark.h).toBeLessThan(at(picture, 1).y);
@@ -746,7 +746,7 @@ describe("the wires", () => {
       detail({
         entryPlacementId: 1,
         placements: [
-          taker(1, "write", { exits: [{ id: 91, outputs: [port("draft", "value"), port("notes", "value")] }] }),
+          taker(1, "write", { exits: [{ id: 91, name: "完了", outputs: [port("draft", "value"), port("notes", "value")] }] }),
           step({ id: 2, name: "check", inputs: [port("draft", "value")] }),
           step({ id: 3, name: "fix", inputs: [port("draft", "value")] }),
           step({ id: 4, name: "ship", inputs: [port("draft", "value"), port("notes", "value")] }),
@@ -785,20 +785,20 @@ describe("the wires", () => {
         entryPlacementId: 1,
         placements: [
           taker(1, "take"),
-          step({ id: 2, name: "cut", exits: [{ id: 200, outputs: [value("tree")] }, { id: 201, name: "*", outputs: [] }] }),
+          step({ id: 2, name: "cut", exits: [{ id: 200, name: "完了", outputs: [value("tree")] }, { id: 201, name: "*", outputs: [] }] }),
           step({ id: 3, name: "build", inputs: [value("tree"), value("note")] }),
           step({
             id: 4,
             name: "review",
             inputs: [value("tree")],
-            exits: [{ id: 400, outputs: [] }, { id: 401, name: "fix", outputs: [value("note")] }, { id: 402, name: "*", outputs: [] }],
+            exits: [{ id: 400, name: "完了", outputs: [] }, { id: 401, name: "fix", outputs: [value("note")] }, { id: 402, name: "*", outputs: [] }],
           }),
           step({
             id: 5,
             name: "merge",
             inputs: [value("tree")],
             exits: [
-              { id: 500, outputs: [value("commit")] },
+              { id: 500, name: "完了", outputs: [value("commit")] },
               { id: 501, name: "red", outputs: [value("note")] },
               { id: 502, name: "*", outputs: [] },
             ],
@@ -848,7 +848,7 @@ describe("the wires", () => {
         placements: [
           taker(1, "write", {
             exits: [
-              { id: 91, outputs: [port("draft", "value")] },
+              { id: 91, name: "完了", outputs: [port("draft", "value")] },
               // Handing the task on too, so both of what follows are that task's and share a row.
               { id: 92, name: "other", outputs: [port("task", "task_take")] },
             ],

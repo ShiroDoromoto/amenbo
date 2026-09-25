@@ -578,10 +578,19 @@ describe("the press that starts a run", () => {
   it("tells the launch which automation, which project and whether the workspace is standing", async () => {
     // The workspace is the shell's to know, and core refuses a launch without one — so a press that
     // did not carry the answer would be refused on a guess made here (`AMB-D-753`).
-    await open({ ready: true, blocks: [] }, false);
+    await open({ ready: true, blocks: [] });
     await act(async () => { button(t("auto.start")).click(); });
     await handOver();
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], false, { text: "", files: [], title: "", notes: "", classification: [] });
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true, { text: "", files: [], title: "", notes: "", classification: [] });
+  });
+
+  it("refuses a press while the workspace is closed, before asking what to hand over", async () => {
+    // Refused after the dialog, what was written there would be thrown away (`AMB-T-5590`).
+    await open({ ready: true, blocks: [] }, false);
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(document.body.querySelector(".modal__card")).toBeNull();
+    expect(hoisted.launch).not.toHaveBeenCalled();
+    expect(container.textContent).toContain(errText({ code: "invalid_automation_workspace_closed", message_en: "" }));
   });
 
   it("says nothing of its own once the launch lands", async () => {

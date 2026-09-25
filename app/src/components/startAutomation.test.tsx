@@ -32,7 +32,8 @@ vi.mock("../core/automations", () => ({
 }));
 vi.mock("../core/dialog", () => ({ pickFiles: async () => ["/w/brief.md", "/w/shot.png"] }));
 
-import { t } from "../core/i18n";
+import { errText, t } from "../core/i18n";
+import { RefNavProvider } from "../core/refNav";
 import { StartAutomation } from "./StartAutomation";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -45,14 +46,18 @@ function card(over: Partial<AutomationCardDto> = {}): AutomationCardDto {
 }
 
 const goToRun = vi.fn();
+const openWorkspace = vi.fn();
 
 async function render(over: { workspaceOpen?: boolean; folders?: string[] } = {}) {
   await act(async () => {
-    root.render(createElement(StartAutomation, {
-      projectId: 1,
-      folders: over.folders ?? ["/w/one"],
-      workspaceOpen: over.workspaceOpen ?? true,
-      onGoToRun: goToRun,
+    root.render(createElement(RefNavProvider, {
+      value: { openWorkspace },
+      children: createElement(StartAutomation, {
+        projectId: 1,
+        folders: over.folders ?? ["/w/one"],
+        workspaceOpen: over.workspaceOpen ?? true,
+        onGoToRun: goToRun,
+      }),
     }));
   });
 }
@@ -81,6 +86,7 @@ beforeEach(() => {
   hoisted.launch.mockClear();
   hoisted.launch.mockResolvedValue({ run: 1 });
   goToRun.mockClear();
+  openWorkspace.mockClear();
 });
 
 afterEach(() => {
@@ -118,10 +124,10 @@ describe("the entrance", () => {
 describe("the press", () => {
   it("carries the automation, the project, the folders and the workspace, and hands over nothing where nothing was given", async () => {
     hoisted.automations = [card()];
-    await render({ workspaceOpen: false, folders: ["/w/one", "/w/two"] });
+    await render({ folders: ["/w/one", "/w/two"] });
     await act(async () => { button("Morning round").click(); });
     await handOver();
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one", "/w/two"], false, { text: "", files: [], title: "", notes: "", classification: [] });
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one", "/w/two"], true, { text: "", files: [], title: "", notes: "", classification: [] });
   });
 
   it("hands over the text typed and the files picked in the dialog the press opens", async () => {
@@ -286,5 +292,37 @@ describe("what the dialog asks for", () => {
     await render();
     await act(async () => { button("Morning round").click(); });
     expect(startButton().disabled).toBe(true);
+  });
+});
+
+describe("a press while the workspace is closed", () => {
+  // Core refuses it too, but only once the launch is sent — after the dialog has been answered, which
+  // throws away whatever was written there (`AMB-T-5590`).
+  const closedLine = errText({ code: "invalid_automation_workspace_closed", message_en: "" });
+
+  it("is refused at the press, before the dialog asks anything", async () => {
+    expect(closedLine).not.toBe(""); // a blank line would be in every screen
+    hoisted.automations = [card()];
+    await render({ workspaceOpen: false });
+    await act(async () => { button("Morning round").click(); });
+    expect(document.body.querySelector(".modal__card")).toBeNull();
+    expect(hoisted.launch).not.toHaveBeenCalled();
+    expect(container.textContent).toContain(closedLine);
+  });
+
+  it("offers the way to the workspace beside the refusal", async () => {
+    hoisted.automations = [card()];
+    await render({ workspaceOpen: false });
+    await act(async () => { button("Morning round").click(); });
+    await act(async () => { button(t("auto.launch.openWorkspace")).click(); });
+    expect(openWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes the refusal away once the workspace opens", async () => {
+    hoisted.automations = [card()];
+    await render({ workspaceOpen: false });
+    await act(async () => { button("Morning round").click(); });
+    await render({ workspaceOpen: true });
+    expect(container.textContent).not.toContain(closedLine);
   });
 });

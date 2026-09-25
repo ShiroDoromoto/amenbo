@@ -20,9 +20,10 @@
 // launch check's answer and it is a paragraph long (`../screens/AutomationBuildScreen`); asking it
 // per row would probe this machine once per automation, to hide rows a reader is looking for. So
 // every one is offered, and what refuses is the press — in core's own words, under the row.
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { launchAutomation, useAutomations, type Handed } from "../core/automations";
 import { errText, t } from "../core/i18n";
+import { useRefNav } from "../core/refNav";
 import { LaunchHanding } from "./LaunchHanding";
 
 /**
@@ -30,6 +31,12 @@ import { LaunchHanding } from "./LaunchHanding";
  *
  * `refused` is core's sentence, cleared by the next press: what a reader is owed is the outcome of
  * the press they just made.
+ *
+ * **A closed workspace is refused at the press, before the dialog asks anything** (`AMB-T-5590`).
+ * Core refuses it too, but only once the launch is sent — after the reader has written what to hand
+ * over, which the refusal then throws away. So the press answers it here in core's own sentence
+ * (`invalid_automation_workspace_closed`), with the way to open the workspace beside it; core's check
+ * stays, for a workspace that closes while the dialog is up. The line goes once the workspace opens.
  *
  * **A run that starts is gone to** (`AMB-T-5530`): `onGoToRun` is handed the run the launch answered
  * with, the same road a row of the "running" tab travels. Left where the press was made, the reader
@@ -43,6 +50,9 @@ export function useAutomationStart(
   onGoToRun?: (project: number, run: number) => void,
 ) {
   const [refused, setRefused] = useState<string | null>(null);
+  // A press turned away because the workspace was closed — drawn only while it still is.
+  const [closed, setClosed] = useState(false);
+  const { openWorkspace } = useRefNav();
   // A press already out. The answer carries the pane the run opens in, so a second press before the
   // first lands would be a second run nobody asked for.
   const [starting, setStarting] = useState(false);
@@ -67,8 +77,10 @@ export function useAutomationStart(
   const start = useCallback((id: number, name: string, folders: readonly string[]) => {
     if (projectId === null) return;
     setRefused(null);
+    setClosed(!workspaceOpen);
+    if (!workspaceOpen) return;
     setAsking({ id, name, folders });
-  }, [projectId]);
+  }, [projectId, workspaceOpen]);
 
   // What the screen draws for the press, wherever the press is: nothing until one is made.
   const handing = asking === null ? null : (
@@ -83,8 +95,22 @@ export function useAutomationStart(
     />
   );
 
-  return { start, refused, starting, handing };
+  const refusal: ReactNode = closed && !workspaceOpen ? (
+    <>
+      {errText({ code: WORKSPACE_CLOSED, message_en: "the workspace is closed" })}
+      {openWorkspace !== undefined && (
+        <button type="button" className="btn autorefused__open" onClick={openWorkspace}>
+          {t("auto.launch.openWorkspace")}
+        </button>
+      )}
+    </>
+  ) : refused;
+
+  return { start, refused: refusal, starting, handing };
 }
+
+// The refusal the press gives on its own is core's, so it is written from the same sentence.
+const WORKSPACE_CLOSED = "invalid_automation_workspace_closed";
 
 export function StartAutomation({
   projectId,

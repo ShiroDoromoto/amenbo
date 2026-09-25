@@ -15,6 +15,9 @@ export interface RefNav {
   openAutomation?: (project: number, automation: number, placement: number | null) => void;
   /** Open a project's automations on the "history" tab — from a run's pane, once the run is over. */
   openRunHistory?: (project: number) => void;
+  /** Bring the workspace forward — from a launch refused because it is closed (`AMB-T-5590`). The
+   *  press lands wherever the workspace is: this window's face, or the window it was split out into. */
+  openWorkspace?: () => void;
 }
 
 const RefNavContext = createContext<RefNav>({});

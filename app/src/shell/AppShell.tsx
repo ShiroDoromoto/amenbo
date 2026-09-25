@@ -646,9 +646,10 @@ export function AppShell() {
     navTo({ type: "project", id: String(project), runs: "history", nth: arrivals.current });
     setFace("tasks");
   }, [navTo]);
+  const openWorkspace = useCallback(() => selectFace("workspace"), [selectFace]);
   const refNav = useMemo(
-    () => ({ selectTask, selectDecision, openAutomation, openRunHistory }),
-    [selectTask, selectDecision, openAutomation, openRunHistory],
+    () => ({ selectTask, selectDecision, openAutomation, openRunHistory, openWorkspace }),
+    [selectTask, selectDecision, openAutomation, openRunHistory, openWorkspace],
   );
 
   // A run's pane followed from the workspace's own window (`AMB-T-5539`). The host has brought this

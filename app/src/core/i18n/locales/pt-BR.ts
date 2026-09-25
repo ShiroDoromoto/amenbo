@@ -947,6 +947,7 @@ export const ptBR: Translation = {
     "auto.hand.unchosen": "Não escolhido",
     "auto.hand.nothing": "Esta automação não recebe nada ao iniciar.",
     "auto.launch.see": "Ver no diagrama",
+    "auto.launch.openWorkspace": "Abrir o espaço de trabalho",
     "auto.startOne": "Iniciar uma automação",
     "auto.pic.lap": "Uma tarefa",
     "auto.pic.insert": "Inserir uma ação aqui",

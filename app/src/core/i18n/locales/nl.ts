@@ -934,6 +934,7 @@ export const nl: Translation = {
     "auto.hand.unchosen": "Niet gekozen",
     "auto.hand.nothing": "Deze automatisering neemt bij het starten niets aan.",
     "auto.launch.see": "Bekijk in het schema",
+    "auto.launch.openWorkspace": "Werkruimte openen",
     "auto.startOne": "Een automatisering starten",
     "auto.pic.lap": "Eén taak",
     "auto.pic.insert": "Hier een actie tussenvoegen",

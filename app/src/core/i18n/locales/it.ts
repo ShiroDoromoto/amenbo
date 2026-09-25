@@ -946,6 +946,7 @@ export const it: Translation = {
     "auto.hand.unchosen": "Non scelto",
     "auto.hand.nothing": "Questa automazione non riceve nulla all'avvio.",
     "auto.launch.see": "Vedi nello schema",
+    "auto.launch.openWorkspace": "Apri lo spazio di lavoro",
     "auto.startOne": "Avviare un’automazione",
     "auto.pic.lap": "Un'attività",
     "auto.pic.insert": "Inserisci qui un’azione",

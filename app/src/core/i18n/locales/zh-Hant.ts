@@ -936,6 +936,7 @@ export const zhHant: Translation = {
     "auto.hand.unchosen": "不選擇",
     "auto.hand.nothing": "此自動化啟動時不接收任何內容。",
     "auto.launch.see": "在圖中查看",
+    "auto.launch.openWorkspace": "開啟工作區",
     "auto.startOne": "啟動一個自動化",
     "auto.pic.lap": "一件任務",
     "auto.pic.insert": "在這裡插入一個動作",

@@ -934,6 +934,7 @@ export const tr: Translation = {
     "auto.hand.unchosen": "Seçilmedi",
     "auto.hand.nothing": "Bu otomasyon başlarken hiçbir şey almaz.",
     "auto.launch.see": "Şemada gör",
+    "auto.launch.openWorkspace": "Çalışma alanını aç",
     "auto.startOne": "Bir otomasyon başlat",
     "auto.pic.lap": "Bir görev",
     "auto.pic.insert": "Buraya bir eylem ekle",

@@ -60,9 +60,11 @@
 // automation was ready and the press then refuse it (`AMB-T-5272`).
 //
 // **A closed workspace is not on the list.** It is not about the definition and stops being true the
-// moment a window opens, so the launch raises it at the press rather than the build screen drawing it
-// among things somebody has to go and fix (`amenbo_core::ops::automation_run::launch`). Whether it is
-// standing is handed down from the shell, which is the one place that knows which window holds it.
+// moment a window opens, so the press refuses it — before its dialog asks what to hand over, with the
+// way to the workspace beside the line (`../components/StartAutomation`, `AMB-T-5590`) — rather than
+// the build screen drawing it among things somebody has to go and fix. Core refuses it as well
+// (`amenbo_core::ops::automation_run::launch`), for one that closes while the dialog is up. Whether it
+// is standing is handed down from the shell, which is the one place that knows which window holds it.
 import { useState } from "react";
 import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPanel";
 import { Panel } from "./AutomationActionBuildScreen";

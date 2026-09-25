@@ -1449,61 +1449,58 @@ button.feed__target:hover { color: var(--c-accent); }
    buttons that move the run stand beside it. They are not inside it because a press inside a press
    is not one — the row would swallow "stop" and go to the pane instead. */
 .autorun { display: flex; align-items: center; gap: var(--s-2); padding-inline-end: var(--s-2); }
-/* The line is read across, one column to each thing it says: the state, what it is, the project, how
-   far in, the task, how long since. Why a failure failed runs under the whole of it. */
+/* The line is the state's dot, then two lines — what it is, and where it has got to — then how long
+   since. */
 .autorun__go {
   flex: 1 1 auto; min-width: 0;
-  display: grid; align-items: center; gap: 2px var(--s-3);
-  grid-template-columns: 7rem minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1.3fr) minmax(0, 1.4fr) 5rem;
+  display: flex; align-items: center; gap: var(--s-3);
   padding: var(--s-2) var(--s-3); text-align: start;
   background: none; border: 0; color: var(--c-text); font: inherit; font-size: var(--fs-md); cursor: pointer;
 }
-/* One project's list has no project column to give the width to. */
-.autorun__go--oneproject { grid-template-columns: 7rem minmax(0, 1.2fr) minmax(0, 1.3fr) minmax(0, 1.4fr) 5rem; }
 .autorun__go:hover { background: var(--c-hover); }
 .autorun__go:disabled { cursor: default; }
 .autorun__go:disabled:hover { background: none; }
-.autorun__state {
-  display: flex; align-items: center; gap: var(--s-1);
-  font-weight: var(--fw-bold); font-size: var(--fs-xs); color: var(--c-plain);
+.autorun__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dot, var(--c-text-faint)); }
+.autorun__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.autorun__head { min-width: 0; display: flex; align-items: center; gap: var(--s-2); }
+.autorun__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-bold); }
+.autorun__chip {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  padding: 0 var(--s-2); border: var(--border-w) solid currentColor; border-radius: 999px;
+  font-size: var(--fs-xs); color: var(--chip, var(--c-text-muted)); white-space: nowrap;
 }
-/* The state's dot, in the state's colour — the one mark that still says it where the word is muted. */
-.autorun__state::before {
-  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%;
-  background: var(--dot, var(--c-text-faint));
+/* What it is on, one thing after another with a dot between: the project, the step, the task, why. */
+.autorun__sub {
+  min-width: 0; display: flex; align-items: center; gap: var(--s-1);
+  font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden;
 }
-.autorun__of { min-width: 0; display: flex; flex-direction: column; }
-.autorun__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-bold); }
-.autorun__project,
-.autorun__step,
-.autorun__task { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--c-text-muted); }
-.autorun__notask { color: var(--c-text-faint); }
-.autorun__when { font-size: var(--fs-xs); color: var(--c-text-faint); text-align: end; font-variant-numeric: tabular-nums; }
-.autorun__why { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--c-stop); }
+.autorun__sub > * + *::before { content: "·"; margin-inline-end: var(--s-1); color: var(--c-text-faint); }
+.autorun__project { flex: none; }
+.autorun__step { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+.autorun__task { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.autorun__task--wait { flex: none; }
+.autorun__why { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--c-stop); }
+.autorun__when { flex: none; font-size: var(--fs-xs); color: var(--c-text-faint); font-variant-numeric: tabular-nums; }
 .autorun__acts { flex: none; display: flex; gap: var(--s-1); }
 .autorun__acts:empty { display: none; }
 /* The colour is the state's own. One under way is the AI at work, so it wears the AI's colour
-   (`--c-ai`). One paused waits on a hand
-   (`--c-heed`). A failure is the one thing here nothing will move again without a hand put to it, so
-   in the running list its whole row takes the stop colour until somebody acknowledges it. What has
-   ended keeps its word muted and says how it ended by the dot alone. */
+   (`--c-ai`). One held, or about to be, waits on a hand (`--c-heed`). A failure is the one thing here
+   nothing will move again without a hand put to it, so in the running list its whole row takes the
+   stop colour until somebody acknowledges it. */
 .autorun--running { --dot: var(--c-ai); }
-.autorun--running .autorun__state { color: var(--c-ai); }
-.autorun--paused { --dot: var(--c-heed); }
-.autorun--paused .autorun__state { color: var(--c-heed); }
+.autorun--pausing,
+.autorun--paused { --dot: var(--c-heed); --chip: var(--c-heed); }
 .autorun--completed { --dot: var(--c-done); }
-.autorun--completed .autorun__state { color: var(--c-text-muted); }
-.autorun--failed { --dot: var(--c-stop); background: color-mix(in srgb, var(--c-stop) 8%, transparent); }
-.autorun--failed .autorun__state { color: var(--c-stop); }
-.autorun--canceled .autorun__state { color: var(--c-text-muted); }
+.autorun--failed { --dot: var(--c-stop); --chip: var(--c-stop); background: color-mix(in srgb, var(--c-stop) 8%, transparent); }
+.autorun--failed .autorun__sub { color: var(--c-stop); }
 /* The history is what was acknowledged already: a failure there is read, not waited on. */
 .autoruns--history .autorun--failed { background: none; }
+.autoruns--history .autorun--failed .autorun__sub { color: var(--c-text-muted); }
 /* A narrow list keeps what says which run this is, and lets the rest go. What is narrow is the list's
    own width and not the window's: the same rows also stand in the build screen (`AutomationHeldBy`),
    and the main column is the window less the sidebar, whose width the window does not say. */
-@container autoruns (max-width: 44rem) {
-  .autorun__go { grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 1.2fr); }
-  .autorun__project, .autorun__task, .autorun__when { display: none; }
+@container autoruns (max-width: 32rem) {
+  .autorun__when { display: none; }
 }
 
 /* The history's narrowing: the four choices as the chips the action tab narrows by (`.actchip`), and
@@ -1873,10 +1870,6 @@ button.feed__target:hover { color: var(--c-accent); }
   font-size: var(--fs-xs); color: var(--c-text-muted);
 }
 .autolist__refused { padding: 0 var(--s-3) var(--s-2); font-size: var(--fs-xs); color: var(--c-stop); }
-/* Over the two run tabs from the sidebar: what they are, and that they are this device's whole. */
-.autotabs__head { display: flex; align-items: baseline; gap: var(--s-2); }
-.autotabs__scope { font-size: var(--fs-xs); color: var(--c-text-faint); }
-
 /* The library in the panel (`../screens/AutomationLibraryPanel`): two groups by reach, and the row
    pressed opens in place with what the action declares and the press that places it. */
 .autolib__group {

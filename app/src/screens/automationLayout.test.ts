@@ -7,7 +7,7 @@
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
-import { automationGraph, layOut, type PicGraph } from "./automationLayout";
+import { automationGraph, edgeWord, layOut, type PicGraph } from "./automationLayout";
 import type {
   AutomationDetailDto,
   AutomationEdgeDto,
@@ -501,6 +501,35 @@ describe("the picture of an automation", () => {
     // The one on the left runs further down, so its words pass under the shorter one's foot.
     expect(left!.points[1]!.y).toBeGreaterThan(right!.at.y);
     expect(left!.at.y).toBeGreaterThan(right!.at.y);
+  });
+
+  it("is wide enough to hold the words of a way out that goes nowhere, off the last box", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", {
+            exits: [
+              { id: 91, name: "完了", outputs: [port("task", "task_take")] },
+              { id: 92, name: "着手できるタスクが無い", outputs: [] },
+              { id: 93, name: "*", outputs: [] },
+            ],
+          }),
+          step({ id: 2, name: "work" }),
+        ],
+        // Hung second along the box, so its words start well to the right of the box's left side.
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "着手できるタスクが無い", ends: "done" }),
+        ],
+      }),
+    );
+    const line = picture.lines.find((one) => one.exitName === "着手できるタスクが無い")!;
+    // The way out and where the run goes after it, both: the ending is the half that got cut.
+    const words = edgeWord(line);
+    expect(words.length).toBeGreaterThan("着手できるタスクが無い".length);
+    const wide = [...words].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+    expect(line.at.x + wide).toBeLessThanOrEqual(picture.width);
   });
 
   it("ties a named way out first when the ways out before it have no line", () => {

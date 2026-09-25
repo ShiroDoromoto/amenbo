@@ -25,16 +25,10 @@
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
 // every time the definition is read again.
 import { useId } from "react";
-import { layOut, lineWord, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
+import { edgeWord, exitWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { Icon } from "../components/Icon";
-
-/** The way out a line hangs on, in a word. Empty where the line leaves by no way out. */
-function exitWord(line: PicLine): string {
-  if (line.exitName === ERROR_EXIT) return t("auto.pic.errorExit");
-  return lineWord(line) ?? "";
-}
 
 /**
  * The name over a wire's trunk: what it hands on, and — where the box hands it on by a way out with
@@ -60,13 +54,6 @@ function inputsLine(mark: PicMark): string {
     .join("　");
 }
 
-/** Where the run goes where a line names no step, in a word. */
-function endWord(line: PicLine): string {
-  if (line.ends === "done") return t("auto.pic.endsDone");
-  if (line.ends === "halt") return t("auto.pic.endsHalt");
-  return "";
-}
-
 /**
  * What a line is, in a sentence: the words written beside an edge, and the one thing a reader who
  * cannot see the drawing is left with.
@@ -75,7 +62,7 @@ function lineTitle(line: PicLine): string {
   if (line.kind === "wire" && line.hands !== undefined) {
     return tf("auto.pic.hands", { from: line.hands.from, to: listLabel([...line.hands.to]) });
   }
-  return [exitWord(line), endWord(line)].filter((one) => one !== "").join(" — ");
+  return edgeWord(line);
 }
 
 /** Which arrowhead a line ends in — its colour, since a marker cannot take the line's own. */

@@ -4386,6 +4386,15 @@ impl Instructor {
             (Domain::Automation, "start") => {
                 "On the build screen's head, press the button that starts a run.".to_string()
             }
+            // Pressing a reason under the head. What it does is the picture's own press: the box it
+            // names is picked out and its panel opens, so the step says so and a road reads the panel
+            // next the way it would after `pick-box`.
+            (Domain::Automation, "press-reason") => format!(
+                "On the build screen's head, press the reason listed under it that is {}, naming \"{}\". Confirm the box \"{}\" is picked out on the picture and its panel opens beside it.",
+                launch_reason(req(with, "reason")?)?,
+                req(with, "box")?,
+                req(with, "box")?
+            ),
             // Taking away the pane a run is drawn in, once the run is over. While the run is going or
             // held the control cannot be pressed (`pane_state`), so this stops nothing.
             (Domain::Automation, "close-run-pane") => {
@@ -6454,7 +6463,7 @@ impl Instructor {
                 // the way — and a road that only ever asked for a reason to be there could not
                 // catch it.
                 (false, Some(reason)) => format!(
-                    "On the build screen's head, confirm the button that starts a run cannot be pressed, and that {} of the reasons listed under the head is {}{}{}.",
+                    "On the build screen's head, confirm the button that starts a run cannot be pressed, and that {} of the reasons listed under the head is {}{}{}{}.",
                     match present(with) {
                         true => "one",
                         false => "none",
@@ -6467,6 +6476,13 @@ impl Instructor {
                     match arg_str(with, "at") {
                         Some(at) => format!(" and \"{at}\" on it"),
                         None => String::new(),
+                    },
+                    // A reason about one box is a press that opens it; the two about the automation as
+                    // a whole are a line to read, and a click on one opens nothing.
+                    match step_mark(with, "pressable")? {
+                        Some(true) => ", and that its line is a press, with the word saying it is seen on the picture after it",
+                        Some(false) => ", and that its line is not a press: nothing after it says it is seen on the picture, and clicking it opens nothing",
+                        None => "",
                     }
                 ),
             },
@@ -8775,6 +8791,35 @@ steps_gui:
         assert!(lines[n - 3].contains("using it") && lines[n - 3].contains("only read"), "{}", lines[n - 3]);
         assert!(lines[n - 2].contains("opens its pane") && lines[n - 2].contains("pane the run is drawn in"), "{}", lines[n - 2]);
         assert!(lines[n - 1].contains("no band") && lines[n - 1].contains("takes writes again"), "{}", lines[n - 1]);
+    }
+
+    /// A reason under the build screen's head is pressed by its code and the box it names, and a
+    /// reading of one says whether its line is a press at all.
+    #[test]
+    fn a_launch_reason_is_pressed_and_read_for_whether_it_is_a_press() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: unwired_input, box: work }
+  - type: assert
+    domain: automation
+    op: launch
+    with: { ready: false, reason: unwired_input, box: work, pressable: true, present: true }
+  - type: assert
+    domain: automation
+    op: launch
+    with: { ready: false, reason: no_steps, pressable: false, present: true }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).expect("every step renders")).collect();
+        assert!(lines[0].contains("press the reason") && lines[0].contains("\"work\" is picked out"), "{}", lines[0]);
+        assert!(lines[1].contains("its line is a press"), "{}", lines[1]);
+        assert!(lines[2].contains("not a press") && lines[2].contains("opens nothing"), "{}", lines[2]);
     }
 
     /// `held-by` lists a run, so a road reading the hold names which one; only the release names

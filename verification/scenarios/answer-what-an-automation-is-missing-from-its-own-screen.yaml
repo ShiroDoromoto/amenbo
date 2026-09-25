@@ -7,10 +7,11 @@ id: answer-what-an-automation-is-missing-from-its-own-screen
 title: What the launch place says is in the way is put right on the screen, and the line for it goes
 description: >
   Stand a definition up with two holes in it — a required setting nobody answered and a required
-  input nothing reaches — and close both from the screen: the setting on the rows its kind is
-  answered by, the input from the list of what fits. Each is read twice, there and gone. A build that
-  drew the list once and never read it again would pass the first half of each and fail the second,
-  which is the failure this road is written against.
+  input nothing reaches — and close both from the screen: each reached by pressing the reason that
+  names it, which opens its box; the setting on the rows its kind is answered by, the input from the
+  list of what fits. Each is read twice, there and gone. A build that drew the list once and never
+  read it again would pass the first half of each and fail the second, which is the failure this road
+  is written against.
 given:
   # The action that takes the task. Its named way out hands on a value, which is what the placement
   # after it is left waiting for. The step inside declares the same, and the lines inside the action
@@ -64,6 +65,7 @@ steps_gui:
       target: auto
 
   # Both holes, named on the launch place before anything is done about them.
+  # Each names one box, so its line is a press that opens that box.
   - type: assert
     domain: automation
     op: launch
@@ -72,6 +74,7 @@ steps_gui:
       reason: unanswered_cfg
       box: take
       at: which
+      pressable: true
       present: true
 
   - type: assert
@@ -82,6 +85,7 @@ steps_gui:
       reason: unwired_input
       box: work
       at: note
+      pressable: true
       present: true
 
   # And on the picture as well, where the placement wears it.
@@ -92,13 +96,15 @@ steps_gui:
       name: work
       unfed: true
 
-  # The setting, answered on the rows its kind is taken on. Which row and which value are the
-  # reader's words; what a filter expression would look like never appears on this screen.
+  # The setting, reached by pressing the reason that names it, and answered on the rows its kind is
+  # taken on. Which row and which value are the reader's words; what a filter expression would look
+  # like never appears on this screen.
   - type: action
     domain: automation
-    op: pick-box
+    op: press-reason
     with:
-      name: take
+      reason: unanswered_cfg
+      box: take
 
   - type: action
     domain: automation
@@ -118,13 +124,14 @@ steps_gui:
       at: which
       present: false
 
-  # The input, filled from the list of what fits. What is offered is what carries the same kind, so
-  # the way out that hands a value on is the only thing this list can hold.
+  # The input, reached the same way, and filled from the list of what fits. What is offered is what
+  # carries the same kind, so the way out that hands a value on is the only thing this list can hold.
   - type: action
     domain: automation
-    op: pick-box
+    op: press-reason
     with:
-      name: work
+      reason: unwired_input
+      box: work
 
   - type: action
     domain: automation

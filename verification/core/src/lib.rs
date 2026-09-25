@@ -4382,7 +4382,17 @@ const REGISTRY: &[OpSpec] = &[
     // quoting a sentence the interface owns. `box` is the name the reason carries — the action on a
     // placement, or a step inside one for the two reasons about who carries a step out — and `at`
     // what on it is named.
+    //
+    // `pressable` is whether that reason's line is a press. A reason about one box is: pressing it
+    // picks that box out on the picture and opens its panel (`press-reason`). The two about the
+    // automation as a whole name no box and are a line to read, which is what `pressable: false`
+    // reads — a build that drew every line as a press would open nothing for those two.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch", required: &["ready"], refs: &[], strings: &["reason", "box", "at"], binds: false },
+    // Pressing one of those reasons, named by its code and by the box it names (`box`), the way
+    // `launch` reads it. What the press does is the picture's: that box is picked out and its panel
+    // opens beside it, as pressing the box itself would — so a road goes on from here the way it
+    // goes on from `pick-box`.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-reason", required: &["reason", "box"], refs: &[], strings: &["reason", "box"], binds: false },
     //
     // The pane a run is drawn in, and what its header carries: the run's own number and which step
     // on the name's line, and the task it is on with how many tasks in on the line under it. The step is said with the action it was opened
@@ -5065,11 +5075,23 @@ impl Scenario {
                 "task_decisions",
                 "task_comments",
                 "history",
+                "pressable",
             ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));
                     }
+                }
+            }
+
+            // Whether a reason's line is a press is a reading of one reason, so it needs the reason it is
+            // about, and a reason said to be absent has no line to be pressed or not.
+            if step.domain() == Domain::Automation && step.op() == "launch" && step.with().contains_key("pressable") {
+                if !step.with().contains_key("reason") {
+                    errs.push(at(i, "`pressable` is about one reason's line, so it needs the `reason`".to_string()));
+                }
+                if step.with().get("present").and_then(|v| v.as_bool()) == Some(false) {
+                    errs.push(at(i, "`pressable` reads a line that is there, and `present: false` says it is not".to_string()));
                 }
             }
 
@@ -5422,6 +5444,26 @@ steps_gui:
     op: save
 "#;
         load_str(yaml).unwrap().validate().expect("the save stands in both forms");
+    }
+
+    #[test]
+    fn pressable_is_read_of_one_reason_that_is_there() {
+        let no_reason = r#"
+id: x
+title: y
+steps_gui:
+  - { type: assert, domain: automation, op: launch, with: { ready: false, pressable: false } }
+"#;
+        let errs = load_str(no_reason).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("needs the `reason`")));
+        let absent = r#"
+id: x
+title: y
+steps_gui:
+  - { type: assert, domain: automation, op: launch, with: { ready: false, reason: no_steps, pressable: false, present: false } }
+"#;
+        let errs = load_str(absent).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`present: false` says it is not")));
     }
 
     #[test]

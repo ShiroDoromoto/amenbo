@@ -4469,10 +4469,9 @@ const REGISTRY: &[OpSpec] = &[
     // or `on: row`, it is the row. `open` is the row's alone, the pane being where it leads.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press", "on"], binds: false },
     //
-    // The two ways in that are not the build screen: a task's own pane, and an empty frame of the
-    // workspace. Neither hands anything over at the press — which task and which folder are the
-    // definition's — so both make the same run the build screen would.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-from-task", required: &[], refs: &["target", "task"], strings: &[], binds: true },
+    // The way in that is not the build screen: an empty frame of the workspace. It hands nothing over
+    // at the press — which task and which folder are the definition's — so it makes the same run the
+    // build screen would.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-from-frame", required: &[], refs: &["target"], strings: &[], binds: true },
     //
     // **The automations the sidebar opens**, every project's on one list (`open-view` with

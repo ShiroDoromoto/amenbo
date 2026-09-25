@@ -1,19 +1,19 @@
-# The build screen is not the only way in. A reader looking at a task, and a reader looking at a page
-# of the workspace with room left on it, are both in the position of wanting a run — and neither
-# should have to go and find the definition's own screen to press the same button. What matters is
-# that the run is the same one: nothing is handed over at any of the three presses, which task and
-# which folder being the definition's, so a build that let one of the other two pass something along
-# would make two kinds of run out of one.
-id: start-an-automation-from-a-task-or-an-empty-frame
-title: A run is started from a task's own pane and from an empty frame, and is the run the build screen would have made
+# The build screen is not the only way in. A reader looking at a page of the workspace with room
+# left on it is in the position of wanting a run too, and should not have to go and find the
+# definition's own screen to press the same button. What matters is that the run is the same one:
+# nothing is handed over at the press, which task and which folder being the definition's, so a
+# build that let this way in pass something along would make two kinds of run out of one.
+#
+# A task's own pane was a second way in once, and was taken out: a button under a task reads as
+# "run this one on this task", and the entry step takes its own (`app/src/components/StartAutomation.tsx`).
+id: start-an-automation-from-an-empty-frame
+title: A run is started from an empty frame, goes to its own pane, and is the run the build screen would have made
 description: >
-  Stand one definition up and start it twice, from the two ways in that are not the build screen: the
-  control on a task's pane, and the one an empty frame of the workspace carries. Each is read by the
-  pane it stands up and by its row on the running tab. Both are walked in one road because what is
-  under test is that they agree — a single way in proves only itself.
+  Stand one definition up and start it from the control an empty frame of the workspace carries.
+  The run is read by the pane it stands up, which is the one being worked in, and by its row on the
+  running tab.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
-  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the one a run is started from }, as: seed }
   # The action the run opens, holding the one step it runs. The way out that takes the task is
   # declared on both layers: the step's is what the step reports, and the action's is what the
   # automation's picture goes on from — the line inside the action carries the one out by the other.
@@ -26,7 +26,7 @@ given:
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two ways in" }, as: auto }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — from an empty frame" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
@@ -36,8 +36,8 @@ given:
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
-  # A workspace to put the runs in. Both ways in below need one for the same reason the build
-  # screen's press does: a run's steps open terminals, and terminals live here.
+  # A workspace to put the run in, for the same reason the build screen's press needs one: a run's
+  # steps open terminals, and terminals live here.
   - type: action
     domain: workspace
     op: show-face
@@ -50,34 +50,7 @@ steps_gui:
     with:
       dir: lantern
 
-  - type: action
-    domain: workspace
-    op: show-face
-    with:
-      face: tasks
-
-  # The first way in: a task's own pane. Nothing is handed over — which task the run works is the
-  # definition's to decide — so this is the same press as the build screen's, made where a reader
-  # happened to be standing.
-  - type: action
-    domain: automation
-    op: start-from-task
-    with:
-      target: auto
-      task: seed
-    as: from_task
-
-  - type: assert
-    domain: automation
-    op: run-pane
-    with:
-      target: from_task
-      step: claim
-      action: take
-      present: true
-
-
-  # The second way in: the box a page with room on it draws where the next pane would land.
+  # The box a page with room on it draws where the next pane would land.
   - type: action
     domain: automation
     op: start-from-frame
@@ -99,22 +72,14 @@ steps_gui:
     domain: workspace
     op: worked-in
     with:
-      shows: "SCENARIO SEED — two ways in"
+      shows: "SCENARIO SEED — from an empty frame"
 
-
-  # And both are on the tab that draws every run this device is carrying.
+  # And it is on the tab that draws every run this device is carrying.
   - type: action
     domain: automation
     op: screen
     with:
       tab: running
-
-  - type: assert
-    domain: automation
-    op: run-row
-    with:
-      target: from_task
-      state: running
 
   - type: assert
     domain: automation

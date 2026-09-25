@@ -735,7 +735,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .iter()
                 .map(|path| crate::cmd::attach::file_to_ingest(store, path, None))
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut handed = HandedAtLaunch { text, files: Vec::new() };
+            let mut handed = HandedAtLaunch { text, ..Default::default() };
             for file in &files {
                 let blob = file.ingest(store)?;
                 handed.files.push(HandedFile {

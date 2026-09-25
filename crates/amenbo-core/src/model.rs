@@ -1990,6 +1990,12 @@ pub struct AutomationRun {
     /// (`AMB-D-970`).
     #[serde(default)]
     pub handed: Option<String>,
+    /// **What a person handed over to file the task a run starts by filing** — the title, the notes and
+    /// the classification, as JSON ([`crate::ops::automation_run::HandedTask`]). Only a run whose entry is
+    /// the built-in that files a task is handed these, and that built-in is what reads them. `None` for
+    /// every other run (`AMB-D-970`).
+    #[serde(default)]
+    pub handed_task: Option<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

@@ -895,8 +895,7 @@ export function layOut(graph: PicGraph | null): Picture {
       toId,
       draw: (laneX, lane, stair) => {
         // Halfway down the lane, and a `+` lower for each lane further out: two lines running past
-        // the same rows would otherwise have their `+` side by side, and the inner one's name on the
-        // outer one's `+`.
+        // the same rows would otherwise have their `+` side by side.
         const middle = Math.min(Math.round((top + bottom) / 2) + lane * LANE_PLUS, bottom - LANE_PLUS / 2);
         inserts.push({ edgeId: edge.id, x: laneX, y: middle });
         // The lines of one box that leave for the margin are the first ways out along its bottom, so
@@ -920,9 +919,11 @@ export function layOut(graph: PicGraph | null): Picture {
           leaves: edge.ends === "exit",
           exitName: edge.exitName,
           builtin: from.builtin,
-          // Level with its `+`, past the outermost lane: inside it are the boxes, and between the two
-          // run the lanes further out, which would cross the words written beside the `+` itself.
-          at: { x: leftWordsX - BESIDE, y: middle + 4 },
+          // Level with the leg it leaves its box by, past the outermost lane: halfway along a long
+          // lane the words would stand beside some other box, and read as that one's way out
+          // (`AMB-T-5592`). Past every lane nothing crosses them; two lines leaving one box write
+          // theirs a row apart, however many there are.
+          at: { x: leftWordsX - BESIDE, y: sy + DROP + stair.out * WORD_H + 4 },
           align: "end",
         };
       },

@@ -738,6 +738,29 @@ fn inside_a_step_the_building_and_driving_verbs_are_refused() {
     }
 }
 
+/// **Inside a step, what moves a task's status or who it is assigned to is refused**, whatever the
+/// namespace (`AMB-D-968`) — the run takes its task, ends it and hands it to a person, and the refusal
+/// says so and names the way out a step leaves by instead. The task is left where it was.
+#[test]
+fn inside_a_step_what_moves_a_task_is_refused_and_the_task_is_left_alone() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
+
+    for args in [
+        vec!["--actor", "ai", "task", "done", &t, "--json"],
+        vec!["--actor", "ai", "task", "status", &t, "blocked", "--json"],
+        vec!["--actor", "ai", "task", "assign", &t, "--to", "me", "--json"],
+    ] {
+        let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
+        assert_eq!(code, 2, "{args:?}: {err}");
+        assert!(err.contains("automation_outside_only"), "{args:?}: {err}");
+        assert!(err.contains("step-done"), "it names the way a step hands a decision back: {args:?}: {err}");
+    }
+    let shown = cli.json(&["task", "show", &t, "--json"]);
+    assert_eq!(shown["status"], "todo", "{shown}");
+}
+
 /// The reading verbs are left with a step, so the agent carrying it out can see where it stands — and
 /// the action layer is among them, because the prompts moved there. `show` alone would hand back the
 /// placements and nothing of what stands at one.

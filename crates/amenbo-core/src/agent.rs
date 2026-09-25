@@ -493,8 +493,8 @@ pub enum InAStep {
 
 impl Cmd {
     /// **Where each command may be typed, as a match over every one of them** — what the list a
-    /// step's entry teaches ([`build_step`]) is made from, and the refusal inside a step with it (that
-    /// one is still the CLI's `typed_in`, over the `automation` verbs alone, until `AMB-T-5470`).
+    /// step's entry teaches ([`build_step`]) is made from, and the refusal inside a step with it (the
+    /// CLI asks this of every command it parses, before it reads or writes anything).
     ///
     /// **There is no `_` arm, deliberately.** A command added to the table does not compile until
     /// this says which side it is on.

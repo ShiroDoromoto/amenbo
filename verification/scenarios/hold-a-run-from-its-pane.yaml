@@ -1,0 +1,172 @@
+# A reader watching a run is in the pane it is drawn in, and the line over that pane carries the same
+# three controls as the running tab's row: hold the run, pick it up again, stop it. This is the road
+# that presses them there. Stopping from the line keeps the pane — that is what sets it apart from
+# the control that takes the pane away, which stops the run too and asks first.
+#
+# The picture is the one hold-a-run-and-let-it-go-again walks, for the reason given there: a hold
+# settles only when a step reports and the run has somewhere to go on to.
+id: hold-a-run-from-its-pane
+title: A run is held, picked up again and stopped from the line over its pane, and the pane stays
+description: >
+  Start a run, then from the line over the pane it is drawn in hold it, let the step report, pick it
+  up again and stop it, reading the run's state on that line after each. Once it is stopped the pane
+  is still up, saying the run was canceled.
+given:
+  # Two rather than one because the terminal's premise stands its programs up in front of the
+  # machine's own and cannot make a row shorter than two; the step names the first of them either way.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # The task the first step takes on the screen. A hold settles only when a step reports and the run
+  # has somewhere to go on to, so the screen road works the first step to its end.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run held from its pane works }, as: seed }
+  # The action the run opens, holding the one step it runs. The way out that takes the task is
+  # declared on both layers: the step's is what the step reports, and the action's is what the
+  # automation's picture goes on from — the line inside the action carries the one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  # The action the run goes on to. It is what makes the hold settle: a step that reports with nothing
+  # after it closes the run, and a closed run is not a held one.
+  - { type: action, domain: automation, op: action-add, with: { name: after }, as: after }
+  - { type: action, domain: automation, op: step-add, with: { target: after, name: wait, prompt: carry on with the task }, as: wait }
+  - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to hold from its pane" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_after, step: wait, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_after } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_after, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      state: running
+
+  # Holding while the first step is open. The step cannot be cut in half, so the line says the run
+  # will hold when that step ends, not that it already has.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: pause
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      state: pausing
+
+  # The step's agent finishing, typed in the same pane. Reporting is what lets the hold settle.
+  - type: action
+    domain: automation
+    op: take-in-pane
+    with:
+      target: run
+      task: seed
+
+  - type: action
+    domain: automation
+    op: done-in-pane
+    with:
+      target: run
+      exit: got one
+      report: took the task and stopped where the hold asked
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      state: paused
+
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: resume
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      state: running
+
+  # Stopping from the line is final and asks nothing, as on the tab's row.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: stop
+      on: pane
+
+  # The pane is still up, saying how the run ended — the stop was the run's, not the pane's.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      state: canceled

@@ -4482,10 +4482,22 @@ impl Instructor {
                 "In the pane this run is drawn in, type `exit` and run it. Confirm the program in that pane has ended and takes no more lines."
                     .to_string()
             }
-            (Domain::Automation, "press-run") => format!(
-                "On the running tab, on the row for this run, {}.",
-                run_press(req(with, "press")?)?
-            ),
+            (Domain::Automation, "press-run") => {
+                let press = req(with, "press")?;
+                match arg_str(with, "on").unwrap_or("row") {
+                    "row" => format!("On the running tab, on the row for this run, {}.", run_press(press)?),
+                    // The pane's line carries the same controls as the row, in the same words, save
+                    // the one that opens the pane.
+                    "pane" if press == "open" => {
+                        return Err("`press: open` is the row's — the pane is where it leads".to_string())
+                    }
+                    "pane" => format!(
+                        "In the workspace, on the line over the pane this run is drawn in, {}.",
+                        run_press(press)?
+                    ),
+                    other => return Err(format!("`on` does not know `{other}` — it is row / pane")),
+                }
+            }
             // The two ways in that are not the build screen. Neither hands anything over at the
             // press: which task and which folder are the definition's.
             (Domain::Automation, "start-from-task") => format!(
@@ -8701,6 +8713,10 @@ steps_gui:
     domain: automation
     op: press-run
     with: { target: run, press: pause }
+  - type: action
+    domain: automation
+    op: press-run
+    with: { target: run, press: resume, on: pane }
   - type: action
     domain: automation
     op: close-run-pane

@@ -3698,6 +3698,11 @@ pub struct AutomationBuiltinRunDto {
     /// **Whether it is waiting for something to turn up** rather than being carried out — a built-in
     /// set to wait, with nothing yet for it (`AMB-D-969`).
     pub(crate) waiting: bool,
+    /// **What it waits for**, as the filter a person answered it with reads — `task list --filter`'s
+    /// words. Absent while it is not waiting. What would match is neither listed nor counted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) looks_for: Option<String>,
 }
 
 /// **One step of a run, as its pane draws it.**

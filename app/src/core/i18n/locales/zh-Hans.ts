@@ -1128,6 +1128,7 @@ export const zhHans: Translation = {
     "auto.run.step": "步骤 {n} · {step}",
     "auto.run.inAction": "{action} 的 {step}",
     "auto.run.noTask": "尚未领取任务",
+    "auto.run.waitingForTask": "正在等待可领取的任务",
 
     "mcp.title": "通过 MCP 连接",
     "mcp.setupTitle": "让 AI 可以使用你的项目",

@@ -78,7 +78,13 @@ pub(super) const TAKE_TASK: Builtin = Builtin {
         },
         BuiltinExit { name: Some(NONE_TO_TAKE), outs: &[] },
     ],
-    waits: Some(Waits { setting: WHEN_NONE, answer: WAIT, instead_of: NONE_TO_TAKE, turned_up }),
+    waits: Some(Waits {
+        setting: WHEN_NONE,
+        answer: WAIT,
+        instead_of: NONE_TO_TAKE,
+        turned_up,
+        looks_for: |cfg| expression(answer(cfg, FILTER)),
+    }),
     run: take,
 };
 

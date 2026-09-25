@@ -359,6 +359,25 @@ describe("a built-in on a run's pane", () => {
     expect(q(".slot__builtin-state")[0]?.textContent).not.toBe(doing);
   });
 
+  it("says it is waiting and what for, and names no task, while a built-in waits for one", async () => {
+    await mount();
+    await arrive({
+      step: undefined,
+      builtin: builtin({
+        name: "タスクに着手する",
+        key: "take_task",
+        task: undefined,
+        waiting: true,
+        looksFor: "assignee:me-ai status:todo ready:yes",
+      }),
+    });
+
+    expect(card()).toHaveLength(1);
+    expect(q(".slot__builtin-state")[0]?.textContent).toBe("Waiting for a task it can take");
+    expect(q(".slot__builtin-filter")[0]?.textContent).toBe("assignee:me-ai status:todo ready:yes");
+    expect(q(".slot__builtin-task")).toHaveLength(0);
+  });
+
   it("gives the pane back to a terminal when the next step arrives", async () => {
     await mount();
     await arrive({ step: undefined, builtin: builtin({ seq: 1 }) });

@@ -123,6 +123,13 @@ describe("the running tab", () => {
     expect(tasks).toEqual([t("auto.run.noTask"), t("auto.run.noTask"), ""]);
   });
 
+  it("says a run waiting for a task to take is waiting, in place of the task it last closed", async () => {
+    const closed = { id: 12, ref: "AMB-T-12", title: "the last one", seq: 1 };
+    await render([run({ waiting: true, task: closed })]);
+    expect(container.querySelector(".autorun__state")?.textContent).toBe(t("auto.run.running"));
+    expect(container.querySelector(".autorun__task")?.textContent).toBe(t("auto.run.waitingForTask"));
+  });
+
   /// A spot taken off the picture while its run walks on leaves the step with nothing to be inside
   /// of. The line says the step alone rather than a name the picture no longer holds.
   it("says the step alone where the spot it was opened from has gone", async () => {

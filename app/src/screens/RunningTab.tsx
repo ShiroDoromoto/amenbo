@@ -107,7 +107,11 @@ export function RunLine({
             })}
         </span>
         <span className="autorun__task">
-          {run.task !== undefined ? (
+          {/* Waiting comes first: the task a run waiting to take its next one still holds is the
+              last one, closed, and naming it would say the run is on it. */}
+          {run.waiting ? (
+            <span className="autorun__notask">{t("auto.run.waitingForTask")}</span>
+          ) : run.task !== undefined ? (
             `${run.task.ref} ${run.task.title}`
           ) : (
             // Only while it can still take one: a run that ended without a task never had one to take.

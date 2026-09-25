@@ -393,7 +393,12 @@ finished: boolean,
  * **Whether it is waiting for something to turn up** rather than being carried out — a built-in
  * set to wait, with nothing yet for it (`AMB-D-969`).
  */
-waiting: boolean, };
+waiting: boolean, 
+/**
+ * **What it waits for**, as the filter a person answered it with reads — `task list --filter`'s
+ * words. Absent while it is not waiting. What would match is neither listed nor counted.
+ */
+looksFor?: string, };
 
 /**
  * **One automation in the list** — what the "automations" tab draws a row from.

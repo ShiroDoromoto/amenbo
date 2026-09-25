@@ -109,6 +109,9 @@ pub struct Waits {
     pub instead_of: &'static str,
     /// Whether what it waits for is there now, read from the answers where it was placed.
     pub turned_up: fn(&Connection, &AutomationRun, &[RunDefCfg]) -> Result<bool>,
+    /// What it looks for, as a person reads it beside the run while it waits — read from the same
+    /// answers. What it would find is not listed or counted: that is asked of every task there is.
+    pub looks_for: fn(&[RunDefCfg]) -> String,
 }
 
 impl Waits {
@@ -137,6 +140,16 @@ pub fn waiting(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -
         return Ok(false);
     }
     Ok(!(waits.turned_up)(conn, run, &cfg)?)
+}
+
+/// **What this copy of a step looks for while it waits** ([`Waits::looks_for`]), or `None` for a step
+/// that does not wait.
+pub fn looks_for(def: &AutomationRunDef) -> Result<Option<String>> {
+    let Some(waits) = def.builtin.as_deref().and_then(find).and_then(|b| b.waits.as_ref()) else {
+        return Ok(None);
+    };
+    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    Ok(Some((waits.looks_for)(&cfg)))
 }
 
 /// **The way out a placed built-in never leaves by**, as it is set there — the launch check asks no

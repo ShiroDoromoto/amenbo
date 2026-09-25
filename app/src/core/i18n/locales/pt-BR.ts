@@ -1139,6 +1139,7 @@ export const ptBR: Translation = {
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} em {action}",
     "auto.run.noTask": "Nenhuma tarefa pega ainda",
+    "auto.run.waitingForTask": "Aguardando uma tarefa que possa pegar",
 
     "mcp.title": "Conectar por MCP",
     "mcp.setupTitle": "Usar seus projetos a partir de uma IA",

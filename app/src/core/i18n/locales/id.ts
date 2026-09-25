@@ -1127,6 +1127,7 @@ export const id: Translation = {
     "auto.run.step": "Langkah {n} · {step}",
     "auto.run.inAction": "{step} di {action}",
     "auto.run.noTask": "Belum mengambil tugas",
+    "auto.run.waitingForTask": "Menunggu tugas yang bisa diambil",
 
     "mcp.title": "Hubungkan lewat MCP",
     "mcp.setupTitle": "Gunakan proyek Anda dari AI",

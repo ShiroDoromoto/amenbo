@@ -1123,6 +1123,7 @@ export const ko: Translation = {
     "auto.run.step": "단계 {n} · {step}",
     "auto.run.inAction": "{action}의 {step}",
     "auto.run.noTask": "아직 가져온 작업이 없습니다",
+    "auto.run.waitingForTask": "가져올 수 있는 작업을 기다리는 중",
 
     "mcp.title": "MCP로 연결",
     "mcp.setupTitle": "내 프로젝트를 AI에서 사용하기",

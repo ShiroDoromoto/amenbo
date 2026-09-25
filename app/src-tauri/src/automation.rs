@@ -1643,6 +1643,7 @@ fn open_one(
                     })?;
                     let (project, mut builtin) = builtin_about_to(store, run_id, &def)?;
                     builtin.waiting = true;
+                    builtin.looks_for = amenbo_core::ops::automation_builtin::looks_for(&def)?;
                     (project, None, Some(builtin), Vec::new())
                 }
                 _ => (run.project_id, None, None, Vec::new()),
@@ -1678,6 +1679,7 @@ fn open_one(
                 task: worked_task(store, run_step.run_task_id)?,
                 finished: true,
                 waiting: false,
+                looks_for: None,
             };
             (run.project_id, None, Some(builtin), Vec::new())
         }
@@ -1753,6 +1755,7 @@ fn builtin_about_to(
         task: worked_task(store, stretch)?,
         finished: false,
         waiting: false,
+        looks_for: None,
     }))
 }
 

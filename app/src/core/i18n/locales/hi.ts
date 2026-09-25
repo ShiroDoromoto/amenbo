@@ -1126,6 +1126,7 @@ export const hi: Translation = {
     "auto.run.step": "चरण {n} · {step}",
     "auto.run.inAction": "{action} का {step}",
     "auto.run.noTask": "अभी तक कोई कार्य नहीं लिया",
+    "auto.run.waitingForTask": "लेने योग्य कार्य की प्रतीक्षा में",
 
     "mcp.title": "MCP से जोड़ें",
     "mcp.setupTitle": "अपने प्रोजेक्ट AI से इस्तेमाल करें",

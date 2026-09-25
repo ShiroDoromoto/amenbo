@@ -615,6 +615,8 @@ export const ptBR: Translation = {
     "face.ended": "O programa deste terminal foi encerrado.",
     "face.builtinDoing": "O Amenbo está executando isto",
     "face.builtinDone": "O Amenbo executou isto",
+    "face.builtinExit": "Saída: {exit}",
+    "face.runFailedAt": "{step} · Saída: {exit}",
 
     "face.endedGeminiUnset": "O Gemini CLI não tem um método de autenticação definido. O caminho indicado pertence apenas a este painel e some com ele — o arquivo a editar é o seu próprio ~/.gemini/settings.json.",
     "face.noWayBack": "Esta conversa não pode mais ser aberta.",

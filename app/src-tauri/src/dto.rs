@@ -3705,6 +3705,11 @@ pub struct AutomationBuiltinRunDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) looks_for: Option<String>,
+    /// **The way out it left through**, once it has been carried out — by the name its step declared
+    /// it under, and empty for the unnamed one. Absent while Amenbo is still at it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) exit_name: Option<String>,
 }
 
 /// **One step of a run, as its pane draws it.**
@@ -3894,6 +3899,13 @@ pub struct AutomationRunCardDto {
     /// a reader asks of a run they are not watching.
     #[ts(type = "number")]
     pub(crate) steps_done: usize,
+    /// **The way out the last step left through**, by the name the run's copy declared it under,
+    /// and empty for the unnamed one. Absent while that step is still under way, and where it ended
+    /// without leaving by one — a program that exited before it reported. On a failure it is the
+    /// half of "where did it fail" the step's name does not say.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) exit_name: Option<String>,
     /// The task it is working, where it is on one. A run walks a stretch per task
     /// ([`amenbo_core::model::AutomationRunTask`]), and this is the one it is in now — the same
     /// shape the row over its pane says it in.

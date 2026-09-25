@@ -605,6 +605,8 @@ export const th: Translation = {
     "face.ended": "โปรแกรมในเทอร์มินัลนี้จบการทำงานแล้ว",
     "face.builtinDoing": "Amenbo กำลังดำเนินการ",
     "face.builtinDone": "Amenbo ดำเนินการเสร็จแล้ว",
+    "face.builtinExit": "ทางออก: {exit}",
+    "face.runFailedAt": "{step} · ทางออก: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI ยังไม่ได้ตั้งค่าวิธียืนยันตัวตน เส้นทางที่แสดงเป็นของแผงนี้เท่านั้นและจะถูกลบไปพร้อมกัน — ไฟล์ที่ต้องตั้งค่าคือ ~/.gemini/settings.json ของคุณเอง",
     "face.noWayBack": "เปิดบทสนทนานี้อีกไม่ได้แล้ว",

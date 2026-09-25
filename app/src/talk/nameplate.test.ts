@@ -81,6 +81,7 @@ describe("the row above a run's pane", () => {
     step: "取る",
     action: "下ごしらえ",
     task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 2 },
+    state: null,
   };
 
   it("says where the run has got to, and marks the pane as a run's", () => {
@@ -98,7 +99,7 @@ describe("the row above a run's pane", () => {
     // leads, then the automation, then where the run has got to.
     const row = host.querySelector(".plate") as HTMLElement;
     expect([...row.children].map((el) => el.className))
-      .toEqual(["plate__dot", "plate__auto", "plate__name", "plate__no", "plate__step", "plate__nth"]);
+      .toEqual(["plate__dot", "plate__auto", "plate__name", "plate__no", "plate__step", "plate__nth", "plate__state"]);
     expect(row.classList.contains("plate--run")).toBe(true);
     // Which step, with the spot of the picture it was opened from: two spots standing on the same
     // action run steps of the same names, so the step's own name does not say which this is
@@ -145,6 +146,59 @@ describe("the row above a run's pane", () => {
     expect((host.querySelector(".plate__step") as HTMLElement).hidden).toBe(false);
   });
 
+  /// Until the run has been read the row says nothing of its state: a mark guessed from the step
+  /// would say "running" of a run that had already ended.
+  it("says no state before the run has been read", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "/work/a", dot: STILL, run: RUN });
+
+    expect((host.querySelector(".plate__state") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate-fail") as HTMLElement).hidden).toBe(true);
+  });
+
+  /// A run's pane outlives its last step, so what the row says has to move with the run and not
+  /// with the step — a completed run's pane was left naming the step it ended on (`AMB-T-5506`).
+  it("says where the run stands, and marks which state for the drawing", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { status: "running", word: "実行中", why: null, where: null } } });
+    const state = host.querySelector(".plate__state") as HTMLElement;
+    expect(state.hidden).toBe(false);
+    expect(state.textContent).toBe("実行中");
+    expect(state.dataset.state).toBe("running");
+    expect((host.querySelector(".plate-fail") as HTMLElement).hidden).toBe(true);
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { status: "completed", word: "完了", why: null, where: null } } });
+    expect(state.textContent).toBe("完了");
+    expect(state.dataset.state).toBe("completed");
+    expect((host.querySelector(".plate-fail") as HTMLElement).hidden).toBe(true);
+  });
+
+  /// A failure says why and where on a line of its own, so nobody has to read what the step printed
+  /// to learn that the run failed and at which way out.
+  it("says why and where a failed run failed", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: {
+      status: "failed", word: "失敗", why: "人を呼ぶ出口で止まった", where: "取る · エラー",
+    } } });
+
+    expect((host.querySelector(".plate-fail") as HTMLElement).hidden).toBe(false);
+    expect(host.querySelector(".plate-fail__why")?.textContent).toBe("人を呼ぶ出口で止まった");
+    expect(host.querySelector(".plate-fail__where")?.textContent).toBe("取る · エラー");
+
+    // A failure core gave no reason for says where alone rather than an empty reason.
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: {
+      status: "failed", word: "失敗", why: null, where: "取る",
+    } } });
+    expect((host.querySelector(".plate-fail__why") as HTMLElement).hidden).toBe(true);
+    expect(host.querySelector(".plate-fail__where")?.textContent).toBe("取る");
+  });
+
   it("says nothing of a run on a pane that is not one", () => {
     const host = document.createElement("div");
     const draw = mountNameplate(host);
@@ -155,6 +209,8 @@ describe("the row above a run's pane", () => {
     expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(true);
     expect((host.querySelector(".plate__step") as HTMLElement).hidden).toBe(true);
     expect((host.querySelector(".plate__no") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate__state") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate-fail") as HTMLElement).hidden).toBe(true);
     // The panel is the name's, exactly as it was: an empty line in it would push it taller for a
     // pane that has no run.
     expect(host.querySelector(".plate-peek")?.textContent).toBe("the migration");

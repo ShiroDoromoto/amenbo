@@ -618,6 +618,8 @@ export const uk: Translation = {
     "face.ended": "Програму в цьому терміналі завершено.",
     "face.builtinDoing": "Amenbo виконує це",
     "face.builtinDone": "Amenbo виконав це",
+    "face.builtinExit": "Вихід: {exit}",
+    "face.runFailedAt": "{step} · Вихід: {exit}",
 
     "face.endedGeminiUnset": "Для Gemini CLI не задано спосіб автентифікації. Вказаний шлях належить лише цій панелі й зникне разом із нею — задати його потрібно у вашому власному ~/.gemini/settings.json.",
     "face.noWayBack": "Цю розмову більше не відкрити.",

@@ -603,6 +603,8 @@ export const tr: Translation = {
     "face.ended": "Bu terminaldeki program sona erdi.",
     "face.builtinDoing": "Amenbo bunu yürütüyor",
     "face.builtinDone": "Amenbo bunu yürüttü",
+    "face.builtinExit": "Çıkış: {exit}",
+    "face.runFailedAt": "{step} · Çıkış: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI için bir kimlik doğrulama yöntemi ayarlanmamış. Belirtilen yol yalnızca bu bölmeye aittir ve onunla birlikte silinir — ayarlamanız gereken kendi ~/.gemini/settings.json dosyanızdır.",
     "face.noWayBack": "Bu konuşma artık açılamıyor.",

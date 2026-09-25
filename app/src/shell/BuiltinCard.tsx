@@ -9,9 +9,13 @@
 // **A built-in set to wait says only that it is waiting, and for what** (`AMB-D-969`): the line and the
 // filter it was answered with. What would match is not listed or counted — it is asked again every
 // second, and a list would be asked of every task there is.
+//
+// **A built-in that has been carried out says which way out it left by** (`AMB-T-5506`): the run goes
+// on from there, and which way it went is what a reader watching the pane asks next.
 import type { BuiltinRun } from "../talk/automationStep";
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
+import { runExitWord } from "../core/runWords";
 
 export function BuiltinCard({ builtin }: { builtin: BuiltinRun }) {
   return (
@@ -29,6 +33,11 @@ export function BuiltinCard({ builtin }: { builtin: BuiltinRun }) {
         <span className="slot__builtin-task">
           <span className="slot__builtin-ref">{builtin.task.ref}</span>
           <span className="slot__builtin-title">{builtin.task.title}</span>
+        </span>
+      )}
+      {builtin.finished && builtin.exitName !== undefined && (
+        <span className="slot__builtin-exit">
+          {tf("face.builtinExit", { exit: runExitWord(builtin.key, builtin.exitName) })}
         </span>
       )}
     </div>

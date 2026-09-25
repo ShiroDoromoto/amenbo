@@ -42,7 +42,7 @@ vi.mock("../core/notice", () => ({ pushNotice: vi.fn() }));
 vi.mock("../core/ipc", () => ({ invoke: vi.fn(async () => {}) }));
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
-    opened: () => {}, closed: () => {}, named: () => {}, took: () => {},
+    opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {},
     focused: () => {}, stop: () => {},
   }),
 }));

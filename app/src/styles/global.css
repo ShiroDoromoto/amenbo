@@ -797,6 +797,7 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 .slot__builtin-ref { font-variant-numeric: tabular-nums; }
 .slot__builtin-title { overflow-wrap: anywhere; }
 .slot__builtin-filter { max-width: 100%; color: var(--c-text-muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.slot__builtin-exit { color: var(--c-text-muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
 
 /* The question and the row under it, kept together: the words are what say the pills are an offer, so
    they sit closer to the row than the row sits to the press that acts on it. */
@@ -2885,6 +2886,55 @@ body.dragging-row { user-select: none; }
   text-overflow: ellipsis;
   color: var(--c-text);
 }
+/* **Where the run stands**, last on the name's line (`../talk/nameplate`, `AMB-T-5506`). The word and a
+   dot in the state's colour, the colours being the "running" tab's own (`.autorun--*`), so a state
+   reads the same on the pane and on the tab. It never shrinks: it is what a reader glancing at the
+   pane is asking, and a narrow pane gives up the run's number before it.
+
+   **Running is the one that moves**: its dot pulses, because it is the one state about now — the
+   other four are over or held, and hold still. A reader who has asked for less motion gets the dot
+   held lit instead. */
+.plate__state {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  margin-inline-start: var(--s-2);
+  font-size: var(--fs-xs); font-weight: 700;
+  color: var(--state, var(--c-text-muted));
+}
+.plate__state[hidden] { display: none; }
+.plate__state::before {
+  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--state-dot, var(--state, var(--c-text-faint)));
+}
+.plate__state[data-state="running"] { --state: var(--c-ai); }
+.plate__state[data-state="running"]::before { animation: plate-running 1.2s ease-in-out infinite; }
+.plate__state[data-state="paused"] { --state: var(--c-heed); }
+.plate__state[data-state="completed"] { --state: var(--c-text-muted); --state-dot: var(--c-done); }
+.plate__state[data-state="failed"] { --state: var(--c-stop); }
+.plate__state[data-state="canceled"] { --state: var(--c-text-muted); }
+@keyframes plate-running {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plate__state[data-state="running"]::before { animation: none; }
+}
+
+/* **Why and where a run failed**, on a line of its own under the name, in the stop colour. One line,
+   like the task's, for the same reason; the reason is kept and the place is what is cut. */
+.plate-fail {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 0 var(--s-2) var(--s-2);
+  font-size: var(--fs-xs);
+  color: var(--c-stop);
+  white-space: nowrap;
+}
+.plate-fail[hidden], .plate-fail__why[hidden], .plate-fail__where[hidden] { display: none; }
+.plate-fail__why { flex: 0 0 auto; font-weight: 700; }
+.plate-fail__where { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
 @container (max-width: 20rem) { .plate-run__label { display: none; } }
 @container (max-width: 15rem) { .plate__no, .plate__nth { display: none; } }
 @container (max-width: 11rem) { .plate-run__title { display: none; } }

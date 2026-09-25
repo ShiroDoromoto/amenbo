@@ -10,7 +10,7 @@
 // neither of which the world can rewrite behind it.
 
 import { frameLabel, frameNames, type FrameNames } from "./frames";
-import { faceOf, mountNameplate, type Plate as Row, type Say, type Worked } from "./nameplate";
+import { faceOf, mountNameplate, type Plate as Row, type RunState, type Say, type Worked } from "./nameplate";
 import { movingAt, STILL_AFTER_MS } from "./moving";
 
 /** A pane's label, and the pane's way of telling it what happened. */
@@ -28,6 +28,9 @@ export type Plate = {
   /** The run's step has taken its task since the pane was opened (`AMB-T-5427`). Nothing on an
    *  ordinary pane: it has no run to say it of. */
   took(task: Worked | null): void;
+  /** The run has moved on — started, paused, ended — while this step's pane stands (`AMB-T-5506`).
+   *  Nothing on an ordinary pane, for `took`'s reason. */
+  stated(state: RunState | null): void;
   /** Take the label away. */
   stop(): void;
   /**
@@ -52,10 +55,11 @@ export type Plate = {
  * laid the page out (`./moving`).
  *
  * `run` is where the run this pane is drawing has got to, and null on every ordinary pane
- * (`./nameplate`). **It is taken at mount, and only its task changes afterwards**: a run's pane is
- * built again at every step, the terminal in it being a new one each time (`../shell/WorkspaceFace`),
- * so the step, the run and the count are said by that. The task is the one thing that moves while a
- * step stands — a step that takes its task opens with none and takes it partway (`took`).
+ * (`./nameplate`). **It is taken at mount, and only its task and its state change afterwards**: a
+ * run's pane is built again at every step, the terminal in it being a new one each time
+ * (`../shell/WorkspaceFace`), so the step, the run and the count are said by that. The task and the
+ * state are what move while a step stands — a step that takes its task opens with none and takes it
+ * partway (`took`), and the run ends, or is paused, with its last step's pane still up (`stated`).
  */
 export function mountPlate(
   host: HTMLElement,
@@ -155,6 +159,11 @@ export function mountPlate(
     took: (task) => {
       if (run === null) return;
       run = { ...run, task };
+      redraw();
+    },
+    stated: (state) => {
+      if (run === null) return;
+      run = { ...run, state };
       redraw();
     },
     // A pane that has been taken down has no row to read: what it said was about a session that is

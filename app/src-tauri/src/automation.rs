@@ -1403,6 +1403,7 @@ fn run_card(
     };
     let action_name =
         placed_action_name(store, last_def.as_ref().and_then(|def| def.placement_id))?;
+    let exit_name = last_def.as_ref().and_then(|def| left_by(def, steps.last()?.exit_id));
     let builtin = last_def.as_ref().and_then(|def| def.builtin.clone());
     let step_name = last_def.map(|def| def.name);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
@@ -1426,8 +1427,34 @@ fn run_card(
         builtin,
         action_name,
         steps_done: steps.len(),
+        exit_name,
         task: worked_task(store, stretch)?,
     })
+}
+
+/// **The way out one execution left through**, by the name the run's copy declared it under — empty
+/// for the unnamed one. `None` while it has not left, and where the copy holds no way out of that id.
+///
+/// Read off the copy rather than the live step, for the reason the step's own name is: what a reader
+/// is told is the way out as it stood when the run took it, and a way out renamed or taken off since
+/// is still the one it left by.
+fn left_by(def: &amenbo_core::model::AutomationRunDef, exit_id: Option<i64>) -> Option<String> {
+    let exit_id = exit_id?;
+    let exits: Vec<amenbo_core::model::RunDefExit> = serde_json::from_str(&def.exits).ok()?;
+    exits.into_iter().find(|one| one.id == exit_id).map(|one| one.name.unwrap_or_default())
+}
+
+/// **The runs a workspace's panes are drawing**, by id — what the row over each pane says the run's
+/// state with (`app/src/talk/nameplate.ts`).
+///
+/// It is read by id rather than off the "running" tab's list, because a pane outlives the run it
+/// draws: a run that has completed or been canceled leaves that list, and its pane is still up saying
+/// how it ended. A run gone from under an id is left out.
+#[tauri::command]
+pub fn automation_run_cards(run_ids: Vec<i64>) -> Result<Vec<AutomationRunCardDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_run_cards");
+    let store = open_store_read()?;
+    run_cards(&store, run_ids)
 }
 
 /// The event the workspace hears when a step of a run is ready to be drawn.
@@ -1683,6 +1710,7 @@ fn open_one(
                 finished: true,
                 waiting: false,
                 looks_for: None,
+                exit_name: left_by(&def, run_step.exit_id),
             };
             (run.project_id, None, Some(builtin), Vec::new())
         }
@@ -1759,6 +1787,7 @@ fn builtin_about_to(
         finished: false,
         waiting: false,
         looks_for: None,
+        exit_name: None,
     }))
 }
 

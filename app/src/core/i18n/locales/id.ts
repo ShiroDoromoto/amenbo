@@ -605,6 +605,8 @@ export const id: Translation = {
     "face.ended": "Program di terminal ini telah berhenti.",
     "face.builtinDoing": "Amenbo sedang menjalankannya",
     "face.builtinDone": "Amenbo telah menjalankannya",
+    "face.builtinExit": "Keluaran: {exit}",
+    "face.runFailedAt": "{step} · Keluaran: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI belum memiliki metode autentikasi. Jalur yang disebutkan hanya milik panel ini dan ikut terhapus — yang perlu diatur adalah ~/.gemini/settings.json milik Anda sendiri.",
     "face.noWayBack": "Percakapan ini tidak bisa dibuka lagi.",

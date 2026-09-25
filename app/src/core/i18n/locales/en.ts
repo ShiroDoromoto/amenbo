@@ -693,6 +693,8 @@ const ui = {
   "face.ended": "The program in this terminal has exited.",
   "face.builtinDoing": "Amenbo is carrying this out",
   "face.builtinDone": "Amenbo carried this out",
+  "face.builtinExit": "Way out: {exit}",
+  "face.runFailedAt": "{step} · way out: {exit}",
   "face.endedGeminiUnset": "Gemini CLI has no authentication method set. The path it names is this pane's own and goes with it — the one to set is your own ~/.gemini/settings.json.",
   "face.noWayBack": "This conversation cannot be opened again.",
   "face.projects": "Projects",

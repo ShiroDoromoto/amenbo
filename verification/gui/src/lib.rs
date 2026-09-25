@@ -4200,11 +4200,11 @@ impl Instructor {
                     .cloned()
                     .unwrap_or_else(|| "<the action>".to_string())
             ),
-            // One box on the pressed placement's panel, ticked for where a run opens and cleared to
+            // One switch on the pressed placement's panel, turned on for where a run opens and off to
             // give it back. One automation has one entry, so ticking it here moves it off any other.
             (Domain::Automation, "set-entry") => match step_mark(with, "on")? {
-                None | Some(true) => "In the panel showing what the pressed placement holds, tick the box that makes it the start.".to_string(),
-                Some(false) => "In the panel showing what the pressed placement holds, clear the box that makes it the start.".to_string(),
+                None | Some(true) => "In the panel showing what the pressed placement holds, turn on the switch that makes it the start.".to_string(),
+                Some(false) => "In the panel showing what the pressed placement holds, turn off the switch that makes it the start.".to_string(),
             },
             // **The one press on the placement's panel that cannot be taken back**, which is why the
             // road answers the machine's question and does not stop at the press.
@@ -9019,8 +9019,8 @@ steps_gui:
         let lines: Vec<String> =
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
         assert!(lines[0].contains("places the first action") && lines[0].contains("\"draft\""), "{}", lines[0]);
-        assert!(lines[1].contains("tick the box that makes it the start"), "{}", lines[1]);
-        assert!(lines[2].contains("clear the box that makes it the start"), "{}", lines[2]);
+        assert!(lines[1].contains("turn on the switch that makes it the start"), "{}", lines[1]);
+        assert!(lines[2].contains("turn off the switch that makes it the start"), "{}", lines[2]);
         assert!(lines[3].contains("takes this placement off") && lines[3].contains("goes ahead"), "{}", lines[3]);
         assert!(lines[4].contains("saying it is the start written in it"), "{}", lines[4]);
         assert!(lines[5].contains("no mark saying it is the start"), "{}", lines[5]);

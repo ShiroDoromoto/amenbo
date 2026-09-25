@@ -4383,13 +4383,19 @@ const REGISTRY: &[OpSpec] = &[
     // what on it is named.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch", required: &["ready"], refs: &[], strings: &["reason", "box", "at"], binds: false },
     //
-    // The pane a run is drawn in, and the four things its header carries: which step, how many tasks
+    // The pane a run is drawn in, and what its header carries: which step, how many tasks
     // in, the run's own number and the task it is on. The step is said with the action it was opened
     // from (`action`), as one value — the step is one terminal, and which action it belongs to is
     // what says where on the automation's picture the run has got to. A run whose placement has been
     // taken off the picture since says the step alone. `label` reads a pane's name and nothing else,
     // which is why this one is here.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "action"], binds: false },
+    //
+    // `state` is where the run stands, said at the end of the name's line, and `reason` why a failed
+    // one failed, said on a line of its own under the header — both spelled as `run-row` spells them,
+    // so a road reads the run the same way on the pane and on the tab, in whichever language the
+    // screen is drawn. The pane outlives the step it was opened for, which is why a run that is over
+    // is read here at all.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "action", "state", "reason"], binds: false },
     // Closing that pane, which is a way of stopping the run and says so before it does.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "close-run-pane", required: &[], refs: &["target"], strings: &[], binds: false },
     //

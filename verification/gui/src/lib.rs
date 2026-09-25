@@ -6467,12 +6467,13 @@ impl Instructor {
                     }
                 ),
             },
-            // The pane a run is drawn in, and the four things its header carries — the run on the
-            // name's own line and the task on the line under it. `label` reads a pane's name and
-            // nothing else, which is why this one is here.
+            // The pane a run is drawn in, and what its header carries — the run on the name's own
+            // line and the task on the line under it. `label` reads a pane's name and
+            // nothing else, which is why this one is here. Where the run stands is read off the same
+            // header, in the words `run-row` reads the tab in.
             (Domain::Automation, "run-pane") => match present(with) {
                 true => format!(
-                    "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands in front of its name, and that its header carries four things: on the name's line the run's own number, which step it is on{} and how many tasks in it is{}, and on the line under it the number of the task it is working{}.",
+                    "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands in front of its name, and that its header carries on the name's line the run's own number, which step it is on{} and how many tasks in it is{}{}{}.",
                     // The step and the action it was opened from are one value on the screen, in the
                     // order the reader's language puts them — so the line names both and leaves the
                     // order to the eye.
@@ -6486,13 +6487,17 @@ impl Instructor {
                         Some(_) => format!(" ({})", count(with, "nth")?),
                         None => String::new(),
                     },
+                    // The line under the name stands only while the run is working a task, so a road
+                    // that names none says nothing of it — a run on no task yet, or one that failed
+                    // before it took one, has no such line to point at.
                     match with.get("task") {
-                        Some(_) => format!(" (\"{}\")", self.labels
+                        Some(_) => format!(", and on the line under it the number of the task it is working (\"{}\")", self.labels
                             .get(with.get("task").and_then(|v| v.as_str()).unwrap_or(""))
                             .cloned()
                             .unwrap_or_else(|| "<the task>".to_string())),
                         None => String::new(),
-                    }
+                    },
+                    pane_state(arg_str(with, "state"), arg_str(with, "reason"))?
                 ),
                 // Where the road bound no run, there is none to speak of: what it is saying is that
                 // the press it just made stood nothing up.
@@ -6960,6 +6965,41 @@ fn run_ending(reason: &str) -> Result<&'static str, String> {
                 "`reason` does not know `{other}` — it is one of the reasons a failed run is given"
             ))
         }
+    })
+}
+
+/// **Where a run stands, as the header over its pane says it** — the end of the name's line, and for a
+/// failure the line under the header that says why and where. Nothing where the road did not ask.
+///
+/// The words are the running tab's (`run_state`) but for a failure: the tab's row waits for somebody to
+/// acknowledge it, and the pane has nothing to acknowledge with. A failure's line names the step it
+/// failed in whether or not the road names a reason — a program that exited before it reported left by
+/// no way out, and the step is then all the line says of where.
+fn pane_state(state: Option<&str>, reason: Option<&str>) -> Result<String, String> {
+    let Some(state) = state else {
+        return match reason {
+            Some(_) => Err("`reason` is why a failed run failed, so it goes with `state: failed`".to_string()),
+            None => Ok(String::new()),
+        };
+    };
+    let word = match state {
+        "failed" => "failed",
+        // The one state that is about now, and the one the mark is drawn moving for.
+        "running" => "under way, its mark moving",
+        other => run_state(other)?,
+    };
+    Ok(match (state, reason) {
+        ("failed", Some(reason)) => format!(
+            ". Confirm too that the end of the name's line says the run is {word}, and that a line under the header says {} and names the step it failed in",
+            run_ending(reason)?
+        ),
+        ("failed", None) => format!(
+            ". Confirm too that the end of the name's line says the run is {word}, and that a line under the header names the step it failed in"
+        ),
+        (_, Some(_)) => return Err(format!("`reason` goes with `state: failed`, not `{state}`")),
+        (_, None) => format!(
+            ". Confirm too that the end of the name's line says the run is {word}, and that no line under the header says it failed"
+        ),
     })
 }
 

@@ -9,11 +9,11 @@
 # rather than closing the pane: a closed pane is Amenbo ending the terminal, which is a stop and
 # moves the run to `canceled`, not to this.
 id: see-a-run-fail-when-its-step-ends-without-reporting
-title: A run whose step's program ends before the step reports fails there, and its row says why
+title: A run whose step's program ends before the step reports fails there, and its pane and its row say why
 description: >
   Start a run of one step, and in the pane it is drawn in end the program carrying the step out
-  before it reports. The running tab's row says the run failed because its step ended without
-  reporting — at once, not on the next startup.
+  before it reports. The pane's header and the running tab's row both say the run failed because its
+  step ended without reporting — at once, not on the next startup.
 given:
   # Claude Code is one of the two agents this machine can start — two being the fewest the premise
   # stands up. `runs` keeps the stand-in standing and carries out what is typed at it, which is what
@@ -76,6 +76,20 @@ steps_gui:
     op: quit-in-pane
     with:
       target: run
+
+  # The pane outlives the step, and its header says the run is over and how: failed, because the step
+  # ended without reporting, and in which step. Without it the pane would go on naming the step as if
+  # the run were still on it, and only the program's last lines would say otherwise.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: do
+      action: work
+      state: failed
+      reason: crashed
+      present: true
 
   - type: action
     domain: workspace

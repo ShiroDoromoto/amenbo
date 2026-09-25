@@ -1193,7 +1193,8 @@ pub(crate) enum Onward {
     Go { def: Box<AutomationRunDef>, line: RunDefLine },
     /// The way out closes the run.
     Done,
-    /// The way out halts the run and calls a person.
+    /// The way out halts the run and calls a person — drawn so, or an error way out with no line after
+    /// it.
     Halt,
     /// Nothing says what follows, or what it leads to was never copied into this run.
     Nowhere,
@@ -1202,7 +1203,16 @@ pub(crate) enum Onward {
 pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64>) -> Result<Onward> {
     let Some(exit) = exit else { return Ok(Onward::Nowhere) };
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
-    let Some(line) = exits.into_iter().find(|e| e.id == exit).and_then(|e| e.then) else {
+    let Some(taken) = exits.into_iter().find(|e| e.id == exit) else { return Ok(Onward::Nowhere) };
+    let Some(line) = taken.then else {
+        // **An error way out nobody drew a line from halts the run and calls a person** (`AMB-D-966`)
+        // — which is why the launch check never asks for one. That holds for the step's own error way
+        // out left without a line inside the action, and for one returned to an action's way out the
+        // automation draws nothing after: the launch check lets that through only for the action's
+        // error way out, and a run holds its pictures still, so no other can be left bare here.
+        if taken.name.as_deref() == Some(ERROR_EXIT) || taken.returns_to.is_some() {
+            return Ok(Onward::Halt);
+        }
         return Ok(Onward::Nowhere);
     };
     Ok(match line.ends {

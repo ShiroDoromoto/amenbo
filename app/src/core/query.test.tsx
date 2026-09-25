@@ -244,6 +244,30 @@ describe("invalidateScopes — a scope reaches the queries drawn from it", () =>
     await settle();
     expect([count("board"), count("decs")]).toEqual([2, 3]);
   });
+
+  // The two notification screens are moved from the CLI and hear it only through here: a scope the feed
+  // folds with no case to receive it leaves the shelf and the project's pane on what they drew.
+  it("refetches the shelf of notification targets and a project's notification pane, each on its own scope", async () => {
+    render(
+      createElement(
+        "div",
+        null,
+        createElement(KeyProbe, { qkey: ["notify-targets"], k: "shelf" }),
+        createElement(KeyProbe, { qkey: ["project-notify", 1], k: "pane" }),
+      ),
+    );
+    await settle();
+    expect([count("shelf"), count("pane")]).toEqual([1, 1]);
+
+    invalidateScopes(new Set(["notifyTargets"]));
+    await settle();
+    expect([count("shelf"), count("pane")]).toEqual([2, 1]);
+
+    invalidateScopes(new Set(["projectNotify"]));
+    await settle();
+    expect([count("shelf"), count("pane")]).toEqual([2, 2]);
+  });
+
   // `automation add` / `automation update` typed at the terminal fold to "automations". The list, the
   // definition and the launch check were refetched after a write made on screen and not after this one
   // (`AMB-T-5495`), so the list stayed as it was until "refresh to the latest" was pressed.

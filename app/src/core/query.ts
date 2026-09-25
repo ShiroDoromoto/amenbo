@@ -133,6 +133,10 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   // putting it there would double the feed for a number a person glances at rather than watches.
   "viewer-state": ["viewer"],
   "viewer-pairing": ["viewer"],
+  // The device's shelf of notification targets, and one project's notification pane. Both are moved
+  // from the CLI (`notify target-add`, `notify on`, `notify use` …), which the feed folds here.
+  "notify-targets": ["notifyTargets"],
+  "project-notify": ["projectNotify"],
   // The "running" tab's rows. What moves them is a run being launched, moving on to its next step
   // or ending — every one of which is a row of `automation_run`, of the stretch it is spending on
   // a task, or of the steps it has opened (`core/changes`).

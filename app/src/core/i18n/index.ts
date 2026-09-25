@@ -35,6 +35,7 @@ import { nl } from "./locales/nl";
 import { uk } from "./locales/uk";
 import { currentLang, type Lang } from "./lang";
 import { formatNumber } from "./format";
+import { builtinDictKey } from "./builtinKeys";
 
 export { currentLang, dateLocale, DEFAULT_LANG, guessLang, langEndonym, LANGS, normalizeLang, type Lang } from "./lang";
 // Dates, times, numbers and the joining of a list are not dictionary entries — `Intl` writes them
@@ -139,9 +140,10 @@ export function errLabel(err: CmdError, lang: Lang = currentLang()): string {
   const tmpl = errTemplate(err.code, lang);
   if (!tmpl) return err.message_en;
   const parts = err.parts ?? [];
-  if (parts.length === 0) return fillFields(tmpl, err.fields);
+  const fields = builtinFields(err.fields, lang);
+  if (parts.length === 0) return fillFields(tmpl, fields);
   const reasons = parts.map((p) => errSentence(p, lang)).join(t("err.reasonSep", lang));
-  return fillFields(tmpl, { ...(err.fields ?? {}), reasons });
+  return fillFields(tmpl, { ...(fields ?? {}), reasons });
 }
 
 /**
@@ -154,7 +156,38 @@ export function errLabel(err: CmdError, lang: Lang = currentLang()): string {
  */
 export function errSentence(one: CodedSentence, lang: Lang = currentLang()): string {
   const tmpl = errTemplate(one.code, lang);
-  return tmpl ? fillFields(tmpl, one.fields) : one.message_en;
+  return tmpl ? fillFields(tmpl, builtinFields(one.fields, lang)) : one.message_en;
+}
+
+/** The fields each built-in's key names, and the one that names each of them (`AMB-D-964`). */
+const BUILTIN_FIELDS: Record<string, readonly string[]> = {
+  builtin: ["step", "exit", "port", "cfg"],
+  to_builtin: ["to"],
+};
+
+/**
+ * A sentence's values with a built-in's names written in the reader's language. The store keeps a
+ * built-in's step, ways out, inputs and settings in Japanese, so a launch check's reason names them
+ * that way whatever the screen is in; the key sent beside them (`builtin`, `to_builtin`) says which
+ * built-in each came from. A name with no key is a person's own and is left as it is.
+ */
+function builtinFields(
+  fields: Record<string, unknown> | null | undefined,
+  lang: Lang,
+): Record<string, unknown> | null | undefined {
+  if (!fields) return fields;
+  const out = { ...fields };
+  for (const [keyField, named] of Object.entries(BUILTIN_FIELDS)) {
+    const builtin = fields[keyField];
+    if (typeof builtin !== "string") continue;
+    for (const one of named) {
+      const word = fields[one];
+      if (typeof word !== "string") continue;
+      const dictKey = builtinDictKey(builtin, word);
+      if (dictKey !== undefined) out[one] = t(dictKey, lang);
+    }
+  }
+  return out;
 }
 
 /**

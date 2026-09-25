@@ -833,7 +833,7 @@ mod tests {
 
     /// **The screen's table of a built-in's words is this definition's.** The GUI draws
     /// a built-in's words in the screen's language by looking the store's word up among the Japanese
-    /// dictionary's `auto.bi.<built-in>.*` entries (`app/src/core/builtinWords.ts`). A word renamed
+    /// dictionary's `auto.bi.<built-in>.*` entries (`app/src/core/i18n/builtinKeys.ts`). A word renamed
     /// here and not there would be drawn untranslated, and one left there would translate nothing — so
     /// both sides are held to the same set, a built-in at a time.
     #[test]

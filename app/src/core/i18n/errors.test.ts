@@ -3,7 +3,7 @@
 // have no template (`AMB-D-413`).
 import { describe, it, expect } from "vitest";
 import { CORE_CLI_ONLY_ERROR_CODES, CORE_SENTENCE_ERROR_CODES, TAURI_ERROR_CODES } from "../errorCodes";
-import { DICTIONARIES, errLabel, errText, type CmdError } from "./index";
+import { DICTIONARIES, errLabel, errSentence, errText, type CmdError } from "./index";
 import { en } from "./locales/en";
 
 const bindingStale: CmdError = {
@@ -178,5 +178,46 @@ describe("the codes only the CLI refuses with", () => {
       CORE_CLI_ONLY_ERROR_CODES.filter((code) => dict.err[code]).map((code) => `${lang}: ${code}`),
     );
     expect(written).toEqual([]);
+  });
+});
+
+// A built-in's step and ways out are named in the store's Japanese, so a launch check's reason carries
+// them that way whatever the screen is in. The key beside them says which built-in each came from, and
+// the sentence is written with the screen's words for them (`AMB-D-964`).
+describe("a reason naming a built-in", () => {
+  const openExit = {
+    code: "not_ready_automation_open_exit",
+    message_en: "nothing is set to happen after the way out '着手できるタスクが無い' of 'タスクに着手する'",
+    fields: { step: "タスクに着手する", exit: "着手できるタスクが無い", builtin: "take_task" },
+  };
+
+  it("names the built-in's step and way out in the reader's language", () => {
+    expect(errSentence(openExit, "en")).toBe("Take a task: nothing is set to happen after No task to take");
+  });
+
+  it("names the one it goes on to by that one's own key", () => {
+    const leftOpen = {
+      code: "not_ready_automation_task_left_open",
+      message_en: "",
+      fields: { step: "直す", exit: "できた", to: "タスクに着手する", to_builtin: "take_task" },
+    };
+    expect(errSentence(leftOpen, "en")).toBe(
+      "直す: できた goes on to Take a task, which takes another task, with this one still open",
+    );
+  });
+
+  it("is written the same way inside a refusal's parts", () => {
+    const refused: CmdError = {
+      code: "not_ready_automation",
+      message_en: "",
+      fields: { automation: "流す" },
+      parts: [openExit],
+    };
+    expect(errLabel(refused, "en")).toContain("Take a task: nothing is set to happen after No task to take");
+  });
+
+  it("leaves a person's own names alone", () => {
+    const own = { ...openExit, fields: { step: "タスクに着手する", exit: "着手できるタスクが無い" } };
+    expect(errSentence(own, "en")).toBe("タスクに着手する: nothing is set to happen after 着手できるタスクが無い");
   });
 });

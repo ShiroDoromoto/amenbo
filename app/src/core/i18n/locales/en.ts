@@ -1144,7 +1144,6 @@ const ui = {
   "auto.tab.history": "History",
   "auto.empty": "No automations in this project yet.",
   "auto.emptyEverywhere": "No project has an automation yet.",
-  "auto.scope.device": "All on this device",
   "auto.new": "New automation",
   "auto.new.name": "Name",
   "auto.new.make": "Create",
@@ -1377,7 +1376,7 @@ const ui = {
   "auto.run.canceled": "Canceled",
   "auto.run.acknowledge": "Acknowledge",
   "auto.run.paused": "Paused",
-  "auto.run.pausing": "Pausing after this step",
+  "auto.run.pausing": "Pausing",
   "auto.run.crashed": "its step ended without reporting",
   "auto.run.maxTimes": "it went round too many times",
   "auto.run.noAgent": "its agent could not be started",
@@ -1387,8 +1386,8 @@ const ui = {
   "auto.run.leftTaskOpen": "it tried to go on without closing its task",
   "auto.run.step": "Step {n} · {step}",
   "auto.run.inAction": "{step} in {action}",
-  "auto.run.noTask": "No task taken yet",
   "auto.run.waitingForTask": "Waiting for a task it can take",
+  "auto.run.taskWait": "Waiting for a task",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,

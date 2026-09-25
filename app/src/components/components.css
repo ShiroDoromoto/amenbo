@@ -1742,7 +1742,11 @@ button.feed__target:hover { color: var(--c-accent); }
   display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
   padding: var(--s-3) var(--s-3) var(--s-5); overflow-x: auto;
 }
-.actbuild__canvas .autopic { max-height: none; align-self: stretch; }
+/* Only across. When the right pane narrows `.main`, the picture grows a scrollbar along its foot, and
+   that bar's height pushed the sheet past the bottom and gave the picture a second vertical scrollbar
+   inside `.main`'s (`AMB-T-5514`). With no height cap there is nothing to scroll down to here; `.main`
+   is the one scroll that goes down. */
+.actbuild__canvas .autopic { max-height: none; align-self: stretch; overflow-y: hidden; }
 /* The picture stands in the middle of the place it is drawn in, as the mock has it; a picture wider
    than the place scrolls from its left edge as before. */
 .actbuild__canvas .autopic__sheet { margin-inline: auto; }

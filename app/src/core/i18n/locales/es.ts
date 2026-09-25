@@ -1009,6 +1009,8 @@ export const es: Translation = {
     "auto.step.cfg": "Ajustes",
     "auto.step.declaresNone": "Nada declarado",
     "auto.step.required": "obligatorio",
+    "auto.step.noAxes": "Aún no hay ningún eje para clasificar tareas",
+    "auto.step.oneALine": "Una por línea (p. ej., AMB-T-12)",
     "auto.step.inputs": "Entradas",
     "auto.step.unwired": "no llega nada",
     "auto.step.exits": "Salidas",

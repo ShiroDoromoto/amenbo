@@ -188,3 +188,42 @@ export function writeFilter(filter: TaskFilter, sort: string = FILTER_SORTS[0]):
   if (sort !== FILTER_SORTS[0]) out[SORT_KEY] = sort;
   return JSON.stringify(out);
 }
+
+/**
+ * **A text answer read one line at a time** — the shape a setting that names several things takes
+ * (`amenbo_core::ops::automation_builtin_make`'s `CLASSIFY`, `AI_AXES`, `DEPENDS_ON_TASKS` and
+ * `DECISIONS`). Blank lines are nothing, as core reads them.
+ */
+export function readLines(value: string | undefined): string[] {
+  return readText(value)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+}
+
+/** Lines on their way to core as one text answer, or `null` where none is left. */
+export function writeLines(lines: readonly string[]): string | null {
+  return writeText(lines.join("\n"));
+}
+
+/** The line a classification is written as — `axis=value`, what `CLASSIFY` reads. */
+export function classLine(axis: string, value: string): string {
+  return `${axis}=${value}`;
+}
+
+/** The axis a classification line names, or `undefined` for a line that is not one. */
+export function classAxis(line: string): string | undefined {
+  const at = line.indexOf("=");
+  return at <= 0 ? undefined : line.slice(0, at).trim();
+}
+
+/**
+ * **A classification pressed**: pressed again it goes; pressed on an axis that holds one value it takes
+ * the place of that axis's other one; on an axis that holds several it is added beside them.
+ */
+export function pressedClass(lines: readonly string[], axis: string, value: string, single: boolean): string[] {
+  const line = classLine(axis, value);
+  if (lines.includes(line)) return lines.filter((one) => one !== line);
+  const kept = single ? lines.filter((one) => classAxis(one) !== axis) : [...lines];
+  return [...kept, line];
+}

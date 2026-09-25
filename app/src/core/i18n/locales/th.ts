@@ -998,6 +998,8 @@ export const th: Translation = {
     "auto.step.cfg": "การตั้งค่า",
     "auto.step.declaresNone": "ไม่ได้ประกาศไว้",
     "auto.step.required": "จำเป็น",
+    "auto.step.noAxes": "ยังไม่มีแกนสำหรับจัดประเภทงาน",
+    "auto.step.oneALine": "บรรทัดละหนึ่ง (เช่น AMB-T-12)",
     "auto.step.inputs": "อินพุต",
     "auto.step.unwired": "ไม่มีอะไรไปถึง",
     "auto.step.exits": "ทางออก",

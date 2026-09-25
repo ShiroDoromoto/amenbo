@@ -19,6 +19,7 @@ import type {
   AutomationActionDetailDto,
   AutomationDetailDto,
   AutomationPlacementDto,
+  DimensionDto,
 } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
@@ -32,6 +33,8 @@ const hoisted = vi.hoisted(() => ({
   editEdge: vi.fn(),
   removeEdge: vi.fn(),
   removePlacement: vi.fn(),
+  dimensions: [] as DimensionDto[],
+  folders: [] as { path: string }[],
 }));
 
 vi.mock("../core/automations", () => ({
@@ -49,7 +52,15 @@ vi.mock("../core/automations", () => ({
 // Taking a spot off asks first, and what the machine would put up is not this test's business.
 vi.mock("../core/dialog", () => ({ confirmDialog: () => Promise.resolve(true) }));
 vi.mock("../core/boundFolders", () => ({
-  useBoundFolders: () => ({ all: [], live: [], answered: true }),
+  useBoundFolders: (projectId: number | null) => {
+    const all = projectId === null ? [] : hoisted.folders;
+    return { all, live: all, answered: true };
+  },
+}));
+// The project's axes, which the settings that classify a task offer; none unless a test gives some.
+vi.mock("../core/snapshot", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../core/snapshot")>()),
+  getSnapshot: () => ({ projects: [{ id: 1, dimensions: hoisted.dimensions }] }),
 }));
 // The machine's own answers. `inTauri` is false in this environment, so neither probe is made and
 // what the panel draws is the spot's own value plus whatever these would have added.
@@ -337,6 +348,96 @@ describe("the panel of one spot", () => {
       target.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
     });
     expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "見に行く先", '"gh issue list --label triage"');
+  });
+
+  describe("the built-in that files a task", () => {
+    const axis = (over: Partial<DimensionDto> & { id: number; name: string }): DimensionDto => ({
+      notes: "",
+      cardinality: "single",
+      role: "none",
+      ordered: false,
+      showOnCard: false,
+      required: false,
+      appliesTo: "task",
+      values: [],
+      ...over,
+    });
+    const value = (id: number, name: string, closed = false) =>
+      ({ id, name, closed }) as unknown as DimensionDto["values"][number];
+    const makeTask = (classified?: string) =>
+      detail({
+        placements: [
+          spot({
+            builtin: "make_task",
+            settings: [
+              { name: "分類", kind: "text", required: false, value: classified },
+              { name: "AI に選ばせる軸", kind: "text", required: false },
+              { name: "依存させる既存のタスク", kind: "text", required: false },
+              { name: "作業フォルダ", kind: "folder", required: false },
+            ],
+          }),
+        ],
+      });
+
+    beforeEach(() => {
+      hoisted.dimensions = [
+        axis({ id: 3, name: "職能", values: [value(1, "実装"), value(2, "設計"), value(9, "旧", true)] }),
+        axis({ id: 4, name: "ラベル", cardinality: "multi", values: [value(5, "急ぎ")] }),
+        axis({ id: 6, name: "決定の種類", appliesTo: "decision", values: [value(7, "方針")] }),
+      ];
+      hoisted.folders = [{ path: "/work/app" }, { path: "/work/site" }];
+    });
+    afterEach(() => {
+      hoisted.dimensions = [];
+      hoisted.folders = [];
+    });
+
+    const chip = (label: string) =>
+      [...container.querySelectorAll<HTMLButtonElement>(".autostep__chip")].filter((b) => b.textContent === label);
+
+    it("classifies on a row per axis a task is filed under, offering no closed value, one line a value", async () => {
+      await render({ automation: makeTask('"職能=実装"'), placementId: 1 });
+      expect(chip("旧")).toHaveLength(0);
+      expect(chip("方針")).toHaveLength(0);
+      await act(async () => {
+        chip("設計")[0]!.click();
+      });
+      // One value on an axis that holds one: the press takes the other's place.
+      expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "分類", JSON.stringify("職能=設計"));
+      await act(async () => {
+        chip("急ぎ")[0]!.click();
+      });
+      expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "分類", JSON.stringify("職能=実装\nラベル=急ぎ"));
+    });
+
+    it("offers the AI only the axes the classification leaves open", async () => {
+      await render({ automation: makeTask('"職能=実装"'), placementId: 1 });
+      // The axis classified is drawn once, as the classification's row name, and not as an axis to press.
+      expect(chip("職能")).toHaveLength(0);
+      await act(async () => {
+        chip("ラベル")[0]!.click();
+      });
+      expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "AI に選ばせる軸", JSON.stringify("ラベル"));
+    });
+
+    it("takes tasks one a line, and picks the folder from the project's own", async () => {
+      await render({ automation: makeTask(), placementId: 1 });
+      const box = container.querySelector<HTMLTextAreaElement>("textarea")!;
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+        setter.call(box, "AMB-T-12\n\n 34 ");
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => {
+        box.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+      });
+      expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "依存させる既存のタスク", JSON.stringify("AMB-T-12\n34"));
+
+      const folder = selects().find((s) => s.getAttribute("aria-label") === t("auto.bi.makeTask.folder"))!;
+      expect([...folder.options].map((o) => o.textContent)).toEqual(["—", "/work/app", "/work/site"]);
+      await pick(folder, "/work/site");
+      expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "作業フォルダ", JSON.stringify("/work/site"));
+    });
   });
 
   it("says the order as a sentence, and writes it beside the parts it orders", async () => {

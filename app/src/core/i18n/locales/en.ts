@@ -1240,6 +1240,8 @@ const ui = {
   "auto.step.cfg": "Settings",
   "auto.step.declaresNone": "None declared",
   "auto.step.required": "required",
+  "auto.step.noAxes": "There is no axis to classify a task by yet",
+  "auto.step.oneALine": "One a line (e.g. AMB-T-12)",
   "auto.step.inputs": "Inputs",
   "auto.step.unwired": "nothing reaches it",
   "auto.step.exits": "Exits",

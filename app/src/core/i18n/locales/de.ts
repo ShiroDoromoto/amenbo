@@ -1001,6 +1001,8 @@ export const de: Translation = {
     "auto.step.cfg": "Einstellungen",
     "auto.step.declaresNone": "Nichts deklariert",
     "auto.step.required": "erforderlich",
+    "auto.step.noAxes": "Es gibt noch keine Achse, nach der Aufgaben klassifiziert werden",
+    "auto.step.oneALine": "Eine pro Zeile (z. B. AMB-T-12)",
     "auto.step.inputs": "Eingaben",
     "auto.step.unwired": "nichts erreicht sie",
     "auto.step.exits": "Ausgänge",

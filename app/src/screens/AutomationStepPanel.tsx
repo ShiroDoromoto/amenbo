@@ -76,6 +76,8 @@ import {
 } from "./automationCfg";
 import { choiceKey, wireChoices, wireInto } from "./automationWires";
 import { kindLabel } from "./automationPortKinds";
+import { AxisChips, CLASSIFY, ClassRows, makeTaskControl, NumberLines } from "./AutomationMakeTaskCfg";
+import { useBoundFolders } from "../core/boundFolders";
 import type {
   AutomationCfgDto,
   AutomationDetailDto,
@@ -159,15 +161,21 @@ function DeclChip({ name, kind, required, tone }: { name: string; kind: string; 
 }
 
 /** One setting: what the action declares, read, and the control its kind takes for this spot's answer. */
-function CfgRow({ placementId, projectId, builtin, cfg, run }: {
+function CfgRow({ placementId, projectId, builtin, cfg, siblings, run }: {
   placementId: number;
   projectId: number | null;
   builtin: string | undefined;
   cfg: AutomationCfgDto;
+  /** Every setting of the same spot, this one among them — what one setting's control may read of another's. */
+  siblings: readonly AutomationCfgDto[];
   run: Run;
 }) {
   const answer = (value: string | null) =>
     void run(answerAutomationCfg(placementId, cfg.name, value));
+  const special = makeTaskControl(builtin, cfg.name);
+  // A folder is picked from the project's own; only a spot answering one asks for them.
+  const folders = useBoundFolders(cfg.kind === "folder" ? projectId : null);
+  const folderPaths = folders.all.map((one) => one.path);
   const [text, setText] = useDraft(cfg.kind === "number" ? "" : readText(cfg.value));
   const [number, setNumber] = useDraft(cfg.kind === "number" ? String(readNumber(cfg.value) ?? "") : "");
   const filter: TaskFilter = readFilter(cfg.value);
@@ -263,7 +271,37 @@ function CfgRow({ placementId, projectId, builtin, cfg, run }: {
         />
       )}
 
-      {(cfg.kind === "text" || cfg.kind === "folder") && (
+      {special === "classes" && <ClassRows projectId={projectId} value={cfg.value} onAnswer={answer} />}
+      {special === "axes" && (
+        <AxisChips
+          projectId={projectId}
+          value={cfg.value}
+          classified={siblings.find((one) => one.name === CLASSIFY)?.value}
+          onAnswer={answer}
+        />
+      )}
+      {special === "numbers" && <NumberLines label={shown} value={cfg.value} onAnswer={answer} />}
+
+      {/* A folder answered with one this project has not got stays offered, so what is written shows. */}
+      {cfg.kind === "folder" && folderPaths.length > 0 && (
+        <select
+          aria-label={shown}
+          value={readText(cfg.value)}
+          onChange={(e) => answer(writeText(e.target.value))}
+        >
+          <option value="">—</option>
+          {readText(cfg.value) !== "" && !folderPaths.includes(readText(cfg.value)) && (
+            <option value={readText(cfg.value)}>{readText(cfg.value)}</option>
+          )}
+          {folderPaths.map((path) => (
+            <option key={path} value={path}>
+              {path}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {special === undefined && (cfg.kind === "text" || (cfg.kind === "folder" && folderPaths.length === 0)) && (
         <input
           aria-label={shown}
           value={text}
@@ -496,6 +534,7 @@ export function AutomationStepPanel({
             projectId={automation.projectId}
             builtin={placement.builtin}
             cfg={cfg}
+            siblings={placement.settings}
             run={run}
           />
         ))}

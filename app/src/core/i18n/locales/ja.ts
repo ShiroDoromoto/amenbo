@@ -1003,6 +1003,8 @@ export const ja: Translation = {
     "auto.step.cfg": "設定",
     "auto.step.declaresNone": "まだありません",
     "auto.step.required": "必須",
+    "auto.step.noAxes": "タスクを分類する軸がまだ無い",
+    "auto.step.oneALine": "1行に1つ（例：AMB-T-12）",
     "auto.step.inputs": "入力パラメータ",
     "auto.step.unwired": "何も届かない",
     "auto.step.exits": "出口",

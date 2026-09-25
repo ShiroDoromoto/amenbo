@@ -231,8 +231,8 @@ export type PicLine = {
   branches?: readonly (readonly PicPoint[])[];
   /**
    * Where the way out's name is written — and, on a line that names no box, how it ends. Over the
-   * middle of the leg that runs across, beside the lane of a line in the margin, under the foot of
-   * one that goes nowhere.
+   * middle of the leg that runs across, past every lane level with the `+` of a line in the margin,
+   * under the foot of one that goes nowhere.
    */
   at: PicPoint;
   /** Which end of the words `at` is: where they start, their middle, or where they finish. */
@@ -914,8 +914,9 @@ export function layOut(graph: PicGraph | null): Picture {
           leaves: edge.ends === "exit",
           exitName: edge.exitName,
           builtin: from.builtin,
-          // Outside the lane, beside its `+`: inside it are the boxes.
-          at: { x: laneX - BESIDE, y: middle + 4 },
+          // Level with its `+`, past the outermost lane: inside it are the boxes, and between the two
+          // run the lanes further out, which would cross the words written beside the `+` itself.
+          at: { x: leftWordsX - BESIDE, y: middle + 4 },
           align: "end",
         };
       },
@@ -1096,6 +1097,7 @@ export function layOut(graph: PicGraph | null): Picture {
   };
   const outStair = stairOf((line) => line.fromId);
   const inStair = stairOf((line) => line.toId);
+  const leftWordsX = -LAP_PAD - leftLanes * LANE_W;
   for (const line of asideLeft) {
     const lane = leftAt.get(line.key)!;
     const stair = { out: outStair.get(line.key) ?? 0, in: inStair.get(line.key) ?? 0 };

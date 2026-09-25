@@ -372,6 +372,34 @@ describe("the picture of an automation", () => {
     expect(last("edge-8")[0]!.y).toBeLessThan(last("edge-7")[0]!.y);
   });
 
+  it("writes the name of a line in the margin past every lane, level with its +", () => {
+    const one = detail({
+      entryPlacementId: 1,
+      placements: [
+        taker(1, "take"),
+        step({ id: 2, name: "work" }),
+        step({ id: 3, name: "check", exits: [{ id: 93, name: "again", outputs: [] }, { id: 94, name: "*", outputs: [] }] }),
+      ],
+      edges: [
+        edge({ id: 1, fromId: 1, toId: 2 }),
+        edge({ id: 2, fromId: 2, toId: 3 }),
+        edge({ id: 3, fromId: 3, exitName: "again", toId: 2 }),
+        edge({ id: 4, fromId: 3, exitName: "*", toId: 1 }),
+      ],
+    });
+    const picture = layOut(one);
+    const line = (key: string) => picture.lines.find((one) => one.key === key)!;
+    const laneX = (key: string) => Math.min(...line(key).points.map((p) => p.x));
+    // The inner line's name is written outside the outer line's lane, so that lane does not cross it.
+    expect(laneX("edge-3")).toBeGreaterThan(laneX("edge-4"));
+    expect(line("edge-3").at.x).toBeLessThan(laneX("edge-4"));
+    expect(line("edge-3").align).toBe("end");
+    // Level with its own `+`, and the picture keeps the room for it.
+    const plus = picture.inserts.find((one) => one.edgeId === 3)!;
+    expect(line("edge-3").at.y - plus.y).toBe(4);
+    expect(line("edge-3").at.x - "again".length * 7).toBeGreaterThanOrEqual(0);
+  });
+
   it("gives two lines leaving one box for the margin a leg each", () => {
     const one = detail({
       entryPlacementId: 1,

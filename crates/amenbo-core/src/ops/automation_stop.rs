@@ -811,7 +811,7 @@ mod tests {
             let error = read::automation_exits_of(tx.conn(), crate::model::AutomationOwner::Step, step)
                 .expect("exits")
                 .into_iter()
-                .find(|e| e.name.as_deref() == Some(ERROR_EXIT))
+                .find(|e| e.name == ERROR_EXIT)
                 .expect("the error way out");
             let inner = read::automation_edge_for_exit(
                 tx.conn(),
@@ -1199,7 +1199,7 @@ mod tests {
     }
 
     /// **An action of two steps, placed after a spot that takes a task.** The first step inside goes on
-    /// to the second, and the second returns to the action's unnamed way out, which closes the run on
+    /// to the second, and the second returns to the action's done way out, which closes the run on
     /// the automation's picture. `back` gives the second step a way round to itself inside the action,
     /// capped at one turn.
     struct Inside {
@@ -1238,8 +1238,8 @@ mod tests {
         automation::placement_step_set(tx, second.id, review.id, "claude", None)
             .expect("choose who carries it out");
         // The first step no longer leaves the action: it goes on to the second inside it.
-        let unnamed = exit_id(tx, crate::model::AutomationOwner::Step, write.id, None);
-        let leaves = read::automation_edge_for_exit(tx.conn(), Action, write.id, unnamed)
+        let done_exit = exit_id(tx, crate::model::AutomationOwner::Step, write.id, None);
+        let leaves = read::automation_edge_for_exit(tx.conn(), Action, write.id, done_exit)
             .expect("read")
             .expect("the line out of the first step");
         automation::edge_update(tx, leaves.id, Some(EdgeTarget::Go(review.id)), None)
@@ -1391,12 +1391,12 @@ mod tests {
             let back_copy = copy_of(tx, &run, &p.second, &p.review);
             let lines: Vec<crate::model::RunDefExit> =
                 serde_json::from_str(&back_copy.exits).expect("exits");
-            let again = lines.iter().find(|e| e.name.as_deref() == Some("again")).expect("again");
+            let again = lines.iter().find(|e| e.name == "again").expect("again");
             assert_eq!(again.then.as_ref().and_then(|l| l.max_times), Some(3), "the way back keeps its limit");
             let down_copy: Vec<crate::model::RunDefExit> =
                 serde_json::from_str(&copy_of(tx, &run, &p.second, &p.write).exits).expect("exits");
             assert_eq!(
-                down_copy.iter().find(|e| e.name.as_deref() == Some(crate::model::DONE_EXIT)).and_then(|e| e.then.as_ref()).and_then(|l| l.max_times),
+                down_copy.iter().find(|e| e.name == crate::model::DONE_EXIT).and_then(|e| e.then.as_ref()).and_then(|l| l.max_times),
                 None,
                 "the line down keeps none",
             );

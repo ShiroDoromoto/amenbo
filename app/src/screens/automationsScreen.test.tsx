@@ -8,8 +8,8 @@
 // row opens the build screen** in place of the list rather than beside it; **the panel beside the
 // picture is opened by what was pressed** — the library by the press on an empty picture, the
 // definition's own fields by "Edit" — and by nothing else; **what is in the way is listed under the
-// build screen's head, in words**, every reason the check can give taking a line a person can act on
-// — including the unnamed way out, which has no name to put in a sentence; and **the start press is
+// build screen's head, in words**, every reason the check can give taking a line a person can act on;
+// and **the start press is
 // shut while anything is in the way**, which is the whole of what that list is for.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -438,7 +438,6 @@ describe("the start press on the build screen's head", () => {
       reason("not_ready_automation_no_entry"),
       reason("not_ready_automation_entry_takes_no_task", { step: "Read" }),
       reason("not_ready_automation_open_exit", { step: "Read", exit: "again" }),
-      reason("not_ready_automation_open_exit_unnamed", { step: "Read" }),
       reason("not_ready_automation_unwired_input", { step: "Write", port: "folder" }),
       reason("not_ready_automation_unanswered_cfg", { step: "Write", cfg: "filter" }),
       reason("not_ready_automation_agent_missing", { step: "Write", agent: "codex-cli" }),

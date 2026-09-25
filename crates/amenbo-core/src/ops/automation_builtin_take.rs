@@ -425,7 +425,7 @@ mod tests {
                 let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked()).expect("check");
                 let open = unmet
                     .iter()
-                    .find(|u| matches!(u, Unmet::OpenExit { exit: Some(e), .. } if e == NONE_TO_TAKE))
+                    .find(|u| matches!(u, Unmet::OpenExit { exit: e, .. } if e == NONE_TO_TAKE))
                     .unwrap_or_else(|| panic!("{answer:?}: {unmet:?}"));
                 assert!(
                     open.msg().fields().iter().any(|field| field == ("builtin", TAKE_TASK.key)),

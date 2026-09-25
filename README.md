@@ -366,7 +366,7 @@ amenbo automation step-add 7 --name "Implement" --prompt - --work-dir worktree #
 amenbo automation port-add --action 7 --name worktree --kind value --required  # what the action takes in
 amenbo automation wire-add --in-action --from 0 --from-port worktree --to 11 --to-port worktree # `0` is the action itself: what it takes in, handed to a step
 amenbo automation action-entry-set 7 --step 11         # the step a placement of it opens first (the first one written already is)
-amenbo automation exit-add --action 7 --name "gave up" # a way out a placement may leave by (every one has the unnamed one and `*`)
+amenbo automation exit-add --action 7 --name "gave up" # a way out a placement may leave by (every one has the done one and `*`)
 amenbo automation edge-add --in-action --from 11: --exit-to # inside an action: leave it by a way out it declares
 amenbo automation edge-add --in-action --from "11:gave up" --exit-to "gave up"
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)

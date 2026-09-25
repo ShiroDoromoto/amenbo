@@ -529,7 +529,56 @@ fn compose(
         push_block(&mut out, &format!("## Your settings\n\n{}", lines.join("\n")));
     }
     push_block(&mut out, &format!("## What to do\n\n{}", def.prompt.as_deref().unwrap_or("").trim()));
-    push_block(&mut out, &handing_back(exits));
+    push_block(&mut out, &handing_back(exits, &choices_for(tx, def)?));
+    Ok(out)
+}
+
+/// The lines one output may say, keyed by (way out, output) as the run's copy keys them.
+type Choices = ((i64, i64), Vec<String>);
+
+/// **What each of this step's outputs may say, where a built-in reading it offers a closed set** — the
+/// classification the built-in that files a task takes from the step before it, on the axes its
+/// placement offers (`AMB-D-971`). Keyed by (way out, output) as the copy keys them; each entry is the
+/// lines [`handing_back`] shows under that output.
+///
+/// Read off the run's copies, so it follows the wires the run launched with: a copy that reads
+/// [`super::automation_builtin_make::CHOSEN`] from one of this step's outputs is what makes that output
+/// one with a closed set.
+fn choices_for(tx: &WriteTx<'_>, def: &AutomationRunDef) -> Result<Vec<Choices>> {
+    use super::automation_builtin_make::{choosable, AI_AXES, CHOSEN};
+    let conn = tx.conn();
+    let (Some(placement_id), Some(step_id)) = (def.placement_id, def.step_id) else {
+        return Ok(Vec::new());
+    };
+    let Some(run) = read::automation_run(conn, def.run_id)? else {
+        return Ok(Vec::new());
+    };
+    let mut out: Vec<Choices> = Vec::new();
+    for reader in read::automation_run_defs_of(conn, def.run_id)? {
+        if reader.builtin.as_deref() != Some(super::automation_builtin_make::MAKE_TASK.key) {
+            continue;
+        }
+        let ins: Vec<RunDefIn> = serde_json::from_str(&reader.ins).map_err(Error::from)?;
+        let cfg: Vec<RunDefCfg> = serde_json::from_str(&reader.cfg).map_err(Error::from)?;
+        let Some(axes) = cfg.iter().find(|c| c.name == AI_AXES).and_then(|c| c.value.as_deref()) else {
+            continue;
+        };
+        let lines = choosable(conn, run.project_id, axes)?;
+        if lines.is_empty() {
+            continue;
+        }
+        for input in ins.iter().filter(|i| i.port.name == CHOSEN) {
+            for source in &input.from {
+                if source.placement_id != placement_id || source.step_id != step_id {
+                    continue;
+                }
+                let Some(exit_id) = source.exit_id else { continue };
+                if !out.iter().any(|(key, _)| *key == (exit_id, source.port_id)) {
+                    out.push(((exit_id, source.port_id), lines.clone()));
+                }
+            }
+        }
+    }
     Ok(out)
 }
 
@@ -751,7 +800,7 @@ fn one_setting(cfg: &RunDefCfg) -> String {
 /// when the agent dies between them ([`crate::ops::automation_report::take`]). A text that said "put
 /// each one down with `out`" was therefore wrong on exactly the step every automation has to start
 /// with — and an agent does what the text says (`AMB-T-5279`).
-fn handing_back(exits: &[RunDefExit]) -> String {
+fn handing_back(exits: &[RunDefExit], choices: &[Choices]) -> String {
     let cli = crate::config::Paths::command_name();
     let mut lines = vec![format!("## How to hand your work back\n")];
     lines.push(format!(
@@ -773,6 +822,19 @@ fn handing_back(exits: &[RunDefExit]) -> String {
                 .join(", "),
         };
         lines.push(format!("- `--exit {}` — {} — {outs}", exit.id, named(&exit.name)));
+        for port in &exit.outs {
+            let Some((_, offered)) = choices.iter().find(|(key, _)| *key == (exit.id, port.id)) else {
+                continue;
+            };
+            lines.push(format!(
+                "  - `{}` {} takes one `axis=value` a line, one value on each axis you choose on, and \
+                 only these — anything else is refused:",
+                port.id, port.name
+            ));
+            for line in offered {
+                lines.push(format!("    - {line}"));
+            }
+        }
     }
     let kinds: BTreeSet<AutomationPortKind> =
         exits.iter().flat_map(|e| e.outs.iter().map(|p| p.kind)).collect();

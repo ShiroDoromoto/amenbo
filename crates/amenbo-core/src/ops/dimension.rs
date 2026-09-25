@@ -470,6 +470,11 @@ pub fn update(
     if d.role == DimensionRole::TimeAxis && d.cardinality == DimensionCardinality::Multi {
         return Err(time_axis_holds_one(&d.name));
     }
+    if before.cardinality == DimensionCardinality::Single
+        && d.cardinality == DimensionCardinality::Multi
+    {
+        crate::ops::automation_builtin_split::refuse_to_widen(tx, d.id, &d.name)?;
+    }
     if before.cardinality == DimensionCardinality::Multi
         && d.cardinality == DimensionCardinality::Single
     {
@@ -516,6 +521,8 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 /// (`AMB-D-403`). Sweeping value by value covers the whole axis, and both sides of it: an assignment —
 /// a task's or a decision's — names a value, and that value's axis is this one.
 pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<()> {
+    // Before the values, so the ways out of an action that split by the axis are left as they stood.
+    crate::ops::automation_builtin_split::forget(tx, id)?;
     for value_id in read::dimension_value_ids(tx.conn(), id)? {
         delete_value_subtree(tx, value_id)?;
     }
@@ -571,6 +578,7 @@ pub fn value_add(
         updated_at: now,
     };
     emit_create(tx, record::dimension_value(&value))?;
+    crate::ops::automation_builtin_split::follow(tx, dimension_id, None)?;
     Ok(value)
 }
 
@@ -580,6 +588,7 @@ pub fn value_rename(tx: &WriteTx<'_>, value_id: i64, name: &str) -> Result<Dimen
     live_before(tx, before.dimension_id)?;
     let after = DimensionValue { name, updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::dimension_value(&before), record::dimension_value(&after))?;
+    crate::ops::automation_builtin_split::follow(tx, after.dimension_id, Some((&before.name, &after.name)))?;
     Ok(after)
 }
 
@@ -681,6 +690,7 @@ pub fn value_move(tx: &WriteTx<'_>, value_id: i64, pos: Position) -> Result<Dime
     let key = place(&sibs, &pos)?;
     let after = DimensionValue { order_key: key, updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::dimension_value(&before), record::dimension_value(&after))?;
+    crate::ops::automation_builtin_split::follow(tx, dimension.id, None)?;
     Ok(after)
 }
 
@@ -761,7 +771,8 @@ pub fn value_delete(tx: &WriteTx<'_>, value_id: i64, reassign_to: Option<i64>) -
         }
         None => {}
     }
-    delete_value_subtree(tx, before.id)
+    delete_value_subtree(tx, before.id)?;
+    crate::ops::automation_builtin_split::follow(tx, axis.id, None)
 }
 
 /// Re-point assignments at another value of the same axis (checked by the caller). The row keeps its

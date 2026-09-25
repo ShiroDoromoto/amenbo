@@ -1632,6 +1632,12 @@ pub struct AutomationAction {
     /// ([`crate::ops::automation_builtin`]).
     #[serde(default)]
     pub builtin: Option<String>,
+    /// **The axis it splits by**, for the built-in whose ways out are an axis's values (`AMB-D-972`),
+    /// and `None` on every other action. There is one such action per axis: the ways out are the
+    /// action's rows, and they follow the axis's values ([`crate::ops::automation_builtin_split`]).
+    /// `None` on one of them is an axis deleted from under it.
+    #[serde(default)]
+    pub builtin_dimension_id: Option<i64>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,

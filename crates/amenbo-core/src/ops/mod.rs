@@ -32,6 +32,7 @@ pub mod automation_builtin_cut;
 pub mod automation_builtin_fetch;
 pub mod automation_builtin_fold;
 pub mod automation_builtin_make;
+pub mod automation_builtin_split;
 pub mod automation_builtin_take;
 pub mod automation_report;
 pub mod automation_run;

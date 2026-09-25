@@ -478,6 +478,7 @@ pub(super) fn automation_action_row(r: &Row) -> rusqlite::Result<AutomationActio
         note: get(r, C.note)?,
         entry_step_id: get(r, C.entry_step_id)?,
         builtin: get(r, C.builtin)?,
+        builtin_dimension_id: get(r, C.builtin_dimension_id)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

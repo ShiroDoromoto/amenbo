@@ -1042,7 +1042,29 @@ pub const STEPS: &[Step] = &[
         name: "let a run carry what a person handed over at launch, text and files",
         apply: Apply::Custom(let_a_run_be_handed_things),
     },
+    Step {
+        to: 78,
+        name: "name the axis a built-in that splits by one splits by",
+        // `AMB-D-972`. NULL on every row already written: no build before this one carried a built-in
+        // that splits by an axis.
+        apply: Apply::Custom(name_the_axis_a_split_splits_by),
+    },
 ];
+
+/// v78: the axis a library action splits by, for the built-in whose ways out are an axis's values
+/// (`AMB-D-972`).
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason.
+fn name_the_axis_a_split_splits_by(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_action")?.iter().any(|c| c == "builtin_dimension_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation_action ADD COLUMN builtin_dimension_id BIGINT REFERENCES dimension(id) \
+                 ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    Ok(())
+}
 
 /// v77: a run carries what a person handed over when launching it (`AMB-D-970`) — the text on
 /// `automation_run.handed`, and the files as attachments hanging off the run, which is a sixth kind

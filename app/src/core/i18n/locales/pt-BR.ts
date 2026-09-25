@@ -1010,6 +1010,8 @@ export const ptBR: Translation = {
     "auto.step.cfg": "Ajustes",
     "auto.step.declaresNone": "Nada declarado",
     "auto.step.required": "obrigatório",
+    "auto.step.noAxes": "Ainda não há eixo para classificar tarefas",
+    "auto.step.oneALine": "Uma por linha (ex.: AMB-T-12)",
     "auto.step.inputs": "Entradas",
     "auto.step.unwired": "nada chega",
     "auto.step.exits": "Saídas",

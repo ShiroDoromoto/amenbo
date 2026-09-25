@@ -997,6 +997,8 @@ export const tr: Translation = {
     "auto.step.cfg": "Ayarlar",
     "auto.step.declaresNone": "Hiçbir şey bildirilmemiş",
     "auto.step.required": "zorunlu",
+    "auto.step.noAxes": "Görevleri sınıflandıracak bir eksen henüz yok",
+    "auto.step.oneALine": "Satır başına bir tane (ör. AMB-T-12)",
     "auto.step.inputs": "Girdiler",
     "auto.step.unwired": "hiçbir şey ulaşmıyor",
     "auto.step.exits": "Çıkışlar",

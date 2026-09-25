@@ -998,6 +998,8 @@ export const vi: Translation = {
     "auto.step.cfg": "Thiết lập",
     "auto.step.declaresNone": "Không khai báo gì",
     "auto.step.required": "bắt buộc",
+    "auto.step.noAxes": "Chưa có trục nào để phân loại việc",
+    "auto.step.oneALine": "Mỗi dòng một mục (vd. AMB-T-12)",
     "auto.step.inputs": "Đầu vào",
     "auto.step.unwired": "không có gì đến được",
     "auto.step.exits": "Lối ra",

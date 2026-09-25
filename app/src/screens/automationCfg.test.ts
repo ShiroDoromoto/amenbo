@@ -13,6 +13,10 @@
 import { describe, expect, it } from "vitest";
 import type { DimensionDto } from "../bindings/bindings";
 import {
+  classAxis,
+  pressedClass,
+  readLines,
+  writeLines,
   DIM_KEY,
   dimRows,
   dimToken,
@@ -143,5 +147,24 @@ describe("a setting's answer", () => {
     expect(JSON.parse(writeFilter(filter) ?? "")).toEqual({ dim: ["theme=main", "stage=second"] });
     expect(readFilter(writeFilter(filter) ?? "")).toEqual(filter);
     expect(pressed(filter, DIM_KEY, "theme=main", false)).toEqual({ dim: ["stage=second"] });
+  });
+});
+
+describe("a setting that names several things, one a line", () => {
+  it("reads the lines of a text answer, blank ones being nothing, and writes none left as unanswered", () => {
+    expect(readLines(JSON.stringify("職能=実装\n\n 職能=設計 "))).toEqual(["職能=実装", "職能=設計"]);
+    expect(readLines(undefined)).toEqual([]);
+    expect(writeLines(["AMB-T-1", "AMB-T-2"])).toBe(JSON.stringify("AMB-T-1\nAMB-T-2"));
+    expect(writeLines([])).toBeNull();
+  });
+
+  it("replaces a value on an axis that holds one, adds beside on one that holds several, and takes a second press back", () => {
+    const one = pressedClass(["職能=実装"], "職能", "設計", true);
+    expect(one).toEqual(["職能=設計"]);
+    expect(pressedClass(one, "ラベル", "a", false)).toEqual(["職能=設計", "ラベル=a"]);
+    expect(pressedClass(["ラベル=a"], "ラベル", "b", false)).toEqual(["ラベル=a", "ラベル=b"]);
+    expect(pressedClass(["職能=設計"], "職能", "設計", true)).toEqual([]);
+    expect(classAxis("職能=設計")).toBe("職能");
+    expect(classAxis("no axis")).toBeUndefined();
   });
 });

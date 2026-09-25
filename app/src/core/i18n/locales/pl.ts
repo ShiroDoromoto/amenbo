@@ -1014,6 +1014,8 @@ export const pl: Translation = {
     "auto.step.cfg": "Ustawienia",
     "auto.step.declaresNone": "Nic nie zadeklarowano",
     "auto.step.required": "wymagane",
+    "auto.step.noAxes": "Nie ma jeszcze osi do klasyfikowania zadań",
+    "auto.step.oneALine": "Jedna w wierszu (np. AMB-T-12)",
     "auto.step.inputs": "Wejścia",
     "auto.step.unwired": "nic do niego nie dociera",
     "auto.step.exits": "Wyjścia",

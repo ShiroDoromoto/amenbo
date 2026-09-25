@@ -1014,6 +1014,8 @@ export const uk: Translation = {
     "auto.step.cfg": "Налаштування",
     "auto.step.declaresNone": "Нічого не оголошено",
     "auto.step.required": "обов'язковий",
+    "auto.step.noAxes": "Поки немає осі для класифікації завдань",
+    "auto.step.oneALine": "По одному в рядку (наприклад, AMB-T-12)",
     "auto.step.inputs": "Входи",
     "auto.step.unwired": "до нього нічого не доходить",
     "auto.step.exits": "Виходи",

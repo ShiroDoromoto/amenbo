@@ -30,10 +30,11 @@
 // takes in or hands out is a wire from the top mark or into a bottom one — the boundary the core names
 // `ACTION_BOUNDARY`. An automation's picture has no such boundary, and draws neither.
 //
-// **The error way out is drawn only where somebody changed it.** Every box is born carrying it
-// with nothing said about what follows, which core reads as stopping the run and calling a person
-// (`amenbo_core::ops::automation::edge_delete`). So an edge on that way out *is* the change, and a
-// box that never had one has no line here to draw.
+// **The error way out is drawn on every box, changed or not** (`AMB-T-5501`). Every box is born
+// carrying it with nothing said about what follows, which core reads as stopping the run and calling
+// a person (`AMB-D-966`). A box with no edge on it is drawn with a line of its own to that stop, so a
+// reader sees where a run goes when a step fails without having to know the default. That line has no
+// `+`: there is no edge under it to put a box in on.
 import { builtinWord } from "../core/builtinWords";
 import type {
   AutomationActionDetailDto,
@@ -801,10 +802,17 @@ export function layOut(graph: PicGraph | null): Picture {
     if (toId === undefined) return 2;
     return neighbours(edge.fromId, toId) ? 1 : 0;
   };
+  // The error way out of each box nobody drew a line from, as the line core reads it as: one that
+  // halts the run. Its id is the box's, negated — no edge has one below zero.
+  const unsaid: AutomationEdgeDto[] = graph.boxes
+    .filter((box) => box.exits.some((exit) => exit.name === ERROR_EXIT))
+    .filter((box) => !graph.edges.some((edge) => edge.fromId === box.id && edge.exitName === ERROR_EXIT))
+    .map((box) => ({ id: -box.id, fromId: box.id, exitName: ERROR_EXIT, ends: "halt" }));
+  const edges = [...graph.edges, ...unsaid];
   const slot = new Map<number, { nth: number; below: number }>();
   for (const box of graph.boxes) {
     const exitAt = (edge: AutomationEdgeDto) => box.exits.findIndex((exit) => exit.name === edge.exitName);
-    const own = graph.edges
+    const own = edges
       .filter((edge) => edge.fromId === box.id)
       .sort((a, b) => reach(a) - reach(b) || exitAt(a) - exitAt(b));
     const nowhere = own.filter((edge) => reach(edge) === 2).length;
@@ -816,7 +824,7 @@ export function layOut(graph: PicGraph | null): Picture {
     });
   }
 
-  for (const edge of graph.edges) {
+  for (const edge of edges) {
     const from = node.get(edge.fromId);
     if (from === undefined) continue;
     const { nth, below } = slot.get(edge.id)!;
@@ -828,7 +836,7 @@ export function layOut(graph: PicGraph | null): Picture {
     if (toId === undefined) {
       // The one further left runs further down, so its words pass under the shorter lines to its right.
       const foot = sy + STUB + below * WORD_H;
-      inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
+      if (edge.id > 0) inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
       lines.push({
         key,
         kind: "edge",
@@ -1052,7 +1060,7 @@ export function layOut(graph: PicGraph | null): Picture {
   const named = (box: PicBox | undefined) =>
     box?.exits.filter((exit) => exit.name !== undefined && exit.name !== ERROR_EXIT).length ?? 0;
   const tones = new Map<string, PicLine["tone"]>(
-    graph.edges.map((edge) => [
+    edges.map((edge) => [
       lineKey("edge", edge.id),
       edge.exitName === ERROR_EXIT || edge.ends === "halt"
         ? "error"

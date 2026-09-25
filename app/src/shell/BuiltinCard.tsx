@@ -33,7 +33,7 @@ export function BuiltinCard({ builtin }: { builtin: BuiltinRun }) {
       )}
       {builtin.waiting && builtin.looksFor !== undefined && <FilterChips expression={builtin.looksFor} />}
       {builtin.finished && builtin.exitName !== undefined && (
-        <ExitMark name={builtin.exitName === "" ? undefined : builtin.exitName} builtin={builtin.key} />
+        <ExitMark name={builtin.exitName} builtin={builtin.key} />
       )}
     </div>
   );

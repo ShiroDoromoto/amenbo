@@ -13,7 +13,7 @@
 //! before the task is closed, since a closed task takes no comment, and it is not written twice where
 //! that step already carried it onto the task.
 //!
-//! It leaves by the unnamed way out once the task is closed. A task already done is left as it is and
+//! It leaves by the done way out once the task is closed. A task already done is left as it is and
 //! leaves the same way; one decided against, or no task at all, leaves by the error way out.
 
 use crate::error::{Error, Result};
@@ -184,7 +184,7 @@ mod tests {
             automation_report::out(tx, run_step, port, Produced::Value(sha)).expect("hand the commit on");
         }
         let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&opening.run_def.exits).expect("exits");
-        let done = exits.iter().find(|e| e.name.as_deref() == Some(DONE_EXIT)).map(|e| e.id);
+        let done = exits.iter().find(|e| e.name == DONE_EXIT).map(|e| e.id);
         let Next::Step(close) = automation_report::done(tx, run_step, done, report).expect("report") else {
             panic!("the work goes on to the close");
         };

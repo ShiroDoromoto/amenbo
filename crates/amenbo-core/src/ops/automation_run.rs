@@ -76,7 +76,7 @@ pub enum Unmet {
     EntryTakesNoTask { step: String, builtin: Option<String>, placement: i64 },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
-    OpenExit { step: String, exit: Option<String>, builtin: Option<String>, placement: i64 },
+    OpenExit { step: String, exit: String, builtin: Option<String>, placement: i64 },
     /// A required input with nothing reaching it — no wire at all, or none whose far end is both
     /// declared and reachable from the entry.
     UnwiredInput { step: String, port: String, builtin: Option<String>, placement: i64 },
@@ -102,7 +102,7 @@ pub enum Unmet {
     /// the work back, say — are not asked about: only the ones leading out of it.
     LeavesTaskOpen {
         step: String,
-        exit: Option<String>,
+        exit: String,
         to: Option<String>,
         builtin: Option<String>,
         to_builtin: Option<String>,
@@ -124,7 +124,7 @@ impl Unmet {
                 format!("the entry '{step}' takes no task — declare a task_take output on one of its ways out")
             }
             Unmet::OpenExit { step, exit, .. } => {
-                format!("nothing is set to happen after {} of '{step}'", named(exit.as_deref()))
+                format!("nothing is set to happen after {} of '{step}'", named(exit))
             }
             Unmet::UnwiredInput { step, port, .. } => {
                 format!("the required input '{port}' of '{step}' has nothing reaching it")
@@ -142,7 +142,7 @@ impl Unmet {
                 format!("'{step}' asks for the model '{model}', which '{agent}' here does not offer")
             }
             Unmet::LeavesTaskOpen { step, exit, to, .. } => {
-                let from = format!("{} of '{step}'", named(exit.as_deref()));
+                let from = format!("{} of '{step}'", named(exit));
                 match to {
                     Some(to) => format!(
                         "{from} goes on to '{to}', which takes another task, with the task taken before \
@@ -168,21 +168,13 @@ impl Unmet {
             Unmet::NoEntry => ErrorCode::NotReadyAutomationNoEntry,
             Unmet::ActionEmpty { .. } => ErrorCode::NotReadyAutomationActionEmpty,
             Unmet::EntryTakesNoTask { .. } => ErrorCode::NotReadyAutomationEntryTakesNoTask,
-            // The unnamed way out is a sentence of its own: there is no name to put in one.
-            Unmet::OpenExit { exit: None, .. } => ErrorCode::NotReadyAutomationOpenExitUnnamed,
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
             Unmet::AgentUnchosen { .. } => ErrorCode::NotReadyAutomationAgentUnchosen,
             Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
             Unmet::ModelMissing { .. } => ErrorCode::NotReadyAutomationModelMissing,
-            Unmet::LeavesTaskOpen { exit: None, to: Some(_), .. } => {
-                ErrorCode::NotReadyAutomationTaskLeftOpenUnnamed
-            }
             Unmet::LeavesTaskOpen { to: Some(_), .. } => ErrorCode::NotReadyAutomationTaskLeftOpen,
-            Unmet::LeavesTaskOpen { exit: None, to: None, .. } => {
-                ErrorCode::NotReadyAutomationTaskLeftOpenAtEndUnnamed
-            }
             Unmet::LeavesTaskOpen { to: None, .. } => ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
         }
     }
@@ -207,21 +199,14 @@ impl Unmet {
             Unmet::NoSteps | Unmet::NoEntry => msg,
             Unmet::ActionEmpty { action, .. } => msg.with("action", action),
             Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
-            Unmet::OpenExit { step, exit, .. } => match exit {
-                Some(exit) => msg.with("step", step).with("exit", exit),
-                None => msg.with("step", step),
-            },
+            Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
             Unmet::UnansweredCfg { step, cfg, .. } => msg.with("step", step).with("cfg", cfg),
             Unmet::AgentUnchosen { step, .. } => msg.with("step", step),
             Unmet::AgentMissing { step, agent, .. } => msg.with("step", step).with("agent", agent),
             Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
             Unmet::LeavesTaskOpen { step, exit, to, to_builtin, .. } => {
-                let msg = msg.with("step", step);
-                let msg = match exit {
-                    Some(exit) => msg.with("exit", exit),
-                    None => msg,
-                };
+                let msg = msg.with("step", step).with("exit", exit);
                 let msg = match to {
                     Some(to) => msg.with("to", to),
                     None => msg,
@@ -263,12 +248,9 @@ impl Unmet {
     }
 }
 
-/// How a way out is spoken of in a sentence: by its name, or as the unnamed one.
-fn named(exit: Option<&str>) -> String {
-    match exit {
-        Some(name) => format!("the way out '{name}'"),
-        None => "the unnamed way out".to_string(),
-    }
+/// How a way out is spoken of in a sentence: by its name.
+fn named(exit: &str) -> String {
+    format!("the way out '{exit}'")
 }
 
 /// **What the store cannot answer**, handed to [`launch`] by whoever pressed it.
@@ -384,7 +366,7 @@ pub fn check(
             None => None,
         };
         for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
-            if never_taken.is_some() && exit.name.as_deref() == never_taken {
+            if never_taken.is_some() && Some(exit.name.as_str()) == never_taken {
                 continue;
             }
             // The error way out is the one nobody has to answer for. Every step and every action is
@@ -392,7 +374,7 @@ pub fn check(
             // would put one more thing to write on every action somebody places — for the case that
             // is already handled. Left alone it halts the run and calls a person, and an edge on it
             // is how somebody says otherwise.
-            if exit.name.as_deref() == Some(ERROR_EXIT) {
+            if exit.name == ERROR_EXIT {
                 continue;
             }
             if !decided(conn, placement.id, exit.id, &by_id)? {
@@ -626,7 +608,7 @@ fn inside(
     let mut unmet = Vec::new();
     for step in steps {
         for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
-            if exit.name.as_deref() == Some(ERROR_EXIT) {
+            if exit.name == ERROR_EXIT {
                 continue;
             }
             let edge =
@@ -1260,7 +1242,7 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
         // out left without a line inside the action, and for one returned to an action's way out the
         // automation draws nothing after: the launch check lets that through only for the action's
         // error way out, and a run holds its pictures still, so no other can be left bare here.
-        if taken.name.as_deref() == Some(ERROR_EXIT) || taken.returns_to.is_some() {
+        if taken.name == ERROR_EXIT || taken.returns_to.is_some() {
             return Ok(Onward::Halt);
         }
         return Ok(Onward::Nowhere);
@@ -1534,7 +1516,7 @@ mod tests {
                 checked(tx, &automation),
                 vec![Unmet::LeavesTaskOpen {
                     step: "直す".into(),
-                    exit: Some(crate::model::DONE_EXIT.into()),
+                    exit: crate::model::DONE_EXIT.into(),
                     to: None,
                     builtin: None,
                     to_builtin: None,
@@ -1562,7 +1544,7 @@ mod tests {
                 checked(tx, &automation),
                 vec![Unmet::LeavesTaskOpen {
                     step: "直す".into(),
-                    exit: Some(crate::model::DONE_EXIT.into()),
+                    exit: crate::model::DONE_EXIT.into(),
                     to: Some("取る".into()),
                     builtin: None,
                     to_builtin: None,
@@ -1581,7 +1563,7 @@ mod tests {
             let stuck = automation::exit_add(tx, AutomationOwner::Action, work.id, Some("人に聞く"))
                 .expect("exit");
             let on = AutomationPictureOwner::Automation;
-            automation::edge_add(tx, on, working.id, stuck.name.as_deref(), EdgeTarget::Halt, None)
+            automation::edge_add(tx, on, working.id, Some(&stuck.name), EdgeTarget::Halt, None)
                 .expect("call a person");
             let close = crate::ops::test_support::mk_closed_after(tx, &automation, working.id, None);
             // The close goes back to take the next one rather than on to the end.
@@ -1795,7 +1777,7 @@ mod tests {
                 exit_id(tx, AutomationOwner::Step, entry.id, None),
             )
                 .expect("read the line out of the action")
-                .expect("the step an action is written with leaves it by its unnamed way out");
+                .expect("the step an action is written with leaves it by its done way out");
         let step = automation::step_insert(tx, leaves_by.id, NewStep::new(name, "続ける"), &[], &[])
             .expect("the second step");
         automation::placement_step_set(tx, placement.id, step.id, agent, None)
@@ -2031,7 +2013,7 @@ mod tests {
             assert_eq!(copy.prompt.as_deref(), Some("take one"));
             assert_eq!(copy.step_id, Some(step.id));
             let exits: Vec<RunDefExit> = serde_json::from_str(&copy.exits).expect("exits");
-            assert_eq!(exits.len(), 2, "the unnamed way out and the error one");
+            assert_eq!(exits.len(), 2, "the done way out and the error one");
             assert_eq!(exits[0].outs[0].kind, AutomationPortKind::TaskTake);
 
             // The definition is held while the run is going (`AMB-D-961`), so it is ended first — the copy
@@ -2086,7 +2068,7 @@ mod tests {
             let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
             crate::ops::automation_report::take(tx, opening.run_step.id, task).expect("take");
 
-            // Once it has reported, the answer is read off the way out it took — here the unnamed one,
+            // Once it has reported, the answer is read off the way out it took — here the done one,
             // which goes on to the built-in that closes the task.
             crate::ops::automation_report::done(tx, opening.run_step.id, None, "did it")
                 .expect("report");
@@ -2137,7 +2119,7 @@ mod tests {
     }
 
     /// A picture with somewhere to stand towards: the entry takes a task and leaves through its
-    /// unnamed way out into a second placement, which closes the run. What the tests about a run
+    /// done way out into a second placement, which closes the run. What the tests about a run
     /// standing between two spots start from — [`launchable`]'s single placement closes the run on the
     /// spot and never stands anywhere.
     fn two_spots(tx: &WriteTx<'_>) -> (Automation, AutomationPlacement, AutomationEdge) {
@@ -2293,8 +2275,8 @@ mod tests {
         automation::placement_step_set(tx, placement.id, second.id, "claude", None)
             .expect("choose who carries it out");
         let on = AutomationPictureOwner::Action;
-        let unnamed = exit_id(tx, AutomationOwner::Step, first.id, None);
-        let leaves = read::automation_edge_for_exit(tx.conn(), on, first.id, unnamed)
+        let done_exit = exit_id(tx, AutomationOwner::Step, first.id, None);
+        let leaves = read::automation_edge_for_exit(tx.conn(), on, first.id, done_exit)
             .expect("read")
             .expect("the line out of the first step");
         automation::edge_update(tx, leaves.id, Some(EdgeTarget::Go(second.id)), None).expect("on");
@@ -2310,7 +2292,7 @@ mod tests {
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::OpenExit {
                     step: "見直す".into(),
-                    exit: Some(crate::model::DONE_EXIT.into()),
+                    exit: crate::model::DONE_EXIT.into(),
                     builtin: None,
                     placement: placement.id,
                 }],
@@ -2365,7 +2347,7 @@ mod tests {
             assert!(
                 unmet.contains(&Unmet::OpenExit {
                     step: "見直す".into(),
-                    exit: Some(crate::model::DONE_EXIT.into()),
+                    exit: crate::model::DONE_EXIT.into(),
                     builtin: None,
                     placement: placement.id,
                 }),
@@ -2483,7 +2465,7 @@ mod tests {
             let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
             let about = |at: i64| Unmet::OpenExit {
                 step: "見直す".into(),
-                exit: Some(crate::model::DONE_EXIT.into()),
+                exit: crate::model::DONE_EXIT.into(),
                 builtin: None,
                 placement: at,
             };

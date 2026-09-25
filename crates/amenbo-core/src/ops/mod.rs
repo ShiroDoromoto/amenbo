@@ -227,7 +227,7 @@ pub(crate) mod test_support {
         let step = crate::store_engine::read::automation_run_step(tx.conn(), run_step_id).ok()??;
         let def = crate::store_engine::read::automation_run_def(tx.conn(), step.run_def_id).ok()??;
         let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&def.exits).ok()?;
-        exits.into_iter().find(|e| e.name.as_deref() == Some(name)).map(|e| e.id)
+        exits.into_iter().find(|e| e.name == name).map(|e| e.id)
     }
 
     /// **The id of one output a run's step declares**, by its name — on the way out `exit` keys where it

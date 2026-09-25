@@ -1624,7 +1624,6 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_entry_takes_no_task:
     "{step}: the start step takes no task, so every step after it would be about nothing",
   not_ready_automation_open_exit: "{step}: nothing is set to happen after {exit}",
-  not_ready_automation_open_exit_unnamed: "{step}: nothing is set to happen after it",
   not_ready_automation_unwired_input: "{step}: nothing reaches the required input {port}",
   not_ready_automation_unanswered_cfg: "{step}: the required setting {cfg} is unanswered",
   not_ready_automation_agent_unchosen: "{step}: nobody is chosen to carry it out",
@@ -1634,9 +1633,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   // silence (`app/src-tauri/src/agent_models.rs`).
   not_ready_automation_model_missing: "{step}: its agent here does not offer the model {model}",
   not_ready_automation_task_left_open: "{step}: {exit} goes on to {to}, which takes another task, with this one still open",
-  not_ready_automation_task_left_open_unnamed: "{step}: it goes on to {to}, which takes another task, with this one still open",
   not_ready_automation_task_left_open_at_end: "{step}: {exit} ends the run with the task still open",
-  not_ready_automation_task_left_open_at_end_unnamed: "{step}: it ends the run with the task still open",
   store_busy: "The store is in use right now. Try again in a moment.",
   // The store itself giving way — a disk that would not answer, a database that could not be read.
   // What the engine said is a line in the diagnostic log, not a sentence for a reader: it names none

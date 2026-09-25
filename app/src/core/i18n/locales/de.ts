@@ -1147,6 +1147,7 @@ export const de: Translation = {
     "auto.run.step": "Schritt {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
     "auto.run.noTask": "Noch keine Aufgabe übernommen",
+    "auto.run.reportWithheld": "Bericht nicht an der Aufgabe hinterlassen, da sie geschlossen war: {steps}",
     "auto.run.waitingForTask": "Wartet auf eine Aufgabe, die übernommen werden kann",
 
     "mcp.title": "Über MCP verbinden",

@@ -1416,6 +1416,13 @@ fn run_card(
     let step_name = last_def.map(|def| def.name);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
     let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
+    // The steps that owed the task their report and could not leave it, the task being closed.
+    let mut report_withheld = Vec::new();
+    for step in steps.iter().filter(|one| one.report_withheld) {
+        if let Some(def) = read::automation_run_def(conn, step.run_def_id)? {
+            report_withheld.push(def.name);
+        }
+    }
     Ok(AutomationRunCardDto {
         run: run.id,
         project: run.project_id,
@@ -1437,6 +1444,7 @@ fn run_card(
         steps_done: steps.len(),
         exit_name,
         task: worked_task(store, stretch)?,
+        report_withheld,
     })
 }
 

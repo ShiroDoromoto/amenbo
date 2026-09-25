@@ -1160,6 +1160,7 @@ export const ru: Translation = {
     "auto.run.step": "Шаг {n} · {step}",
     "auto.run.inAction": "{step} в {action}",
     "auto.run.noTask": "Задача ещё не взята",
+    "auto.run.reportWithheld": "Отчёт не оставлен в задаче, так как она была закрыта: {steps}",
     "auto.run.waitingForTask": "Ждёт задачу, которую можно взять",
 
     "mcp.title": "Подключение по MCP",

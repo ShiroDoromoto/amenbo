@@ -19,13 +19,18 @@
 // a run's pane does (`../talk/nameplate`): a launch opens one spot of the picture into a column of
 // steps, so a step's name alone no longer says which spot of the automation this is. Where the spot
 // has been taken off the picture since, the line says the step alone.
+//
+// **A step that could not leave its report on the task is marked on the row** (`AMB-D-963`): a step
+// built to carry its report onto the task leaves none on a closed one, and without the mark nothing
+// on screen would say why the task holds no report.
 import { useState, type ReactNode } from "react";
 import { acknowledgeRun, pauseRun, resumeRun, stopRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { runReasonWord, runStatusWord } from "../core/runWords";
-import { exactLabel, whenLabel } from "../core/i18n/format";
+import { exactLabel, listLabel, whenLabel } from "../core/i18n/format";
 import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 import type { AutomationRunCardDto } from "../bindings/bindings";
 
 /**
@@ -37,6 +42,20 @@ import type { AutomationRunCardDto } from "../bindings/bindings";
  * it, for a failure, why. `acts` are the buttons that move the run; the history passes none. The
  * project is left off a list that is one project's already.
  */
+/**
+ * That a step owed the task its report and left none, the task being closed by then (`AMB-D-963`) —
+ * as a mark beside the task rather than a sentence, with the steps it was named in its title. It
+ * leads the task's cell so a long title cut short does not take it with it.
+ */
+function WithheldMark({ steps }: { steps: readonly string[] }) {
+  const said = tf("auto.run.reportWithheld", { steps: listLabel([...steps]) });
+  return (
+    <span className="autorun__withheld" title={said}>
+      <Icon name="comment" label={said} />
+    </span>
+  );
+}
+
 export function RunLine({
   run,
   onGo,
@@ -82,6 +101,7 @@ export function RunLine({
             })}
         </span>
         <span className="autorun__task">
+          {run.reportWithheld.length > 0 && <WithheldMark steps={run.reportWithheld} />}
           {/* Waiting comes first: the task a run waiting to take its next one still holds is the
               last one, closed, and naming it would say the run is on it. */}
           {run.waiting ? (

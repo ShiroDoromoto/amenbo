@@ -1155,6 +1155,7 @@ export const es: Translation = {
     "auto.run.step": "Paso {n} · {step}",
     "auto.run.inAction": "{step} en {action}",
     "auto.run.noTask": "Aún no ha tomado ninguna tarea",
+    "auto.run.reportWithheld": "Informe no dejado en la tarea porque estaba cerrada: {steps}",
     "auto.run.waitingForTask": "Esperando una tarea que pueda tomar",
 
     "mcp.title": "Conectar por MCP",

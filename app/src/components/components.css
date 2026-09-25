@@ -1478,6 +1478,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autorun__step,
 .autorun__task { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autorun__notask { color: var(--c-text-faint); }
+/* A step's report kept off a closed task: a mark leading the task's cell, in the heed colour. */
+.autorun__withheld { display: inline-flex; vertical-align: middle; margin-inline-end: var(--s-1); color: var(--c-heed); }
 .autorun__when { font-size: var(--fs-xs); color: var(--c-text-faint); text-align: end; font-variant-numeric: tabular-nums; }
 .autorun__why { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--c-stop); }
 .autorun__acts { flex: none; display: flex; gap: var(--s-1); }

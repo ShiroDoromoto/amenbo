@@ -1143,6 +1143,7 @@ export const tr: Translation = {
     "auto.run.step": "Adım {n} · {step}",
     "auto.run.inAction": "{action} içindeki {step}",
     "auto.run.noTask": "Henüz görev alınmadı",
+    "auto.run.reportWithheld": "Görev kapalı olduğu için rapor göreve bırakılmadı: {steps}",
     "auto.run.waitingForTask": "Alınabilecek bir görev bekleniyor",
 
     "mcp.title": "MCP ile bağlan",

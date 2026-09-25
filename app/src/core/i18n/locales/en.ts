@@ -1388,6 +1388,7 @@ const ui = {
   "auto.run.step": "Step {n} · {step}",
   "auto.run.inAction": "{step} in {action}",
   "auto.run.noTask": "No task taken yet",
+  "auto.run.reportWithheld": "Report kept off the task, which was closed: {steps}",
   "auto.run.waitingForTask": "Waiting for a task it can take",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead

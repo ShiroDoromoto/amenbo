@@ -1144,6 +1144,7 @@ export const id: Translation = {
     "auto.run.step": "Langkah {n} · {step}",
     "auto.run.inAction": "{step} di {action}",
     "auto.run.noTask": "Belum mengambil tugas",
+    "auto.run.reportWithheld": "Laporan tidak ditinggalkan di tugas karena tugas sudah ditutup: {steps}",
     "auto.run.waitingForTask": "Menunggu tugas yang bisa diambil",
 
     "mcp.title": "Hubungkan lewat MCP",

@@ -1144,6 +1144,7 @@ export const vi: Translation = {
     "auto.run.step": "Bước {n} · {step}",
     "auto.run.inAction": "{step} trong {action}",
     "auto.run.noTask": "Chưa nhận việc nào",
+    "auto.run.reportWithheld": "Không để lại báo cáo trên việc vì việc đã đóng: {steps}",
     "auto.run.waitingForTask": "Đang chờ việc có thể nhận",
 
     "mcp.title": "Kết nối qua MCP",

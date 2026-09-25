@@ -3916,4 +3916,8 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) task: Option<AutomationRunTaskDto>,
+    /// **The steps whose report was kept off the task**, by name, in the order they ran: each was
+    /// built to carry its report onto the task, and the task was closed by then (`AMB-D-963`). Empty
+    /// where every report went where it was owed.
+    pub(crate) report_withheld: Vec<String>,
 }

@@ -209,7 +209,8 @@ fn cfg_value(o: &CfgAnswer) -> Result<Option<Value>, CliError> {
     let value = Value::Object(map);
     // Read as the filter it will be run as — the same expression the step's prompt spells — so a value
     // nothing accepts is refused while the person who wrote it is still here, rather than at the launch
-    // of a run, days later.
+    // of a run, days later. Whether the axes and values it names are there is looked up when it is
+    // written (`ops::automation::cfg_set`), where the store is at hand.
     let expr = amenbo_core::ops::automation_step::taskfilter_expr(&value.to_string()).unwrap_or_default();
     amenbo_core::query::Filter::parse(&expr, amenbo_core::time::today()).map_err(CliError::from)?;
     Ok(Some(value))

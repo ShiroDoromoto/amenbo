@@ -1821,6 +1821,7 @@ pub fn cfg_set(
     if let Some(before) =
         read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement.id, &name)?
     {
+        filter_names_what_is_there(tx, before.kind, value)?;
         let mut after = before.clone();
         after.value = value.map(str::to_string);
         after.updated_at = Timestamp::now();
@@ -1830,6 +1831,7 @@ pub fn cfg_set(
     let declared =
         read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Action, placement.action_id, &name)?
             .ok_or_else(|| Error::not_found(format!("no setting called '{name}' is declared here")))?;
+    filter_names_what_is_there(tx, declared.kind, value)?;
     write_cfg_row(
         tx,
         AutomationCfgOwner::Placement,
@@ -1840,6 +1842,21 @@ pub fn cfg_set(
         declared.options,
         value.map(str::to_string),
     )
+}
+
+/// **A task filter's answer is read the way the run will read it** — parsed, and its axes and values
+/// looked up (`AMB-T-5551`). A grammar check alone lets `dim:` name an axis or a value that is not
+/// there, and the run then falls over at `task list` long after the person who wrote it has gone.
+/// An answer of another kind, or one that is not an object of parts, is not a filter here.
+fn filter_names_what_is_there(tx: &WriteTx<'_>, kind: AutomationCfgKind, value: Option<&str>) -> Result<()> {
+    if kind != AutomationCfgKind::TaskFilter {
+        return Ok(());
+    }
+    let Some(expr) = value.and_then(crate::ops::automation_step::taskfilter_expr) else {
+        return Ok(());
+    };
+    let mut filter = crate::query::Filter::parse(&expr, crate::time::today())?;
+    filter.resolve(tx.conn())
 }
 
 /// Reorder a setting within its owner's list.
@@ -3253,6 +3270,47 @@ mod tests {
             };
             assert_eq!(read_back(here.id).as_deref(), Some("\"全部\""));
             assert_eq!(read_back(there.id).as_deref(), Some("\"半分\""));
+        });
+    }
+
+    /// **A task filter naming an axis or a value that is not there is refused when it is written**
+    /// (`AMB-T-5551`), not when a run reads it — and two `dim` values are two tokens, so naming two
+    /// axes that are there goes through.
+    #[test]
+    fn a_task_filter_is_refused_for_an_axis_or_value_that_is_not_there() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, placement) = mk_placed(tx, &automation, "取る");
+            cfg_add(tx, action.id, "受信箱", AutomationCfgKind::TaskFilter, true, None)
+                .expect("declare the setting");
+            for (axis, value) in [("テーマ", "メイン"), ("フェーズ", "運用第2期")] {
+                let dim = crate::ops::dimension::add(
+                    tx,
+                    automation.project_id,
+                    crate::ops::dimension::NewDimension {
+                        name: axis.to_string(),
+                        notes: String::new(),
+                        cardinality: crate::model::DimensionCardinality::Single,
+                        ordered: false,
+                        role: crate::model::DimensionRole::None,
+                        show_on_card: false,
+                        required: false,
+                        applies_to: crate::model::DimensionAppliesTo::Both,
+                        slug: None,
+                    },
+                )
+                .expect("add the axis");
+                crate::ops::dimension::value_add(tx, dim.id, value, None).expect("add the value");
+            }
+            cfg_set(
+                tx,
+                placement.id,
+                "受信箱",
+                Some(r#"{"dim":["テーマ=メイン","フェーズ=運用第2期"]}"#),
+            )
+            .expect("two axes that are there");
+            assert!(cfg_set(tx, placement.id, "受信箱", Some(r#"{"dim":["テーマ=ない"]}"#)).is_err(), "no such value");
+            assert!(cfg_set(tx, placement.id, "受信箱", Some(r#"{"dim":["ない=メイン"]}"#)).is_err(), "no such axis");
         });
     }
 

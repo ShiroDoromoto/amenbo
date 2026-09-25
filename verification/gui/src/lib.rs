@@ -4422,18 +4422,31 @@ impl Instructor {
                     ),
                 }
             }
-            // The other side of those three: a verb that builds or drives, reached for from inside a
-            // step. What the line says is spelled out rather than left at "it was refused", because
-            // this road is about which refusal — a mistyped number is turned away too, and on a shot
-            // the two would read the same.
-            (Domain::Automation, "verb-in-pane") => {
-                let verb = req(with, "verb")?;
-                let standing_in = match verb.contains("<run>") {
-                    true => ", putting the number of this run — the one the line over the pane carries — where the command says `<run>`",
-                    false => "",
+            // The other side of those three: a command that builds, drives or moves the task,
+            // reached for from inside a step. What the line says is spelled out rather than left at
+            // "it was refused", because this road is about which refusal — a mistyped number is
+            // turned away too, and on a shot the two would read the same.
+            (Domain::Automation, "command-in-pane") => {
+                let command = req(with, "command")?;
+                let mut gaps = Vec::new();
+                if command.contains("<run>") {
+                    gaps.push("the number of this run — the one the line over the pane carries — where the command says `<run>`".to_string());
+                }
+                if command.contains("<ref>") {
+                    if !with.contains_key("task") {
+                        return Err("`command` leaves a `<ref>` gap, so `task` has to name the task whose ref fills it".to_string());
+                    }
+                    gaps.push(format!(
+                        "the ref of the task \"{}\" — its `AMB-T-…` — where the command says `<ref>`",
+                        self.task_label(with)
+                    ));
+                }
+                let filling = match gaps.is_empty() {
+                    true => String::new(),
+                    false => format!(", putting {}", gaps.join(", and ")),
                 };
                 format!(
-                    "In the pane this run is drawn in, type `amenbo automation {verb}` and run it{standing_in}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
+                    "In the pane this run is drawn in, type `amenbo {command}` and run it{filling}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
                 )
             }
             // The report made without the run's pane. The step's number is not on any screen — the

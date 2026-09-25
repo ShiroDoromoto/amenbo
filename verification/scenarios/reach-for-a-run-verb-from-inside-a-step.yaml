@@ -2,24 +2,31 @@
 # working that step can type `automation start` and set a second run going, or `automation stop` and
 # put its own down. Neither is the agent's to do: the work came with the text the step starts on, and
 # what the run does next is the run's. So the binary asks where it is standing before it reads or
-# writes anything, and turns those verbs away there.
+# writes anything, and turns those verbs away there. The same holds past `automation`:
+# a task's status is the run's to move, and `task done` typed there would close one with no commit
+# on it — so that is turned away too, with a sentence of its own.
 #
 # The refusal is the whole of this road. What reaches from inside a step — `step-take`, `step-out`,
 # `step-done` — is walked by `walk-a-run-from-one-step-to-the-next`, and the six reading verbs that
 # also reach are held by the CLI's own tests. What no test can stand in for is this: a shipped binary
 # in a terminal a shipped window opened, with the environment that window set on it.
 id: reach-for-a-run-verb-from-inside-a-step
-title: A verb that drives a run is turned away in the pane that run is drawn in
+title: A verb that drives a run, or closes a task, is turned away in the pane that run is drawn in
 description: >
   Start a run, and in the pane it is drawn in reach for the two verbs that would put it down — pause
   and stop — as the agent working the step could. Each is turned away, and the running tab still says
   the run is under way. Both are walked because they are two ways to the same end: a build where only
-  one arm of the guard was written would turn the first away and let the second through.
+  one arm of the guard was written would turn the first away and let the second through. Then reach
+  for `task done` on a task of the project: it is turned away too, and the task is still to do — and
+  for `worktree start`, which a built-in does for the run.
 given:
   # Claude Code is one of the two agents this machine can start — two being the fewest the premise
   # stands up — so the step is not refused for who carries it out. `runs` keeps the stand-in standing
   # and carries out what is typed at it, which is what the command typed in the pane needs.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # The task `task done` is reached for on. It is not the run's — the step never takes one — since
+  # the door turns the command away before it reads which task is named, so any task stands for it.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task a step tries to close }, as: seed }
   # The action the run opens, holding the one step it runs. The way out that takes the task is
   # declared on both layers: the step's is what the step reports, and the action's is what the
   # automation's picture goes on from — the line inside the action carries the one out by the other.
@@ -93,10 +100,10 @@ steps_gui:
   # The first reach: the verb that would hold the run the step is part of.
   - type: action
     domain: automation
-    op: verb-in-pane
+    op: command-in-pane
     with:
       target: run
-      verb: pause <run>
+      command: automation pause <run>
       refused: automation_outside_only
 
   - type: action
@@ -122,10 +129,10 @@ steps_gui:
   # The second reach: the verb that would put the run down for good.
   - type: action
     domain: automation
-    op: verb-in-pane
+    op: command-in-pane
     with:
       target: run
-      verb: stop <run>
+      command: automation stop <run>
       refused: automation_outside_only
 
   - type: action
@@ -140,3 +147,40 @@ steps_gui:
     with:
       target: run
       state: running
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The third reach, past `automation`: the command that would close a task. The run moves a
+  # task's status, so this is turned away under the same code with a sentence of its own.
+  - type: action
+    domain: automation
+    op: command-in-pane
+    with:
+      target: run
+      task: seed
+      command: task done <ref>
+      refused: automation_outside_only
+
+  # Nothing moved. A build that let the command through would have the task done.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  # The fourth reach: what a built-in does for the run. Cutting the task's worktree is the run's,
+  # so this is turned away under the same code with the sentence that points at step-out.
+  - type: action
+    domain: automation
+    op: command-in-pane
+    with:
+      target: run
+      task: seed
+      command: worktree start <ref>
+      refused: automation_outside_only

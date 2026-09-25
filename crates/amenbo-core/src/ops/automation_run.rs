@@ -1180,11 +1180,7 @@ fn entry_reads(
     automation: &Automation,
     handed: &HandedAtLaunch,
 ) -> Result<Option<HandedTask>> {
-    let entry = match automation.entry_placement_id {
-        Some(id) => read::automation_placement(conn, id)?,
-        None => None,
-    };
-    let Some(entry) = entry else {
+    let Some(entry) = entry_of(conn, automation)? else {
         return Ok(None);
     };
     let step = action_name(conn, entry.action_id)?;
@@ -1226,6 +1222,43 @@ fn entry_reads(
         }
         (true, false) => Ok(None),
     }
+}
+
+/// The placement a run of `automation` opens first, where one is named.
+fn entry_of(conn: &Connection, automation: &Automation) -> Result<Option<AutomationPlacement>> {
+    match automation.entry_placement_id {
+        Some(id) => Ok(read::automation_placement(conn, id)?),
+        None => Ok(None),
+    }
+}
+
+/// **What the entry asks the person launching a run for** (`AMB-D-970`) — the same split
+/// [`entry_reads`] refuses by, answered before the press so a launch dialog asks for what the entry
+/// reads and nothing else.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LaunchAsks {
+    /// An agent's step: a text and files.
+    Words,
+    /// The built-in that files a task: its title and notes, and a value on each of these axes.
+    Task { axes: Vec<crate::ops::automation_builtin_make::LaunchAxis> },
+    /// Any other built-in, or no entry yet: nothing is handed over.
+    Nothing,
+}
+
+/// **What a launch of this automation asks for** ([`LaunchAsks`]).
+pub fn launch_asks(conn: &Connection, automation_id: i64) -> Result<LaunchAsks> {
+    let automation: Automation =
+        read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    let Some(entry) = entry_of(conn, &automation)? else {
+        return Ok(LaunchAsks::Nothing);
+    };
+    Ok(match action_builtin(conn, entry.action_id)?.as_deref() {
+        None => LaunchAsks::Words,
+        Some(crate::ops::automation_builtin_make::KEY) => LaunchAsks::Task {
+            axes: crate::ops::automation_builtin_make::launch_axes(conn, &entry, automation.project_id)?,
+        },
+        Some(_) => LaunchAsks::Nothing,
+    })
 }
 
 /// Build the body of the `not_ready` refusal: one refusal over a list of reasons whose length is only

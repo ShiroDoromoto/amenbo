@@ -498,6 +498,23 @@ export type AutomationExitDto = { id: number,
 name: string, outputs: Array<AutomationPortDto>, };
 
 /**
+ * **What a launch asks the person starting it for** — what the entry reads at launch
+ * ([`amenbo_core::ops::automation_run::LaunchAsks`]), so the dialog every press opens asks for that
+ * and nothing else (`AMB-D-970`).
+ *
+ * `reads` is `"words"` for an agent's step (a text and files), `"task"` for the built-in that files a
+ * task (a title, notes and a value on each of `axes`), and `"nothing"` for any other entry. `axes` is
+ * empty unless `reads` is `"task"`.
+ */
+export type AutomationLaunchAsksDto = { reads: "words" | "task" | "nothing", axes: Array<AutomationLaunchAxisDto>, };
+
+/**
+ * **An axis a launch asks a value on**, with the values open on it in the axis's own order.
+ * `required` is the project's: a launch that gives it none is refused.
+ */
+export type AutomationLaunchAxisDto = { name: string, values: Array<string>, required: boolean, };
+
+/**
  * **One thing standing in the way of a launch**, as core named it
  * ([`amenbo_core::ops::automation_run::Unmet`]) — written in the shape a refusal's own reasons travel
  * in (`CmdErrorPart`): the code naming the sentence, the values it is built from, and the English it

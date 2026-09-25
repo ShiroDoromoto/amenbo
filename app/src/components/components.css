@@ -1621,6 +1621,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .launchhand__drop { border: 0; background: none; padding: 0; cursor: pointer; color: var(--c-text-muted); }
 .launchhand__drop:hover { color: var(--c-text); }
 .launchhand__add { align-self: flex-start; }
+/* The title of a task to file is a line of text, as wide as the notes under it. */
+.launchhand__title { width: 100%; }
 /* A dialog whose parts are a picture, a field and a row of chips as well as its buttons: each stands
    apart from the next by the same gap rather than by margins of their own. */
 .autodlg__stack { display: flex; flex-direction: column; gap: var(--s-3); }

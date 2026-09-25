@@ -44,6 +44,9 @@ vi.mock("../core/automations", () => ({
   insertAutomationAction: () => Promise.resolve(),
   placeAutomationAction: () => Promise.resolve(),
   launchAutomation: hoisted.launch,
+  // An agent's step as the entry: the dialog every start opens asks for a text and files.
+  useLaunchAsks: () => ({ reads: "words", axes: [] }),
+  NOTHING_HANDED: { text: "", files: [], title: "", notes: "", classification: [] },
   stopRun: hoisted.stop,
   // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
   // it is the tab being reachable that matters.
@@ -176,7 +179,7 @@ describe("the automations screen", () => {
     expect(rows[0]).toContain(tf("auto.stepCount", { count: 3 }));
     await act(async () => { button(t("auto.start")).click(); });
     await handOver();
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true, { text: "", files: [] });
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true, { text: "", files: [], title: "", notes: "", classification: [] });
   });
 
   // Whether it could start is the press's state, and why not is read off it (`AMB-T-5523`).
@@ -314,7 +317,7 @@ describe("the automations screen opened from the sidebar", () => {
     await renderEverywhere();
     await act(async () => { button(t("auto.start")).click(); });
     await handOver();
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 3, [], true, { text: "", files: [] });
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 3, [], true, { text: "", files: [], title: "", notes: "", classification: [] });
     expect(goTo).not.toHaveBeenCalled();
   });
 
@@ -578,7 +581,7 @@ describe("the press that starts a run", () => {
     await open({ ready: true, blocks: [] }, false);
     await act(async () => { button(t("auto.start")).click(); });
     await handOver();
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], false, { text: "", files: [] });
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], false, { text: "", files: [], title: "", notes: "", classification: [] });
   });
 
   it("says nothing of its own once the launch lands", async () => {

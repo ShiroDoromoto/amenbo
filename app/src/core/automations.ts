@@ -33,6 +33,7 @@ import type {
   AutomationCfgDto,
   AutomationDetailDto,
   AutomationEdgeDto,
+  AutomationLaunchAsksDto,
   AutomationLaunchCheckDto,
   AutomationPortDto,
   AutomationRunCardDto,
@@ -783,6 +784,18 @@ async function startableAgents(
     .catch(() => null);
 }
 
+/** What a person hands a run as they start it, as the launch takes it. Empty is nothing handed. */
+export type Handed = {
+  text: string;
+  files: readonly string[];
+  title: string;
+  notes: string;
+  /** (axis, value) by name, one per axis. */
+  classification: readonly (readonly [string, string])[];
+};
+
+export const NOTHING_HANDED: Handed = { text: "", files: [], title: "", notes: "", classification: [] };
+
 /**
  * **Start a run of this automation.** Answers the run's id.
  *
@@ -800,8 +813,11 @@ export async function launchAutomation(
   projectId: number,
   folders: readonly string[],
   workspaceOpen: boolean,
-  /** What the person hands the run as it starts (`AMB-D-970`): a text, and files by their paths. */
-  handed: { text: string; files: readonly string[] } = { text: "", files: [] },
+  /**
+   * What the person hands the run as it starts (`AMB-D-970`): a text, and files by their paths, for an
+   * agent's step; a title, notes and a value per axis for the built-in that files a task.
+   */
+  handed: Handed = NOTHING_HANDED,
 ): Promise<AutomationRunStartedDto | null> {
   if (!inTauri()) return null;
   const agents = await startableAgents(projectId, folders);
@@ -811,7 +827,25 @@ export async function launchAutomation(
     workspaceOpen,
     text: handed.text === "" ? null : handed.text,
     files: handed.files.length === 0 ? null : [...handed.files],
+    title: handed.title === "" ? null : handed.title,
+    notes: handed.notes === "" ? null : handed.notes,
+    classification: handed.classification.length === 0 ? null : [...handed.classification],
   });
+}
+
+/**
+ * **What a launch of this automation asks for** — what its entry reads at launch (`AMB-D-970`): a
+ * text and files for an agent's step, a title, notes and a value on each axis for the built-in that
+ * files a task, nothing for any other. `null` until it is answered. Outside the app it is words, the
+ * one entry a browser iteration can hand anything to.
+ */
+export function useLaunchAsks(id: number): AutomationLaunchAsksDto | null {
+  const { data } = useQuery<AutomationLaunchAsksDto | null>(["automationLaunchAsks", id], () =>
+    inTauri()
+      ? invoke<AutomationLaunchAsksDto>("automation_launch_asks", { id })
+      : Promise.resolve({ reads: "words", axes: [] }),
+  );
+  return data ?? null;
 }
 
 /** Subscribing read of the launch check for one automation. */

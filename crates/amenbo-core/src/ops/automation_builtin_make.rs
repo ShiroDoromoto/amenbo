@@ -477,14 +477,7 @@ pub(crate) fn handed_at_launch(
     classification: &[(String, String)],
 ) -> Result<Option<String>> {
     let settings = crate::ops::automation_run::settings_of(conn, entry)?;
-    let answer = |name: &str| -> Result<Option<String>> {
-        settings
-            .iter()
-            .find(|cfg| cfg.name == name)
-            .and_then(|cfg| cfg.value.as_deref())
-            .map(|value| serde_json::from_str::<String>(value).map_err(Error::from))
-            .transpose()
-    };
+    let answer = |name: &str| answered(&settings, name);
     let mut values = fixed(conn, project_id, answer(CLASSIFY)?.as_deref())?;
     let written = (!classification.is_empty()).then(|| {
         classification.iter().map(|(axis, value)| format!("{axis}={value}")).collect::<Vec<_>>().join("\n")
@@ -495,6 +488,75 @@ pub(crate) fn handed_at_launch(
     }
     unfilable(conn, project_id, &values)?;
     Ok(written)
+}
+
+/// **One setting's answer where it is placed** (`settings`), as the text it was answered with.
+fn answered(settings: &[crate::model::AutomationCfg], name: &str) -> Result<Option<String>> {
+    settings
+        .iter()
+        .find(|cfg| cfg.name == name)
+        .and_then(|cfg| cfg.value.as_deref())
+        .map(|value| serde_json::from_str::<String>(value).map_err(Error::from))
+        .transpose()
+}
+
+/// **An axis the person launching a run whose entry this is gives a value on**, with the values open
+/// on it in the order the axis lists them. `required` is the project's: a launch that leaves it
+/// without a value is refused ([`handed_at_launch`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LaunchAxis {
+    pub name: String,
+    pub values: Vec<String>,
+    pub required: bool,
+}
+
+/// **The axes a person launching a run whose entry this is may give a value on** — the ones
+/// [`handed_at_launch`] accepts: those [`AI_AXES`] names, then those the project requires, each once,
+/// less those [`CLASSIFY`] already fixes where it is placed (`entry`).
+///
+/// A line on either setting that names no axis is left out rather than refused: this is what a launch
+/// dialog draws, and the launch itself refuses what it cannot file from, in its own words.
+pub(crate) fn launch_axes(
+    conn: &rusqlite::Connection,
+    entry: &crate::model::AutomationPlacement,
+    project_id: i64,
+) -> Result<Vec<LaunchAxis>> {
+    let settings = crate::ops::automation_run::settings_of(conn, entry)?;
+    let fixed = fixed(conn, project_id, answered(&settings, CLASSIFY)?.as_deref()).unwrap_or_default();
+    let required: Vec<i64> = read::required_dimensions(conn, project_id, crate::model::ClassifiedSide::Task)?
+        .into_iter()
+        .map(|(axis_id, _)| axis_id)
+        .collect();
+    let written = answered(&settings, AI_AXES)?.unwrap_or_default();
+    let named = written.lines().filter_map(|line| ai_axes(conn, project_id, line).ok()).flatten();
+    let mut offered: Vec<i64> = Vec::new();
+    for axis_id in named.chain(required.iter().copied()) {
+        if !offered.contains(&axis_id) && !fixed.iter().any(|(on, _)| *on == axis_id) {
+            offered.push(axis_id);
+        }
+    }
+    let mut axes = Vec::new();
+    for axis_id in offered {
+        let Some(dimension) = read::dimension(conn, axis_id)? else { continue };
+        axes.push(LaunchAxis {
+            name: dimension.name,
+            values: open_values(conn, axis_id)?,
+            required: required.contains(&axis_id),
+        });
+    }
+    Ok(axes)
+}
+
+/// The names of the values open on an axis, in the order the axis lists them.
+fn open_values(conn: &rusqlite::Connection, axis_id: i64) -> Result<Vec<String>> {
+    let mut values = Vec::new();
+    for id in read::open_dimension_value_ids(conn, axis_id)? {
+        if let Some(value) = read::dimension_value(conn, id)? {
+            values.push(value);
+        }
+    }
+    values.sort_by(|a, b| a.order_key.cmp(&b.order_key).then(a.id.cmp(&b.id)));
+    Ok(values.into_iter().map(|v| v.name).collect())
 }
 
 /// **Whether this execution is the entry, handed its inputs at launch** — the first step of a run that
@@ -520,15 +582,7 @@ pub(crate) fn choosable(conn: &rusqlite::Connection, project_id: i64, written: &
         let Ok(axes) = ai_axes(conn, project_id, axis) else { continue };
         for axis_id in axes {
             let Some(dimension) = read::dimension(conn, axis_id)? else { continue };
-            let mut values = Vec::new();
-            for id in read::open_dimension_value_ids(conn, axis_id)? {
-                if let Some(value) = read::dimension_value(conn, id)? {
-                    values.push(value);
-                }
-            }
-            values.sort_by(|a, b| a.order_key.cmp(&b.order_key).then(a.id.cmp(&b.id)));
-            let names: Vec<String> = values.into_iter().map(|v| v.name).collect();
-            lines.push(format!("{}: {}", dimension.name, names.join(", ")));
+            lines.push(format!("{}: {}", dimension.name, open_values(conn, axis_id)?.join(", ")));
         }
     }
     Ok(lines)
@@ -1092,6 +1146,60 @@ mod tests {
             refused(tx, with_values("an issue", &[("職能", "営業")]), "職能=営業");
             answer(tx, &p, CLASSIFY, "職能=設計");
             refused(tx, with_values("an issue", &[("職能", "実装")]), "already fixes");
+        });
+    }
+
+    /// **A launch asks for the axes it accepts a value on** — those offered to choose on, then those the
+    /// project requires, less those fixed where it is placed — each with its open values; an agent's
+    /// step as the entry asks for words, and a built-in that takes a task asks for nothing.
+    #[test]
+    fn a_launch_asks_for_the_axes_it_accepts_a_value_on() {
+        use crate::ops::automation_run::{launch_asks, LaunchAsks};
+        with_tx(|tx| {
+            let (automation, make, project) = entry(tx);
+            let p = Picture { automation: automation.clone(), project, first: make.clone(), make: make.clone() };
+            let asked = |tx: &WriteTx<'_>| match launch_asks(tx.conn(), automation.id).expect("asks") {
+                LaunchAsks::Task { axes } => axes,
+                other => panic!("the entry files a task: {other:?}"),
+            };
+            assert_eq!(asked(tx), Vec::new());
+
+            trades(tx, &p);
+            answer(tx, &p, AI_AXES, "職能\nどこにも無い軸");
+            let kind = crate::ops::dimension::add(
+                tx,
+                project,
+                crate::ops::dimension::NewDimension { name: "種別".into(), ..Default::default() },
+            )
+            .expect("axis");
+            crate::ops::dimension::value_add(tx, kind.id, "不具合", None).expect("value");
+            crate::ops::dimension::update(tx, kind.id, None, None, None, None, None, None, Some(true), None, None)
+                .expect("required");
+            let axis = |name: &str, values: &[&str], required: bool| LaunchAxis {
+                name: name.into(),
+                values: values.iter().map(|v| v.to_string()).collect(),
+                required,
+            };
+            assert_eq!(asked(tx), vec![axis("職能", &["実装", "設計"], false), axis("種別", &["不具合"], true)]);
+
+            answer(tx, &p, CLASSIFY, "職能=設計");
+            assert_eq!(asked(tx), vec![axis("種別", &["不具合"], true)]);
+
+            let another = |tx: &WriteTx<'_>, name: &str| {
+                automation::add(tx, project, NewAutomation { name: name.into(), ..Default::default() })
+                    .expect("automation")
+            };
+            let agent = another(tx, "agent");
+            let (_, work) = mk_placed(tx, &agent, "work", "work on it", "claude");
+            automation::set_entry(tx, agent.id, Some(work.id)).expect("entry");
+            assert_eq!(launch_asks(tx.conn(), agent.id).expect("asks"), LaunchAsks::Words);
+
+            let take = another(tx, "take");
+            let placed = automation::placement_add(tx, take.id, action(tx, "take_task").expect("action").id)
+                .expect("place it");
+            assert_eq!(launch_asks(tx.conn(), take.id).expect("asks"), LaunchAsks::Nothing);
+            automation::set_entry(tx, take.id, Some(placed.id)).expect("entry");
+            assert_eq!(launch_asks(tx.conn(), take.id).expect("asks"), LaunchAsks::Nothing);
         });
     }
 

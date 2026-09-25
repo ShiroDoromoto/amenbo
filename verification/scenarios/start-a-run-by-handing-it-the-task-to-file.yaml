@@ -8,13 +8,18 @@
 # turned away — the built-in files from a title, not from a text for an agent to read. Each is refused
 # before any run is made. A run started at a terminal opens no step, so what is read is the run it
 # started.
+#
+# The screen asks the same three things in the dialog every start opens — a title, notes, and a value
+# on each axis the entry offers — and nothing an agent's step reads. The run it starts files the task,
+# takes it and closes it, so it is read on the history tab.
 id: start-a-run-by-handing-it-the-task-to-file
 title: A run whose entry files a task starts with the title and classification it is handed
 description: >
   Place the built-in that files a task as an automation's entry, set to take the task it files, then
   close it. Start it from the terminal handing a title, notes and a value on the axis the project
   requires, and read the run under way. Start it with no title, with no value on that axis, and with
-  a text, and read each refused.
+  a text, and read each refused. On screen, start it from the dialog with a title, notes and a value
+  typed in and chosen, and read the run completed on the history tab.
 given:
   # The axis the road requires. Values first: an axis offering none cannot be required.
   - { type: action, domain: dimension, op: create, with: { name: 職種 } }
@@ -78,3 +83,64 @@ steps_cli:
       text: nothing here reads this
       dim: 職種=エンジニア
       refused: invalid
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  # Every task has to carry a value on it from here on.
+  - { type: action, domain: dimension, op: required, with: { dimension: 職種, required: true } }
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - { type: action, domain: automation, op: pick-box, with: { builtin: make_task } }
+  - { type: action, domain: automation, op: answer-choice, with: { builtin: make_task, setting: 起票したタスク, value: "進行中にして、出口「起票して着手した」へ進む" } }
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+      title: the login page loses the password field on a narrow window
+      notes: seen on a phone held upright
+      dim: 職種=エンジニア
+    as: run
+
+  # Filed, taken and closed: the run is over, and not failed.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: history
+
+  - type: assert
+    domain: automation
+    op: history-row
+    with:
+      target: run
+      state: completed

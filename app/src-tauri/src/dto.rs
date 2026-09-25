@@ -3674,6 +3674,33 @@ pub struct AutomationRunStartedDto {
     pub(crate) run: i64,
 }
 
+/// **What a launch asks the person starting it for** — what the entry reads at launch
+/// ([`amenbo_core::ops::automation_run::LaunchAsks`]), so the dialog every press opens asks for that
+/// and nothing else (`AMB-D-970`).
+///
+/// `reads` is `"words"` for an agent's step (a text and files), `"task"` for the built-in that files a
+/// task (a title, notes and a value on each of `axes`), and `"nothing"` for any other entry. `axes` is
+/// empty unless `reads` is `"task"`.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchAsksDto {
+    #[ts(type = "\"words\" | \"task\" | \"nothing\"")]
+    pub(crate) reads: String,
+    pub(crate) axes: Vec<AutomationLaunchAxisDto>,
+}
+
+/// **An axis a launch asks a value on**, with the values open on it in the axis's own order.
+/// `required` is the project's: a launch that gives it none is refused.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchAxisDto {
+    pub(crate) name: String,
+    pub(crate) values: Vec<String>,
+    pub(crate) required: bool,
+}
+
 /// **A step of a run, opened** — what the workspace stands a terminal on
 /// ([`amenbo_core::ops::automation_step::open`]).
 ///

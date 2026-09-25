@@ -926,6 +926,7 @@ export const hi: Translation = {
     "auto.place.agentOf": "{step} कौन चलाएगा",
     "auto.place.modelOf": "{step} का मॉडल",
     "auto.start": "शुरू करें",
+    "auto.launch.see": "चित्र में देखें",
     "auto.startOne": "एक ऑटोमेशन शुरू करें",
     "auto.pic.empty": "अभी कुछ भी नहीं रखा गया है।",
     "auto.pic.lap": "एक कार्य",

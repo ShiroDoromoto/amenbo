@@ -923,6 +923,7 @@ export const ko: Translation = {
     "auto.place.agentOf": "{step}을(를) 누구에게 맡길지",
     "auto.place.modelOf": "{step}의 모델",
     "auto.start": "시작하기",
+    "auto.launch.see": "그림에서 보기",
     "auto.startOne": "오토메이션 시작",
     "auto.pic.empty": "아직 아무것도 놓여 있지 않습니다",
     "auto.pic.lap": "작업 하나",

@@ -938,6 +938,7 @@ export const es: Translation = {
     "auto.place.agentOf": "Quién ejecuta {step}",
     "auto.place.modelOf": "Modelo para {step}",
     "auto.start": "Iniciar",
+    "auto.launch.see": "Ver en el diagrama",
     "auto.startOne": "Iniciar una automatización",
     "auto.pic.empty": "Todavía no hay nada colocado",
     "auto.pic.lap": "Una tarea",

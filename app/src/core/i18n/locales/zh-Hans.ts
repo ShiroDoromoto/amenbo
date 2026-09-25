@@ -928,6 +928,7 @@ export const zhHans: Translation = {
     "auto.place.agentOf": "{step} 由谁执行",
     "auto.place.modelOf": "{step} 的模型",
     "auto.start": "启动",
+    "auto.launch.see": "在图中查看",
     "auto.startOne": "启动一个自动化",
     "auto.pic.empty": "还没有放置任何内容",
     "auto.pic.lap": "一件任务",

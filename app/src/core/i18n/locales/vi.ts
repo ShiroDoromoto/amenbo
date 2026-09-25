@@ -927,6 +927,7 @@ export const vi: Translation = {
     "auto.place.agentOf": "Ai thực hiện {step}",
     "auto.place.modelOf": "Mô hình cho {step}",
     "auto.start": "Chạy",
+    "auto.launch.see": "Xem trên sơ đồ",
     "auto.startOne": "Bắt đầu một tự động hoá",
     "auto.pic.empty": "Chưa đặt gì cả",
     "auto.pic.lap": "Một công việc",

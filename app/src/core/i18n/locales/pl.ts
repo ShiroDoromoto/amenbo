@@ -943,6 +943,7 @@ export const pl: Translation = {
     "auto.place.agentOf": "Kto wykonuje {step}",
     "auto.place.modelOf": "Model dla {step}",
     "auto.start": "Uruchom",
+    "auto.launch.see": "Pokaż na schemacie",
     "auto.startOne": "Uruchom automatyzację",
     "auto.pic.empty": "Nic jeszcze nie umieszczono",
     "auto.pic.lap": "Jedno zadanie",

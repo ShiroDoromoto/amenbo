@@ -939,6 +939,7 @@ export const ptBR: Translation = {
     "auto.place.agentOf": "Quem executa {step}",
     "auto.place.modelOf": "Modelo para {step}",
     "auto.start": "Iniciar",
+    "auto.launch.see": "Ver no diagrama",
     "auto.startOne": "Iniciar uma automação",
     "auto.pic.empty": "Ainda não há nada colocado",
     "auto.pic.lap": "Uma tarefa",

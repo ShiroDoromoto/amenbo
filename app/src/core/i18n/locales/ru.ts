@@ -943,6 +943,7 @@ export const ru: Translation = {
     "auto.place.agentOf": "Кто выполняет {step}",
     "auto.place.modelOf": "Модель для {step}",
     "auto.start": "Запустить",
+    "auto.launch.see": "Показать на схеме",
     "auto.startOne": "Запустить автоматизацию",
     "auto.pic.empty": "Пока ничего не размещено",
     "auto.pic.lap": "Одна задача",

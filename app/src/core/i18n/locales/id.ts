@@ -927,6 +927,7 @@ export const id: Translation = {
     "auto.place.agentOf": "Siapa yang menjalankan {step}",
     "auto.place.modelOf": "Model untuk {step}",
     "auto.start": "Mulai",
+    "auto.launch.see": "Lihat di gambar",
     "auto.startOne": "Mulai sebuah otomasi",
     "auto.pic.empty": "Belum ada yang ditempatkan",
     "auto.pic.lap": "Satu tugas",

@@ -3942,28 +3942,29 @@ impl Instructor {
             ),
             // **Making an action from the library's own list.** It takes a name and a reach and no
             // prompt — the prompt is a step's, and there is no step until the build screen the press
-            // lands on puts one in. The reach pulldown starts on nothing picked, so the
+            // lands on puts one in. The reach switch beside the name starts with neither picked, so the
             // operator picks one either way: this project's where the road names none.
             (Domain::Automation, "action-make") => format!(
-                "On the actions tab, press the button that adds an action, write \"{}\" as its name, {}, and press the button that makes it. Confirm the action build screen for it opens in place of the list.",
+                "On the actions tab, press the button that makes an action, write \"{}\" as its name, {}, and press the button that makes it and opens it. Confirm the action build screen for it opens in place of the list.",
                 req(with, "name")?,
                 match arg_str(with, "reach") {
-                    None | Some("project") => "set where it is kept to this project's library".to_string(),
-                    Some("device") => "set where it is kept to the global library".to_string(),
+                    None | Some("project") => "in the switch beside it pick this project's library".to_string(),
+                    Some("device") => "in the switch beside it pick the global library".to_string(),
                     Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
                 }
             ),
             // Moving an action to the other library, from the "actions" tab of the entrance that owns
             // it now — the one place it is changed from: a project's own is sent to the global
-            // library from that project's automations screen in one press; a global one is sent into
-            // a project from the sidebar's automations, which asks which project under the row first.
+            // library from that project's automations screen; a global one is sent into a project from
+            // the sidebar's automations, which asks which project under the row. Either is picked from
+            // the row's "⋯" menu and then confirmed by a second press under the row.
             (Domain::Automation, "action-scope") => match req(with, "reach")? {
                 "device" => format!(
-                    "Open the automations screen of the project on the ledger, stand on the actions tab, and on the row for \"{}\" press the button that moves it to the global library.",
+                    "Open the automations screen of the project on the ledger, stand on the actions tab, and on the row for \"{}\" open its \"⋯\" menu, pick the item that moves it to the global library, and press the button under the row that moves it there.",
                     self.target_label(with)
                 ),
                 "project" => format!(
-                    "In the sidebar, press the smart view for automations and stand on the actions tab. On the row for \"{}\" press the button that moves it to a project, pick {} in the list that opens under the row, and press the button that moves it.",
+                    "In the sidebar, press the smart view for automations and stand on the actions tab. On the row for \"{}\" open its \"⋯\" menu, pick the item that moves it to a project, pick {} in the list that opens under the row, and press the button that moves it.",
                     self.target_label(with),
                     match with.get("project").and_then(|v| v.as_str()) {
                         Some(name) => format!(
@@ -8815,7 +8816,7 @@ steps_gui:
         assert!(lines[16].contains("nothing reaches one of a box's required inputs"), "{}", lines[16]);
         assert!(lines[19].contains("\"work\"") && lines[19].contains("\"build\""), "{}", lines[19]);
         assert!(
-            lines.iter().any(|l| l.contains("adds an action") && l.contains("\"Triage\"") && l.contains("the global library")),
+            lines.iter().any(|l| l.contains("makes an action") && l.contains("\"Triage\"") && l.contains("the global library")),
             "the action made from the list is said with its reach",
         );
         let n = lines.len();

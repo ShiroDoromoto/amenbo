@@ -1666,20 +1666,34 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
   font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: 0.07em; color: var(--c-text-faint);
 }
 .actlib { display: flex; flex-direction: column; gap: var(--s-2); }
-.actlib__head { display: flex; align-items: center; gap: var(--s-2); }
-.actlib__head .btn { margin-inline-start: auto; }
-.actlib__make {
-  display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--s-2);
-  padding: var(--s-2); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
-  background: var(--c-sunken-pic) var(--c-sunken);
-}
-.actlib__field { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-xs); color: var(--c-text-faint); }
-.actlib__field input { width: 18em; max-width: 100%; }
-.actlib__said { flex-basis: 100%; margin: 0; font-size: var(--fs-xs); color: var(--c-text-faint); }
-.actlib__tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+/* Search, the narrowing and the press that opens the make form, on one row — the press at the far
+   end. */
+.actlib__tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.actlib__make-open { margin-inline-start: auto; }
 /* The search grows with the row it is on, past the cap a box to fill in has (`--measure-form`): it
    is the width of the list it narrows, not one value. */
 .actlib__search { flex: 1 1 180px; min-width: 0; max-width: none; }
+/* The make form, on one line: a name, a reach, and the press named for where it lands. */
+.actlib__make {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2);
+  padding: var(--s-2); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-sunken-pic) var(--c-sunken);
+}
+.actlib__makename { flex: 1 1 12em; min-width: 0; }
+.actlib__make > .errortext { flex-basis: 100%; }
+/* A square switch — the narrowing, and the reach a new action is made in. Square so it never reads as
+   the round reach chip a row wears, which cannot be pressed. */
+.actseg {
+  display: inline-flex; overflow: hidden;
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
+}
+.actseg__one {
+  font: inherit; font-size: var(--fs-xs); padding: 2px var(--s-2); cursor: pointer;
+  border: 0; background: none; color: var(--c-text-muted);
+}
+.actseg__one + .actseg__one { border-inline-start: var(--border-w) var(--border-style) var(--c-edge); }
+.actseg__one:hover { color: var(--c-text); }
+.actseg__one--on, .actseg__one--on:hover { background: var(--c-accent-weak); color: var(--c-accent); }
 .actchip {
   font: inherit; font-size: var(--fs-xs); padding: 2px var(--s-2); border-radius: 999px; cursor: pointer;
   border: var(--border-w) var(--border-style) var(--c-edge); background: none; color: var(--c-text-muted);
@@ -1714,6 +1728,12 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 .actlib__line > .actlib__row { min-width: 0; }
 .actlib__moveslot { grid-column: 5; display: flex; justify-content: flex-end; padding-inline-end: var(--s-2); }
 .actlib__moveslot > .btn { white-space: nowrap; }
+/* The row's "⋯": the moves and the delete, which the entrance that owns the action is the one to make. */
+.actlib__more {
+  display: inline-flex; align-items: center; padding: 2px var(--s-1);
+  border: 0; border-radius: var(--r-sm); background: none; color: var(--c-text-muted); cursor: pointer;
+}
+.actlib__more:hover { background: var(--c-hover); color: var(--c-text); }
 .actlib__moveplace {
   grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2);
   padding: 0 var(--s-2) var(--s-2);
@@ -1721,6 +1741,10 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 .actlib__rows > li + li { border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
 .actlib__num { text-align: end; font-variant-numeric: tabular-nums; }
 .actlib__zero { font-size: var(--fs-xs); color: var(--c-text-faint); }
+/* An action with no step — what stops a launch, so it wears the colour of something to heed. */
+.actlib__empty { font-size: var(--fs-xs); color: var(--c-heed); }
+/* A built-in's name with its lock beside it. */
+.actlib__title { display: inline-flex; align-items: center; gap: var(--s-1); }
 /* Which reach holds an action. The device's is the accent; a project's wears the project-ish amber. */
 .actscope {
   display: inline-flex; align-items: center; gap: var(--s-1); white-space: nowrap;
@@ -1752,6 +1776,10 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
   font-size: var(--fs-md); color: var(--c-text-muted);
 }
 .actdecl__used { font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* A built-in's head ends on how many use it, at the far end (`../screens/AutomationBuiltinScreen`). */
+.actbuild__head > .actdecl__used { margin-inline-start: auto; }
+/* What a built-in does, as the first thing under its head — the sentence is the definition's own. */
+.actdecl__does { margin: 0 0 var(--s-2); font-size: var(--fs-md); }
 .actdecl .btn--on { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-weak); }
 .actdecl__rows {
   display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--s-1) var(--s-3);

@@ -364,6 +364,21 @@ pub fn automation_action_set_scope(id: i64, project_id: Option<i64>) -> Result<W
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
+/// **Delete a library action with everything inside it** — its steps, their declarations and the
+/// picture they are drawn into ([`amenbo_core::ops::automation::action_delete`]).
+///
+/// **Core refuses it while a placement stands on it**, saying how many: the placement would be left
+/// standing on nothing, and what should stand there instead is not the list's to guess. The refusal
+/// reaches the screen as core's sentence, the way a refused move does.
+#[tauri::command]
+pub fn automation_action_remove(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automationActions"]))
+}
+
 /// **Change the step one library action opens.** Only what is `Some` is written.
 ///
 /// The fields are the step's, not the placement's: a prompt and the flags belong to the terminal

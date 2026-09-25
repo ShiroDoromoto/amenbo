@@ -14,8 +14,11 @@
 // one act to the reader.
 //
 // And on the built-ins (`AMB-D-964`): **they are listed after the library's rows at both entrances,
-// saying they are Amenbo's own**, narrowed by their own chip and by the box; **a press opens one to be
-// read**, by its key; and **nothing on the row moves one**.
+// saying they are Amenbo's own** under a lock, narrowed by their own segment and by the box; **a press
+// opens one to be read**, by its key; and **nothing on the row moves one**.
+//
+// And on the row's "⋯" (`AMB-T-5525`): **moving and deleting are each picked, then confirmed under
+// the row**, so nothing is written on the first press whichever it is.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,6 +29,7 @@ const hoisted = vi.hoisted(() => ({
   builtins: [] as AutomationBuiltinDto[],
   add: vi.fn(async (_name: string, _project: number | null) => {}),
   scope: vi.fn(async (_id: number, _project: number | null) => {}),
+  remove: vi.fn(async (_id: number) => {}),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -33,6 +37,7 @@ vi.mock("../core/automations", () => ({
   useAutomationBuiltins: () => hoisted.builtins,
   addAutomationAction: hoisted.add,
   setAutomationActionScope: hoisted.scope,
+  removeAutomationAction: hoisted.remove,
 }));
 vi.mock("../mock/adapter", () => ({
   dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }, { id: 2, name: "site" }] },
@@ -84,16 +89,35 @@ function button(label: string): HTMLButtonElement {
   return found;
 }
 
+/** The button whose words are exactly these — "Make" is inside "Make and open", so `button` would not
+ *  tell the two apart. */
+function exact(label: string): HTMLButtonElement {
+  const found = [...container.querySelectorAll("button")].find((b) => b.textContent?.trim() === label);
+  if (!found) throw new Error(`no button reading ${label}`);
+  return found;
+}
+
+/** Open a row's "⋯" and pick an item from it. */
+async function fromMenu(item: string, row = 0) {
+  const more = container.querySelectorAll<HTMLButtonElement>(".actlib__more")[row]!;
+  await act(async () => { more.click(); });
+  const picked = [...document.querySelectorAll<HTMLButtonElement>(".menu__item")].find((b) => b.textContent === item)!;
+  await act(async () => { picked.click(); });
+}
+
+/** The second press under a row, which is what writes. */
+const confirmUnder = (label: string) =>
+  [...container.querySelectorAll<HTMLButtonElement>(".actlib__moveplace button")].find((b) => b.textContent === label)!;
+
 /** The name box of the make form — the list's search box stands beside it. */
 const nameBox = () => container.querySelector<HTMLInputElement>(".actlib__make input")!;
 
 /** Pick a reach in the make form, which starts with none picked. */
 async function pickReach(value: "project" | "global") {
-  const reach = container.querySelector<HTMLSelectElement>(".actlib__make select")!;
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(reach, value);
-    reach.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  const label = t(value === "project" ? "auto.actions.reachProject" : "auto.actions.reachGlobal");
+  const one = [...container.querySelectorAll<HTMLButtonElement>(".actlib__make .actseg__one")]
+    .find((b) => b.textContent === label)!;
+  await act(async () => { one.click(); });
 }
 
 /** Typing into a controlled field: React listens for `input`, not for the value being assigned. */
@@ -119,9 +143,10 @@ afterEach(() => {
 });
 
 describe("the library", () => {
-  it("says an empty library is empty", async () => {
+  it("is one press that makes the first action while nothing is in it", async () => {
     await render();
-    expect(container.textContent).toContain(t("auto.actions.empty"));
+    expect(container.textContent?.trim()).toBe(t("auto.actions.makeFirst"));
+    expect(container.querySelector(".actlib__search")).toBeNull();
   });
 
   it("draws both reaches as one list, each row saying which one holds it", async () => {
@@ -150,6 +175,12 @@ describe("the library", () => {
       (one) => one.querySelector(".auto__note")?.textContent ?? null,
     );
     expect(notes).toEqual(["Says what the run did", null]);
+  });
+
+  it("says an action with no step is empty, in the colour of what stops a launch", async () => {
+    hoisted.actions = [action({ steps: 0 })];
+    await render();
+    expect(container.querySelector(".actlib__empty")?.textContent).toBe(t("auto.actions.stepsEmpty"));
   });
 
   it("says in words that nobody runs one, rather than counting to zero", async () => {
@@ -193,34 +224,36 @@ describe("opening one", () => {
 describe("making one", () => {
   /** Open the form the way a reader does: press the one control the tab draws over the list. */
   async function openForm() {
+    hoisted.actions = [action({ id: 3, name: "Take one" })];
     await render();
-    await act(async () => { button(t("auto.actions.add")).click(); });
+    await act(async () => { exact(t("auto.actions.make")).click(); });
   }
 
-  it("offers the way to make one while the library is empty", async () => {
+  it("opens the form from the empty library's one press", async () => {
     await render();
-    expect(container.textContent).toContain(t("auto.actions.empty"));
-    expect(button(t("auto.actions.add"))).not.toBeNull();
+    await act(async () => { exact(t("auto.actions.makeFirst")).click(); });
+    expect(nameBox()).not.toBeNull();
   });
 
   it("asks for a name and a reach, and for no prompt", async () => {
     await openForm();
     expect(container.querySelector(".actlib__make input")).not.toBeNull();
-    expect(container.querySelector("select")).not.toBeNull();
+    expect(container.querySelectorAll(".actlib__make .actseg__one")).toHaveLength(2);
     expect(container.querySelector("textarea")).toBeNull();
   });
 
   it("makes nothing until a reach is picked", async () => {
     await openForm();
     type(nameBox(), "Review");
-    expect(button(t("auto.actions.add")).disabled).toBe(true);
+    expect(container.querySelector(".actlib__make .actseg__one--on")).toBeNull();
+    expect(exact(t("auto.actions.makeOpen")).disabled).toBe(true);
   });
 
   it("makes it in this project's library when that reach is picked", async () => {
     await openForm();
     type(nameBox(), "Review");
     await pickReach("project");
-    await act(async () => { button(t("auto.actions.add")).click(); });
+    await act(async () => { exact(t("auto.actions.makeOpen")).click(); });
     expect(hoisted.add).toHaveBeenCalledWith("Review", 1);
   });
 
@@ -228,25 +261,24 @@ describe("making one", () => {
     await openForm();
     type(nameBox(), "Review");
     await pickReach("global");
-    await act(async () => { button(t("auto.actions.add")).click(); });
+    await act(async () => { exact(t("auto.actions.makeOpen")).click(); });
     expect(hoisted.add).toHaveBeenCalledWith("Review", null);
   });
 
   it("writes nothing while the name is blank", async () => {
     await openForm();
-    expect(button(t("auto.actions.add")).disabled).toBe(true);
+    await pickReach("project");
+    expect(exact(t("auto.actions.makeOpen")).disabled).toBe(true);
   });
 
   it("opens the build screen on the row that was just made", async () => {
-    hoisted.actions = [action({ id: 3, name: "Take one" })];
     hoisted.add.mockImplementation(async (name: string) => {
       hoisted.actions = [...hoisted.actions, action({ id: 9, name })];
     });
-    await render();
-    await act(async () => { button(t("auto.actions.add")).click(); });
+    await openForm();
     type(nameBox(), "Review");
     await pickReach("project");
-    await act(async () => { button(t("auto.actions.add")).click(); });
+    await act(async () => { exact(t("auto.actions.makeOpen")).click(); });
     expect(opened).toEqual([9]);
   });
 });
@@ -269,23 +301,23 @@ describe("the library opened from the sidebar", () => {
   it("offers no reach to narrow to", async () => {
     hoisted.actions = [action({ global: true })];
     await renderDevice();
-    expect(container.querySelector(".actchip")).toBeNull();
+    expect(container.querySelector(".actseg")).toBeNull();
   });
 
-  it("makes it in the device's library, the one reach there is", async () => {
+  it("makes it in the device's library, the one reach there is, without asking", async () => {
+    hoisted.actions = [action({ global: true })];
     await renderDevice();
-    await act(async () => { button(t("auto.actions.add")).click(); });
-    const options = [...container.querySelectorAll(".actlib__make option")].map((one) => one.getAttribute("value"));
-    expect(options).toEqual(["global"]);
+    await act(async () => { exact(t("auto.actions.make")).click(); });
+    expect(container.querySelector(".actlib__make .actseg")).toBeNull();
     type(nameBox(), "Review");
-    await act(async () => { button(t("auto.actions.add")).click(); });
+    await act(async () => { exact(t("auto.actions.makeOpen")).click(); });
     expect(hoisted.add).toHaveBeenCalledWith("Review", null);
   });
 });
 
-// Moving a reach from the row, on the entrance that owns it now (`AMB-D-954`): a project moves its own
-// to the device's library in one press; the sidebar asks which project for a global one; a refusal
-// stays under the row in core's words.
+// Moving a reach from the row's "⋯", on the entrance that owns it now (`AMB-D-954`): a project moves
+// its own to the device's library, the sidebar asks which project for a global one, and either waits
+// for a second press under the row; a refusal stays there in core's words.
 describe("moving an action's reach", () => {
   beforeEach(() => {
     hoisted.scope.mockReset();
@@ -309,7 +341,9 @@ describe("moving an action's reach", () => {
     await renderAt(1);
     const moves = [...container.querySelectorAll(".actlib__moveslot button")];
     expect(moves).toHaveLength(1);
-    await act(async () => { button(t("auto.actions.toGlobal")).click(); });
+    await fromMenu(t("auto.actions.toGlobal"));
+    expect(hoisted.scope).not.toHaveBeenCalled();
+    await act(async () => { confirmUnder(t("auto.actions.toGlobal")).click(); });
     expect(hoisted.scope).toHaveBeenCalledWith(3, null);
     expect(opened).toEqual([]);
   });
@@ -317,9 +351,8 @@ describe("moving an action's reach", () => {
   it("asks which project before moving a global action from the sidebar", async () => {
     hoisted.actions = [action({ id: 5, name: "Shared", global: true })];
     await renderAt(null);
-    await act(async () => { button(t("auto.actions.toProject")).click(); });
-    const move = () => [...container.querySelectorAll<HTMLButtonElement>(".actlib__moveplace button")]
-      .find((b) => b.textContent === t("auto.actions.move"))!;
+    await fromMenu(t("auto.actions.toProject"));
+    const move = () => confirmUnder(t("auto.actions.move"));
     expect(move().disabled).toBe(true);
     const pick = container.querySelector<HTMLSelectElement>(".actlib__moveplace select")!;
     await act(async () => {
@@ -334,8 +367,49 @@ describe("moving an action's reach", () => {
     hoisted.actions = [action({ id: 3, global: false })];
     hoisted.scope.mockRejectedValue("placed by Nightly (7) in site");
     await renderAt(1);
-    await act(async () => { button(t("auto.actions.toGlobal")).click(); });
+    await fromMenu(t("auto.actions.toGlobal"));
+    await act(async () => { confirmUnder(t("auto.actions.toGlobal")).click(); });
     expect(container.querySelector(".actlib__moveplace")?.textContent).toContain("Nightly");
+  });
+});
+
+describe("deleting an action", () => {
+  beforeEach(() => {
+    hoisted.remove.mockReset();
+    hoisted.remove.mockResolvedValue(undefined);
+  });
+
+  it("deletes it only on the second press, under the row", async () => {
+    hoisted.actions = [action({ id: 3, global: false, usedBy: 0 })];
+    await render();
+    await fromMenu(t("auto.actions.remove"));
+    expect(hoisted.remove).not.toHaveBeenCalled();
+    await act(async () => { confirmUnder(t("auto.actions.remove")).click(); });
+    expect(hoisted.remove).toHaveBeenCalledWith(3);
+  });
+
+  it("writes nothing when the second press is cancelled", async () => {
+    hoisted.actions = [action({ id: 3, global: false })];
+    await render();
+    await fromMenu(t("auto.actions.remove"));
+    await act(async () => { confirmUnder(t("auto.actions.cancel")).click(); });
+    expect(container.querySelector(".actlib__moveplace")).toBeNull();
+    expect(hoisted.remove).not.toHaveBeenCalled();
+  });
+
+  it("keeps core's refusal under the row", async () => {
+    hoisted.actions = [action({ id: 3, global: false })];
+    hoisted.remove.mockRejectedValue("2 placement(s) stand on this action");
+    await render();
+    await fromMenu(t("auto.actions.remove"));
+    await act(async () => { confirmUnder(t("auto.actions.remove")).click(); });
+    expect(container.querySelector(".actlib__moveplace")?.textContent).toContain("placement");
+  });
+
+  it("offers no menu on a row this entrance does not own", async () => {
+    hoisted.actions = [action({ id: 5, global: true })];
+    await render();
+    expect(container.querySelector(".actlib__more")).toBeNull();
   });
 });
 
@@ -367,6 +441,7 @@ describe("the built-ins", () => {
     expect(all[1]).toContain("Take a task");
     expect(all[1]).toContain(t("auto.actions.reachBuiltin"));
     expect(all[1]).toContain(t("auto.actions.unused"));
+    expect(container.querySelectorAll(".auto__row")[1]!.querySelector('[data-icon="lock"]')).not.toBeNull();
   });
 
   it("are narrowed by their own chip, and left out by another reach's", async () => {
@@ -400,7 +475,7 @@ describe("the built-ins", () => {
         }),
       );
     });
-    expect(container.textContent).not.toContain(t("auto.actions.empty"));
+    expect(container.textContent).not.toContain(t("auto.actions.makeFirst"));
     expect(rows()[0]).toContain("Take a task");
   });
 });

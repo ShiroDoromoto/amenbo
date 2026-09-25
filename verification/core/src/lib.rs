@@ -4276,14 +4276,14 @@ const REGISTRY: &[OpSpec] = &[
     // Amenbo's own, in the machine's language, so the driver says what the built-in is and the
     // operator finds it by that.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after"], refs: &["action"], strings: &["after", "exit", "name", "reach", "builtin"], binds: false },
-    // The `+ output artefact` on a way out, and the dialog it opens.
+    // The `＋` on a way out's card, and the row it opens inside that card.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
     //
     // **The action build screen's own two.** Inside an action a picture has no line until two boxes
     // are joined, so `insert-box` has nothing to press on it: the first step, and every one after it
     // that is not put in on a line, comes from the press above the picture — `＋ First step` on an
-    // empty action and `＋ Step` once one is there, the same dialog either way. `exits` and `inputs`
-    // are what the dialog is to declare on it, read the way `insert-box` reads them.
+    // empty action and `＋ Step` once one is there, the same dialog either way. It asks a name and a
+    // prompt alone; what else the step declares is written on the panel afterwards (`declare`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-step", required: &["name", "prompt"], refs: &[], strings: &["name", "prompt"], binds: false },
     // Deleting the step the panel is showing. It takes what the step declared and every line naming
     // it, so the machine's own question stands between the press and the write, and the road answers

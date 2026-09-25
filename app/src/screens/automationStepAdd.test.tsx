@@ -5,14 +5,16 @@
 //
 // What these guard: **inside an action there is no library to pick from** (`AMB-D-949`) and the press
 // goes through that picture's own door — the line it was opened from, or the action itself where
-// there is no line yet (`AMB-T-5315`); **what the dialog took is what is sent**, ways out and inputs
-// together; **nothing is sent until the dialog has what a step cannot be made without**; **an action
+// there is no line yet (`AMB-T-5315`); **the two roads are named apart**, and only the one on a line
+// draws where it goes (`AMB-T-5526`); **what the dialog took — a name and a prompt — is what is
+// sent**; **nothing is sent until the dialog has what a step cannot be made without**; **an action
 // made on the spot is asked a name and a library and nothing else**, under a small picture of where
 // it goes and starting from the name the library was searched with, lands where it was asked for,
-// and hands its id on so the screen can go and build it; and, for the output artefact, **the name
+// and hands its id on so the screen can go and build it; and, for what a way out hands on, **the name
 // starts on the way out's own and stops following once somebody writes their own** — but only where
-// that way out hands on nothing yet. **No dialog closes from the backdrop or Escape** (`AMB-T-5363`)
-// — only its buttons do, so what was typed is not thrown away by a stray press.
+// that way out hands on nothing yet — asked in a row inside the way out's card rather than a dialog.
+// **No dialog closes from the backdrop or Escape** (`AMB-T-5363`) — only its buttons do, so what was
+// typed is not thrown away by a stray press.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -56,13 +58,6 @@ async function typeInto(box: HTMLInputElement | HTMLTextAreaElement, value: stri
   });
 }
 
-async function pick(select: HTMLSelectElement, value: string) {
-  await act(async () => {
-    select.value = value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-}
-
 beforeEach(() => {
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -84,11 +79,31 @@ describe("putting a step in inside an action", () => {
       root.render(
         createElement(AutomationStepAdd, {
           into,
+          where: "edgeId" in into ? { box: "書く", exit: "書けた", next: "見直す" } : null,
           onClose: () => undefined,
         }),
       );
     });
   }
+
+  it("asks a name and a prompt, and nothing else", async () => {
+    await open({ picture: "action", actionId: 4 });
+    expect(boxes()).toHaveLength(1);
+    expect(selects()).toHaveLength(0);
+    expect(document.body.querySelectorAll("textarea")).toHaveLength(1);
+  });
+
+  it("says it puts one in, and draws where, only on a line", async () => {
+    await open({ picture: "action", edgeId: 9 });
+    expect(document.body.querySelector(".autodlg__title")?.textContent).toBe(t("auto.act.insertTitle"));
+    expect([...document.body.querySelectorAll(".wheremark__box")].map((one) => one.textContent)).toEqual([
+      "書く",
+      "見直す",
+    ]);
+    await open({ picture: "action", actionId: 4 });
+    expect(document.body.querySelector(".autodlg__title")?.textContent).toBe(t("auto.act.addTitle"));
+    expect(document.body.querySelector(".wheremark")).toBeNull();
+  });
 
   it("offers no library to pick from — an action places no actions", async () => {
     await open({ picture: "action", edgeId: 9 });
@@ -100,28 +115,16 @@ describe("putting a step in inside an action", () => {
     await open({ picture: "action", edgeId: 9 });
     await typeInto(boxes()[0]!, "直す");
     await typeInto(document.body.querySelector("textarea")!, "やる");
-    await act(async () => button(t("auto.add.put")).click());
-    expect(hoisted.insertInside).toHaveBeenCalledWith(9, {
-      name: "直す",
-      prompt: "やる",
-      interactive: false,
-      exits: [],
-      inputs: [],
-    });
+    await act(async () => button(t("auto.act.insertPut")).click());
+    expect(hoisted.insertInside).toHaveBeenCalledWith(9, { name: "直す", prompt: "やる" });
   });
 
   it("adds the first step where the picture has no line to press", async () => {
     await open({ picture: "action", actionId: 4 });
     await typeInto(boxes()[0]!, "取る");
     await typeInto(document.body.querySelector("textarea")!, "やる");
-    await act(async () => button(t("auto.add.put")).click());
-    expect(hoisted.add).toHaveBeenCalledWith(4, {
-      name: "取る",
-      prompt: "やる",
-      interactive: false,
-      exits: [],
-      inputs: [],
-    });
+    await act(async () => button(t("auto.act.addPut")).click());
+    expect(hoisted.add).toHaveBeenCalledWith(4, { name: "取る", prompt: "やる" });
   });
 });
 
@@ -230,14 +233,30 @@ describe("declaring what a way out hands on", () => {
   it("stops following the way out once somebody writes their own", async () => {
     await open([]);
     await typeInto(boxes()[0]!, "下書き");
-    await pick(selects()[0]!, "file");
-    await pick(selects()[1]!, "no");
+    await act(async () => button(t("auto.kind.file")).click());
+    expect(button(t("auto.decl.required")).getAttribute("aria-pressed")).toBe("true");
+    await act(async () => button(t("auto.decl.required")).click());
     await act(async () => button(t("auto.out.add")).click());
     expect(hoisted.output).toHaveBeenCalledWith(3, {
       name: "下書き",
       kind: "file",
       required: false,
     });
+  });
+
+  // A row in the card rather than a dialog: nothing half written is lost by putting it away.
+  it("is put away by Escape or its ×", async () => {
+    const onClose = vi.fn();
+    await act(async () => {
+      root.render(createElement(AutomationOutputAdd, { exit: { id: 3, name: "drafted", outputs: [] }, onClose }));
+    });
+    expect(document.body.querySelector(".modal__overlay")).toBeNull();
+    await act(async () => {
+      boxes()[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(onClose).toHaveBeenCalledOnce();
+    await act(async () => document.body.querySelector<HTMLButtonElement>(".autoout__close")!.click());
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -256,8 +275,6 @@ describe("leaving either dialog", () => {
         onMade: () => undefined,
         onClose,
       }),
-    "the one that declares what a way out hands on": (onClose: () => void) =>
-      createElement(AutomationOutputAdd, { exit: { id: 3, name: "drafted", outputs: [] }, onClose }),
   };
 
   for (const [which, make] of Object.entries(dialogs)) {

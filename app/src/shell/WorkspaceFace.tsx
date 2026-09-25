@@ -45,6 +45,7 @@ import { invoke } from "../core/ipc";
 import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
+import { builtinWord } from "../core/builtinWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
@@ -1702,10 +1703,12 @@ export function WorkspaceFace({
                       run: frame.run,
                       automation: on.automationName,
                       seq: on.seq,
-                      step: on.name,
+                      // A built-in's name, and the action standing where it was opened from, are
+                      // drawn in the screen's language (`builtinWord`); an agent's step has no key.
+                      step: builtinWord(builtin?.key, on.name),
                       // Which spot of the picture this step was opened from, said by the action
                       // standing there (`AMB-D-949`). Null where that spot has since been taken off.
-                      action: on.actionName ?? null,
+                      action: on.actionName === undefined ? null : builtinWord(builtin?.key, on.actionName),
                       task: on.task ?? null,
                     }}
                     builtin={builtin ?? null}

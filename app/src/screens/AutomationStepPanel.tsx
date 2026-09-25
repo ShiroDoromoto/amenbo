@@ -45,6 +45,7 @@ import {
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
 import { errText, isStatus, statusLabel, t, tf, tn } from "../core/i18n";
+import { builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { ReachChip } from "./AutomationActionsTab";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
@@ -171,12 +172,15 @@ function CfgRow({ placementId, builtin, cfg, run }: {
   const filter: TaskFilter = readFilter(cfg.value);
   const sort = readSort(cfg.value);
   const choices = choicesOf(cfg.options);
+  // A built-in's setting and its choices are drawn in the screen's language; what is written is still
+  // the store's word, which is what the built-in reads its answer by.
+  const shown = builtinWord(builtin, cfg.name);
 
   return (
     <div className="autostep__cfg">
       <div>
         <DeclChip
-          name={cfg.name}
+          name={shown}
           kind={CFG_KINDS.find((one) => one.id === cfg.kind)?.label() ?? cfg.kind}
           required={cfg.required}
           tone="cfg"
@@ -213,14 +217,14 @@ function CfgRow({ placementId, builtin, cfg, run }: {
 
       {cfg.kind === "choice" && (
         <select
-          aria-label={cfg.name}
+          aria-label={shown}
           value={readText(cfg.value)}
           onChange={(e) => answer(writeText(e.target.value))}
         >
           <option value="">—</option>
           {choices.map((one) => (
             <option key={one} value={one}>
-              {one}
+              {builtinWord(builtin, one)}
             </option>
           ))}
         </select>
@@ -229,7 +233,7 @@ function CfgRow({ placementId, builtin, cfg, run }: {
       {cfg.kind === "number" && (
         <input
           type="number"
-          aria-label={cfg.name}
+          aria-label={shown}
           value={number}
           onChange={(e) => setNumber(e.target.value)}
           onBlur={() => writeNumber(number) !== (cfg.value ?? null) && answer(writeNumber(number))}
@@ -238,7 +242,7 @@ function CfgRow({ placementId, builtin, cfg, run }: {
 
       {(cfg.kind === "text" || cfg.kind === "folder") && (
         <input
-          aria-label={cfg.name}
+          aria-label={shown}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={() => writeText(text) !== (cfg.value ?? null) && answer(writeText(text))}
@@ -325,13 +329,14 @@ function InputRow({
   const now = wireInto(graph, placement.id, input.name);
   const choices = wireChoices(graph, placement.id, input);
   const picked = now === undefined ? "" : choiceKey(now.fromId, now.fromExitName, now.fromPortName);
+  const inputName = builtinWord(placement.builtin, input.name);
   return (
     <div className="autostep__wire">
       <div>
-        <DeclChip name={input.name} kind={kindLabel(input.kind)} required={input.required} tone={input.kind} />
+        <DeclChip name={inputName} kind={kindLabel(input.kind)} required={input.required} tone={input.kind} />
       </div>
       <select
-        aria-label={input.name}
+        aria-label={inputName}
         value={picked}
         onChange={(e) => {
           const chosen = choices.find((one) => one.key === e.target.value);
@@ -351,7 +356,11 @@ function InputRow({
         <option value="">{t("auto.step.unwired")}</option>
         {choices.map((one) => (
           <option key={one.key} value={one.key}>
-            {`${one.boxName} · ${exitLabel(one.exitName)} · ${one.portName}`}
+            {[
+              builtinWord(one.builtin, one.boxName),
+              exitLabel(one.exitName === undefined ? undefined : builtinWord(one.builtin, one.exitName)),
+              builtinWord(one.builtin, one.portName),
+            ].join(" · ")}
           </option>
         ))}
       </select>
@@ -418,11 +427,11 @@ export function AutomationStepPanel({
         <span className="autostep__label">{t("auto.place.action")}</span>
         <div className="autoplace__action">
           <div className="autoplace__actionhead">
-            <span className="autoplace__actionname">{placement.name}</span>
+            <span className="autoplace__actionname">{builtinWord(placement.builtin, placement.name)}</span>
             {action !== null && <ReachChip global={action.global} builtin={placement.builtin !== undefined} />}
           </div>
           {action !== null && action.note.trim() !== "" && (
-            <div className="autoplace__note">{action.note}</div>
+            <div className="autoplace__note">{builtinWord(placement.builtin, action.note)}</div>
           )}
           {action !== null && action.steps.length === 0 && (
             <div className="autoplace__empty">{t("auto.place.empty")}</div>
@@ -499,9 +508,11 @@ export function AutomationStepPanel({
               <li key={one.id} className="autostep__exit">
                 <div className="autostep__exithead">
                   <span className="actport actport--exit">
-                    {one.name ?? t("auto.step.exitUnnamed")}
+                    {one.name === undefined ? t("auto.step.exitUnnamed") : builtinWord(placement.builtin, one.name)}
                     {one.outputs.length > 0 && (
-                      <span className="actport__kind">{one.outputs.map((out) => out.name).join("・")}</span>
+                      <span className="actport__kind">
+                        {one.outputs.map((out) => builtinWord(placement.builtin, out.name)).join("・")}
+                      </span>
                     )}
                   </span>
                 </div>

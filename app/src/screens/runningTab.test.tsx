@@ -40,6 +40,7 @@ function move(what: string): Promise<void> {
 }
 
 import { t, tf } from "../core/i18n";
+import { builtinWord } from "../core/builtinWords";
 import { RunningTab } from "./RunningTab";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -136,6 +137,20 @@ describe("the running tab", () => {
     await render([run({ stepName: "Take one", stepsDone: 2 })]);
     const row = container.querySelector(".autorun__go")?.textContent ?? "";
     expect(row).toContain(tf("auto.run.step", { n: 2, step: "Take one" }));
+  });
+
+  /// A built-in's step is written into the run in the store's Japanese; the row draws it in the
+  /// screen's language, by the key the step carries. An agent's step carries none and is left alone.
+  it("says a built-in's step in the screen's language", async () => {
+    await render([
+      run({ run: 1, builtin: "take_task", stepName: "タスクに着手する", actionName: "タスクに着手する", stepsDone: 1 }),
+      run({ run: 2, stepName: "タスクに着手する", stepsDone: 1 }),
+    ]);
+    const [built, own] = [...container.querySelectorAll(".autorun__step")].map((one) => one.textContent);
+    const name = builtinWord("take_task", "タスクに着手する");
+    expect(name).not.toBe("タスクに着手する");
+    expect(built).toBe(tf("auto.run.step", { n: 1, step: tf("auto.run.inAction", { action: name, step: name }) }));
+    expect(own).toBe(tf("auto.run.step", { n: 1, step: "タスクに着手する" }));
   });
 
   it("reads a pause that has been asked for as neither running nor paused", async () => {

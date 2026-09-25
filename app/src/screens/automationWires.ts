@@ -20,6 +20,8 @@ export type WireChoice = {
   key: string;
   boxId: number;
   boxName: string;
+  /** The built-in the box is, by its key — its words are drawn in the screen's language (`builtinWord`). */
+  builtin?: string;
   /** The way out it leaves by. Absent is the unnamed one. */
   exitName?: string;
   portName: string;
@@ -65,6 +67,7 @@ export function wireChoices(
           key: choiceKey(box.id, exit.name, port.name),
           boxId: box.id,
           boxName: box.name,
+          builtin: box.builtin,
           exitName: exit.name,
           portName: port.name,
         });
@@ -111,6 +114,7 @@ export function boundaryChoices(
         key: choiceKey(box.id, exit.name, one.name),
         boxId: box.id,
         boxName: box.name,
+        builtin: box.builtin,
         exitName: exit.name,
         portName: one.name,
       });

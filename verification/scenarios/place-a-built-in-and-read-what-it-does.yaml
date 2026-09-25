@@ -9,11 +9,15 @@
 #
 # The road is the screen's alone. The terminal places a built-in by its key (`place-add`), and reads
 # no library the way the screen draws one.
+#
+# **Every word of a built-in is drawn in the machine's language**, so the road names it by its key and
+# what it declares by the words the store keeps them under — the same words the terminal writes. It
+# walks in any language the interface is drawn in.
 id: place-a-built-in-and-read-what-it-does
 title: A built-in is read from the library, put in on a line from its own head, and read again from its placement
 description: >
-  On the actions tab, open the built-in "タスクに着手する" and read what it does, the setting it reads
-  and its two ways out, with no automation running it yet. On an automation, put it in on the line
+  On the actions tab, open the built-in that takes a task (`take_task`) and read what it does, the two
+  settings it reads and its two ways out, with no automation running it yet. On an automation, put it in on the line
   leaving a library action, from the head for the built-ins in the panel the `+` opens, and read it on
   the picture. Press its box, open the action standing on it, and read the same screen again, now run
   by one automation.
@@ -38,14 +42,14 @@ steps_gui:
     domain: automation
     op: builtin-open
     with:
-      name: タスクに着手する
+      builtin: take_task
 
   - type: assert
     domain: automation
     op: builtin-read
     with:
-      name: タスクに着手する
-      settings: [絞り込み]
+      builtin: take_task
+      settings: [絞り込み, 着手できるタスクが無いとき]
       exits: [着手した, 着手できるタスクが無い]
       used_by: 0
 
@@ -82,13 +86,13 @@ steps_gui:
     with:
       after: draft
       exit: drafted
-      builtin: タスクに着手する
+      builtin: take_task
 
   - type: assert
     domain: automation
     op: pictured
     with:
-      name: タスクに着手する
+      builtin: take_task
       present: true
 
   - type: assert
@@ -97,7 +101,7 @@ steps_gui:
     with:
       from: draft
       exit: drafted
-      to: タスクに着手する
+      to_builtin: take_task
 
   # And read again from where it stands: the placement's panel opens the same screen, and the
   # placement is now counted on it.
@@ -105,7 +109,7 @@ steps_gui:
     domain: automation
     op: pick-box
     with:
-      name: タスクに着手する
+      builtin: take_task
 
   - type: action
     domain: automation
@@ -115,5 +119,5 @@ steps_gui:
     domain: automation
     op: builtin-read
     with:
-      name: タスクに着手する
+      builtin: take_task
       used_by: 1

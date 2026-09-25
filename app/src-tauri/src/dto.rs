@@ -3873,6 +3873,11 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) step_name: Option<String>,
+    /// **The built-in that step is**, by its key (`AMB-D-964`) — what the row turns its words into the
+    /// screen's language by. Absent for an agent's step, and before the first step has opened.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) builtin: Option<String>,
     /// **The action that step's spot stands on** — [`AutomationStepRunDto::action_name`], on the row
     /// rather than over the pane. Absent for the same two reasons: no step has opened yet, or the
     /// spot it was opened from is no longer on the picture.

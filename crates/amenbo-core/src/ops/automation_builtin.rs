@@ -793,4 +793,51 @@ mod tests {
             assert_eq!(run.status, AutomationRunStatus::Failed);
         });
     }
+
+    /// **The screen's table of a built-in's words is this definition's.** The GUI draws
+    /// a built-in's words in the screen's language by looking the store's word up among the Japanese
+    /// dictionary's `auto.bi.<built-in>.*` entries (`app/src/core/builtinWords.ts`). A word renamed
+    /// here and not there would be drawn untranslated, and one left there would translate nothing — so
+    /// both sides are held to the same set, a built-in at a time.
+    #[test]
+    fn the_japanese_dictionary_holds_every_word_of_every_builtin() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../app/src/core/i18n/locales/ja.ts");
+        let ja = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        for builtin in all().iter().filter(|one| !one.key.starts_with("test_")) {
+            // `take_task` is written `takeTask` in the dictionary's keys.
+            let section: String = builtin
+                .key
+                .split('_')
+                .enumerate()
+                .map(|(nth, part)| match nth {
+                    0 => part.to_string(),
+                    _ => part[..1].to_uppercase() + &part[1..],
+                })
+                .collect();
+            let head = format!("\"auto.bi.{section}.");
+            let written: std::collections::BTreeSet<String> = ja
+                .lines()
+                .map(str::trim)
+                .filter(|line| line.starts_with(&head))
+                .map(|line| {
+                    let value = line.split_once(": ").expect("a `key: value` line").1.trim_end_matches(',');
+                    serde_json::from_str::<String>(value).expect("a quoted value")
+                })
+                .collect();
+            let mut words: std::collections::BTreeSet<String> =
+                [builtin.name, builtin.does].into_iter().map(str::to_string).collect();
+            for setting in builtin.settings {
+                words.insert(setting.name.to_string());
+                if let Some(options) = setting.options {
+                    words.extend(serde_json::from_str::<Vec<String>>(options).expect("options are a JSON list"));
+                }
+            }
+            words.extend(builtin.ins.iter().map(|port| port.name.to_string()));
+            for exit in builtin.exits {
+                words.extend(exit.name.map(str::to_string));
+                words.extend(exit.outs.iter().map(|port| port.name.to_string()));
+            }
+            assert_eq!(written, words, "`{}`'s words against the dictionary's `auto.bi.{section}.*`", builtin.key);
+        }
+    }
 }

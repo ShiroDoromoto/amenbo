@@ -643,6 +643,11 @@ waiting: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_inp
  */
 stepName?: string, 
 /**
+ * **The built-in that step is**, by its key (`AMB-D-964`) — what the row turns its words into the
+ * screen's language by. Absent for an agent's step, and before the first step has opened.
+ */
+builtin?: string, 
+/**
  * **The action that step's spot stands on** — [`AutomationStepRunDto::action_name`], on the row
  * rather than over the pane. Absent for the same two reasons: no step has opened yet, or the
  * spot it was opened from is no longer on the picture.

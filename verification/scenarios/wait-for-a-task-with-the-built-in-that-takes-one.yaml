@@ -11,8 +11,9 @@
 id: wait-for-a-task-with-the-built-in-that-takes-one
 title: The built-in that takes a task, set to wait, keeps its run going until a task turns up and then takes it
 description: >
-  Place the built-in "タスクに着手する" as an automation's entry, answer its setting "着手できるタスクが無いとき"
-  with "着手できるタスクが出るまで待つ", and draw nothing after the way out that found none. Start it while
+  Place the built-in that takes a task (`take_task`) as an automation's entry, answer its setting
+  "着手できるタスクが無いとき" with "着手できるタスクが出るまで待つ", and draw nothing after the way
+  out that found none. Start it while
   no task is handed to the AI, and read the run still running. Hand a task to the AI, and read the task
   gone to in_progress and the agent's step in the run's pane working it.
 given:
@@ -77,12 +78,13 @@ steps_gui:
     domain: automation
     op: pick-box
     with:
-      name: タスクに着手する
+      builtin: take_task
 
   - type: action
     domain: automation
     op: answer-choice
     with:
+      builtin: take_task
       setting: 着手できるタスクが無いとき
       value: 着手できるタスクが出るまで待つ
 

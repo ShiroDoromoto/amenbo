@@ -1936,7 +1936,8 @@ pub enum AutomationCmd {
         id: i64,
     },
     /// Add a step to a library action. One step is one terminal, and it carries its own prompt; who
-    /// carries it out is chosen where the action is placed (`agent-set`)
+    /// carries it out is chosen where the action is placed (`agent-set`). Where the action is placed
+    /// already, the new step starts out there with the default agent, as a placed step does
     StepAdd {
         /// action id
         action: i64,

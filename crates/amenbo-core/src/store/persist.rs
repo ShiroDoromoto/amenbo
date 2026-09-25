@@ -41,6 +41,25 @@ fn steps_default(
     crate::ops::automation::placement_steps_default(tx, placement.id, agent.as_deref())
 }
 
+/// Write the default agent onto a step just added to an action, at every placement of that action —
+/// what [`steps_default`] writes for the steps an action is placed with, for a step that came after
+/// (`AMB-T-5531`). Each placement reads the default for the project its own automation belongs to.
+fn new_step_default(
+    tx: &WriteTx<'_>,
+    config: &crate::config::Config,
+    step: &crate::model::AutomationStep,
+) -> Result<()> {
+    use crate::store_engine::read;
+    let conn = tx.conn();
+    for placement_id in read::automation_placement_ids_using_action(conn, step.action_id)? {
+        let Some(placement) = read::automation_placement(conn, placement_id)? else { continue };
+        let Some(automation) = read::automation(conn, placement.automation_id)? else { continue };
+        let agent = crate::wake::step_agent(config, automation.project_id);
+        crate::ops::automation::placement_step_default(tx, placement.id, step, agent.as_deref())?;
+    }
+    Ok(())
+}
+
 /// Take the next activity sequence number for a system event and mark it used **in the same
 /// transaction**. A system event has no row in the DB (only a line in the ledger), so the next
 /// `MAX(id)` would not see this id — without the high-water mark, two events in a row would be
@@ -2060,13 +2079,18 @@ impl Store {
         })
     }
 
+    /// Add a step to a library action (one operation = one transaction), with the default agent
+    /// written onto it at every placement of the action ([`new_step_default`]).
     pub fn automation_step_add(
         &mut self,
         action_id: i64,
         new: crate::ops::automation::NewStep,
     ) -> Result<crate::model::AutomationStep> {
+        let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, action_id)], |tx| {
-            crate::ops::automation::step_add(tx, action_id, new)
+            let step = crate::ops::automation::step_add(tx, action_id, new)?;
+            new_step_default(tx, &config, &step)?;
+            Ok(step)
         })
     }
 
@@ -2099,7 +2123,8 @@ impl Store {
     }
 
     /// Put a step in on a line (one operation = one transaction): the step, the ways out and inputs it
-    /// was written with, and the two edges that leave nothing pointing at nothing.
+    /// was written with, and the two edges that leave nothing pointing at nothing — with the default
+    /// agent written onto it as [`Self::automation_step_add`] writes it.
     pub fn automation_step_insert(
         &mut self,
         edge_id: i64,
@@ -2107,8 +2132,11 @@ impl Store {
         exits: &[String],
         inputs: &[(String, crate::model::AutomationPortKind, bool)],
     ) -> Result<crate::model::AutomationStep> {
+        let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
-            crate::ops::automation::step_insert(tx, edge_id, new, exits, inputs)
+            let step = crate::ops::automation::step_insert(tx, edge_id, new, exits, inputs)?;
+            new_step_default(tx, &config, &step)?;
+            Ok(step)
         })
     }
 

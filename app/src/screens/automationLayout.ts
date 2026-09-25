@@ -120,11 +120,11 @@ const END_ROOM = 56;
 const LANE_W = 16;
 /** How far apart the wires' trunks stand — wider than an edge's lane, for the name over each one. */
 const WIRE_LANE_W = 28;
-/** How far in from a box's top and bottom a wire leaves it or lands, down its right side. */
+/** How far in from a box's right edge a wire that comes down into its top lands. */
 const WIRE_IN = 15;
 /** How far over a box the leg of a wire that comes down into its top runs, per input. */
 const WIRE_OVER = 7;
-/** How far the name over a trunk stands off it, to the right and up. */
+/** How far a wire's name stands past the outermost trunk, and how far under its stem its foot sits. */
 const WIRE_WORD = 4;
 const PAD = 18;
 /** How far in from a box's edge the first line is tied, and how far apart the next ones are. */
@@ -210,10 +210,11 @@ export type PicLine = {
   tone?: "next" | "branch" | "error";
   /** It crosses the action's own boundary: in from the top mark, or out into a way out's mark. */
   leaves?: boolean;
-  /** The way out this edge hangs on, as core names it. Absent for the unnamed one and for a wire. */
+  /** The way out this edge hangs on, or a wire is handed on by, as core names it. Absent for the
+   *  unnamed one. */
   exitName?: string;
   /**
-   * The built-in the box this edge leaves is, by its key: its way out is written in the screen's
+   * The built-in the box this line leaves is, by its key: its way out is written in the screen's
    * language (`lineWord`), while `exitName` stays the store's word the edge is matched on.
    */
   builtin?: string;
@@ -925,19 +926,34 @@ export function layOut(graph: PicGraph | null): Picture {
   // many boxes take it, split just before each input it lands in. They all go out to the right,
   // never straight down between two boxes — a wire under a box would cross the names of the lines
   // that leave it there.
+  //
+  // **Every end on a box's right side has a height of its own** (`AMB-T-5500`): the legs coming in
+  // stand over the stems going out, one per wire even where two land in the same input, so a line
+  // that leaves a box never reads as one coming into it and two that land together never run as
+  // one. Which height goes to which is settled once the trunks have their lanes (`sideSlots`).
+  type End = {
+    toId: number;
+    input: string;
+    x: number;
+    /** Where the leg lands, and the height it runs across at — the same as the landing, unless it
+     *  comes down into the box from above. Both wait for `sideSlots` on a leg into the right side. */
+    y: number;
+    across: number;
+    /** It comes over the row and down into the box's top, rather than into its right side. */
+    over: boolean;
+  };
   type Trunk = {
     key: string;
     fromId: number;
+    exitName?: string;
+    builtin?: string;
     port: string;
     sx: number;
+    /** Where the stem leaves the box — waits for `sideSlots`. */
     sy: number;
-    /** Where each leg ends, and the height it runs across at — the same as the end's, unless it
-     *  comes down into the box from above. */
-    ends: { input: string; x: number; y: number; across: number }[];
+    ends: End[];
   };
   const trunks = new Map<string, Trunk>();
-  /** How many trunks each box has put out already — each one leaves a row higher up its right side. */
-  const stems = new Map<number, number>();
   for (const wire of graph.wires) {
     // Out of the action itself comes one of its inputs, from the top mark; into it goes an output of
     // the way out the source step leaves the action by, into that way out's mark.
@@ -953,42 +969,47 @@ export function layOut(graph: PicGraph | null): Picture {
     const id = `${wire.fromId}\u0000${wire.fromExitName ?? ""}\u0000${wire.fromPortName}`;
     let trunk = trunks.get(id);
     if (trunk === undefined) {
-      const nth = stems.get(wire.fromId) ?? 0;
-      stems.set(wire.fromId, nth + 1);
       trunk = {
         key: lineKey("wire", wire.id),
         fromId: wire.fromId,
+        exitName: wire.fromExitName,
+        builtin: from.builtin,
         port: builtinWord(from.builtin, wire.fromPortName),
         sx: from.x + from.w,
-        sy: Math.max(from.y + WIRE_IN, from.y + from.h - WIRE_IN - nth * WORD_H),
+        sy: from.y + Math.round(from.h / 2),
         ends: [],
       };
       trunks.set(id, trunk);
     }
     const inputs = toId === ACTION_BOUNDARY ? [] : boxes.get(toId)?.inputs ?? [];
     const nth = Math.max(0, inputs.findIndex((p) => p.name === wire.toPortName));
+    const input = builtinWord(to.builtin, wire.toPortName);
     // Into the right side, unless another box stands to the right on the same row: a leg across
     // would run through that one, so it comes over the row and down into this box's top instead.
     const hemmed = [...nodes, ...spots].some((one) => one.y === to.y && one.x > to.x);
     trunk.ends.push(
       hemmed
         ? {
-            input: builtinWord(to.builtin, wire.toPortName),
+            toId,
+            input,
             x: to.x + to.w - WIRE_IN - nth * WORD_H,
             y: to.y,
             // A row apart per input, and all of them under the legs of the edges coming into the row.
             across: to.y - WIRE_OVER - nth * WIRE_OVER,
+            over: true,
           }
-        : {
-            input: builtinWord(to.builtin, wire.toPortName),
-            x: to.x + to.w,
-            y: Math.min(to.y + WIRE_IN + nth * WORD_H, to.y + to.h - WIRE_IN / 2),
-            across: Math.min(to.y + WIRE_IN + nth * WORD_H, to.y + to.h - WIRE_IN / 2),
-          },
+        : { toId, input, x: to.x + to.w, y: to.y, across: to.y, over: false },
     );
   }
   for (const trunk of trunks.values()) {
-    const ys = [trunk.sy, ...trunk.ends.map((one) => one.across)];
+    // The rows it runs past, read off the boxes at its ends: where along their sides it leaves and
+    // lands is only settled once every trunk has its lane.
+    const from = node.get(trunk.fromId)!;
+    const ys = [from.y, from.y + from.h];
+    for (const end of trunk.ends) {
+      const to = node.get(end.toId)!;
+      ys.push(end.over ? end.across : to.y, to.y + to.h);
+    }
     asideRight.push({
       key: trunk.key,
       top: Math.min(...ys),
@@ -1004,9 +1025,12 @@ export function layOut(graph: PicGraph | null): Picture {
           ...(end.across === end.y ? [] : [{ x: end.x, y: end.y }]),
         ]),
         back: false,
+        exitName: trunk.exitName,
+        builtin: trunk.builtin,
         hands: { from: trunk.port, to: trunk.ends.map((one) => one.input) },
-        // Over the top of the trunk, the way the name of an edge is written over its leg across.
-        at: { x: laneX + WIRE_WORD, y: trunk.sy - WIRE_WORD },
+        // Past the outermost trunk, level with the stem: nothing runs out there, so no trunk crosses
+        // the words, and each stem out of a box has a height of its own for them.
+        at: { x: wordsX + WIRE_WORD, y: trunk.sy + WIRE_WORD },
         align: "start",
       }),
     });
@@ -1014,6 +1038,45 @@ export function layOut(graph: PicGraph | null): Picture {
 
   const leftAt = lanes(asideLeft);
   const rightAt = lanes(asideRight);
+  // `sideSlots`: the heights down each box's right side, handed out now that every trunk has its
+  // lane. Legs in stand over stems out. Two lines at one box are put in the order that keeps them
+  // from crossing: a leg from a trunk further out passes over the nearer trunk, so it lands on the
+  // far side of that trunk's own leg — lower where the two come down from above, higher where they
+  // come up from below — and a stem to a trunk further out leaves on the far side the same way.
+  {
+    type Slot = { group: number; order: number; set: (y: number) => void };
+    const sides = new Map<number, Slot[]>();
+    const put = (boxId: number, slot: Slot) => sides.set(boxId, [...(sides.get(boxId) ?? []), slot]);
+    for (const trunk of trunks.values()) {
+      const from = node.get(trunk.fromId)!;
+      const lane = rightAt.get(trunk.key) ?? 0;
+      const ends = trunk.ends.map((end) => node.get(end.toId)!.y);
+      const up = ends.reduce((sum, y) => sum + y, 0) / ends.length < from.y;
+      put(trunk.fromId, {
+        group: up ? 2 : 3,
+        order: up ? lane : -lane,
+        set: (y) => (trunk.sy = y),
+      });
+      for (const end of trunk.ends) {
+        if (end.over) continue;
+        const above = from.y < node.get(end.toId)!.y;
+        put(end.toId, {
+          group: above ? 0 : 1,
+          order: above ? lane : -lane,
+          set: (y) => {
+            end.y = y;
+            end.across = y;
+          },
+        });
+      }
+    }
+    for (const [boxId, slots] of sides) {
+      const box = node.get(boxId)!;
+      slots
+        .sort((a, b) => a.group - b.group || a.order - b.order)
+        .forEach((slot, nth) => slot.set(box.y + Math.round((box.h * (nth + 1)) / (slots.length + 1))));
+    }
+  }
   const leftLanes = asideLeft.length === 0 ? 0 : Math.max(...[...leftAt.values()]) + 1;
   const rightLanes = asideRight.length === 0 ? 0 : Math.max(...[...rightAt.values()]) + 1;
   /** Where each line in the margin stands among the ones sharing its box at one end, innermost first. */
@@ -1038,6 +1101,7 @@ export function layOut(graph: PicGraph | null): Picture {
     const stair = { out: outStair.get(line.key) ?? 0, in: inStair.get(line.key) ?? 0 };
     lines.push(line.draw(-LAP_PAD - (lane + 1) * LANE_W, lane, stair));
   }
+  const wordsX = contentW + LAP_PAD + rightLanes * WIRE_LANE_W;
   for (const line of asideRight) {
     const lane = rightAt.get(line.key)!;
     lines.push(line.draw(contentW + LAP_PAD + (lane + 1) * WIRE_LANE_W, lane, { out: 0, in: 0 }));
@@ -1072,7 +1136,12 @@ export function layOut(graph: PicGraph | null): Picture {
   // And the room the right margin takes: the trunks, and the name written past the outermost one.
   const rightRoom = Math.max(
     LAP_PAD + rightLanes * WIRE_LANE_W,
-    ...lines.map((line) => (line.kind === "wire" ? line.at.x + wordW(line.hands?.from) - contentW : 0)),
+    ...lines.map((line) => {
+      if (line.kind !== "wire") return 0;
+      // The way out it leaves by is written first where it has a name, with a separator after it.
+      const exit = line.exitName === undefined ? 0 : wordW(lineWord(line)) + BESIDE;
+      return line.at.x + exit + wordW(line.hands?.from) - contentW;
+    }),
   );
   return {
     width: dx + contentW + rightRoom + PAD,

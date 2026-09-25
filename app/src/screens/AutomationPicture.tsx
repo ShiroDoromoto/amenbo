@@ -31,6 +31,15 @@ function exitWord(line: PicLine): string {
   return lineWord(line) ?? "";
 }
 
+/**
+ * The name over a wire's trunk: what it hands on, and — where the box hands it on by a way out with
+ * a name — that way out first, so two outputs of one name leaving one box by two ways out read apart.
+ */
+function wireWord(line: PicLine): string {
+  const exit = exitWord(line);
+  return exit === "" ? (line.hands?.from ?? "") : `${exit} · ${line.hands?.from ?? ""}`;
+}
+
 /** One way out of the action, in words: the unnamed one and the error one have names of their own. */
 function markWord(mark: PicMark): string {
   if (mark.exitName === undefined) return t("auto.step.exitUnnamed");
@@ -168,6 +177,10 @@ export function AutomationPicture({
                   <path className={`autopic__arrow autopic__arrow--${kind}`} d="M0 0 L10 5 L0 10 z" />
                 </marker>
               ))}
+              {/* Where a wire leaves its box: a dot, as its arrowhead is where it lands. */}
+              <marker id={`${ids}-wire-out`} viewBox="0 0 10 10" refX={5} refY={5} markerWidth={4} markerHeight={4}>
+                <circle className="autopic__arrow autopic__arrow--wire" cx={5} cy={5} r={5} />
+              </marker>
             </defs>
             {picture.laps.map((lap) => (
               <rect
@@ -199,6 +212,7 @@ export function AutomationPicture({
                     // Into the box it goes to. A wire's stem ends on its trunk and takes none — its
                     // branches do — and a line that goes nowhere ends in its words instead.
                     markerEnd={line.kind === "edge" && line.points.length > 2 ? head(headOf(line)) : undefined}
+                    markerStart={line.kind === "wire" ? `url(#${ids}-wire-out)` : undefined}
                   />
                   {/* A wire's legs off its trunk, one into each input it lands in. */}
                   {line.branches?.map((branch, nth) => (
@@ -214,11 +228,11 @@ export function AutomationPicture({
                       {lineTitle(line)}
                     </text>
                   )}
-                  {/* A wire is named by what it hands on, over its trunk: the sentence saying where it
+                  {/* A wire is named by what it hands on, past the trunks: the sentence saying where it
                       goes is the title, since the ends it lands in are drawn. */}
                   {line.kind === "wire" && line.hands !== undefined && (
                     <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
-                      {line.hands.from}
+                      {wireWord(line)}
                     </text>
                   )}
                 </g>

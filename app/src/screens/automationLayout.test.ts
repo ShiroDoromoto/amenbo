@@ -747,6 +747,70 @@ describe("the wires", () => {
     );
   });
 
+  it("gives every wire an end of its own down a box's right side, the legs in over the stems out", () => {
+    const value = (name: string) => port(name, "value", false);
+    // Handed on down the picture and back up it, with two outputs of one name leaving the same way.
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({ id: 2, name: "cut", exits: [{ id: 200, outputs: [value("tree")] }, { id: 201, name: "*", outputs: [] }] }),
+          step({ id: 3, name: "build", inputs: [value("tree"), value("note")] }),
+          step({
+            id: 4,
+            name: "review",
+            inputs: [value("tree")],
+            exits: [{ id: 400, outputs: [] }, { id: 401, name: "fix", outputs: [value("note")] }, { id: 402, name: "*", outputs: [] }],
+          }),
+          step({
+            id: 5,
+            name: "merge",
+            inputs: [value("tree")],
+            exits: [
+              { id: 500, outputs: [value("commit")] },
+              { id: 501, name: "red", outputs: [value("note")] },
+              { id: 502, name: "*", outputs: [] },
+            ],
+          }),
+          step({ id: 6, name: "close", inputs: [value("commit")] }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 3, toId: 4 }),
+          edge({ id: 4, fromId: 4, toId: 5 }),
+          edge({ id: 5, fromId: 5, toId: 6 }),
+          edge({ id: 6, fromId: 4, exitName: "fix", toId: 3 }),
+          edge({ id: 7, fromId: 5, exitName: "red", toId: 3 }),
+        ],
+        wires: [
+          wire({ id: 1, fromId: 2, fromPortName: "tree", toId: 3, toPortName: "tree" }),
+          wire({ id: 2, fromId: 2, fromPortName: "tree", toId: 4, toPortName: "tree" }),
+          wire({ id: 3, fromId: 2, fromPortName: "tree", toId: 5, toPortName: "tree" }),
+          wire({ id: 4, fromId: 4, fromExitName: "fix", fromPortName: "note", toId: 3, toPortName: "note" }),
+          wire({ id: 5, fromId: 5, fromExitName: "red", fromPortName: "note", toId: 3, toPortName: "note" }),
+          wire({ id: 6, fromId: 5, fromPortName: "commit", toId: 6, toPortName: "commit" }),
+        ],
+      }),
+    );
+    const drawn = (key: string) => picture.lines.find((one) => one.key === key)!;
+    const stemY = (key: string) => drawn(key).points[0]!.y;
+    const landY = (key: string, nth = 0) => drawn(key).branches![nth]!.slice(-1)[0]!.y;
+    // Into the fifth step one leg comes, and out of it two stems go: three heights, the leg highest.
+    const into5 = landY("wire-1", 2);
+    expect(new Set([into5, stemY("wire-5"), stemY("wire-6")]).size).toBe(3);
+    expect(into5).toBeLessThan(Math.min(stemY("wire-5"), stemY("wire-6")));
+    // Into the third step's one input two wires come up from below: each lands at its own height.
+    expect(landY("wire-4")).not.toBe(landY("wire-5"));
+    // The one from the trunk further out lands higher, so its leg passes over the nearer trunk.
+    expect(drawn("wire-5").points[1]!.x).toBeGreaterThan(drawn("wire-4").points[1]!.x);
+    expect(landY("wire-5")).toBeLessThan(landY("wire-4"));
+    // And a wire says the way out it is handed on by, where that way out has a name.
+    expect(drawn("wire-5").exitName).toBe("red");
+    expect(drawn("wire-6").exitName).toBeUndefined();
+  });
+
   it("comes down into the top of a box with another beside it, rather than through that one", () => {
     const picture = layOut(
       detail({
@@ -777,7 +841,7 @@ describe("the wires", () => {
     expect(branch.slice(-2)[0]!.y).toBeLessThan(right.y);
   });
 
-  it("gives each output of a box a trunk of its own, and writes its name over it", () => {
+  it("gives each output of a box a trunk of its own, and writes its name past every trunk", () => {
     const picture = fanned([
       wire({ id: 1, fromId: 1, fromPortName: "draft", toId: 4, toPortName: "draft" }),
       wire({ id: 2, fromId: 1, fromPortName: "notes", toId: 4, toPortName: "notes" }),
@@ -789,10 +853,12 @@ describe("the wires", () => {
     // Each leaves at a height of its own, and lands in the input it names.
     expect(wires[0]!.points[0]!.y).not.toBe(wires[1]!.points[0]!.y);
     expect(wires[0]!.branches![0]!.slice(-1)[0]!.y).toBeLessThan(wires[1]!.branches![0]!.slice(-1)[0]!.y);
-    // The name is over the top of its trunk, and the picture is wide enough to hold it.
+    // The name is past the outermost trunk, where no line runs through it, level with its own stem;
+    // and the picture is wide enough to hold it.
+    const outermost = Math.max(...wires.map((one) => one.points[1]!.x));
     for (const one of wires) {
-      expect(one.at.x).toBeGreaterThan(one.points[1]!.x);
-      expect(one.at.y).toBeLessThan(one.points[1]!.y);
+      expect(one.at.x).toBeGreaterThan(outermost);
+      expect(Math.abs(one.at.y - one.points[0]!.y)).toBeLessThan(8);
       expect(one.at.x).toBeLessThan(picture.width);
     }
   });

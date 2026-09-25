@@ -1140,6 +1140,7 @@ export const uk: Translation = {
     "auto.run.noWayOn": "відкривати вже не було чого",
     "auto.run.noInput": "обов'язковий вхід лишився порожнім",
     "auto.run.halted": "вихід покликав людину",
+    "auto.run.leftTaskOpen": "він спробував іти далі, не закривши завдання",
     "auto.run.step": "Крок {n} · {step}",
     "auto.run.inAction": "{step} у {action}",
     "auto.run.noTask": "Завдання ще не взято",

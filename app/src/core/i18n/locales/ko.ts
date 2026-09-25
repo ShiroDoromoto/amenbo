@@ -1120,6 +1120,7 @@ export const ko: Translation = {
     "auto.run.noWayOn": "열 단계가 남아 있지 않았다",
     "auto.run.noInput": "필수 입력이 비어 있었다",
     "auto.run.halted": "사람을 부르는 출구로 멈췄다",
+    "auto.run.leftTaskOpen": "태스크를 닫지 않고 다음으로 가려고 했다",
     "auto.run.step": "단계 {n} · {step}",
     "auto.run.inAction": "{action}의 {step}",
     "auto.run.noTask": "아직 가져온 작업이 없습니다",

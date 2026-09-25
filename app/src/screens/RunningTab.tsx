@@ -53,6 +53,7 @@ function reasonText(run: AutomationRunCardDto): string | null {
     case "no_input": return t("auto.run.noInput");
     case "no_way_on": return t("auto.run.noWayOn");
     case "halted": return t("auto.run.halted");
+    case "left_task_open": return t("auto.run.leftTaskOpen");
     default: return null;
   }
 }

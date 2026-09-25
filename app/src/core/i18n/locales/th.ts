@@ -1124,6 +1124,7 @@ export const th: Translation = {
     "auto.run.noWayOn": "ไม่มีขั้นตอนให้เปิดต่อแล้ว",
     "auto.run.noInput": "อินพุตที่จำเป็นไม่มีค่า",
     "auto.run.halted": "ทางออกเรียกให้คนมาดู",
+    "auto.run.leftTaskOpen": "พยายามไปต่อโดยไม่ปิดงาน",
     "auto.run.step": "ขั้นตอน {n} · {step}",
     "auto.run.inAction": "{step} ใน {action}",
     "auto.run.noTask": "ยังไม่ได้รับงาน",

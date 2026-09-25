@@ -1123,6 +1123,7 @@ export const tr: Translation = {
     "auto.run.noWayOn": "açılacak bir şey kalmamıştı",
     "auto.run.noInput": "zorunlu bir girdi boş kaldı",
     "auto.run.halted": "bir çıkış bir kişiyi çağırdı",
+    "auto.run.leftTaskOpen": "görevini kapatmadan devam etmeye çalıştı",
     "auto.run.step": "Adım {n} · {step}",
     "auto.run.inAction": "{action} içindeki {step}",
     "auto.run.noTask": "Henüz görev alınmadı",

@@ -1135,6 +1135,7 @@ export const fr: Translation = {
     "auto.run.noWayOn": "il ne restait rien à ouvrir",
     "auto.run.noInput": "une entrée requise est restée vide",
     "auto.run.halted": "une sortie a appelé une personne",
+    "auto.run.leftTaskOpen": "elle a tenté de continuer sans fermer sa tâche",
     "auto.run.step": "Étape {n} · {step}",
     "auto.run.inAction": "{step} dans {action}",
     "auto.run.noTask": "Aucune tâche prise pour l’instant",

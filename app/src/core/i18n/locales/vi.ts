@@ -1124,6 +1124,7 @@ export const vi: Translation = {
     "auto.run.noWayOn": "không còn gì để mở",
     "auto.run.noInput": "một đầu vào bắt buộc bị bỏ trống",
     "auto.run.halted": "một lối ra đã gọi người",
+    "auto.run.leftTaskOpen": "nó định đi tiếp mà không đóng công việc",
     "auto.run.step": "Bước {n} · {step}",
     "auto.run.inAction": "{step} trong {action}",
     "auto.run.noTask": "Chưa nhận việc nào",

@@ -1125,6 +1125,7 @@ export const zhHans: Translation = {
     "auto.run.noWayOn": "没有可打开的步骤了",
     "auto.run.noInput": "必填的输入没有值",
     "auto.run.halted": "在呼叫人的出口停下",
+    "auto.run.leftTaskOpen": "没关闭任务就要继续往下走",
     "auto.run.step": "步骤 {n} · {step}",
     "auto.run.inAction": "{action} 的 {step}",
     "auto.run.noTask": "尚未领取任务",

@@ -1140,6 +1140,7 @@ export const ru: Translation = {
     "auto.run.noWayOn": "открывать было больше нечего",
     "auto.run.noInput": "обязательный вход остался пустым",
     "auto.run.halted": "выход позвал человека",
+    "auto.run.leftTaskOpen": "он попытался идти дальше, не закрыв задачу",
     "auto.run.step": "Шаг {n} · {step}",
     "auto.run.inAction": "{step} в {action}",
     "auto.run.noTask": "Задача ещё не взята",

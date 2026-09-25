@@ -1124,6 +1124,7 @@ export const id: Translation = {
     "auto.run.noWayOn": "tidak ada lagi yang bisa dibuka",
     "auto.run.noInput": "input wajib tidak terisi",
     "auto.run.halted": "jalan keluar memanggil seseorang",
+    "auto.run.leftTaskOpen": "ia mencoba lanjut tanpa menutup tugasnya",
     "auto.run.step": "Langkah {n} · {step}",
     "auto.run.inAction": "{step} di {action}",
     "auto.run.noTask": "Belum mengambil tugas",

@@ -4498,16 +4498,8 @@ impl Instructor {
                     other => return Err(format!("`on` does not know `{other}` — it is row / pane")),
                 }
             }
-            // The two ways in that are not the build screen. Neither hands anything over at the
-            // press: which task and which folder are the definition's.
-            (Domain::Automation, "start-from-task") => format!(
-                "Open the task \"{}\" and press the control that starts an automation, then pick \"{}\".",
-                self.labels
-                    .get(with.get("task").and_then(|v| v.as_str()).unwrap_or(""))
-                    .cloned()
-                    .unwrap_or_else(|| "<the task>".to_string()),
-                self.target_label(with)
-            ),
+            // The way in that is not the build screen. It hands nothing over at the press: which task
+            // and which folder are the definition's.
             (Domain::Automation, "start-from-frame") => format!(
                 "In the workspace, on a page with room left on it, press the empty frame's control that starts an automation, then pick \"{}\".",
                 self.target_label(with)
@@ -8738,11 +8730,6 @@ steps_gui:
     domain: automation
     op: action-rewrite
     with: { step: look, prompt: look at it twice }
-  - type: action
-    domain: automation
-    op: start-from-task
-    with: { target: auto, task: seed }
-    as: from_task
   - type: action
     domain: automation
     op: start-from-frame

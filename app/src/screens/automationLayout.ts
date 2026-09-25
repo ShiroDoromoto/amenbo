@@ -914,16 +914,22 @@ export function layOut(graph: PicGraph | null): Picture {
       fromId: edge.fromId,
       toId,
       draw: (laneX, lane, stair) => {
-        // Halfway down the lane, and a `+` lower for each lane further out: two lines running past
-        // the same rows would otherwise have their `+` side by side.
-        const middle = Math.min(Math.round((top + bottom) / 2) + lane * LANE_PLUS, bottom - LANE_PLUS / 2);
-        inserts.push({ edgeId: edge.id, x: laneX, y: middle });
         // The lines of one box that leave for the margin are the first ways out along its bottom, so
         // they take those places in the order of their lanes, the innermost leftmost.
         const outX = attach(from, stair.out);
         const outY = sy + DROP + Math.min(stair.out, STAIRS) * STAIR;
         const inX = landAt(to, stair.in);
         const inY = ty - DROP - Math.min(stair.in, STAIRS) * STAIR;
+        // On the lane just past the turn it takes out of its box, beside the name written there:
+        // halfway along a long lane the `+` stood beside some other box, apart from its name
+        // (`AMB-T-5596`). Two lines leaving one box turn a few points apart on lanes closer than a
+        // `+` is wide, so each one further out sits a `+` further along its lane. A lane too short
+        // for that keeps it halfway, a `+` lower for each lane further out.
+        const along = Math.sign(inY - outY);
+        const near = sy + DROP + along * (LANE_PLUS / 2 + stair.out * LANE_PLUS);
+        const room = along * (inY - near) >= LANE_PLUS / 2 && along * (near - outY) > 0;
+        const middle = Math.min(Math.round((top + bottom) / 2) + lane * LANE_PLUS, bottom - LANE_PLUS / 2);
+        inserts.push({ edgeId: edge.id, x: laneX, y: room ? near : middle });
         return {
           key,
           kind: "edge",

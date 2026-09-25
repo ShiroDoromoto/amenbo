@@ -30,7 +30,7 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-opener": "^2.5.5",
-    "@tauri-apps/plugin-updater": "^2.11.0",
+    "@tauri-apps/plugin-updater": "^2.12.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "mermaid": "^11.17.2",
@@ -45,7 +45,7 @@
     "tm-grammars": "^1.32.20"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.4",
+    "@tauri-apps/cli": "^2.11.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.0",

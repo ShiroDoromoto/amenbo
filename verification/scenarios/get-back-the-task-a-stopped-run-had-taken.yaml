@@ -40,6 +40,15 @@ given:
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
+  # The line the run leaves on the task is written in the language the settings name, and a fresh
+  # store opens in whatever language the machine reads. Said out loud, so the sentence read below is
+  # the one that gets written.
+  - type: action
+    domain: store
+    op: set-language
+    with:
+      language: en
+
   - type: action
     domain: workspace
     op: show-face

@@ -4401,6 +4401,11 @@ impl Instructor {
             ),
             // The press that makes a run. It is the build screen's, and the two other ways in below
             // make the same run without handing anything over either.
+            // A closed workspace is refused at the press itself, before the dialog asks what to hand
+            // over, so there is no dialog to answer on that road.
+            (Domain::Automation, "start") if arg_str(with, "refused") == Some("workspace_closed") => {
+                "On the build screen's head, press the button that starts a run.".to_string()
+            }
             (Domain::Automation, "start") => {
                 format!("On the build screen's head, press the button that starts a run. {}", handing(with))
             }
@@ -11826,6 +11831,24 @@ steps_gui:
             Instructor::new().expectation(&step).is_none(),
             "the names on the row are the interface's own words, so no reading is expected off the shot"
         );
+    }
+
+    /// A start refused because the workspace is closed is turned away at the press, before the dialog
+    /// that asks what to hand over opens — so the line asks for no dialog to be answered.
+    #[test]
+    fn a_start_refused_for_a_closed_workspace_answers_no_dialog() {
+        let step = Step::Action {
+            domain: Domain::Automation,
+            op: "start".to_string(),
+            with: [("refused".to_string(), serde_yaml::Value::from("workspace_closed"))]
+                .into_iter()
+                .collect(),
+            bind: None,
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("starts a run"), "got: {said}");
+        assert!(!said.contains("dialog"), "got: {said}");
     }
 
     /// An agent named on that row is refused rather than rendered. Which agents are on it is a probe

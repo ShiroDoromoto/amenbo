@@ -7,7 +7,7 @@
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
-import { automationGraph, layOut, type PicGraph } from "./automationLayout";
+import { automationGraph, edgeWord, layOut, type PicGraph } from "./automationLayout";
 import type {
   AutomationDetailDto,
   AutomationEdgeDto,
@@ -374,7 +374,7 @@ describe("the picture of an automation", () => {
     expect(last("edge-8")[0]!.y).toBeLessThan(last("edge-7")[0]!.y);
   });
 
-  it("writes the name of a line in the margin past every lane, level with its +", () => {
+  it("writes the name of a line in the margin past every lane, level with the leg it leaves its box by", () => {
     const one = detail({
       entryPlacementId: 1,
       placements: [
@@ -396,10 +396,40 @@ describe("the picture of an automation", () => {
     expect(laneX("edge-3")).toBeGreaterThan(laneX("edge-4"));
     expect(line("edge-3").at.x).toBeLessThan(laneX("edge-4"));
     expect(line("edge-3").align).toBe("end");
-    // Level with its own `+`, and the picture keeps the room for it.
-    const plus = picture.inserts.find((one) => one.edgeId === 3)!;
-    expect(line("edge-3").at.y - plus.y).toBe(4);
+    // Level with the leg out of its box, and the picture keeps the room for it.
+    expect(line("edge-3").at.y - line("edge-3").points[1]!.y).toBe(4);
     expect(line("edge-3").at.x - "again".length * 7).toBeGreaterThanOrEqual(0);
+    // Two lines leaving one box write their names a row apart.
+    expect(Math.abs(line("edge-3").at.y - line("edge-4").at.y)).toBeGreaterThanOrEqual(15);
+  });
+
+  it("writes the name of a line going back by the box it leaves, not halfway up its lane", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({ id: 2, name: "a" }),
+          step({ id: 3, name: "b" }),
+          step({ id: 4, name: "c" }),
+          step({ id: 5, name: "d" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 3, toId: 4 }),
+          edge({ id: 4, fromId: 4, toId: 5 }),
+          edge({ id: 5, fromId: 5, exitName: "again", toId: 1 }),
+        ],
+      }),
+    );
+    const back = picture.lines.find((one) => one.key === "edge-5")!;
+    const from = picture.nodes.find((one) => one.boxId === 5)!;
+    const over = picture.nodes.find((one) => one.boxId === 4)!;
+    // Under the box it leaves, and below every other box it runs past.
+    expect(back.at.y).toBeGreaterThan(from.y + from.h);
+    expect(back.at.y).toBeLessThan(from.y + from.h + 30);
+    expect(back.at.y).toBeGreaterThan(over.y + over.h);
   });
 
   it("gives two lines leaving one box for the margin a leg each", () => {
@@ -501,6 +531,35 @@ describe("the picture of an automation", () => {
     // The one on the left runs further down, so its words pass under the shorter one's foot.
     expect(left!.points[1]!.y).toBeGreaterThan(right!.at.y);
     expect(left!.at.y).toBeGreaterThan(right!.at.y);
+  });
+
+  it("is wide enough to hold the words of a way out that goes nowhere, off the last box", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", {
+            exits: [
+              { id: 91, name: "完了", outputs: [port("task", "task_take")] },
+              { id: 92, name: "着手できるタスクが無い", outputs: [] },
+              { id: 93, name: "*", outputs: [] },
+            ],
+          }),
+          step({ id: 2, name: "work" }),
+        ],
+        // Hung second along the box, so its words start well to the right of the box's left side.
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "着手できるタスクが無い", ends: "done" }),
+        ],
+      }),
+    );
+    const line = picture.lines.find((one) => one.exitName === "着手できるタスクが無い")!;
+    // The way out and where the run goes after it, both: the ending is the half that got cut.
+    const words = edgeWord(line);
+    expect(words.length).toBeGreaterThan("着手できるタスクが無い".length);
+    const wide = [...words].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+    expect(line.at.x + wide).toBeLessThanOrEqual(picture.width);
   });
 
   it("ties a named way out first when the ways out before it have no line", () => {

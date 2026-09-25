@@ -61,6 +61,7 @@ pub mod query;
 pub mod reach;
 pub mod read_receipts;
 pub mod refscan;
+pub mod run_wording;
 pub mod self_update;
 pub mod session;
 pub mod skin;

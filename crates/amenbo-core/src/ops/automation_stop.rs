@@ -28,6 +28,7 @@ use crate::model::{
     ActorKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStepStatus,
     AutomationRunTask, AutomationStoppedReason, TaskStatus,
 };
+use crate::run_wording::Reached;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -247,49 +248,38 @@ fn unsaid_report(tx: &WriteTx<'_>, run: &AutomationRun) -> Result<Option<(i64, S
     Ok((!carried).then_some((last.id, last.report)))
 }
 
-/// What the line on the task says: that the run stopped, why, and how far it got.
+/// What the line on the task says: that the run stopped, why, and how far it got — in the language the
+/// write was opened in ([`WriteTx::language`], `AMB-D-976`), and kept as that text.
 ///
 /// The run's id is in it because that is the only handle a person has on a run from a task — the two
 /// are not linked by a column, and a task that has been round three runs would otherwise say only that
 /// one of them stopped.
 fn said(tx: &WriteTx<'_>, run: &AutomationRun, ending: Ending) -> Result<String> {
     let walked = read::automation_run_steps_of(tx.conn(), run.id)?;
-    let reached = walked
+    let last = walked
         .last()
-        .map(|step| match read::automation_run_def(tx.conn(), step.run_def_id) {
-            Ok(Some(def)) => format!("It got as far as \"{}\".", def.name),
-            _ => "It got as far as a step that is no longer there.".to_string(),
-        })
-        .unwrap_or_else(|| "It stopped before opening a step.".to_string());
-    Ok(format!("{} {reached} (run {})", why(ending), run.id))
+        .map(|step| read::automation_run_def(tx.conn(), step.run_def_id).ok().flatten());
+    let reached = match &last {
+        Some(Some(def)) => Reached::Step(&def.name),
+        Some(None) => Reached::Gone,
+        None => Reached::Nothing,
+    };
+    Ok(crate::run_wording::stopped(tx.language(), why(ending), reached, run.id))
 }
 
-/// The first sentence of that line: what ended the run, in the words each ending is worth.
+/// The first sentence of that line: what ended the run, as the `auto.say.*` key each ending is worded
+/// under.
 fn why(ending: Ending) -> &'static str {
     match ending {
-        Ending::Failed(AutomationStoppedReason::Crashed) => {
-            "An automation run failed: a step ended without reporting — its program exited, or Amenbo was restarted while it was under way."
-        }
-        Ending::Failed(AutomationStoppedReason::MaxTimes) => {
-            "An automation run failed: a way back was taken as often as it is allowed to be."
-        }
-        Ending::Failed(AutomationStoppedReason::NoAgent) => {
-            "An automation run failed: the agent a step asked for could not be started."
-        }
-        Ending::Failed(AutomationStoppedReason::NoInput) => {
-            "An automation run failed: a step's required input had nothing to fill it."
-        }
-        Ending::Failed(AutomationStoppedReason::NoWayOn) => {
-            "An automation run failed: nothing was left for it to open."
-        }
-        Ending::Failed(AutomationStoppedReason::LeftTaskOpen) => {
-            "An automation run failed: it went on without closing the task it had taken."
-        }
-        Ending::Failed(AutomationStoppedReason::Halted) => {
-            "An automation run stopped to call a person: a step left through a way out that asks for one."
-        }
-        Ending::Canceled => "An automation run was canceled.",
-        Ending::Completed => "An automation run completed.",
+        Ending::Failed(AutomationStoppedReason::Crashed) => "crashed",
+        Ending::Failed(AutomationStoppedReason::MaxTimes) => "maxTimes",
+        Ending::Failed(AutomationStoppedReason::NoAgent) => "noAgent",
+        Ending::Failed(AutomationStoppedReason::NoInput) => "noInput",
+        Ending::Failed(AutomationStoppedReason::NoWayOn) => "noWayOn",
+        Ending::Failed(AutomationStoppedReason::LeftTaskOpen) => "leftTaskOpen",
+        Ending::Failed(AutomationStoppedReason::Halted) => "halted",
+        Ending::Canceled => "canceled",
+        Ending::Completed => "completed",
     }
 }
 
@@ -490,7 +480,7 @@ mod tests {
     use crate::ops::automation_step::{Opened, Opening};
     use crate::ops::test_support::open;
     use crate::ops::test_support::{
-        exit_id, mk_exit, mk_out, mk_placed, mk_project, mk_task_in, way_out, with_tx,
+        exit_id, mk_exit, mk_out, mk_placed, mk_project, mk_task_in, way_out, with_tx, with_tx_in,
     };
 
 
@@ -732,6 +722,26 @@ mod tests {
             assert_eq!(said.len(), 1, "one line, saying the run is not coming back");
             assert!(said[0].contains("調べる"), "{}", said[0]);
             assert!(said[0].contains(&format!("run {}", run.id)), "{}", said[0]);
+        });
+    }
+
+    /// **The line is written in the language the write was opened in, and kept as that text**
+    /// (`AMB-D-976`) — a Japanese screen does not get the one English comment.
+    #[test]
+    fn the_line_on_the_task_is_written_in_the_readers_language() {
+        with_tx_in("ja", |tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, step.run_step.id);
+
+            stop(tx, run.id, Ending::Canceled).expect("stop");
+            let said = comments_on(tx, task);
+            assert_eq!(said.len(), 1);
+            assert_eq!(
+                said[0],
+                format!("オートメーションの実行が中止されました。「調べる」まで進みました。（実行 {}）", run.id),
+            );
         });
     }
 

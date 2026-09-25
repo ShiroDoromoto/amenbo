@@ -423,7 +423,8 @@ impl Store {
         op: impl FnOnce(&WriteTx<'_>) -> Result<T>,
     ) -> Result<T> {
         let reach = self.reach;
-        let tx = self.engine.write()?;
+        let mut tx = self.engine.write()?;
+        tx.write_in(self.config.language.as_deref().unwrap_or("en"));
         write_reach::guard(tx.conn(), reach, targets)?;
         for project in write_reach::projects_of(tx.conn(), targets)? {
             tx.touches_project(project);

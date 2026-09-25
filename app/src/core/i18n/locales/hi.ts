@@ -996,7 +996,6 @@ export const hi: Translation = {
     "auto.step.inputs": "इनपुट पैरामीटर",
     "auto.step.unwired": "कुछ नहीं पहुँचता",
     "auto.step.exits": "निकास",
-    "auto.step.exitUnnamed": "निकास",
     "auto.step.modelDefault": "एजेंट का अपना डिफ़ॉल्ट",
     "auto.step.notHere": "{agent} — इस मशीन पर नहीं है",
     "auto.step.folder": "कहाँ चलेगा",

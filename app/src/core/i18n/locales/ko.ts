@@ -993,7 +993,6 @@ export const ko: Translation = {
     "auto.step.inputs": "입력 파라미터",
     "auto.step.unwired": "아무것도 닿지 않습니다",
     "auto.step.exits": "출구",
-    "auto.step.exitUnnamed": "출구",
     "auto.step.modelDefault": "에이전트 자체 기본값",
     "auto.step.notHere": "{agent} — 이 기기에 없습니다",
     "auto.step.folder": "실행할 폴더",

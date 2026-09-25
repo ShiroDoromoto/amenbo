@@ -218,18 +218,6 @@ describe("declaring what a way out hands on", () => {
     expect(boxes()[0]!.value).toBe("");
   });
 
-  it("does not for the unnamed way out, which has no name to lend", async () => {
-    await act(async () => {
-      root.render(
-        createElement(AutomationOutputAdd, {
-          exit: { id: 3, outputs: [] },
-          onClose: () => undefined,
-        }),
-      );
-    });
-    expect(boxes()[0]!.value).toBe("");
-  });
-
   it("stops following the way out once somebody writes their own", async () => {
     await open([]);
     await typeInto(boxes()[0]!, "下書き");

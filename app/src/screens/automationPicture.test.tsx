@@ -34,7 +34,7 @@ function step(
     showNotes: true,
     showDecisions: true,
     showComments: true,
-    exits: [{ id: over.id * 10, outputs: [{ name: "task", kind: "task_take", required: true }] }],
+    exits: [{ id: over.id * 10, name: "完了", outputs: [{ name: "task", kind: "task_take", required: true }] }],
     inputs: [],
     settings: [],
     steps: [],
@@ -109,10 +109,10 @@ describe("the picture of the steps", () => {
 
   it("stands a + on every edge, shut while nothing is listening for the press", async () => {
     const one = detail({
-      placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, outputs: [] }] })],
+      placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] })],
       edges: [
-        { id: 1, fromId: 1, toId: 2, ends: "go" },
-        { id: 2, fromId: 2, ends: "done" },
+        { id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" },
+        { id: 2, fromId: 2, exitName: "完了", ends: "done" },
       ],
     });
     await render({ graph: one });
@@ -136,11 +136,11 @@ describe("the picture of the steps", () => {
           id: 2,
           name: "Review",
           actionId: 4,
-          exits: [{ id: 20, outputs: [] }],
+          exits: [{ id: 20, name: "完了", outputs: [] }],
           inputs: [{ name: "draft", kind: "file", required: true }],
         }),
       ],
-      edges: [{ id: 1, fromId: 1, toId: 2, ends: "go" }],
+      edges: [{ id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" }],
     });
     await render({ graph: one });
     const review = nodes().find((node) => node.textContent?.includes("Review"))!;
@@ -178,9 +178,9 @@ describe("the picture of the steps", () => {
     const one = detail({
       placements: [
         step({ id: 1, name: "take" }),
-        step({ id: 2, name: "work", exits: [{ id: 20, outputs: [] }] }),
+        step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] }),
       ],
-      edges: [{ id: 1, fromId: 1, toId: 2, ends: "go" }],
+      edges: [{ id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" }],
       entryPlacementId: 2,
     });
     await render({ graph: one });
@@ -217,11 +217,11 @@ describe("what the picture marks, as the mock draws it", () => {
             { id: 23, name: "*", outputs: [] },
           ],
         }),
-        step({ id: 3, name: "fix", exits: [{ id: 30, outputs: [] }] }),
-        step({ id: 4, name: "ship", exits: [{ id: 40, outputs: [] }] }),
+        step({ id: 3, name: "fix", exits: [{ id: 30, name: "完了", outputs: [] }] }),
+        step({ id: 4, name: "ship", exits: [{ id: 40, name: "完了", outputs: [] }] }),
       ],
       edges: [
-        { id: 1, fromId: 1, toId: 2, ends: "go" },
+        { id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" },
         { id: 2, fromId: 2, exitName: "fix it", toId: 3, ends: "go" },
         { id: 3, fromId: 2, exitName: "ship it", toId: 4, ends: "go" },
         { id: 4, fromId: 2, exitName: "*", ends: "halt" },

@@ -33,7 +33,7 @@ export function AutomationOutputAdd({
   const [own, setOwn] = useState<string | null>(null);
   const [kind, setKind] = useState<string>("value");
   const [required, setRequired] = useState(true);
-  const name = own ?? (exit.name !== undefined && exit.outputs.length === 0 ? exit.name : "");
+  const name = own ?? (exit.outputs.length === 0 ? exit.name : "");
 
   const add = () => {
     if (name.trim() === "") return;

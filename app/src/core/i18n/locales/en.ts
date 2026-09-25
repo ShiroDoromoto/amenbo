@@ -1239,7 +1239,6 @@ const ui = {
   "auto.step.inputs": "Inputs",
   "auto.step.unwired": "nothing reaches it",
   "auto.step.exits": "Exits",
-  "auto.step.exitUnnamed": "exit",
   "auto.step.modelDefault": "the agent's own default",
   "auto.step.notHere": "{agent} — not on this machine",
   "auto.step.folder": "Where it runs",

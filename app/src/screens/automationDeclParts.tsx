@@ -216,20 +216,19 @@ export function ExitEdit({
   exit: AutomationExitDto;
   run: Run;
 }) {
-  const [name, setName] = useDraft(exit.name ?? "");
-  const was = exit.name ?? null;
+  const [name, setName] = useDraft(exit.name);
+  const was = exit.name;
   return (
     <div className="autostep__decl">
       <input
         className="autostep__declname"
-        placeholder={t("auto.step.exitUnnamed")}
         aria-label={t("auto.step.exitName")}
         value={name}
         onChange={(e) => setName(e.target.value)}
         onBlur={() => {
           // A way out keeps a name: emptied, it goes back to the one it had.
           const now = name.trim();
-          if (now === "") setName(was ?? "");
+          if (now === "") setName(was);
           else if (now !== was) void run(renameAutomationExit(owner, ownerId, was, now));
         }}
       />

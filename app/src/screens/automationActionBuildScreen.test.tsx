@@ -71,7 +71,7 @@ function step(over: Partial<AutomationStepDto> = {}): AutomationStepDto {
     showNotes: true,
     showDecisions: true,
     showComments: true,
-    exits: [{ id: 10, outputs: [] }, { id: 19, name: "*", outputs: [] }],
+    exits: [{ id: 10, name: "完了", outputs: [] }, { id: 19, name: "*", outputs: [] }],
     inputs: [],
     ...over,
   };
@@ -88,7 +88,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     steps: [step()],
     edges: [],
     wires: [],
-    exits: [{ id: 20, outputs: [] }],
+    exits: [{ id: 20, name: "完了", outputs: [] }],
     inputs: [],
     settings: [],
     heldBy: [],
@@ -165,7 +165,7 @@ describe("the action build screen", () => {
   it("draws the steps inside the action as the boxes of the picture", async () => {
     hoisted.action = action({
       steps: [step(), step({ id: 12, name: "Review" })],
-      edges: [{ id: 5, fromId: 11, toId: 12, ends: "go" }],
+      edges: [{ id: 5, fromId: 11, exitName: "完了", toId: 12, ends: "go" }],
     });
     await render();
     expect(nodes().map((one) => one.textContent)).toEqual([
@@ -244,7 +244,7 @@ describe("the action build screen", () => {
     hoisted.action = action({
       note: "Takes the next task off the queue\nand says which",
       exits: [
-        { id: 1, outputs: [] },
+        { id: 1, name: "完了", outputs: [] },
         { id: 2, name: "*", outputs: [] },
       ],
     });

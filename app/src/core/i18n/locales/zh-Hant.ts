@@ -998,7 +998,6 @@ export const zhHant: Translation = {
     "auto.step.inputs": "輸入參數",
     "auto.step.unwired": "沒有東西送到",
     "auto.step.exits": "出口",
-    "auto.step.exitUnnamed": "出口",
     "auto.step.modelDefault": "代理自己的預設值",
     "auto.step.notHere": "{agent}——這台機器上沒有",
     "auto.step.folder": "執行的目錄",

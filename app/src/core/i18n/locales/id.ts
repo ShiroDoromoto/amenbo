@@ -997,7 +997,6 @@ export const id: Translation = {
     "auto.step.inputs": "Masukan",
     "auto.step.unwired": "tidak ada yang sampai",
     "auto.step.exits": "Jalan keluar",
-    "auto.step.exitUnnamed": "jalan keluar",
     "auto.step.modelDefault": "bawaan agen itu sendiri",
     "auto.step.notHere": "{agent} — tidak ada di mesin ini",
     "auto.step.folder": "Tempat ia berjalan",

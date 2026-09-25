@@ -44,9 +44,8 @@ export type Run = (write: Promise<void> | void) => Promise<boolean>;
 /** A name and what it is called, as the two pulldowns that pick a kind take them. */
 export type Choice = { id: string; label: string };
 
-/** A way out, as the list of them names it. The unnamed one has no name to put there. */
-export function exitLabel(name: string | undefined): string {
-  if (name === undefined) return t("auto.step.exitUnnamed");
+/** A way out, as the list of them names it: by its name, the error one in the screen's words. */
+export function exitLabel(name: string): string {
   return name === ERROR_EXIT ? t("auto.pic.errorExit") : name;
 }
 
@@ -234,7 +233,6 @@ export function DeclEdit({
 function edgeKey(edge: AutomationEdgeDto | undefined): string {
   if (edge === undefined) return "";
   if (edge.ends === "go") return `go:${edge.toId ?? ""}`;
-  // A way out's name is never empty, so the empty one after the colon is the unnamed way out.
   if (edge.ends === "exit") return `exit:${edge.exitTo ?? ""}`;
   return edge.ends;
 }
@@ -280,8 +278,8 @@ export function NextRow({
   picture: Picture;
   /** The box this way out leaves — an edge is the picture's, never the library action's. */
   boxId: number;
-  /** The way out it hangs on, `undefined` being the unnamed one. */
-  exitName: string | undefined;
+  /** The way out it hangs on. */
+  exitName: string;
   /** Lead the pulldown with an arrow rather than a word — under a way out's mark, where the arrow
    *  reads as the line the picture draws. */
   arrow?: boolean;
@@ -317,7 +315,7 @@ export function NextRow({
     const target = key.startsWith("go:")
       ? { ends: "go" as EdgeEnds, to: Number(key.slice("go:".length)) }
       : key.startsWith("exit:")
-        ? { ends: "exit" as EdgeEnds, exitTo: back === "" ? undefined : back }
+        ? { ends: "exit" as EdgeEnds, exitTo: back }
         : { ends: key as EdgeEnds };
     void run(
       edge === undefined
@@ -350,7 +348,7 @@ export function NextRow({
       )}
       <select
         className={unset ? "autostep__unset" : undefined}
-        aria-label={exitLabel(exitName === undefined ? undefined : builtinWord(self?.builtin, exitName))}
+        aria-label={exitLabel(builtinWord(self?.builtin, exitName))}
         value={edgeKey(edge)}
         onChange={(e) => pick(e.target.value)}
       >
@@ -379,7 +377,7 @@ export function NextRow({
             {[...graph.boundary.exits]
               .sort((a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT))
               .map((one) => (
-                <option key={`exit:${one.name ?? ""}`} value={`exit:${one.name ?? ""}`}>
+                <option key={`exit:${one.name}`} value={`exit:${one.name}`}>
                   {tf("auto.step.nextExit", { name: exitLabel(one.name) })}
                 </option>
               ))}

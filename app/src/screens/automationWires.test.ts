@@ -33,7 +33,7 @@ function step(
     showNotes: true,
     showDecisions: true,
     showComments: true,
-    exits: [{ id: id * 10, outputs }],
+    exits: [{ id: id * 10, name: "完了", outputs }],
     inputs,
     settings: [],
     steps: [],
@@ -74,7 +74,7 @@ describe("what can fill an input", () => {
 
   it("names a choice by the spot, the way out and the output together", () => {
     const choices = wireChoices(one, 2, port("note", "value"));
-    expect(choices[0]!.key).toBe(choiceKey(1, undefined, "note"));
+    expect(choices[0]!.key).toBe(choiceKey(1, "完了", "note"));
   });
 
   it("shows the wire drawn last where several land on one input", () => {
@@ -94,10 +94,10 @@ describe("what crosses the action's own boundary", () => {
       step(2, "review", [port("notes", "file")]),
     ],
     edges: [
-      { id: 21, fromId: 1, ends: "exit", exitTo: "done" },
-      { id: 22, fromId: 2, ends: "go", toId: 1 },
+      { id: 21, fromId: 1, exitName: "完了", ends: "exit", exitTo: "done" },
+      { id: 22, fromId: 2, exitName: "完了", ends: "go", toId: 1 },
     ],
-    wires: [{ id: 41, fromId: 1, fromPortName: "draft", toId: 0, toPortName: "result" }],
+    wires: [{ id: 41, fromId: 1, fromExitName: "完了", fromPortName: "draft", toId: 0, toPortName: "result" }],
     boundary: { inputs: [port("title", "value"), port("file", "file")], exits: [] },
   };
 
@@ -110,7 +110,7 @@ describe("what crosses the action's own boundary", () => {
   it("fills a way out of the action only from the steps that leave by it", () => {
     const choices = boundaryChoices(inner, "done", port("result", "file"));
     expect(choices.map((one) => `${one.boxName}:${one.portName}`)).toEqual(["draft:draft"]);
-    expect(boundaryChoices(inner, undefined, port("result", "file"))).toEqual([]);
+    expect(boundaryChoices(inner, "gave up", port("result", "file"))).toEqual([]);
   });
 
   it("reads the wire filling a way out's output", () => {

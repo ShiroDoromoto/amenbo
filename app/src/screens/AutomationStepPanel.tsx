@@ -360,7 +360,7 @@ function InputRow({
           <option key={one.key} value={one.key}>
             {[
               builtinWord(one.builtin, one.boxName),
-              exitLabel(one.exitName === undefined ? undefined : builtinWord(one.builtin, one.exitName)),
+              ...(one.exitName === undefined ? [] : [exitLabel(builtinWord(one.builtin, one.exitName))]),
               builtinWord(one.builtin, one.portName),
             ].join(" · ")}
           </option>

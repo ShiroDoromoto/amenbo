@@ -1000,7 +1000,6 @@ export const de: Translation = {
     "auto.step.inputs": "Eingaben",
     "auto.step.unwired": "nichts erreicht sie",
     "auto.step.exits": "Ausgänge",
-    "auto.step.exitUnnamed": "Ausgang",
     "auto.step.modelDefault": "die Vorgabe des Agenten selbst",
     "auto.step.notHere": "{agent} – auf diesem Rechner nicht vorhanden",
     "auto.step.folder": "Wo er läuft",

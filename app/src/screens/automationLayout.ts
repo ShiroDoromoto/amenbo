@@ -215,8 +215,8 @@ export type PicLine = {
   tone?: "next" | "branch" | "error";
   /** It crosses the action's own boundary: in from the top mark, or out into a way out's mark. */
   leaves?: boolean;
-  /** The way out this edge hangs on, or a wire is handed on by, as core names it. Absent for the
-   *  unnamed one. */
+  /** The way out this edge hangs on, or a wire is handed on by, as core names it. Absent on the line
+   *  in from the top mark and on a wire from the action's own inputs, which leave by no way out. */
   exitName?: string;
   /**
    * The built-in the box this line leaves is, by its key: its way out is written in the screen's
@@ -255,7 +255,7 @@ export type PicInsert = { edgeId: number; x: number; y: number };
 export type PicMark = {
   key: string;
   kind: "in" | "out";
-  /** The way out, for `out`. Absent for the unnamed one and for `in`. */
+  /** The way out, for `out`. Absent for `in`. */
   exitName?: string;
   /** What the action takes in, for `in`; what leaving by this way out hands on, for `out`. */
   ports: readonly AutomationPortDto[];
@@ -585,8 +585,8 @@ function lineKey(kind: "edge" | "wire", id: number): string {
  */
 /**
  * The way out a line hangs on, in the words it is written with: a built-in's in the screen's language,
- * anything else as core names it. Absent for the unnamed one. The error way out is left to the picture,
- * which writes it as a word of its own.
+ * anything else as core names it. Absent where the line leaves by no way out. The error way out is
+ * left to the picture, which writes it as a word of its own.
  */
 export function lineWord(line: Pick<PicLine, "exitName" | "builtin">): string | undefined {
   return line.exitName === undefined ? undefined : builtinWord(line.builtin, line.exitName);
@@ -697,10 +697,10 @@ export function layOut(graph: PicGraph | null): Picture {
     outs.forEach((exit, nth) => {
       const id = -(nth + 1);
       const x = startX + nth * (OUT_W + OUT_GAP);
-      outOf.set(exit.name ?? "", id);
+      outOf.set(exit.name, id);
       spots.push(spot(id, x, outY, OUT_W, OUT_H));
       marks.push({
-        key: `out:${exit.name ?? ""}`,
+        key: `out:${exit.name}`,
         kind: "out",
         exitName: exit.name,
         ports: exit.outputs,
@@ -800,8 +800,8 @@ export function layOut(graph: PicGraph | null): Picture {
     });
   }
 
-  // Where each edge is tied to its box. Only a way out with a line is counted — the unnamed one and
-  // the error one are there on every box, and counting them would push every named line along. The
+  // Where each edge is tied to its box. Only a way out with a line is counted — the two every box is
+  // born with are there on every box, and counting them would push every other line along. The
   // lines that leave for the left lane come first, since their first leg turns left; those that go
   // nowhere come last, so their words have the room to the right of every line.
   const reach = (edge: AutomationEdgeDto): number => {

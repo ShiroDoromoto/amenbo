@@ -80,7 +80,7 @@ function step(over: Partial<AutomationStepDto> = {}): AutomationStepDto {
     showDecisions: true,
     showComments: true,
     // What core writes at birth: the unnamed way out, and the error one nobody can delete.
-    exits: [{ id: 10, outputs: [] }, { id: 19, name: "*", outputs: [] }],
+    exits: [{ id: 10, name: "完了", outputs: [] }, { id: 19, name: "*", outputs: [] }],
     inputs: [],
     ...over,
   };
@@ -97,7 +97,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     steps: [step()],
     edges: [],
     wires: [],
-    exits: [{ id: 20, outputs: [] }],
+    exits: [{ id: 20, name: "完了", outputs: [] }],
     inputs: [],
     settings: [],
     heldBy: [],
@@ -132,7 +132,7 @@ const addOf = (title: string) =>
 const nextPicks = () =>
   selects().filter((one) => {
     const label = one.getAttribute("aria-label");
-    return label === t("auto.step.exitUnnamed") || label === t("auto.pic.errorExit");
+    return label === "完了" || label === t("auto.pic.errorExit");
   });
 
 /** The line that declares one more of a family, found by what its empty box asks for. */
@@ -225,7 +225,7 @@ describe("the panel of one step", () => {
 
 describe("what happens after a way out", () => {
   const two = action({
-    steps: [step(), step({ id: 12, name: "Review", exits: [{ id: 30, outputs: [] }] })],
+    steps: [step(), step({ id: 12, name: "Review", exits: [{ id: 30, name: "完了", outputs: [] }] })],
   });
 
   it("offers the other steps, numbered as the picture draws them, and sends the line on this picture", async () => {
@@ -242,14 +242,14 @@ describe("what happens after a way out", () => {
     await pick(next, "go:12");
     expect(hoisted.addEdge).toHaveBeenCalledWith(
       "action",
-      { boxId: 11, exitName: undefined },
+      { boxId: 11, exitName: "完了" },
       { ends: "go", to: 12 },
     );
   });
 
   it("offers leaving the action by each way out it declares, and says which", async () => {
     const declared = action({
-      exits: [{ id: 20, outputs: [] }, { id: 21, name: "gave up", outputs: [] }],
+      exits: [{ id: 20, name: "完了", outputs: [] }, { id: 21, name: "gave up", outputs: [] }],
     });
     await render({ action: declared, stepId: 11, onRemoved: () => undefined });
     const next = nextPicks()[0]!;
@@ -259,21 +259,21 @@ describe("what happens after a way out", () => {
     await pick(next, "exit:gave up");
     expect(hoisted.addEdge).toHaveBeenCalledWith(
       "action",
-      { boxId: 11, exitName: undefined },
+      { boxId: 11, exitName: "完了" },
       { ends: "exit", exitTo: "gave up" },
     );
-    await pick(next, "exit:");
+    await pick(next, "exit:完了");
     expect(hoisted.addEdge).toHaveBeenLastCalledWith(
       "action",
-      { boxId: 11, exitName: undefined },
-      { ends: "exit", exitTo: undefined },
+      { boxId: 11, exitName: "完了" },
+      { ends: "exit", exitTo: "完了" },
     );
   });
 
   it("reads a line that leaves the action back as the way out it returns to", async () => {
     const leaving = action({
-      exits: [{ id: 20, outputs: [] }, { id: 21, name: "gave up", outputs: [] }],
-      edges: [{ id: 5, fromId: 11, ends: "exit", exitTo: "gave up" }],
+      exits: [{ id: 20, name: "完了", outputs: [] }, { id: 21, name: "gave up", outputs: [] }],
+      edges: [{ id: 5, fromId: 11, exitName: "完了", ends: "exit", exitTo: "gave up" }],
     });
     await render({ action: leaving, stepId: 11, onRemoved: () => undefined });
     expect(nextPicks()[0]!.value).toBe("exit:gave up");
@@ -282,7 +282,7 @@ describe("what happens after a way out", () => {
   it("takes the line away where the reader says nothing is decided yet", async () => {
     const wired = action({
       steps: two.steps,
-      edges: [{ id: 5, fromId: 11, toId: 12, ends: "go" }],
+      edges: [{ id: 5, fromId: 11, exitName: "完了", toId: 12, ends: "go" }],
     });
     await render({ action: wired, stepId: 11, onRemoved: () => undefined });
     expect(nextPicks()[0]!.value).toBe("go:12");

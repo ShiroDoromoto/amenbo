@@ -66,7 +66,7 @@ function Declared({
   exits,
 }: {
   inputs: readonly AutomationPortDto[];
-  exits: readonly { name?: string | null; outputs: readonly { name: string }[] }[];
+  exits: readonly { name: string; outputs: readonly { name: string }[] }[];
 }) {
   const named = exits.filter((one) => one.name !== ERROR_EXIT);
   return (
@@ -91,8 +91,8 @@ function Declared({
       <span className="actdecl__chips">
         {named.map((one) => (
           <ExitMark
-            key={one.name ?? ""}
-            name={one.name ?? undefined}
+            key={one.name}
+            name={one.name}
             outputs={one.outputs.map((out) => out.name)}
           />
         ))}

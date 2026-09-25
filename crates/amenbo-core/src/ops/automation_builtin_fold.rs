@@ -14,9 +14,12 @@
 //! to say: it leaves by [`UNMERGED`], and whoever built it draws where that goes. There is no setting
 //! that forces the fold — discarding work is a person's decision, made at a terminal. Anything else that
 //! stops it, uncommitted changes included, leaves by the error way out.
+//!
+//! **Done before the step's transaction** ([`Work::Outside`]), as the cut is: the fetch waits on the
+//! remote.
 
 use crate::error::{Error, Result};
-use crate::ops::automation_builtin::{Builtin, BuiltinExit, Carried, Carry};
+use crate::ops::automation_builtin::{Builtin, BuiltinExit, Outside, Work, Worked};
 use crate::ops::automation_builtin_cut::{refused, repository};
 use crate::store_engine::read;
 use crate::worktree_cut::{self, Refusal};
@@ -32,26 +35,28 @@ pub(super) const FOLD_WORKTREE: Builtin = Builtin {
     ins: &[],
     exits: &[BuiltinExit { name: None, outs: &[] }, BuiltinExit { name: Some(UNMERGED), outs: &[] }],
     waits: None,
-    run: fold,
+    work: Work::Outside(fold),
 };
 
-fn fold(carry: &Carry<'_, '_>) -> Result<Carried> {
-    let task_id = carry
+fn fold(outside: &Outside<'_>) -> Result<Worked> {
+    let task_id = outside
         .task_id
         .ok_or_else(|| Error::invalid("there is no task whose worktree to fold — the run has not taken one"))?;
-    let task = read::task(carry.tx.conn(), task_id)?
+    let task = read::task(outside.conn, task_id)?
         .ok_or_else(|| Error::not_found(format!("task AMB-T-{task_id}")))?;
-    let root = repository(carry.tx.conn(), carry.run.project_id, task.at_binding_id)?;
+    let root = repository(outside.conn, outside.run.project_id, task.at_binding_id)?;
     let cut = worktree_cut::layout(&root, &task_id.to_string());
     let base = worktree_cut::origin_default(&root).map_err(refused)?;
     match worktree_cut::finish(&cut, Some(&base), false) {
-        Ok(_) => Ok(Carried {
+        Ok(_) => Ok(Worked {
             exit: None,
             report: format!("folded {} and {}", cut.worktree.display(), cut.branch),
+            hands: Vec::new(),
         }),
-        Err(Refusal::Unmerged { branch, base }) => Ok(Carried {
+        Err(Refusal::Unmerged { branch, base }) => Ok(Worked {
             exit: Some(UNMERGED),
             report: format!("{branch} carries changes {base} does not have, so it was left standing"),
+            hands: Vec::new(),
         }),
         Err(other) => Err(refused(other)),
     }
@@ -67,7 +72,8 @@ mod tests {
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{launch_leaving_the_task_open as launch, nothing_asked, Launcher};
-    use crate::ops::automation_step::{open, Opened};
+    use crate::ops::automation_step::Opened;
+    use crate::ops::test_support::open;
     use crate::ops::test_support::{mk_project, mk_task_in, way_out, with_tx};
     use crate::store_engine::WriteTx;
     use std::path::{Path, PathBuf};

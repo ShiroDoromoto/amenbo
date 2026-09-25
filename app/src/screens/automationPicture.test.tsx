@@ -108,18 +108,38 @@ describe("the picture of the steps", () => {
   });
 
   /// A run's pane sends the reader here with the box it stopped at picked (`AMB-T-5594`).
-  it("brings a box picked out of sight to the middle, once per pick, and leaves one in sight", async () => {
-    // jsdom lays nothing out, so the observer is stood in by one whose answer the test gives.
-    const watched: { box: Element; answer: (ratio: number) => void }[] = [];
+  it("brings a box picked out of sight to the middle until the reader moves, and leaves one in sight", async () => {
+    // jsdom lays nothing out, so the observer is stood in by one whose answer the test gives. An
+    // observer let go answers no more, as the real one does.
+    const watched: { box: Element; answer: (ratio: number, height?: number) => void }[] = [];
     const wasObserver = globalThis.IntersectionObserver;
     globalThis.IntersectionObserver = class {
+      private gone = false;
       constructor(private readonly call: IntersectionObserverCallback) {}
       observe(box: Element) {
         watched.push({
           box,
-          answer: (ratio) =>
-            this.call([{ intersectionRatio: ratio } as IntersectionObserverEntry], this as never),
+          answer: (ratio, height = 40) => {
+            if (this.gone) return;
+            this.call(
+              [{ intersectionRatio: ratio, boundingClientRect: { height } } as IntersectionObserverEntry],
+              this as never,
+            );
+          },
         });
+      }
+      unobserve() {}
+      disconnect() {
+        this.gone = true;
+      }
+    } as never;
+    // The box taking a size is stood in the same way: the test says when it happens.
+    const sizes: (() => void)[] = [];
+    const wasSize = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(private readonly call: ResizeObserverCallback) {}
+      observe() {
+        sizes.push(() => this.call([], this as never));
       }
       disconnect() {}
     } as never;
@@ -135,7 +155,7 @@ describe("the picture of the steps", () => {
       expect(watched.map((one) => one.box)).toEqual([nodes()[0]]);
       watched[0]!.answer(0.5);
       expect(moved).toEqual([[nodes()[0], { block: "center", inline: "nearest" }]]);
-      // Drawn again with the same pick — a reader who scrolled away is not pulled back.
+      // Drawn again with the same pick, the watch is not set up again.
       await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
       expect(watched).toHaveLength(1);
       // Picked again, and wholly in sight this time: it stays where it is.
@@ -143,8 +163,43 @@ describe("the picture of the steps", () => {
       await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
       watched[1]!.answer(1);
       expect(moved).toHaveLength(1);
+      // Seen whole, then pushed down by a band that lands after it (`AMB-T-5595`): brought back.
+      watched[1]!.answer(0.3);
+      expect(moved).toHaveLength(2);
+      // Brought into sight and pushed out again by the next band: brought back again.
+      watched[1]!.answer(1);
+      watched[1]!.answer(0.3);
+      expect(moved).toHaveLength(3);
+      // On a face not shown yet it has no size, and the watch waits rather than moving or ending.
+      // Out of sight at both of the observer's looks, the box crosses nothing and the observer stays
+      // silent, so the box taking a size asks it again, and its fresh answer moves the box.
+      await render({ graph: detail(), onPickBox: vi.fn() });
+      await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
+      watched[2]!.answer(0, 0);
+      expect(moved).toHaveLength(3);
+      sizes[sizes.length - 1]!();
+      expect(watched).toHaveLength(4);
+      watched[3]!.answer(0);
+      expect(moved).toHaveLength(4);
+      // A band landing over the board changes the document without touching the box: asked again.
+      const band = document.body.appendChild(document.createElement("div"));
+      await act(async () => {});
+      band.remove();
+      await act(async () => {});
+      expect(watched.length).toBeGreaterThan(4);
+      watched[watched.length - 1]!.answer(0.3);
+      expect(moved).toHaveLength(5);
+      // The reader's own wheel ends the watch: where the screen stands is theirs from then on.
+      await render({ graph: detail(), onPickBox: vi.fn() });
+      await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
+      const last = watched.length;
+      watched[last - 1]!.answer(1);
+      window.dispatchEvent(new Event("wheel"));
+      watched[last - 1]!.answer(0.3);
+      expect(moved).toHaveLength(5);
     } finally {
       globalThis.IntersectionObserver = wasObserver;
+      globalThis.ResizeObserver = wasSize;
       Element.prototype.scrollIntoView = wasScroll;
     }
   });

@@ -25,8 +25,8 @@
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
 // every time the definition is read again. The one move it makes is to bring a box newly picked into
 // sight — the box a run stopped at arrives picked from its pane (`AMB-T-5594`), and a band over the
-// screen can push it out of view. It moves once per pick, so a reader scrolling away from the box
-// that stays picked is not pulled back.
+// screen can push it out of view. It stops moving once the reader's own hand has moved the screen,
+// so a reader scrolling away from the box that stays picked is not pulled back.
 import { useEffect, useId, useRef } from "react";
 import { edgeWord, exitWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
@@ -152,22 +152,50 @@ export function AutomationPicture({
   const pickedRef = useRef<HTMLButtonElement | null>(null);
   // A box picked before the definition has loaded has no element yet, so the move waits for the
   // render that draws it. Whether the box is in sight is asked of an observer rather than read at
-  // once: the panel that opens with the pick changes the screen on the renders after, and the
-  // observer answers once they have landed. A box wholly in sight stays where it is — the reader
-  // pressed it where they could see it — and one that is not is brought to the middle, with the
-  // lines around it.
+  // once, and asked for as long as the screen is still settling: the panel the pick opens and the
+  // bands over the picture land on renders after the box is drawn, and can push it out of view after
+  // it was seen whole or brought into sight. A box in sight stays where it is; one that is not is
+  // brought to the middle, with the lines around it, as often as the screen pushes it out. The watch
+  // ends with the reader's own wheel, touch, key or press — from then on where the screen stands is
+  // theirs.
+  //
+  // The observer speaks only when the box crosses into or out of sight between two of its looks, so
+  // it alone cannot be trusted with a screen that is still moving. Sent from a run's pane, the box
+  // was brought into sight and the band over the board grew in the same frame, pushing it back
+  // below the fold: out of sight at both looks, it crossed nothing, and nothing moved it again
+  // (`AMB-T-5595`). The band is not around the box, and the boxes that are keep their size while
+  // their content overflows, so no size of theirs says it grew. What does is the page changing: each
+  // change to the document, and each change of the box's own size (a face coming up), asks the
+  // observer again from the start.
   const drawn = picture.nodes.some((node) => node.boxId === selectedBoxId);
   useEffect(() => {
     const box = pickedRef.current;
     if (!drawn || box === null || typeof IntersectionObserver === "undefined") return;
-    const watch = new IntersectionObserver(([seen]) => {
+    const reader = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+    const stop = () => {
       watch.disconnect();
-      if (seen !== undefined && seen.intersectionRatio < 1) {
+      sized?.disconnect();
+      changed.disconnect();
+      for (const kind of reader) window.removeEventListener(kind, stop, true);
+    };
+    const watch = new IntersectionObserver(([seen]) => {
+      // A box with no size is on a face not shown yet and has no place to be brought to.
+      const laidOut = seen !== undefined && (seen.boundingClientRect?.height ?? 1) > 0;
+      if (laidOut && seen.intersectionRatio < 1) {
         box.scrollIntoView?.({ block: "center", inline: "nearest" });
       }
     }, { threshold: 1 });
+    const askAgain = () => {
+      watch.unobserve(box);
+      watch.observe(box);
+    };
+    const sized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(askAgain);
+    const changed = new MutationObserver(askAgain);
     watch.observe(box);
-    return () => watch.disconnect();
+    sized?.observe(box);
+    changed.observe(document.body, { childList: true, subtree: true, characterData: true });
+    for (const kind of reader) window.addEventListener(kind, stop, true);
+    return stop;
   }, [selectedBoxId, drawn]);
   if (picture.nodes.length === 0) return null;
 

@@ -134,6 +134,8 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // refusal are one set of sentences rather than two to keep in step.
   "invalid_automation_archived",
   "invalid_automation_workspace_closed",
+  "invalid_action_still_placed",
+  "invalid_action_placed_elsewhere",
   "not_ready_automation",
   "not_ready_automation_no_steps",
   "not_ready_automation_no_entry",

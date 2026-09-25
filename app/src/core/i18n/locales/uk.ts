@@ -617,9 +617,6 @@ export const uk: Translation = {
     "quit.confirmNotAll": "Завершити Amenbo? Усі відкриті термінали завершаться. Розмови повернуться під час наступного запуску, окрім панелей із {names}. Те, що в них виконувалося, теж не повернеться.",
 
     "face.ended": "Програму в цьому терміналі завершено.",
-    "face.builtinDoing": "Amenbo виконує це",
-    "face.builtinDone": "Amenbo виконав це",
-    "face.builtinExit": "Вихід: {exit}",
 
     "face.endedGeminiUnset": "Для Gemini CLI не задано спосіб автентифікації. Вказаний шлях належить лише цій панелі й зникне разом із нею — задати його потрібно у вашому власному ~/.gemini/settings.json.",
     "face.noWayBack": "Цю розмову більше не відкрити.",
@@ -1149,7 +1146,6 @@ export const uk: Translation = {
     "auto.run.step": "Крок {n} · {step}",
     "auto.run.inAction": "{step} у {action}",
     "auto.run.reportWithheld": "Звіт не залишено в завданні, бо воно було закрите: {steps}",
-    "auto.run.waitingForTask": "Чекає на завдання, яке можна взяти",
     "auto.run.taskWait": "Чекає завдання",
 
     "mcp.title": "Підключення через MCP",
@@ -1352,6 +1348,10 @@ export const uk: Translation = {
     not_ready_premise_unsettled: "{ref} не вирішено — дочекайтеся, поки його допишуть, або відв'яжіть його",
     not_ready_not_started: "воно починається аж {start} — змініть дату початку, якщо вона хибна",
     not_ready_draft: "воно ще створюється — спершу завершіть створення",
+    invalid_action_still_placed:
+      "Ця дія ще стоїть на схемах — усього {count}. Приберіть її звідти, перш ніж видаляти.",
+    invalid_action_placed_elsewhere:
+      "Ця дія стоїть в автоматизаціях інших проєктів ({automations}). Приберіть її звідти, перш ніж переносити в «{project}».",
     invalid_automation_archived: "«{automation}» в архіві. Поверніть її, перш ніж запускати.",
     invalid_automation_workspace_closed:
       "Робочий простір закрито, а запуск малює свої кроки в його панелях. Відкрийте його й запустіть знову.",

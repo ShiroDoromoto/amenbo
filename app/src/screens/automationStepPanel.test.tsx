@@ -155,7 +155,7 @@ const boxes = () => [...container.querySelectorAll<HTMLInputElement>("input")];
 
 /** The switch that makes this spot where a run opens. */
 const entrySwitch = () =>
-  container.querySelector<HTMLInputElement>(".autostep__switch input[role=switch]")!;
+  container.querySelector<HTMLInputElement>(".autoswitch input[role=switch]")!;
 
 /** The pulldown that says what happens after one way out, found by the way out it hangs on. */
 const nextFor = (exit: string) =>
@@ -362,7 +362,7 @@ describe("the panel of one spot", () => {
   /// A family the action declares none of is left off, rather than drawn with a line saying so.
   it("draws no section for inputs or settings the action does not declare", async () => {
     await render({ automation: detail(), placementId: 1 });
-    const titles = [...container.querySelectorAll(".autostep__sectitle")].map((one) => one.textContent);
+    const titles = [...container.querySelectorAll(".autosec__head")].map((one) => one.textContent);
     expect(titles).not.toContain(t("auto.step.inputs"));
     expect(titles).not.toContain(t("auto.step.cfg"));
     expect(titles).toContain(t("auto.step.exits"));
@@ -402,7 +402,7 @@ describe("the panel of one spot", () => {
   /// definition, and unticking it leaves the automation with no entry at all rather than refusing.
   it("names this spot as where a run opens, and gives the entry back", async () => {
     await render({ automation: detail({ entryPlacementId: undefined }), placementId: 1 });
-    expect(container.querySelector(".autostep__switch")?.textContent).toContain(t("auto.step.entry"));
+    expect(container.querySelector(".autoswitch")?.textContent).toContain(t("auto.step.entry"));
     const entry = entrySwitch();
     expect(entry.checked).toBe(false);
     await act(async () => entry.click());

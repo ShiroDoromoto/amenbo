@@ -608,9 +608,6 @@ export const ja: Translation = {
     "quit.confirmNotAll": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、{names} のペインは戻りません。走っていたものも戻りません。",
 
     "face.ended": "この端末のプログラムは終了しました。",
-    "face.builtinDoing": "Amenbo が実行しています",
-    "face.builtinDone": "Amenbo が実行しました",
-    "face.builtinExit": "出口: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI に認証方法が設定されていません。画面のパスはこのペイン専用で一緒に捨てられるので、直すのはご自分の ~/.gemini/settings.json です。",
     "face.noWayBack": "この会話はもう開けません。",
@@ -1138,7 +1135,6 @@ export const ja: Translation = {
     "auto.run.step": "ステップ {n} · {step}",
     "auto.run.inAction": "{action} の {step}",
     "auto.run.reportWithheld": "タスクが閉じていたので、報告を残さなかった：{steps}",
-    "auto.run.waitingForTask": "着手できるタスクを待っています",
     "auto.run.taskWait": "タスク待ち",
 
     "mcp.title": "MCP でつなぐ",
@@ -1341,6 +1337,10 @@ export const ja: Translation = {
     not_ready_premise_unsettled: "{ref} が未確定です。書き終わるのを待つかリンクを外してください",
     not_ready_not_started: "着手日 {start} より前です。日付が違うなら着手日を変えてください",
     not_ready_draft: "まだ作成中です。作成を終えてください",
+    invalid_action_still_placed:
+      "このアクションは図に置かれています（全部で {count} か所）。図から外してから消してください。",
+    invalid_action_placed_elsewhere:
+      "このアクションは、ほかのプロジェクトのオートメーション（{automations}）に置かれています。そこから外してから「{project}」へ移してください。",
     invalid_automation_archived: "「{automation}」はアーカイブ済みです。戻してから起動してください。",
     invalid_automation_workspace_closed:
       "ワークスペースが閉じています。実行はステップをそのペインに描くので、開いてから起動してください。",

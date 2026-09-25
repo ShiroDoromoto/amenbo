@@ -602,9 +602,6 @@ export const tr: Translation = {
     "quit.confirmNotAll": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, {names} çalıştıran bölmeler hariç. İçlerinde çalışanlar da geri gelmez.",
 
     "face.ended": "Bu terminaldeki program sona erdi.",
-    "face.builtinDoing": "Amenbo bunu yürütüyor",
-    "face.builtinDone": "Amenbo bunu yürüttü",
-    "face.builtinExit": "Çıkış: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI için bir kimlik doğrulama yöntemi ayarlanmamış. Belirtilen yol yalnızca bu bölmeye aittir ve onunla birlikte silinir — ayarlamanız gereken kendi ~/.gemini/settings.json dosyanızdır.",
     "face.noWayBack": "Bu konuşma artık açılamıyor.",
@@ -1132,7 +1129,6 @@ export const tr: Translation = {
     "auto.run.step": "Adım {n} · {step}",
     "auto.run.inAction": "{action} içindeki {step}",
     "auto.run.reportWithheld": "Görev kapalı olduğu için rapor göreve bırakılmadı: {steps}",
-    "auto.run.waitingForTask": "Alınabilecek bir görev bekleniyor",
     "auto.run.taskWait": "Görev bekleniyor",
 
     "mcp.title": "MCP ile bağlan",
@@ -1326,6 +1322,10 @@ export const tr: Translation = {
     not_ready_premise_unsettled: "{ref} karara bağlanmadı — yazılıp bitmesini bekleyin ya da bağı kaldırın",
     not_ready_not_started: "{start} tarihinden önce başlamıyor — tarih yanlışsa başlangıç gününü değiştirin",
     not_ready_draft: "hâlâ oluşturuluyor — önce oluşturmayı bitirin",
+    invalid_action_still_placed:
+      "Bu eylem hâlâ şemalarda duruyor — toplam {count}. Silmeden önce oradan çıkar.",
+    invalid_action_placed_elsewhere:
+      "Bu eylem başka projelerin otomasyonlarına yerleştirilmiş ({automations}). “{project}” projesine taşımadan önce oradan çıkar.",
     invalid_automation_archived: "“{automation}” arşivlenmiş. Başlatmadan önce geri getir.",
     invalid_automation_workspace_closed:
       "Çalışma alanı kapalı ve bir koşu adımlarını oradaki bölmelere çizer. Aç ve yeniden başlat.",

@@ -158,7 +158,7 @@ describe("naming a pane", () => {
   it("offers no name on a run's pane, whose row is headed with the automation", async () => {
     // A name given there would be kept against the place and never drawn (`AMB-T-5529`).
     await pane(new Map(), {
-      automation: "家計簿の開発ループ", run: 7, step: "取る", action: null, task: null, state: null,
+      automation: "家計簿の開発ループ", run: 7, step: "取る", builtin: false, action: null, task: null, state: null,
     });
     await opened();
 

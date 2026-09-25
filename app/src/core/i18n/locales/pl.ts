@@ -617,9 +617,6 @@ export const pl: Translation = {
     "quit.confirmNotAll": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, poza panelami z {names}. To, co w nich działało, też nie wróci.",
 
     "face.ended": "Program w tym terminalu zakończył działanie.",
-    "face.builtinDoing": "Amenbo właśnie to wykonuje",
-    "face.builtinDone": "Amenbo to wykonało",
-    "face.builtinExit": "Wyjście: {exit}",
 
     "face.endedGeminiUnset": "Dla Gemini CLI nie ustawiono metody uwierzytelniania. Podana ścieżka należy tylko do tego panelu i znika wraz z nim — ustaw ją we własnym pliku ~/.gemini/settings.json.",
     "face.noWayBack": "Tej rozmowy nie da się już otworzyć.",
@@ -1149,7 +1146,6 @@ export const pl: Translation = {
     "auto.run.step": "Krok {n} · {step}",
     "auto.run.inAction": "{step} w {action}",
     "auto.run.reportWithheld": "Raport nie został zostawiony w zadaniu, bo było zamknięte: {steps}",
-    "auto.run.waitingForTask": "Czeka na zadanie, które może pobrać",
     "auto.run.taskWait": "Czeka na zadanie",
 
     "mcp.title": "Połącz przez MCP",
@@ -1352,6 +1348,10 @@ export const pl: Translation = {
     not_ready_premise_unsettled: "{ref} jest nierozstrzygnięte — poczekaj, aż zostanie dopisane do końca, albo je odepnij",
     not_ready_not_started: "zaczyna się dopiero {start} — zmień datę startu, jeśli to pomyłka",
     not_ready_draft: "wciąż jest tworzone — najpierw zakończ tworzenie",
+    invalid_action_still_placed:
+      "Ta akcja nadal stoi na schematach — łącznie {count}. Zdejmij ją z nich, zanim ją usuniesz.",
+    invalid_action_placed_elsewhere:
+      "Ta akcja stoi w automatyzacjach innych projektów ({automations}). Zdejmij ją z nich, zanim przeniesiesz ją do „{project}”.",
     invalid_automation_archived: "„{automation}” jest zarchiwizowana. Przywróć ją, zanim uruchomisz.",
     invalid_automation_workspace_closed:
       "Obszar roboczy jest zamknięty, a przebieg rysuje swoje kroki w jego panelach. Otwórz go i uruchom ponownie.",

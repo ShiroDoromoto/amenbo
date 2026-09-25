@@ -602,9 +602,6 @@ export const nl: Translation = {
     "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",
 
     "face.ended": "Het programma in deze terminal is gestopt.",
-    "face.builtinDoing": "Amenbo voert dit nu uit",
-    "face.builtinDone": "Amenbo heeft dit uitgevoerd",
-    "face.builtinExit": "Uitgang: {exit}",
 
     "face.endedGeminiUnset": "Voor Gemini CLI is geen authenticatiemethode ingesteld. Het genoemde pad hoort alleen bij dit deelvenster en verdwijnt ermee — in te stellen in uw eigen ~/.gemini/settings.json.",
     "face.noWayBack": "Dit gesprek kan niet meer worden geopend.",
@@ -1132,7 +1129,6 @@ export const nl: Translation = {
     "auto.run.step": "Stap {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
     "auto.run.reportWithheld": "Verslag niet bij de taak achtergelaten, want die was gesloten: {steps}",
-    "auto.run.waitingForTask": "Wacht op een taak die opgepakt kan worden",
     "auto.run.taskWait": "Wacht op taak",
 
     "mcp.title": "Verbinden via MCP",
@@ -1326,6 +1322,10 @@ export const nl: Translation = {
     not_ready_premise_unsettled: "{ref} is nog niet beslecht — wacht tot hij is afgeschreven of ontkoppel hem",
     not_ready_not_started: "hij begint pas op {start} — pas de startdatum aan als die niet klopt",
     not_ready_draft: "hij wordt nog aangemaakt — rond het aanmaken eerst af",
+    invalid_action_still_placed:
+      "Deze actie staat nog in schema’s — {count} in totaal. Haal haar daar weg voordat je haar verwijdert.",
+    invalid_action_placed_elsewhere:
+      "Deze actie staat in automatiseringen van andere projecten ({automations}). Haal haar daar weg voordat je haar naar “{project}” verplaatst.",
     invalid_automation_archived: "“{automation}” is gearchiveerd. Haal het terug voordat je het start.",
     invalid_automation_workspace_closed:
       "De werkruimte is gesloten, en een run tekent zijn stappen in de vakken daarvan. Open hem en start opnieuw.",

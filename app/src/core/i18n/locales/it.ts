@@ -613,9 +613,6 @@ export const it: Translation = {
     "quit.confirmNotAll": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, tranne nei riquadri con {names}. Non torna nemmeno ciò che stavano eseguendo.",
 
     "face.ended": "Il programma di questo terminale è terminato.",
-    "face.builtinDoing": "Amenbo lo sta eseguendo",
-    "face.builtinDone": "Amenbo lo ha eseguito",
-    "face.builtinExit": "Uscita: {exit}",
 
     "face.endedGeminiUnset": "Per Gemini CLI non è impostato alcun metodo di autenticazione. Il percorso indicato appartiene solo a questo riquadro e sparisce con esso: quello da modificare è il tuo ~/.gemini/settings.json.",
     "face.noWayBack": "Questa conversazione non si può più aprire.",
@@ -1144,7 +1141,6 @@ export const it: Translation = {
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
     "auto.run.reportWithheld": "Resoconto non lasciato sull’attività, che era chiusa: {steps}",
-    "auto.run.waitingForTask": "In attesa di un’attività da prendere",
     "auto.run.taskWait": "In attesa di attività",
 
     "mcp.title": "Collegare via MCP",
@@ -1344,6 +1340,10 @@ export const it: Translation = {
     not_ready_premise_unsettled: "{ref} non è risolta: aspetta che sia scritta fino in fondo o togli il collegamento",
     not_ready_not_started: "non comincia prima del {start}: cambia la data di inizio se non è quella giusta",
     not_ready_draft: "è ancora in fase di creazione: completa prima la creazione",
+    invalid_action_still_placed:
+      "Questa azione è ancora negli schemi: {count} in tutto. Toglila da lì prima di eliminarla.",
+    invalid_action_placed_elsewhere:
+      "Questa azione è posizionata in automazioni di altri progetti ({automations}). Toglila da lì prima di spostarla in «{project}».",
     invalid_automation_archived: "«{automation}» è archiviata. Riportala indietro prima di avviarla.",
     invalid_automation_workspace_closed:
       "L’area di lavoro è chiusa, e un’esecuzione disegna i suoi passi nei suoi riquadri. Aprila e avvia di nuovo.",

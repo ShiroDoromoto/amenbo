@@ -1,5 +1,6 @@
-// The parts the action's panels are drawn with, so that a panel says what it holds by its shape
-// rather than by a sentence under each field (`AMB-T-5522`).
+// The parts the build panels are drawn with — the action's and a spot's on an automation — so that a
+// panel says what it holds by its shape rather than by a sentence under each field (`AMB-T-5522`).
+// One part per shape: a heading or a switch drawn two ways would read as two different things.
 //
 // **A section is a heading with its own "＋ add".** The empty row a name is typed into is there only
 // after that press, and goes again once the name is written: a row that is always open reads as one
@@ -18,7 +19,8 @@ import { DeclareRow, useDraft, type Choice, type Run } from "./automationPanel";
 import { kindLabel } from "./automationPortKinds";
 import type { AutomationExitDto } from "../bindings/bindings";
 
-/** An on/off that writes the moment it is flipped. `boxed` draws it framed, standing apart. */
+/** An on/off that writes the moment it is flipped. `boxed` draws it framed, standing apart — the
+ *  start, on a spot and on a step alike. */
 export function Switch({
   label,
   checked,
@@ -49,13 +51,15 @@ export function Switch({
   );
 }
 
-/** A heading over a part of a panel, with the part under it. */
+/** A heading over a part of a panel, with the part under it — on every build panel, the spot's
+ *  (`./AutomationStepPanel`) as well as the action's. */
 export function Sec({
   title,
   onAdd,
   children,
 }: {
-  title: string;
+  /** What the part is called — with a mark beside it where it has one, such as "required". */
+  title: ReactNode;
   /** The press that opens a row to declare one more — absent where the part takes none. */
   onAdd?: () => void;
   children?: ReactNode;

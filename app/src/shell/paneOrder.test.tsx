@@ -9,7 +9,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  EMPTY_LAYOUT, openedFrame, openedIn, panesOf, resized, type Frame, type Layout, type Size,
+  EMPTY_LAYOUT, openedFrame, openedIn, panesOf, resized, runFrameId, stoodForRun, type Frame, type Layout,
+  type Size,
 } from "../talk/layout";
 import type { Plate as Row } from "../talk/nameplate";
 import { PaneOrder } from "./PaneOrder";
@@ -240,6 +241,22 @@ describe("what a card says about its pane", () => {
     draw(layout);
     expect(cardOf("1").querySelector(".paneorder__ended")).toBeNull();
     expect(cardOf("2").querySelector(".paneorder__ended")).not.toBeNull();
+  });
+
+  it("says where the run stands on a run's pane, which has no session while Amenbo carries a built-in out", () => {
+    // A built-in opens no terminal, so its pane has no session — and is not over for that.
+    const { layout } = stoodForRun(faceOf(1), 1, 13);
+    const card = runFrameId(13);
+    const state = { status: "running" as const, word: "タスク待ち", pauseRequested: false, why: null, exit: null, errorExit: false, acknowledged: false };
+    draw(layout, new Map(), new Map([
+      reads(card, {
+        name: "test",
+        dot: { hue: 199, face: "lit" },
+        run: { automation: "test", run: 13, step: "タスクに着手する", builtin: true, action: null, task: null, state },
+      }),
+    ]));
+    expect(cardOf(card).querySelector(".paneorder__ended")).toBeNull();
+    expect(cardOf(card).querySelector(".paneorder__state")!.textContent).toBe("タスク待ち");
   });
 
   it("carries the folder the pane works in, beside the name that may be nothing else", () => {

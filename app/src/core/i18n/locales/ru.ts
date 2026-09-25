@@ -617,9 +617,6 @@ export const ru: Translation = {
     "quit.confirmNotAll": "Завершить Amenbo? Все открытые терминалы завершатся. Разговоры вернутся при следующем запуске, кроме панелей с {names}. То, что в них выполнялось, тоже не вернётся.",
 
     "face.ended": "Программа в этом терминале завершилась.",
-    "face.builtinDoing": "Amenbo выполняет это",
-    "face.builtinDone": "Amenbo выполнил это",
-    "face.builtinExit": "Выход: {exit}",
 
     "face.endedGeminiUnset": "Для Gemini CLI не задан способ аутентификации. Указанный путь принадлежит только этой панели и исчезнет вместе с ней — задать его нужно в вашем собственном ~/.gemini/settings.json.",
     "face.noWayBack": "Этот разговор больше не открыть.",
@@ -1149,7 +1146,6 @@ export const ru: Translation = {
     "auto.run.step": "Шаг {n} · {step}",
     "auto.run.inAction": "{step} в {action}",
     "auto.run.reportWithheld": "Отчёт не оставлен в задаче, так как она была закрыта: {steps}",
-    "auto.run.waitingForTask": "Ждёт задачу, которую можно взять",
     "auto.run.taskWait": "Ждёт задачу",
 
     "mcp.title": "Подключение по MCP",
@@ -1352,6 +1348,10 @@ export const ru: Translation = {
     not_ready_premise_unsettled: "{ref} не решена — дождитесь, пока её допишут, или уберите связь",
     not_ready_not_started: "она начинается только {start} — измените дату начала, если она неверна",
     not_ready_draft: "она ещё создаётся — сначала завершите создание",
+    invalid_action_still_placed:
+      "Это действие всё ещё стоит на схемах — всего {count}. Уберите его оттуда, прежде чем удалять.",
+    invalid_action_placed_elsewhere:
+      "Это действие стоит в автоматизациях других проектов ({automations}). Уберите его оттуда, прежде чем переносить в «{project}».",
     invalid_automation_archived: "«{automation}» в архиве. Верните её, прежде чем запускать.",
     invalid_automation_workspace_closed:
       "Рабочее пространство закрыто, а запуск рисует свои шаги в его панелях. Откройте его и запустите снова.",

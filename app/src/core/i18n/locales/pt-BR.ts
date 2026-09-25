@@ -614,9 +614,6 @@ export const ptBR: Translation = {
     "quit.confirmNotAll": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução, exceto nos painéis com {names}. O que estava rodando nelas também não volta.",
 
     "face.ended": "O programa deste terminal foi encerrado.",
-    "face.builtinDoing": "O Amenbo está executando isto",
-    "face.builtinDone": "O Amenbo executou isto",
-    "face.builtinExit": "Saída: {exit}",
 
     "face.endedGeminiUnset": "O Gemini CLI não tem um método de autenticação definido. O caminho indicado pertence apenas a este painel e some com ele — o arquivo a editar é o seu próprio ~/.gemini/settings.json.",
     "face.noWayBack": "Esta conversa não pode mais ser aberta.",
@@ -1145,7 +1142,6 @@ export const ptBR: Translation = {
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} em {action}",
     "auto.run.reportWithheld": "Relatório não deixado na tarefa, que estava fechada: {steps}",
-    "auto.run.waitingForTask": "Aguardando uma tarefa que possa pegar",
     "auto.run.taskWait": "Aguardando tarefa",
 
     "mcp.title": "Conectar por MCP",
@@ -1344,6 +1340,10 @@ export const ptBR: Translation = {
     not_ready_premise_unsettled: "{ref} não está resolvida — espere terminarem de escrevê-la ou desvincule",
     not_ready_not_started: "ela só começa em {start} — mude a data de início se não for essa",
     not_ready_draft: "ela ainda está sendo criada — termine a criação primeiro",
+    invalid_action_still_placed:
+      "Esta ação ainda está em diagramas — {count} no total. Tire-a deles antes de excluí-la.",
+    invalid_action_placed_elsewhere:
+      "Esta ação está colocada em automações de outros projetos ({automations}). Tire-a delas antes de movê-la para “{project}”.",
     invalid_automation_archived: "“{automation}” está arquivada. Recupere-a antes de iniciá-la.",
     invalid_automation_workspace_closed:
       "O espaço de trabalho está fechado, e uma execução desenha seus passos nos painéis dele. Abra-o e inicie de novo.",

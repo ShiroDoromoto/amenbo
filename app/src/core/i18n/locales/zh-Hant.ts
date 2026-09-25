@@ -601,9 +601,6 @@ export const zhHant: Translation = {
     "quit.confirmNotAll": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，但跑著 {names} 的窗格不會。正在跑的東西也不會。",
 
     "face.ended": "此終端機中的程式已結束。",
-    "face.builtinDoing": "Amenbo 正在執行",
-    "face.builtinDone": "Amenbo 已執行",
-    "face.builtinExit": "出口：{exit}",
 
     "face.endedGeminiUnset": "Gemini CLI 尚未設定驗證方式。它列出的路徑只屬於此窗格，會隨之捨棄——要設定的是你自己的 ~/.gemini/settings.json。",
     "face.noWayBack": "這段對話已經打不開了。",
@@ -1134,7 +1131,6 @@ export const zhHant: Translation = {
     "auto.run.step": "步驟 {n} · {step}",
     "auto.run.inAction": "{action} 的 {step}",
     "auto.run.reportWithheld": "任務已關閉，未留下報告：{steps}",
-    "auto.run.waitingForTask": "正在等待可領取的任務",
     "auto.run.taskWait": "等待任務",
 
     "mcp.title": "透過 MCP 連線",
@@ -1327,6 +1323,10 @@ export const zhHant: Translation = {
     not_ready_premise_unsettled: "{ref} 尚未定案——等它寫完或解除連結",
     not_ready_not_started: "它要到 {start} 才開始——日期不對就改開始日",
     not_ready_draft: "它還在建立中——請先完成建立",
+    invalid_action_still_placed:
+      "此動作仍放在圖中——共 {count} 處。先從圖中移除再刪除。",
+    invalid_action_placed_elsewhere:
+      "此動作放在其他專案的自動化中（{automations}）。先從那裡移除，再移到「{project}」。",
     invalid_automation_archived: "「{automation}」已封存。先取回再啟動。",
     invalid_automation_workspace_closed:
       "工作區是關著的，而一次執行要把步驟畫在它的窗格裡。打開後再啟動。",

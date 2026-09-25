@@ -613,9 +613,6 @@ export const fr: Translation = {
     "quit.confirmNotAll": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, sauf dans les volets qui font tourner {names}. Ce qu'elles exécutaient ne revient pas non plus.",
 
     "face.ended": "Le programme de ce terminal s'est arrêté.",
-    "face.builtinDoing": "Amenbo est en train de l'exécuter",
-    "face.builtinDone": "Amenbo l'a exécuté",
-    "face.builtinExit": "Sortie : {exit}",
 
     "face.endedGeminiUnset": "Aucune méthode d'authentification n'est définie pour Gemini CLI. Le chemin indiqué appartient à ce volet et disparaît avec lui — celui à modifier est votre propre ~/.gemini/settings.json.",
     "face.noWayBack": "Cette conversation ne peut plus être ouverte.",
@@ -1144,7 +1141,6 @@ export const fr: Translation = {
     "auto.run.step": "Étape {n} · {step}",
     "auto.run.inAction": "{step} dans {action}",
     "auto.run.reportWithheld": "Rapport non laissé sur la tâche, qui était fermée : {steps}",
-    "auto.run.waitingForTask": "En attente d’une tâche à prendre",
     "auto.run.taskWait": "En attente de tâche",
 
     "mcp.title": "Se connecter en MCP",
@@ -1344,6 +1340,10 @@ export const fr: Translation = {
     not_ready_premise_unsettled: "{ref} n'est pas tranchée — attendez qu'elle soit écrite jusqu'au bout ou retirez le lien",
     not_ready_not_started: "elle ne commence que le {start} — changez la date de début si ce n'est pas la bonne",
     not_ready_draft: "elle est encore en cours de création — terminez d'abord sa création",
+    invalid_action_still_placed:
+      "Cette action figure encore dans des schémas — {count} au total. Retirez-la avant de la supprimer.",
+    invalid_action_placed_elsewhere:
+      "Cette action est placée dans des automatisations d’autres projets ({automations}). Retirez-la avant de la déplacer dans « {project} ».",
     invalid_automation_archived: "« {automation} » est archivée. Sortez-la des archives avant de la lancer.",
     invalid_automation_workspace_closed:
       "L’espace de travail est fermé, et une exécution dessine ses étapes dans ses volets. Ouvrez-le et relancez.",

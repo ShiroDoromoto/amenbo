@@ -5,7 +5,7 @@
 // it cannot be changed here, a way out, and where a placement is about to go are each drawn once,
 // here, because the same thing said three ways reads as three things. A screen hands a part the
 // facts rather than writing its own words around them, so no screen needs a sentence explaining it.
-import { t, tn } from "../core/i18n";
+import { isStatus, statusLabel, t, tn } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { Icon } from "../components/Icon";
 import { ERROR_EXIT } from "./automationLayout";
@@ -126,5 +126,44 @@ export function WhereMark({ where }: { where: WhereTo }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * One value pressed on a task filter's row, in the words the row draws it with — the placement's
+ * panel and a built-in waiting on its pane say the same value the same way.
+ */
+export function filterValueLabel(key: string, value: string): string {
+  if (key === "status") return isStatus(value) ? statusLabel(value) : value;
+  if (key === "assignee") {
+    if (value === "none") return t("filter.opt.assignee.none");
+    if (value === "me") return t("filter.opt.assignee.me");
+    return t("filter.opt.assignee.meAi");
+  }
+  if (key === "ready") return value === "yes" ? t("auto.step.readyYes") : t("auto.step.readyNo");
+  return `${key}:${value}`;
+}
+
+/**
+ * **A task filter as the chips its values are**, read out of `task list --filter`'s words — what a
+ * built-in waiting for a task looks for, drawn the way the placement's panel draws the answer rather
+ * than as the expression. A part the rows have no words for is shown as the filter spells it.
+ */
+export function FilterChips({ expression }: { expression: string }) {
+  const chips: { key: string; word: string }[] = [];
+  for (const part of expression.split(/\s+/)) {
+    const at = part.indexOf(":");
+    if (at <= 0) continue;
+    const key = part.slice(0, at);
+    for (const value of part.slice(at + 1).split(",")) {
+      if (value !== "") chips.push({ key: `${key}:${value}`, word: filterValueLabel(key, value) });
+    }
+  }
+  return (
+    <span className="filterchips">
+      {chips.map((one) => (
+        <span key={one.key} className="chip chip--block">{one.word}</span>
+      ))}
+    </span>
   );
 }

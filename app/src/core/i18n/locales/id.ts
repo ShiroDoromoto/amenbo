@@ -604,9 +604,6 @@ export const id: Translation = {
     "quit.confirmNotAll": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",
 
     "face.ended": "Program di terminal ini telah berhenti.",
-    "face.builtinDoing": "Amenbo sedang menjalankannya",
-    "face.builtinDone": "Amenbo telah menjalankannya",
-    "face.builtinExit": "Jalan keluar: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI belum memiliki metode autentikasi. Jalur yang disebutkan hanya milik panel ini dan ikut terhapus — yang perlu diatur adalah ~/.gemini/settings.json milik Anda sendiri.",
     "face.noWayBack": "Percakapan ini tidak bisa dibuka lagi.",
@@ -1133,7 +1130,6 @@ export const id: Translation = {
     "auto.run.step": "Langkah {n} · {step}",
     "auto.run.inAction": "{step} di {action}",
     "auto.run.reportWithheld": "Laporan tidak ditinggalkan di tugas karena tugas sudah ditutup: {steps}",
-    "auto.run.waitingForTask": "Menunggu tugas yang bisa diambil",
     "auto.run.taskWait": "Menunggu tugas",
 
     "mcp.title": "Hubungkan lewat MCP",
@@ -1327,6 +1323,10 @@ export const id: Translation = {
     not_ready_premise_unsettled: "{ref} belum selesai diputuskan — tunggu sampai selesai ditulis atau lepaskan tautannya",
     not_ready_not_started: "tugas ini baru mulai {start} — ubah tanggal mulai kalau itu keliru",
     not_ready_draft: "tugas ini masih dibuat — selesaikan pembuatannya dulu",
+    invalid_action_still_placed:
+      "Aksi ini masih ada di gambar — total {count}. Keluarkan dulu dari sana sebelum menghapusnya.",
+    invalid_action_placed_elsewhere:
+      "Aksi ini dipasang di otomatisasi proyek lain ({automations}). Keluarkan dulu dari sana sebelum memindahkannya ke “{project}”.",
     invalid_automation_archived: "“{automation}” sudah diarsipkan. Kembalikan dulu sebelum menjalankannya.",
     invalid_automation_workspace_closed:
       "Ruang kerja tertutup, dan sebuah jalannya menggambar langkahnya di panel ruang itu. Buka lalu jalankan lagi.",

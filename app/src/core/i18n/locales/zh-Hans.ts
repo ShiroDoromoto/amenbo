@@ -601,9 +601,6 @@ export const zhHans: Translation = {
     "quit.confirmNotAll": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，但跑着 {names} 的窗格不会。正在跑的东西也不会。",
 
     "face.ended": "此终端中的程序已退出。",
-    "face.builtinDoing": "Amenbo 正在执行",
-    "face.builtinDone": "Amenbo 已执行",
-    "face.builtinExit": "出口：{exit}",
 
     "face.endedGeminiUnset": "Gemini CLI 尚未设置身份验证方式。它给出的路径只属于此窗格，会随之丢弃——要设置的是你自己的 ~/.gemini/settings.json。",
     "face.noWayBack": "这段对话已经打不开了。",
@@ -1134,7 +1131,6 @@ export const zhHans: Translation = {
     "auto.run.step": "步骤 {n} · {step}",
     "auto.run.inAction": "{action} 的 {step}",
     "auto.run.reportWithheld": "任务已关闭，未留下报告：{steps}",
-    "auto.run.waitingForTask": "正在等待可领取的任务",
     "auto.run.taskWait": "等待任务",
 
     "mcp.title": "通过 MCP 连接",
@@ -1327,6 +1323,10 @@ export const zhHans: Translation = {
     not_ready_premise_unsettled: "{ref} 尚未定论——等它写完或解除关联",
     not_ready_not_started: "它要到 {start} 才开始——日期不对就改开始日",
     not_ready_draft: "它还在创建中——请先完成创建",
+    invalid_action_still_placed:
+      "此动作仍放在图中——共 {count} 处。先从图中移除再删除。",
+    invalid_action_placed_elsewhere:
+      "此动作放在其他项目的自动化中（{automations}）。先从那里移除，再移到“{project}”。",
     invalid_automation_archived: "“{automation}”已归档。先取回再启动。",
     invalid_automation_workspace_closed:
       "工作区是关着的，而一次运行要把步骤画在它的窗格里。打开后再启动。",

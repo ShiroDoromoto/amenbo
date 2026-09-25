@@ -602,9 +602,6 @@ export const hi: Translation = {
     "quit.confirmNotAll": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे। बातचीत अगली बार वापस आ जाएगी, पर {names} वाले पैन वापस नहीं आएँगे। उनमें जो चल रहा था वह भी वापस नहीं आएगा।",
 
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",
-    "face.builtinDoing": "Amenbo इसे चला रहा है",
-    "face.builtinDone": "Amenbo ने इसे चला दिया",
-    "face.builtinExit": "निकास: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI के लिए कोई प्रमाणीकरण विधि सेट नहीं है। जो पथ दिखाया गया है वह केवल इसी पैन का है और इसके साथ हट जाता है — सेट करनी है आपकी अपनी ~/.gemini/settings.json में।",
     "face.noWayBack": "यह बातचीत अब नहीं खोली जा सकती।",
@@ -1132,7 +1129,6 @@ export const hi: Translation = {
     "auto.run.step": "चरण {n} · {step}",
     "auto.run.inAction": "{action} का {step}",
     "auto.run.reportWithheld": "कार्य बंद था, इसलिए रिपोर्ट उस पर नहीं छोड़ी गई: {steps}",
-    "auto.run.waitingForTask": "लेने योग्य कार्य की प्रतीक्षा में",
     "auto.run.taskWait": "कार्य की प्रतीक्षा",
 
     "mcp.title": "MCP से जोड़ें",
@@ -1326,6 +1322,10 @@ export const hi: Translation = {
     not_ready_premise_unsettled: "{ref} तय नहीं है — उसके पूरा लिखे जाने की प्रतीक्षा करें या कड़ी हटाएँ",
     not_ready_not_started: "यह {start} से पहले शुरू नहीं होती — तारीख़ ग़लत हो तो आरंभ तिथि बदलें",
     not_ready_draft: "यह अभी बन ही रही है — पहले इसे बनाना पूरा करें",
+    invalid_action_still_placed:
+      "यह क्रिया अभी भी चित्रों में रखी है — कुल {count}। हटाने से पहले उसे वहाँ से निकालें।",
+    invalid_action_placed_elsewhere:
+      "यह क्रिया दूसरे प्रोजेक्ट के ऑटोमेशन ({automations}) में रखी है। “{project}” में ले जाने से पहले उसे वहाँ से निकालें।",
     invalid_automation_archived: "“{automation}” संग्रहित है। शुरू करने से पहले उसे वापस लाएँ।",
     invalid_automation_workspace_closed:
       "कार्यक्षेत्र बंद है, और एक रन अपने चरण उसी के पैनल में दिखाता है। उसे खोलकर फिर शुरू करें।",

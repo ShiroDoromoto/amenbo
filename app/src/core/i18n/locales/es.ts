@@ -613,9 +613,6 @@ export const es: Translation = {
     "quit.confirmNotAll": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque, salvo en los paneles con {names}. Lo que estaban ejecutando tampoco vuelve.",
 
     "face.ended": "El programa de esta terminal ha terminado.",
-    "face.builtinDoing": "Amenbo lo está ejecutando",
-    "face.builtinDone": "Amenbo lo ejecutó",
-    "face.builtinExit": "Salida: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI no tiene definido ningún método de autenticación. La ruta que indica pertenece solo a este panel y desaparece con él: la que debe editar es su propio ~/.gemini/settings.json.",
     "face.noWayBack": "Esta conversación ya no se puede abrir.",
@@ -1144,7 +1141,6 @@ export const es: Translation = {
     "auto.run.step": "Paso {n} · {step}",
     "auto.run.inAction": "{step} en {action}",
     "auto.run.reportWithheld": "Informe no dejado en la tarea porque estaba cerrada: {steps}",
-    "auto.run.waitingForTask": "Esperando una tarea que pueda tomar",
     "auto.run.taskWait": "Esperando tarea",
 
     "mcp.title": "Conectar por MCP",
@@ -1344,6 +1340,10 @@ export const es: Translation = {
     not_ready_premise_unsettled: "{ref} está sin resolver: espera a que se termine de escribir o quita el enlace",
     not_ready_not_started: "no empieza hasta el {start}: cambia la fecha de inicio si no es correcta",
     not_ready_draft: "todavía se está creando: termina de crearla primero",
+    invalid_action_still_placed:
+      "Esta acción sigue en diagramas: {count} en total. Quítala de ellos antes de eliminarla.",
+    invalid_action_placed_elsewhere:
+      "Esta acción está colocada en automatizaciones de otros proyectos ({automations}). Quítala de ellas antes de moverla a “{project}”.",
     invalid_automation_archived: "«{automation}» está archivada. Recupérala antes de iniciarla.",
     invalid_automation_workspace_closed:
       "El espacio de trabajo está cerrado y una ejecución dibuja sus pasos en sus paneles. Ábrelo y vuelve a iniciar.",

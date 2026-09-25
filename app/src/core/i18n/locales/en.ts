@@ -692,9 +692,6 @@ const ui = {
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.
   "face.ended": "The program in this terminal has exited.",
-  "face.builtinDoing": "Amenbo is carrying this out",
-  "face.builtinDone": "Amenbo carried this out",
-  "face.builtinExit": "Exit: {exit}",
   "face.endedGeminiUnset": "Gemini CLI has no authentication method set. The path it names is this pane's own and goes with it — the one to set is your own ~/.gemini/settings.json.",
   "face.noWayBack": "This conversation cannot be opened again.",
   "face.projects": "Projects",
@@ -1377,7 +1374,6 @@ const ui = {
   "auto.run.step": "Step {n} · {step}",
   "auto.run.inAction": "{step} in {action}",
   "auto.run.reportWithheld": "Report kept off the task, which was closed: {steps}",
-  "auto.run.waitingForTask": "Waiting for a task it can take",
   "auto.run.taskWait": "Waiting for a task",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
@@ -1613,6 +1609,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   // sentences, because they are the same sentences. The list is a read that succeeded and the refusal
   // is a write that did not, so both hand over the code and the values, and both are written from
   // here (`core/i18n`'s `errSentence`).
+  invalid_action_still_placed:
+    "This action still stands on pictures — {count} in all. Take it off them before deleting it.",
+  invalid_action_placed_elsewhere:
+    "This action is placed on automations in other projects ({automations}). Take it off them before moving it into “{project}”.",
   invalid_automation_archived: "“{automation}” is archived. Bring it back before starting it.",
   invalid_automation_workspace_closed:
     "The workspace is closed, and a run draws its steps in its panes. Open it and start again.",

@@ -1604,34 +1604,6 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The count stands in the row of the select it caps, so it takes that select's height: with the
    form padding of every input it came out nearly twice as tall as the select beside it. */
 .autostep__limit input { width: 6rem; height: var(--tap-min); padding-block: 0; }
-/* One section of the spot's panel: a small title over what it holds. A setting's title is its own
-   name, with the "required" mark beside it. */
-.autostep__sec { display: flex; flex-direction: column; gap: var(--s-2); }
-.autostep__sectitle {
-  display: flex; align-items: center; gap: var(--s-2);
-  font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-muted);
-}
-/* The start of a run as a switch row: the words on the left, the switch on the right, and the whole
-   row is the press. */
-.autostep__switch {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
-  padding: var(--s-2) var(--s-3); font-size: var(--fs-md); cursor: pointer;
-  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
-}
-.autostep__switch > input {
-  appearance: none; position: relative; flex: none; margin: 0; cursor: pointer;
-  width: 34px; height: 20px; border-radius: 999px; background: var(--c-edge);
-}
-.autostep__switch > input::after {
-  content: ""; position: absolute; top: 2px; inset-inline-start: 2px;
-  width: 16px; height: 16px; border-radius: 50%; background: #fff;
-}
-.autostep__switch > input:checked { background: var(--c-accent); }
-.autostep__switch > input:checked::after { transform: translateX(14px); }
-.autostep__switch > input:checked:dir(rtl)::after { transform: translateX(-14px); }
-.autostep__switch > input:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
-fieldset:disabled .autostep__switch { cursor: default; opacity: .6; }
-fieldset:disabled .autostep__switch > input { cursor: default; }
 
 /* ----- the build screen's two dialogs (`screens/AutomationStepAdd.tsx`, `AutomationOutputAdd.tsx`) -----
    Both wear the plain card, so what tells them from the rest of the application is the question at
@@ -1653,7 +1625,7 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 .autostep__declare { padding-block: var(--s-1); }
 .autostep__declname { flex: 1 1 8rem; min-width: 0; }
 
-/* ── The parts the action's panels are drawn with (`../screens/automationDeclParts`) ──
+/* ── The parts the build panels are drawn with (`../screens/automationDeclParts`) ──
    What each part is, is said by its shape rather than by a sentence under it (`AMB-T-5522`). */
 /* A part of a panel under its heading. The heading's "＋ add" stands at its far end, so the row it
    opens lands under the heading it was pressed on. */
@@ -1689,9 +1661,12 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 }
 .autoswitch__track input:checked + i { background: var(--c-accent); }
 .autoswitch__track input:checked + i::after { transform: translateX(14px); }
+.autoswitch__track input:checked:dir(rtl) + i::after { transform: translateX(-14px); }
 .autoswitch__track input:focus-visible + i { outline: 2px solid var(--c-accent); outline-offset: 2px; }
-/* On and held: the entry stays where it is until another step takes it. */
+/* On and held: the entry stays where it is until another step takes it. Shut with the whole panel
+   (a disabled fieldset), it reads as not to be pressed. */
 .autoswitch__track input:disabled { cursor: default; }
+fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 /* One declared row: what is read, and the "⋯" at its far end that opens what changes it. */
 .autodecl { display: flex; flex-direction: column; gap: var(--s-1); }
 .autodecl__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }

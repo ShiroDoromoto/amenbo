@@ -604,9 +604,6 @@ export const th: Translation = {
     "quit.confirmNotAll": "ออกจาก Amenbo ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง บทสนทนาจะกลับมาในการเปิดครั้งถัดไป ยกเว้นบานหน้าต่างที่รัน {names} สิ่งที่กำลังทำงานอยู่ก็จะไม่กลับมาเช่นกัน",
 
     "face.ended": "โปรแกรมในเทอร์มินัลนี้จบการทำงานแล้ว",
-    "face.builtinDoing": "Amenbo กำลังดำเนินการ",
-    "face.builtinDone": "Amenbo ดำเนินการเสร็จแล้ว",
-    "face.builtinExit": "ทางออก: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI ยังไม่ได้ตั้งค่าวิธียืนยันตัวตน เส้นทางที่แสดงเป็นของแผงนี้เท่านั้นและจะถูกลบไปพร้อมกัน — ไฟล์ที่ต้องตั้งค่าคือ ~/.gemini/settings.json ของคุณเอง",
     "face.noWayBack": "เปิดบทสนทนานี้อีกไม่ได้แล้ว",
@@ -1133,7 +1130,6 @@ export const th: Translation = {
     "auto.run.step": "ขั้นตอน {n} · {step}",
     "auto.run.inAction": "{step} ใน {action}",
     "auto.run.reportWithheld": "ไม่ได้ทิ้งรายงานไว้ที่งาน เพราะงานปิดแล้ว: {steps}",
-    "auto.run.waitingForTask": "กำลังรองานที่รับได้",
     "auto.run.taskWait": "รองาน",
 
     "mcp.title": "เชื่อมต่อผ่าน MCP",
@@ -1326,6 +1322,10 @@ export const th: Translation = {
     not_ready_premise_unsettled: "{ref} ยังไม่ยุติ — รอให้เขียนจนจบหรือปลดการเชื่อม",
     not_ready_not_started: "งานนี้เริ่มวันที่ {start} — ถ้าไม่ถูกต้องให้แก้วันเริ่ม",
     not_ready_draft: "งานนี้ยังสร้างไม่เสร็จ — กรุณาสร้างให้เสร็จก่อน",
+    invalid_action_still_placed:
+      "แอ็กชันนี้ยังวางอยู่ในแผนภาพ — รวม {count} แห่ง นำออกจากแผนภาพก่อนแล้วจึงลบ",
+    invalid_action_placed_elsewhere:
+      "แอ็กชันนี้วางอยู่ในออโตเมชันของโปรเจกต์อื่น ({automations}) นำออกจากที่นั่นก่อนแล้วจึงย้ายไปที่ “{project}”",
     invalid_automation_archived: "“{automation}” ถูกเก็บเข้าคลังแล้ว นำกลับมาก่อนจึงจะเริ่มได้",
     invalid_automation_workspace_closed:
       "พื้นที่ทำงานปิดอยู่ และการรันจะวาดขั้นตอนไว้ในช่องของพื้นที่นั้น เปิดแล้วเริ่มใหม่",

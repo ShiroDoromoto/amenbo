@@ -604,9 +604,6 @@ export const vi: Translation = {
     "quit.confirmNotAll": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, trừ các khung đang chạy {names}. Những gì đang chạy trong đó cũng không trở lại.",
 
     "face.ended": "Chương trình trong terminal này đã kết thúc.",
-    "face.builtinDoing": "Amenbo đang thực hiện",
-    "face.builtinDone": "Amenbo đã thực hiện xong",
-    "face.builtinExit": "Lối ra: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI chưa được đặt phương thức xác thực. Đường dẫn được nêu chỉ thuộc về khung này và sẽ mất theo nó — tệp cần đặt là ~/.gemini/settings.json của riêng bạn.",
     "face.noWayBack": "Không thể mở lại cuộc trò chuyện này.",
@@ -1133,7 +1130,6 @@ export const vi: Translation = {
     "auto.run.step": "Bước {n} · {step}",
     "auto.run.inAction": "{step} trong {action}",
     "auto.run.reportWithheld": "Không để lại báo cáo trên việc vì việc đã đóng: {steps}",
-    "auto.run.waitingForTask": "Đang chờ việc có thể nhận",
     "auto.run.taskWait": "Chờ việc",
 
     "mcp.title": "Kết nối qua MCP",
@@ -1326,6 +1322,10 @@ export const vi: Translation = {
     not_ready_premise_unsettled: "{ref} chưa ngã ngũ — hãy chờ viết xong hoặc gỡ mối nối",
     not_ready_not_started: "việc này đến {start} mới bắt đầu — hãy sửa ngày bắt đầu nếu sai",
     not_ready_draft: "việc này vẫn đang được tạo — hãy hoàn tất việc tạo trước",
+    invalid_action_still_placed:
+      "Hành động này vẫn nằm trên sơ đồ — tổng cộng {count}. Gỡ nó ra trước khi xóa.",
+    invalid_action_placed_elsewhere:
+      "Hành động này đang được đặt trong tự động hóa của dự án khác ({automations}). Gỡ nó ra trước khi chuyển sang “{project}”.",
     invalid_automation_archived: "“{automation}” đã lưu trữ. Đưa nó trở lại trước khi chạy.",
     invalid_automation_workspace_closed:
       "Không gian làm việc đang đóng, và một lượt chạy vẽ các bước của nó trong các khung ở đó. Mở ra rồi chạy lại.",

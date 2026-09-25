@@ -76,3 +76,12 @@ export function runStateOf(run: AutomationRunCardDto | undefined): RunState | nu
     acknowledged: run.acknowledged,
   };
 }
+
+/**
+ * **A run whose built-in is waiting for a task**, as its pane says it: still running, in the word the
+ * running tab says a waiting run with (`auto.run.taskWait`). A run held or over says that instead.
+ */
+export function waitingState(state: RunState | null): RunState | null {
+  if (state === null || state.status !== "running" || state.pauseRequested) return state;
+  return { ...state, word: t("auto.run.taskWait") };
+}

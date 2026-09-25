@@ -4,7 +4,7 @@
 // **The press carries what the person hands over, and nothing else.** Which tasks a run works, which
 // folder its steps run in and what each step is asked are all the definition's, settled while it was
 // built. What the reader chooses here is which automation, and then — in the dialog every press
-// opens — a text and files to hand the run as it starts (`./LaunchHanding`, `AMB-D-970`).
+// opens — what to hand the run as it starts: what its entry reads (`./LaunchHanding`, `AMB-D-970`).
 //
 // **Which is why there is no way in on a task's pane.** One stood there and was taken out: a button
 // under a task reads as "run this one on this task", and the task a reader was looking at cannot
@@ -21,9 +21,9 @@
 // per row would probe this machine once per automation, to hide rows a reader is looking for. So
 // every one is offered, and what refuses is the press — in core's own words, under the row.
 import { useCallback, useState } from "react";
-import { launchAutomation, useAutomations } from "../core/automations";
+import { launchAutomation, useAutomations, type Handed } from "../core/automations";
 import { errText, t } from "../core/i18n";
-import { LaunchHanding, type Handed } from "./LaunchHanding";
+import { LaunchHanding } from "./LaunchHanding";
 
 /**
  * The press behind either entrance: launch, and hold what came back.
@@ -73,6 +73,7 @@ export function useAutomationStart(
   // What the screen draws for the press, wherever the press is: nothing until one is made.
   const handing = asking === null ? null : (
     <LaunchHanding
+      id={asking.id}
       name={asking.name}
       onClose={() => setAsking(null)}
       onStart={(handed) => {

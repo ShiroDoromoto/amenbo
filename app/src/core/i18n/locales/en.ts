@@ -1165,6 +1165,11 @@ const ui = {
   "auto.hand.files": "Files to hand over",
   "auto.hand.fileAdd": "＋ Add a file",
   "auto.hand.fileRemove": "Remove {name}",
+  "auto.hand.taskTitle": "Title of the task to file",
+  "auto.hand.taskNotes": "Its notes",
+  "auto.hand.required": "required",
+  "auto.hand.unchosen": "Not chosen",
+  "auto.hand.nothing": "This automation takes nothing as it starts.",
   "auto.launch.see": "See in the picture",
   "auto.startOne": "Start an automation",
   // The picture of the steps on the build screen: what it says about a step, and what it writes

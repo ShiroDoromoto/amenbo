@@ -523,6 +523,7 @@ pub fn run() {
       automation::automation_detail,
       automation::automation_launch_check,
       automation::automation_launch,
+      automation::automation_launch_asks,
       automation::automation_step_open,
       automation::automation_steps_standing,
       automation::automation_running_page,

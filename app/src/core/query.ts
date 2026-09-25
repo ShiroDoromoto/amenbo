@@ -155,6 +155,8 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   automations: ["automations"],
   automation: ["automations"],
   automationLaunchCheck: ["automations"],
+  // What a launch asks for: the entry's settings, and the project's axes and their values.
+  automationLaunchAsks: ["automations", "tasks"],
 };
 
 function setState(e: Entry, next: QueryState<unknown>): void {

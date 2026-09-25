@@ -61,7 +61,8 @@ use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
     AutomationActionCardDto, AutomationActionDetailDto, AutomationBuiltinDto,
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
-    AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto,
+    AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationLaunchAsksDto,
+    AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto,
@@ -1271,6 +1272,27 @@ fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
     }
 }
 
+/// **What a launch of this automation asks for** — what its entry reads at launch, so the dialog every
+/// press opens asks for that and nothing else (`AMB-D-970`). Core answers it
+/// ([`automation_run::launch_asks`]); an entry handed what it does not read would refuse the launch.
+#[tauri::command]
+pub fn automation_launch_asks(id: i64) -> Result<AutomationLaunchAsksDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_launch_asks");
+    let store = open_store_read()?;
+    let (reads, axes) = match automation_run::launch_asks(store.read_model().conn(), id)? {
+        automation_run::LaunchAsks::Words => ("words", Vec::new()),
+        automation_run::LaunchAsks::Task { axes } => ("task", axes),
+        automation_run::LaunchAsks::Nothing => ("nothing", Vec::new()),
+    };
+    Ok(AutomationLaunchAsksDto {
+        reads: reads.to_string(),
+        axes: axes
+            .into_iter()
+            .map(|axis| AutomationLaunchAxisDto { name: axis.name, values: axis.values, required: axis.required })
+            .collect(),
+    })
+}
+
 /// **Start a run of this automation** — the press behind the build screen's "start".
 ///
 /// What the store cannot answer is handed in, each from the side that holds it
@@ -1292,17 +1314,22 @@ fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
 /// stood at once rather than at the end of its wait.
 ///
 /// **What the person hands over with the press** (`AMB-D-970`): `text`, and `files` by their paths on
-/// this machine. The files are ingested the way an attachment is ([`crate::commands::attachment_add`]):
+/// this machine, for an agent's step as the entry; `title`, `notes` and `classification` (axis and
+/// value, by name) for the built-in that files a task ([`automation_launch_asks`] says which). The files are ingested the way an attachment is ([`crate::commands::attachment_add`]):
 /// the per-file cap checked, then streamed into the blob store. They go into the store before the
 /// launch, and onto the run in the launch's own transaction ([`automation_run::HandedAtLaunch`]) — a
 /// launch refused afterwards leaves a blob nothing names, which the blob sweep takes like any other.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn automation_launch(
     id: i64,
     agents: Option<Vec<String>>,
     workspace_open: bool,
     text: Option<String>,
     files: Option<Vec<String>>,
+    title: Option<String>,
+    notes: Option<String>,
+    classification: Option<Vec<(String, String)>>,
 ) -> Result<AutomationRunStartedDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_launch");
     // The models are read here, as the check reads them (`automation_launch_check`): the press is
@@ -1316,7 +1343,13 @@ pub fn automation_launch(
         by: Some(ActorKind::Human),
     };
     let run = with_store_mut(|store| {
-        let mut handed = automation_run::HandedAtLaunch { text, ..Default::default() };
+        let mut handed = automation_run::HandedAtLaunch {
+            text,
+            title,
+            notes,
+            classification: classification.unwrap_or_default(),
+            ..Default::default()
+        };
         for path in files.unwrap_or_default() {
             handed.files.push(handed_file(store, &path)?);
         }

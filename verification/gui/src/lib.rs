@@ -4215,11 +4215,19 @@ impl Instructor {
             ),
             // One row of the panel, written. Every control there writes on the spot, and a box of
             // text writes as the caret leaves it — so the instruction says to leave the box.
-            (Domain::Automation, "panel-set") => format!(
-                "In the panel showing what the pressed box holds, set {} to \"{}\", then move off the control so what you wrote is taken.",
-                step_field(req(with, "field")?)?,
-                req(with, "value")?
-            ),
+            (Domain::Automation, "panel-set") => match step_mark(with, "on")? {
+                // A box writes the moment it is pressed, so there is nothing to leave.
+                Some(on) => format!(
+                    "In the panel showing what the pressed box holds, {} {}.",
+                    if on { "tick" } else { "clear" },
+                    step_box(req(with, "field")?)?
+                ),
+                None => format!(
+                    "In the panel showing what the pressed box holds, set {} to \"{}\", then move off the control so what you wrote is taken.",
+                    step_words(req(with, "field")?)?,
+                    req(with, "value")?
+                ),
+            },
             // A task filter is answered on rows, never as an expression: the row is the part and what
             // is pressed on it is the value.
             (Domain::Automation, "answer-filter") => format!(
@@ -6413,12 +6421,18 @@ impl Instructor {
                 req(with, "head")?
             ),
             // One row of the panel, read.
-            (Domain::Automation, "panel-shows") => match arg_str(with, "value") {
-                Some(value) => format!(
+            (Domain::Automation, "panel-shows") => match (arg_str(with, "value"), step_mark(with, "on")?) {
+                (Some(value), _) => format!(
                     "In the panel showing what the pressed box holds, confirm {} reads \"{value}\".",
-                    step_field(req(with, "field")?)?
+                    step_words(req(with, "field")?)?
                 ),
-                None => format!(
+                // Whether a box is ticked is drawn and not written, so it is an eye's.
+                (None, Some(on)) => format!(
+                    "In the panel showing what the pressed box holds, confirm {} is {}.",
+                    step_box(req(with, "field")?)?,
+                    if on { "ticked" } else { "clear" }
+                ),
+                (None, None) => format!(
                     "In the panel showing what the pressed box holds, confirm {} is drawn.",
                     step_field(req(with, "field")?)?
                 ),
@@ -6795,12 +6809,33 @@ fn step_field(field: &str) -> Result<&'static str, String> {
         "interactive" => "the box saying the step may stop and wait for a person",
         "report" => "the box saying the step's report also lands on the task",
         "history" => "the box saying the step is handed the run's story so far",
+        "task_context" => "the box saying the step is handed the task the run is on (its notes, linked decisions and comments)",
         other => {
             return Err(format!(
-                "`field` does not know `{other}` — it is name / task / prompt / agent / model / folder / interactive / report / history"
+                "`field` does not know `{other}` — it is name / task / prompt / agent / model / folder / interactive / report / history / task_context"
             ))
         }
     })
+}
+
+/// The rows that are a box to tick. Whether one is ticked is a yes or a no (`on`), and no words
+/// stand in it, so a road naming a `value` for one is refused rather than told to type into a box.
+const STEP_BOXES: [&str; 4] = ["interactive", "report", "history", "task_context"];
+
+/// A row that is a box to tick, for a road that names `on`.
+fn step_box(field: &str) -> Result<&'static str, String> {
+    match STEP_BOXES.contains(&field) {
+        true => step_field(field),
+        false => Err(format!("`on` ticks a box, and `{field}` is not one — it takes a `value`")),
+    }
+}
+
+/// A row with words in it, for a road that names a `value`.
+fn step_words(field: &str) -> Result<&'static str, String> {
+    match STEP_BOXES.contains(&field) {
+        true => Err(format!("`{field}` is a box to tick — it takes `on`, not a `value`")),
+        false => step_field(field),
+    }
 }
 
 /// What a port carries, in the words the two dialogs offer it by.

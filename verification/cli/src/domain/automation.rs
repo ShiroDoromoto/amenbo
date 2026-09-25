@@ -155,9 +155,41 @@ impl Driver<'_> {
                     args.push("--work-dir".into());
                     args.push(v.to_string());
                 }
+                // Both are handed on unless a flag says not to, so a road's `true` is the flag left off.
+                if opt_bool(with, "task_context") == Some(false) {
+                    args.push("--no-task-context".into());
+                }
+                if opt_bool(with, "history") == Some(false) {
+                    args.push("--no-history".into());
+                }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_step", bind)?;
                 Ok(Outcome::action(format!("added step {id} `{name}` to library action {action}")))
+            }
+            // Turning what a step is handed back on or off, the rest of the step left as it is.
+            "step-update" => {
+                let step = self.resolve(with)?;
+                let mut args: Vec<String> = vec!["automation".into(), "step-update".into(), step.to_string()];
+                let mut said = Vec::new();
+                for (key, flag, what) in [
+                    ("task_context", "--task-context", "the task the run is on"),
+                    ("history", "--history", "the run's story so far"),
+                ] {
+                    if let Some(on) = opt_bool(with, key) {
+                        args.push(flag.into());
+                        args.push(on.to_string());
+                        said.push(format!("{} {what}", if on { "handed" } else { "not handed" }));
+                    }
+                }
+                if said.is_empty() {
+                    return Err(
+                        "`step-update` turns `task_context` or `history` — a step naming neither would write nothing"
+                            .to_string(),
+                    );
+                }
+                args.push("--json".into());
+                self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                Ok(Outcome::action(format!("step {step} is now {}", said.join(" and "))))
             }
             "action-entry" => {
                 let action = self.resolve(with)?;
@@ -893,6 +925,24 @@ fn judge_step(action: i64, view: &serde_json::Value, with: &Args) -> Result<Outc
         let (ok, note) = judge_names(with, "inputs", &port_names(step), "taking in")?;
         pass = pass && ok;
         said.push_str(&note);
+    }
+    for (key, column, what) in [
+        ("task_context", "show_task", "the task the run is on"),
+        ("history", "show_history", "the run's story so far"),
+    ] {
+        if let Some(want) = opt_bool(with, key) {
+            let got = step["step"][column].as_bool();
+            pass = pass && got == Some(want);
+            said.push_str(&format!(
+                ", {} {what} (expected {})",
+                match got {
+                    Some(true) => "handed",
+                    Some(false) => "not handed",
+                    None => "(none reported for)",
+                },
+                if want { "handed" } else { "not handed" }
+            ));
+        }
     }
     said.push_str(if pass { ", as expected" } else { ", MISMATCH" });
     Ok(Outcome::assert(pass, said))

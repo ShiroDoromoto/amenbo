@@ -1544,3 +1544,46 @@ fn placing_an_action_writes_the_default_agent_onto_its_steps() {
     );
     fs::remove_dir_all(&dir).ok();
 }
+
+/// **A step added to an action already placed is given the default agent at every placement** — each
+/// the one for its own automation's project — whether it is added at the end or put in on a line, and
+/// a step somebody took the choice back from is not written again (`AMB-T-5531`).
+#[test]
+fn a_step_added_after_placing_is_given_the_default_agent_at_every_placement() {
+    use crate::model::AutomationPictureOwner;
+    use crate::ops::automation::{EdgeTarget, NewAutomation, NewStep};
+
+    let (mut s, dir) = fresh_store("added-step-default-agent");
+    let mine = s.project_add(project("PJ")).unwrap();
+    let theirs = s.project_add(project("よそ")).unwrap();
+    let here =
+        s.automation_add(mine.id, NewAutomation { name: "回す".into(), ..Default::default() }).unwrap();
+    let there =
+        s.automation_add(theirs.id, NewAutomation { name: "よそで回す".into(), ..Default::default() })
+            .unwrap();
+    let action =
+        s.automation_action_from_prompt(None, NewStep::new("調べる", "do it"), &[], &[]).unwrap();
+    let first = action.entry_step_id.unwrap();
+    let at_here = s.automation_placement_add(here.id, action.id).unwrap();
+    let at_there = s.automation_placement_add(there.id, action.id).unwrap();
+    let chosen = |s: &Store, placement: i64, step: i64| {
+        crate::store_engine::read::automation_placement_step_for(s.engine.conn(), placement, step)
+            .unwrap()
+            .map(|c| c.agent)
+    };
+
+    s.config.last_agent = Some("codex-cli".to_string());
+    s.config.remember_agent(mine.id, "claude-code");
+    let second = s.automation_step_add(action.id, NewStep::new("直す", "fix it")).unwrap();
+    assert_eq!(chosen(&s, at_here.id, second.id).as_deref(), Some("claude-code"), "this project's");
+    assert_eq!(chosen(&s, at_there.id, second.id).as_deref(), Some("codex-cli"), "else the person's");
+    assert_eq!(chosen(&s, at_here.id, first).as_deref(), None, "the step placed with nobody stays so");
+
+    let edge = s
+        .automation_edge_add(AutomationPictureOwner::Action, second.id, None, EdgeTarget::Done, None)
+        .unwrap();
+    let third = s.automation_step_insert(edge.id, NewStep::new("見直す", "look"), &[], &[]).unwrap();
+    assert_eq!(chosen(&s, at_here.id, third.id).as_deref(), Some("claude-code"), "put in on a line");
+    assert_eq!(chosen(&s, at_there.id, third.id).as_deref(), Some("codex-cli"));
+    fs::remove_dir_all(&dir).ok();
+}

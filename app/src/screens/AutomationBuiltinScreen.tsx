@@ -10,8 +10,9 @@
 // and an action build screen opened on a built-in's action comes here too
 // (`./AutomationActionBuildScreen`), since its rows are the same definition written out.
 //
-// **The declaration is the one the library panel shows under a picked row** (`BuiltinDecl`), so a
-// reader sees the same three rows wherever they weigh one.
+// **The declaration is written out in full here** (`BuiltinDecl`): its settings as well as what it
+// receives and its ways out. The library panel shows only the last two under a picked row, the same
+// way for a built-in as for an action of one's own (`./AutomationLibraryPanel`).
 //
 // **The lock says it, not a sentence** (`AMB-T-5525`): the reach chip and the lock beside it are
 // what tell a reader nothing here is theirs to change, and a screen with no field in it bears that

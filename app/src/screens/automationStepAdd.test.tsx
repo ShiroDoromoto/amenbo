@@ -7,7 +7,8 @@
 // goes through that picture's own door — the line it was opened from, or the action itself where
 // there is no line yet (`AMB-T-5315`); **what the dialog took is what is sent**, ways out and inputs
 // together; **nothing is sent until the dialog has what a step cannot be made without**; **an action
-// made on the spot is asked a name and a library and nothing else**, lands where it was asked for,
+// made on the spot is asked a name and a library and nothing else**, under a small picture of where
+// it goes and starting from the name the library was searched with, lands where it was asked for,
 // and hands its id on so the screen can go and build it; and, for the output artefact, **the name
 // starts on the way out's own and stops following once somebody writes their own** — but only where
 // that way out hands on nothing yet. **No dialog closes from the backdrop or Escape** (`AMB-T-5363`)
@@ -126,27 +127,50 @@ describe("putting a step in inside an action", () => {
 
 describe("making an action on the spot", () => {
   const made = vi.fn();
-  async function open(into: { edgeId: number } | { automationId: number } = { edgeId: 9 }) {
+  async function open(
+    into: { edgeId: number } | { automationId: number } = { edgeId: 9 },
+    name?: string,
+  ) {
     made.mockClear();
     await act(async () => {
       root.render(
-        createElement(AutomationActionMake, { into, projectId: 1, onMade: made, onClose: () => undefined }),
+        createElement(AutomationActionMake, {
+          into,
+          name,
+          where: { box: "Take a task", exit: "taken", next: "Build it" },
+          projectId: 1,
+          onMade: made,
+          onClose: () => undefined,
+        }),
       );
     });
   }
 
-  it("asks a name and a library, and nothing an action's steps hold", async () => {
+  it("asks a name and a library under where it goes, and nothing an action's steps hold", async () => {
     await open();
     expect(document.body.querySelector("textarea")).toBeNull();
     expect(boxes()).toHaveLength(1);
-    expect([...selects()[0]!.options].map((one) => one.value)).toEqual(["project", "device"]);
+    expect(selects()).toHaveLength(0);
+    const where = document.body.querySelector(".wheremark")!;
+    expect([...where.querySelectorAll(".wheremark__box")].map((one) => one.textContent)).toEqual([
+      "Take a task",
+      "Build it",
+    ]);
+    expect(button(t("auto.actions.reachProject")).getAttribute("aria-pressed")).toBe("true");
+    expect(button(t("auto.actions.reachGlobal")).getAttribute("aria-pressed")).toBe("false");
     expect(button(t("auto.make.go")).disabled).toBe(true);
+  });
+
+  it("starts from the name the library was searched with", async () => {
+    await open({ edgeId: 9 }, "レビュ");
+    expect(boxes()[0]!.value).toBe("レビュ");
+    expect(button(t("auto.make.go")).disabled).toBe(false);
   });
 
   it("places it on the line it was opened from, and goes on to build it", async () => {
     await open({ edgeId: 9 });
     await typeInto(boxes()[0]!, "書く");
-    await pick(selects()[0]!, "device");
+    await act(async () => button(t("auto.actions.reachGlobal")).click());
     await act(async () => button(t("auto.make.go")).click());
     expect(hoisted.make).toHaveBeenCalledWith({ edgeId: 9 }, "書く", "device");
     expect(made).toHaveBeenCalledWith(21);
@@ -225,7 +249,13 @@ describe("leaving either dialog", () => {
         onClose,
       }),
     "the one that makes an action on the spot": (onClose: () => void) =>
-      createElement(AutomationActionMake, { into: { edgeId: 9 }, projectId: 1, onMade: () => undefined, onClose }),
+      createElement(AutomationActionMake, {
+        into: { edgeId: 9 },
+        where: null,
+        projectId: 1,
+        onMade: () => undefined,
+        onClose,
+      }),
     "the one that declares what a way out hands on": (onClose: () => void) =>
       createElement(AutomationOutputAdd, { exit: { id: 3, name: "drafted", outputs: [] }, onClose }),
   };

@@ -1603,6 +1603,10 @@ button.feed__target:hover { color: var(--c-accent); }
    dialog takes is what the panel shows, and a second arrangement for the same fields would make the
    two read as two subjects. */
 .autodlg__title { margin: 0 0 var(--s-3); font-size: var(--fs-xl); font-weight: var(--fw-bold); }
+/* A dialog whose parts are a picture, a field and a row of chips as well as its buttons: each stands
+   apart from the next by the same gap rather than by margins of their own. */
+.autodlg__stack { display: flex; flex-direction: column; gap: var(--s-3); }
+.autodlg__stack > .autodlg__title { margin: 0; }
 /* A row a reader writes and may drop again: the name, what it carries, whether it is required, and
    the way out of it. It wraps rather than shrinks — a name box squeezed to three characters is not
    one. */
@@ -1905,8 +1909,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .autotabs__head { display: flex; align-items: baseline; gap: var(--s-2); }
 .autotabs__scope { font-size: var(--fs-xs); color: var(--c-text-faint); }
 
-/* The library in the panel (`../screens/AutomationLibraryPanel`): two groups by reach, and the row
-   pressed opens in place with what the action declares and the press that places it. */
+/* The library in the panel (`../screens/AutomationLibraryPanel`): a group per reach, left out while
+   nothing in it matches, and the row pressed opens in place with what the action declares and the
+   press that places it. */
 .autolib__group {
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); overflow: hidden;
 }
@@ -1940,7 +1945,6 @@ button.feed__target:hover { color: var(--c-accent); }
   padding: 1px var(--s-2); border: var(--border-w) dashed var(--c-accent); border-radius: var(--r-sm);
   color: var(--c-accent);
 }
-.autolib__none { padding: var(--s-2); font-size: var(--fs-xs); color: var(--c-text-faint); }
 .autolib__picked {
   display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-2) var(--s-3) var(--s-3);
   border-block-start: var(--border-w) var(--border-style) var(--c-rule);
@@ -1948,10 +1952,14 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autolib__picked .actdecl__rows { margin-block-start: 0; }
 .autolib__note { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: pre-wrap; }
+/* The row at the foot that makes a new action, under the name typed in the search box: read as the
+   list's last row, in the accent, rather than as a button with a sentence over it. */
 .autolib__make {
-  display: flex; flex-direction: column; gap: var(--s-1);
-  padding-block-start: var(--s-2); border-block-start: var(--border-w) dashed var(--c-edge);
+  padding: var(--s-2); border: 0; border-block-start: var(--border-w) var(--border-style) var(--c-rule);
+  background: none; text-align: start; color: var(--c-accent); font: inherit; cursor: pointer;
+  overflow-wrap: anywhere;
 }
+.autolib__make:hover { background: var(--c-accent-weak); }
 
 /* The action itself on its own picture (`../screens/automationLayout`): its input, a frame over the
    steps, and its output, a frame under them holding each way out. Both frames are pressed to open the

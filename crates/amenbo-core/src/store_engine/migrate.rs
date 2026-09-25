@@ -1032,7 +1032,71 @@ pub const STEPS: &[Step] = &[
         name: "give an action with steps and no entry the first of its steps as its entry",
         apply: Apply::Custom(enter_each_action_at_its_first_step),
     },
+    Step {
+        to: 76,
+        name: "declare a way out's name NOT NULL",
+        apply: Apply::Custom(hold_every_way_out_to_its_name),
+    },
 ];
+
+/// v76: `automation_exit.name` is declared NOT NULL (`AMB-T-5548`).
+///
+/// v74 named every way out, and nothing has written one without a name since: the model has held the
+/// name as a name from then on, and only the column still admitted none. This closes the column.
+///
+/// **A row still without a name is named first**, in v74's words and by v74's rule — the done way
+/// out's name, or that name with its row id after it where its owner already has one — so that the
+/// constraint holds of every row it is declared over. None is expected; the statement is what makes
+/// "none" a fact rather than a hope.
+///
+/// **v69's procedure, copied rather than called**: the column's declaration is rewritten where
+/// `sqlite_master` holds it, the connection's parsed schema is dropped, and the columns are read back
+/// to be sure nothing else moved. A store born from a registry that already declares the column NOT
+/// NULL is left as it is.
+fn hold_every_way_out_to_its_name(ctx: &Ctx<'_>) -> Result<()> {
+    /// The column as every store from v61 to v75 declares it — frozen text, like every step's.
+    const LOOSE: &str = "    name TEXT,\n";
+    /// The same column, closed.
+    const TIGHT: &str = "    name TEXT NOT NULL DEFAULT '',\n";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_exit'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains(TIGHT) {
+        return Ok(());
+    }
+    if !declared.contains(LOOSE) {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "automation_exit", expected: LOOSE });
+    }
+    ctx.tx.execute_batch(
+        "UPDATE automation_exit SET name = '完了'
+          WHERE name IS NULL
+            AND NOT EXISTS (SELECT 1 FROM automation_exit o
+                             WHERE o.owner_kind = automation_exit.owner_kind
+                               AND o.owner_id = automation_exit.owner_id
+                               AND o.name = '完了');
+         UPDATE automation_exit SET name = '完了 (' || id || ')' WHERE name IS NULL;",
+    )?;
+    let closed = declared.replacen(LOOSE, TIGHT, 1);
+
+    let before = column_names(ctx.tx, "automation_exit")?;
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = ctx.tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_exit'",
+        [&closed],
+    );
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the very next
+    // statement sees the column closed instead of the one this connection read at open.
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    let after = column_names(ctx.tx, "automation_exit")?;
+    if before != after {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "automation_exit", expected: LOOSE });
+    }
+    Ok(())
+}
 
 /// v75: an action that has steps has an entry (`AMB-T-5533`).
 ///
@@ -9345,6 +9409,39 @@ mod tests {
         };
         assert_eq!(copy(81), vec!["完了".to_string(), "*".to_string()]);
         assert_eq!(copy(82), vec!["完了 (23)".to_string(), "完了".to_string()]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v76 closes the way out's name: a row still without one is named the way v74 names it, and a row
+    /// written without one afterwards is refused by the store itself.
+    #[test]
+    fn a_way_out_s_name_is_declared_not_null() {
+        let dir = scratch("way-out-name-not-null");
+        let engine = store_at(&dir, 75);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO automation_exit (id, owner_kind, owner_id, name) VALUES
+                     (31, 'step', 11, NULL), (32, 'step', 11, '*'),
+                     (33, 'step', 12, NULL), (34, 'step', 12, '完了');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let name = |id: i64| -> String {
+            engine
+                .conn()
+                .query_row("SELECT name FROM automation_exit WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(name(31), "完了");
+        assert_eq!(name(33), "完了 (33)", "its owner already had a 完了");
+        let refused = engine.conn().execute(
+            "INSERT INTO automation_exit (id, owner_kind, owner_id, name) VALUES (35, 'step', 13, NULL)",
+            [],
+        );
+        assert!(refused.is_err(), "a way out written without a name is refused: {refused:?}");
         std::fs::remove_dir_all(&dir).ok();
     }
 }

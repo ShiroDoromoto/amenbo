@@ -9,9 +9,10 @@
 // action's; **the way out says where the run goes
 // next**, on the action's own picture, and choosing "nothing said" takes that line away;
 // **the error way out is drawn with that pulldown and nothing else**, being carried from birth and
-// neither renamed nor removed; **the task is handed on unless the box is unticked**
-// (`AMB-D-965`); **the entry is named from the step it names**; and **deleting asks
-// first**, taking the panel's selection with it.
+// neither renamed nor removed; **the task is handed on unless its toggle is let up**
+// (`AMB-D-965`); **a row to declare one more is there only after the section's add**; **the entry is
+// a switch, on and held at the step it names**; and **deleting asks first**, taking the panel's
+// selection with it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -100,6 +101,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     inputs: [],
     settings: [],
     heldBy: [],
+    placedOn: [],
     ...over,
   };
 }
@@ -111,9 +113,20 @@ async function render(props: Parameters<typeof AutomationActionStepPanel>[0]) {
 }
 
 const selects = () => [...container.querySelectorAll<HTMLSelectElement>("select")];
-const boxes = () => [...container.querySelectorAll<HTMLInputElement>("input")];
 const buttons = () => [...container.querySelectorAll<HTMLButtonElement>("button")];
 const button = (label: string) => buttons().find((one) => one.textContent === label)!;
+
+/** The switch a row is labelled with. */
+const switchOf = (label: string) =>
+  [...container.querySelectorAll<HTMLLabelElement>(".autoswitch")]
+    .find((one) => one.textContent?.includes(label))!
+    .querySelector("input")!;
+
+/** The "＋ add" on the heading of one section. */
+const addOf = (title: string) =>
+  [...container.querySelectorAll<HTMLElement>(".autosec")]
+    .find((one) => one.querySelector(".autosec__head > span")?.textContent === title)!
+    .querySelector<HTMLButtonElement>(".autosec__add")!;
 
 /** The pulldown that says what happens after one way out, in the order the ways out are drawn. */
 const nextPicks = () =>
@@ -172,9 +185,11 @@ describe("the panel of one step", () => {
     expect(hoisted.editStep).toHaveBeenCalledWith(11, { prompt: "take the next ready one" });
   });
 
-  it("declares an input on the step, not on the action", async () => {
+  it("opens the row that declares an input only on the section's add, and declares it on the step", async () => {
     await render({ action: action(), stepId: 11, onRemoved: () => undefined });
-    const line = declareLine(t("auto.step.inputName"));
+    expect(container.querySelector(".autostep__declare")).toBeNull();
+    await act(async () => addOf(t("auto.decl.inputs")).click());
+    const line = declareLine(t("auto.decl.inputName"));
     await typeInto(line.querySelector("input")!, "draft");
     await act(async () => line.querySelector<HTMLButtonElement>("button")!.click());
     expect(hoisted.declareInput).toHaveBeenCalledWith("step", 11, {
@@ -183,28 +198,26 @@ describe("the panel of one step", () => {
     });
   });
 
-  it("says under the report box that a task already closed gets no report (AMB-D-963)", async () => {
+  it("writes the report switch onto the step", async () => {
     await render({ action: action(), stepId: 11, onRemoved: () => undefined });
-    const box = [...container.querySelectorAll<HTMLLabelElement>(".autostep__check")]
-      .find((one) => one.textContent?.includes(t("auto.step.reportToTask")))!
-      .querySelector("input")!;
-    const note = document.getElementById(box.getAttribute("aria-describedby")!)!;
-    expect(note.textContent).toBe(t("auto.step.reportToTaskNote"));
+    const box = switchOf(t("auto.step.reportToTask"));
+    expect(box.checked).toBe(false);
+    await act(async () => box.click());
+    expect(hoisted.editStep).toHaveBeenCalledWith(11, { reportToTask: true });
   });
 
   it.each([
-    ["auto.step.taskNotes", { taskNotes: false }],
-    ["auto.step.taskDecisions", { taskDecisions: false }],
-    ["auto.step.taskComments", { taskComments: false }],
+    ["auto.give.history", { history: false }],
+    ["auto.give.taskNotes", { taskNotes: false }],
+    ["auto.give.taskDecisions", { taskDecisions: false }],
+    ["auto.give.taskComments", { taskComments: false }],
   ] as const)(
-    "hands the step each part of its task unless the reader unticks it, and writes that onto the step: %s",
+    "hands the step each part unless the reader lets its toggle up, and writes that onto the step: %s",
     async (label, patch) => {
       await render({ action: action(), stepId: 11, onRemoved: () => undefined });
-      const box = [...container.querySelectorAll<HTMLLabelElement>(".autostep__check")]
-        .find((one) => one.textContent?.includes(t(label)))!
-        .querySelector("input")!;
-      expect(box.checked).toBe(true);
-      await act(async () => box.click());
+      const toggle = button(t(label));
+      expect(toggle.getAttribute("aria-pressed")).toBe("true");
+      await act(async () => toggle.click());
       expect(hoisted.editStep).toHaveBeenCalledWith(11, patch);
     },
   );
@@ -279,7 +292,9 @@ describe("what happens after a way out", () => {
 
   it("gives the error way out that pulldown and nothing else", async () => {
     await render({ action: action(), stepId: 11, onRemoved: () => undefined });
-    const row = container.querySelector(".autostep__exiterr")!;
+    const cards = [...container.querySelectorAll(".autoexit")];
+    expect(cards[cards.length - 1]!.classList.contains("autoexit--error")).toBe(true);
+    const row = container.querySelector(".autoexit--error")!;
     expect(row.textContent).toContain(t("auto.pic.errorExit"));
     expect(row.querySelector("input")).toBeNull();
     expect(row.querySelectorAll("button")).toHaveLength(0);
@@ -288,10 +303,11 @@ describe("what happens after a way out", () => {
 });
 
 describe("the step a placement opens first", () => {
-  it("says so on the step that is it", async () => {
+  it("draws the switch on, and held, on the step that is it", async () => {
     await render({ action: action(), stepId: 11, onRemoved: () => undefined });
-    expect(container.textContent).toContain(t("auto.act.entryIs"));
-    expect(buttons().some((one) => one.textContent === t("auto.act.entrySet"))).toBe(false);
+    const box = switchOf(t("auto.act.entrySwitch"));
+    expect(box.checked).toBe(true);
+    expect(box.disabled).toBe(true);
   });
 
   it("names this step where another one is it", async () => {
@@ -300,7 +316,9 @@ describe("the step a placement opens first", () => {
       stepId: 11,
       onRemoved: () => undefined,
     });
-    await act(async () => button(t("auto.act.entrySet")).click());
+    const box = switchOf(t("auto.act.entrySwitch"));
+    expect(box.checked).toBe(false);
+    await act(async () => box.click());
     expect(hoisted.setEntry).toHaveBeenCalledWith(4, 11);
   });
 });
@@ -322,10 +340,5 @@ describe("taking a step out", () => {
     await act(async () => button(t("auto.act.stepRemove")).click());
     expect(hoisted.removeStep).not.toHaveBeenCalled();
     expect(onRemoved).not.toHaveBeenCalled();
-  });
-
-  it("names the box the reader is looking at, not the one the line came from", async () => {
-    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
-    expect(boxes()[0]!.value).toBe("Take the next task");
   });
 });

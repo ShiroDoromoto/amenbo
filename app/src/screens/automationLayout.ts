@@ -508,7 +508,7 @@ export function pictureOrder(graph: PicGraph): PicOrder {
  * reaches, that box still exists, and the way out it leaves by really hands on a port of that name.
  *
  * It is worked out here because the launch check answers by box *name*, which is no way to find a
- * box. What a box says is a remark; the launch place above the picture is what refuses, and it reads
+ * box. What a box says is a remark; the start press over the picture is what refuses, and it reads
  * core's answer whole (`./AutomationBuildScreen`).
  */
 function fed(

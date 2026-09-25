@@ -44,14 +44,19 @@
 // (`amenbo automation start <ID>`): a name can be changed, so the ID is what ties a row on this
 // screen to a line typed there.
 //
-// **A row says whether its automation could be started now**, beside how many actions are placed on
-// it: "what is this" and "is it built yet" are the two things the list is read for. It is the build
-// screen's own launch check, so the list and the launch place cannot disagree (`AMB-T-5272`).
+// **A row starts its automation**, at either entrance, and whether it can be started is said by that
+// press alone: it cannot be pressed while something is in the way, and what is in the way is read off
+// it on hover. It is the build screen's own launch check, so the list and the build screen cannot
+// disagree (`AMB-T-5272`). A badge beside it would say the same thing a second time (`AMB-T-5523`).
+//
+// **Archived rows are folded at the end**, counted, so the list is the automations in use and the
+// ones put away stay one press off rather than mixed in among them.
 //
 // **A new one is made from the list**, which is where this side of the app makes one at all. The
 // press takes a name and nothing else, and lands in the build screen on what it just made — what an
 // automation is for is the picture, and a form asking for its notes first would be asked before
-// there is anything to write them about (`AutomationNew`).
+// there is anything to write them about (`AutomationNew`). With none yet, that press is the whole
+// list: a sentence saying the list is empty would stand beside the one move it leaves.
 import { useState } from "react";
 import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 import { AutomationActionsTab, firstLine } from "./AutomationActionsTab";
@@ -61,10 +66,11 @@ import { HistoryTab } from "./HistoryTab";
 import { RunningTab } from "./RunningTab";
 import { useAutomationStart } from "../components/StartAutomation";
 import { addAutomation, useAutomations, useEveryAutomation, useLaunchCheck } from "../core/automations";
+import { Icon } from "../components/Icon";
 import { useBoundFolders } from "../core/boundFolders";
 import { asTyped, isEnterSubmit } from "../core/keys";
-import { t, tf } from "../core/i18n";
-import type { AutomationCardDto, EveryAutomationCardDto } from "../bindings/bindings";
+import { errSentence, t, tf } from "../core/i18n";
+import type { AutomationCardDto } from "../bindings/bindings";
 
 /** Which of the four tabs the screen is on. */
 type Tab = "automations" | "actions" | "running" | "history";
@@ -114,7 +120,6 @@ export function AutomationsScreen({
   // Which built-in is open to be read, by its key — in the same spot again.
   const [openBuiltin, setOpenBuiltin] = useState<string | null>(null);
   const automations = useAutomations(projectId);
-  const folders = useBoundFolders(projectId).live.map((one) => one.path);
 
   // The tab the reader sees lit: the open screen's own while one is open, the chosen one otherwise.
   const lit: Tab =
@@ -126,6 +131,17 @@ export function AutomationsScreen({
     setOpen(null);
     setTab(next);
   }
+
+  // An automation an open action is placed on: this project's is opened here, in place of the action;
+  // the sidebar's screen goes to it where its project draws it. A project's screen offers no other
+  // project's (`./AutomationActionBuildScreen`).
+  const goToAutomation =
+    projectId === null
+      ? onGoToAutomation
+      : (_project: number, automation: number) => {
+          setOpenAction(null);
+          setOpen(automation);
+        };
 
   const tabs = (
     <div className="autotabs" role="tablist" aria-label={t("auto.title")}>
@@ -163,6 +179,7 @@ export function AutomationsScreen({
           onBack={() => setOpenAction(null)}
           onGoToGlobal={onGoToGlobalAction}
           onGoToRun={onGoToRun}
+          onGoToAutomation={goToAutomation}
         />
       </div>
     );
@@ -200,25 +217,16 @@ export function AutomationsScreen({
         <EveryAutomationList workspaceOpen={workspaceOpen} onGoTo={onGoToAutomation} onGoToRun={onGoToRun} />
       )}
 
-      {tab === "automations" && !everywhere && <AutomationNew projectId={projectId} onMade={setOpen} />}
-
-      {tab === "automations" && !everywhere && automations.length === 0 && (
-        <div className="auto__empty">{t("auto.empty")}</div>
-      )}
-
-      {tab === "automations" && !everywhere && automations.length > 0 && (
-        <ul className="autolist">
-          {automations.map((one) => (
-            <li key={one.id}>
-              <AutomationRow
-                automation={one}
-                projectId={projectId}
-                folders={folders}
-                onOpen={() => setOpen(one.id)}
-              />
-            </li>
-          ))}
-        </ul>
+      {tab === "automations" && projectId !== null && (
+        <>
+          <AutomationNew projectId={projectId} first={automations.length === 0} onMade={setOpen} />
+          <AutomationRows
+            cards={automations.map((card) => ({ card, projectId }))}
+            workspaceOpen={workspaceOpen}
+            onOpen={(row) => setOpen(row.card.id)}
+            onGoToRun={onGoToRun}
+          />
+        </>
       )}
     </div>
   );
@@ -237,129 +245,134 @@ function EveryAutomationList({
   const automations = useEveryAutomation();
   if (automations.length === 0) return <div className="auto__empty">{t("auto.emptyEverywhere")}</div>;
   return (
+    <AutomationRows
+      cards={automations.map((one) => ({ card: one.card, projectId: one.projectId, projectName: one.projectName }))}
+      workspaceOpen={workspaceOpen}
+      onOpen={onGoTo && ((row) => onGoTo(row.projectId, row.card.id))}
+      onGoToRun={onGoToRun}
+    />
+  );
+}
+
+/** One definition as a row: whose it is, and the name the sidebar's list names that project by. */
+type Row = { card: AutomationCardDto; projectId: number; projectName?: string };
+
+/**
+ * The rows of either list — the ones in use, then the archived ones folded under a count.
+ *
+ * The fold is closed on arrival, and stays as it was left while the list is re-read underneath.
+ */
+function AutomationRows({
+  cards,
+  workspaceOpen,
+  onOpen,
+  onGoToRun,
+}: {
+  cards: readonly Row[];
+  workspaceOpen: boolean;
+  /** Open the row's automation. Absent where there is nowhere to go, and then the rows are read. */
+  onOpen?: (row: Row) => void;
+  onGoToRun?: (project: number, run: number) => void;
+}) {
+  const [unfolded, setUnfolded] = useState(false);
+  if (cards.length === 0) return null;
+  const live = cards.filter((row) => !row.card.archived);
+  const archived = cards.filter((row) => row.card.archived);
+  const line = (row: Row) => (
+    <li key={row.card.id}>
+      <AutomationLine
+        row={row}
+        workspaceOpen={workspaceOpen}
+        onOpen={onOpen && (() => onOpen(row))}
+        onGoToRun={onGoToRun}
+      />
+    </li>
+  );
+  return (
     <ul className="autolist">
-      {automations.map((one) => (
-        <li key={one.card.id}>
-          <EveryAutomationRow
-            row={one}
-            workspaceOpen={workspaceOpen}
-            onGoTo={onGoTo && (() => onGoTo(one.projectId, one.card.id))}
-            onGoToRun={onGoToRun}
-          />
+      {live.map(line)}
+      {archived.length > 0 && (
+        <li>
+          <button
+            type="button"
+            className="autolist__fold"
+            aria-expanded={unfolded}
+            onClick={() => setUnfolded(!unfolded)}
+          >
+            <Icon name={unfolded ? "chevronDown" : "chevronRight"} />
+            {tf("auto.archivedFold", { count: archived.length })}
+          </button>
         </li>
-      ))}
+      )}
+      {unfolded && archived.map(line)}
     </ul>
   );
 }
 
 /**
- * One definition on the sidebar's list — the row goes to its project's build screen, and the start
- * press stands beside it.
+ * One definition on a list — the row opens it, and the start press stands beside it.
  *
  * The press is not inside the row because a press inside a press is not one: the row would swallow
- * "start" and go to the project instead (the "running" tab's rows stand the same way). Where the
+ * "start" and open the automation instead (the "running" tab's rows stand the same way). Where the
  * launch is refused, core's sentence goes under the row it was pressed on, as the build screen puts it
  * under its own press (`../components/StartAutomation`).
  */
-function EveryAutomationRow({
+function AutomationLine({
   row,
   workspaceOpen,
-  onGoTo,
+  onOpen,
   onGoToRun,
 }: {
-  row: EveryAutomationCardDto;
+  row: Row;
   workspaceOpen: boolean;
-  onGoTo?: () => void;
+  onOpen?: () => void;
   onGoToRun?: (project: number, run: number) => void;
 }) {
-  const { card, projectId } = row;
+  const { card, projectId, projectName } = row;
   const folders = useBoundFolders(projectId).live.map((one) => one.path);
   const check = useLaunchCheck(card.id, projectId, folders);
   const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
+  // What is in the way, read off the press on hover — the build screen's own list, in its words.
+  const blocked = check === null || check.ready ? undefined : check.blocks.map((block) => errSentence(block)).join("\n");
   return (
     <>
       <div className="autolist__line">
         <button
           type="button"
-          className={card.archived ? "autolist__row autolist__row--everywhere autolist__row--archived" : "autolist__row autolist__row--everywhere"}
-          disabled={!onGoTo}
-          onClick={onGoTo}
+          className={projectName === undefined ? "autolist__row" : "autolist__row autolist__row--everywhere"}
+          disabled={!onOpen}
+          onClick={onOpen}
         >
           <span className="autolist__name">
             <span className="autoid">{tf("auto.id", { id: card.id })}</span>
             {card.name}
-            {card.archived && <span className="autolist__tag">{t("auto.archived")}</span>}
             {firstLine(card.notes) !== "" && <span className="auto__note">{firstLine(card.notes)}</span>}
           </span>
-          <span className="autolist__project">{row.projectName}</span>
+          {projectName !== undefined && <span className="autolist__project">{projectName}</span>}
           <span className="autolist__meta">{tf("auto.stepCount", { count: card.placements })}</span>
-          <span
-            className={
-              check === null ? "autolist__ready" : `autolist__ready autolist__ready--${check.ready ? "ok" : "no"}`
-            }
+        </button>
+        {/* Held down until the check answers: a press offered before it would be a guess. */}
+        <span className="autolist__start" title={blocked}>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={check?.ready !== true || starting}
+            onClick={() => void start(card.id, folders)}
           >
-            {check === null ? "" : check.ready ? t("auto.ready") : t("auto.notReady")}
-          </span>
-        </button>
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={check?.ready !== true || starting}
-          onClick={() => void start(card.id, folders)}
-        >
-          {t("auto.start")}
-        </button>
+            {t("auto.start")}
+          </button>
+        </span>
       </div>
       {refused !== null && <div className="autolist__refused">{refused}</div>}
     </>
   );
 }
 
-/** One definition on the list — the whole row is the press that opens it. */
-function AutomationRow({
-  automation,
-  projectId,
-  folders,
-  onOpen,
-}: {
-  automation: AutomationCardDto;
-  projectId: number | null;
-  folders: readonly string[];
-  onOpen: () => void;
-}) {
-  const check = useLaunchCheck(automation.id, projectId, folders);
-  return (
-    <button
-      type="button"
-      className={automation.archived ? "autolist__row autolist__row--archived" : "autolist__row"}
-      onClick={onOpen}
-    >
-      <span className="autolist__name">
-        <span className="autoid">{tf("auto.id", { id: automation.id })}</span>
-        {automation.name}
-        {automation.archived && <span className="autolist__tag">{t("auto.archived")}</span>}
-        {firstLine(automation.notes) !== "" && <span className="auto__note">{firstLine(automation.notes)}</span>}
-      </span>
-      <span className="autolist__meta">{tf("auto.stepCount", { count: automation.placements })}</span>
-      {/* Nothing until the check answers: a guess either way would be a word the build screen may
-          then contradict. */}
-      <span
-        className={
-          check === null ? "autolist__ready" : `autolist__ready autolist__ready--${check.ready ? "ok" : "no"}`
-        }
-      >
-        {check === null ? "" : check.ready ? t("auto.ready") : t("auto.notReady")}
-      </span>
-    </button>
-  );
-}
-
 /**
  * **Make an automation from the list** — a name, and then the build screen it was made for.
  *
- * It is drawn above the list and above the empty text alike, because the press a reader with no
- * automations needs is the same one, and a screen that offered it only when the list was empty would
- * take it away as soon as it had been used once.
+ * It is drawn above the list, and in place of the list while there is none: the press a reader with
+ * no automations needs is the same one, drawn where there is nothing else to look at.
  *
  * The name is held here while it is being typed and the box closes on the press, so nothing is left
  * open behind the build screen that arrives. A blank name is refused by not making anything: core
@@ -371,9 +384,12 @@ function AutomationRow({
  */
 function AutomationNew({
   projectId,
+  first,
   onMade,
 }: {
   projectId: number | null;
+  /** Whether the project has none yet — then the press is drawn alone, in the middle of the tab. */
+  first: boolean;
   /** Open the build screen on what was just made. */
   onMade: (id: number) => void;
 }) {
@@ -398,11 +414,21 @@ function AutomationNew({
     }
   }
 
+  if (!open && first) {
+    return (
+      <div className="autolist__first">
+        <button type="button" className="btn btn--primary" onClick={() => setOpen(true)}>
+          <Icon name="plus" /> {t("auto.newFirst")}
+        </button>
+      </div>
+    );
+  }
+
   if (!open) {
     return (
       <div className="autolist__head">
-        <button type="button" className="btn btn--primary" onClick={() => setOpen(true)}>
-          {t("auto.new")}
+        <button type="button" className="btn" onClick={() => setOpen(true)}>
+          <Icon name="plus" /> {t("auto.new")}
         </button>
       </div>
     );

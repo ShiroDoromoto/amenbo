@@ -16,6 +16,7 @@ import type { AutomationActionDetailDto, AutomationRunCardDto, AutomationStepDto
 const hoisted = vi.hoisted(() => ({
   action: null as AutomationActionDetailDto | null,
   editAction: vi.fn(),
+  editStep: vi.fn(),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -24,7 +25,7 @@ vi.mock("../core/automations", () => ({
   useAutomationAction: () => hoisted.action,
   useAutomationActions: () => [],
   editAutomationAction: hoisted.editAction,
-  editAutomationStep: vi.fn(),
+  editAutomationStep: hoisted.editStep,
   setAutomationWire: vi.fn(),
   clearAutomationWire: vi.fn(),
   addAutomationEdge: vi.fn(),
@@ -51,7 +52,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -91,6 +92,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     inputs: [],
     settings: [],
     heldBy: [],
+    placedOn: [],
     ...over,
   };
 }
@@ -112,12 +114,20 @@ const buttons = () => [...container.querySelectorAll<HTMLButtonElement>("button"
 const has = (label: string) => buttons().some((one) => one.textContent === label);
 const textareas = () => [...container.querySelectorAll("textarea")];
 
-/** The note's box — the field labelled with it, on the part of the screen that is the action's own. */
+/** The note's box — the one labelled with it, on the part of the screen that is the action's own. */
 function noteBox(): HTMLTextAreaElement {
-  const field = [...container.querySelectorAll("label")].find(
-    (one) => one.querySelector(".autostep__label")?.textContent === t("auto.actions.note"),
-  );
-  return field!.querySelector("textarea")!;
+  return container.querySelector<HTMLTextAreaElement>(
+    `textarea[aria-label="${t("auto.actions.note")}"]`,
+  )!;
+}
+
+/** The panel's head, as the box its name is typed in. */
+const titleBox = () => container.querySelector<HTMLInputElement>(".actpanel__titlein");
+
+/** Typing into a controlled one-line box. */
+function typeLine(field: HTMLInputElement, text: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, text);
+  field.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 /** Open the action itself in the panel, the way a reader does: the edit button on its row. */
@@ -143,6 +153,7 @@ beforeEach(() => {
   root = createRoot(container);
   hoisted.action = action();
   hoisted.editAction.mockReset();
+  hoisted.editStep.mockReset();
 });
 
 afterEach(() => {
@@ -169,8 +180,55 @@ describe("the action build screen", () => {
     await render();
     expect(container.querySelector(".actpanel")).toBeNull();
     await act(async () => nodes()[0]!.click());
-    expect(container.querySelector(".actpanel__title")?.textContent).toBe("Take the next task");
+    expect(titleBox()?.value).toBe("Take the next task");
     expect(textareas().map((one) => one.value)).toContain("take one");
+  });
+
+  it("renames the step from the panel's head, when the caret leaves it", async () => {
+    await render();
+    await act(async () => nodes()[0]!.click());
+    await act(async () => {
+      typeLine(titleBox()!, "Take one");
+      leave(titleBox()!);
+    });
+    expect(hoisted.editStep).toHaveBeenCalledWith(11, { name: "Take one" });
+  });
+
+  it("renames the action from the head of its own panel", async () => {
+    await render();
+    await openDeclaration();
+    await act(async () => {
+      typeLine(titleBox()!, "Implement");
+      leave(titleBox()!);
+    });
+    expect(hoisted.editAction).toHaveBeenCalledWith(4, { name: "Implement" });
+  });
+
+  it("names the automations it is placed on, and goes to one on its press", async () => {
+    const goTo = vi.fn();
+    hoisted.action = action({
+      placedOn: [
+        { id: 7, name: "Dev loop", project: 1 },
+        { id: 8, name: "Elsewhere", project: 2 },
+      ],
+    });
+    await act(async () => {
+      root.render(
+        createElement(AutomationActionBuildScreen, {
+          id: 4,
+          projectId: 1,
+          onBack: () => undefined,
+          onGoToAutomation: goTo,
+        }),
+      );
+    });
+    await openDeclaration();
+    const names = [...container.querySelectorAll(".actplaced__one")];
+    expect(names.map((one) => one.textContent?.replace(" ↗", ""))).toEqual(["Dev loop", "Elsewhere"]);
+    // Another project's automation is not gone to from this project's screen.
+    expect(names[1]!.tagName).toBe("SPAN");
+    await act(async () => (names[0] as HTMLButtonElement).click());
+    expect(goTo).toHaveBeenCalledWith(1, 7);
   });
 
   it("closes the panel from its own close button", async () => {
@@ -201,6 +259,26 @@ describe("the action build screen", () => {
     expect(container.querySelector(".actpanel")?.textContent).toContain(t("auto.pic.errorExit"));
   });
 
+  it("draws a setting as a chip with an empty slot for its answer, and opens a row to declare only on add", async () => {
+    hoisted.action = action({
+      settings: [{ name: "branch", kind: "choice", required: true }],
+    });
+    await render();
+    const frames = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__frame")];
+    await act(async () => frames().find((one) => one.classList.contains("autopic__frame--in"))!.click());
+    const panel = container.querySelector(".actpanel")!;
+    expect(panel.querySelector(".actport--cfg")?.textContent).toContain("branch");
+    expect(panel.querySelector(".autodecl__slot")?.textContent).toBe(t("auto.decl.answeredOnPlacement"));
+    expect(panel.querySelector(".autostep__declare")).toBeNull();
+    // What renames or removes it is behind its "⋯".
+    expect(panel.querySelector(".autostep__decl")).toBeNull();
+    await act(async () => panel.querySelector<HTMLButtonElement>(".autodecl__more")!.click());
+    expect(panel.querySelector(".autostep__decl")).not.toBeNull();
+    const adds = [...panel.querySelectorAll<HTMLButtonElement>(".autosec__add")];
+    await act(async () => adds[1]!.click());
+    expect(panel.querySelectorAll(".autostep__declare")).toHaveLength(1);
+  });
+
   it("offers the first step while the picture is empty, and not once there is one", async () => {
     hoisted.action = action({ steps: [], entryStepId: undefined });
     await render();
@@ -216,7 +294,7 @@ describe("the action build screen", () => {
     await render();
     await openDeclaration();
     expect(noteBox().value).toBe("Takes the next task off the queue");
-    expect(container.textContent).toContain(t("auto.actions.noteWhat"));
+    expect(noteBox().placeholder).toBe(t("auto.actions.notePlaceholder"));
 
     await act(async () => {
       type(noteBox(), "Takes one task");
@@ -276,6 +354,7 @@ describe("a global action opened from a project", () => {
       buttons().find((one) => one.textContent === t("auto.act.read"))!.click();
     });
     expect(noteBox().closest("fieldset")?.disabled).toBe(true);
+    expect(titleBox()?.readOnly).toBe(true);
   });
 
   it("opens a step to be read, with the fields shut", async () => {
@@ -316,6 +395,7 @@ function heldRun(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     pauseRequested: false,
     waiting: false,
     stepsDone: 1,
+    reportWithheld: [],
     ...over,
   };
 }
@@ -339,9 +419,9 @@ describe("an action a run is going on (AMB-D-961)", () => {
 
   it("names the runs using it, and goes to a run's pane on its line", async () => {
     await renderHeld();
-    expect(container.textContent).toContain(t("auto.held.what"));
-    expect(container.textContent).toContain("Night round");
-    await act(async () => { container.querySelector<HTMLButtonElement>(".autoheld .autorun__go")!.click(); });
+    expect(container.querySelector(".autoheld")?.textContent).toContain(tf("auto.held.by", { run: 31 }));
+    expect(container.querySelector(".autoheld")?.textContent).toContain("Night round");
+    await act(async () => { [...container.querySelectorAll<HTMLButtonElement>(".autoheld .btn")].find((b) => b.textContent === t("auto.held.openPane"))!.click(); });
     expect(goToRun).toHaveBeenCalledWith(2, 31);
   });
 
@@ -359,7 +439,8 @@ describe("an action a run is going on (AMB-D-961)", () => {
   it("offers no way to add a step, and does not say it is changed from the sidebar", async () => {
     await renderHeld();
     expect(has(t("auto.act.stepAdd"))).toBe(false);
-    expect(container.querySelector('[data-icon="lock"]')).toBeNull();
+    // The held band carries its own lock; the one that says "changed from the sidebar" is the head's.
+    expect(container.querySelector('.actdecl [data-icon="lock"]')).toBeNull();
   });
 
   it("says nothing of runs, and holds nothing shut, while none is going", async () => {

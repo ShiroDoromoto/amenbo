@@ -49,13 +49,14 @@ import {
   useAutomationAction,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
-import { errText, isStatus, statusLabel, t, tf } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
-import { ExitMark, ReachChip, usedCount } from "./automationParts";
+import { ExitMark, filterValueLabel, ReachChip, usedCount } from "./automationParts";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
 import { exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
+import { Sec, Switch } from "./automationDeclParts";
 import {
   filterRows,
   pressed,
@@ -79,17 +80,6 @@ import type {
   AutomationPortDto,
   WakeCandidateDto,
 } from "../bindings/bindings";
-
-/** What one value of a task filter row is called. */
-function rowValueLabel(key: string, value: string): string {
-  if (key === "status") return isStatus(value) ? statusLabel(value) : value;
-  if (key === "assignee") {
-    if (value === "none") return t("filter.opt.assignee.none");
-    if (value === "me") return t("filter.opt.assignee.me");
-    return t("filter.opt.assignee.meAi");
-  }
-  return value === "yes" ? t("auto.step.readyYes") : t("auto.step.readyNo");
-}
 
 /** What one task filter row is called. */
 function rowLabel(key: string): string {
@@ -183,11 +173,14 @@ function CfgRow({ placementId, builtin, cfg, run }: {
   const shown = builtinWord(builtin, cfg.name);
 
   return (
-    <section className="autostep__sec">
-      <div className="autostep__sectitle">
-        {shown}
-        {cfg.required && <span className="autostep__req">● {t("auto.step.required")}</span>}
-      </div>
+    <Sec
+      title={
+        <>
+          {shown}
+          {cfg.required && <span className="autostep__req">● {t("auto.step.required")}</span>}
+        </>
+      }
+    >
 
       {cfg.kind === "taskfilter" && (
         <div className="autostep__rows">
@@ -202,7 +195,7 @@ function CfgRow({ placementId, builtin, cfg, run }: {
                   aria-pressed={(filter[row.key] ?? []).includes(value)}
                   onClick={() => answer(writeFilter(pressed(filter, row.key, value, row.single), sort))}
                 >
-                  {rowValueLabel(row.key, value)}
+                  {filterValueLabel(row.key, value)}
                 </button>
               ))}
             </div>
@@ -250,7 +243,7 @@ function CfgRow({ placementId, builtin, cfg, run }: {
           onBlur={() => writeText(text) !== (cfg.value ?? null) && answer(writeText(text))}
         />
       )}
-    </section>
+    </Sec>
   );
 }
 
@@ -452,26 +445,20 @@ export function AutomationStepPanel({
         {/* A switch rather than a tick box: it reads as something to turn on. There is one start per
             automation, and turning it on here moves it off the spot that had it — which the picture
             shows as its mark moving. */}
-        <label className="autostep__switch">
-          <span>{t("auto.step.entry")}</span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={automation.entryPlacementId === placement.id}
-            onChange={(e) =>
-              void run(setAutomationEntry(automation.id, e.target.checked ? placement.id : null))
-            }
-          />
-        </label>
+        <Switch
+          boxed
+          label={t("auto.step.entry")}
+          checked={automation.entryPlacementId === placement.id}
+          onChange={(to) => void run(setAutomationEntry(automation.id, to ? placement.id : null))}
+        />
 
         {/* Amenbo carries a built-in out itself, and core refuses anybody chosen for it (`AMB-D-964`). */}
         {placement.steps.length > 0 && placement.builtin === undefined && (
-          <section className="autostep__sec">
-            <div className="autostep__sectitle">{t("auto.place.agents")}</div>
+          <Sec title={t("auto.place.agents")}>
             {placement.steps.map((step) => (
               <AgentRow key={step.stepId} placementId={placement.id} step={step} agents={agents} run={run} />
             ))}
-          </section>
+          </Sec>
         )}
 
         {placement.settings.map((cfg) => (
@@ -479,16 +466,14 @@ export function AutomationStepPanel({
         ))}
 
         {placement.inputs.length > 0 && (
-          <section className="autostep__sec">
-            <div className="autostep__sectitle">{t("auto.step.inputs")}</div>
+          <Sec title={t("auto.step.inputs")}>
             {placement.inputs.map((input) => (
               <InputRow key={input.name} automation={automation} placement={placement} input={input} run={run} />
             ))}
-          </section>
+          </Sec>
         )}
 
-        <section className="autostep__sec">
-          <div className="autostep__sectitle">{t("auto.step.exits")}</div>
+        <Sec title={t("auto.step.exits")}>
           <ul className="autostep__exits autostep__exits--flow">
             {named.map((one) => (
               <li key={one.id} className="autostep__exit">
@@ -517,7 +502,7 @@ export function AutomationStepPanel({
               />
             </li>
           </ul>
-        </section>
+        </Sec>
 
         <div className="actpanel__foot">
           <button type="button" className="btn btn--danger" onClick={() => void remove()}>

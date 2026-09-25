@@ -275,7 +275,7 @@ fn put(
 /// **The step is finished**: it names the way out it took, hands its report over, and the run reads the
 /// picture to see what comes next.
 ///
-/// **The way out is named by its id** (`AMB-D-961`), as the step's copy keys it — the unnamed one
+/// **The way out is named by its id** (`AMB-D-961`), as the step's copy keys it — the done one
 /// included, which can also be said by leaving `--exit` off. An id the step does not declare is refused
 /// before anything is written, naming the ones it does: the way out is the condition the picture reads
 /// to pick what comes next, so one nobody drew cannot be walked, and reading it as the error one
@@ -307,7 +307,7 @@ pub fn done(
     // The way out, as the step's copy declares it: by its id, or — left unsaid — the done one.
     let Some(taken) = exits.iter().find(|e| match exit_id {
         Some(id) => e.id == id,
-        None => e.name.as_deref() == Some(DONE_EXIT),
+        None => e.name == DONE_EXIT,
     }) else {
         return Err(undeclared(&def.name, exit_id, &exits));
     };
@@ -335,7 +335,7 @@ pub fn done(
         return Err(Error::invalid(format!(
             "step '{}' has not handed on what leaving through {} requires: {}",
             def.name,
-            named(taken.name.as_deref()),
+            named(&taken.name),
             missing.join(", "),
         )));
     }
@@ -391,10 +391,9 @@ fn undeclared(step: &str, said: Option<i64>, exits: &[RunDefExit]) -> Error {
     let ways: Vec<String> = exits
         .iter()
         .map(|e| {
-            let what = match e.name.as_deref() {
-                Some(ERROR_EXIT) => "the error way out, for a step that could not finish".to_string(),
-                Some(name) => format!("\"{name}\""),
-                None => "the unnamed way out".to_string(),
+            let what = match e.name.as_str() {
+                ERROR_EXIT => "the error way out, for a step that could not finish".to_string(),
+                name => format!("\"{name}\""),
             };
             format!("--exit {} ({what})", e.id)
         })
@@ -545,12 +544,11 @@ fn over_its_turns(
     Ok(taken > limit)
 }
 
-/// How a way out is spoken of in a sentence: by its name, or as the unnamed one.
-fn named(exit: Option<&str>) -> String {
+/// How a way out is spoken of in a sentence: by its name, and the error one as what it is.
+fn named(exit: &str) -> String {
     match exit {
-        Some(ERROR_EXIT) => "the error way out".to_string(),
-        Some(name) => format!("\"{name}\""),
-        None => "the unnamed way out".to_string(),
+        ERROR_EXIT => "the error way out".to_string(),
+        name => format!("\"{name}\""),
     }
 }
 
@@ -793,22 +791,22 @@ mod tests {
             let step = opened(tx, &run, &p.first).run_step;
             let found = way_out(tx, step.id, "found");
             let on_found = out_port(tx, step.id, found, "note");
-            let unnamed = exits_of(&read::automation_run_def(tx.conn(), step.run_def_id).unwrap().unwrap())
+            let done_exit = exits_of(&read::automation_run_def(tx.conn(), step.run_def_id).unwrap().unwrap())
                 .unwrap()
                 .into_iter()
-                .find(|e| e.name.as_deref() == Some(DONE_EXIT))
+                .find(|e| e.name == DONE_EXIT)
                 .expect("the done way out")
                 .id;
-            let on_unnamed = out_port(tx, step.id, Some(unnamed), "note");
-            assert_ne!(on_found, on_unnamed, "one name, two ports");
+            let on_done = out_port(tx, step.id, Some(done_exit), "note");
+            assert_ne!(on_found, on_done, "one name, two ports");
 
             let put = out(tx, step.id, on_found, Produced::Value("for found")).expect("out");
             assert_eq!(put.exit_id, found, "it is the way out's the moment it is put down");
-            let refused = done(tx, step.id, Some(unnamed), "Nothing to fix.").expect_err("still missing");
-            assert!(refused.to_string().contains(&format!("{on_unnamed} (note)")), "{refused}");
+            let refused = done(tx, step.id, Some(done_exit), "Nothing to fix.").expect_err("still missing");
+            assert!(refused.to_string().contains(&format!("{on_done} (note)")), "{refused}");
 
-            out(tx, step.id, on_unnamed, Produced::Value("for the unnamed")).expect("out");
-            done(tx, step.id, Some(unnamed), "Nothing to fix.").expect("done");
+            out(tx, step.id, on_done, Produced::Value("for the done one")).expect("out");
+            done(tx, step.id, Some(done_exit), "Nothing to fix.").expect("done");
             let kept = outs(tx, step.id);
             assert_eq!(kept.len(), 2, "the value on the other way out is kept as the record");
             assert!(kept.iter().any(|v| v.port_id == on_found && v.exit_id == found));
@@ -926,7 +924,7 @@ mod tests {
 
             let next = done(tx, step.run_step.id, None, "")
                 .expect("done with nothing to say");
-            assert!(matches!(next, Next::Closed(_)), "the unnamed way out closes the run: {next:?}");
+            assert!(matches!(next, Next::Closed(_)), "the done way out closes the run: {next:?}");
             let ended = read::automation_run_step(tx.conn(), step.run_step.id)
                 .expect("read")
                 .expect("the execution");

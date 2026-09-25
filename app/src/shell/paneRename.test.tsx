@@ -159,7 +159,7 @@ describe("naming a pane", () => {
     // A name given there would be kept against the place and never drawn (`AMB-T-5529`).
     await pane(new Map(), {
       automation: "家計簿の開発ループ", run: 7, step: "取る", automationId: 3, placement: null, box: null,
-      action: null, task: null, state: null,
+      builtin: false, action: null, task: null, state: null,
     });
     await opened();
 

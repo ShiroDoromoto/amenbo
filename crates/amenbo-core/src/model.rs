@@ -1754,14 +1754,13 @@ pub struct AutomationCfg {
 
 /// **A way out of a step or an action**, named by whoever built it. Which one the agent took is the
 /// whole condition the next box is chosen by. Every owner is born with [`DONE_EXIT`] and
-/// [`ERROR_EXIT`]. `name` is `None` only on a row written before v71, which gave every way out a name.
+/// [`ERROR_EXIT`], and none goes without a name (v74 named the ones written before).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AutomationExit {
     pub id: i64,
     pub owner_kind: AutomationOwner,
     pub owner_id: i64,
-    #[serde(default)]
-    pub name: Option<String>,
+    pub name: String,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -2052,9 +2051,8 @@ pub struct RunDefExit {
     /// The [`AutomationExit`] row this was copied from — what `step-done --exit` names and what the
     /// run's records key the way out by. Kept after the row itself is renamed or gone.
     pub id: i64,
-    /// [`ERROR_EXIT`] is the error one. `None` only in a copy written before v71.
-    #[serde(default)]
-    pub name: Option<String>,
+    /// [`ERROR_EXIT`] is the error one. Every copy carries one (v74 named the ones written before).
+    pub name: String,
     pub outs: Vec<RunDefPort>,
     /// What follows leaving by it, resolved at launch across the action's edge — `None` where nothing
     /// was drawn after it (`AMB-D-961`).

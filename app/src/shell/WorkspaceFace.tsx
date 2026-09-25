@@ -47,7 +47,7 @@ import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { useRunCards } from "../core/automations";
-import { runStateOf } from "../core/runWords";
+import { runStateOf, waitingState } from "../core/runWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
@@ -1738,6 +1738,7 @@ export function WorkspaceFace({
                       automationId: on.automation,
                       placement: on.placement ?? null,
                       box: null,
+                      builtin: builtin !== undefined,
                       // Which spot of the picture this step was opened from, said by the action
                       // standing there (`AMB-D-949`). Null where that spot has since been taken off.
                       action: on.actionName === undefined ? null : builtinWord(builtin?.key, on.actionName),
@@ -1745,8 +1746,11 @@ export function WorkspaceFace({
                       // the run closed before it, and a line naming that one would say the run was on it.
                       task: builtin?.waiting ? null : on.task ?? null,
                       // Whether the run is going, held or over, and where a failure failed
-                      // (`AMB-T-5506`). Null until it has been read.
-                      state: runStateOf(runCardOf.get(frame.run)),
+                      // (`AMB-T-5506`). Null until it has been read. A run whose built-in is waiting
+                      // for a task is still running, and the row says what it is doing: waiting.
+                      state: builtin?.waiting
+                        ? waitingState(runStateOf(runCardOf.get(frame.run)))
+                        : runStateOf(runCardOf.get(frame.run)),
                     }}
                     builtin={builtin ?? null}
                     // A place that came back holding a way into what was running in it is opened

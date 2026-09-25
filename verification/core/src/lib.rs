@@ -4276,14 +4276,14 @@ const REGISTRY: &[OpSpec] = &[
     // Amenbo's own, in the machine's language, so the driver says what the built-in is and the
     // operator finds it by that.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after"], refs: &["action"], strings: &["after", "exit", "name", "reach", "builtin"], binds: false },
-    // The `+ output artefact` on a way out, and the dialog it opens.
+    // The `＋` on a way out's card, and the row it opens inside that card.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
     //
     // **The action build screen's own two.** Inside an action a picture has no line until two boxes
     // are joined, so `insert-box` has nothing to press on it: the first step, and every one after it
     // that is not put in on a line, comes from the press above the picture — `＋ First step` on an
-    // empty action and `＋ Step` once one is there, the same dialog either way. `exits` and `inputs`
-    // are what the dialog is to declare on it, read the way `insert-box` reads them.
+    // empty action and `＋ Step` once one is there, the same dialog either way. It asks a name and a
+    // prompt alone; what else the step declares is written on the panel afterwards (`declare`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-step", required: &["name", "prompt"], refs: &[], strings: &["name", "prompt"], binds: false },
     // Deleting the step the panel is showing. It takes what the step declared and every line naming
     // it, so the machine's own question stands between the press and the write, and the road answers
@@ -4382,7 +4382,17 @@ const REGISTRY: &[OpSpec] = &[
     // quoting a sentence the interface owns. `box` is the name the reason carries — the action on a
     // placement, or a step inside one for the two reasons about who carries a step out — and `at`
     // what on it is named.
+    //
+    // `pressable` is whether that reason's line is a press. A reason about one box is: pressing it
+    // picks that box out on the picture and opens its panel (`press-reason`). The two about the
+    // automation as a whole name no box and are a line to read, which is what `pressable: false`
+    // reads — a build that drew every line as a press would open nothing for those two.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch", required: &["ready"], refs: &[], strings: &["reason", "box", "at"], binds: false },
+    // Pressing one of those reasons, named by its code and by the box it names (`box`), the way
+    // `launch` reads it. What the press does is the picture's: that box is picked out and its panel
+    // opens beside it, as pressing the box itself would — so a road goes on from here the way it
+    // goes on from `pick-box`.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-reason", required: &["reason", "box"], refs: &[], strings: &["reason", "box"], binds: false },
     //
     // The pane a run is drawn in, and what its header carries: the run's own number and which step
     // on the name's line, and the task it is on with how many tasks in on the line under it. The step is said with the action it was opened
@@ -5065,11 +5075,23 @@ impl Scenario {
                 "task_decisions",
                 "task_comments",
                 "history",
+                "pressable",
             ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));
                     }
+                }
+            }
+
+            // Whether a reason's line is a press is a reading of one reason, so it needs the reason it is
+            // about, and a reason said to be absent has no line to be pressed or not.
+            if step.domain() == Domain::Automation && step.op() == "launch" && step.with().contains_key("pressable") {
+                if !step.with().contains_key("reason") {
+                    errs.push(at(i, "`pressable` is about one reason's line, so it needs the `reason`".to_string()));
+                }
+                if step.with().get("present").and_then(|v| v.as_bool()) == Some(false) {
+                    errs.push(at(i, "`pressable` reads a line that is there, and `present: false` says it is not".to_string()));
                 }
             }
 
@@ -5422,6 +5444,26 @@ steps_gui:
     op: save
 "#;
         load_str(yaml).unwrap().validate().expect("the save stands in both forms");
+    }
+
+    #[test]
+    fn pressable_is_read_of_one_reason_that_is_there() {
+        let no_reason = r#"
+id: x
+title: y
+steps_gui:
+  - { type: assert, domain: automation, op: launch, with: { ready: false, pressable: false } }
+"#;
+        let errs = load_str(no_reason).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("needs the `reason`")));
+        let absent = r#"
+id: x
+title: y
+steps_gui:
+  - { type: assert, domain: automation, op: launch, with: { ready: false, reason: no_steps, pressable: false, present: false } }
+"#;
+        let errs = load_str(absent).unwrap().validate().unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`present: false` says it is not")));
     }
 
     #[test]

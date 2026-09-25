@@ -30,13 +30,15 @@ steps_gui:
     as: auto
 
   # Where the press landed. An automation made a moment ago holds nothing, and the launch place says so
-  # before anything else — it is the reason that stands in front of every other.
+  # before anything else — it is the reason that stands in front of every other. It is about the
+  # automation as a whole and names no box, so its line is one to read and not a press.
   - type: assert
     domain: automation
     op: launch
     with:
       ready: false
       reason: no_steps
+      pressable: false
       present: true
 
   # And the list it was made from, with the row it now carries. The count is the half worth asking

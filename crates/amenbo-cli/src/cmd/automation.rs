@@ -978,7 +978,7 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
         human(flags, format!("    step {} {}  {who}", one.step.id, one.step.name));
     }
     for exit in &placement.exits {
-        human(flags, format!("    way out {}  [{}]", one_exit(exit.exit.name.as_deref()), exit.exit.id));
+        human(flags, format!("    way out {}  [{}]", one_exit(&exit.exit.name), exit.exit.id));
         for port in &exit.outputs {
             human(flags, format!("        hands on  {}", one_port(port)));
         }
@@ -1057,7 +1057,7 @@ fn render_action(flags: &Flags, view: &ActionView) {
         human(flags, format!("declares  {}", one_cfg(cfg)));
     }
     for exit in &view.exits {
-        human(flags, format!("way out {}", one_exit(exit.exit.name.as_deref())));
+        human(flags, format!("way out {}", one_exit(&exit.exit.name)));
         for port in &exit.outputs {
             human(flags, format!("    hands on  {}", one_port(port)));
         }
@@ -1108,7 +1108,7 @@ fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
         human(flags, format!("    takes  {}", one_port(port)));
     }
     for exit in &step.exits {
-        human(flags, format!("    way out {}  [{}]", one_exit(exit.exit.name.as_deref()), exit.exit.id));
+        human(flags, format!("    way out {}  [{}]", one_exit(&exit.exit.name), exit.exit.id));
         for port in &exit.outputs {
             human(flags, format!("        hands on  {}", one_port(port)));
         }
@@ -1141,11 +1141,10 @@ fn port_named(name: Option<&str>, id: i64) -> String {
     name.map(str::to_string).unwrap_or_else(|| format!("port {id}"))
 }
 
-fn one_exit(name: Option<&str>) -> String {
+fn one_exit(name: &str) -> String {
     match name {
-        Some(amenbo_core::model::ERROR_EXIT) => "the error one".to_string(),
-        Some(name) => format!("\"{name}\""),
-        None => "the unnamed one".to_string(),
+        amenbo_core::model::ERROR_EXIT => "the error one".to_string(),
+        name => format!("\"{name}\""),
     }
 }
 
@@ -1195,10 +1194,7 @@ fn one_edge(
         (amenbo_core::model::AutomationEnds::Go, None) => "nowhere".to_string(),
         (amenbo_core::model::AutomationEnds::Exit, _) => {
             match action_exits.iter().find(|e| Some(e.exit.id) == edge.exit_to_id) {
-                Some(e) => match e.exit.name.as_deref() {
-                    Some(name) => format!("out of the action by '{name}'"),
-                    None => "out of the action by its unnamed way out".to_string(),
-                },
+                Some(e) => format!("out of the action by '{}'", e.exit.name),
                 None => "out of the action by a way out it no longer declares".to_string(),
             }
         }
@@ -1296,13 +1292,13 @@ fn render_move(
     Ok(())
 }
 
-/// How a way out is spoken of in a sentence: by its name, or as the unnamed one. A step still running
-/// has taken none yet, which is a third thing and reads as such.
+/// How a way out is spoken of in a sentence: by its name, and the error one as what it is. A step
+/// still running has taken none yet, which is a thing of its own and reads as such.
 fn named(exit: Option<&str>) -> String {
     match exit {
         Some(amenbo_core::model::ERROR_EXIT) => "the error way out".to_string(),
         Some(name) => format!("\"{name}\""),
-        None => "the unnamed way out".to_string(),
+        None => "no way out yet".to_string(),
     }
 }
 
@@ -1315,11 +1311,12 @@ fn named_step(defs: &[AutomationRunDef], m: &AutomationRunStep) -> String {
 }
 
 /// The name of the way out an execution left by, read from the run's copy of the step — the live row
-/// may have been renamed or deleted since. `None` is the unnamed one.
+/// may have been renamed or deleted since. `None` where it has left by none, or by one the copy does not
+/// hold.
 fn left_by(defs: &[AutomationRunDef], m: &AutomationRunStep) -> Option<String> {
     let def = defs.iter().find(|d| d.id == m.run_def_id)?;
     let exits: Vec<amenbo_core::model::RunDefExit> = serde_json::from_str(&def.exits).ok()?;
-    exits.into_iter().find(|e| Some(e.id) == m.exit_id).and_then(|e| e.name)
+    exits.into_iter().find(|e| Some(e.id) == m.exit_id).map(|e| e.name)
 }
 
 /// One value on one line, said from the side it was on: what came in, and what went out.

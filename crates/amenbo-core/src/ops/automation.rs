@@ -38,7 +38,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     AttachmentTarget, Automation, AutomationAction, AutomationCfg, AutomationCfgKind,
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
@@ -332,8 +332,8 @@ fn box_word(owner_kind: AutomationPictureOwner) -> &'static str {
 /// with a single way out needs, and the error one, which nobody can delete. Written at the moment the
 /// owner is created so that an edge or a port has somewhere to hang from the first command onwards.
 fn born_with_exits(tx: &WriteTx<'_>, owner_kind: AutomationOwner, owner_id: i64) -> Result<()> {
-    add_exit_row(tx, owner_kind, owner_id, Some(DONE_EXIT.to_string()))?;
-    add_exit_row(tx, owner_kind, owner_id, Some(ERROR_EXIT.to_string()))?;
+    add_exit_row(tx, owner_kind, owner_id, DONE_EXIT.to_string())?;
+    add_exit_row(tx, owner_kind, owner_id, ERROR_EXIT.to_string())?;
     Ok(())
 }
 
@@ -343,7 +343,7 @@ fn add_exit_row(
     tx: &WriteTx<'_>,
     owner_kind: AutomationOwner,
     owner_id: i64,
-    name: Option<String>,
+    name: String,
 ) -> Result<AutomationExit> {
     let sibs = read::automation_exit_siblings(tx.conn(), owner_kind, owner_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
@@ -615,12 +615,20 @@ pub fn action_set_scope(
         }
         let elsewhere = automations_placing_outside(tx, id, project_id)?;
         if !elsewhere.is_empty() {
-            return Err(Error::invalid(format!(
-                "action '{id}' is placed on automations of other projects — {} — take it off them \
-                 before moving it into project {}",
-                elsewhere.join(", "),
-                crate::idref::project(project_id),
-            )));
+            let project = read::project_name(tx.conn(), project_id)?.unwrap_or_default();
+            let said: Vec<String> = elsewhere.iter().map(|one| one.said.clone()).collect();
+            let names: Vec<String> = elsewhere.iter().map(|one| one.name.clone()).collect();
+            return Err(Error::Invalid(
+                Msg::new(format!(
+                    "action '{id}' is placed on automations of other projects — {} — take it off them \
+                     before moving it into project {}",
+                    said.join(", "),
+                    crate::idref::project(project_id),
+                ))
+                .coded(ErrorCode::InvalidActionPlacedElsewhere)
+                .with("automations", names.join(", "))
+                .with("project", project),
+            ));
         }
     }
     let sibs = read::automation_action_siblings(tx.conn(), project_id, Some(id))?;
@@ -634,11 +642,18 @@ pub fn action_set_scope(
 
 /// The automations outside `project_id` that place this action, each named once with its project —
 /// `automation '<name>' (<id>) in project <ref> '<name>'`, in the order the placements were made.
+/// One automation outside the project that stands in the way: said in full for the English sentence,
+/// and by its name alone for the screen's, which draws the project it is moving into beside it.
+struct Outside {
+    said: String,
+    name: String,
+}
+
 fn automations_placing_outside(
     tx: &WriteTx<'_>,
     action_id: i64,
     project_id: i64,
-) -> Result<Vec<String>> {
+) -> Result<Vec<Outside>> {
     let mut seen = Vec::new();
     let mut named = Vec::new();
     for placement in read::automation_placement_ids_using_action(tx.conn(), action_id)? {
@@ -649,12 +664,15 @@ fn automations_placing_outside(
         }
         seen.push(automation.id);
         let project = read::project_name(tx.conn(), automation.project_id)?.unwrap_or_default();
-        named.push(format!(
-            "automation '{}' ({}) in project {} '{project}'",
-            automation.name,
-            automation.id,
-            crate::idref::project(automation.project_id),
-        ));
+        named.push(Outside {
+            said: format!(
+                "automation '{}' ({}) in project {} '{project}'",
+                automation.name,
+                automation.id,
+                crate::idref::project(automation.project_id),
+            ),
+            name: automation.name,
+        });
     }
     Ok(named)
 }
@@ -669,11 +687,15 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     not_under_a_run(tx, Def::Action(id))?;
     let users = read::automation_placement_ids_using_action(tx.conn(), id)?;
     if !users.is_empty() {
-        return Err(Error::invalid(format!(
-            "{} placement(s) stand on this action — take them off the pictures they are on before \
-             deleting it",
-            users.len()
-        )));
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "{} placement(s) stand on this action — take them off the pictures they are on before \
+                 deleting it",
+                users.len()
+            ))
+            .coded(ErrorCode::InvalidActionStillPlaced)
+            .with("count", users.len()),
+        ));
     }
     for wire in read::automation_wire_ids(tx.conn(), AutomationPictureOwner::Action, id)? {
         tx.delete_record("automation_wire", wire)?;
@@ -1268,7 +1290,7 @@ fn splice_onto_edge(tx: &WriteTx<'_>, edge: &AutomationEdge, new_box: i64) -> Re
             edge.to_id.ok_or_else(|| Error::invalid("the way out goes on to nothing"))?,
         ),
         AutomationEnds::Exit => EdgeTarget::Exit(match edge.exit_to_id {
-            Some(id) => live_exit(tx, id)?.name,
+            Some(id) => Some(live_exit(tx, id)?.name),
             None => None,
         }),
         AutomationEnds::Done => EdgeTarget::Done,
@@ -1463,7 +1485,7 @@ pub fn exit_add(
     if read::automation_exit_by_name(tx.conn(), owner_kind, owner_id, Some(&name))?.is_some() {
         return Err(Error::invalid(format!("a way out called '{name}' is already declared here")));
     }
-    add_exit_row(tx, owner_kind, owner_id, Some(name))
+    add_exit_row(tx, owner_kind, owner_id, name)
 }
 
 /// Rename a way out.
@@ -1476,7 +1498,7 @@ pub fn exit_add(
 pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<AutomationExit> {
     let before = live_exit(tx, id)?;
     not_under_a_run(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
-    if before.name.as_deref() == Some(ERROR_EXIT) {
+    if before.name == ERROR_EXIT {
         return Err(Error::invalid(
             "the error way out's name is fixed — every step and every action is read as carrying it",
         ));
@@ -1493,7 +1515,7 @@ pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<Auto
         }
     }
     let mut after = before.clone();
-    after.name = Some(name);
+    after.name = name;
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation_exit(&before), record::automation_exit(&after))?;
     Ok(after)
@@ -1518,7 +1540,7 @@ pub fn exit_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationE
 pub fn exit_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let exit = live_exit(tx, id)?;
     not_under_a_run(tx, def_of_declarer(tx, exit.owner_kind, exit.owner_id)?)?;
-    if exit.name.as_deref() == Some(ERROR_EXIT) {
+    if exit.name == ERROR_EXIT {
         return Err(Error::invalid(
             "the error way out cannot be deleted — every step and every action carries one",
         ));
@@ -2036,8 +2058,7 @@ pub fn edge_add(
     };
     checked_max_times(max_times, ends)?;
     if read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, exit.id)?.is_some() {
-        let n = exit.name.as_deref().unwrap_or(DONE_EXIT);
-        return Err(Error::invalid(format!("'{n}' already says what happens after it")));
+        return Err(Error::invalid(format!("'{}' already says what happens after it", exit.name)));
     }
     let sibs = read::automation_edge_siblings(tx.conn(), owner_kind, owner_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
@@ -2391,7 +2412,7 @@ mod tests {
         live_step(tx, action.entry_step_id.expect("an entry step")).expect("read the step")
     }
 
-    fn exit_names(tx: &WriteTx<'_>, owner: AutomationOwner, owner_id: i64) -> Vec<Option<String>> {
+    fn exit_names(tx: &WriteTx<'_>, owner: AutomationOwner, owner_id: i64) -> Vec<String> {
         read::automation_exits_of(tx.conn(), owner, owner_id)
             .expect("read exits")
             .into_iter()
@@ -2407,12 +2428,12 @@ mod tests {
             let step = only_step(tx, &action);
             assert_eq!(
                 exit_names(tx, AutomationOwner::Step, step.id),
-                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string())],
+                vec![DONE_EXIT.to_string(), ERROR_EXIT.to_string()],
                 "both are written at birth, the error one last so it sits at the bottom of the list",
             );
             assert_eq!(
                 exit_names(tx, AutomationOwner::Action, action.id),
-                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string())],
+                vec![DONE_EXIT.to_string(), ERROR_EXIT.to_string()],
                 "and the action carries the pair a placement of it is left by",
             );
         });
@@ -2817,7 +2838,7 @@ mod tests {
             );
             assert_eq!(
                 exit_names(tx, AutomationOwner::Step, put.id),
-                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string()), Some("直すところがある".to_string())],
+                vec![DONE_EXIT.to_string(), ERROR_EXIT.to_string(), "直すところがある".to_string()],
                 "what the dialog wrote is declared on the step it made",
             );
             let inputs = read::automation_ports_of(
@@ -2885,11 +2906,11 @@ mod tests {
             let done = read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, step.id, None)
                 .expect("read")
                 .expect("a way out left unsaid is the done one");
-            assert_eq!(done.name.as_deref(), Some(DONE_EXIT));
+            assert_eq!(done.name, DONE_EXIT);
             assert!(exit_rename(tx, done.id, None).is_err(), "a way out may not be left without a name");
             exit_delete(tx, done.id).expect("完了 is an ordinary way out, and may go");
             let back = exit_add(tx, AutomationOwner::Step, step.id, None).expect("put it back");
-            assert_eq!(back.name.as_deref(), Some(DONE_EXIT), "put back under its name, not without one");
+            assert_eq!(back.name, DONE_EXIT, "put back under its name, not without one");
         });
     }
 
@@ -3296,9 +3317,9 @@ mod tests {
                 assert_eq!(
                     exit_names(tx, owner, owner_id),
                     vec![
-                        Some(DONE_EXIT.to_string()),
-                        Some(ERROR_EXIT.to_string()),
-                        Some("直すところがある".to_string())
+                        DONE_EXIT.to_string(),
+                        ERROR_EXIT.to_string(),
+                        "直すところがある".to_string()
                     ],
                 );
                 let port_owner = match owner {
@@ -3461,7 +3482,12 @@ mod tests {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let (action, placement) = mk_placed(tx, &automation, "点検");
-            assert!(action_delete(tx, action.id).is_err());
+            let refused = action_delete(tx, action.id).expect_err("placed");
+            // The row it is pressed on shows the refusal in the reader's language, so it names itself
+            // and carries the count its sentence is written with.
+            assert_eq!(refused.code(), "invalid_action_still_placed");
+            let fields: Vec<_> = refused.fields().expect("values ride along").iter().collect();
+            assert_eq!(fields, vec![("count", "1")]);
             placement_delete(tx, placement.id).expect("take the placement off");
             action_delete(tx, action.id).expect("now it goes");
             assert!(
@@ -3535,6 +3561,9 @@ mod tests {
             action_set_scope(tx, action.id, None).expect("out");
             let other = mk_project(tx, "別");
             let refused = action_set_scope(tx, action.id, Some(other)).expect_err("placed elsewhere");
+            assert_eq!(refused.code(), "invalid_action_placed_elsewhere");
+            let fields: Vec<_> = refused.fields().expect("values ride along").iter().collect();
+            assert_eq!(fields, vec![("automations", here.name.as_str()), ("project", "別")]);
             let said = refused.to_string();
             assert!(said.contains(&here.name), "it names the automation: {said}");
             assert!(

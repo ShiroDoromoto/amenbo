@@ -605,7 +605,7 @@ fn story_so_far(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>) -> Result
             true => String::new(),
             false => format!(": {first}"),
         };
-        lines.push(format!("{}. {name} — left through {}{said}", execution.seq, named(left_by.as_deref())));
+        lines.push(format!("{}. {name} — left through {}{said}", execution.seq, left_by.as_deref().map_or_else(|| "no way out".to_string(), named)));
     }
     if lines.is_empty() {
         return Ok(None);
@@ -614,19 +614,18 @@ fn story_so_far(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>) -> Result
 }
 
 /// The name of the way out an execution left by, read from the run's copy of the step it ran — the
-/// live row may have been renamed or deleted since. `None` is the unnamed one, and a way out the copy
-/// does not hold reads as that too.
+/// live row may have been renamed or deleted since. `None` where it left by none, or by one the copy
+/// does not hold.
 fn exit_in(def: &AutomationRunDef, exit_id: Option<i64>) -> Option<String> {
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).ok()?;
-    exits.into_iter().find(|e| Some(e.id) == exit_id).and_then(|e| e.name)
+    exits.into_iter().find(|e| Some(e.id) == exit_id).map(|e| e.name)
 }
 
-/// How a way out is spoken of in a sentence: by its name, or as the unnamed one.
-fn named(exit: Option<&str>) -> String {
+/// How a way out is spoken of in a sentence: by its name, and the error one as what it is.
+fn named(exit: &str) -> String {
     match exit {
-        Some(ERROR_EXIT) => "the error way out".to_string(),
-        Some(name) => format!("\"{name}\""),
-        None => "the unnamed way out".to_string(),
+        ERROR_EXIT => "the error way out".to_string(),
+        name => format!("\"{name}\""),
     }
 }
 
@@ -679,7 +678,7 @@ fn one_setting(cfg: &RunDefCfg) -> String {
 /// How to hand the work back: the ways out this step may leave through, what each of them is declared
 /// to carry, and the one thing every step owes. Each way out is listed with the id `step-done --exit`
 /// takes, and each output with the id `step-out` takes (`AMB-D-961`) — a name is what a person reads,
-/// and the unnamed way out has none to type. An output is one way out's: two ways out may each declare
+/// and the id is what cannot be mistyped. An output is one way out's: two ways out may each declare
 /// one of the same name, and the id is what says which of them a value is put down on.
 ///
 /// **The error way out is named but not offered.** It is where a step that fell over goes, and a step
@@ -713,7 +712,7 @@ fn handing_back(exits: &[RunDefExit]) -> String {
                 .collect::<Vec<_>>()
                 .join(", "),
         };
-        lines.push(format!("- `--exit {}` — {} — {outs}", exit.id, named(exit.name.as_deref())));
+        lines.push(format!("- `--exit {}` — {} — {outs}", exit.id, named(&exit.name)));
     }
     let kinds: BTreeSet<AutomationPortKind> =
         exits.iter().flat_map(|e| e.outs.iter().map(|p| p.kind)).collect();
@@ -792,7 +791,7 @@ mod tests {
         let (second_action, second) =
             mk_placed(tx, &automation, "直す", "fix what the note says", "claude");
 
-        // The first spot takes the task on its unnamed way out, and hands a note on through "found".
+        // The first spot takes the task on its done way out, and hands a note on through "found".
         mk_out(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
         mk_exit(tx, &first_action, "found");
         mk_out(tx, &first_action, Some("found"), "note", AutomationPortKind::Value, false);

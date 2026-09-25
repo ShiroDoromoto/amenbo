@@ -385,26 +385,25 @@ pub enum ErrorCode {
     // succeeded, this one is raised by a write that did not.
     InvalidAutomationArchived,
     InvalidAutomationWorkspaceClosed,
+    // A library action that cannot be deleted or moved for the placements standing on it. The screen
+    // shows the refusal under the action's row, so it names itself and carries what it counts and names.
+    InvalidActionStillPlaced,
+    InvalidActionPlacedElsewhere,
     NotReadyAutomation,
     NotReadyAutomationNoSteps,
     NotReadyAutomationNoEntry,
     NotReadyAutomationActionEmpty,
     NotReadyAutomationEntryTakesNoTask,
     NotReadyAutomationOpenExit,
-    // The unnamed way out has no name to put in the sentence, so it is a sentence of its own rather
-    // than one with a hole where the name goes — as the screen's list writes it.
-    NotReadyAutomationOpenExitUnnamed,
     NotReadyAutomationUnwiredInput,
     NotReadyAutomationUnansweredCfg,
     NotReadyAutomationAgentUnchosen,
     NotReadyAutomationAgentMissing,
     NotReadyAutomationModelMissing,
     // A line that leaves the task a run took open (`AMB-D-967`) — on to another task, or to the run's
-    // end — each with the unnamed way out as a sentence of its own, as the open way out has.
+    // end.
     NotReadyAutomationTaskLeftOpen,
-    NotReadyAutomationTaskLeftOpenUnnamed,
     NotReadyAutomationTaskLeftOpenAtEnd,
-    NotReadyAutomationTaskLeftOpenAtEndUnnamed,
 }
 
 impl ErrorCode {
@@ -478,24 +477,21 @@ impl ErrorCode {
             ErrorCode::InvalidMigrationRollbackFailed => "invalid_migration_rollback_failed",
             ErrorCode::InvalidAutomationArchived => "invalid_automation_archived",
             ErrorCode::InvalidAutomationWorkspaceClosed => "invalid_automation_workspace_closed",
+            ErrorCode::InvalidActionStillPlaced => "invalid_action_still_placed",
+            ErrorCode::InvalidActionPlacedElsewhere => "invalid_action_placed_elsewhere",
             ErrorCode::NotReadyAutomation => "not_ready_automation",
             ErrorCode::NotReadyAutomationNoSteps => "not_ready_automation_no_steps",
             ErrorCode::NotReadyAutomationNoEntry => "not_ready_automation_no_entry",
             ErrorCode::NotReadyAutomationActionEmpty => "not_ready_automation_action_empty",
             ErrorCode::NotReadyAutomationEntryTakesNoTask => "not_ready_automation_entry_takes_no_task",
             ErrorCode::NotReadyAutomationOpenExit => "not_ready_automation_open_exit",
-            ErrorCode::NotReadyAutomationOpenExitUnnamed => "not_ready_automation_open_exit_unnamed",
             ErrorCode::NotReadyAutomationUnwiredInput => "not_ready_automation_unwired_input",
             ErrorCode::NotReadyAutomationUnansweredCfg => "not_ready_automation_unanswered_cfg",
             ErrorCode::NotReadyAutomationAgentUnchosen => "not_ready_automation_agent_unchosen",
             ErrorCode::NotReadyAutomationAgentMissing => "not_ready_automation_agent_missing",
             ErrorCode::NotReadyAutomationModelMissing => "not_ready_automation_model_missing",
             ErrorCode::NotReadyAutomationTaskLeftOpen => "not_ready_automation_task_left_open",
-            ErrorCode::NotReadyAutomationTaskLeftOpenUnnamed => "not_ready_automation_task_left_open_unnamed",
             ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd => "not_ready_automation_task_left_open_at_end",
-            ErrorCode::NotReadyAutomationTaskLeftOpenAtEndUnnamed => {
-                "not_ready_automation_task_left_open_at_end_unnamed"
-            }
         }
     }
 
@@ -566,22 +562,21 @@ impl ErrorCode {
         ErrorCode::InvalidMigrationRollbackFailed,
         ErrorCode::InvalidAutomationArchived,
         ErrorCode::InvalidAutomationWorkspaceClosed,
+        ErrorCode::InvalidActionStillPlaced,
+        ErrorCode::InvalidActionPlacedElsewhere,
         ErrorCode::NotReadyAutomation,
         ErrorCode::NotReadyAutomationNoSteps,
         ErrorCode::NotReadyAutomationNoEntry,
         ErrorCode::NotReadyAutomationActionEmpty,
         ErrorCode::NotReadyAutomationEntryTakesNoTask,
         ErrorCode::NotReadyAutomationOpenExit,
-        ErrorCode::NotReadyAutomationOpenExitUnnamed,
         ErrorCode::NotReadyAutomationUnwiredInput,
         ErrorCode::NotReadyAutomationUnansweredCfg,
         ErrorCode::NotReadyAutomationAgentUnchosen,
         ErrorCode::NotReadyAutomationAgentMissing,
         ErrorCode::NotReadyAutomationModelMissing,
         ErrorCode::NotReadyAutomationTaskLeftOpen,
-        ErrorCode::NotReadyAutomationTaskLeftOpenUnnamed,
         ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
-        ErrorCode::NotReadyAutomationTaskLeftOpenAtEndUnnamed,
     ];
 }
 
@@ -783,22 +778,21 @@ mod tests {
             "invalid_migration_rollback_failed",
             "invalid_automation_archived",
             "invalid_automation_workspace_closed",
+            "invalid_action_still_placed",
+            "invalid_action_placed_elsewhere",
             "not_ready_automation",
             "not_ready_automation_no_steps",
             "not_ready_automation_no_entry",
             "not_ready_automation_action_empty",
             "not_ready_automation_entry_takes_no_task",
             "not_ready_automation_open_exit",
-            "not_ready_automation_open_exit_unnamed",
             "not_ready_automation_unwired_input",
             "not_ready_automation_unanswered_cfg",
             "not_ready_automation_agent_unchosen",
             "not_ready_automation_agent_missing",
             "not_ready_automation_model_missing",
             "not_ready_automation_task_left_open",
-            "not_ready_automation_task_left_open_unnamed",
             "not_ready_automation_task_left_open_at_end",
-            "not_ready_automation_task_left_open_at_end_unnamed",
         ]
         .into_iter()
         .collect();

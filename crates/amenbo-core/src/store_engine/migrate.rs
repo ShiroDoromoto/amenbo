@@ -9335,7 +9335,7 @@ mod tests {
         assert_eq!(name(23).as_deref(), Some("完了 (23)"), "its owner already had a 完了");
         assert_eq!(name(24).as_deref(), Some("完了"));
 
-        let copy = |id: i64| -> Vec<Option<String>> {
+        let copy = |id: i64| -> Vec<String> {
             let json: String = engine
                 .conn()
                 .query_row("SELECT exits FROM automation_run_def WHERE id = ?1", [id], |r| r.get(0))
@@ -9343,8 +9343,8 @@ mod tests {
             let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&json).expect("today's shape");
             exits.into_iter().map(|e| e.name).collect()
         };
-        assert_eq!(copy(81), vec![Some("完了".to_string()), Some("*".to_string())]);
-        assert_eq!(copy(82), vec![Some("完了 (23)".to_string()), Some("完了".to_string())]);
+        assert_eq!(copy(81), vec!["完了".to_string(), "*".to_string()]);
+        assert_eq!(copy(82), vec!["完了 (23)".to_string(), "完了".to_string()]);
         std::fs::remove_dir_all(&dir).ok();
     }
 }

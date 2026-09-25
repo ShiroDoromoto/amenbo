@@ -134,22 +134,21 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // refusal are one set of sentences rather than two to keep in step.
   "invalid_automation_archived",
   "invalid_automation_workspace_closed",
+  "invalid_action_still_placed",
+  "invalid_action_placed_elsewhere",
   "not_ready_automation",
   "not_ready_automation_no_steps",
   "not_ready_automation_no_entry",
   "not_ready_automation_action_empty",
   "not_ready_automation_entry_takes_no_task",
   "not_ready_automation_open_exit",
-  "not_ready_automation_open_exit_unnamed",
   "not_ready_automation_unwired_input",
   "not_ready_automation_unanswered_cfg",
   "not_ready_automation_agent_unchosen",
   "not_ready_automation_agent_missing",
   "not_ready_automation_model_missing",
   "not_ready_automation_task_left_open",
-  "not_ready_automation_task_left_open_unnamed",
   "not_ready_automation_task_left_open_at_end",
-  "not_ready_automation_task_left_open_at_end_unnamed",
 ] as const;
 
 /** Core codes the webview never receives, because the only door they come through is the CLI. None is

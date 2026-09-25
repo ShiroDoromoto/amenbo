@@ -692,9 +692,6 @@ const ui = {
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.
   "face.ended": "The program in this terminal has exited.",
-  "face.builtinDoing": "Amenbo is carrying this out",
-  "face.builtinDone": "Amenbo carried this out",
-  "face.builtinExit": "Exit: {exit}",
   "face.endedGeminiUnset": "Gemini CLI has no authentication method set. The path it names is this pane's own and goes with it — the one to set is your own ~/.gemini/settings.json.",
   "face.noWayBack": "This conversation cannot be opened again.",
   "face.projects": "Projects",
@@ -1257,16 +1254,8 @@ const ui = {
   "auto.kind.file": "File",
   "auto.kind.taskTake": "Task (taken)",
   "auto.kind.taskMake": "Task (made)",
-  "auto.add.exitPh": "Name of the exit",
-  "auto.add.exitAdd": "＋ Exit",
   "auto.add.namePh": "What it is called",
-  "auto.add.inputAdd": "＋ Input",
-  "auto.add.required": "Required",
-  "auto.add.optional": "Optional",
-  "auto.add.drop": "Drop this row",
-  "auto.add.put": "Put it in",
   "auto.add.cancel": "Cancel",
-  "auto.out.title": "Add something to hand on",
   "auto.out.kind": "What it carries",
   "auto.out.add": "Add",
   "auto.step.add": "Add",
@@ -1322,12 +1311,10 @@ const ui = {
   "auto.builtin.back": "Back",
   "auto.act.aboutPlace": "Action",
   "auto.act.edit": "Edit",
-  "auto.act.read": "View",
-  "auto.act.openInSidebar": "Open in the sidebar",
+  "auto.act.openInSidebar": "Open in the sidebar to change ↗",
   "auto.held.by": "In use by run #{run}",
   "auto.held.openPane": "Open pane",
   "auto.act.stepsPlace": "Steps",
-  "auto.act.stepsHint": "Comes in at Takes above, runs through the steps, and ends at one of the Exits below",
   "auto.step.nextExit": "End at exit “{name}”",
   "auto.pic.actionIn": "Takes",
   "auto.pic.actionOut": "Exits",
@@ -1337,17 +1324,18 @@ const ui = {
   "auto.actions.noMatch": "No action matches",
   "auto.actions.colSteps": "Steps",
   "auto.actions.colUsed": "Used by automations",
-  "auto.act.noNote": "No note yet",
   "auto.act.none": "None",
   "auto.act.close": "Close",
   "auto.act.about": "This action",
   "auto.act.step": "Step",
   "auto.act.stepNone": "Press a step in the picture and what it holds shows here",
   "auto.act.insert": "Put a step in here",
-  "auto.act.addTitle": "Put a step in",
+  "auto.act.addTitle": "Add a step",
+  "auto.act.insertTitle": "Put a step in",
+  "auto.act.addPut": "Add",
+  "auto.act.insertPut": "Put in",
   "auto.act.firstStep": "＋ First step",
   "auto.act.stepAdd": "＋ Step",
-  "auto.act.noEntry": "No step is the start. Pick one in a step's contents.",
   "auto.act.stepRemove": "Delete this step",
   "auto.act.stepRemoveConfirm": "Delete this step? What it declares and every line naming it go with it. This cannot be undone.",
   "auto.about.name": "Name",
@@ -1387,7 +1375,6 @@ const ui = {
   "auto.run.step": "Step {n} · {step}",
   "auto.run.inAction": "{step} in {action}",
   "auto.run.reportWithheld": "Report kept off the task, which was closed: {steps}",
-  "auto.run.waitingForTask": "Waiting for a task it can take",
   "auto.run.taskWait": "Waiting for a task",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
@@ -1623,6 +1610,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   // sentences, because they are the same sentences. The list is a read that succeeded and the refusal
   // is a write that did not, so both hand over the code and the values, and both are written from
   // here (`core/i18n`'s `errSentence`).
+  invalid_action_still_placed:
+    "This action still stands on pictures — {count} in all. Take it off them before deleting it.",
+  invalid_action_placed_elsewhere:
+    "This action is placed on automations in other projects ({automations}). Take it off them before moving it into “{project}”.",
   invalid_automation_archived: "“{automation}” is archived. Bring it back before starting it.",
   invalid_automation_workspace_closed:
     "The workspace is closed, and a run draws its steps in its panes. Open it and start again.",
@@ -1633,7 +1624,6 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_entry_takes_no_task:
     "{step}: the start step takes no task, so every step after it would be about nothing",
   not_ready_automation_open_exit: "{step}: nothing is set to happen after {exit}",
-  not_ready_automation_open_exit_unnamed: "{step}: nothing is set to happen after it",
   not_ready_automation_unwired_input: "{step}: nothing reaches the required input {port}",
   not_ready_automation_unanswered_cfg: "{step}: the required setting {cfg} is unanswered",
   not_ready_automation_agent_unchosen: "{step}: nobody is chosen to carry it out",
@@ -1643,9 +1633,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   // silence (`app/src-tauri/src/agent_models.rs`).
   not_ready_automation_model_missing: "{step}: its agent here does not offer the model {model}",
   not_ready_automation_task_left_open: "{step}: {exit} goes on to {to}, which takes another task, with this one still open",
-  not_ready_automation_task_left_open_unnamed: "{step}: it goes on to {to}, which takes another task, with this one still open",
   not_ready_automation_task_left_open_at_end: "{step}: {exit} ends the run with the task still open",
-  not_ready_automation_task_left_open_at_end_unnamed: "{step}: it ends the run with the task still open",
   store_busy: "The store is in use right now. Try again in a moment.",
   // The store itself giving way — a disk that would not answer, a database that could not be read.
   // What the engine said is a line in the diagnostic log, not a sentence for a reader: it names none

@@ -61,13 +61,18 @@ function ExitCard({
   action,
   step,
   exit,
+  adding,
   onAddOutput,
+  onAdded,
   run,
 }: {
   action: AutomationActionDetailDto;
   step: AutomationStepDto;
   exit: AutomationExitDto;
+  /** Whether the row that declares one more output stands open in this card. */
+  adding: boolean;
   onAddOutput: () => void;
+  onAdded: () => void;
   run: Run;
 }) {
   const isError = exit.name === ERROR_EXIT;
@@ -76,14 +81,17 @@ function ExitCard({
       className={isError ? "autoexit autoexit--error" : "autoexit"}
       edit={isError ? undefined : <ExitEdit owner="step" ownerId={step.id} exit={exit} run={run} />}
       below={
-        <NextRow
-          graph={actionGraph(action)!}
-          picture="action"
-          boxId={step.id}
-          exitName={exit.name}
-          arrow
-          run={run}
-        />
+        <>
+          {adding && <AutomationOutputAdd exit={exit} onClose={onAdded} />}
+          <NextRow
+            graph={actionGraph(action)!}
+            picture="action"
+            boxId={step.id}
+            exitName={exit.name}
+            arrow
+            run={run}
+          />
+        </>
       }
     >
       <ExitMark name={exit.name} />
@@ -214,7 +222,7 @@ export function AutomationActionStepPanel({
 }) {
   const step = action?.steps.find((one) => one.id === stepId) ?? null;
   const [prompt, setPrompt] = useDraft(step?.prompt ?? "");
-  // The way out an output artefact is being declared on, while that dialog is open.
+  // The way out whose card has the row open that declares one more thing it hands on.
   const [adding, setAdding] = useState<number | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
 
@@ -308,7 +316,9 @@ export function AutomationActionStepPanel({
               action={action}
               step={step}
               exit={one}
+              adding={adding === one.id}
               onAddOutput={() => setAdding(one.id)}
+              onAdded={() => setAdding(null)}
               run={run}
             />
           ))}
@@ -362,12 +372,6 @@ export function AutomationActionStepPanel({
         </button>
       </div>
 
-      {adding !== null && (
-        <AutomationOutputAdd
-          exit={step.exits.find((one) => one.id === adding)!}
-          onClose={() => setAdding(null)}
-        />
-      )}
     </div>
   );
 }

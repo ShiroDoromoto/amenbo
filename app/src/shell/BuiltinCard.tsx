@@ -1,44 +1,39 @@
 // **What Amenbo is doing, in a run's pane, while it carries a built-in out** (`AMB-D-964`).
 //
 // A built-in is a step Amenbo carries out itself — finding a task, closing it, cutting a worktree —
-// so there is no terminal for its pane to show. What stands there instead is one card: which built-in
-// it is and the task it is about. It is written over, never added to: the next built-in replaces it,
-// and the next agent's step takes the pane back to a terminal (`./WorkspaceFace`). What was done is
-// kept on the run and read on the "running" and "history" tabs, not here.
+// so there is no terminal for its pane to show. What stands there instead is one card, and it says
+// where the built-in has got to by marks rather than sentences: a turning mark while Amenbo is at it
+// or waiting, a tick once it is done. Which built-in it is and the task it is about are the row's to
+// say (`../talk/nameplate`), so the card does not say them again. It is written over, never added to:
+// the next built-in replaces it, and the next agent's step takes the pane back to a terminal
+// (`./WorkspaceFace`). What was done is kept on the run and read on the "running" and "history" tabs,
+// not here.
 //
-// **A built-in set to wait says only that it is waiting, and for what** (`AMB-D-969`): the line and the
-// filter it was answered with. What would match is not listed or counted — it is asked again every
-// second, and a list would be asked of every task there is.
+// **A built-in set to wait shows what it waits for** (`AMB-D-969`), as the chips the placement's panel
+// answered it with. What would match is not listed or counted — it is asked again every second, and a
+// list would be asked of every task there is.
 //
-// **A built-in that has been carried out says which way out it left by** (`AMB-T-5506`): the run goes
-// on from there, and which way it went is what a reader watching the pane asks next.
+// **A built-in that has been carried out shows the way out it left by** (`AMB-T-5506`), as the mark the
+// picture draws that way out with: the run goes on from there, and which way it went is what a reader
+// watching the pane asks next.
 import type { BuiltinRun } from "../talk/automationStep";
-import { t, tf } from "../core/i18n";
-import { builtinWord } from "../core/builtinWords";
-import { runExitWord } from "../core/runWords";
+import { t } from "../core/i18n";
+import { ExitMark, FilterChips } from "../screens/automationParts";
 
 export function BuiltinCard({ builtin }: { builtin: BuiltinRun }) {
+  const word = t(builtin.finished ? "auto.run.completed" : builtin.waiting ? "auto.run.taskWait" : "auto.run.running");
   return (
     // A status and not an alert: it changes by itself as the run goes on, and each change is worth
     // hearing without taking the reader away from what they were doing.
     <div className="slot__builtin" role="status" aria-live="polite">
-      <span className="slot__builtin-state">
-        {t(builtin.waiting ? "auto.run.waitingForTask" : builtin.finished ? "face.builtinDone" : "face.builtinDoing")}
-      </span>
-      <strong className="slot__builtin-name">{builtinWord(builtin.key, builtin.name)}</strong>
-      {builtin.waiting && builtin.looksFor !== undefined && (
-        <code className="slot__builtin-filter">{builtin.looksFor}</code>
+      {builtin.finished ? (
+        <span className="slot__builtin-done" role="img" aria-label={word}>✓</span>
+      ) : (
+        <span className="slot__builtin-spin" role="img" aria-label={word} />
       )}
-      {!builtin.waiting && builtin.task !== undefined && (
-        <span className="slot__builtin-task">
-          <span className="slot__builtin-ref">{builtin.task.ref}</span>
-          <span className="slot__builtin-title">{builtin.task.title}</span>
-        </span>
-      )}
+      {builtin.waiting && builtin.looksFor !== undefined && <FilterChips expression={builtin.looksFor} />}
       {builtin.finished && builtin.exitName !== undefined && (
-        <span className="slot__builtin-exit">
-          {tf("face.builtinExit", { exit: runExitWord(builtin.key, builtin.exitName) })}
-        </span>
+        <ExitMark name={builtin.exitName === "" ? undefined : builtin.exitName} builtin={builtin.key} />
       )}
     </div>
   );

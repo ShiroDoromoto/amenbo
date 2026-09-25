@@ -4112,45 +4112,45 @@ impl Instructor {
                     ),
                 }
             }
-            // What a way out hands on, declared from the way out it belongs to.
+            // What a way out hands on, declared in a row that opens inside that way out's card.
             (Domain::Automation, "add-output") => format!(
-                "In the panel open beside the picture, on the line for {}, press the control that adds an output artefact. {}. Pick {} as what it carries{}, then press the button that adds it.",
+                "In the panel open beside the picture, on the card for {}, press the \"＋\" beside its mark. In the row that opens inside that card, {}. Pick {} as what it carries{}, then press the button that adds it.",
                 way_out(with),
-                // **The name the box starts on is the one thing this dialog does for a reader.** A
+                // **The name the box starts on is the one thing this row does for a reader.** A
                 // way out that hands one thing on is named for what it hands on nine times out of
                 // ten, so the box starts on the way out's own name — and a road naming that same
                 // name is walking exactly that, which it can only do by being told to read the box
                 // rather than to fill it.
                 match (arg_str(with, "exit"), arg_str(with, "name")) {
                     (Some(exit), Some(name)) if exit == name => format!(
-                        "Confirm the name box already reads \"{name}\" — the way out's own name, it having handed nothing on yet"
+                        "confirm the name box already reads \"{name}\" — the way out's own name, it having handed nothing on yet"
                     ),
-                    (_, name) => format!("Write the name \"{}\"", name.unwrap_or("")),
+                    (_, name) => format!("write the name \"{}\"", name.unwrap_or("")),
                 },
                 port_kind(req(with, "kind")?)?,
                 match flagged(with, "required") {
                     true => "",
-                    false => ", and set it to optional",
+                    false => ", turn off the toggle saying it is required",
                 }
             ),
             // The press above an action's picture, which adds a step on its own rather than on a
             // line. It is named by what it does and not by its words: it reads one way while the
             // action holds no step and another once it does, and the dialog it opens is the same.
-            (Domain::Automation, "add-step") => format!(
-                "On the action build screen, press the button under the picture that adds a step on its own. In the dialog, write the name \"{}\" and write \"{}\" as its prompt{}{}, then press the button that puts it in.",
-                req(with, "name")?,
-                req(with, "prompt")?,
-                match declared_exits(with)?.as_slice() {
-                    [] => String::new(),
-                    [one] => format!(", add a way out called {one}"),
-                    ways => format!(", add a way out for each of {}", listed(ways)),
-                },
-                match declared_inputs(with)?.as_slice() {
-                    [] => String::new(),
-                    [one] => format!(", add an input {one}"),
-                    ports => format!(", add an input for each of {}", listed(ports)),
+            (Domain::Automation, "add-step") => {
+                // The dialog asks a name and a prompt and nothing else: a step is made with its one
+                // way out, and what else it declares is written on the panel afterwards (`declare`).
+                if with.contains_key("exits") || with.contains_key("inputs") {
+                    return Err(
+                        "the dialog that adds a step asks a name and a prompt alone — declare ways out and inputs on the panel afterwards (`declare`)"
+                            .to_string(),
+                    );
                 }
-            ),
+                format!(
+                    "On the action build screen, press the button under the picture that adds a step on its own. In the dialog, write the name \"{}\" and write \"{}\" as its prompt, then press the button that adds it.",
+                    req(with, "name")?,
+                    req(with, "prompt")?,
+                )
+            }
             // What leaving by one way out leads to, picked off the pulldown on that way out's row.
             // Picking the first line of it takes what was said away, which is the road's `to` and
             // `ends` both left out — a state of its own, and not a way out that ends anything.
@@ -4200,11 +4200,11 @@ impl Instructor {
                     .cloned()
                     .unwrap_or_else(|| "<the action>".to_string())
             ),
-            // One box on the pressed placement's panel, ticked for where a run opens and cleared to
+            // One switch on the pressed placement's panel, turned on for where a run opens and off to
             // give it back. One automation has one entry, so ticking it here moves it off any other.
             (Domain::Automation, "set-entry") => match step_mark(with, "on")? {
-                None | Some(true) => "In the panel showing what the pressed placement holds, tick the box that makes it the start.".to_string(),
-                Some(false) => "In the panel showing what the pressed placement holds, clear the box that makes it the start.".to_string(),
+                None | Some(true) => "In the panel showing what the pressed placement holds, turn on the switch that makes it the start.".to_string(),
+                Some(false) => "In the panel showing what the pressed placement holds, turn off the switch that makes it the start.".to_string(),
             },
             // **The one press on the placement's panel that cannot be taken back**, which is why the
             // road answers the machine's question and does not stop at the press.
@@ -4386,6 +4386,15 @@ impl Instructor {
             (Domain::Automation, "start") => {
                 "On the build screen's head, press the button that starts a run.".to_string()
             }
+            // Pressing a reason under the head. What it does is the picture's own press: the box it
+            // names is picked out and its panel opens, so the step says so and a road reads the panel
+            // next the way it would after `pick-box`.
+            (Domain::Automation, "press-reason") => format!(
+                "On the build screen's head, press the reason listed under it that is {}, naming \"{}\". Confirm the box \"{}\" is picked out on the picture and its panel opens beside it.",
+                launch_reason(req(with, "reason")?)?,
+                req(with, "box")?,
+                req(with, "box")?
+            ),
             // Taking away the pane a run is drawn in, once the run is over. While the run is going or
             // held the control cannot be pressed (`pane_state`), so this stops nothing.
             (Domain::Automation, "close-run-pane") => {
@@ -6454,7 +6463,7 @@ impl Instructor {
                 // the way — and a road that only ever asked for a reason to be there could not
                 // catch it.
                 (false, Some(reason)) => format!(
-                    "On the build screen's head, confirm the button that starts a run cannot be pressed, and that {} of the reasons listed under the head is {}{}{}.",
+                    "On the build screen's head, confirm the button that starts a run cannot be pressed, and that {} of the reasons listed under the head is {}{}{}{}.",
                     match present(with) {
                         true => "one",
                         false => "none",
@@ -6467,6 +6476,13 @@ impl Instructor {
                     match arg_str(with, "at") {
                         Some(at) => format!(" and \"{at}\" on it"),
                         None => String::new(),
+                    },
+                    // A reason about one box is a press that opens it; the two about the automation as
+                    // a whole are a line to read, and a click on one opens nothing.
+                    match step_mark(with, "pressable")? {
+                        Some(true) => ", and that its line is a press, with the word saying it is seen on the picture after it",
+                        Some(false) => ", and that its line is not a press: nothing after it says it is seen on the picture, and clicking it opens nothing",
+                        None => "",
                     }
                 ),
             },
@@ -6588,54 +6604,6 @@ fn decision_filter_pair(axis: &str, value: &str) -> String {
         ("status", "superseded") => "superseded:yes".to_string(),
         _ => filter_pair(axis, value),
     }
-}
-
-/// The named ways out the dialog is to declare on the step it is making.
-fn declared_exits(with: &Args) -> Result<Vec<String>, String> {
-    let Some(value) = with.get("exits") else { return Ok(Vec::new()) };
-    let Some(seq) = value.as_sequence() else {
-        return Err("`exits` is a list of the names to declare".to_string());
-    };
-    seq.iter()
-        .map(|v| {
-            v.as_str()
-                .map(|name| format!("\"{name}\""))
-                .ok_or_else(|| "`exits` is a list of the names to declare".to_string())
-        })
-        .collect()
-}
-
-/// The inputs the dialog is to declare on that step: what each is called, what it carries, and
-/// whether the step is refused without it.
-fn declared_inputs(with: &Args) -> Result<Vec<String>, String> {
-    let Some(value) = with.get("inputs") else { return Ok(Vec::new()) };
-    let Some(seq) = value.as_sequence() else {
-        return Err("`inputs` is a list, each naming a port and what it carries".to_string());
-    };
-    let mut out = Vec::new();
-    for one in seq {
-        let Some(port) = one.as_mapping() else {
-            return Err("`inputs` is a list, each naming a port and what it carries".to_string());
-        };
-        let at = |key: &str| {
-            port.get(serde_yaml::Value::String(key.to_string())).and_then(|v| v.as_str()).map(str::to_string)
-        };
-        let name = at("name").ok_or_else(|| "an input names what it is called".to_string())?;
-        let kind = at("kind").ok_or_else(|| "an input names what it carries".to_string())?;
-        let required = port
-            .get(serde_yaml::Value::String("required".to_string()))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        out.push(format!(
-            "\"{name}\" carrying {}, marked {}",
-            port_kind(&kind)?,
-            match required {
-                true => "required",
-                false => "optional",
-            }
-        ));
-    }
-    Ok(out)
 }
 
 /// A handful of things said as a person would say them, so an instruction reads as a sentence
@@ -8812,7 +8780,7 @@ steps_gui:
         assert!(lines[2].contains("\"Evening round\"") && lines[2].contains("build screen"), "{}", lines[2]);
         assert!(lines[6].contains("\"got one\"") && lines[6].contains("\"work\""), "{}", lines[6]);
         assert!(lines[7].contains("the run ends"), "{}", lines[7]);
-        assert!(lines[15].contains("output artefact") && lines[15].contains("a value"), "{}", lines[15]);
+        assert!(lines[15].contains("row that opens inside that card") && lines[15].contains("a value"), "{}", lines[15]);
         assert!(lines[16].contains("nothing reaches one of a box's required inputs"), "{}", lines[16]);
         assert!(lines[19].contains("\"work\"") && lines[19].contains("\"build\""), "{}", lines[19]);
         assert!(
@@ -8823,6 +8791,35 @@ steps_gui:
         assert!(lines[n - 3].contains("using it") && lines[n - 3].contains("only read"), "{}", lines[n - 3]);
         assert!(lines[n - 2].contains("opens its pane") && lines[n - 2].contains("pane the run is drawn in"), "{}", lines[n - 2]);
         assert!(lines[n - 1].contains("no band") && lines[n - 1].contains("takes writes again"), "{}", lines[n - 1]);
+    }
+
+    /// A reason under the build screen's head is pressed by its code and the box it names, and a
+    /// reading of one says whether its line is a press at all.
+    #[test]
+    fn a_launch_reason_is_pressed_and_read_for_whether_it_is_a_press() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: unwired_input, box: work }
+  - type: assert
+    domain: automation
+    op: launch
+    with: { ready: false, reason: unwired_input, box: work, pressable: true, present: true }
+  - type: assert
+    domain: automation
+    op: launch
+    with: { ready: false, reason: no_steps, pressable: false, present: true }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).expect("every step renders")).collect();
+        assert!(lines[0].contains("press the reason") && lines[0].contains("\"work\" is picked out"), "{}", lines[0]);
+        assert!(lines[1].contains("its line is a press"), "{}", lines[1]);
+        assert!(lines[2].contains("not a press") && lines[2].contains("opens nothing"), "{}", lines[2]);
     }
 
     /// `held-by` lists a run, so a road reading the hold names which one; only the release names
@@ -8945,7 +8942,7 @@ steps_gui:
   - type: action
     domain: automation
     op: add-step
-    with: { name: draft, prompt: write it, exits: [drafted] }
+    with: { name: draft, prompt: write it }
   - type: action
     domain: automation
     op: set-next
@@ -8970,13 +8967,31 @@ steps_gui:
         let steps = s.steps(Driver::Gui);
         let lines: Vec<String> =
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
-        assert!(lines[0].contains("adds a step on its own") && lines[0].contains("called \"drafted\""), "{}", lines[0]);
+        assert!(lines[0].contains("adds a step on its own") && lines[0].contains("\"draft\""), "{}", lines[0]);
         assert!(lines[1].contains("opens \"review\"") && lines[1].contains("write 3"), "{}", lines[1]);
         assert!(lines[2].contains("nothing is said yet"), "{}", lines[2]);
         assert!(lines[3].contains("stops and calls a person"), "{}", lines[3]);
         assert!(lines[4].contains("deletes this step") && lines[4].contains("goes ahead"), "{}", lines[4]);
         assert!(lines[5].contains("no line leaves the box \"draft\""), "{}", lines[5]);
         assert!(ins.expectation(&steps[5]).is_none(), "a line gone is an eye's");
+    }
+
+    /// The dialog that adds a step asks a name and a prompt alone, so a road that names ways out or
+    /// inputs on it is refused rather than told to fill fields that are not there.
+    #[test]
+    fn a_step_added_with_ways_out_is_refused() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: add-step
+    with: { name: draft, prompt: write it, exits: [drafted] }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        assert!(ins.render(&steps[0]).is_err());
     }
 
     /// The automation build screen's own: the first action placed from the empty picture, the
@@ -9019,8 +9034,8 @@ steps_gui:
         let lines: Vec<String> =
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
         assert!(lines[0].contains("places the first action") && lines[0].contains("\"draft\""), "{}", lines[0]);
-        assert!(lines[1].contains("tick the box that makes it the start"), "{}", lines[1]);
-        assert!(lines[2].contains("clear the box that makes it the start"), "{}", lines[2]);
+        assert!(lines[1].contains("turn on the switch that makes it the start"), "{}", lines[1]);
+        assert!(lines[2].contains("turn off the switch that makes it the start"), "{}", lines[2]);
         assert!(lines[3].contains("takes this placement off") && lines[3].contains("goes ahead"), "{}", lines[3]);
         assert!(lines[4].contains("saying it is the start written in it"), "{}", lines[4]);
         assert!(lines[5].contains("no mark saying it is the start"), "{}", lines[5]);
@@ -9044,7 +9059,7 @@ steps_gui:
         assert!(ins.render(&s.steps(Driver::Gui)[0]).is_err());
     }
 
-    /// The name the output dialog's box starts on is the one thing it does for a reader, so a road
+    /// The name the output row's box starts on is the one thing it does for a reader, so a road
     /// naming the way out's own name is told to read the box rather than to fill it.
     #[test]
     fn the_output_dialog_is_read_where_the_name_is_the_way_outs_own() {
@@ -9068,7 +9083,7 @@ steps_gui:
             "the box starts on the way out's own name, so the road reads it",
         );
         assert!(
-            ins.render(&steps[1]).expect("it renders").contains("Write the name \"the draft\""),
+            ins.render(&steps[1]).expect("it renders").contains("write the name \"the draft\""),
             "a name of the reader's own is written",
         );
     }

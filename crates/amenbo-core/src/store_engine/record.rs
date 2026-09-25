@@ -628,7 +628,7 @@ pub fn automation_exit(e: &AutomationExit) -> Record {
             vec![
                 ("owner_kind", tv(e.owner_kind.as_str())),
                 ("owner_id", kv(e.owner_id)),
-                ("name", ov(&e.name)),
+                ("name", tv(&e.name)),
                 ("order_key", tv(&e.order_key)),
             ],
             &e.created_at,

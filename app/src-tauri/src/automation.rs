@@ -1024,7 +1024,7 @@ pub fn automation_step_insert(edge_id: i64, action: i64) -> Result<WriteAck, Cmd
 // one thing, and core refuses a second edge on the same one.
 
 /// What a way out is said to do, as the screen sends it: the word, the box a `go` opens, and the way
-/// out of the action an `exit` returns to (`None` there being the unnamed one).
+/// out of the action an `exit` returns to (`None` there being the done one).
 fn edge_target(
     ends: &str,
     to_id: Option<i64>,
@@ -1470,8 +1470,8 @@ fn run_card(
     })
 }
 
-/// **The way out one execution left through**, by the name the run's copy declared it under — empty
-/// for the unnamed one. `None` while it has not left, and where the copy holds no way out of that id.
+/// **The way out one execution left through**, by the name the run's copy declared it under. `None`
+/// while it has not left, and where the copy holds no way out of that id.
 ///
 /// Read off the copy rather than the live step, for the reason the step's own name is: what a reader
 /// is told is the way out as it stood when the run took it, and a way out renamed or taken off since
@@ -1479,7 +1479,7 @@ fn run_card(
 fn left_by(def: &amenbo_core::model::AutomationRunDef, exit_id: Option<i64>) -> Option<String> {
     let exit_id = exit_id?;
     let exits: Vec<amenbo_core::model::RunDefExit> = serde_json::from_str(&def.exits).ok()?;
-    exits.into_iter().find(|one| one.id == exit_id).map(|one| one.name.unwrap_or_default())
+    exits.into_iter().find(|one| one.id == exit_id).map(|one| one.name)
 }
 
 /// **The runs a workspace's panes are drawing**, by id — what the row over each pane says the run's
@@ -2049,17 +2049,17 @@ fn step_dto(view: automation_view::StepView) -> AutomationStepDto {
 /// a renamed way out's lines on it on screen as in the store.
 fn exit_names<'a>(
     exits: impl Iterator<Item = &'a automation_view::ExitView>,
-) -> std::collections::HashMap<i64, Option<String>> {
+) -> std::collections::HashMap<i64, String> {
     exits.map(|e| (e.exit.id, e.exit.name.clone())).collect()
 }
 
-/// The name a line's way out carries, `None` being the unnamed one.
-fn exit_name(names: &std::collections::HashMap<i64, Option<String>>, id: Option<i64>) -> Option<String> {
-    id.and_then(|id| names.get(&id).cloned().flatten())
+/// The name a line's way out carries, `None` where the line keys none, or one no longer there.
+fn exit_name(names: &std::collections::HashMap<i64, String>, id: Option<i64>) -> Option<String> {
+    id.and_then(|id| names.get(&id).cloned())
 }
 
 /// One line of either picture. Which boxes its two ends name is the picture it came in.
-fn edge_dto(edge: AutomationEdge, names: &std::collections::HashMap<i64, Option<String>>) -> AutomationEdgeDto {
+fn edge_dto(edge: AutomationEdge, names: &std::collections::HashMap<i64, String>) -> AutomationEdgeDto {
     AutomationEdgeDto {
         id: edge.id,
         from_id: edge.from_id,
@@ -2077,7 +2077,7 @@ fn edge_dto(edge: AutomationEdge, names: &std::collections::HashMap<i64, Option<
 /// is what keeps a renamed port's wires on it on screen as in the store.
 fn wire_dto<'a>(
     wire: &AutomationWire,
-    names: &std::collections::HashMap<i64, Option<String>>,
+    names: &std::collections::HashMap<i64, String>,
     port_name: impl Fn(i64) -> Option<&'a str>,
 ) -> AutomationWireDto {
     AutomationWireDto {
@@ -2134,7 +2134,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
 fn exit_dto(view: automation_view::ExitView) -> AutomationExitDto {
     AutomationExitDto {
         id: view.exit.id,
-        name: view.exit.name,
+        name: Some(view.exit.name),
         outputs: view.outputs.into_iter().map(port_dto).collect(),
     }
 }

@@ -270,7 +270,7 @@ impl Carry<'_, '_> {
         let declared = self
             .exits
             .iter()
-            .find(|e| e.name.as_deref() == Some(exit))
+            .find(|e| e.name == exit)
             .and_then(|e| e.outs.iter().find(|p| p.name == port))
             .ok_or_else(|| {
                 Error::invalid(format!("the built-in hands on no '{port}' through that way out"))
@@ -516,7 +516,7 @@ pub(crate) fn carry_out(
         Ok(carried) => (carried.exit, carried.report),
         Err(e) => (ERROR_EXIT, e.to_string()),
     };
-    let leaves_by = |name: &str| exits.iter().find(|e| e.name.as_deref() == Some(name)).map(|e| e.id);
+    let leaves_by = |name: &str| exits.iter().find(|e| e.name == name).map(|e| e.id);
     let Some(exit_id) = leaves_by(exit) else {
         return fell_over(tx, run_step, exits, &format!("the built-in '{key}' left by a way out this step does not declare"));
     };
@@ -538,7 +538,7 @@ fn fell_over(
 ) -> Result<Next> {
     let error = exits
         .iter()
-        .find(|e| e.name.as_deref() == Some(ERROR_EXIT))
+        .find(|e| e.name == ERROR_EXIT)
         .ok_or_else(|| Error::invalid("the step carries no error way out"))?;
     automation_report::done(tx, run_step.id, Some(error.id), why)
 }
@@ -693,7 +693,7 @@ mod tests {
             let [step]: [AutomationStep; 1] = steps.try_into().expect("one step");
             assert_eq!(step.builtin.as_deref(), Some("test_stamp"));
             assert_eq!(written.entry_step_id, Some(step.id));
-            let names = |owner, id| -> Vec<Option<String>> {
+            let names = |owner, id| -> Vec<String> {
                 read::automation_exits_of(tx.conn(), owner, id)
                     .expect("exits")
                     .into_iter()
@@ -701,7 +701,7 @@ mod tests {
                     .collect()
             };
             let expected =
-                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string()), Some("stamped".to_string())];
+                vec![DONE_EXIT.to_string(), ERROR_EXIT.to_string(), "stamped".to_string()];
             assert_eq!(names(AutomationOwner::Step, step.id), expected);
             assert_eq!(names(AutomationOwner::Action, written.id), expected);
 
@@ -710,7 +710,7 @@ mod tests {
             let falls_step = written_step(tx, falls.id);
             assert_eq!(
                 names(AutomationOwner::Step, falls_step.id),
-                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string())],
+                vec![DONE_EXIT.to_string(), ERROR_EXIT.to_string()],
                 "the one it declares is 完了",
             );
 

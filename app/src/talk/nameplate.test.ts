@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { tf } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { faceOf, mountNameplate, type Dot } from "./nameplate";
 
 /** The lamp in front of the name, at rest. These cases are about the name on the row; what the lamp
@@ -81,11 +81,25 @@ describe("the row above a run's pane", () => {
     automationId: 3,
     placement: 11,
     box: null,
+    builtin: false,
     action: "下ごしらえ",
     task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 2 },
     state: null,
   };
   const STATE = { why: null, exit: null, errorExit: false, acknowledged: false, pauseRequested: false };
+
+  it("marks a built-in's step with the chip every screen marks one with, and no other step", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "/work/a", dot: STILL, run: RUN });
+    expect(host.querySelector<HTMLElement>(".plate__builtin")?.hidden).toBe(true);
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, builtin: true } });
+    const chip = host.querySelector<HTMLElement>(".plate__builtin")!;
+    expect(chip.hidden).toBe(false);
+    expect(chip.textContent).toBe(t("auto.actions.reachBuiltin"));
+  });
 
   it("says which automation and which step on the first line, and which task on the second", () => {
     // All of them are Amenbo's own — off the execution row and off the ledger — which is the whole
@@ -99,9 +113,10 @@ describe("the row above a run's pane", () => {
     expect(host.querySelector(".plate__auto")?.textContent).toBeTruthy();
     expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(false);
     // The first line holds the run and the step and the state, nothing more (`AMB-T-5529`): the count
-    // of tasks is the task line's.
+    // of tasks is the task line's. The chip after the step is drawn on a built-in's step alone.
     const row = host.querySelector(".plate") as HTMLElement;
-    expect([...row.children].map((el) => el.className))
+    expect([...row.children].filter((el) => !(el as HTMLElement).hidden || !el.classList.contains("plate__builtin"))
+      .map((el) => el.className))
       .toEqual(["plate__dot", "plate__auto", "plate__name", "plate__no", "plate__into", "plate__step", "plate__state"]);
     expect(row.classList.contains("plate--run")).toBe(true);
     expect(host.querySelector(".plate__no")?.textContent).toBe("#7");

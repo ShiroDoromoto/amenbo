@@ -6,9 +6,10 @@
 // `./AutomationActionStepPanel`, `./AutomationStepAdd`), handed this picture instead of that one.
 //
 // **There is no start press.** What is started is an automation, and an action is what one places —
-// so what this screen has in that spot is the action's own name, what it is for, its reach, and what
-// a rewrite here reaches: every automation that places it. What it is for is written the way the
-// automation's notes are (`./AutomationAboutPanel`), and like them it reaches no launch (`AMB-D-952`).
+// so what this screen has in that spot is the action's own name, its reach, and what a rewrite here
+// reaches: every automation that places it. What it is for is written in the panel "Edit" opens, the
+// way the automation's notes are (`./AutomationAboutPanel`), and like them it reaches no launch
+// (`AMB-D-952`).
 //
 // **A step is added here, or put in on a line.** The `+` on a line is the road that leaves nothing
 // pointing at nothing — but a picture has no line until two boxes are joined, so the press above it
@@ -16,19 +17,21 @@
 // (`../core/automations`), and every later one a reader then says what leads to with the way out's
 // own pulldown (`./AutomationActionStepPanel`).
 //
-// **Four places, top to bottom: the action, its input, its steps and its output** (`AMB-T-5369`). The
-// action is one row — what it is for, its reach and how far a rewrite carries — and the input and the
-// output are frames over and under the picture of the steps, so the screen reads as what comes in,
-// what is done with it and what goes out. Pressing the row's edit button, either frame or a step opens
-// that one in the panel to the right of the picture rather than stacked under it: a picture that runs
+// **The head is the action, and the picture is the rest** (`AMB-T-5369`, `AMB-T-5526`). The head
+// carries the name, its reach and how far a rewrite carries, and the one press that opens the action
+// itself in the panel — what it is for is read there and on the list, not repeated over the picture.
+// The input and the output are frames over and under the picture of the steps, named "takes in" and
+// "exit", so the screen reads top to bottom as what comes in, what is done with it and what goes out
+// without a line saying so. Pressing "Edit", either frame or a step opens that one in the panel to
+// the right of the picture rather than stacked under it: a picture that runs
 // long would otherwise carry a low step's contents off the bottom of the window, and the press would
 // show nothing. The panel stands in the shell's right-pane column, where the board's detail does
 // (`../shell/paneSlot`), so it scrolls on its own and is as tall as the window lets it be.
 //
 // **A global action opened from a project is read, not written** (`AMB-D-954`). It is no one
 // project's, so it is changed from the sidebar's entrance and nowhere else: here the panels still open
-// to be read, with everything in them held shut, nothing adds a step, and the action's row carries the
-// press that goes to it there. One place to change a thing is what keeps a reader from wondering which
+// to be read, with everything in them held shut, nothing adds a step, and the head carries the lock
+// and the one press that goes to it there in place of "Edit". One place to change a thing is what keeps a reader from wondering which
 // of two is the real one.
 //
 // **An action a run is going on is read, not written, for as long as the run goes** (`AMB-D-961`). Core
@@ -53,6 +56,7 @@ import { LockMark, ReachChip, usedCount } from "./automationParts";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
 import { editAutomationAction, editAutomationStep, useAutomationAction } from "../core/automations";
+import type { WhereTo } from "./automationParts";
 import { actionGraph } from "./automationLayout";
 import { errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
@@ -63,63 +67,13 @@ import { useDraft, type Run } from "./automationPanel";
 import { Sec } from "./automationDeclParts";
 import type { AutomationActionDetailDto, AutomationPlacedOnDto } from "../bindings/bindings";
 
-/** The first line of what the action is for — all the band has room for; the panel holds the rest. */
-function firstLine(note: string): string {
-  return note.split("\n").find((line) => line.trim() !== "")?.trim() ?? "";
-}
-
-/**
- * **The action, in one row**: what it is for, its reach, and how many automations a rewrite here
- * reaches — read, not written. Its edit button opens the same fields in the panel.
- */
-function AboutRow({
-  action,
-  editing,
-  onEdit,
-  readOnly,
-  elsewhere,
-  onGoToOwner,
-}: {
-  action: AutomationActionDetailDto;
-  editing: boolean;
-  onEdit: () => void;
-  /** Whether it is read rather than written here — changed elsewhere, or held by a run. */
-  readOnly: boolean;
-  /** Whether it is changed elsewhere — a global action opened from a project. */
-  elsewhere: boolean;
-  /** Go to where it is changed — the sidebar's entrance, for a global action. */
-  onGoToOwner?: () => void;
-}) {
-  return (
-    <div className="actdecl">
-      <div className="actdecl__head">
-        <span className="actbuild__sec">{t("auto.act.aboutPlace")}</span>
-        <span className="actdecl__note">
-          {firstLine(action.note) !== "" ? (
-            firstLine(action.note)
-          ) : (
-            <span className="actdecl__none">{t("auto.act.noNote")}</span>
-          )}
-        </span>
-        <ReachChip global={action.global} />
-        <span className="actdecl__used">{usedCount(action.usedBy)}</span>
-        {elsewhere && <LockMark />}
-        <button
-          type="button"
-          className={editing ? "btn btn--on" : "btn"}
-          aria-pressed={editing}
-          onClick={onEdit}
-        >
-          {readOnly ? t("auto.act.read") : t("auto.act.edit")}
-        </button>
-        {elsewhere && onGoToOwner && (
-          <button type="button" className="btn" onClick={onGoToOwner}>
-            {t("auto.act.openInSidebar")}
-          </button>
-        )}
-      </div>
-    </div>
-  );
+/** Where a step put in on a line goes: after which way out of which step, and before which. */
+function whereTo(action: AutomationActionDetailDto | null, target: AddTarget): WhereTo {
+  if (!("edgeId" in target)) return null;
+  const edge = action?.edges.find((one) => one.id === target.edgeId);
+  const from = action?.steps.find((one) => one.id === edge?.fromId);
+  const to = action?.steps.find((one) => one.id === edge?.toId);
+  return { box: from?.name ?? "", exit: edge?.exitName, next: to?.name };
 }
 
 /**
@@ -316,26 +270,41 @@ export function AutomationActionBuildScreen({
           <Icon name="chevronLeft" /> {t("auto.build.back")}
         </button>
         <span className="actbuild__name">{action?.name ?? ""}</span>
+        {action !== null && (
+          <>
+            <ReachChip global={action.global} />
+            <span className="actdecl__used">{usedCount(action.usedBy)}</span>
+            {elsewhere ? (
+              <>
+                <LockMark />
+                {onGoToGlobal && (
+                  <button type="button" className="btn actbuild__edit" onClick={() => onGoToGlobal(action.id)}>
+                    {t("auto.act.openInSidebar")}
+                  </button>
+                )}
+              </>
+            ) : (
+              // "Edit" whether or not a run holds it: held, the panel it opens is shut, which is where
+              // a reader finds out — the head does not change its word for it.
+              <button
+                type="button"
+                className={part === "about" ? "btn btn--on actbuild__edit" : "btn actbuild__edit"}
+                aria-pressed={part === "about"}
+                onClick={() => pickPart("about")}
+              >
+                {t("auto.act.edit")}
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
-
-      {action !== null && (
-        <AboutRow
-          action={action}
-          editing={part === "about"}
-          onEdit={() => pickPart("about")}
-          readOnly={readOnly}
-          elsewhere={elsewhere}
-          onGoToOwner={onGoToGlobal && (() => onGoToGlobal(action.id))}
-        />
-      )}
 
       {action !== null && <AutomationHeldBy runs={action.heldBy} withAutomation onGoToRun={onGoToRun} />}
 
       <div className="actbuild__canvashead">
         <span className="actbuild__sec">{t("auto.act.stepsPlace")}</span>
-        <span className="actbuild__hint">{t("auto.act.stepsHint")}</span>
         {action !== null && action.steps.length > 0 && !readOnly && (
           <button
             type="button"
@@ -346,9 +315,6 @@ export function AutomationActionBuildScreen({
           </button>
         )}
       </div>
-      {action !== null && action.entryStepId === undefined && action.steps.length > 0 && (
-        <div className="auto__notready actbuild__notready">{t("auto.act.noEntry")}</div>
-      )}
       <div className="actbuild__canvas">
         <AutomationPicture
           graph={actionGraph(action)}
@@ -430,6 +396,7 @@ export function AutomationActionBuildScreen({
       {adding !== null && (
         <AutomationStepAdd
           into={adding}
+          where={whereTo(action, adding)}
           onClose={() => setAdding(null)}
         />
       )}

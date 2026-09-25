@@ -38,7 +38,7 @@ vi.mock("../mock/adapter", () => ({
   dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }, { id: 2, name: "site" }] },
 }));
 
-import { t, tf } from "../core/i18n";
+import { t, tn } from "../core/i18n";
 import { AutomationActionsTab } from "./AutomationActionsTab";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -137,7 +137,7 @@ describe("the library", () => {
   it("says how many automations run each action", async () => {
     hoisted.actions = [action({ usedBy: 4 })];
     await render();
-    expect(rows()[0]).toContain(tf("auto.actions.usedN", { n: 4 }));
+    expect(rows()[0]).toContain(tn("auto.actions.usedBy", 4));
   });
 
   it("carries the first line of what an action is for, and nothing where none is written", async () => {
@@ -155,8 +155,8 @@ describe("the library", () => {
   it("says in words that nobody runs one, rather than counting to zero", async () => {
     hoisted.actions = [action({ usedBy: 0 })];
     await render();
-    expect(rows()[0]).toContain(t("auto.actions.usedNone"));
-    expect(rows()[0]).not.toContain(tf("auto.actions.usedN", { n: 0 }));
+    expect(rows()[0]).toContain(t("auto.actions.unused"));
+    expect(rows()[0]).not.toContain(tn("auto.actions.usedBy", 0));
   });
 });
 
@@ -366,7 +366,7 @@ describe("the built-ins", () => {
     expect(all[0]).toContain("Review");
     expect(all[1]).toContain("Take a task");
     expect(all[1]).toContain(t("auto.actions.reachBuiltin"));
-    expect(all[1]).toContain(t("auto.actions.usedNone"));
+    expect(all[1]).toContain(t("auto.actions.unused"));
   });
 
   it("are narrowed by their own chip, and left out by another reach's", async () => {

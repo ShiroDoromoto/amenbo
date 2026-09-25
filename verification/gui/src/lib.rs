@@ -4198,8 +4198,8 @@ impl Instructor {
             // One box on the pressed placement's panel, ticked for where a run opens and cleared to
             // give it back. One automation has one entry, so ticking it here moves it off any other.
             (Domain::Automation, "set-entry") => match step_mark(with, "on")? {
-                None | Some(true) => "In the panel showing what the pressed placement holds, tick the box saying a run starts here.".to_string(),
-                Some(false) => "In the panel showing what the pressed placement holds, clear the box saying a run starts here.".to_string(),
+                None | Some(true) => "In the panel showing what the pressed placement holds, tick the box that makes it the start.".to_string(),
+                Some(false) => "In the panel showing what the pressed placement holds, clear the box that makes it the start.".to_string(),
             },
             // **The one press on the placement's panel that cannot be taken back**, which is why the
             // road answers the machine's question and does not stop at the press.
@@ -6343,7 +6343,7 @@ impl Instructor {
                     }
                 };
                 format!(
-                    "Confirm the screen reading {} is open, every word of it in the interface's language: its name over it, what it does beside the chip marking it as built-in, and the line saying it is Amenbo's own and is not changed{}{}{}. Confirm nothing on it can be written in or pressed but the button that goes back.",
+                    "Confirm the screen reading {} is open, every word of it in the interface's language: its name over it, what it does beside the chip marking it as built-in, and the lock saying it is not changed there{}{}{}. Confirm nothing on it can be written in or pressed but the button that goes back.",
                     builtin.called,
                     rows("settings", "settings")?,
                     rows("exits", "ways out")?,
@@ -6368,8 +6368,8 @@ impl Instructor {
                         None => "",
                     },
                     match step_mark(with, "entry")? {
-                        Some(true) => ", with the words saying a run starts here written in it, above its name",
-                        Some(false) => ", with no words saying a run starts here written in it",
+                        Some(true) => ", with the mark saying it is the start written in it, above its name",
+                        Some(false) => ", with no mark saying it is the start written in it",
                         None => "",
                     },
                     builtin_note(with, "builtin")
@@ -9002,11 +9002,11 @@ steps_gui:
         let lines: Vec<String> =
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
         assert!(lines[0].contains("places the first action") && lines[0].contains("\"draft\""), "{}", lines[0]);
-        assert!(lines[1].contains("tick the box saying a run starts here"), "{}", lines[1]);
-        assert!(lines[2].contains("clear the box saying a run starts here"), "{}", lines[2]);
+        assert!(lines[1].contains("tick the box that makes it the start"), "{}", lines[1]);
+        assert!(lines[2].contains("clear the box that makes it the start"), "{}", lines[2]);
         assert!(lines[3].contains("takes this placement off") && lines[3].contains("goes ahead"), "{}", lines[3]);
-        assert!(lines[4].contains("a run starts here written in it"), "{}", lines[4]);
-        assert!(lines[5].contains("no words saying a run starts here"), "{}", lines[5]);
+        assert!(lines[4].contains("saying it is the start written in it"), "{}", lines[4]);
+        assert!(lines[5].contains("no mark saying it is the start"), "{}", lines[5]);
         assert!(ins.expectation(&steps[4]).is_none(), "the entry's mark is an eye's");
     }
 

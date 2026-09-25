@@ -43,6 +43,7 @@ import {
   useDraft,
   type Run,
 } from "./automationPanel";
+import { ExitMark } from "./automationParts";
 import { choiceKey, wireChoices, wireInto } from "./automationWires";
 import { AutomationOutputAdd } from "./AutomationOutputAdd";
 import { kindLabel, PORT_KINDS } from "./automationPortKinds";
@@ -81,7 +82,9 @@ function ExitRow({
   return (
     <li className={isError ? "autostep__exiterr" : "autostep__exit"}>
       {isError ? (
-        <span className="autostep__label">{t("auto.pic.errorExit")}</span>
+        <div className="autostep__exithead">
+          <ExitMark name={ERROR_EXIT} />
+        </div>
       ) : (
         <div className="autostep__exithead">
           <input

@@ -46,6 +46,7 @@ import {
   useDraft,
   type Run,
 } from "./automationPanel";
+import { ExitMark } from "./automationParts";
 import { AutomationOutputAdd } from "./AutomationOutputAdd";
 import { kindLabel, PORT_KINDS } from "./automationPortKinds";
 import { boundaryChoices, choiceKey, wireOutOf } from "./automationWires";
@@ -328,7 +329,11 @@ export function AutomationActionDeclaresPanel({
           {/* The error way out, always drawn and always last: every action carries one, and a list
               that left it off would read as an action that cannot fail. Nothing here renames or
               removes it, which core refuses either way. */}
-          <li className="autostep__exiterr">{t("auto.pic.errorExit")}</li>
+          <li className="autostep__exiterr">
+            <div className="autostep__exithead">
+              <ExitMark name={ERROR_EXIT} />
+            </div>
+          </li>
         </ul>
         <DeclareRow
           what={t("auto.step.exitName")}

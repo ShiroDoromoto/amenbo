@@ -56,7 +56,7 @@ async function render(target: PlaceTarget = { edgeId: 9 }) {
       createElement(AutomationLibraryPanel, {
         target,
         projectId: 1,
-        where: "after",
+        where: { box: "Take a task", exit: "taken" },
         onPlaced: placed,
         onMake: make,
       }),
@@ -99,11 +99,21 @@ afterEach(() => {
   container.remove();
 });
 
+describe("where the pick goes", () => {
+  it("draws the box before it, the way out it hangs on and a dashed here, rather than a sentence", async () => {
+    await render();
+    const where = container.querySelector(".wheremark")!;
+    expect(where.querySelector(".wheremark__box")?.textContent).toBe("Take a task");
+    expect(where.querySelector(".actport--exit")?.textContent).toBe("taken");
+    expect(where.querySelector(".wheremark__here")?.textContent).toBe(t("auto.lib.here"));
+  });
+});
+
 describe("the library in the panel", () => {
   it("lists this project's and the device's under their own heads", async () => {
     await render();
     const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
-    expect(heads).toEqual([t("auto.actions.reachProject"), t("auto.lib.global")]);
+    expect(heads).toEqual([t("auto.actions.reachProject"), t("auto.actions.reachGlobal")]);
     const groups = [...container.querySelectorAll(".autolib__group")];
     expect(groups[0]!.textContent).toContain("Review");
     expect(groups[1]!.textContent).toContain("Publish");
@@ -173,7 +183,11 @@ describe("the built-ins in the panel", () => {
   it("come third, under their own head", async () => {
     await render();
     const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
-    expect(heads).toEqual([t("auto.actions.reachProject"), t("auto.lib.global"), t("auto.lib.builtin")]);
+    expect(heads).toEqual([
+      t("auto.actions.reachProject"),
+      t("auto.actions.reachGlobal"),
+      t("auto.actions.reachBuiltin"),
+    ]);
     expect([...container.querySelectorAll(".autolib__group")][2]!.textContent).toContain("Take a task");
   });
 
@@ -181,7 +195,7 @@ describe("the built-ins in the panel", () => {
     hoisted.builtins = [];
     await render();
     const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
-    expect(heads).not.toContain(t("auto.lib.builtin"));
+    expect(heads).not.toContain(t("auto.actions.reachBuiltin"));
   });
 
   it("show what a picked one does and declares", async () => {

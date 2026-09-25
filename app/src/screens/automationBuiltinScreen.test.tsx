@@ -69,7 +69,7 @@ describe("a built-in, opened", () => {
     await act(async () => {
       root.render(createElement(AutomationBuiltinScreen, { builtinKey: "task_take", onBack: back }));
     });
-    expect(container.textContent).toContain(t("auto.builtin.readOnly"));
+    expect(container.querySelector('[data-icon="lock"]')).not.toBeNull();
     const buttons = [...container.querySelectorAll("button")];
     expect(buttons).toHaveLength(1);
     expect(container.querySelector("input, textarea, select")).toBeNull();
@@ -96,7 +96,7 @@ describe("a built-in, opened", () => {
     await act(async () => {
       root.render(createElement(AutomationActionBuildScreen, { id: 40, projectId: 1, onBack: back }));
     });
-    expect(container.textContent).toContain(t("auto.builtin.readOnly"));
+    expect(container.querySelector('[data-icon="lock"]')).not.toBeNull();
     expect(container.querySelector(".actbuild__canvas")).toBeNull();
   });
 });

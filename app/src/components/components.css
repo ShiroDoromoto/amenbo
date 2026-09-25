@@ -1770,8 +1770,9 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 /* The press that removes what the panel shows, at its foot. */
 .actpanel__foot { display: flex; gap: var(--s-3); font-size: var(--fs-md); }
-/* Under the action's row, where a global action is only read: where it is changed instead. */
-.actdecl__elsewhere { margin: var(--s-1) 0 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* That what is shown is not changed here (`../screens/automationParts`). The press beside it, when
+   there is one, goes to where it is changed. */
+.lockmark { display: inline-flex; align-items: center; color: var(--c-heed); }
 
 /* ── One automation, opened (`../screens/AutomationBuildScreen`) ──
    The action build screen's frame (`.actbuild`), with the launch band where that one has its
@@ -1895,6 +1896,22 @@ button.feed__target:hover { color: var(--c-accent); }
 .autolib__row--on { box-shadow: inset 3px 0 0 var(--c-accent); }
 .autolib__name { flex: 1 1 auto; min-width: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); overflow-wrap: anywhere; }
 .autolib__meta { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* Where the pick goes, as the line it goes on: the box before it, the way out it hangs on, and a
+   dashed "here" (`../screens/automationParts`). */
+.wheremark {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); padding: var(--s-2);
+  border: var(--border-w) dashed var(--c-edge); border-radius: var(--r-md);
+  background: var(--c-sunken-pic) var(--c-sunken); font-size: var(--fs-xs);
+}
+.wheremark__box {
+  padding: 1px var(--s-2); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
+  color: var(--c-text); overflow-wrap: anywhere;
+}
+.wheremark__line { color: var(--c-text-faint); }
+.wheremark__here {
+  padding: 1px var(--s-2); border: var(--border-w) dashed var(--c-accent); border-radius: var(--r-sm);
+  color: var(--c-accent);
+}
 .autolib__none { padding: var(--s-2); font-size: var(--fs-xs); color: var(--c-text-faint); }
 .autolib__picked {
   display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-2) var(--s-3) var(--s-3);
@@ -1929,11 +1946,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__mark {
   position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center;
   box-sizing: border-box; padding: 0 var(--s-2); border-radius: var(--r-md); pointer-events: none;
-  border: var(--border-w) dashed var(--c-accent); color: var(--c-accent);
+  border: var(--border-w) var(--border-style) var(--c-accent); color: var(--c-accent);
   background: var(--c-surface-pic) var(--c-surface);
   font-size: var(--fs-xs);
 }
-.autopic__mark--error { border-color: var(--c-stop); color: var(--c-stop); }
+/* Dashed in the stop colour, as the error way out is drawn in a panel and a dialog too. */
+.autopic__mark--error { border-color: var(--c-stop); border-style: dashed; color: var(--c-stop); }
 .autopic__markname, .autopic__markports { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .autopic__markname { font-weight: var(--fw-bold); }
 .autopic__markports { color: var(--c-text); }

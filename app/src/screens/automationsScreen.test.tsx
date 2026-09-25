@@ -353,7 +353,7 @@ describe("the panel beside the picture", () => {
     await open();
     await act(async () => { button(t("auto.pic.first")).click(); });
     expect(panelPlace()).toBe(t("auto.pic.place"));
-    expect(container.textContent).toContain(t("auto.lib.first"));
+    expect(container.querySelector(".wheremark")?.textContent).toBe(t("auto.lib.here"));
     expect(container.textContent).toContain(t("auto.lib.make"));
   });
 

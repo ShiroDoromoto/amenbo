@@ -261,7 +261,7 @@ describe("a global action opened from a project", () => {
 
   it("says it is changed from the sidebar, and goes there on the row's press", async () => {
     await renderAt(1);
-    expect(container.textContent).toContain(t("auto.act.globalReadOnly"));
+    expect(container.querySelector('[data-icon="lock"]')).not.toBeNull();
     await act(async () => {
       buttons().find((one) => one.textContent === t("auto.act.openInSidebar"))!.click();
     });
@@ -293,7 +293,7 @@ describe("a global action opened from a project", () => {
   it("is written from the sidebar, where it is changed", async () => {
     await renderAt(null);
     expect(has(t("auto.act.edit"))).toBe(true);
-    expect(container.textContent).not.toContain(t("auto.act.globalReadOnly"));
+    expect(container.querySelector('[data-icon="lock"]')).toBeNull();
   });
 
   it("leaves a project's own action written from that project", async () => {
@@ -358,7 +358,7 @@ describe("an action a run is going on (AMB-D-961)", () => {
   it("offers no way to add a step, and does not say it is changed from the sidebar", async () => {
     await renderHeld();
     expect(has(t("auto.act.stepAdd"))).toBe(false);
-    expect(container.textContent).not.toContain(t("auto.act.globalReadOnly"));
+    expect(container.querySelector('[data-icon="lock"]')).toBeNull();
   });
 
   it("says nothing of runs, and holds nothing shut, while none is going", async () => {

@@ -2,7 +2,7 @@
 //
 // **A built-in is Amenbo's own.** What it does, the settings it reads, what it takes and the ways out
 // it leaves by are written in the code that carries it out, so there is nothing here to change: the
-// screen draws the definition and says so. It is still opened, because a reader placing something
+// screen draws the definition under a lock. It is still opened, because a reader placing something
 // they cannot see inside would not know what the run will do there.
 //
 // **It reads the definition, not an action.** A built-in's library action is only written the first
@@ -14,9 +14,9 @@
 // reader sees the same three rows wherever they weigh one.
 import { useAutomationBuiltins } from "../core/automations";
 import { builtinShown } from "../core/builtinWords";
-import { t, tn } from "../core/i18n";
+import { t } from "../core/i18n";
 import { Icon } from "../components/Icon";
-import { ReachChip } from "./AutomationActionsTab";
+import { ExitMark, LockMark, ReachChip, usedCount } from "./automationParts";
 import { CFG_KINDS } from "./automationPanel";
 import { kindLabel } from "./automationPortKinds";
 import type { AutomationBuiltinDto } from "../bindings/bindings";
@@ -60,12 +60,7 @@ export function BuiltinDecl({ builtin }: { builtin: AutomationBuiltinDto }) {
       <span className="actdecl__key">{t("auto.step.exits")}</span>
       <span className="actdecl__chips">
         {builtin.exits.map((one) => (
-          <span key={one.name ?? ""} className="actport actport--exit">
-            {one.name ?? t("auto.step.exitUnnamed")}
-            {one.outputs.length > 0 && (
-              <span className="actport__kind">{one.outputs.map((out) => out.name).join("・")}</span>
-            )}
-          </span>
+          <ExitMark key={one.name ?? ""} name={one.name ?? undefined} outputs={one.outputs.map((out) => out.name)} />
         ))}
       </span>
     </div>
@@ -96,11 +91,10 @@ export function AutomationBuiltinScreen({
             <span className="actbuild__sec">{t("auto.builtin.does")}</span>
             <span className="actdecl__note">{builtin.does}</span>
             <ReachChip global builtin />
-            <span className="actdecl__used">
-              {builtin.usedBy === 0 ? t("auto.actions.unused") : tn("auto.actions.usedBy", builtin.usedBy)}
-            </span>
+            <span className="actdecl__used">{usedCount(builtin.usedBy)}</span>
+            {/* Nowhere to change it: Amenbo carries it out as its code says. */}
+            <LockMark />
           </div>
-          <p className="actdecl__elsewhere">{t("auto.builtin.readOnly")}</p>
           <BuiltinDecl builtin={builtin} />
         </div>
       )}

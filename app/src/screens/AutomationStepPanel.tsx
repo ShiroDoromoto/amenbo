@@ -44,10 +44,10 @@ import {
   useAutomationAction,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
-import { errText, isStatus, statusLabel, t, tf, tn } from "../core/i18n";
+import { errText, isStatus, statusLabel, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
-import { ReachChip } from "./AutomationActionsTab";
+import { ExitMark, ReachChip, usedCount } from "./automationParts";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
 import { CFG_KINDS, exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import {
@@ -437,7 +437,7 @@ export function AutomationStepPanel({
             <div className="autoplace__empty">{t("auto.place.empty")}</div>
           )}
           <div className="autoplace__meta">
-            {action !== null && action.usedBy > 0 && <span>{tn("auto.actions.usedBy", action.usedBy)}</span>}
+            {action !== null && <span>{usedCount(action.usedBy)}</span>}
             <button type="button" className="btn" onClick={() => onOpenAction(placement.actionId)}>
               {t("auto.place.open")}
             </button>
@@ -507,14 +507,11 @@ export function AutomationStepPanel({
             {named.map((one) => (
               <li key={one.id} className="autostep__exit">
                 <div className="autostep__exithead">
-                  <span className="actport actport--exit">
-                    {one.name === undefined ? t("auto.step.exitUnnamed") : builtinWord(placement.builtin, one.name)}
-                    {one.outputs.length > 0 && (
-                      <span className="actport__kind">
-                        {one.outputs.map((out) => builtinWord(placement.builtin, out.name)).join("・")}
-                      </span>
-                    )}
-                  </span>
+                  <ExitMark
+                    name={one.name}
+                    builtin={placement.builtin}
+                    outputs={one.outputs.map((out) => builtinWord(placement.builtin, out.name))}
+                  />
                 </div>
                 <NextRow
                   graph={automationGraph(automation)!}
@@ -530,7 +527,9 @@ export function AutomationStepPanel({
                 cannot fail. Saying nothing after it stops the run and calls a person, and the row is
                 where a picture says otherwise. */}
             <li className="autostep__exiterr">
-              <span className="autostep__label">{t("auto.pic.errorExit")}</span>
+              <div className="autostep__exithead">
+                <ExitMark name={ERROR_EXIT} />
+              </div>
               <NextRow
                 graph={automationGraph(automation)!}
                 picture="automation"

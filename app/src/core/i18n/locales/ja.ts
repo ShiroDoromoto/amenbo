@@ -1125,7 +1125,6 @@ export const ja: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "走っている実行はありません",
     "auto.history.all": "すべて",
-    "auto.history.empty": "あてはまる実行はありません",
     "auto.history.prev": "‹ 前",
     "auto.history.next": "次 ›",
     "auto.history.count": "{from}–{to} 件目 / {total} 件",

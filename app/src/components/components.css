@@ -1444,6 +1444,11 @@ button.feed__target:hover { color: var(--c-accent); }
   list-style: none; margin: 0; padding: 0;
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md); overflow: hidden;
 }
+/* Nothing under way: the automations' mark and a dash, in the middle of where the rows would be. */
+.autoruns__none {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+  padding: var(--s-6) 0; color: var(--c-text-faint);
+}
 .autoruns > li + li { border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
 /* One run is a row and its buttons: the whole line is the press that goes to its pane, and the
    buttons that move the run stand beside it. They are not inside it because a press inside a press
@@ -1776,6 +1781,8 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 }
 .actchip:hover { border-color: var(--c-accent); color: var(--c-accent); }
 .actchip--on, .actchip--on:hover { border-color: var(--c-accent); background: var(--c-accent); color: var(--c-on-accent); }
+/* How many a narrowing would show, where the chip says (the history's endings). */
+.actchip__count { margin-inline-start: var(--s-1); font-variant-numeric: tabular-nums; opacity: .75; }
 .actlib__none { padding: var(--s-6) var(--s-2); text-align: center; font-size: var(--fs-md); color: var(--c-text-faint); }
 /* One grid for the heads and every row, so the columns line up without a table's markup. The table owns
    the tracks and every level down to a row takes them as a subgrid, so a column is as wide as the widest

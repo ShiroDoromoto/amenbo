@@ -1119,7 +1119,6 @@ export const nl: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "Er loopt niets.",
     "auto.history.all": "Alle",
-    "auto.history.empty": "Geen runs die overeenkomen.",
     "auto.history.prev": "‹ Vorige",
     "auto.history.next": "Volgende ›",
     "auto.history.count": "{from}–{to} van {total}",

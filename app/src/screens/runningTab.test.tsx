@@ -117,9 +117,10 @@ afterEach(() => {
 });
 
 describe("the running tab", () => {
+  // Nothing under way is a mark and a dash on the screen, and the sentence is its name.
   it("says so when nothing is running", async () => {
     await render([]);
-    expect(container.textContent).toContain(t("auto.running.empty"));
+    expect(container.querySelector(".autoruns__none")?.getAttribute("aria-label")).toBe(t("auto.running.empty"));
   });
 
   it("says what each run is, how far in it is, and what it is on", async () => {
@@ -263,6 +264,6 @@ describe("the running tab's reach", () => {
 
   it("says nothing is running in a project whose runs are all elsewhere", async () => {
     await render(two(), 3);
-    expect(container.textContent).toContain(t("auto.running.empty"));
+    expect(container.querySelector(".autoruns__none")?.getAttribute("aria-label")).toBe(t("auto.running.empty"));
   });
 });

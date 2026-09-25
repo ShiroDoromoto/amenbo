@@ -239,7 +239,14 @@ export function RunningTab({
       {/* Above the rows, and above the empty line too: a press that was refused is the answer to
           what the reader just did, and the list emptying under it is not a reason to take it back. */}
       {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
-      {runs.length === 0 && <div className="auto__empty">{t("auto.running.empty")}</div>}
+      {/* Nothing under way is the automations' mark and a dash — the sentence stays as its name,
+          for whoever cannot see the mark. */}
+      {runs.length === 0 && (
+        <div className="autoruns__none" role="status" aria-label={t("auto.running.empty")}>
+          <Icon name="rocket" size="lg" />
+          <span aria-hidden="true">—</span>
+        </div>
+      )}
       {runs.length > 0 && (
         <ul className="autoruns">
           {runs.map((run) => (

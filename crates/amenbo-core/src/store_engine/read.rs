@@ -6976,6 +6976,17 @@ pub enum RunOutcome {
 pub struct RunHistoryPage {
     pub runs: Vec<crate::model::AutomationRun>,
     pub total: usize,
+    /// **How many runs each ending holds**, whatever `only` narrowed the page to — completed, failed,
+    /// canceled, counted over the same project. What a narrowing's chip says it would show.
+    pub by_ending: RunEndings,
+}
+
+/// How many runs of the history ended each way.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RunEndings {
+    pub completed: usize,
+    pub failed: usize,
+    pub canceled: usize,
 }
 
 /// **One page of the runs that are over and need nobody**, newest first — completed, canceled, and
@@ -6997,26 +7008,37 @@ pub fn automation_runs_history(
     let canceled = || Pred::eq(R.status, S::Canceled.as_str());
     let seen_failure =
         || Pred::eq(R.status, S::Failed.as_str()).and(Pred::is_not_null(R.acknowledged_at));
-    let mut pred = match only {
-        None => completed().or(canceled()).or(seen_failure()),
-        Some(RunOutcome::Completed) => completed(),
-        Some(RunOutcome::Failed) => seen_failure(),
-        Some(RunOutcome::Canceled) => canceled(),
+    let within = |pred: Pred| match project {
+        Some(project) => pred.and(Pred::eq(R.project_id, project)),
+        None => pred,
     };
-    if let Some(project) = project {
-        pred = pred.and(Pred::eq(R.project_id, project));
-    }
+    let count = |pred: &Pred| -> Result<usize> {
+        let mut counted = Select::new();
+        let matched = counted.count_all();
+        let mut count = Sql::from(&counted, R.table);
+        count.push_where(Some(pred));
+        Ok(conn
+            .query_row(count.text(), rusqlite::params_from_iter(count.params()), |r| matched.get(r))
+            .map_err(StoreEngineError::from)? as usize)
+    };
 
-    let mut counted = Select::new();
-    let matched = counted.count_all();
-    let mut count = Sql::from(&counted, R.table);
-    count.push_where(Some(&pred));
-    let total: usize = conn
-        .query_row(count.text(), rusqlite::params_from_iter(count.params()), |r| matched.get(r))
-        .map_err(StoreEngineError::from)? as usize;
+    let by_ending = RunEndings {
+        completed: count(&within(completed()))?,
+        failed: count(&within(seen_failure()))?,
+        canceled: count(&within(canceled()))?,
+    };
+    let (pred, total) = match only {
+        None => (
+            within(completed().or(canceled()).or(seen_failure())),
+            by_ending.completed + by_ending.failed + by_ending.canceled,
+        ),
+        Some(RunOutcome::Completed) => (within(completed()), by_ending.completed),
+        Some(RunOutcome::Failed) => (within(seen_failure()), by_ending.failed),
+        Some(RunOutcome::Canceled) => (within(canceled()), by_ending.canceled),
+    };
 
     let runs = automation_run_rows(conn, &pred, Some(limit as i64), offset as i64)?;
-    Ok(RunHistoryPage { runs, total })
+    Ok(RunHistoryPage { runs, total, by_ending })
 }
 
 /// The `automation_run` rows matching `pred`, newest first, skipping `offset` and at most `limit` of

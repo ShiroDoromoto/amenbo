@@ -1123,7 +1123,6 @@ export const de: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "Es läuft nichts.",
     "auto.history.all": "Alle",
-    "auto.history.empty": "Keine passenden Läufe.",
     "auto.history.prev": "‹ Zurück",
     "auto.history.next": "Weiter ›",
     "auto.history.count": "{from}–{to} von {total}",

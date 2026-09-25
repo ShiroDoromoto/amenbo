@@ -62,10 +62,11 @@ use crate::dto::{
     AutomationActionCardDto, AutomationActionDetailDto, AutomationBuiltinDto,
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto,
-    AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto, AutomationPlacementStepDto,
-    AutomationPortDto, AutomationRunCardDto,
+    AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
+    AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto,
-    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationCardDto, WriteAck,
+    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationCardDto,
+    WriteAck,
 };
 use crate::error::CmdError;
 use std::collections::HashMap;
@@ -1366,7 +1367,12 @@ pub fn automation_history_page(
     for run in found.runs {
         runs.push(run_card(&store, run)?);
     }
-    Ok(AutomationRunHistoryDto { runs, total: found.total, page_size: HISTORY_PAGE })
+    let by_ending = AutomationRunEndingsDto {
+        completed: found.by_ending.completed,
+        failed: found.by_ending.failed,
+        canceled: found.by_ending.canceled,
+    };
+    Ok(AutomationRunHistoryDto { runs, total: found.total, page_size: HISTORY_PAGE, by_ending })
 }
 
 /// **Say a failed run has been seen** ([`amenbo_core::ops::automation_stop::acknowledge`]) — pressed on

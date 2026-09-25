@@ -1116,7 +1116,6 @@ export const ko: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "실행 중인 것이 없습니다.",
     "auto.history.all": "전체",
-    "auto.history.empty": "해당하는 실행이 없습니다.",
     "auto.history.prev": "‹ 이전",
     "auto.history.next": "다음 ›",
     "auto.history.count": "{total}개 중 {from}–{to}",

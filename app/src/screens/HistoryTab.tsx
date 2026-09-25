@@ -9,23 +9,30 @@
 // pressed it.
 //
 // **Narrowed by ending.** "All", or one of completed, failed and canceled; changing it goes back to the
-// first page, because the page a reader was on counts rows of a list that is no longer there.
+// first page, because the page a reader was on counts rows of a list that is no longer there. Each
+// chip carries how many runs it would show, so an empty history, or an ending nothing has come to, is
+// read off the chip — "failed 0" — rather than a sentence under it.
 //
 // **A row here is read, not pressed.** What it did is over, and its pane with it; the line is the same
 // one the "running" tab draws (`./RunningTab`), so a run reads the same on either side of ending.
 import { useState } from "react";
 import { useRunHistory, type RunHistoryFilter } from "../core/automations";
 import { t, tf } from "../core/i18n";
+import type { AutomationRunEndingsDto } from "../bindings/bindings";
 import { formatNumber } from "../core/i18n/format";
 import { RunLine } from "./RunningTab";
 
 // Spelled out rather than built from the id, so the key gate can see every label a reader can be
 // shown (`core/i18n/sourceKeys.test.ts`).
-const FILTERS: readonly { id: RunHistoryFilter; label: () => string }[] = [
-  { id: "all", label: () => t("auto.history.all") },
-  { id: "completed", label: () => t("auto.run.completed") },
-  { id: "failed", label: () => t("auto.run.failed") },
-  { id: "canceled", label: () => t("auto.run.canceled") },
+const FILTERS: readonly {
+  id: RunHistoryFilter;
+  label: () => string;
+  count: (by: AutomationRunEndingsDto) => number;
+}[] = [
+  { id: "all", label: () => t("auto.history.all"), count: (by) => by.completed + by.failed + by.canceled },
+  { id: "completed", label: () => t("auto.run.completed"), count: (by) => by.completed },
+  { id: "failed", label: () => t("auto.run.failed"), count: (by) => by.failed },
+  { id: "canceled", label: () => t("auto.run.canceled"), count: (by) => by.canceled },
 ];
 
 /**
@@ -77,18 +84,19 @@ export function HistoryTab({
             }}
           >
             {one.label()}
+            {/* Not until the first answer lands: a 0 drawn before it would say there is none. */}
+            {history !== null && <span className="actchip__count">{formatNumber(one.count(history.byEnding))}</span>}
           </button>
         ))}
       </div>
 
-      {history !== null && runs.length === 0 && <div className="auto__empty">{t("auto.history.empty")}</div>}
       {runs.length > 0 && (
         <ul className="autoruns autoruns--history">
           {runs.map((run) => <RunLine key={run.run} run={run} ended withProject={projectId === null} />)}
         </ul>
       )}
 
-      {/* No pager over nothing: "0–0 of 0" says less than the empty line above it already has. */}
+      {/* No pager over nothing: "0–0 of 0" says less than the chip's 0 already has. */}
       {total > 0 && (
         <nav className="autohist__pager">
           <button type="button" className="btn" disabled={page === 0} onClick={() => setPage(page - 1)}>

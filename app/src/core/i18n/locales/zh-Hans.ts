@@ -1121,7 +1121,6 @@ export const zhHans: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "没有正在运行的执行。",
     "auto.history.all": "全部",
-    "auto.history.empty": "没有符合的运行。",
     "auto.history.prev": "‹ 上一页",
     "auto.history.next": "下一页 ›",
     "auto.history.count": "第 {from}–{to} 条，共 {total} 条",

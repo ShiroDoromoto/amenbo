@@ -1120,7 +1120,6 @@ export const vi: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "Không có gì đang chạy.",
     "auto.history.all": "Tất cả",
-    "auto.history.empty": "Không có lượt chạy nào khớp.",
     "auto.history.prev": "‹ Trước",
     "auto.history.next": "Sau ›",
     "auto.history.count": "{from}–{to} / {total}",

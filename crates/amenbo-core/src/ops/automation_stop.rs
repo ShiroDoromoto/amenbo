@@ -1177,6 +1177,10 @@ mod tests {
             assert_eq!(only(read::RunOutcome::Completed).total, 3);
             assert_eq!(ids(&only(read::RunOutcome::Failed)), vec![seen.id]);
             assert_eq!(ids(&only(read::RunOutcome::Canceled)), vec![canceled.id]);
+            // Every ending is counted whichever one the page was narrowed to — what each chip says.
+            let endings = read::RunEndings { completed: 3, failed: 1, canceled: 1 };
+            assert_eq!(first.by_ending, endings);
+            assert_eq!(only(read::RunOutcome::Canceled).by_ending, endings);
 
             let here = read::automation_runs_history(tx.conn(), Some(p.project), None, 0, 20)
                 .expect("page");
@@ -1184,6 +1188,7 @@ mod tests {
             let elsewhere = read::automation_runs_history(tx.conn(), Some(p.project + 1), None, 0, 20)
                 .expect("page");
             assert_eq!((elsewhere.total, elsewhere.runs.len()), (0, 0));
+            assert_eq!(elsewhere.by_ending, read::RunEndings::default(), "counted within the project");
         });
     }
 

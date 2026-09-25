@@ -1132,7 +1132,6 @@ export const ptBR: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "Nada em execução.",
     "auto.history.all": "Todas",
-    "auto.history.empty": "Nenhuma execução corresponde.",
     "auto.history.prev": "‹ Anterior",
     "auto.history.next": "Próxima ›",
     "auto.history.count": "{from}–{to} de {total}",

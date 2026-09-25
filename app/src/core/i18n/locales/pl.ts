@@ -1136,7 +1136,6 @@ export const pl: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "Nic nie jest uruchomione.",
     "auto.history.all": "Wszystkie",
-    "auto.history.empty": "Brak pasujących uruchomień.",
     "auto.history.prev": "‹ Poprzednia",
     "auto.history.next": "Następna ›",
     "auto.history.count": "{from}–{to} z {total}",

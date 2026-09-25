@@ -1119,7 +1119,6 @@ export const hi: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "कुछ भी नहीं चल रहा है।",
     "auto.history.all": "सभी",
-    "auto.history.empty": "कोई मेल खाता रन नहीं।",
     "auto.history.prev": "‹ पिछला",
     "auto.history.next": "अगला ›",
     "auto.history.count": "{total} में से {from}–{to}",

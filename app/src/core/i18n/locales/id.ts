@@ -1120,7 +1120,6 @@ export const id: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "Tidak ada yang berjalan.",
     "auto.history.all": "Semua",
-    "auto.history.empty": "Tidak ada run yang cocok.",
     "auto.history.prev": "‹ Sebelumnya",
     "auto.history.next": "Berikutnya ›",
     "auto.history.count": "{from}–{to} dari {total}",

@@ -766,6 +766,30 @@ fn inside_a_step_what_moves_a_task_is_refused_and_the_task_is_left_alone() {
     assert_eq!(shown["status"], "todo", "{shown}");
 }
 
+/// **Inside a step, what one of Amenbo's built-ins does is refused** (`AMB-D-964`) — cutting the
+/// task's worktree, folding it away, recording the commit it is closed on. The refusal names the way
+/// a step hands a built-in what it needs, and no commit is recorded on the task.
+#[test]
+fn inside_a_step_what_a_built_in_does_is_refused() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+
+    for args in [
+        vec!["--actor", "ai", "worktree", "start", &t, "--json"],
+        vec!["--actor", "ai", "worktree", "finish", &t, "--json"],
+        vec!["--actor", "ai", "task", "commit-add", &t, sha, "--json"],
+    ] {
+        let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
+        assert_eq!(code, 2, "{args:?}: {err}");
+        assert!(err.contains("automation_outside_only"), "{args:?}: {err}");
+        assert!(err.contains("step-out"), "it names the way a step hands a built-in what it needs: {args:?}: {err}");
+    }
+    let commits = cli.json(&["task", "commit-list", &t, "--json"]);
+    assert_eq!(commits["count"], 0, "{commits}");
+}
+
 /// The reading verbs are left with a step, so the agent carrying it out can see where it stands — and
 /// the action layer is among them, because the prompts moved there. `show` alone would hand back the
 /// placements and nothing of what stands at one.

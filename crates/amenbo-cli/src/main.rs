@@ -180,6 +180,7 @@ fn in_a_step(typed: &str, inside: bool) -> Result<(), CliError> {
     match Cmd::ALL.iter().find(|cmd| cmd.name() == typed).map(|cmd| cmd.in_a_step()) {
         Some(InAStep::HandsBack | InAStep::Reaches) => Ok(()),
         Some(InAStep::MovesTheTask) => Err(CliError::automation_task_is_the_runs(typed)),
+        Some(InAStep::ABuiltInDoesIt) => Err(CliError::automation_a_built_in_does_it(typed)),
         Some(InAStep::OutsideARun) | None => Err(CliError::automation_outside_only(typed)),
     }
 }
@@ -1381,6 +1382,9 @@ mod tests {
             ("task done", "moves its task's status"),
             ("task status", "moves its task's status"),
             ("task assign", "moves its task's status"),
+            ("worktree start", "a built-in does"),
+            ("worktree finish", "a built-in does"),
+            ("task commit-add", "a built-in does"),
             ("automation start", "is typed from outside one"),
             ("decision add", "is typed from outside one"),
             ("no such command", "is typed from outside one"),

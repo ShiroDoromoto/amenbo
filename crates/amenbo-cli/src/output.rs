@@ -426,7 +426,8 @@ impl CliError {
     /// about where it is standing.
     ///
     /// **One code for both reasons.** Either way the command is one typed outside a run; what differs is
-    /// why, and that is the sentence ([`CliError::automation_task_is_the_runs`]).
+    /// why, and that is the sentence ([`CliError::automation_task_is_the_runs`],
+    /// [`CliError::automation_a_built_in_does_it`]).
     pub fn automation_outside_only(command: &str) -> CliError {
         CliError {
             code: CliErrorCode::AutomationOutsideOnly.as_str(),
@@ -452,6 +453,23 @@ impl CliError {
             ),
             hint: Some(format!(
                 "Where a person has to decide, leave by the way out that says so with step-done. {STEP_REACHES}"
+            )),
+            exit: 2,
+        }
+    }
+
+    /// **A command one of Amenbo's built-ins carries out, typed inside a step** (`AMB-D-964`,
+    /// `AMB-D-968`) — the task's worktree, cut and folded away, and the commit the task is closed on.
+    /// The step hands on what the built-in needs and leaves the doing to it, so the sentence says that.
+    pub fn automation_a_built_in_does_it(command: &str) -> CliError {
+        let cli = Paths::command_name();
+        CliError {
+            code: CliErrorCode::AutomationOutsideOnly.as_str(),
+            message: format!(
+                "this terminal is a step of a run, and what `{cli} {command}` does a built-in does for the run. Nothing was done."
+            ),
+            hint: Some(format!(
+                "Hand on what the built-in needs with step-out — the commit's SHA, say — and leave by your way out; `{cli} automation builtin-list` says what each built-in takes. {STEP_REACHES}"
             )),
             exit: 2,
         }

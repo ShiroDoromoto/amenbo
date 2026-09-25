@@ -4274,6 +4274,24 @@ impl Instructor {
                     )
                 }
             },
+            // A `text` is typed into the box under it, and written when the box is left — so the
+            // line says to leave it, or the answer stays a draft nothing reads.
+            (Domain::Automation, "answer-text") => match arg_str(with, "builtin") {
+                None => format!(
+                    "In the panel showing what the pressed box holds, under the setting \"{}\", type \"{}\" into its box, then click outside the box so it is written.",
+                    req(with, "setting")?,
+                    req(with, "value")?
+                ),
+                Some(key) => {
+                    let builtin = builtin_words(key)?;
+                    format!(
+                        "In the panel showing what the pressed box holds, under {} of {}, type \"{}\" into its box, then click outside the box so it is written.",
+                        builtin.word(req(with, "setting")?)?,
+                        builtin.called,
+                        req(with, "value")?
+                    )
+                }
+            },
             // **Declaring on the panel.** What is declared is an action's or a step's, so the panel
             // is one on the action build screen: the action's input or output, opened with
             // `open-part`, or a pressed step. A spot on an automation declares nothing (it reads what
@@ -4384,7 +4402,7 @@ impl Instructor {
             // The press that makes a run. It is the build screen's, and the two other ways in below
             // make the same run without handing anything over either.
             (Domain::Automation, "start") => {
-                format!("On the build screen's head, press the button that starts a run. {HAND_NOTHING}")
+                format!("On the build screen's head, press the button that starts a run. {}", handing(with))
             }
             // Pressing a reason under the head. What it does is the picture's own press: the box it
             // names is picked out and its panel opens, so the step says so and a road reads the panel
@@ -6710,6 +6728,32 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
         words: &[("コミット", "the input for the commit it records")],
     },
     BuiltinWords {
+        key: "fetch",
+        called: "the built-in that goes and fetches (it looks at a URL, a file or a command set beforehand)",
+        words: &[
+            ("形式", "the setting saying which form the place it looks at is written in"),
+            ("URL", "the choice that looks at a URL"),
+            ("ファイルパス", "the choice that reads a file"),
+            ("コマンド", "the choice that runs a command"),
+            ("見に行く先", "the setting saying where it looks"),
+            ("取ってきた", "the way out for having brought something back"),
+            ("見つからない", "the way out for there being nothing there"),
+            ("中身", "what it brought back"),
+        ],
+    },
+    BuiltinWords {
+        key: "make_task",
+        called: "the built-in that files a task",
+        words: &[
+            ("起票したタスク", "the setting saying what becomes of the task it files"),
+            ("未着手のまま、出口「起票した」へ進む", "the choice that leaves the task not started"),
+            ("進行中にして、出口「起票して着手した」へ進む", "the choice that takes the task it files"),
+            ("タイトル", "the input for the new task's title"),
+            ("起票した", "the way out for having filed a task"),
+            ("起票して着手した", "the way out for having filed a task and taken it"),
+        ],
+    },
+    BuiltinWords {
         key: "split_by_dim",
         called: "the built-in that splits the task by its value on one axis",
         words: &[("分類なし", "the way out for a task with no value on that axis")],
@@ -6770,6 +6814,25 @@ fn builtin_note(with: &Args, builtin_key: &str) -> &'static str {
 /// the dialog was there.
 const HAND_NOTHING: &str =
     "In the dialog that opens asking what to hand the run, leave the text and the files empty and press its start button.";
+
+/// **What a start hands the run**, said as what to put in that dialog: the road's `text` typed in,
+/// and its `file` added — the operator's to bring, of which only the name crosses, as with `attach`.
+/// A road that names neither hands nothing ([`HAND_NOTHING`]).
+fn handing(with: &Args) -> String {
+    let (text, file) = (arg_str(with, "text"), arg_str(with, "file"));
+    if text.is_none() && file.is_none() {
+        return HAND_NOTHING.to_string();
+    }
+    let mut said = "In the dialog that opens asking what to hand the run,".to_string();
+    if let Some(text) = text {
+        said.push_str(&format!(" type \"{text}\" as the text,"));
+    }
+    if let Some(file) = file {
+        said.push_str(&format!(" add a file named \"{file}\","));
+    }
+    said.push_str(" and press its start button.");
+    said
+}
 
 fn box_named(with: &Args, name_key: &str, builtin_key: &str) -> Result<String, String> {
     match (arg_str(with, name_key), arg_str(with, builtin_key)) {

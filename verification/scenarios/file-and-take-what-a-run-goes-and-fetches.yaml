@@ -1,0 +1,137 @@
+# The third way into an automation: a place set up beforehand is looked at, and what is there is filed
+# as a task and taken, so the run goes on the way one that took a task does. Looking,
+# filing and taking are Amenbo's own steps — the built-ins that fetch and that file a task — so nobody
+# types anything on the way.
+#
+# The place looked at is a command, which needs nothing brought onto the machine: what it prints is
+# what comes back, and what comes back is the new task's title.
+#
+# The terminal meets the guard the launch keeps in front of this: a run that starts at the fetch has
+# to take a task before any step works on one, so the one that goes from the fetch straight to an
+# agent's step is refused, and the one that files and takes first is started. A run started at a
+# terminal opens no step, so the walk itself is the screen's: started there, it fetches, files, takes
+# and closes the task, and the road reads the run over on the history tab.
+id: file-and-take-what-a-run-goes-and-fetches
+title: A run that starts by fetching files what it brought back as a task, takes it, and closes it
+description: >
+  Place the built-in that fetches as an automation's entry, set to run a command, and join what it
+  brings back to the title of the built-in that files a task, set to take the task it files, then
+  close it. Start it from the terminal, and read a second automation that goes from the fetch
+  straight to an agent's step refused. On screen, start the first and read the run over on the
+  history tab.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
+
+  # Fetch, file and take, close. With nothing there the run simply ends. What it looks at, and
+  # that the task it files is taken, are answered on each road: answering is a move a road makes.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that goes and fetches" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: fetch }, as: at_fetch }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: make_task }, as: at_make }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: wire-add, with: { target: at_fetch, exit: 取ってきた, from_port: 中身, to: at_make, to_port: タイトル } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_fetch, exit: 取ってきた, to: at_make } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_fetch, exit: 見つからない } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_make, exit: 起票して着手した, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_fetch } }
+
+  # The same fetch, going straight to an agent's step: that step would be about no task.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: build, prompt: work on what came back }, as: build }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: build } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: build, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that fetches for nobody" }, as: loose }
+  - { type: action, domain: automation, op: place-add, with: { target: loose, builtin: fetch }, as: loose_fetch }
+  - { type: action, domain: automation, op: place-add, with: { target: loose, action: work }, as: loose_work }
+  - { type: action, domain: automation, op: agent-set, with: { target: loose_work, step: build, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: loose_fetch, exit: 取ってきた, to: loose_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: loose_fetch, exit: 見つからない } }
+  - { type: action, domain: automation, op: edge-add, with: { target: loose_work } }
+  - { type: action, domain: automation, op: entry, with: { target: loose, placement: loose_fetch } }
+
+steps_cli:
+  - { type: action, domain: automation, op: cfg-set, with: { target: at_fetch, name: 形式, choice: コマンド } }
+  - { type: action, domain: automation, op: cfg-set, with: { target: at_fetch, name: 見に行く先, text: "echo SCENARIO SEED — what the fetch brought back" } }
+  - { type: action, domain: automation, op: cfg-set, with: { target: at_make, name: 起票したタスク, choice: "進行中にして、出口「起票して着手した」へ進む" } }
+  - { type: action, domain: automation, op: cfg-set, with: { target: loose_fetch, name: 形式, choice: コマンド } }
+  - { type: action, domain: automation, op: cfg-set, with: { target: loose_fetch, name: 見に行く先, text: "echo nothing to see" } }
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: running
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: loose
+      refused: not_ready_automation
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # Where it looks, and that the task it files is taken, answered on each box's panel.
+  - { type: action, domain: automation, op: pick-box, with: { builtin: fetch } }
+  - { type: action, domain: automation, op: answer-choice, with: { builtin: fetch, setting: 形式, value: コマンド } }
+  - { type: action, domain: automation, op: answer-text, with: { builtin: fetch, setting: 見に行く先, value: "echo SCENARIO SEED — what the fetch brought back" } }
+  - { type: action, domain: automation, op: pick-box, with: { builtin: make_task } }
+  - { type: action, domain: automation, op: answer-choice, with: { builtin: make_task, setting: 起票したタスク, value: "進行中にして、出口「起票して着手した」へ進む" } }
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # Fetched, filed, taken and closed: the run is over, and not failed.
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: history
+
+  - type: assert
+    domain: automation
+    op: history-row
+    with:
+      target: run
+      state: completed

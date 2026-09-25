@@ -223,14 +223,18 @@ impl Driver<'_> {
                     Some(key) => ("--builtin", key.to_string(), "built-in"),
                     None => ("--action", self.resolve_key(with, "action")?.to_string(), "library action"),
                 };
-                let args = [
+                let mut args = vec![
                     "automation".into(),
                     "place-add".into(),
                     automation.to_string(),
                     flag.into(),
                     placed.clone(),
-                    "--json".into(),
                 ];
+                // The axis the built-in that splits by one splits by, as the project names it.
+                if let Some(axis) = with.get("axis").and_then(|v| v.as_str()) {
+                    args.extend(["--axis".into(), axis.to_string()]);
+                }
+                args.push("--json".into());
                 let id = self.bound_id(&args, "automation_placement", bind)?;
                 Ok(Outcome::action(format!(
                     "placed {what} {placed} on automation {automation} (placement {id})"
@@ -465,8 +469,16 @@ impl Driver<'_> {
             }
             "start" => {
                 let automation = self.resolve(with)?;
-                let args =
-                    ["automation".into(), "start".into(), automation.to_string(), "--json".into()];
+                let mut args = vec!["automation".into(), "start".into(), automation.to_string()];
+                // What is handed over as it starts: the text, and a file the run wrote.
+                if let Some(text) = with.get("text").and_then(|v| v.as_str()) {
+                    args.extend(["--text".into(), text.to_string()]);
+                }
+                if let Some(file) = with.get("file").and_then(|v| v.as_str()) {
+                    self.in_session(file)?; // refuse a path that reaches out of the run's folder
+                    args.extend(["--file".into(), file.to_string()]);
+                }
+                args.push("--json".into());
                 let id = self.bound_id(&args, "automation_run", bind)?;
                 Ok(Outcome::action(format!("started automation {automation} as run {id}")))
             }
@@ -505,6 +517,12 @@ impl Driver<'_> {
                     pass = pass && got == Some(want);
                     let got = got.map_or("(none reported)".to_string(), |b| b.to_string());
                     said.push_str(&format!(", pause asked `{got}`, expected `{want}`"));
+                }
+                // The text it was handed as it started.
+                if let Some(want) = with.get("handed").and_then(|v| v.as_str()) {
+                    let got = row["handed"].as_str().unwrap_or("(none handed)");
+                    pass = pass && got == want;
+                    said.push_str(&format!(", handed `{got}`, expected `{want}`"));
                 }
                 said.push_str(if pass { ", as expected)" } else { ", MISMATCH)" });
                 Ok(Outcome::assert(pass, said))

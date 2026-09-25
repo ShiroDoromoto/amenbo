@@ -4100,7 +4100,11 @@ const REGISTRY: &[OpSpec] = &[
     // Amenbo's built-ins (`take_task`, …) — one of the two, never both. A built-in is defined in the
     // code and not in the store, so it is named by its key rather than by a binding. Its ways out
     // carry the names the code gives them, and an edge off one is written with that name.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target"], refs: &["target", "action"], strings: &["builtin"], binds: true },
+    //
+    // `axis` is the axis the built-in that splits by one (`split_by_dim`) splits by, named as the
+    // project names it. There is one of that built-in per axis, and its ways out are the axis's values,
+    // so an edge off one is written with a value's name.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target"], refs: &["target", "action"], strings: &["builtin", "axis"], binds: true },
     // Who carries one step (`step`) out at one placement (`target`), and the model where one is named.
     // A step a run could open with nobody chosen is refused at launch, so a premise
     // that stands up a definition to be run chooses for every step of every placement. `agent` is the
@@ -4149,7 +4153,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "wire-add", required: &["from_port", "to_port"], refs: &["target", "to"], strings: &["exit", "from_port", "to_port"], binds: true },
     //
     // Running one. `start` binds the run every other verb here names.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &[], binds: true },
+    //
+    // What a person hands the run as it starts: `text`, and `file`, a file the run
+    // wrote (`repo write-file`) — the way `attach` names one, and on screen the operator's to bring,
+    // of which only the name crosses. Handed nothing, the run starts as it always has.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &["text", "file"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "resume", required: &[], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "stop", required: &[], refs: &["target"], strings: &[], binds: false },
@@ -4157,7 +4165,8 @@ const REGISTRY: &[OpSpec] = &[
     // Asserts. What a run is doing, read the way a person reads it back — from the run itself.
     // `stopped_reason` is asked only of a run that is stopped, and a road that names it is saying
     // which kind of stop this was.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run", required: &["status"], refs: &["target"], strings: &["status", "stopped_reason"], binds: false },
+    // `handed` is the text the run was handed as it started, read back off the run.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run", required: &["status"], refs: &["target"], strings: &["status", "stopped_reason", "handed"], binds: false },
     // The runs one automation has behind it, or the ones that worked one task — the two doors a run
     // is reached by, and the whole of what a listing of runs is (there is no listing of every run).
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "runs-listed", required: &[], refs: &["target", "automation", "task"], strings: &[], binds: false },
@@ -4355,6 +4364,10 @@ const REGISTRY: &[OpSpec] = &[
     // `builtin` names whose it is by its key, and `setting` and `value` are then the words the store
     // keeps them under.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-choice", required: &["setting", "value"], refs: &[], strings: &["setting", "value", "builtin"], binds: false },
+    // The words a `text` setting is answered with, typed into the box under it. It is written when
+    // the box is left, the way the panel writes one. `builtin` names a built-in's setting as for
+    // `answer-choice`, and `setting` is then the word the store keeps it under.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-text", required: &["setting", "value"], refs: &[], strings: &["setting", "value", "builtin"], binds: false },
     // What fills one of a box's inputs, picked from what fits rather than drawn.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-wire", required: &["input", "from"], refs: &[], strings: &["input", "from"], binds: false },
     //

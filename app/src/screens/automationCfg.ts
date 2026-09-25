@@ -10,7 +10,8 @@
 // **What the JSON's own type says is which kind answered it**: an object for a task filter, a number
 // for a number, a string for the other three. Nothing here reads the declaration to decide that — the
 // control that took the answer knew which kind it was taking.
-import type { AutomationCfgDto } from "../bindings/bindings";
+import type { AutomationCfgDto, DimensionDto } from "../bindings/bindings";
+import { axesFor } from "../core/appliesTo";
 
 /** What is pressed on each row of a task filter, by the name of the part it answers. */
 export type TaskFilter = Record<string, readonly string[]>;
@@ -19,9 +20,10 @@ export type TaskFilter = Record<string, readonly string[]>;
  * The rows a task filter is taken on, in the order they are drawn.
  *
  * **Three, and the three a person reaching for one wants first**: whose it is, where it has got to,
- * and whether anything is in the way. Not every spot draws all three (`filterRows`). The parts core's
- * filter accepts are more than these, and the ones not here are not lost — they are the next rows to
- * draw, not a different control.
+ * and whether anything is in the way. Not every spot draws all three (`filterRows`). The project's
+ * classifications follow them, a row per axis (`dimRows`). The parts core's filter accepts are more
+ * than these, and the ones not here are not lost — they are the next rows to draw, not a different
+ * control.
  *
  * `single` is the part core takes one answer for: `ready` is a yes or a no, and pressing the other
  * replaces it rather than asking for both (`amenbo_core::query::Filter::parse`).
@@ -31,6 +33,30 @@ export const FILTER_ROWS: readonly { key: string; single: boolean; values: reado
   { key: "status", single: false, values: ["todo", "in_progress", "done", "blocked", "rejected"] },
   { key: "ready", single: true, values: ["yes", "no"] },
 ];
+
+/** The part a task filter keeps its classifications under — `dim` on the command line. */
+export const DIM_KEY = "dim";
+
+/**
+ * **The classification rows, one per axis the project files a task under** (`AMB-T-5552`), drawn after
+ * `FILTER_ROWS`. They are one part, `dim`, whose values are each `<axis>=<value>` — the words
+ * `--dim` takes — so a value pressed on each of two rows is both, and two on one row is either,
+ * which is how `task list --filter` reads `dim:` tokens (`AMB-D-655`).
+ *
+ * Every value is offered, a closed one too: closing retires a value from what a task is newly filed
+ * under, and a filter naming it still finds the tasks already on it (`AMB-D-829`). An axis with no value
+ * has nothing to press, and is not drawn.
+ */
+export function dimRows(dims: readonly DimensionDto[]): { axis: string; values: string[] }[] {
+  return axesFor("task", dims)
+    .filter((dim) => dim.values.length > 0)
+    .map((dim) => ({ axis: dim.name, values: dim.values.map((value) => value.name) }));
+}
+
+/** The word a classification is pressed as — what `--dim` takes. */
+export function dimToken(axis: string, value: string): string {
+  return `${axis}=${value}`;
+}
 
 /** The built-in that takes a task (`amenbo_core::ops::automation_builtin_take::TAKE_TASK`). */
 const TAKE_TASK = "take_task";

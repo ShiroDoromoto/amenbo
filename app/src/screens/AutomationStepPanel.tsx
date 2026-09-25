@@ -49,6 +49,7 @@ import {
   useAutomationAction,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
+import { getSnapshot } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
@@ -58,6 +59,9 @@ import { automationGraph, ERROR_EXIT } from "./automationLayout";
 import { exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import { Sec, Switch } from "./automationDeclParts";
 import {
+  dimRows,
+  dimToken,
+  DIM_KEY,
   filterRows,
   pressed,
   readFilter,
@@ -155,8 +159,9 @@ function DeclChip({ name, kind, required, tone }: { name: string; kind: string; 
 }
 
 /** One setting: what the action declares, read, and the control its kind takes for this spot's answer. */
-function CfgRow({ placementId, builtin, cfg, run }: {
+function CfgRow({ placementId, projectId, builtin, cfg, run }: {
   placementId: number;
+  projectId: number | null;
   builtin: string | undefined;
   cfg: AutomationCfgDto;
   run: Run;
@@ -167,6 +172,9 @@ function CfgRow({ placementId, builtin, cfg, run }: {
   const [number, setNumber] = useDraft(cfg.kind === "number" ? String(readNumber(cfg.value) ?? "") : "");
   const filter: TaskFilter = readFilter(cfg.value);
   const sort = readSort(cfg.value);
+  const dims = cfg.kind === "taskfilter"
+    ? dimRows(getSnapshot().projects.find((p) => p.id === projectId)?.dimensions ?? [])
+    : [];
   const choices = choicesOf(cfg.options);
   // A built-in's setting and its choices are drawn in the screen's language; what is written is still
   // the store's word, which is what the built-in reads its answer by.
@@ -198,6 +206,26 @@ function CfgRow({ placementId, builtin, cfg, run }: {
                   {filterValueLabel(row.key, value)}
                 </button>
               ))}
+            </div>
+          ))}
+          {dims.map((row) => (
+            <div key={`${DIM_KEY}:${row.axis}`} className="autostep__row">
+              <span className="autostep__rowname">{row.axis}</span>
+              {row.values.map((value) => {
+                const token = dimToken(row.axis, value);
+                const on = (filter[DIM_KEY] ?? []).includes(token);
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`autostep__chip ${on ? "autostep__chip--on" : ""}`}
+                    aria-pressed={on}
+                    onClick={() => answer(writeFilter(pressed(filter, DIM_KEY, token, false), sort))}
+                  >
+                    {value}
+                  </button>
+                );
+              })}
             </div>
           ))}
           {/* Nothing pressed is no answer at all, and an order is an order of something: the list waits
@@ -462,7 +490,14 @@ export function AutomationStepPanel({
         )}
 
         {placement.settings.map((cfg) => (
-          <CfgRow key={cfg.name} placementId={placement.id} builtin={placement.builtin} cfg={cfg} run={run} />
+          <CfgRow
+            key={cfg.name}
+            placementId={placement.id}
+            projectId={automation.projectId}
+            builtin={placement.builtin}
+            cfg={cfg}
+            run={run}
+          />
         ))}
 
         {placement.inputs.length > 0 && (

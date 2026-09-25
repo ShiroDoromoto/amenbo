@@ -386,6 +386,8 @@ pub fn run() {
       // its size is bounded. A logger that cannot start is not a reason to refuse to start the app, so
       // the error is dropped rather than raised: there is nowhere left to report it to anyway.
       let _ = app.handle().plugin(diag::logger().build());
+      // And a panic goes into it, before the abort that can follow leaves nothing behind (`diag`).
+      diag::install_panic_hook();
       // Where git is on this machine, settled now rather than under the first thing that wants it
       // (`AMB-D-774`). `sys::git` keeps its answer for the life of the process, so this is the one call
       // that pays for it — and what it can cost is a login shell (~40ms measured), which is why it is on

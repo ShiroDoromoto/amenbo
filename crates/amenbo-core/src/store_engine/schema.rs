@@ -1145,11 +1145,11 @@ datasets! {
     // way out for "nothing to fix" and another for "something to fix", and which of them the agent
     // took is the whole condition the next box is chosen by. An action declares the ways out a
     // placement of it is left by; a step declares the ways out it ends on inside that action. Every
-    // owner is born with the done way out; `name` NULL is only on a row written before v74 named them.
+    // owner is born with the done way out, and every way out has a name (v76 declared it NOT NULL).
     automation_exit {
         owner_kind: enum_col("step", "action"),
         owner_id: col(KEY_REF),
-        name: col(OPT),
+        name: col(REQ),
         order_key: col(ORDER_KEY),
     }
 

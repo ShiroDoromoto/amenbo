@@ -1852,7 +1852,8 @@ pub enum AutomationCmd {
     PlaceAdd {
         /// automation id
         automation: i64,
-        /// the library action to place
+        /// the library action to place. Each of its steps starts out carried by the default agent —
+        /// the project's, else the one a pane was last opened with — and `agent-set` changes it
         #[arg(long, value_name = "ID", required_unless_present = "builtin", conflicts_with = "builtin")]
         action: Option<i64>,
         /// place one of Amenbo's built-ins instead (`automation builtin-list` names them)

@@ -217,6 +217,27 @@ pub fn startable_ids(config: &crate::config::Config) -> Option<Vec<String>> {
     Some(startable(&here).into_iter().map(|one| one.id.clone()).collect())
 }
 
+/// **Who a step is chosen to be carried out by when its action is placed**, where somebody has
+/// answered already: the project's answer, else the person's — ranks 1 and 2 of [`settle`], in its
+/// order.
+///
+/// **Ranks 3 and 4 are left out on purpose.** The folder's trace is a guess, and a single startable
+/// agent is the machine agreeing with itself; either would put a name on the placement that nobody
+/// gave, and a name written there stays there. Where neither answer holds, the step is left with
+/// nobody chosen, as before.
+///
+/// [`SHELL`] is not an answer here — a step is carried out by an agent, and a bare prompt carries
+/// nothing out — so the person's answer falls through when it is the shell. An answer this machine is
+/// known not to be able to start falls through too, as it does in [`settle`]; where nobody has asked
+/// the machine yet ([`startable_ids`] is `None`) the answer is taken as it stands.
+pub fn step_agent(config: &crate::config::Config, project: i64) -> Option<String> {
+    let startable = startable_ids(config);
+    let holds = |kept: &&str| {
+        *kept != SHELL && startable.as_ref().is_none_or(|ids| ids.iter().any(|id| id == kept))
+    };
+    config.agent_for(project).filter(holds).or(config.last_agent().filter(holds)).map(str::to_string)
+}
+
 /// The answer: the project's if it still holds, else the person's, else the folder's trace, else
 /// nothing — the four ranks the module docs set out, in that order.
 ///
@@ -296,6 +317,35 @@ mod tests {
             !ids.contains(&"claude".to_string()),
             "and the command itself is not among them — nothing names a step by it: {ids:?}",
         );
+    }
+
+    /// A placed step takes the project's answer over the person's, as a pane does, and nothing where
+    /// neither holds — the shell and an agent this machine cannot start are not answers for a step.
+    #[test]
+    fn a_placed_step_takes_the_projects_answer_then_the_persons_and_never_the_shell() {
+        let mut config = crate::config::Config {
+            installed_agents: Some(vec!["claude".to_string(), "codex".to_string()]),
+            last_agent: Some("codex-cli".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(step_agent(&config, 7).as_deref(), Some("codex-cli"), "the person's answer");
+
+        config.remember_agent(7, "claude-code");
+        assert_eq!(step_agent(&config, 7).as_deref(), Some("claude-code"), "the project's outranks it");
+        assert_eq!(step_agent(&config, 8).as_deref(), Some("codex-cli"), "and is this project's alone");
+
+        config.remember_agent(8, "gemini-cli");
+        assert_eq!(
+            step_agent(&config, 8).as_deref(),
+            Some("codex-cli"),
+            "an answer this machine cannot start falls through",
+        );
+
+        config.last_agent = Some(SHELL.to_string());
+        assert_eq!(step_agent(&config, 9), None, "the shell carries no step out");
+
+        config.last_agent = None;
+        assert_eq!(step_agent(&config, 9), None, "nobody has answered");
     }
 
     /// A machine nobody has probed is not a machine with nothing installed (`AMB-D-792`). `None`

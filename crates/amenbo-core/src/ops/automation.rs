@@ -1089,6 +1089,33 @@ pub fn placement_step_set(
     Ok(chosen)
 }
 
+/// **Write the default agent onto every step of a placement that nobody has chosen for yet** — what
+/// placing an action leaves behind, so the steps do not each have to be chosen again before a launch
+/// will take them. `agent` is the answer a pane would open with ([`crate::wake::step_agent`]); `None`
+/// leaves the steps as they are, with nobody chosen.
+///
+/// **What is written belongs to the placement from then on.** It is an ordinary choice, the one
+/// [`placement_step_set`] writes, and a later change to the default does not reach it. The model is
+/// left out, which is the agent's own default. A built-in step is skipped: Amenbo carries it out
+/// itself (`AMB-D-964`).
+pub fn placement_steps_default(
+    tx: &WriteTx<'_>,
+    placement_id: i64,
+    agent: Option<&str>,
+) -> Result<()> {
+    let Some(agent) = agent else { return Ok(()) };
+    let placement = live_placement(tx, placement_id)?;
+    for step in read::automation_action_steps_of(tx.conn(), placement.action_id)? {
+        if step.builtin.is_some()
+            || read::automation_placement_step_for(tx.conn(), placement_id, step.id)?.is_some()
+        {
+            continue;
+        }
+        placement_step_set(tx, placement_id, step.id, agent, None)?;
+    }
+    Ok(())
+}
+
 /// **Take back the choice of who carries one step out at one placement**, leaving nobody chosen there.
 /// A launch that would open the step is then refused until somebody chooses again. Nothing chosen is
 /// nothing to take back, and that is not an error.
@@ -3520,6 +3547,41 @@ mod tests {
         });
     }
 
+    /// **Placing writes the default onto the steps nobody has chosen for**, leaves a choice already
+    /// made alone, writes nothing where there is no default, and passes a built-in by.
+    #[test]
+    fn the_default_agent_is_written_only_where_nobody_has_chosen() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, here) = mk_placed(tx, &automation, "調べる");
+            let step = only_step(tx, &action);
+            let chosen = |p: i64| {
+                read::automation_placement_step_for(tx.conn(), p, step.id)
+                    .unwrap()
+                    .map(|c| (c.agent, c.model))
+            };
+
+            placement_steps_default(tx, here.id, None).expect("no default");
+            assert_eq!(chosen(here.id), None, "no default leaves nobody chosen");
+
+            placement_steps_default(tx, here.id, Some("claude-code")).expect("default");
+            assert_eq!(chosen(here.id), Some(("claude-code".to_string(), None)));
+
+            placement_step_set(tx, here.id, step.id, "codex-cli", Some("o3")).expect("choose");
+            placement_steps_default(tx, here.id, Some("claude-code")).expect("default again");
+            assert_eq!(
+                chosen(here.id),
+                Some(("codex-cli".to_string(), Some("o3".to_string()))),
+                "a choice already made stays",
+            );
+
+            let builtin = crate::ops::automation_builtin::action(tx, "take_task").expect("built-in");
+            let spot = placement_add(tx, automation.id, builtin.id).expect("place it");
+            placement_steps_default(tx, spot.id, Some("claude-code")).expect("a built-in is passed by");
+            assert!(read::automation_placement_step_ids(tx.conn(), spot.id).unwrap().is_empty());
+        });
+    }
+
     /// A choice for a step of some other action would be written and never read, so it is refused.
     #[test]
     fn a_choice_for_a_step_outside_the_placed_action_is_refused() {
@@ -3811,10 +3873,12 @@ mod held_by_a_run {
             // The order of a list, not a definition.
             "action_move",
             "move_to",
-            // Only through ops that ask: `action_add` then `step_add`, `placement_add`, `step_add`.
+            // Only through ops that ask: `action_add` then `step_add`, `placement_add`,
+            // `placement_step_set`, `step_add`.
             "action_from_prompt",
             "placement_insert",
             "placement_insert_new",
+            "placement_steps_default",
             "step_insert",
             // Reads a picture handed to it and writes nothing.
             "lines_back",

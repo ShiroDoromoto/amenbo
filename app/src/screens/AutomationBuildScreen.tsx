@@ -5,9 +5,10 @@
 // right. The two screens are one move a layer apart (`AMB-D-949`), and a reader going between them
 // should not have to learn a second arrangement.
 //
-// **Three places, each named on the screen**: "launch", the band that refuses; "build", the picture of
-// the placements (`./AutomationPicture`); and "placement", what the pressed spot holds
-// (`./AutomationStepPanel`), which is the panel's reading of a press on a box.
+// **Two places, each named on the screen**: "build", the picture of the placements
+// (`./AutomationPicture`); and "placement", what the pressed spot holds (`./AutomationStepPanel`),
+// which is the panel's reading of a press on a box. The press that starts a run is not a place of its
+// own: it stands at the far end of the head (`AMB-T-5523`).
 //
 // **Everything else the screen asks is the panel too.** A `+` on a line, or the press on an empty
 // picture, opens the library in it (`./AutomationLibraryPanel`); "Edit" on the head opens the
@@ -33,20 +34,21 @@
 // **An automation a run is going on is read, not written, for as long as the run goes** (`AMB-D-961`).
 // Core refuses every rewrite of it while a run of it is running or paused, so nothing adds to the
 // picture, the panels open to be read with every write in them held shut, and the runs are named over
-// the picture with the way to each one's pane (`./AutomationHeldBy`). Starting another run is not a
-// rewrite, and stays.
+// the picture with the way to each one's pane and the press that stops it (`./AutomationHeldBy`).
+// Starting another run is not a rewrite, and stays.
 //
 // **What the panel shows is the screen's, not the picture's.** The picture marks the pressed box and
 // the panel draws it, so it is held where both can see it, and the panel hands it back when the spot
 // it was drawn from is taken off.
 //
-// **The launch place refuses, the build place never does.** Building is always half-finished — a step
+// **The start press refuses, the build place never does.** Building is always half-finished — a step
 // with no way onward, an input nobody has wired — and every one of those saves
 // (`amenbo_core::ops::automation`). What is unfinished only matters at the moment somebody is about
-// to be let down by it, which is here: the reasons are listed, and the button is not offered while
-// there is one.
+// to be let down by it, which is at the press: it cannot be pressed while there is a reason, and the
+// reasons are listed under the head only then. Whether it can be started is said once, by the button,
+// rather than again by a badge and a heading beside it.
 //
-// **The press can still be refused, and its refusal is drawn where the list is.** Two things move
+// **The press can still be refused, and its refusal is drawn where the reasons are.** Two things move
 // between the screen being drawn and the button being pressed — the machine, and whether the
 // workspace is standing — and core raises both as a sentence rather than as a reason on the list
 // (`amenbo_core::ops::automation_run::launch`). A run that took no lane is not a refusal: it says so
@@ -61,7 +63,7 @@
 // among things somebody has to go and fix (`amenbo_core::ops::automation_run::launch`). Whether it is
 // standing is handed down from the shell, which is the one place that knows which window holds it.
 import { useState } from "react";
-import { AutomationAboutPanel } from "./AutomationAboutPanel";
+import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPanel";
 import { Panel } from "./AutomationActionBuildScreen";
 import { AutomationLibraryPanel, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
@@ -150,45 +152,33 @@ export function AutomationBuildScreen({
         >
           {t("auto.build.edit")}
         </button>
+        {/* Held down until the check answers: a press offered before it would be a guess the list
+            under it may then contradict. */}
+        <button
+          type="button"
+          className="btn btn--primary"
+          disabled={check?.ready !== true || starting || projectId === null}
+          onClick={() => void start(id, folders.live.map((one) => one.path))}
+        >
+          {t("auto.start")}
+        </button>
       </div>
 
-      <div className="autolaunch">
-        <span className="actbuild__sec">{t("auto.build.launch")}</span>
-
-        {check === null && <div className="auto__empty">{t("app.loading")}</div>}
-
-        {check !== null && (
-          <div className={check.ready ? "autolaunch__box autolaunch__box--ok" : "autolaunch__box autolaunch__box--no"}>
-            <div className="autolaunch__title">
-              {check.ready ? (
-                <span className="auto__ready">{t("auto.ready")}</span>
-              ) : (
-                <span className="auto__notready">{t("auto.notReady")}</span>
-              )}
-              <button
-                type="button"
-                className="btn btn--primary autolaunch__start"
-                disabled={!check.ready || starting || projectId === null}
-                onClick={() => void start(id, folders.live.map((one) => one.path))}
-              >
-                {t("auto.start")}
-              </button>
-            </div>
-            {!check.ready && (
-              <ul className="auto__blocks">
-                {/* Each reason names itself, so the sentence comes from the same place the press's
-                    refusal writes its own from (`core/i18n`'s `errSentence`) — this list and that one
-                    are the same words, and holding them apart is what let them drift. */}
-                {check.blocks.map((block, nth) => (
-                  <li key={`${block.code}-${nth}`}>{errSentence(block)}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
-        {refused !== null && <div className="auto__notready">{refused}</div>}
-      </div>
+      {((check !== null && !check.ready) || refused !== null) && (
+        <div className="autolaunch">
+          {check !== null && !check.ready && (
+            <ul className="autolaunch__blocks">
+              {/* Each reason names itself, so the sentence comes from the same place the press's
+                  refusal writes its own from (`core/i18n`'s `errSentence`) — this list and that one
+                  are the same words, and holding them apart is what let them drift. */}
+              {check.blocks.map((block, nth) => (
+                <li key={`${block.code}-${nth}`}>{errSentence(block)}</li>
+              ))}
+            </ul>
+          )}
+          {refused !== null && <div className="autolaunch__refused">{refused}</div>}
+        </div>
+      )}
 
       {automation !== null && <AutomationHeldBy runs={automation.heldBy} onGoToRun={onGoToRun} />}
 
@@ -229,7 +219,12 @@ export function AutomationBuildScreen({
       )}
 
       {automation !== null && showing?.kind === "about" && (
-        <Panel place={t("auto.build.edit")} title={automation.name} onClose={close} readOnly={held}>
+        <Panel
+          place={t("auto.build.edit")}
+          title={<AutomationNameField automation={automation} readOnly={held} />}
+          onClose={close}
+          readOnly={held}
+        >
           <AutomationAboutPanel automation={automation} onDeleted={onBack} />
         </Panel>
       )}

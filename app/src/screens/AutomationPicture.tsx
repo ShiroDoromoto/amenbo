@@ -23,8 +23,11 @@
 //
 // **It scrolls, and it does nothing else.** No zoom, no folding a stretch away: an automation is
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
-// every time the definition is read again.
-import { useId } from "react";
+// every time the definition is read again. The one move it makes is to bring a box newly picked into
+// sight — the box a run stopped at arrives picked from its pane (`AMB-T-5594`), and a band over the
+// screen can push it out of view. It moves once per pick, so a reader scrolling away from the box
+// that stays picked is not pulled back.
+import { useEffect, useId, useRef } from "react";
 import { layOut, lineWord, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
@@ -159,6 +162,26 @@ export function AutomationPicture({
   const ids = useId();
   const head = (kind: Head) => `url(#${ids}-${kind})`;
   const picture = layOut(graph);
+  const pickedRef = useRef<HTMLButtonElement | null>(null);
+  // A box picked before the definition has loaded has no element yet, so the move waits for the
+  // render that draws it. Whether the box is in sight is asked of an observer rather than read at
+  // once: the panel that opens with the pick changes the screen on the renders after, and the
+  // observer answers once they have landed. A box wholly in sight stays where it is — the reader
+  // pressed it where they could see it — and one that is not is brought to the middle, with the
+  // lines around it.
+  const drawn = picture.nodes.some((node) => node.boxId === selectedBoxId);
+  useEffect(() => {
+    const box = pickedRef.current;
+    if (!drawn || box === null || typeof IntersectionObserver === "undefined") return;
+    const watch = new IntersectionObserver(([seen]) => {
+      watch.disconnect();
+      if (seen !== undefined && seen.intersectionRatio < 1) {
+        box.scrollIntoView?.({ block: "center", inline: "nearest" });
+      }
+    }, { threshold: 1 });
+    watch.observe(box);
+    return () => watch.disconnect();
+  }, [selectedBoxId, drawn]);
   if (picture.nodes.length === 0) return null;
 
   return (
@@ -335,6 +358,7 @@ export function AutomationPicture({
           {picture.nodes.map((node) => (
             <button
               key={node.boxId}
+              ref={node.boxId === selectedBoxId ? pickedRef : undefined}
               type="button"
               className={[
                 "autopic__node",

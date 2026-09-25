@@ -107,6 +107,48 @@ describe("the picture of the steps", () => {
     expect(nodes()[0]!.className).toContain("autopic__node--on");
   });
 
+  /// A run's pane sends the reader here with the box it stopped at picked (`AMB-T-5594`).
+  it("brings a box picked out of sight to the middle, once per pick, and leaves one in sight", async () => {
+    // jsdom lays nothing out, so the observer is stood in by one whose answer the test gives.
+    const watched: { box: Element; answer: (ratio: number) => void }[] = [];
+    const wasObserver = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = class {
+      constructor(private readonly call: IntersectionObserverCallback) {}
+      observe(box: Element) {
+        watched.push({
+          box,
+          answer: (ratio) =>
+            this.call([{ intersectionRatio: ratio } as IntersectionObserverEntry], this as never),
+        });
+      }
+      disconnect() {}
+    } as never;
+    const moved: [Element, ScrollIntoViewOptions | undefined][] = [];
+    const wasScroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element, how?: ScrollIntoViewOptions) {
+      moved.push([this, how]);
+    } as never;
+    try {
+      await render({ graph: null, selectedBoxId: 1, onPickBox: vi.fn() });
+      expect(watched).toHaveLength(0);
+      await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
+      expect(watched.map((one) => one.box)).toEqual([nodes()[0]]);
+      watched[0]!.answer(0.5);
+      expect(moved).toEqual([[nodes()[0], { block: "center", inline: "nearest" }]]);
+      // Drawn again with the same pick — a reader who scrolled away is not pulled back.
+      await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
+      expect(watched).toHaveLength(1);
+      // Picked again, and wholly in sight this time: it stays where it is.
+      await render({ graph: detail(), onPickBox: vi.fn() });
+      await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
+      watched[1]!.answer(1);
+      expect(moved).toHaveLength(1);
+    } finally {
+      globalThis.IntersectionObserver = wasObserver;
+      Element.prototype.scrollIntoView = wasScroll;
+    }
+  });
+
   it("stands a + on every edge, shut while nothing is listening for the press", async () => {
     const one = detail({
       placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] })],

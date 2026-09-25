@@ -954,6 +954,8 @@ export const de: Translation = {
     "auto.pic.first": "＋ Erste Aktion platzieren",
     "auto.lib.here": "Hier",
     "auto.lib.makeNew": "＋ Neu anlegen",
+    "auto.lib.splitAxis": "Achse zum Aufteilen",
+    "auto.lib.splitNoAxis": "Es gibt keine Achse, von der eine Aufgabe nur einen Wert hat, also lässt sich nicht aufteilen. Lege eine in der Verwaltung der Klassifizierungen an",
     "auto.lib.makeNamed": "＋ Neu anlegen mit dem Namen „{name}“",
     "auto.lockMark": "Hier nicht änderbar",
     "auto.lib.make": "Neu anlegen und platzieren",

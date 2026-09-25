@@ -962,6 +962,8 @@ export const es: Translation = {
     "auto.pic.first": "＋ Colocar la primera acción",
     "auto.lib.here": "Aquí",
     "auto.lib.makeNew": "＋ Crear una nueva",
+    "auto.lib.splitAxis": "Eje por el que dividir",
+    "auto.lib.splitNoAxis": "No hay ningún eje en el que una tarea tenga un solo valor, así que no hay por dónde dividir. Crea uno donde se gestionan las clasificaciones",
     "auto.lib.makeNamed": "＋ Crear una nueva llamada «{name}»",
     "auto.lockMark": "No se puede cambiar aquí",
     "auto.lib.make": "Crear una nueva y colocarla",

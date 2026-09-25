@@ -950,6 +950,8 @@ export const hi: Translation = {
     "auto.pic.first": "＋ पहला ऐक्शन रखें",
     "auto.lib.here": "यहाँ",
     "auto.lib.makeNew": "＋ नया बनाएँ",
+    "auto.lib.splitAxis": "बाँटने की धुरी",
+    "auto.lib.splitNoAxis": "ऐसी कोई धुरी नहीं जिसमें कार्य का एक ही मान हो, इसलिए बाँटा नहीं जा सकता। वर्गीकरण प्रबंधन में एक धुरी बनाएँ",
     "auto.lib.makeNamed": "＋ “{name}” नाम से नया बनाएँ",
     "auto.lockMark": "यहाँ नहीं बदला जा सकता",
     "auto.lib.make": "नया बनाकर रखें",

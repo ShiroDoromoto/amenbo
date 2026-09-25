@@ -963,6 +963,8 @@ export const ptBR: Translation = {
     "auto.pic.first": "＋ Colocar a primeira ação",
     "auto.lib.here": "Aqui",
     "auto.lib.makeNew": "＋ Criar uma nova",
+    "auto.lib.splitAxis": "Eixo para dividir",
+    "auto.lib.splitNoAxis": "Não há eixo em que a tarefa tenha um só valor, então não há por onde dividir. Crie um onde as classificações são gerenciadas",
     "auto.lib.makeNamed": "＋ Criar uma nova chamada “{name}”",
     "auto.lockMark": "Não pode ser alterado aqui",
     "auto.lib.make": "Criar uma nova e colocar",

@@ -947,6 +947,8 @@ export const ko: Translation = {
     "auto.pic.first": "＋ 첫 액션 배치",
     "auto.lib.here": "여기",
     "auto.lib.makeNew": "＋ 새로 만들기",
+    "auto.lib.splitAxis": "나눌 축",
+    "auto.lib.splitNoAxis": "값을 하나만 붙일 수 있는 축이 없어서 나눌 수 없다. 분류 관리에서 축을 만든다",
     "auto.lib.makeNamed": "＋ ‘{name}’ 이름으로 새로 만들기",
     "auto.lockMark": "여기서는 고칠 수 없음",
     "auto.lib.make": "새로 만들어 배치",

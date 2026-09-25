@@ -2129,6 +2129,8 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 }
 .autolib__picked .actdecl__rows { margin-block-start: 0; }
 .autolib__note { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: pre-wrap; }
+/* The axis the built-in that splits by one splits by: the word, then the pulldown, on one line. */
+.autolib__axis { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
 /* The row at the foot that makes a new action, under the name typed in the search box: read as the
    list's last row, in the accent, rather than as a button with a sentence over it. */
 .autolib__make {

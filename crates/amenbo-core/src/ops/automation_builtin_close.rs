@@ -24,7 +24,7 @@ use crate::store_engine::{read, WriteTx};
 /// The input the commit's SHA is handed in on.
 pub const COMMIT: &str = "コミット";
 
-pub(super) const CLOSE_TASK: Builtin = Builtin {
+pub(crate) const CLOSE_TASK: Builtin = Builtin {
     key: "close_task",
     name: "タスクを閉じる",
     does: "いま扱っているタスクを完了にする。コミットを受け取ったら、その SHA も記録する",

@@ -252,8 +252,9 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     let other = store.project_add(new_project("隣")).unwrap().id;
     let _ = filed(&mut store, new_task("隣の1件", other));
 
-    // The smallest automation that launches: one action of one step that takes a task and closes the
-    // run, placed once, with every way out of it answered for.
+    // The smallest automation that launches: one action of one step that takes a task, the built-in
+    // that closes it, and the end of the run, with every way out answered for. A run does not end with
+    // the task it took still open (`AMB-D-967`).
     let automation = store
         .automation_add(mine, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
         .unwrap();
@@ -284,7 +285,9 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
         .unwrap();
     store.automation_set_entry(automation.id, Some(placement.id)).unwrap();
     let on = AutomationPictureOwner::Automation;
-    store.automation_edge_add(on, placement.id, Some("取った"), EdgeTarget::Done, None).unwrap();
+    let close = store.automation_builtin_place(automation.id, "close_task").unwrap();
+    store.automation_edge_add(on, placement.id, Some("取った"), EdgeTarget::Go(close.id), None).unwrap();
+    store.automation_edge_add(on, close.id, None, EdgeTarget::Done, None).unwrap();
     store.automation_edge_add(on, placement.id, None, EdgeTarget::Done, None).unwrap();
 
     let startable = ["claude".to_string()];

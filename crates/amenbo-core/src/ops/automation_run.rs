@@ -83,6 +83,13 @@ pub enum Unmet {
     /// Only raised for an agent that has already been asked what it offers, and that answered with a
     /// list ([`ModelsHere`]).
     ModelMissing { step: String, agent: String, model: String },
+    /// A line a run could walk while it holds the task it took, and that goes on to take another one
+    /// (`to` naming where) or ends the run (`to` `None`) without the task being closed or a person being
+    /// called on the way (`AMB-D-967`). The task would be left in progress with no run holding it.
+    ///
+    /// `step` and `exit` name the way out the line leaves by. Lines inside one task — a review sending
+    /// the work back, say — are not asked about: only the ones leading out of it.
+    LeavesTaskOpen { step: String, exit: Option<String>, to: Option<String> },
 }
 
 impl Unmet {
@@ -116,6 +123,19 @@ impl Unmet {
             Unmet::ModelMissing { step, agent, model } => {
                 format!("'{step}' asks for the model '{model}', which '{agent}' here does not offer")
             }
+            Unmet::LeavesTaskOpen { step, exit, to } => {
+                let from = format!("{} of '{step}'", named(exit.as_deref()));
+                match to {
+                    Some(to) => format!(
+                        "{from} goes on to '{to}', which takes another task, with the task taken before \
+                         still open — close it or call a person on the way"
+                    ),
+                    None => format!(
+                        "{from} ends the run with the task it took still open — close it or call a \
+                         person on the way"
+                    ),
+                }
+            }
         }
     }
 }
@@ -138,6 +158,14 @@ impl Unmet {
             Unmet::AgentUnchosen { .. } => ErrorCode::NotReadyAutomationAgentUnchosen,
             Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
             Unmet::ModelMissing { .. } => ErrorCode::NotReadyAutomationModelMissing,
+            Unmet::LeavesTaskOpen { exit: None, to: Some(_), .. } => {
+                ErrorCode::NotReadyAutomationTaskLeftOpenUnnamed
+            }
+            Unmet::LeavesTaskOpen { to: Some(_), .. } => ErrorCode::NotReadyAutomationTaskLeftOpen,
+            Unmet::LeavesTaskOpen { exit: None, to: None, .. } => {
+                ErrorCode::NotReadyAutomationTaskLeftOpenAtEndUnnamed
+            }
+            Unmet::LeavesTaskOpen { to: None, .. } => ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
         }
     }
 
@@ -162,6 +190,17 @@ impl Unmet {
             Unmet::AgentUnchosen { step } => msg.with("step", step),
             Unmet::AgentMissing { step, agent } => msg.with("step", step).with("agent", agent),
             Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
+            Unmet::LeavesTaskOpen { step, exit, to } => {
+                let msg = msg.with("step", step);
+                let msg = match exit {
+                    Some(exit) => msg.with("exit", exit),
+                    None => msg,
+                };
+                match to {
+                    Some(to) => msg.with("to", to),
+                    None => msg,
+                }
+            }
         }
     }
 }
@@ -349,7 +388,110 @@ pub fn check(
             push_new(&mut unmet, found);
         }
     }
+    push_new(&mut unmet, leaves_task_open(conn, &live, &by_id)?);
     Ok(unmet)
+}
+
+/// **The lines that leave a taken task open** (`AMB-D-967`), walked from every way out that hands a
+/// task on.
+///
+/// While a run holds the task it took, the walk goes on through the placements it reaches and stops at
+/// the two that settle the task: the built-in that closes it, and a line that stops the run and calls a
+/// person (the error way out with nothing after it is one — it halts). Reaching the run's end, or a
+/// placement that takes a task, before either is the line refused. A placement already walked is not
+/// walked again, so a line back within the task — a review sending the work back — is followed once
+/// and asked nothing.
+///
+/// **The picture inside an action is opened too.** A line in there can end the run on its own, and
+/// that is the same task left open. What takes a task and what closes one are asked of the action as a
+/// whole: taking is declared on the action's ways out, and the built-in that closes stands on a
+/// placement of its own (`AMB-D-969`).
+fn leaves_task_open(
+    conn: &Connection,
+    live: &BTreeSet<i64>,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+) -> Result<Vec<Unmet>> {
+    let mut unmet = Vec::new();
+    for &start in live {
+        let Some(placement) = by_id.get(&start) else { continue };
+        let mut lines = Vec::new();
+        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+            if outs_of(conn, &exit)?.iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+                lines.push((*placement, exit));
+            }
+        }
+        let mut walked = BTreeSet::new();
+        while let Some((from, exit)) = lines.pop() {
+            let Some(edge) =
+                read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, from.id, exit.id)?
+            else {
+                // Nothing drawn: the error way out halts, and any other is refused as an open way out.
+                continue;
+            };
+            let to = match edge.ends {
+                AutomationEnds::Halt | AutomationEnds::Exit => continue,
+                AutomationEnds::Done => {
+                    push_new(
+                        &mut unmet,
+                        vec![Unmet::LeavesTaskOpen {
+                            step: action_name(conn, from.action_id)?,
+                            exit: exit.name.clone(),
+                            to: None,
+                        }],
+                    );
+                    continue;
+                }
+                AutomationEnds::Go => match edge.to_id.and_then(|id| by_id.get(&id)) {
+                    Some(to) => *to,
+                    None => continue,
+                },
+            };
+            if closes_the_task(conn, to.action_id)? {
+                continue;
+            }
+            if takes_a_task(conn, to.action_id)? {
+                push_new(
+                    &mut unmet,
+                    vec![Unmet::LeavesTaskOpen {
+                        step: action_name(conn, from.action_id)?,
+                        exit: exit.name.clone(),
+                        to: Some(action_name(conn, to.action_id)?),
+                    }],
+                );
+                continue;
+            }
+            if !walked.insert(to.id) {
+                continue;
+            }
+            push_new(&mut unmet, ends_inside(conn, to.action_id)?);
+            for exit in read::automation_exits_of(conn, AutomationOwner::Action, to.action_id)? {
+                lines.push((to, exit));
+            }
+        }
+    }
+    Ok(unmet)
+}
+
+/// Whether a placement of this action closes the task the run holds — the built-in that does
+/// (`AMB-D-964`).
+fn closes_the_task(conn: &Connection, action_id: i64) -> Result<bool> {
+    Ok(read::automation_action(conn, action_id)?.and_then(|a| a.builtin).as_deref()
+        == Some(crate::ops::automation_builtin_close::CLOSE_TASK.key))
+}
+
+/// The lines inside an action that end the run, each named by the step and the way out it leaves by.
+fn ends_inside(conn: &Connection, action_id: i64) -> Result<Vec<Unmet>> {
+    let mut found = Vec::new();
+    for step in steps_opened_by(conn, action_id)? {
+        for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
+            let edge =
+                read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step.id, exit.id)?;
+            if edge.is_some_and(|e| e.ends == AutomationEnds::Done) {
+                found.push(Unmet::LeavesTaskOpen { step: step.name.clone(), exit: exit.name, to: None });
+            }
+        }
+    }
+    Ok(found)
 }
 
 /// **The way out a line is keyed to**, where that row is still one the given owner declares — `None`
@@ -636,6 +778,28 @@ pub fn settings_of(conn: &Connection, placement: &AutomationPlacement) -> Result
 /// The run is born `running`: nothing caps how many may be under way at once, so a launch never waits
 /// (`AMB-D-947`). `started_at` is the moment of the launch itself.
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
+    launch_asking(tx, automation_id, by, |_| true)
+}
+
+/// [`launch`], with the check's lines that leave a taken task open let through — for a test of how a
+/// run walks, opens, reports or stops, where the picture's shape is not the subject, and for a test of
+/// the safety net a run carries for a line the check missed (`AMB-D-967`).
+#[cfg(test)]
+pub(crate) fn launch_leaving_the_task_open(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+) -> Result<AutomationRun> {
+    launch_asking(tx, automation_id, by, |unmet| !matches!(unmet, Unmet::LeavesTaskOpen { .. }))
+}
+
+/// [`launch`], refusing only over what `counts` says counts.
+fn launch_asking(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+    counts: impl Fn(&Unmet) -> bool,
+) -> Result<AutomationRun> {
     let automation: Automation = read::automation(tx.conn(), automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
     if automation.archived {
@@ -648,7 +812,8 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
             .with("automation", &automation.name),
         ));
     }
-    let unmet = check(tx.conn(), automation_id, by.startable, by.models)?;
+    let unmet: Vec<Unmet> =
+        check(tx.conn(), automation_id, by.startable, by.models)?.into_iter().filter(|u| counts(u)).collect();
     if !unmet.is_empty() {
         return Err(not_ready(&automation.name, &unmet));
     }
@@ -1082,7 +1247,7 @@ mod tests {
     use super::*;
     use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewStep};
-    use crate::ops::test_support::{exit_id, mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
+    use crate::ops::test_support::{exit_id, mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
 
     fn mk_automation(tx: &WriteTx<'_>, name: &str) -> Automation {
         let project = mk_project(tx, "amenbo");
@@ -1090,22 +1255,14 @@ mod tests {
             .expect("add automation")
     }
 
-    /// What every test here starts from: one automation, one action of one step that takes a task and
-    /// closes the run, placed once, and every way out of it decided. It launches as it stands, so each
-    /// test can take one thing back off and watch the check find it.
+    /// What every test here starts from: one automation, one action of one step that takes a task, the
+    /// built-in that closes it, and the end of the run — every way out decided. It launches as it stands,
+    /// so each test can take one thing back off and watch the check find it.
     fn launchable(tx: &WriteTx<'_>) -> (Automation, AutomationAction, AutomationPlacement) {
         let automation = mk_automation(tx, "1件やりきる");
         let (action, placement) = mk_placed(tx, &automation, "取る", "take one", "claude");
         takes_task_on(tx, &action, None);
-        automation::edge_add(
-            tx,
-            AutomationPictureOwner::Automation,
-            placement.id,
-            None,
-            EdgeTarget::Done,
-            None,
-        )
-        .expect("edge");
+        crate::ops::test_support::mk_closed_after(tx, &automation, placement.id, None);
         // Nothing is written for the error way out: it is carried from birth and halts unless
         // somebody says otherwise, which is what `an_error_way_out_nobody_answered_for_is_not_open`
         // holds this to.
@@ -1224,6 +1381,102 @@ mod tests {
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::EntryTakesNoTask { step: "取る".into() }],
             );
+        });
+    }
+
+    /// A task is taken by one placement and worked by the next; what follows the work is each test's to draw.
+    fn taken_then_worked(tx: &WriteTx<'_>) -> (Automation, AutomationPlacement, AutomationAction, AutomationPlacement) {
+        let automation = mk_automation(tx, "閉じ忘れ");
+        let (take, taking) = mk_placed(tx, &automation, "取る", "take one", "claude");
+        takes_task_on(tx, &take, None);
+        let (work, working) = mk_placed(tx, &automation, "直す", "fix it", "claude");
+        let on = AutomationPictureOwner::Automation;
+        automation::edge_add(tx, on, taking.id, None, EdgeTarget::Go(working.id), None).expect("take → work");
+        let automation = automation::set_entry(tx, automation.id, Some(taking.id)).expect("entry");
+        (automation, taking, work, working)
+    }
+
+    fn checked(tx: &WriteTx<'_>, automation: &Automation) -> Vec<Unmet> {
+        check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check")
+    }
+
+    /// **A line that ends the run with the task still open is refused** (`AMB-D-967`), named by the way
+    /// out it leaves by.
+    #[test]
+    fn a_line_that_ends_the_run_with_the_task_open_is_refused() {
+        with_tx(|tx| {
+            let (automation, _, _, working) = taken_then_worked(tx);
+            automation::edge_add(tx, AutomationPictureOwner::Automation, working.id, None, EdgeTarget::Done, None)
+                .expect("work → end");
+            assert_eq!(
+                checked(tx, &automation),
+                vec![Unmet::LeavesTaskOpen { step: "直す".into(), exit: None, to: None }],
+            );
+        });
+    }
+
+    /// **A line that goes on to take another task with this one open is refused**, naming where it goes.
+    #[test]
+    fn a_line_that_takes_another_task_with_this_one_open_is_refused() {
+        with_tx(|tx| {
+            let (automation, taking, _, working) = taken_then_worked(tx);
+            automation::edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                working.id,
+                None,
+                EdgeTarget::Go(taking.id),
+                None,
+            )
+            .expect("work → take again");
+            assert_eq!(
+                checked(tx, &automation),
+                vec![Unmet::LeavesTaskOpen { step: "直す".into(), exit: None, to: Some("取る".into()) }],
+            );
+        });
+    }
+
+    /// **Closing the task, or calling a person, settles it** — and from the close the run may go back
+    /// for the next one.
+    #[test]
+    fn closing_the_task_or_calling_a_person_settles_it() {
+        with_tx(|tx| {
+            let (automation, taking, work, working) = taken_then_worked(tx);
+            let stuck = automation::exit_add(tx, AutomationOwner::Action, work.id, Some("人に聞く"))
+                .expect("exit");
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, working.id, stuck.name.as_deref(), EdgeTarget::Halt, None)
+                .expect("call a person");
+            let close = crate::ops::test_support::mk_closed_after(tx, &automation, working.id, None);
+            // The close goes back to take the next one rather than on to the end.
+            let closed = read::automation_edge_for_exit(
+                tx.conn(),
+                on,
+                close.id,
+                exit_id(tx, AutomationOwner::Action, close.action_id, None),
+            )
+            .expect("read")
+            .expect("the close's line");
+            automation::edge_delete(tx, closed.id).expect("unhook the end");
+            automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(taking.id), None).expect("close → take");
+            assert_eq!(checked(tx, &automation), vec![]);
+        });
+    }
+
+    /// **A line back within one task is not asked about** — a review sending the work back is walked
+    /// once, and what counts is that every way out of the task closes it.
+    #[test]
+    fn a_line_back_within_the_task_is_not_asked_about() {
+        with_tx(|tx| {
+            let (automation, _, _, working) = taken_then_worked(tx);
+            let (review, reviewing) = mk_placed(tx, &automation, "見る", "review it", "claude");
+            mk_exit(tx, &review, "戻す");
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, working.id, None, EdgeTarget::Go(reviewing.id), None).expect("work → review");
+            automation::edge_add(tx, on, reviewing.id, Some("戻す"), EdgeTarget::Go(working.id), None)
+                .expect("review → back to work");
+            crate::ops::test_support::mk_closed_after(tx, &automation, reviewing.id, None);
+            assert_eq!(checked(tx, &automation), vec![]);
         });
     }
 
@@ -1606,13 +1859,19 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             let step = only_step(tx, &action);
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
-            let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
-            assert_eq!(defs.len(), 1);
-            assert_eq!(defs[0].name, "取る");
-            assert_eq!(defs[0].prompt.as_deref(), Some("take one"));
-            assert_eq!(defs[0].placement_id, Some(placement.id));
-            assert_eq!(defs[0].step_id, Some(step.id));
-            let exits: Vec<RunDefExit> = serde_json::from_str(&defs[0].exits).expect("exits");
+            let copy_of_it = |tx: &WriteTx<'_>| {
+                read::automation_run_defs_of(tx.conn(), run.id)
+                    .expect("defs")
+                    .into_iter()
+                    .find(|d| d.placement_id == Some(placement.id))
+                    .expect("the placement's copy")
+            };
+            assert_eq!(read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(), 2, "and the close's");
+            let copy = copy_of_it(tx);
+            assert_eq!(copy.name, "取る");
+            assert_eq!(copy.prompt.as_deref(), Some("take one"));
+            assert_eq!(copy.step_id, Some(step.id));
+            let exits: Vec<RunDefExit> = serde_json::from_str(&copy.exits).expect("exits");
             assert_eq!(exits.len(), 2, "the unnamed way out and the error one");
             assert_eq!(exits[0].outs[0].kind, AutomationPortKind::TaskTake);
 
@@ -1624,9 +1883,9 @@ mod tests {
                 .expect("edit the definition once the run is over");
             automation::step_update(tx, step.id, None, Some("take another"), None, None, None, None, None)
             .expect("rewrite the prompt once the run is over");
-            let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
-            assert_eq!(defs[0].name, "取る", "the copy is what the run reads from here on");
-            assert_eq!(defs[0].prompt.as_deref(), Some("take one"));
+            let copy = copy_of_it(tx);
+            assert_eq!(copy.name, "取る", "the copy is what the run reads from here on");
+            assert_eq!(copy.prompt.as_deref(), Some("take one"));
         });
     }
 
@@ -1667,14 +1926,19 @@ mod tests {
             // report — the refusal that guards a step saying it is done with nothing to show.
             let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
             crate::ops::automation_report::take(tx, opening.run_step.id, task).expect("take");
-            // The picture ends here, and a run does not complete with its task in progress
-            // (`AMB-D-967`), so the step closes it before it reports.
-            crate::ops::task::set_status(tx, task, crate::model::TaskStatus::Done).expect("close");
 
-            // And once it has reported, the answer is read off the way out it took — here the unnamed
-            // one, which closes the run, so there is nothing waiting and the run is no longer running.
+            // Once it has reported, the answer is read off the way out it took — here the unnamed one,
+            // which goes on to the built-in that closes the task.
             crate::ops::automation_report::done(tx, opening.run_step.id, None, "did it")
                 .expect("report");
+            let Waiting::Step(close) = next_def(tx.conn(), run.id).expect("next") else {
+                panic!("the close is what it waits for next")
+            };
+            assert_eq!(close.builtin.as_deref(), Some("close_task"));
+
+            // Carried out on the spot, it closes the task and the run with it: nothing is waiting, and
+            // the run is no longer running.
+            crate::ops::automation_step::open(tx, run.id, close.id, None).expect("close");
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
             assert_eq!(
                 read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,
@@ -1748,7 +2012,9 @@ mod tests {
     /// a report that left through the way out leading on. The run is left `running` with nothing
     /// open, which is the one state [`Waiting`]'s three answers are told apart in.
     fn standing_between(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
-        let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+        // Its second spot ends the run with the task open; where the run goes is what is asked here.
+        let run = crate::ops::automation_run::launch_leaving_the_task_open(tx, automation.id, &here(&claude()))
+            .expect("launch");
         let Waiting::Step(entry) = next_def(tx.conn(), run.id).expect("next") else {
             panic!("the entry is what a fresh run waits for")
         };

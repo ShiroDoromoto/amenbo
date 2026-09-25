@@ -600,9 +600,14 @@ fn a_launchable(cli: &Cli) -> (String, String, String) {
     );
     cli.json(&["automation", "port-add", "--exit", &took, "--name", "task", "--kind", "task_take", "--required", "--json"]);
     cli.json(&["automation", "entry-set", &a, "--placement", &placement, "--json"]);
-    // Every way out of a reachable spot is answered for, which is the whole of what the launch check
-    // asks about the picture.
-    cli.json(&["automation", "edge-add", "--from", &format!("{placement}:took one"), "--done", "--json"]);
+    // Every way out of a reachable spot is answered for, and the task taken is closed before the run
+    // ends (`AMB-D-967`) — the two things the launch check asks about the picture.
+    let close = id_of(
+        &cli.json(&["automation", "place-add", &a, "--builtin", "close_task", "--json"]),
+        "automation_placement",
+    );
+    cli.json(&["automation", "edge-add", "--from", &format!("{placement}:took one"), "--to", &close, "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{close}:"), "--done", "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{placement}:"), "--done", "--json"]);
     (a, placement, step)
 }

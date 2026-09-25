@@ -60,10 +60,12 @@ given:
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: codex-cli } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_review, step: read, agent: codex-cli } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_review } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_review } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_review, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:

@@ -1625,6 +1625,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   // drawn for an agent that has said what it offers, so "does not offer" is an answer and not a
   // silence (`app/src-tauri/src/agent_models.rs`).
   not_ready_automation_model_missing: "{step}: its agent here does not offer the model {model}",
+  not_ready_automation_task_left_open: "{step}: {exit} goes on to {to}, which takes another task, with this one still open",
+  not_ready_automation_task_left_open_unnamed: "{step}: it goes on to {to}, which takes another task, with this one still open",
+  not_ready_automation_task_left_open_at_end: "{step}: {exit} ends the run with the task still open",
+  not_ready_automation_task_left_open_at_end_unnamed: "{step}: it ends the run with the task still open",
   store_busy: "The store is in use right now. Try again in a moment.",
   // The store itself giving way — a disk that would not answer, a database that could not be read.
   // What the engine said is a line in the diagnostic log, not a sentence for a reader: it names none

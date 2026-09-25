@@ -40,10 +40,12 @@ given:
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_after, step: wait, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_after } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_after } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_after, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 # A run started from the terminal opens no step — the host that opens them is the app's — so holding

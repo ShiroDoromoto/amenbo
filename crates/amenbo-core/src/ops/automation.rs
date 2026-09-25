@@ -3517,7 +3517,7 @@ mod tests {
 mod held_by_a_run {
     use super::*;
     use crate::model::{AutomationRun, AutomationRunStatus};
-    use crate::ops::automation_run::{launch, nothing_asked, Launcher};
+    use crate::ops::automation_run::{launch_leaving_the_task_open as launch, nothing_asked, Launcher};
     use crate::ops::automation_stop::{self, Ending};
     use crate::ops::test_support::{mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
 

@@ -486,7 +486,7 @@ mod tests {
     use crate::model::{Automation, AutomationPortKind, ERROR_EXIT};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_report::{done, Next};
-    use crate::ops::automation_run::{launch, Launcher};
+    use crate::ops::automation_run::{launch_leaving_the_task_open as launch, Launcher};
     use crate::ops::automation_step::{open, Opened, Opening};
     use crate::ops::test_support::{
         exit_id, mk_exit, mk_out, mk_placed, mk_project, mk_task_in, way_out, with_tx,

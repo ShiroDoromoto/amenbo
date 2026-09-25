@@ -485,6 +485,10 @@ pub enum InAStep {
     /// handing it to a person are the run's, and a step that did them itself would close a task with
     /// no commit on it, or hand it to another run that takes it straight back.
     MovesTheTask,
+    /// Refused: one of Amenbo's built-ins does it (`AMB-D-964`) — cutting the task's worktree, folding
+    /// it away, and recording the commit the task is closed on. A step that did it itself would leave
+    /// the run holding a worktree it never cut, or a task closed on a commit it never recorded.
+    ABuiltInDoesIt,
     /// Refused: it belongs outside a run. A step that could start a run would let a run make runs,
     /// and one that rewrote a definition or a setting would change what comes next where the person
     /// who started the run is not looking.
@@ -551,16 +555,15 @@ impl Cmd {
             | Cmd::DecisionCommentEdit
             | Cmd::DecisionCommentAttach
             // What the prompts a run is carried out on still type for themselves. An entry step may
-            // file the task it then takes; the worktree and the commit are Amenbo's to handle once the
-            // built-in steps do it (`AMB-D-964`), and until then a step that could not reach them
-            // could not do its work. `mcp` is a host's, and every call through it is this table's
-            // again, since it re-runs this executable.
+            // file the task it then takes. `mcp` is a host's, and every call through it is this
+            // table's again, since it re-runs this executable.
             | Cmd::TaskAdd
             | Cmd::TaskFinishCreating
-            | Cmd::TaskCommitAdd
-            | Cmd::WorktreeStart
-            | Cmd::WorktreeFinish
             | Cmd::Mcp => InAStep::Reaches,
+
+            Cmd::TaskCommitAdd
+            | Cmd::WorktreeStart
+            | Cmd::WorktreeFinish => InAStep::ABuiltInDoesIt,
 
             Cmd::TaskStatus
             | Cmd::TaskDone
@@ -2522,7 +2525,9 @@ pub fn build_step() -> Value {
         .map(|name| command_spec(name).unwrap_or_else(|| json!({ "name": name })))
         .collect();
     let reaches: Vec<&str> = on(InAStep::Reaches).collect();
-    let moves = on(InAStep::MovesTheTask).map(|name| format!("`{name}`")).collect::<Vec<String>>().join(", ");
+    let quoted = |side: InAStep| on(side).map(|name| format!("`{name}`")).collect::<Vec<String>>().join(", ");
+    let moves = quoted(InAStep::MovesTheTask);
+    let built_in = quoted(InAStep::ABuiltInDoesIt);
     json!({
         "mode": "step",
         "version": VERSION,
@@ -2531,7 +2536,7 @@ pub fn build_step() -> Value {
         "commands": hand_back,
         "reaches": {
             "commands": reaches,
-            "note": format!("The rest of what this terminal is for: reading where the step stands, writing on a timeline, and what the text you were started on has you do. Use no other command here. The ones that move a task's status or who it is assigned to ({moves}) are the run's: Amenbo moves the task's status, and if a person's judgement is needed, leave by that way out. `{cli} agent --command <name>` prints any command's full spec."),
+            "note": format!("The rest of what this terminal is for: reading where the step stands, writing on a timeline, and what the text you were started on has you do. Use no other command here. The ones that move a task's status or who it is assigned to ({moves}) are the run's: Amenbo moves the task's status, and if a person's judgement is needed, leave by that way out. The worktree and the commit ({built_in}) are Amenbo's built-ins': hand on what they need — the commit's SHA, say — and leave the rest to them. `{cli} agent --command <name>` prints any command's full spec."),
         },
     })
 }
@@ -2726,7 +2731,7 @@ mod tests {
 
     /// Discipline: the entry inside a step stays short, and teaches what the table says a step may
     /// type — the three that hand the work back in full, the rest by name, and none that moves the
-    /// task.
+    /// task or does what a built-in does.
     #[test]
     fn the_entry_inside_a_step_is_short_and_names_registered_commands() {
         let entry = build_step();
@@ -2740,9 +2745,11 @@ mod tests {
         for name in ["task show", "comment add", "automation run-show"] {
             assert!(reaches.contains(&name), "{name} is left with a step: {reaches:?}");
         }
-        for name in ["task status", "task done", "task assign", "automation start"] {
+        for name in ["task status", "task done", "task assign", "automation start", "worktree start", "task commit-add"] {
             assert!(!reaches.contains(&name), "{name} is not a step's to type: {reaches:?}");
         }
+        let note = entry["reaches"]["note"].as_str().expect("note");
+        assert!(note.contains("`worktree finish`"), "the built-ins' commands are named as theirs: {note}");
         let handed_back: Vec<&str> =
             entry["commands"].as_array().expect("commands").iter().filter_map(|c| c["name"].as_str()).collect();
         assert_eq!(

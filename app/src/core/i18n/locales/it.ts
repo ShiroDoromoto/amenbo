@@ -957,6 +957,8 @@ export const it: Translation = {
     "auto.pic.first": "＋ Colloca la prima azione",
     "auto.lib.here": "Qui",
     "auto.lib.makeNew": "＋ Creane una nuova",
+    "auto.lib.splitAxis": "Asse per cui dividere",
+    "auto.lib.splitNoAxis": "Non c’è un asse con un solo valore per attività, quindi non si può dividere. Creane uno dove si gestiscono le classificazioni",
     "auto.lib.makeNamed": "＋ Creane una nuova chiamata «{name}»",
     "auto.lockMark": "Non modificabile qui",
     "auto.lib.make": "Creane una nuova e collocala",

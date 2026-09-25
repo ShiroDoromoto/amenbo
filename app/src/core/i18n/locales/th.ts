@@ -946,6 +946,8 @@ export const th: Translation = {
     "auto.pic.first": "＋ วางแอ็กชันแรก",
     "auto.lib.here": "ตรงนี้",
     "auto.lib.makeNew": "＋ สร้างใหม่",
+    "auto.lib.splitAxis": "แกนที่ใช้แบ่ง",
+    "auto.lib.splitNoAxis": "ไม่มีแกนที่งานมีค่าได้ค่าเดียว จึงแบ่งไม่ได้ สร้างแกนได้ที่การจัดการการจัดประเภท",
     "auto.lib.makeNamed": "＋ สร้างใหม่ชื่อ “{name}”",
     "auto.lockMark": "แก้ที่นี่ไม่ได้",
     "auto.lib.make": "สร้างใหม่แล้ววาง",

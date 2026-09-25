@@ -951,6 +951,8 @@ export const ja: Translation = {
     "auto.pic.first": "＋ 最初のアクションを配置する",
     "auto.lib.here": "ここ",
     "auto.lib.makeNew": "＋ 新しく作る",
+    "auto.lib.splitAxis": "分ける軸",
+    "auto.lib.splitNoAxis": "値を1つしか付けられない軸が無いので、分けられない。分類の管理で軸を作る",
     "auto.lib.makeNamed": "＋ 「{name}」という名前で新しく作る",
     "auto.lockMark": "ここでは直せない",
     "auto.lib.make": "アクションを作って配置",

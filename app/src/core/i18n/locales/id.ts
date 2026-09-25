@@ -946,6 +946,8 @@ export const id: Translation = {
     "auto.pic.first": "＋ Tempatkan aksi pertama",
     "auto.lib.here": "Di sini",
     "auto.lib.makeNew": "＋ Buat baru",
+    "auto.lib.splitAxis": "Sumbu pembagi",
+    "auto.lib.splitNoAxis": "Tidak ada sumbu yang hanya memberi satu nilai per tugas, jadi tidak bisa dibagi. Buat sumbu di pengelolaan klasifikasi",
     "auto.lib.makeNamed": "＋ Buat baru dengan nama “{name}”",
     "auto.lockMark": "Tidak bisa diubah di sini",
     "auto.lib.make": "Buat baru dan tempatkan",

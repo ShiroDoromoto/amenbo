@@ -947,6 +947,8 @@ export const zhHant: Translation = {
     "auto.pic.first": "＋ 放置第一個動作",
     "auto.lib.here": "這裡",
     "auto.lib.makeNew": "＋ 新建",
+    "auto.lib.splitAxis": "用於劃分的軸",
+    "auto.lib.splitNoAxis": "沒有任務只能有一個值的軸，所以無法劃分。請在分類管理中建立一個",
     "auto.lib.makeNamed": "＋ 以「{name}」為名新建",
     "auto.lockMark": "無法在此修改",
     "auto.lib.make": "新建並放置",

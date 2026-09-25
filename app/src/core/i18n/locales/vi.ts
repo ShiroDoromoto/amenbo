@@ -946,6 +946,8 @@ export const vi: Translation = {
     "auto.pic.first": "＋ Đặt hành động đầu tiên",
     "auto.lib.here": "Ở đây",
     "auto.lib.makeNew": "＋ Tạo mới",
+    "auto.lib.splitAxis": "Trục để chia",
+    "auto.lib.splitNoAxis": "Không có trục nào mà việc chỉ mang một giá trị, nên không chia được. Hãy tạo trục ở phần quản lý phân loại",
     "auto.lib.makeNamed": "＋ Tạo mới với tên “{name}”",
     "auto.lockMark": "Không sửa được ở đây",
     "auto.lib.make": "Tạo mới và đặt",

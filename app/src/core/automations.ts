@@ -164,19 +164,31 @@ export function useAutomationBuiltins(): AutomationBuiltinDto[] {
 /**
  * **Put a built-in on the picture**, standing on its own — `placeAutomationAction` for a built-in,
  * named by its key. Its library action is written the first time any automation places it.
+ *
+ * `axis` is the axis the built-in that splits by one splits by, and `null` for any other: that one has
+ * an action per axis (`AMB-D-973`).
  */
-export async function placeAutomationBuiltin(automationId: number, key: string): Promise<void> {
+export async function placeAutomationBuiltin(
+  automationId: number,
+  key: string,
+  axis: number | null = null,
+): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_builtin_place", { automationId, key });
+  return invokeAck("automation_builtin_place", { automationId, key, axis });
 }
 
 /**
  * **Put a built-in in on a line** — `insertAutomationAction` for a built-in: the way out that was
  * pressed comes to point at the new spot, and the new spot goes on to where that way out used to.
+ * `axis` as for `placeAutomationBuiltin`.
  */
-export async function insertAutomationBuiltin(edgeId: number, key: string): Promise<void> {
+export async function insertAutomationBuiltin(
+  edgeId: number,
+  key: string,
+  axis: number | null = null,
+): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_builtin_insert", { edgeId, key });
+  return invokeAck("automation_builtin_insert", { edgeId, key, axis });
 }
 
 /**

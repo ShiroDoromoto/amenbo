@@ -962,6 +962,8 @@ export const ru: Translation = {
     "auto.pic.first": "＋ Разместить первое действие",
     "auto.lib.here": "Сюда",
     "auto.lib.makeNew": "＋ Создать новое",
+    "auto.lib.splitAxis": "Ось для разделения",
+    "auto.lib.splitNoAxis": "Нет оси, где у задачи одно значение, поэтому делить не по чему. Создайте её в управлении классификациями",
     "auto.lib.makeNamed": "＋ Создать новое с именем «{name}»",
     "auto.lockMark": "Здесь не изменить",
     "auto.lib.make": "Создать и разместить",

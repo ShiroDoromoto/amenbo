@@ -957,6 +957,8 @@ export const fr: Translation = {
     "auto.pic.first": "＋ Placer la première action",
     "auto.lib.here": "Ici",
     "auto.lib.makeNew": "＋ En créer une",
+    "auto.lib.splitAxis": "Axe de répartition",
+    "auto.lib.splitNoAxis": "Aucun axe ne porte une seule valeur par tâche : il n’y a rien par quoi répartir. Créez-en un là où se gèrent les classifications",
     "auto.lib.makeNamed": "＋ En créer une nommée « {name} »",
     "auto.lockMark": "Non modifiable ici",
     "auto.lib.make": "En créer une et la placer",

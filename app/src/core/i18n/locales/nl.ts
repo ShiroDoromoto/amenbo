@@ -945,6 +945,8 @@ export const nl: Translation = {
     "auto.pic.first": "＋ Eerste actie plaatsen",
     "auto.lib.here": "Hier",
     "auto.lib.makeNew": "＋ Nieuwe maken",
+    "auto.lib.splitAxis": "As om op te splitsen",
+    "auto.lib.splitNoAxis": "Er is geen as waarop een taak één waarde heeft, dus er valt niets te splitsen. Maak er een aan bij het beheer van classificaties",
     "auto.lib.makeNamed": "＋ Nieuwe maken met de naam ‘{name}’",
     "auto.lockMark": "Hier niet te wijzigen",
     "auto.lib.make": "Nieuwe maken en plaatsen",

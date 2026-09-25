@@ -945,6 +945,8 @@ export const tr: Translation = {
     "auto.pic.first": "＋ İlk eylemi yerleştir",
     "auto.lib.here": "Buraya",
     "auto.lib.makeNew": "＋ Yenisini oluştur",
+    "auto.lib.splitAxis": "Bölünecek eksen",
+    "auto.lib.splitNoAxis": "Görevin tek değer taşıdığı bir eksen yok, bu yüzden bölünecek bir şey yok. Sınıflandırma yönetiminde bir eksen oluşturun",
     "auto.lib.makeNamed": "＋ “{name}” adıyla yenisini oluştur",
     "auto.lockMark": "Burada değiştirilemez",
     "auto.lib.make": "Yenisini yap ve yerleştir",

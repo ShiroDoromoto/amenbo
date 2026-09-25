@@ -962,6 +962,8 @@ export const uk: Translation = {
     "auto.pic.first": "＋ Розмістити першу дію",
     "auto.lib.here": "Сюди",
     "auto.lib.makeNew": "＋ Створити нову",
+    "auto.lib.splitAxis": "Вісь для поділу",
+    "auto.lib.splitNoAxis": "Немає осі, де завдання має одне значення, тож ділити нема за чим. Створіть її в керуванні класифікаціями",
     "auto.lib.makeNamed": "＋ Створити нову з назвою «{name}»",
     "auto.lockMark": "Тут не змінити",
     "auto.lib.make": "Створити й розмістити",

@@ -28,6 +28,11 @@
 // the row that makes a new action, under the name typed — the reader who searched and did not find
 // it goes on from where they are, without a sentence telling them they may.
 //
+// **The built-in that splits by an axis asks which axis before it is placed** (`AMB-D-973`): there is
+// one of it per axis, and its ways out are that axis's values. Only an axis a task holds one value of is
+// offered, since core refuses any other. The ways out it opens with are that axis's values, then the
+// one for a task carrying none.
+//
 // **On a line, the pressed way out comes to point at the new placement** and the new placement goes
 // on to where that way out used to (`insertAutomationAction`). On an empty picture the placement
 // stands on its own (`placeAutomationAction`).
@@ -48,11 +53,49 @@ import { ERROR_EXIT } from "./automationLayout";
 import { kindLabel } from "./automationPortKinds";
 import { ExitMark, ReachChip, usedCount, WhereMark, type WhereTo } from "./automationParts";
 import { builtinShown } from "../core/builtinWords";
+import { getSnapshot } from "../core/snapshot";
 import type {
   AutomationActionCardDto,
   AutomationBuiltinDto,
   AutomationPortDto,
+  DimensionDto,
 } from "../bindings/bindings";
+
+/** The built-in that splits by an axis (`amenbo_core::ops::automation_builtin_split::SPLIT_BY_DIM`). */
+const SPLIT_BY_DIM = "split_by_dim";
+
+/**
+ * **Which axis the built-in that splits by one splits by** — a pulldown of the axes a task holds one
+ * value of, or a line saying there is none to split by.
+ */
+function SplitAxis({
+  axes,
+  axis,
+  onAxis,
+}: {
+  axes: readonly DimensionDto[];
+  axis: number | null;
+  onAxis: (axis: number | null) => void;
+}) {
+  if (axes.length === 0) return <div className="autolib__note">{t("auto.lib.splitNoAxis")}</div>;
+  return (
+    <label className="autolib__axis">
+      <span>{t("auto.lib.splitAxis")}</span>
+      <select
+        aria-label={t("auto.lib.splitAxis")}
+        value={axis ?? ""}
+        onChange={(e) => onAxis(e.target.value === "" ? null : Number(e.target.value))}
+      >
+        <option value="">—</option>
+        {axes.map((dim) => (
+          <option key={dim.id} value={dim.id}>
+            {dim.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 /** Where the picked action goes: onto a line, or onto a picture with no line yet. */
 export type PlaceTarget = { edgeId: number } | { automationId: number };
@@ -143,6 +186,12 @@ export function AutomationLibraryPanel({
   // An action's id, or a built-in's key: the two lists never share a row.
   const [picked, setPicked] = useState<number | string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  // The axis picked for the built-in that splits by one.
+  const [axis, setAxis] = useState<number | null>(null);
+  const axes = (getSnapshot().projects.find((p) => p.id === projectId)?.dimensions ?? []).filter(
+    (dim) => dim.cardinality === "single" && dim.appliesTo !== "decision",
+  );
+  const splitAxis = axes.find((dim) => dim.id === axis);
 
   // Core refuses an action another project's library holds, and a line that went away underneath;
   // the sentence it writes is what the panel draws, over the list the reader picked from.
@@ -156,10 +205,11 @@ export function AutomationLibraryPanel({
   };
   const placeBuiltin = (key: string) => {
     setRefused(null);
+    const on = key === SPLIT_BY_DIM ? (splitAxis?.id ?? null) : null;
     const write =
       "edgeId" in target
-        ? insertAutomationBuiltin(target.edgeId, key)
-        : placeAutomationBuiltin(target.automationId, key);
+        ? insertAutomationBuiltin(target.edgeId, key, on)
+        : placeAutomationBuiltin(target.automationId, key, on);
     void write.then(onPlaced, (e: unknown) => setRefused(errText(e)));
   };
 
@@ -209,9 +259,24 @@ export function AutomationLibraryPanel({
         {picked === one.key && (
           <div className="autolib__picked">
             <div className="autolib__note">{one.does}</div>
-            <Declared inputs={one.inputs} exits={one.exits} />
+            {one.key === SPLIT_BY_DIM && (
+              <SplitAxis axes={axes} axis={splitAxis?.id ?? null} onAxis={setAxis} />
+            )}
+            <Declared
+              inputs={one.inputs}
+              exits={
+                one.key === SPLIT_BY_DIM && splitAxis !== undefined
+                  ? [...splitAxis.values.map((value) => ({ name: value.name, outputs: [] })), ...one.exits]
+                  : one.exits
+              }
+            />
             <div>
-              <button type="button" className="btn btn--primary" onClick={() => placeBuiltin(one.key)}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={one.key === SPLIT_BY_DIM && splitAxis === undefined}
+                onClick={() => placeBuiltin(one.key)}
+              >
                 {t("auto.pic.placeDo")}
               </button>
             </div>

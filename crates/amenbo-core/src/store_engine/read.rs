@@ -6330,6 +6330,14 @@ pub fn automation_action_builtin(
         .next())
 }
 
+/// **Every library action written for a built-in**, oldest first — one for most, one per axis for the
+/// built-in that splits by one (`AMB-D-972`).
+pub fn automation_actions_builtin(conn: &Connection, key: &str) -> Result<Vec<crate::model::AutomationAction>> {
+    const A: col::automation_action::Cols = col::automation_action::ALL;
+    let pred = Pred::eq(A.builtin, key);
+    automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_action_row)
+}
+
 /// **The library action a built-in that splits by an axis keeps for that axis** (`AMB-D-972`), or
 /// `None` where nobody has placed one on it yet. There is one per axis, since its ways out are the
 /// axis's values; the oldest is taken if a race ever wrote two.

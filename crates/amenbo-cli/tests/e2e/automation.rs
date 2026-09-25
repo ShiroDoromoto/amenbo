@@ -672,10 +672,14 @@ fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
     assert_eq!(chosen["automation_placement_step"]["model"].as_str(), Some("gpt-5"));
     let (shown, _) = cli.run(&["automation", "show", &a]);
     assert!(shown.contains("carried out by codex (gpt-5)"), "{shown}");
+    // The built-in that closes the task is Amenbo's own, so nobody is left unchosen for it
+    // (`AMB-D-964`).
+    assert!(shown.contains("carried out by Amenbo (built-in close_task)"), "{shown}");
+    assert!(!shown.contains("nobody chosen"), "{shown}");
 
     cli.json(&["automation", "agent-set", &placement, "--step", &step, "--clear", "--json"]);
     let (shown, _) = cli.run(&["automation", "show", &a]);
-    assert!(shown.contains("nobody chosen to carry it out"), "{shown}");
+    assert_eq!(shown.matches("nobody chosen to carry it out").count(), 1, "only the agent's step: {shown}");
     let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
     assert_ne!(code, 0, "{err}");
     assert!(err.contains("nobody is chosen to carry out"), "{err}");

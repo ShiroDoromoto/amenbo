@@ -121,7 +121,10 @@ impl Unmet {
                 format!("the action '{action}' placed on it has no step to start at")
             }
             Unmet::EntryTakesNoTask { step, .. } => {
-                format!("the entry '{step}' takes no task — declare a task_take output on one of its ways out")
+                format!(
+                    "the entry '{step}' takes no task — declare a task_take output on one of its ways out, \
+                     or start at a built-in that works before a task and go on from it to a step that takes one"
+                )
             }
             Unmet::OpenExit { step, exit, .. } => {
                 format!("nothing is set to happen after {} of '{step}'", named(exit))
@@ -368,7 +371,7 @@ pub fn check(
 
     let mut unmet = Vec::new();
     if let Some(entry) = by_id.get(&entry_id) {
-        if !takes_a_task(conn, entry)? {
+        if !takes_a_task(conn, entry)? && !takes_one_first(conn, entry, &by_id)? {
             unmet.push(Unmet::EntryTakesNoTask {
                 step: action_name(conn, entry.action_id)?,
                 builtin: action_builtin(conn, entry.action_id)?,
@@ -818,6 +821,53 @@ fn takes_a_task(conn: &Connection, placement: &AutomationPlacement) -> Result<bo
         }
     }
     Ok(false)
+}
+
+/// **Whether a run started here holds a task before any step works on one** — for an entry that takes
+/// none itself (`AMB-D-970`). It has to be a built-in that works before a task
+/// ([`crate::ops::automation_builtin::works_before_a_task`]), and every line out of it has to end the
+/// run or reach a placement that takes a task, passing only through more of those built-ins on the way.
+/// A line nothing is drawn after is not asked here: that is [`Unmet::OpenExit`], said on its own.
+fn takes_one_first(
+    conn: &Connection,
+    entry: &AutomationPlacement,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+) -> Result<bool> {
+    let before_a_task = |placement: &AutomationPlacement| -> Result<bool> {
+        Ok(action_builtin(conn, placement.action_id)?
+            .is_some_and(|key| crate::ops::automation_builtin::works_before_a_task(&key)))
+    };
+    if !before_a_task(entry)? {
+        return Ok(false);
+    }
+    let mut walked = BTreeSet::new();
+    let mut todo = vec![entry.id];
+    while let Some(id) = todo.pop() {
+        if !walked.insert(id) {
+            continue;
+        }
+        let Some(placement) = by_id.get(&id) else { continue };
+        let never = never_taken(conn, placement)?;
+        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+            if Some(exit.name.as_str()) == never {
+                continue;
+            }
+            let Some(edge) =
+                read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, id, exit.id)?
+            else {
+                continue;
+            };
+            let Some(to) = edge.to_id.and_then(|to| by_id.get(&to)) else { continue };
+            if takes_a_task(conn, to)? {
+                continue;
+            }
+            if !before_a_task(to)? {
+                return Ok(false);
+            }
+            todo.push(to.id);
+        }
+    }
+    Ok(true)
 }
 
 /// What one way out hands on. An output belongs to the way out that produced it, so this is the only

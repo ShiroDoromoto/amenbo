@@ -342,6 +342,17 @@ pub fn all() -> &'static [Builtin] {
     BUILTINS
 }
 
+/// **The built-ins a run can start at before it holds a task** (`AMB-D-970`): the one that fetches,
+/// whose work needs no task and whose way on is to file one. The launch lets one stand as the entry where
+/// every line out of it reaches a step that takes a task before any other step
+/// ([`super::automation_run::check`]).
+const BEFORE_A_TASK: &[&str] = &[FETCH.key];
+
+/// Whether the built-in of this key works before the run holds a task ([`BEFORE_A_TASK`]).
+pub fn works_before_a_task(key: &str) -> bool {
+    BEFORE_A_TASK.contains(&key)
+}
+
 /// The built-in of this key, or `None` where this build carries none.
 pub fn find(key: &str) -> Option<&'static Builtin> {
     BUILTINS.iter().find(|b| b.key == key)

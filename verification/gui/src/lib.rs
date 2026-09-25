@@ -6826,10 +6826,12 @@ fn step_field(field: &str) -> Result<&'static str, String> {
         "interactive" => "the box saying the step may stop and wait for a person",
         "report" => "the box saying the step's report also lands on the task",
         "history" => "the box saying the step is handed the run's story so far",
-        "task_context" => "the box saying the step is handed the task the run is on (its notes, linked decisions and comments)",
+        "task_notes" => "the box saying the step is handed the task's notes",
+        "task_decisions" => "the box saying the step is handed the decisions linked to the task",
+        "task_comments" => "the box saying the step is handed the comments on the task",
         other => {
             return Err(format!(
-                "`field` does not know `{other}` — it is name / task / prompt / agent / model / folder / interactive / report / history / task_context"
+                "`field` does not know `{other}` — it is name / task / prompt / agent / model / folder / interactive / report / history / task_notes / task_decisions / task_comments"
             ))
         }
     })
@@ -6837,7 +6839,7 @@ fn step_field(field: &str) -> Result<&'static str, String> {
 
 /// The rows that are a box to tick. Whether one is ticked is a yes or a no (`on`), and no words
 /// stand in it, so a road naming a `value` for one is refused rather than told to type into a box.
-const STEP_BOXES: [&str; 4] = ["interactive", "report", "history", "task_context"];
+const STEP_BOXES: [&str; 6] = ["interactive", "report", "history", "task_notes", "task_decisions", "task_comments"];
 
 /// A row that is a box to tick, for a road that names `on`.
 fn step_box(field: &str) -> Result<&'static str, String> {

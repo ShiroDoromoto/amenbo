@@ -1,49 +1,50 @@
 # A step is handed two things besides its prompt: the task the run is on — its notes, the decisions
-# linked to it and its comments — and the run's story so far. Both are on unless somebody turns them
-# off, because a step that reads no task is rare and a step that works without knowing
-# its task is the worse mistake. Turning one off is what a step that needs neither is for: merging,
-# say, where a task with long decisions and comments costs tokens and gives the step nothing. So the
-# road is the switch, both ways, on a step already built — and a build that dropped the switch, or
-# wrote one of the two when the reader turned the other, would leave every step paying for both.
+# linked to it and its comments, each on a switch of its own — and the run's story so far. All are on
+# unless somebody turns them off, because a step that reads no task is rare and a step that works
+# without knowing its task is the worse mistake. Turning some off is what a step that needs less is
+# for: merging, say, where a task with long decisions and comments costs tokens and gives the step
+# nothing, while its notes still say what was built. So the road is the switches, both ways, on a
+# step already built — and a build that dropped a switch, or wrote one of them when the reader turned
+# another, would leave every step paying for all of them.
 id: leave-out-of-a-step-the-task-and-the-story-so-far
-title: A step can be built without the task the run is on or the run's story so far, and either turned back on
+title: A step can be built without parts of the task the run is on or the run's story so far, and each turned back on
 description: >
   Build one library action of three steps: one handed everything, as every step is unless somebody
-  says otherwise, one built without the task the run is on, and one built without the run's story
-  so far. Read each back and find each of the two switches where it was set, apart from the other.
-  Then turn the task back on for the step built without it, and the story off for the step handed
-  everything, and read both again — a rewrite that moved the other switch too, or moved nothing,
-  reads as a mismatch.
+  says otherwise, one built without the decisions and the comments of the task the run is on but
+  with its notes, and one built without the run's story so far. Read each back and find each switch
+  where it was set, apart from the others. Then turn the decisions back on for the step built without
+  them, and the story off for the step handed everything, and read both again — a rewrite that moved
+  another switch too, or moved nothing, reads as a mismatch.
 given:
   - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — build and merge }, as: act }
   - { type: action, domain: automation, op: step-add, with: { target: act, name: build, prompt: build the task }, as: build }
-  - { type: action, domain: automation, op: step-add, with: { target: act, name: merge, prompt: merge what was built, task_context: false }, as: merge }
+  - { type: action, domain: automation, op: step-add, with: { target: act, name: merge, prompt: merge what was built, task_decisions: false, task_comments: false }, as: merge }
   - { type: action, domain: automation, op: step-add, with: { target: act, name: tidy, prompt: tidy up after the merge, history: false }, as: tidy }
   - { type: action, domain: automation, op: action-entry, with: { target: act, step: build } }
 
 steps_cli:
-  # The one nobody turned anything off on is handed both.
+  # The one nobody turned anything off on is handed everything.
   - type: assert
     domain: automation
     op: step-read
-    with: { target: act, name: build, task_context: true, history: true }
+    with: { target: act, name: build, task_notes: true, task_decisions: true, task_comments: true, history: true }
 
-  # Each of the other two lost the one it was built without, and kept the other.
+  # Each of the other two lost what it was built without, and kept the rest.
   - type: assert
     domain: automation
     op: step-read
-    with: { target: act, name: merge, task_context: false, history: true }
+    with: { target: act, name: merge, task_notes: true, task_decisions: false, task_comments: false, history: true }
   - type: assert
     domain: automation
     op: step-read
-    with: { target: act, name: tidy, task_context: true, history: false }
+    with: { target: act, name: tidy, task_notes: true, task_decisions: true, task_comments: true, history: false }
 
-  # Back on for the merge, and off for the build — each rewrite naming one switch and leaving the
-  # other where it was.
+  # The decisions back on for the merge, and the story off for the build — each rewrite naming one
+  # switch and leaving the others where they were.
   - type: action
     domain: automation
     op: step-update
-    with: { target: merge, task_context: true }
+    with: { target: merge, task_decisions: true }
   - type: action
     domain: automation
     op: step-update
@@ -52,11 +53,11 @@ steps_cli:
   - type: assert
     domain: automation
     op: step-read
-    with: { target: act, name: merge, task_context: true, history: true }
+    with: { target: act, name: merge, task_notes: true, task_decisions: true, task_comments: false, history: true }
   - type: assert
     domain: automation
     op: step-read
-    with: { target: act, name: build, task_context: true, history: false }
+    with: { target: act, name: build, task_notes: true, task_decisions: true, task_comments: true, history: false }
 
 steps_gui:
   - type: action
@@ -71,7 +72,8 @@ steps_gui:
     with:
       target: act
 
-  # The step built without the task: its box for the task clear, and the one for the story ticked.
+  # The step built without the decisions and the comments: those two boxes clear, and the ones for
+  # the notes and the story ticked.
   - type: action
     domain: automation
     op: pick-box
@@ -82,7 +84,21 @@ steps_gui:
     domain: automation
     op: panel-shows
     with:
-      field: task_context
+      field: task_notes
+      on: true
+
+  - type: assert
+    domain: automation
+    op: panel-shows
+    with:
+      field: task_decisions
+      on: false
+
+  - type: assert
+    domain: automation
+    op: panel-shows
+    with:
+      field: task_comments
       on: false
 
   - type: assert
@@ -96,7 +112,7 @@ steps_gui:
     domain: automation
     op: panel-set
     with:
-      field: task_context
+      field: task_decisions
       on: true
 
   # The step handed everything, and the story taken off it.
@@ -110,7 +126,7 @@ steps_gui:
     domain: automation
     op: panel-shows
     with:
-      field: task_context
+      field: task_decisions
       on: true
 
   - type: action
@@ -144,8 +160,15 @@ steps_gui:
     domain: automation
     op: panel-shows
     with:
-      field: task_context
+      field: task_decisions
       on: true
+
+  - type: assert
+    domain: automation
+    op: panel-shows
+    with:
+      field: task_comments
+      on: false
 
   - type: action
     domain: automation
@@ -164,5 +187,5 @@ steps_gui:
     domain: automation
     op: panel-shows
     with:
-      field: task_context
+      field: task_notes
       on: true

@@ -3409,7 +3409,9 @@ pub struct AutomationPlacementDto {
     pub(crate) work_dir_ref: Option<String>,
     pub(crate) report_to_task: bool,
     pub(crate) show_history: bool,
-    pub(crate) show_task: bool,
+    pub(crate) show_notes: bool,
+    pub(crate) show_decisions: bool,
+    pub(crate) show_comments: bool,
     pub(crate) exits: Vec<AutomationExitDto>,
     /// What this spot takes in, in declaration order.
     pub(crate) inputs: Vec<AutomationPortDto>,
@@ -3505,7 +3507,9 @@ pub struct AutomationStepDto {
     pub(crate) work_dir_ref: Option<String>,
     pub(crate) report_to_task: bool,
     pub(crate) show_history: bool,
-    pub(crate) show_task: bool,
+    pub(crate) show_notes: bool,
+    pub(crate) show_decisions: bool,
+    pub(crate) show_comments: bool,
     pub(crate) exits: Vec<AutomationExitDto>,
     /// What this step takes in, in declaration order.
     pub(crate) inputs: Vec<AutomationPortDto>,

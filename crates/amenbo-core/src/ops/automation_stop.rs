@@ -849,7 +849,7 @@ mod tests {
                 .expect("read")
                 .expect("the action");
             let step = action.entry_step_id.expect("an entry step");
-            automation::step_update(tx, step, None, None, None, None, Some(true), None, None)
+            automation::step_update(tx, step, None, None, None, None, Some(true), None, None, None, None)
                 .expect("report to the task");
             let run = a_run(tx, &p.automation);
             let first = opened(tx, &run, &p.first);

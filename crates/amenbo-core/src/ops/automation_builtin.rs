@@ -735,7 +735,7 @@ mod tests {
             refused(automation::action_update(tx, written.id, Some("mine"), None).map(drop), "rename the action");
             refused(automation::action_delete(tx, written.id), "delete the action");
             refused(
-                automation::step_update(tx, step.id, None, Some("do more"), None, None, None, None, None).map(drop),
+                automation::step_update(tx, step.id, None, Some("do more"), None, None, None, None, None, None, None).map(drop),
                 "rewrite the step",
             );
             refused(

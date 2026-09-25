@@ -450,7 +450,9 @@ export async function editAutomationStep(
     workDir?: string | null;
     reportToTask?: boolean;
     history?: boolean;
-    taskContext?: boolean;
+    taskNotes?: boolean;
+    taskDecisions?: boolean;
+    taskComments?: boolean;
   },
 ): Promise<void> {
   if (!inTauri()) return;
@@ -463,7 +465,9 @@ export async function editAutomationStep(
     clearWorkDir: patch.workDir === null,
     reportToTask: patch.reportToTask ?? null,
     history: patch.history ?? null,
-    taskContext: patch.taskContext ?? null,
+    taskNotes: patch.taskNotes ?? null,
+    taskDecisions: patch.taskDecisions ?? null,
+    taskComments: patch.taskComments ?? null,
   });
 }
 

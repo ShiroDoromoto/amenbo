@@ -27,7 +27,9 @@ function step(
     interactive: false,
     reportToTask: false,
     showHistory: true,
-    showTask: true,
+    showNotes: true,
+    showDecisions: true,
+    showComments: true,
     // What core writes at birth: the unnamed way out, and the error one nobody can delete.
     exits: [
       { id: nextId++, outputs: [] },

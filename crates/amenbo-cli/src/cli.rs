@@ -1957,10 +1957,18 @@ pub enum AutomationCmd {
         /// do not hand this step the run's story so far (it is handed on unless this is passed)
         #[arg(long)]
         no_history: bool,
-        /// do not hand this step the task the run is on — its notes, the decisions linked to it and its
-        /// comments (it is handed on unless this is passed)
+        /// do not hand this step the notes of the task the run is on (they are handed on unless this is
+        /// passed)
         #[arg(long)]
-        no_task_context: bool,
+        no_task_notes: bool,
+        /// do not hand this step the decisions linked to the task the run is on (they are handed on
+        /// unless this is passed)
+        #[arg(long)]
+        no_task_decisions: bool,
+        /// do not hand this step the comments on the task the run is on (they are handed on unless this
+        /// is passed)
+        #[arg(long)]
+        no_task_comments: bool,
     },
     /// Change a step (only the given fields change)
     StepUpdate {
@@ -1986,10 +1994,16 @@ pub enum AutomationCmd {
         /// whether this step is handed the run's story so far (`--history true|false`)
         #[arg(long)]
         history: Option<bool>,
-        /// whether this step is handed the task the run is on — its notes, the decisions linked to it
-        /// and its comments (`--task-context true|false`)
+        /// whether this step is handed the notes of the task the run is on (`--task-notes true|false`)
         #[arg(long)]
-        task_context: Option<bool>,
+        task_notes: Option<bool>,
+        /// whether this step is handed the decisions linked to the task the run is on
+        /// (`--task-decisions true|false`)
+        #[arg(long)]
+        task_decisions: Option<bool>,
+        /// whether this step is handed the comments on the task the run is on (`--task-comments true|false`)
+        #[arg(long)]
+        task_comments: Option<bool>,
     },
     /// Delete a step with its declarations and every edge and wire naming it — confirms unless -y
     StepRm {

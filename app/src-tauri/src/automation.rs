@@ -385,7 +385,9 @@ pub fn automation_step_edit(
     clear_work_dir: Option<bool>,
     report_to_task: Option<bool>,
     history: Option<bool>,
-    task_context: Option<bool>,
+    task_notes: Option<bool>,
+    task_decisions: Option<bool>,
+    task_comments: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
     let work_dir = match (clear_work_dir, work_dir.as_deref()) {
         (Some(true), _) => Some(None),
@@ -401,7 +403,9 @@ pub fn automation_step_edit(
             work_dir,
             report_to_task,
             history,
-            task_context,
+            task_notes,
+            task_decisions,
+            task_comments,
         )?;
         Ok(())
     })?;
@@ -439,7 +443,9 @@ pub fn automation_step_add(
         work_dir_ref: None,
         report_to_task: false,
         show_history: true,
-        show_task: true,
+        show_notes: true,
+        show_decisions: true,
+        show_comments: true,
     };
     with_store_mut(|store| {
         let first = read::automation_action_step_ids(store.read_model().conn(), action_id)?.is_empty();
@@ -566,7 +572,9 @@ pub fn automation_action_step_insert(
         work_dir_ref: None,
         report_to_task: false,
         show_history: true,
-        show_task: true,
+        show_notes: true,
+        show_decisions: true,
+        show_comments: true,
     };
     with_store_mut(|store| {
         store.automation_step_insert(edge_id, new, &exits, &ports)?;
@@ -1995,7 +2003,9 @@ fn step_dto(view: automation_view::StepView) -> AutomationStepDto {
         work_dir_ref: step.work_dir_ref,
         report_to_task: step.report_to_task,
         show_history: step.show_history,
-        show_task: step.show_task,
+        show_notes: step.show_notes,
+        show_decisions: step.show_decisions,
+        show_comments: step.show_comments,
         exits: view.exits.into_iter().map(exit_dto).collect(),
         inputs: view.inputs.into_iter().map(port_dto).collect(),
     }
@@ -2069,7 +2079,9 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         work_dir_ref: opens.as_ref().and_then(|s| s.work_dir_ref.clone()),
         report_to_task: opens.as_ref().is_some_and(|s| s.report_to_task),
         show_history: opens.as_ref().map_or(true, |s| s.show_history),
-        show_task: opens.as_ref().map_or(true, |s| s.show_task),
+        show_notes: opens.as_ref().map_or(true, |s| s.show_notes),
+        show_decisions: opens.as_ref().map_or(true, |s| s.show_decisions),
+        show_comments: opens.as_ref().map_or(true, |s| s.show_comments),
         exits: view.exits.into_iter().map(exit_dto).collect(),
         inputs: view.inputs.into_iter().map(port_dto).collect(),
         settings: view.settings.into_iter().map(cfg_dto).collect(),

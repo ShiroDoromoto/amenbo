@@ -51,6 +51,12 @@ use crate::time::Timestamp;
 /// They are a type rather than ten sentences because both doors need them: the refusal writes them out
 /// as English, and the build screen draws them as a list beside the step each belongs to.
 ///
+/// **`placement` is the placement on the automation's picture the reason is about** — the one standing
+/// where the gap is, or holding the action whose picture has it. A name alone cannot say which: the same
+/// action placed twice is two boxes with one name, and a screen that opens the box a reason is about has
+/// to know which of the two. So the same gap in an action placed twice is two reasons, one per placement.
+/// The two reasons about the automation as a whole ([`Unmet::NoSteps`], [`Unmet::NoEntry`]) name none.
+///
 /// **`builtin` is the key of the built-in a name came from** (`AMB-D-964`), and `to_builtin` the same
 /// for `to`. A built-in's step, ways out, inputs and settings are named in the store's Japanese, so a
 /// screen drawn in another language turns them into its own — and only a name carrying a key is
@@ -64,30 +70,30 @@ pub enum Unmet {
     NoEntry,
     /// An action standing on the picture has no step to open — none written yet, or none named as its
     /// entry. A run reaching that spot would have no terminal to put up.
-    ActionEmpty { action: String },
+    ActionEmpty { action: String, placement: i64 },
     /// The entry declares no `task_take` output, so no step of the run would ever come to hold a task
     /// and every step after it would be about nothing.
-    EntryTakesNoTask { step: String, builtin: Option<String> },
+    EntryTakesNoTask { step: String, builtin: Option<String>, placement: i64 },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
-    OpenExit { step: String, exit: Option<String>, builtin: Option<String> },
+    OpenExit { step: String, exit: Option<String>, builtin: Option<String>, placement: i64 },
     /// A required input with nothing reaching it — no wire at all, or none whose far end is both
     /// declared and reachable from the entry.
-    UnwiredInput { step: String, port: String, builtin: Option<String> },
+    UnwiredInput { step: String, port: String, builtin: Option<String>, placement: i64 },
     /// A required setting nobody answered while building.
-    UnansweredCfg { step: String, cfg: String, builtin: Option<String> },
+    UnansweredCfg { step: String, cfg: String, builtin: Option<String>, placement: i64 },
     /// A step nobody has been chosen to carry out where its action is placed (`AMB-D-960`). A pane
     /// opened on it would have no agent to start.
-    AgentUnchosen { step: String },
+    AgentUnchosen { step: String, placement: i64 },
     /// A step asking for an agent this machine cannot start. A pane opened on it would come up on
     /// `command not found`.
-    AgentMissing { step: String, agent: String },
+    AgentMissing { step: String, agent: String, placement: i64 },
     /// A step naming a model its agent does not offer here. The pane would come up, and the agent would
     /// turn the model down inside it — which is a refusal the reader only meets once the run is away.
     ///
     /// Only raised for an agent that has already been asked what it offers, and that answered with a
     /// list ([`ModelsHere`]).
-    ModelMissing { step: String, agent: String, model: String },
+    ModelMissing { step: String, agent: String, model: String, placement: i64 },
     /// A line a run could walk while it holds the task it took, and that goes on to take another one
     /// (`to` naming where) or ends the run (`to` `None`) without the task being closed or a person being
     /// called on the way (`AMB-D-967`). The task would be left in progress with no run holding it.
@@ -100,6 +106,7 @@ pub enum Unmet {
         to: Option<String>,
         builtin: Option<String>,
         to_builtin: Option<String>,
+        placement: i64,
     },
 }
 
@@ -110,7 +117,7 @@ impl Unmet {
         match self {
             Unmet::NoSteps => "no action is placed on it".to_string(),
             Unmet::NoEntry => "no placement is named as the entry".to_string(),
-            Unmet::ActionEmpty { action } => {
+            Unmet::ActionEmpty { action, .. } => {
                 format!("the action '{action}' placed on it has no step to start at")
             }
             Unmet::EntryTakesNoTask { step, .. } => {
@@ -125,13 +132,13 @@ impl Unmet {
             Unmet::UnansweredCfg { step, cfg, .. } => {
                 format!("the required setting '{cfg}' of '{step}' is unanswered")
             }
-            Unmet::AgentUnchosen { step } => {
+            Unmet::AgentUnchosen { step, .. } => {
                 format!("nobody is chosen to carry out '{step}' where its action is placed")
             }
-            Unmet::AgentMissing { step, agent } => {
+            Unmet::AgentMissing { step, agent, .. } => {
                 format!("'{step}' asks for '{agent}', which this machine cannot start")
             }
-            Unmet::ModelMissing { step, agent, model } => {
+            Unmet::ModelMissing { step, agent, model, .. } => {
                 format!("'{step}' asks for the model '{model}', which '{agent}' here does not offer")
             }
             Unmet::LeavesTaskOpen { step, exit, to, .. } => {
@@ -192,9 +199,13 @@ impl Unmet {
             Some(key) => msg.with("builtin", key),
             None => msg,
         };
+        let msg = match self.placement() {
+            Some(id) => msg.with("placement", id),
+            None => msg,
+        };
         match self {
             Unmet::NoSteps | Unmet::NoEntry => msg,
-            Unmet::ActionEmpty { action } => msg.with("action", action),
+            Unmet::ActionEmpty { action, .. } => msg.with("action", action),
             Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
             Unmet::OpenExit { step, exit, .. } => match exit {
                 Some(exit) => msg.with("step", step).with("exit", exit),
@@ -202,8 +213,8 @@ impl Unmet {
             },
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
             Unmet::UnansweredCfg { step, cfg, .. } => msg.with("step", step).with("cfg", cfg),
-            Unmet::AgentUnchosen { step } => msg.with("step", step),
-            Unmet::AgentMissing { step, agent } => msg.with("step", step).with("agent", agent),
+            Unmet::AgentUnchosen { step, .. } => msg.with("step", step),
+            Unmet::AgentMissing { step, agent, .. } => msg.with("step", step).with("agent", agent),
             Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
             Unmet::LeavesTaskOpen { step, exit, to, to_builtin, .. } => {
                 let msg = msg.with("step", step);
@@ -220,6 +231,22 @@ impl Unmet {
                     None => msg,
                 }
             }
+        }
+    }
+
+    /// The placement this reason is about, or `None` for one about the automation as a whole.
+    pub fn placement(&self) -> Option<i64> {
+        match self {
+            Unmet::NoSteps | Unmet::NoEntry => None,
+            Unmet::ActionEmpty { placement, .. }
+            | Unmet::EntryTakesNoTask { placement, .. }
+            | Unmet::OpenExit { placement, .. }
+            | Unmet::UnwiredInput { placement, .. }
+            | Unmet::UnansweredCfg { placement, .. }
+            | Unmet::AgentUnchosen { placement, .. }
+            | Unmet::AgentMissing { placement, .. }
+            | Unmet::ModelMissing { placement, .. }
+            | Unmet::LeavesTaskOpen { placement, .. } => Some(*placement),
         }
     }
 
@@ -340,6 +367,7 @@ pub fn check(
             unmet.push(Unmet::EntryTakesNoTask {
                 step: action_name(conn, entry.action_id)?,
                 builtin: action_builtin(conn, entry.action_id)?,
+                placement: entry.id,
             });
         }
     }
@@ -372,6 +400,7 @@ pub fn check(
                     step: name.clone(),
                     exit: exit.name.clone(),
                     builtin: builtin.clone(),
+                    placement: placement.id,
                 });
             }
         }
@@ -382,17 +411,27 @@ pub fn check(
             AutomationPortDirection::In,
         )? {
             if port.required && !fed(conn, placement, port.id, &live, &by_id)? {
-                unmet.push(Unmet::UnwiredInput { step: name.clone(), port: port.name, builtin: builtin.clone() });
+                unmet.push(Unmet::UnwiredInput {
+                    step: name.clone(),
+                    port: port.name,
+                    builtin: builtin.clone(),
+                    placement: placement.id,
+                });
             }
         }
         for cfg in settings {
             if cfg.required && cfg.value.is_none() {
-                unmet.push(Unmet::UnansweredCfg { step: name.clone(), cfg: cfg.name, builtin: builtin.clone() });
+                unmet.push(Unmet::UnansweredCfg {
+                    step: name.clone(),
+                    cfg: cfg.name,
+                    builtin: builtin.clone(),
+                    placement: placement.id,
+                });
             }
         }
         let steps = steps_opened_by(conn, placement.action_id)?;
         if steps.is_empty() {
-            unmet.push(Unmet::ActionEmpty { action: name.clone() });
+            unmet.push(Unmet::ActionEmpty { action: name.clone(), placement: placement.id });
             continue;
         }
         push_new(&mut unmet, inside(conn, placement, &steps, &live, &by_id)?);
@@ -400,7 +439,7 @@ pub fn check(
         for step in steps.iter().filter(|step| step.builtin.is_none()) {
             let mut found = Vec::new();
             let Some(chosen) = read::automation_placement_step_for(conn, placement.id, step.id)? else {
-                found.push(Unmet::AgentUnchosen { step: step.name.clone() });
+                found.push(Unmet::AgentUnchosen { step: step.name.clone(), placement: placement.id });
                 push_new(&mut unmet, found);
                 continue;
             };
@@ -409,6 +448,7 @@ pub fn check(
                     found.push(Unmet::AgentMissing {
                         step: step.name.clone(),
                         agent: chosen.agent.clone(),
+                        placement: placement.id,
                     });
                 }
             }
@@ -421,6 +461,7 @@ pub fn check(
                         step: step.name.clone(),
                         agent: chosen.agent.clone(),
                         model: model.to_string(),
+                        placement: placement.id,
                     });
                 }
             }
@@ -478,6 +519,7 @@ fn leaves_task_open(
                             to: None,
                             builtin: action_builtin(conn, from.action_id)?,
                             to_builtin: None,
+                            placement: from.id,
                         }],
                     );
                     continue;
@@ -499,6 +541,7 @@ fn leaves_task_open(
                         to: Some(action_name(conn, to.action_id)?),
                         builtin: action_builtin(conn, from.action_id)?,
                         to_builtin: action_builtin(conn, to.action_id)?,
+                        placement: from.id,
                     }],
                 );
                 continue;
@@ -506,7 +549,7 @@ fn leaves_task_open(
             if !walked.insert(to.id) {
                 continue;
             }
-            push_new(&mut unmet, ends_inside(conn, to.action_id)?);
+            push_new(&mut unmet, ends_inside(conn, to)?);
             for exit in read::automation_exits_of(conn, AutomationOwner::Action, to.action_id)? {
                 lines.push((to, exit));
             }
@@ -521,10 +564,11 @@ fn closes_the_task(conn: &Connection, action_id: i64) -> Result<bool> {
     Ok(action_builtin(conn, action_id)?.as_deref() == Some(crate::ops::automation_builtin_close::CLOSE_TASK.key))
 }
 
-/// The lines inside an action that end the run, each named by the step and the way out it leaves by.
-fn ends_inside(conn: &Connection, action_id: i64) -> Result<Vec<Unmet>> {
+/// The lines inside the action standing on one placement that end the run, each named by the step and
+/// the way out it leaves by.
+fn ends_inside(conn: &Connection, placement: &AutomationPlacement) -> Result<Vec<Unmet>> {
     let mut found = Vec::new();
-    for step in steps_opened_by(conn, action_id)? {
+    for step in steps_opened_by(conn, placement.action_id)? {
         for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
             let edge =
                 read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step.id, exit.id)?;
@@ -535,6 +579,7 @@ fn ends_inside(conn: &Connection, action_id: i64) -> Result<Vec<Unmet>> {
                     to: None,
                     builtin: step.builtin.clone(),
                     to_builtin: None,
+                    placement: placement.id,
                 });
             }
         }
@@ -602,6 +647,7 @@ fn inside(
                     step: step.name.clone(),
                     exit: exit.name.clone(),
                     builtin: step.builtin.clone(),
+                    placement: placement.id,
                 });
             }
         }
@@ -646,6 +692,7 @@ fn inside(
                     step: step.name.clone(),
                     port: port.name,
                     builtin: step.builtin.clone(),
+                    placement: placement.id,
                 });
             }
         }
@@ -653,8 +700,9 @@ fn inside(
     Ok(unmet)
 }
 
-/// Add what one placement is missing, leaving out what is already said. An action placed twice has the
-/// same picture inside it twice, and the same gap in it is one thing to fix, not two.
+/// Add what one placement is missing, leaving out what is already said. A reason names its placement, so
+/// the same gap in an action placed twice is kept once per placement — what this leaves out is the same
+/// line found again, as the walk for lines that leave a task open does from several starts.
 fn push_new(unmet: &mut Vec<Unmet>, found: Vec<Unmet>) {
     for one in found {
         if !unmet.contains(&one) {
@@ -1427,11 +1475,11 @@ mod tests {
     #[test]
     fn a_placement_standing_on_an_action_with_no_step_is_refused() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
+            let (automation, action, placement) = launchable(tx);
             automation::action_set_entry(tx, action.id, None).expect("take the entry off");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::ActionEmpty { action: "取る".into() }],
+                vec![Unmet::ActionEmpty { action: "取る".into(), placement: placement.id }],
             );
         });
     }
@@ -1453,7 +1501,7 @@ mod tests {
             automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::EntryTakesNoTask { step: "取る".into(), builtin: None }],
+                vec![Unmet::EntryTakesNoTask { step: "取る".into(), builtin: None, placement: placement.id }],
             );
         });
     }
@@ -1490,6 +1538,7 @@ mod tests {
                     to: None,
                     builtin: None,
                     to_builtin: None,
+                    placement: working.id,
                 }],
             );
         });
@@ -1517,6 +1566,7 @@ mod tests {
                     to: Some("取る".into()),
                     builtin: None,
                     to_builtin: None,
+                    placement: working.id,
                 }],
             );
         });
@@ -1569,13 +1619,18 @@ mod tests {
     #[test]
     fn a_way_out_with_nothing_after_it_is_refused() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
+            let (automation, action, placement) = launchable(tx);
             let exit =
                 automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
                     .expect("exit");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::OpenExit { step: "取る".into(), exit: exit.name.clone(), builtin: None }],
+                vec![Unmet::OpenExit {
+                    step: "取る".into(),
+                    exit: exit.name.clone(),
+                    builtin: None,
+                    placement: placement.id,
+                }],
                 "it saves while building, and is refused at launch",
             );
         });
@@ -1596,7 +1651,7 @@ mod tests {
     #[test]
     fn a_required_input_nothing_reaches_is_refused() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
+            let (automation, action, placement) = launchable(tx);
             automation::port_add(
                 tx,
                 AutomationPortOwner::Action,
@@ -1609,7 +1664,12 @@ mod tests {
             .expect("port");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into(), builtin: None }],
+                vec![Unmet::UnwiredInput {
+                    step: "取る".into(),
+                    port: "下書き".into(),
+                    builtin: None,
+                    placement: placement.id,
+                }],
             );
         });
     }
@@ -1661,7 +1721,12 @@ mod tests {
             .expect("wire");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into(), builtin: None }],
+                vec![Unmet::UnwiredInput {
+                    step: "取る".into(),
+                    port: "下書き".into(),
+                    builtin: None,
+                    placement: entry.id,
+                }],
                 "and the orphan's own ways out are not checked either — no run reaches them",
             );
         });
@@ -1682,7 +1747,12 @@ mod tests {
             .expect("cfg");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnansweredCfg { step: "取る".into(), cfg: "作業フォルダ".into(), builtin: None }],
+                vec![Unmet::UnansweredCfg {
+                    step: "取る".into(),
+                    cfg: "作業フォルダ".into(),
+                    builtin: None,
+                    placement: placement.id,
+                }],
                 "the declaration is the action's and the answer is the placement's",
             );
             automation::cfg_set(tx, placement.id, "作業フォルダ", Some("\"~/work\"")).expect("answer");
@@ -1693,10 +1763,10 @@ mod tests {
     #[test]
     fn an_agent_this_machine_cannot_start_is_refused_and_an_unasked_machine_is_not() {
         with_tx(|tx| {
-            let (automation, _, _) = launchable(tx);
+            let (automation, _, placement) = launchable(tx);
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&[]), nothing_asked()).expect("check"),
-                vec![Unmet::AgentMissing { step: "取る".into(), agent: "claude".into() }],
+                vec![Unmet::AgentMissing { step: "取る".into(), agent: "claude".into(), placement: placement.id }],
             );
             assert_eq!(
                 check(tx.conn(), automation.id, None, nothing_asked()).expect("check"),
@@ -1742,7 +1812,7 @@ mod tests {
             automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
             assert_eq!(
                 check(tx.conn(), automation.id, None, nothing_asked()).expect("check"),
-                vec![Unmet::AgentUnchosen { step: "取る".into() }],
+                vec![Unmet::AgentUnchosen { step: "取る".into(), placement: placement.id }],
             );
             let err = launch(tx, automation.id, &here(&claude())).expect_err("refused");
             let Error::NotReady(msg) = err else { panic!("a launch that cannot go ahead is not_ready") };
@@ -1781,7 +1851,7 @@ mod tests {
             goes_on_to(tx, &action, &placement, "書く", "codex");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::AgentMissing { step: "書く".into(), agent: "codex".into() }],
+                vec![Unmet::AgentMissing { step: "書く".into(), agent: "codex".into(), placement: placement.id }],
                 "the check walks the picture inside the action, not its entry alone",
             );
         });
@@ -1826,6 +1896,7 @@ mod tests {
                     step: "取る".into(),
                     agent: "claude".into(),
                     model: "opus-9".into(),
+                    placement: placement.id,
                 }],
             );
             assert_eq!(
@@ -1894,7 +1965,7 @@ mod tests {
     #[test]
     fn the_refusal_carries_one_part_per_reason() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
+            let (automation, action, placement) = launchable(tx);
             automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
                 .expect("exit");
             let err = launch(tx, automation.id, &here(&[])).expect_err("refused");
@@ -1911,9 +1982,11 @@ mod tests {
                 ],
             );
             // And carries the values those sentences are built from, under the names the templates
-            // interpolate them by — a part with a hole where the step's name goes reads as `{step}`.
-            let named: Vec<&str> = msg.parts()[1].fields().iter().map(|(key, _)| key).collect();
-            assert_eq!(named, vec!["step", "agent"]);
+            // interpolate them by — a part with a hole where the step's name goes reads as `{step}` —
+            // and the placement it is about, which no template writes but a screen opens.
+            let named: Vec<(&str, &str)> = msg.parts()[1].fields().iter().collect();
+            let id = placement.id.to_string();
+            assert_eq!(named, vec![("placement", id.as_str()), ("step", "取る"), ("agent", "claude")]);
         });
     }
 
@@ -2235,7 +2308,12 @@ mod tests {
             a_second_step(tx, &action, &placement);
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::OpenExit { step: "見直す".into(), exit: Some(crate::model::DONE_EXIT.into()), builtin: None }],
+                vec![Unmet::OpenExit {
+                    step: "見直す".into(),
+                    exit: Some(crate::model::DONE_EXIT.into()),
+                    builtin: None,
+                    placement: placement.id,
+                }],
                 "the second step's done way out leads nowhere inside the action",
             );
         });
@@ -2285,7 +2363,12 @@ mod tests {
             let unmet =
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
             assert!(
-                unmet.contains(&Unmet::OpenExit { step: "見直す".into(), exit: Some(crate::model::DONE_EXIT.into()), builtin: None }),
+                unmet.contains(&Unmet::OpenExit {
+                    step: "見直す".into(),
+                    exit: Some(crate::model::DONE_EXIT.into()),
+                    builtin: None,
+                    placement: placement.id,
+                }),
                 "the line returning to it went with it: {unmet:?}",
             );
         });
@@ -2310,7 +2393,12 @@ mod tests {
             .expect("in");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnwiredInput { step: "見直す".into(), port: "下書き".into(), builtin: None }],
+                vec![Unmet::UnwiredInput {
+                    step: "見直す".into(),
+                    port: "下書き".into(),
+                    builtin: None,
+                    placement: placement.id,
+                }],
             );
 
             // Wired from the first step's way out, which hands on nothing of that name yet.
@@ -2343,7 +2431,7 @@ mod tests {
     #[test]
     fn an_input_inside_handed_on_by_the_action_counts_only_where_the_action_is_fed() {
         with_tx(|tx| {
-            let (automation, action, _) = launchable(tx);
+            let (automation, action, placement) = launchable(tx);
             // Optional on the action, so only the step inside asks for it.
             mk_in(tx, &action, "下書き", AutomationPortKind::Value, false);
             let step = only_step(tx, &action);
@@ -2360,9 +2448,50 @@ mod tests {
             automation::port_update(tx, port.id, None, None, Some(true)).expect("required inside");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into(), builtin: None }],
+                vec![Unmet::UnwiredInput {
+                    step: "取る".into(),
+                    port: "下書き".into(),
+                    builtin: None,
+                    placement: placement.id,
+                }],
                 "the wire from the action carries nothing while nothing reaches the action",
             );
+        });
+    }
+
+    /// **The same gap in an action placed twice is two reasons, one per placement** — a name cannot say
+    /// which of the two boxes a reason is about, and the placement can. The one reason about the
+    /// automation as a whole names none.
+    #[test]
+    fn the_same_gap_in_an_action_placed_twice_is_named_once_per_placement() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx, "二度置く");
+            let (action, first) = mk_placed(tx, &automation, "取る", "take one", "claude");
+            takes_task_on(tx, &action, None);
+            a_second_step(tx, &action, &first);
+            let again = automation::placement_add(tx, automation.id, action.id).expect("place it again");
+            automation::edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                first.id,
+                None,
+                EdgeTarget::Go(again.id),
+                None,
+            )
+            .expect("on to the second placement");
+            let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+            let about = |at: i64| Unmet::OpenExit {
+                step: "見直す".into(),
+                exit: Some(crate::model::DONE_EXIT.into()),
+                builtin: None,
+                placement: at,
+            };
+            assert!(unmet.contains(&about(first.id)), "{unmet:?}");
+            assert!(unmet.contains(&about(again.id)), "{unmet:?}");
+            let fields = about(again.id).msg().fields().iter().map(|(k, v)| (k, v.to_string())).collect::<Vec<_>>();
+            assert!(fields.contains(&("placement", again.id.to_string())), "{fields:?}");
+            assert_eq!(Unmet::NoEntry.placement(), None);
         });
     }
 }

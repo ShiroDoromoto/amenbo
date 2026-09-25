@@ -354,7 +354,7 @@ describe("the panel beside the picture", () => {
     await act(async () => { button(t("auto.pic.first")).click(); });
     expect(panelPlace()).toBe(t("auto.pic.place"));
     expect(container.querySelector(".wheremark")?.textContent).toBe(t("auto.lib.here"));
-    expect(container.textContent).toContain(t("auto.lib.make"));
+    expect(container.textContent).toContain(t("auto.lib.makeNew"));
   });
 
   it("opens the definition's own fields from Edit, and keeps them open on a second press", async () => {

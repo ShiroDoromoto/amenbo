@@ -3485,6 +3485,22 @@ pub struct AutomationActionDetailDto {
     /// **The runs holding this action** — those going on any automation that places it, whichever
     /// project that automation is in (`AMB-D-961`). Read for [`AutomationDetailDto::held_by`]'s reason.
     pub(crate) held_by: Vec<AutomationRunCardDto>,
+    /// **The automations that place it**, each once, in id order — the ones `used_by` counts. Named
+    /// rather than counted, so the panel shows where a rewrite here lands and goes to each of them.
+    pub(crate) placed_on: Vec<AutomationPlacedOnDto>,
+}
+
+/// **One automation an action is placed on**, with the project it is in — a global action stands on
+/// automations in more than one, and going to one is going to its project.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationPlacedOnDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) name: String,
+    #[ts(type = "number")]
+    pub(crate) project: i64,
 }
 
 /// **One step inside an action**: the terminal it stands up, and what it declares inside the picture.

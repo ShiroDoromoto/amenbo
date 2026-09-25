@@ -19,7 +19,8 @@
 //
 // **What a declaration is answered with is not drawn here at all.** There is nothing to answer until
 // the action stands somewhere, and a control that took an answer would be writing on a placement
-// this screen cannot see.
+// this screen cannot see. A setting's row keeps an empty dashed slot where the answer would be, so
+// the shape says it is answered elsewhere rather than a sentence (`AMB-T-5522`).
 import { useState } from "react";
 import {
   declareAutomationCfg,
@@ -28,27 +29,18 @@ import {
   editAutomationCfg,
   editAutomationInput,
   removeAutomationCfg,
-  removeAutomationExit,
   removeAutomationInput,
-  renameAutomationExit,
   clearAutomationWire,
   setAutomationWire,
   type CfgKind,
 } from "../core/automations";
-import { t, tf } from "../core/i18n";
+import { t } from "../core/i18n";
 import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT } from "./automationLayout";
-import {
-  CFG_KINDS,
-  choicesOfKinds,
-  DeclareRow,
-  DeclEdit,
-  exitLabel,
-  useDraft,
-  type Run,
-} from "./automationPanel";
+import { CFG_KINDS, choicesOfKinds, DeclEdit, exitLabel, useDraft, type Run } from "./automationPanel";
+import { DeclChip, DeclItem, DeclSec, ExitEdit, OutputPlus, PortChip } from "./automationDeclParts";
 import { ExitMark } from "./automationParts";
 import { AutomationOutputAdd } from "./AutomationOutputAdd";
-import { kindLabel, PORT_KINDS } from "./automationPortKinds";
+import { PORT_KINDS } from "./automationPortKinds";
 import { boundaryChoices, choiceKey, wireOutOf } from "./automationWires";
 import type {
   AutomationActionDetailDto,
@@ -97,11 +89,8 @@ function OutputRow({
   const picked = now === undefined ? "" : choiceKey(now.fromId, now.fromExitName, now.fromPortName);
   return (
     <div className="autostep__outline">
-      <span className="autostep__out">
-        {port.name}
-        <span className="autostep__outkind">{kindLabel(port.kind)}</span>
-      </span>
-      <span aria-hidden="true">←</span>
+      <PortChip port={port} />
+      <span className="autodecl__arrow" aria-hidden="true">←</span>
       <select
         aria-label={port.name}
         value={picked}
@@ -131,8 +120,11 @@ function OutputRow({
   );
 }
 
-/** One way out of the action: what it is called, and what leaving by it hands on. */
-function ExitRow({
+/**
+ * One way out of the action, as a card: its mark, what leaving by it hands on with the "＋" that adds
+ * one more, and under it which step's output fills each of those.
+ */
+function ExitCard({
   action,
   exit,
   onAddOutput,
@@ -143,42 +135,25 @@ function ExitRow({
   onAddOutput: () => void;
   run: Run;
 }) {
-  const actionId = action.id;
-  const [name, setName] = useDraft(exit.name ?? "");
-  const was = exit.name ?? null;
   return (
-    <li className="autostep__exit">
-      <div className="autostep__exithead">
-        <input
-          className="autostep__declname"
-          placeholder={t("auto.step.exitUnnamed")}
-          aria-label={t("auto.step.exits")}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => {
-            const now = name.trim() === "" ? null : name.trim();
-            if (now !== was) void run(renameAutomationExit("action", actionId, was, now));
-          }}
-        />
-        <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
-          {t("auto.step.outputAdd")}
-        </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => void run(removeAutomationExit("action", actionId, was))}
-        >
-          {t("auto.step.remove")}
-        </button>
-      </div>
-      {exit.outputs.map((port) => (
+    <DeclItem
+      className="autoexit"
+      edit={<ExitEdit owner="action" ownerId={action.id} exit={exit} run={run} />}
+      below={exit.outputs.map((port) => (
         <OutputRow key={port.name} action={action} exitName={exit.name} port={port} run={run} />
       ))}
-    </li>
+    >
+      <ExitMark name={exit.name} />
+      <OutputPlus onPress={onAddOutput} />
+    </DeclItem>
   );
 }
 
-/** One setting the action declares — its name, the answer it takes, and the choices where it has any. */
+/**
+ * One setting the action declares, as a chip with the answer's place beside it left empty — the answer
+ * is written where the action is placed, and the dashed slot says so by holding nothing. What renames,
+ * re-kinds or removes it, and its choices, open on the "⋯".
+ */
 function CfgRow({
   actionId,
   cfg,
@@ -189,43 +164,53 @@ function CfgRow({
   run: Run;
 }) {
   const [choiceText, setChoiceText] = useDraft(choicesOf(cfg.options).join("\n"));
+  const kindWord = CFG_KINDS.find((one) => one.id === cfg.kind)?.label() ?? cfg.kind;
   return (
-    <div className="autostep__cfg">
-      <DeclEdit
-        label={t("auto.step.cfg")}
-        name={cfg.name}
-        kind={cfg.kind}
-        kinds={choicesOfKinds(CFG_KINDS)}
-        required={cfg.required}
-        onRename={(to) => void run(editAutomationCfg(actionId, cfg.name, { name: to }))}
-        // A choice list belongs to a choice and to nothing else, so the move takes it with it in the
-        // one call — core refuses a list left behind on a kind that would never show it.
-        onKind={(to) =>
-          void run(
-            editAutomationCfg(actionId, cfg.name, {
-              kind: to as CfgKind,
-              ...(to === "choice" ? {} : { options: null }),
-            }),
-          )
-        }
-        onRequired={(to) => void run(editAutomationCfg(actionId, cfg.name, { required: to }))}
-        onRemove={() => void run(removeAutomationCfg(actionId, cfg.name))}
-      />
-      {cfg.kind === "choice" && (
-        <label className="autostep__field">
-          <span className="autostep__label">{t("auto.step.choices")}</span>
-          <textarea
-            rows={2}
-            value={choiceText}
-            onChange={(e) => setChoiceText(e.target.value)}
-            onBlur={() =>
-              writeChoices(choiceText) !== (cfg.options ?? null) &&
-              void run(editAutomationCfg(actionId, cfg.name, { options: writeChoices(choiceText) }))
+    <DeclItem
+      edit={
+        <div className="autostep__cfg">
+          <DeclEdit
+            label={t("auto.step.cfg")}
+            name={cfg.name}
+            kind={cfg.kind}
+            kinds={choicesOfKinds(CFG_KINDS)}
+            required={cfg.required}
+            onRename={(to) => void run(editAutomationCfg(actionId, cfg.name, { name: to }))}
+            // A choice list belongs to a choice and to nothing else, so the move takes it with it in
+            // the one call — core refuses a list left behind on a kind that would never show it.
+            onKind={(to) =>
+              void run(
+                editAutomationCfg(actionId, cfg.name, {
+                  kind: to as CfgKind,
+                  ...(to === "choice" ? {} : { options: null }),
+                }),
+              )
             }
+            onRequired={(to) => void run(editAutomationCfg(actionId, cfg.name, { required: to }))}
+            onRemove={() => void run(removeAutomationCfg(actionId, cfg.name))}
           />
-        </label>
-      )}
-    </div>
+          {cfg.kind === "choice" && (
+            <label className="autostep__field">
+              <span className="autostep__label">{t("auto.step.choices")}</span>
+              <textarea
+                rows={2}
+                value={choiceText}
+                onChange={(e) => setChoiceText(e.target.value)}
+                onBlur={() =>
+                  writeChoices(choiceText) !== (cfg.options ?? null) &&
+                  void run(
+                    editAutomationCfg(actionId, cfg.name, { options: writeChoices(choiceText) }),
+                  )
+                }
+              />
+            </label>
+          )}
+        </div>
+      }
+    >
+      <DeclChip name={cfg.name} kind={kindWord} tone="cfg" required={cfg.required} />
+      <span className="autodecl__slot">{t("auto.decl.answeredOnPlacement")}</span>
+    </DeclItem>
   );
 }
 
@@ -246,101 +231,93 @@ export function AutomationActionDeclaresPanel({
   if (part === "in") {
     return (
       <div className="autostep">
-        <div className="autostep__field">
-          <span className="autostep__label">{t("auto.step.inputs")}</span>
-          {action.inputs.length === 0 && (
-            <span className="autostep__said">{t("auto.step.declaresNone")}</span>
-          )}
+        <DeclSec
+          title={t("auto.decl.inputs")}
+          what={t("auto.decl.inputName")}
+          kinds={choicesOfKinds(PORT_KINDS)}
+          onAdd={(declared, kind) =>
+            run(
+              declareAutomationInput("action", action.id, {
+                name: declared,
+                kind: kind as AutomationPortDto["kind"],
+              }),
+            )
+          }
+        >
           {action.inputs.map((input) => (
-            <DeclEdit
+            <DeclItem
               key={input.name}
-              label={t("auto.step.inputs")}
-              name={input.name}
-              kind={input.kind}
-              kinds={choicesOfKinds(PORT_KINDS)}
-              required={input.required}
-              onRename={(to) =>
-                void run(editAutomationInput("action", action.id, input.name, { name: to }))
+              edit={
+                <DeclEdit
+                  label={t("auto.decl.inputs")}
+                  name={input.name}
+                  kind={input.kind}
+                  kinds={choicesOfKinds(PORT_KINDS)}
+                  required={input.required}
+                  onRename={(to) =>
+                    void run(editAutomationInput("action", action.id, input.name, { name: to }))
+                  }
+                  onKind={(to) =>
+                    void run(
+                      editAutomationInput("action", action.id, input.name, {
+                        kind: to as AutomationPortDto["kind"],
+                      }),
+                    )
+                  }
+                  onRequired={(to) =>
+                    void run(editAutomationInput("action", action.id, input.name, { required: to }))
+                  }
+                  onRemove={() => void run(removeAutomationInput("action", action.id, input.name))}
+                />
               }
-              onKind={(to) =>
-                void run(
-                  editAutomationInput("action", action.id, input.name, {
-                    kind: to as AutomationPortDto["kind"],
-                  }),
-                )
-              }
-              onRequired={(to) =>
-                void run(editAutomationInput("action", action.id, input.name, { required: to }))
-              }
-              onRemove={() => void run(removeAutomationInput("action", action.id, input.name))}
-            />
+            >
+              <PortChip port={input} />
+            </DeclItem>
           ))}
-          <DeclareRow
-            what={t("auto.step.inputName")}
-            kinds={choicesOfKinds(PORT_KINDS)}
-            onAdd={(declared, kind) =>
-              run(
-                declareAutomationInput("action", action.id, {
-                  name: declared,
-                  kind: kind as AutomationPortDto["kind"],
-                }),
-              )
-            }
-          />
-        </div>
+        </DeclSec>
 
-        <div className="autostep__field">
-          <span className="autostep__label">{t("auto.step.cfg")}</span>
-          <span className="autostep__said">{tf("auto.act.declaresWhat", { name: action.name })}</span>
-          {action.settings.length === 0 && (
-            <span className="autostep__said">{t("auto.step.declaresNone")}</span>
-          )}
+        <DeclSec
+          title={t("auto.step.cfg")}
+          what={t("auto.step.cfgName")}
+          kinds={choicesOfKinds(CFG_KINDS)}
+          onAdd={(declared, kind) =>
+            run(declareAutomationCfg(action.id, { name: declared, kind: kind as CfgKind }))
+          }
+        >
           {action.settings.map((cfg) => (
             <CfgRow key={cfg.name} actionId={action.id} cfg={cfg} run={run} />
           ))}
-          <DeclareRow
-            what={t("auto.step.cfgName")}
-            kinds={choicesOfKinds(CFG_KINDS)}
-            onAdd={(declared, kind) =>
-              run(declareAutomationCfg(action.id, { name: declared, kind: kind as CfgKind }))
-            }
-          />
-        </div>
+        </DeclSec>
       </div>
     );
   }
 
   return (
     <div className="autostep">
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.step.exits")}</span>
-        <ul className="autostep__exits">
-          {action.exits
-            .filter((one) => one.name !== ERROR_EXIT)
-            .map((one) => (
-              <ExitRow
-                key={one.id}
-                action={action}
-                exit={one}
-                onAddOutput={() => setAdding(one.id)}
-                run={run}
-              />
-            ))}
-          {/* The error way out, always drawn and always last: every action carries one, and a list
-              that left it off would read as an action that cannot fail. Nothing here renames or
-              removes it, which core refuses either way. */}
-          <li className="autostep__exiterr">
-            <div className="autostep__exithead">
-              <ExitMark name={ERROR_EXIT} />
-            </div>
-          </li>
-        </ul>
-        <DeclareRow
-          what={t("auto.step.exitName")}
-          kinds={null}
-          onAdd={(declared) => run(declareAutomationExit("action", action.id, declared))}
-        />
-      </div>
+      <DeclSec
+        title={t("auto.step.exits")}
+        what={t("auto.step.exitName")}
+        kinds={null}
+        onAdd={(declared) => run(declareAutomationExit("action", action.id, declared))}
+      >
+        {action.exits
+          .filter((one) => one.name !== ERROR_EXIT)
+          .map((one) => (
+            <ExitCard
+              key={one.id}
+              action={action}
+              exit={one}
+              onAddOutput={() => setAdding(one.id)}
+              run={run}
+            />
+          ))}
+        {/* The error way out, always drawn and always last: every action carries one, and a list
+            that left it off would read as an action that cannot fail. Nothing here renames or
+            removes it, which core refuses either way. */}
+        <DeclItem className="autoexit autoexit--error">
+          <ExitMark name={ERROR_EXIT} />
+        </DeclItem>
+      </DeclSec>
 
       {adding !== null && (
         <AutomationOutputAdd

@@ -1,10 +1,10 @@
 // What the pressed step holds, on the action build screen (`AMB-T-5315`).
 //
 // **It is the step's own panel, not a placement's.** A box inside an action is a step, and a step is
-// one terminal: the prompt it runs on and the three flags are its own. Who carries it out is not —
-// that is chosen where the action is placed, step by step (`./AutomationStepPanel`, `AMB-D-960`),
-// since the same action may be run by different models on two pictures. What the action declares to the automations placing it is the other
-// panel's (`./AutomationActionDeclaresPanel`), and nothing here writes on that layer.
+// one terminal: the prompt it runs on, what it is handed and how it runs are its own. Who carries it
+// out is not — that is chosen where the action is placed, step by step (`./AutomationStepPanel`,
+// `AMB-D-960`), since the same action may be run by different models on two pictures. What the action
+// declares to the automations placing it is the other panel's (`./AutomationActionDeclaresPanel`), and nothing here writes on that layer.
 //
 // **What comes after a way out is written here too.** Inside an action the line and the box it
 // leaves are read together — one way out decides one thing — so the way out's row carries the
@@ -12,6 +12,10 @@
 //
 // **A wire is picked from a list, not drawn** (`./automationWires`), the way it is on an automation,
 // and what does not fit is not offered.
+//
+// **What each part is, is said by its shape, not by a sentence under it** (`AMB-T-5522`): the name is
+// the panel's head (`./AutomationActionBuildScreen`), the entry is a switch, a declaration is a chip
+// with its "⋯", and a way out is a card (`./automationDeclParts`).
 //
 // **A refusal is drawn, once, at the top**, for `./AutomationStepPanel`'s reason: every press here
 // can be refused by core — a name already taken, the error way out, a line that leaves the picture —
@@ -23,10 +27,8 @@ import {
   declareAutomationInput,
   editAutomationInput,
   editAutomationStep,
-  removeAutomationExit,
   removeAutomationInput,
   removeAutomationStep,
-  renameAutomationExit,
   setAutomationActionEntry,
   setAutomationWire,
 } from "../core/automations";
@@ -34,19 +36,12 @@ import { confirmDialog } from "../core/dialog";
 import { errText, t } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT } from "./automationLayout";
-import {
-  choicesOfKinds,
-  DeclareRow,
-  DeclEdit,
-  exitLabel,
-  NextRow,
-  useDraft,
-  type Run,
-} from "./automationPanel";
+import { DeclEdit, choicesOfKinds, exitLabel, NextRow, useDraft, type Run } from "./automationPanel";
+import { DeclItem, DeclSec, ExitEdit, OutputPlus, PortChip, Sec, Switch } from "./automationDeclParts";
 import { ExitMark } from "./automationParts";
 import { choiceKey, wireChoices, wireInto } from "./automationWires";
 import { AutomationOutputAdd } from "./AutomationOutputAdd";
-import { kindLabel, PORT_KINDS } from "./automationPortKinds";
+import { PORT_KINDS } from "./automationPortKinds";
 import type {
   AutomationActionDetailDto,
   AutomationExitDto,
@@ -55,14 +50,14 @@ import type {
 } from "../bindings/bindings";
 
 /**
- * One way out of a step: what it is called, what leaving by it hands on, where the run goes next, and
- * the press that takes it away.
+ * One way out of a step, as a card: its mark, what leaving by it hands on with the "＋" that adds one
+ * more, and where the run goes next.
  *
- * **The error way out has a row too**, and only the pulldown on it: it is carried from birth and
- * neither renamed nor removed (core refuses both), while what follows it is exactly what a builder
- * may want to say — with nothing said, it stops the run and calls a person.
+ * **The error way out has a card too**, with the pulldown alone: it is carried from birth and neither
+ * renamed nor removed (core refuses both), while what follows it is exactly what a builder may want to
+ * say — with nothing said, it stops the run and calls a person.
  */
-function ExitRow({
+function ExitCard({
   action,
   step,
   exit,
@@ -75,59 +70,35 @@ function ExitRow({
   onAddOutput: () => void;
   run: Run;
 }) {
-  const [name, setName] = useDraft(exit.name ?? "");
-  const was = exit.name ?? null;
   const isError = exit.name === ERROR_EXIT;
-
   return (
-    <li className={isError ? "autostep__exiterr" : "autostep__exit"}>
-      {isError ? (
-        <div className="autostep__exithead">
-          <ExitMark name={ERROR_EXIT} />
-        </div>
-      ) : (
-        <div className="autostep__exithead">
-          <input
-            className="autostep__declname"
-            placeholder={t("auto.step.exitUnnamed")}
-            aria-label={t("auto.step.exits")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => {
-              const now = name.trim() === "" ? null : name.trim();
-              if (now !== was) void run(renameAutomationExit("step", step.id, was, now));
-            }}
-          />
-          {exit.outputs.map((port) => (
-            <span key={port.name} className="autostep__out">
-              {port.name}
-              <span className="autostep__outkind">{kindLabel(port.kind)}</span>
-            </span>
-          ))}
-          <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>
-            {t("auto.step.outputAdd")}
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => void run(removeAutomationExit("step", step.id, was))}
-          >
-            {t("auto.step.remove")}
-          </button>
-        </div>
-      )}
-      <NextRow
-        graph={actionGraph(action)!}
-        picture="action"
-        boxId={step.id}
-        exitName={exit.name}
-        run={run}
-      />
-    </li>
+    <DeclItem
+      className={isError ? "autoexit autoexit--error" : "autoexit"}
+      edit={isError ? undefined : <ExitEdit owner="step" ownerId={step.id} exit={exit} run={run} />}
+      below={
+        <NextRow
+          graph={actionGraph(action)!}
+          picture="action"
+          boxId={step.id}
+          exitName={exit.name}
+          arrow
+          run={run}
+        />
+      }
+    >
+      <ExitMark name={exit.name} />
+      {exit.outputs.map((port) => (
+        <PortChip key={port.name} port={port} />
+      ))}
+      {!isError && <OutputPlus onPress={onAddOutput} />}
+    </DeclItem>
   );
 }
 
-/** One input of a step: how it is declared, and what the step before it hands into it. */
+/**
+ * One thing a step takes in, read the way the automation's panel reads a way out: where it comes from,
+ * an arrow, and what it is.
+ */
 function InputRow({
   action,
   step,
@@ -144,26 +115,29 @@ function InputRow({
   const choices = wireChoices(graph, step.id, input, t("auto.pic.actionSelf"));
   const picked = now === undefined ? "" : choiceKey(now.fromId, now.fromExitName, now.fromPortName);
   return (
-    <div className="autostep__wire">
-      <DeclEdit
-        label={t("auto.step.inputs")}
-        name={input.name}
-        kind={input.kind}
-        kinds={choicesOfKinds(PORT_KINDS)}
-        required={input.required}
-        onRename={(to) => void run(editAutomationInput("step", step.id, input.name, { name: to }))}
-        onKind={(to) =>
-          void run(
-            editAutomationInput("step", step.id, input.name, {
-              kind: to as AutomationPortDto["kind"],
-            }),
-          )
-        }
-        onRequired={(to) =>
-          void run(editAutomationInput("step", step.id, input.name, { required: to }))
-        }
-        onRemove={() => void run(removeAutomationInput("step", step.id, input.name))}
-      />
+    <DeclItem
+      edit={
+        <DeclEdit
+          label={t("auto.decl.inputs")}
+          name={input.name}
+          kind={input.kind}
+          kinds={choicesOfKinds(PORT_KINDS)}
+          required={input.required}
+          onRename={(to) => void run(editAutomationInput("step", step.id, input.name, { name: to }))}
+          onKind={(to) =>
+            void run(
+              editAutomationInput("step", step.id, input.name, {
+                kind: to as AutomationPortDto["kind"],
+              }),
+            )
+          }
+          onRequired={(to) =>
+            void run(editAutomationInput("step", step.id, input.name, { required: to }))
+          }
+          onRemove={() => void run(removeAutomationInput("step", step.id, input.name))}
+        />
+      }
+    >
       <select
         aria-label={input.name}
         value={picked}
@@ -193,6 +167,36 @@ function InputRow({
           </option>
         ))}
       </select>
+      <span className="autodecl__arrow" aria-hidden="true">→</span>
+      <PortChip port={input} />
+    </DeclItem>
+  );
+}
+
+/**
+ * What a step is handed besides its prompt, as four toggles — each one a separate flag on the step.
+ * Pressed is handed.
+ */
+function GiveToggles({ step, run }: { step: AutomationStepDto; run: Run }) {
+  const toggles: { on: boolean; label: string; write: (to: boolean) => Parameters<typeof editAutomationStep>[1] }[] = [
+    { on: step.showHistory, label: t("auto.give.history"), write: (to) => ({ history: to }) },
+    { on: step.showNotes, label: t("auto.give.taskNotes"), write: (to) => ({ taskNotes: to }) },
+    { on: step.showDecisions, label: t("auto.give.taskDecisions"), write: (to) => ({ taskDecisions: to }) },
+    { on: step.showComments, label: t("auto.give.taskComments"), write: (to) => ({ taskComments: to }) },
+  ];
+  return (
+    <div className="autogive">
+      {toggles.map((one) => (
+        <button
+          key={one.label}
+          type="button"
+          className={one.on ? "autogive__tog autogive__tog--on" : "autogive__tog"}
+          aria-pressed={one.on}
+          onClick={() => void run(editAutomationStep(step.id, one.write(!one.on)))}
+        >
+          {one.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -209,7 +213,6 @@ export function AutomationActionStepPanel({
   onRemoved: () => void;
 }) {
   const step = action?.steps.find((one) => one.id === stepId) ?? null;
-  const [name, setName] = useDraft(step?.name ?? "");
   const [prompt, setPrompt] = useDraft(step?.prompt ?? "");
   // The way out an output artefact is being declared on, while that dialog is open.
   const [adding, setAdding] = useState<number | null>(null);
@@ -250,68 +253,57 @@ export function AutomationActionStepPanel({
     <div className="autostep">
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.name")}</span>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => name !== step.name && void run(editAutomationStep(step.id, { name }))}
-        />
-      </label>
+      {/* An action opens at one step, so the switch is turned on at the step that is to take over and
+          never off: the picture's entry mark moving is what says there is only one. */}
+      <Switch
+        boxed
+        label={t("auto.act.entrySwitch")}
+        checked={isEntry}
+        disabled={isEntry}
+        onChange={(to) => to && void run(setAutomationActionEntry(action.id, step.id))}
+      />
 
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.act.entry")}</span>
-        {isEntry ? (
-          <span className="autostep__said">{t("auto.act.entryIs")}</span>
-        ) : (
-          <button
-            type="button"
-            className="btn"
-            onClick={() => void run(setAutomationActionEntry(action.id, step.id))}
-          >
-            {t("auto.act.entrySet")}
-          </button>
-        )}
-      </div>
-
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.prompt")}</span>
+      <Sec title={t("auto.step.prompt")}>
         <textarea
           className="autostep__prompt"
+          aria-label={t("auto.step.prompt")}
           rows={6}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onBlur={() => prompt !== step.prompt && void run(editAutomationStep(step.id, { prompt }))}
         />
-      </label>
+      </Sec>
 
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.step.inputs")}</span>
-        {step.inputs.length === 0 && (
-          <span className="autostep__said">{t("auto.step.declaresNone")}</span>
-        )}
+      <DeclSec
+        title={t("auto.decl.inputs")}
+        what={t("auto.decl.inputName")}
+        kinds={choicesOfKinds(PORT_KINDS)}
+        onAdd={(declared, kind) =>
+          run(
+            declareAutomationInput("step", step.id, {
+              name: declared,
+              kind: kind as AutomationPortDto["kind"],
+            }),
+          )
+        }
+      >
         {step.inputs.map((input) => (
           <InputRow key={input.name} action={action} step={step} input={input} run={run} />
         ))}
-        <DeclareRow
-          what={t("auto.step.inputName")}
-          kinds={choicesOfKinds(PORT_KINDS)}
-          onAdd={(declared, kind) =>
-            run(
-              declareAutomationInput("step", step.id, {
-                name: declared,
-                kind: kind as AutomationPortDto["kind"],
-              }),
-            )
-          }
-        />
-      </div>
+      </DeclSec>
 
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.step.exits")}</span>
-        <ul className="autostep__exits">
-          {step.exits.map((one) => (
-            <ExitRow
+      <DeclSec
+        title={t("auto.step.exits")}
+        what={t("auto.step.exitName")}
+        kinds={null}
+        onAdd={(declared) => run(declareAutomationExit("step", step.id, declared))}
+      >
+        {/* The error way out last, as the action's own list has it: it is the one nobody named, and
+            between two named ones it reads as one of them. */}
+        {[...step.exits]
+          .sort((a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT))
+          .map((one) => (
+            <ExitCard
               key={one.id}
               action={action}
               step={step}
@@ -320,98 +312,49 @@ export function AutomationActionStepPanel({
               run={run}
             />
           ))}
-        </ul>
-        <DeclareRow
-          what={t("auto.step.exitName")}
-          kinds={null}
-          onAdd={(declared) => run(declareAutomationExit("step", step.id, declared))}
-        />
-      </div>
+      </DeclSec>
 
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.step.folder")}</span>
-        <select
-          value={step.workDirRef ?? ""}
-          onChange={(e) =>
-            void run(
-              editAutomationStep(step.id, {
-                workDir: e.target.value === "" ? null : e.target.value,
-              }),
-            )
-          }
-        >
-          <option value="">{t("auto.step.folderNone")}</option>
-          {step.workDirRef !== undefined && !folderNames.includes(step.workDirRef) && (
-            <option value={step.workDirRef}>{step.workDirRef}</option>
-          )}
-          {folderNames.map((one) => (
-            <option key={one} value={one}>
-              {one}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Sec title={t("auto.give.title")}>
+        <GiveToggles step={step} run={run} />
+      </Sec>
 
-      <label className="autostep__check">
-        <input
-          type="checkbox"
+      <Sec title={t("auto.step.howRuns")}>
+        <label className="autostep__pair">
+          <span className="autostep__label">{t("auto.step.folder")}</span>
+          <select
+            value={step.workDirRef ?? ""}
+            onChange={(e) =>
+              void run(
+                editAutomationStep(step.id, {
+                  workDir: e.target.value === "" ? null : e.target.value,
+                }),
+              )
+            }
+          >
+            <option value="">{t("auto.step.folderNone")}</option>
+            {step.workDirRef !== undefined && !folderNames.includes(step.workDirRef) && (
+              <option value={step.workDirRef}>{step.workDirRef}</option>
+            )}
+            {folderNames.map((one) => (
+              <option key={one} value={one}>
+                {one}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Switch
+          label={t("auto.step.interactive")}
           checked={step.interactive}
-          onChange={(e) => void run(editAutomationStep(step.id, { interactive: e.target.checked }))}
+          onChange={(to) => void run(editAutomationStep(step.id, { interactive: to }))}
         />
-        {t("auto.step.interactive")}
-      </label>
-
-      <label className="autostep__check">
-        <input
-          type="checkbox"
+        {/* What a closed task gets instead is said where it happens — the run's history — rather
+            than under this switch (`AMB-D-963`). */}
+        <Switch
+          label={t("auto.step.reportToTask")}
           checked={step.reportToTask}
-          aria-describedby={`autostep-report-note-${step.id}`}
-          onChange={(e) =>
-            void run(editAutomationStep(step.id, { reportToTask: e.target.checked }))
-          }
+          onChange={(to) => void run(editAutomationStep(step.id, { reportToTask: to }))}
         />
-        {t("auto.step.reportToTask")}
-      </label>
-      {/* A ticked box that leaves nothing on a closed task would read as broken without this (`AMB-D-963`). */}
-      <p id={`autostep-report-note-${step.id}`} className="autostep__note">
-        {t("auto.step.reportToTaskNote")}
-      </p>
-
-      <label className="autostep__check">
-        <input
-          type="checkbox"
-          checked={step.showHistory}
-          onChange={(e) => void run(editAutomationStep(step.id, { history: e.target.checked }))}
-        />
-        {t("auto.step.history")}
-      </label>
-
-      <label className="autostep__check">
-        <input
-          type="checkbox"
-          checked={step.showNotes}
-          onChange={(e) => void run(editAutomationStep(step.id, { taskNotes: e.target.checked }))}
-        />
-        {t("auto.step.taskNotes")}
-      </label>
-
-      <label className="autostep__check">
-        <input
-          type="checkbox"
-          checked={step.showDecisions}
-          onChange={(e) => void run(editAutomationStep(step.id, { taskDecisions: e.target.checked }))}
-        />
-        {t("auto.step.taskDecisions")}
-      </label>
-
-      <label className="autostep__check">
-        <input
-          type="checkbox"
-          checked={step.showComments}
-          onChange={(e) => void run(editAutomationStep(step.id, { taskComments: e.target.checked }))}
-        />
-        {t("auto.step.taskComments")}
-      </label>
+      </Sec>
 
       <div className="actpanel__foot">
         <button type="button" className="btn btn--danger" onClick={() => void remove()}>

@@ -125,12 +125,18 @@ export function DeclareRow({
   what,
   kinds,
   onAdd,
+  autoFocus = false,
+  onCancel,
 }: {
   /** What the empty box says it wants. */
   what: string;
   /** The kinds to choose between, or nothing where the family has none (a way out). */
   kinds: Choice[] | null;
   onAdd: (name: string, kind: string) => Promise<boolean>;
+  /** Take the caret on arrival — the row was opened by a press, to be typed in. */
+  autoFocus?: boolean;
+  /** Put the row away without writing — Escape in the box. */
+  onCancel?: () => void;
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState(kinds?.[0]?.id ?? "");
@@ -147,7 +153,12 @@ export function DeclareRow({
         placeholder={what}
         aria-label={what}
         value={name}
+        autoFocus={autoFocus}
         onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && name.trim() !== "") press();
+          if (e.key === "Escape" && onCancel !== undefined) onCancel();
+        }}
       />
       {kinds !== null && (
         <select aria-label={what} value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -255,6 +266,7 @@ export function NextRow({
   picture,
   boxId,
   exitName,
+  arrow = false,
   run,
 }: {
   /** The picture the line is drawn on, which is where the boxes to go on to are read from. */
@@ -264,6 +276,9 @@ export function NextRow({
   boxId: number;
   /** The way out it hangs on, `undefined` being the unnamed one. */
   exitName: string | undefined;
+  /** Lead the pulldown with an arrow rather than a word — under a way out's mark, where the arrow
+   *  reads as the line the picture draws. */
+  arrow?: boolean;
   run: Run;
 }) {
   const edge = graph.edges.find((one) => one.fromId === boxId && one.exitName === exitName);
@@ -313,7 +328,11 @@ export function NextRow({
 
   return (
     <div className="autostep__next">
-      <span className="autostep__label">{t("auto.step.next")}</span>
+      {arrow ? (
+        <span className="autodecl__arrow" aria-hidden="true">→</span>
+      ) : (
+        <span className="autostep__label">{t("auto.step.next")}</span>
+      )}
       <select
         aria-label={exitLabel(exitName === undefined ? undefined : builtinWord(self?.builtin, exitName))}
         value={edgeKey(edge)}

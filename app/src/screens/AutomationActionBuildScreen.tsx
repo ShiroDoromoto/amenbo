@@ -52,15 +52,16 @@ import { AutomationHeldBy } from "./AutomationHeldBy";
 import { LockMark, ReachChip, usedCount } from "./automationParts";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
-import { editAutomationAction, useAutomationAction } from "../core/automations";
+import { editAutomationAction, editAutomationStep, useAutomationAction } from "../core/automations";
 import { actionGraph } from "./automationLayout";
-import { errText, t } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { usePaneSlot } from "../shell/paneSlot";
 import { useDraft, type Run } from "./automationPanel";
-import type { AutomationActionDetailDto } from "../bindings/bindings";
+import { Sec } from "./automationDeclParts";
+import type { AutomationActionDetailDto, AutomationPlacedOnDto } from "../bindings/bindings";
 
 /** The first line of what the action is for — all the band has room for; the panel holds the rest. */
 function firstLine(note: string): string {
@@ -122,6 +123,71 @@ function AboutRow({
 }
 
 /**
+ * **The automations this action is placed on, by name** — each one where a rewrite here lands, and
+ * each a press that goes to its build screen. The names say what "used by two" would leave the reader
+ * to go and find.
+ */
+function PlacedOn({
+  placedOn,
+  projectId,
+  onGoTo,
+}: {
+  placedOn: AutomationPlacedOnDto[];
+  /** The project whose screen this is — from there, only its own automations are gone to. `null` is
+   *  the sidebar's, which goes to any. */
+  projectId: number | null;
+  onGoTo?: (project: number, automation: number) => void;
+}) {
+  if (placedOn.length === 0) return <span className="autostep__label">{t("auto.actions.unused")}</span>;
+  return (
+    <div className="actplaced">
+      {placedOn.map((one) =>
+        onGoTo === undefined || (projectId !== null && one.project !== projectId) ? (
+          <span key={one.id} className="actplaced__one">
+            {one.name}
+          </span>
+        ) : (
+          <button
+            key={one.id}
+            type="button"
+            className="actplaced__one actplaced__one--go"
+            onClick={() => onGoTo(one.project, one.id)}
+          >
+            {one.name}
+            <span aria-hidden="true"> ↗</span>
+          </button>
+        ),
+      )}
+    </div>
+  );
+}
+
+/** The panel's head as the box its name is typed in. It writes when the caret leaves, as every field does. */
+function TitleInput({
+  title,
+  label,
+  readOnly,
+  onRename,
+}: {
+  title: string;
+  label: string;
+  readOnly: boolean;
+  onRename: (to: string) => void;
+}) {
+  const [name, setName] = useDraft(title);
+  return (
+    <input
+      className="actpanel__titlein"
+      aria-label={tf("auto.act.nameOf", { place: label })}
+      value={name}
+      readOnly={readOnly}
+      onChange={(e) => setName(e.target.value)}
+      onBlur={() => name.trim() !== "" && name !== title && onRename(name)}
+    />
+  );
+}
+
+/**
  * The panel to the right of the picture: a head that names what it shows, and a way to close. It is
  * drawn into the shell's right-pane column, and in place where there is no shell to lend one.
  * The automation's build screen opens the same one beside its own picture (`./AutomationBuildScreen`).
@@ -129,12 +195,16 @@ function AboutRow({
 export function Panel({
   place,
   title,
+  onRename,
   onClose,
   readOnly = false,
   children,
 }: {
   place: string;
   title: string;
+  /** Write a new name for what the panel shows. Given, the head's title is the box it is typed in —
+   *  the name is what the panel is about, so it is not asked for again as a field under it. */
+  onRename?: (to: string) => void;
   onClose: () => void;
   /** Hold every field and press in the body shut — the head's close stays live. */
   readOnly?: boolean;
@@ -145,7 +215,11 @@ export function Panel({
     <aside className="actpanel">
       <div className="actpanel__head">
         <span className="actbuild__sec">{place}</span>
-        <span className="actpanel__title">{title}</span>
+        {onRename === undefined ? (
+          <span className="actpanel__title">{title}</span>
+        ) : (
+          <TitleInput key={title} title={title} label={place} readOnly={readOnly} onRename={onRename} />
+        )}
         <button
           type="button"
           className="actpanel__close"
@@ -171,6 +245,7 @@ export function AutomationActionBuildScreen({
   onBack,
   onGoToGlobal,
   onGoToRun,
+  onGoToAutomation,
 }: {
   id: number;
   /** Whose project this is — what the machine is asked about when a step picks an agent. `null` is
@@ -181,6 +256,9 @@ export function AutomationActionBuildScreen({
   onGoToGlobal?: (id: number) => void;
   /** Go to the pane a run holding this action is drawn in. */
   onGoToRun?: (project: number, run: number) => void;
+  /** Go to the build screen of an automation this action is placed on. Absent, the names are read
+   *  and not pressed. */
+  onGoToAutomation?: (project: number, automation: number) => void;
 }) {
   const action = useAutomationAction(id);
   const elsewhere = projectId !== null && action?.global === true;
@@ -193,7 +271,6 @@ export function AutomationActionBuildScreen({
   // Where the dialog that writes a step is about to put one, while it is open.
   const [adding, setAdding] = useState<AddTarget | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
-  const [name, setName] = useDraft(action?.name ?? "");
   const [note, setNote] = useDraft(action?.note ?? "");
 
   const run: Run = (write) => {
@@ -288,42 +365,39 @@ export function AutomationActionBuildScreen({
       </div>
 
       {action !== null && part !== null && (
-        <Panel place={partPlace[part]} title={action.name} onClose={() => setPart(null)} readOnly={readOnly}>
+        <Panel
+          place={partPlace[part]}
+          title={action.name}
+          onRename={
+            part === "about" ? (to) => void run(editAutomationAction(action.id, { name: to })) : undefined
+          }
+          onClose={() => setPart(null)}
+          readOnly={readOnly}
+        >
           {part === "about" ? (
             <>
-              <label className="autostep__field">
-                <span className="autostep__label">{t("auto.actions.name")}</span>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onBlur={() =>
-                    name !== action.name && void run(editAutomationAction(action.id, { name }))
-                  }
-                />
-              </label>
-              <label className="autostep__field">
-                <span className="autostep__label">{t("auto.actions.note")}</span>
+              <Sec title={t("auto.actions.note")}>
                 <textarea
                   {...asTyped}
                   rows={3}
+                  aria-label={t("auto.actions.note")}
+                  placeholder={t("auto.actions.notePlaceholder")}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   onBlur={() =>
                     note !== action.note && void run(editAutomationAction(action.id, { note }))
                   }
                 />
-                <span className="autostep__said">{t("auto.actions.noteWhat")}</span>
-              </label>
-              <div className="autostep__field">
+              </Sec>
+              <div className="autostep__pair">
                 <span className="autostep__label">{t("auto.actions.reach")}</span>
                 <span>
                   <ReachChip global={action.global} />
                 </span>
               </div>
-              <div className="autostep__field">
-                <span className="autostep__label">{t("auto.actions.colUsed")}</span>
-                <span className="autostep__said">{usedCount(action.usedBy)}</span>
-              </div>
+              <Sec title={t("auto.act.placedOn")}>
+                <PlacedOn placedOn={action.placedOn} projectId={projectId} onGoTo={onGoToAutomation} />
+              </Sec>
             </>
           ) : (
             <AutomationActionDeclaresPanel action={action} part={part} run={run} />
@@ -332,7 +406,13 @@ export function AutomationActionBuildScreen({
       )}
 
       {pressed !== null && part === null && (
-        <Panel place={t("auto.act.step")} title={pressed.name} onClose={() => setStep(null)} readOnly={readOnly}>
+        <Panel
+          place={t("auto.act.step")}
+          title={pressed.name}
+          onRename={(to) => void run(editAutomationStep(pressed.id, { name: to }))}
+          onClose={() => setStep(null)}
+          readOnly={readOnly}
+        >
           <AutomationActionStepPanel
             action={action}
             stepId={step}

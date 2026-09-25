@@ -44,7 +44,7 @@ use crate::model::{
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
-    AutomationWire, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, ERROR_EXIT,
+    AutomationWire, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, DONE_EXIT, ERROR_EXIT,
 };
 use crate::ops::{automation_view, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -328,11 +328,11 @@ fn box_word(owner_kind: AutomationPictureOwner) -> &'static str {
     }
 }
 
-/// The two ways out every step and every action is born with: the unnamed one, which is all an owner
+/// The two ways out every step and every action is born with: [`DONE_EXIT`], which is all an owner
 /// with a single way out needs, and the error one, which nobody can delete. Written at the moment the
 /// owner is created so that an edge or a port has somewhere to hang from the first command onwards.
 fn born_with_exits(tx: &WriteTx<'_>, owner_kind: AutomationOwner, owner_id: i64) -> Result<()> {
-    add_exit_row(tx, owner_kind, owner_id, None)?;
+    add_exit_row(tx, owner_kind, owner_id, Some(DONE_EXIT.to_string()))?;
     add_exit_row(tx, owner_kind, owner_id, Some(ERROR_EXIT.to_string()))?;
     Ok(())
 }
@@ -517,8 +517,8 @@ pub fn action_set_entry(
 /// that name, and each input the action declares is wired from the boundary onto the step's. An action
 /// of one step is the degenerate case of the mapping, not the absence of one.
 ///
-/// The two ways out the pair is born with are joined as well — the unnamed one, so that an action
-/// nobody named a way out of still leaves, and the error one, so that a step that fell over leaves by
+/// The two ways out the pair is born with are joined as well — [`DONE_EXIT`], so that an action
+/// nobody gave a way out of its own still leaves, and the error one, so that a step that fell over leaves by
 /// the action's error way out and the picture the placement stands on decides what to do about it,
 /// instead of the run halting inside an action the outer picture never sees.
 pub fn action_from_prompt(
@@ -534,7 +534,7 @@ pub fn action_from_prompt(
         exit_add(tx, AutomationOwner::Action, action.id, Some(name))?;
         exit_add(tx, AutomationOwner::Step, step.id, Some(name))?;
     }
-    let born_with = [None, Some(ERROR_EXIT.to_string())];
+    let born_with = [Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string())];
     for name in exits.iter().cloned().map(Some).chain(born_with) {
         edge_add(
             tx,
@@ -1449,7 +1449,8 @@ fn checked_declarer(tx: &WriteTx<'_>, owner_kind: AutomationOwner, owner_id: i64
 
 /// Add a way out to a step or a library action. [`ERROR_EXIT`] is refused as a name, and so is one
 /// already taken on the same owner: an edge names a way out by name, and two rows under one name would
-/// leave it naming either.
+/// leave it naming either. `None` is [`DONE_EXIT`] — the way to put it back on an owner it was deleted
+/// from.
 pub fn exit_add(
     tx: &WriteTx<'_>,
     owner_kind: AutomationOwner,
@@ -1458,14 +1459,11 @@ pub fn exit_add(
 ) -> Result<AutomationExit> {
     checked_declarer(tx, owner_kind, owner_id)?;
     not_under_a_run(tx, def_of_declarer(tx, owner_kind, owner_id)?)?;
-    let name = name.map(checked_exit_name).transpose()?;
-    if read::automation_exit_by_name(tx.conn(), owner_kind, owner_id, name.as_deref())?.is_some() {
-        return Err(Error::invalid(match &name {
-            Some(n) => format!("a way out called '{n}' is already declared here"),
-            None => "the unnamed way out is already declared here".to_string(),
-        }));
+    let name = checked_exit_name(name.unwrap_or(DONE_EXIT))?;
+    if read::automation_exit_by_name(tx.conn(), owner_kind, owner_id, Some(&name))?.is_some() {
+        return Err(Error::invalid(format!("a way out called '{name}' is already declared here")));
     }
-    add_exit_row(tx, owner_kind, owner_id, name)
+    add_exit_row(tx, owner_kind, owner_id, Some(name))
 }
 
 /// Rename a way out.
@@ -1474,6 +1472,7 @@ pub fn exit_add(
 /// (`AMB-D-961`), so a rename changes what the picture says and nothing about how it is joined.
 ///
 /// [`ERROR_EXIT`]'s row is refused at both ends: it may not be renamed, and no other may take its name.
+/// **A way out keeps a name**: `None` is refused, since a way out with none is drawn blank on its line.
 pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<AutomationExit> {
     let before = live_exit(tx, id)?;
     not_under_a_run(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
@@ -1482,19 +1481,19 @@ pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<Auto
             "the error way out's name is fixed — every step and every action is read as carrying it",
         ));
     }
-    let name = name.map(checked_exit_name).transpose()?;
+    let Some(name) = name else {
+        return Err(Error::invalid("a way out keeps a name — give it the new one"));
+    };
+    let name = checked_exit_name(name)?;
     if let Some(holder) =
-        read::automation_exit_by_name(tx.conn(), before.owner_kind, before.owner_id, name.as_deref())?
+        read::automation_exit_by_name(tx.conn(), before.owner_kind, before.owner_id, Some(&name))?
     {
         if holder.id != id {
-            return Err(Error::invalid(match &name {
-                Some(n) => format!("a way out called '{n}' is already declared here"),
-                None => "the unnamed way out is already declared here".to_string(),
-            }));
+            return Err(Error::invalid(format!("a way out called '{name}' is already declared here")));
         }
     }
     let mut after = before.clone();
-    after.name = name;
+    after.name = Some(name);
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation_exit(&before), record::automation_exit(&after))?;
     Ok(after)
@@ -1854,10 +1853,8 @@ fn box_exit(
     let (declarer, declarer_id) = box_declarer(tx, owner_kind, box_id)?;
     read::automation_exit_by_name(tx.conn(), declarer, declarer_id, exit_name)?.ok_or_else(|| {
         let what = box_word(owner_kind);
-        match exit_name {
-            Some(n) => Error::not_found(format!("{what} '{box_id}' has no way out called '{n}'")),
-            None => Error::not_found(format!("{what} '{box_id}' has no unnamed way out")),
-        }
+        let n = exit_name.unwrap_or(DONE_EXIT);
+        Error::not_found(format!("{what} '{box_id}' has no way out called '{n}'"))
     })
 }
 
@@ -1867,7 +1864,7 @@ pub enum EdgeTarget {
     /// Open the next box.
     Go(i64),
     /// Leave the action this picture is inside, by the way out it declares under this name — `None`
-    /// being its unnamed one. An action's picture only: an automation's has nothing outside it. The
+    /// being [`DONE_EXIT`]. An action's picture only: an automation's has nothing outside it. The
     /// name is how the way out is said; what the edge keeps is its row ([`AutomationEdge::exit_to_id`]).
     Exit(Option<String>),
     /// Close the run.
@@ -1905,9 +1902,9 @@ fn returning_exit(
         ));
     }
     read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, owner_id, exit_to)?.ok_or_else(
-        || match exit_to {
-            Some(n) => Error::not_found(format!("this action has no way out called '{n}'")),
-            None => Error::not_found("this action has no unnamed way out".to_string()),
+        || {
+            let n = exit_to.unwrap_or(DONE_EXIT);
+            Error::not_found(format!("this action has no way out called '{n}'"))
         },
     )
 }
@@ -2039,10 +2036,8 @@ pub fn edge_add(
     };
     checked_max_times(max_times, ends)?;
     if read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, exit.id)?.is_some() {
-        return Err(Error::invalid(match exit_name {
-            Some(n) => format!("'{n}' already says what happens after it"),
-            None => "the unnamed way out already says what happens after it".to_string(),
-        }));
+        let n = exit.name.as_deref().unwrap_or(DONE_EXIT);
+        return Err(Error::invalid(format!("'{n}' already says what happens after it")));
     }
     let sibs = read::automation_edge_siblings(tx.conn(), owner_kind, owner_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
@@ -2405,19 +2400,19 @@ mod tests {
     }
 
     #[test]
-    fn a_step_is_born_with_the_unnamed_way_out_and_the_error_one() {
+    fn a_step_is_born_with_the_way_out_called_done_and_the_error_one() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let (action, _) = mk_placed(tx, &automation, "実装する");
             let step = only_step(tx, &action);
             assert_eq!(
                 exit_names(tx, AutomationOwner::Step, step.id),
-                vec![None, Some(ERROR_EXIT.to_string())],
+                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string())],
                 "both are written at birth, the error one last so it sits at the bottom of the list",
             );
             assert_eq!(
                 exit_names(tx, AutomationOwner::Action, action.id),
-                vec![None, Some(ERROR_EXIT.to_string())],
+                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string())],
                 "and the action carries the pair a placement of it is left by",
             );
         });
@@ -2514,13 +2509,13 @@ mod tests {
             let automation = mk_automation(tx);
             let (action, _) = mk_placed(tx, &automation, "点検する");
             let step = only_step(tx, &action);
-            // The output both sides declare: on the step's unnamed way out, and on the action's.
+            // The output both sides declare: on the step's done way out, and on the action's.
             for (owner, owner_id) in
                 [(AutomationOwner::Step, step.id), (AutomationOwner::Action, action.id)]
             {
                 let exit = read::automation_exit_by_name(tx.conn(), owner, owner_id, None)
                     .expect("read the way out")
-                    .expect("the unnamed way out");
+                    .expect("the done way out");
                 port_add(
                     tx,
                     AutomationPortOwner::Exit,
@@ -2780,14 +2775,14 @@ mod tests {
             let (action, _) = mk_placed(tx, &automation, "取る");
             let first = only_step(tx, &action);
             // The line the new step goes in on is the one the action was written with: its one step
-            // leaves the action by its unnamed way out.
+            // leaves the action by its done way out.
             let edge = edge_on(tx,
                 AutomationPictureOwner::Action,
                 first.id,
                 None,
             )
             .expect("read the edge")
-            .expect("the action leaves by its unnamed way out");
+            .expect("the action leaves by its done way out");
             assert_eq!(edge.ends, AutomationEnds::Exit);
 
             let put = step_insert(
@@ -2822,7 +2817,7 @@ mod tests {
             );
             assert_eq!(
                 exit_names(tx, AutomationOwner::Step, put.id),
-                vec![None, Some(ERROR_EXIT.to_string()), Some("直すところがある".to_string())],
+                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string()), Some("直すところがある".to_string())],
                 "what the dialog wrote is declared on the step it made",
             );
             let inputs = read::automation_ports_of(
@@ -2878,6 +2873,23 @@ mod tests {
                 exit_add(tx, AutomationOwner::Step, step.id, Some(ERROR_EXIT)).is_err(),
                 "nor may another take its name",
             );
+        });
+    }
+
+    #[test]
+    fn a_way_out_keeps_a_name_and_the_one_left_unsaid_is_done() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &automation, "実装する");
+            let step = only_step(tx, &action);
+            let done = read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, step.id, None)
+                .expect("read")
+                .expect("a way out left unsaid is the done one");
+            assert_eq!(done.name.as_deref(), Some(DONE_EXIT));
+            assert!(exit_rename(tx, done.id, None).is_err(), "a way out may not be left without a name");
+            exit_delete(tx, done.id).expect("完了 is an ordinary way out, and may go");
+            let back = exit_add(tx, AutomationOwner::Step, step.id, None).expect("put it back");
+            assert_eq!(back.name.as_deref(), Some(DONE_EXIT), "put back under its name, not without one");
         });
     }
 
@@ -3002,7 +3014,7 @@ mod tests {
             let (to_action, to) = mk_placed(tx, &automation, "点検する");
             let exit = read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, from_action.id, None)
                 .expect("read")
-                .expect("the unnamed way out");
+                .expect("the done way out");
             let out = port_add(
                 tx,
                 AutomationPortOwner::Exit,
@@ -3053,7 +3065,7 @@ mod tests {
                 None,
             )
             .expect("read")
-            .expect("the unnamed way out");
+            .expect("the done way out");
             port_add(
                 tx,
                 AutomationPortOwner::Exit,
@@ -3129,7 +3141,7 @@ mod tests {
             let step = only_step(tx, &action);
             let exit = read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, step.id, None)
                 .expect("read")
-                .expect("the unnamed way out");
+                .expect("the done way out");
             assert!(
                 port_add(
                     tx,
@@ -3284,7 +3296,7 @@ mod tests {
                 assert_eq!(
                     exit_names(tx, owner, owner_id),
                     vec![
-                        None,
+                        Some(DONE_EXIT.to_string()),
                         Some(ERROR_EXIT.to_string()),
                         Some("直すところがある".to_string())
                     ],

@@ -202,8 +202,7 @@ export function OutputPlus({ onPress }: { onPress: () => void }) {
 }
 
 /**
- * What changes a way out, opened on its "⋯": its name, and the press that takes it away. Emptying the
- * name makes it the unnamed way out, as core has it.
+ * What changes a way out, opened on its "⋯": its name, and the press that takes it away.
  */
 export function ExitEdit({
   owner,
@@ -228,8 +227,10 @@ export function ExitEdit({
         value={name}
         onChange={(e) => setName(e.target.value)}
         onBlur={() => {
-          const now = name.trim() === "" ? null : name.trim();
-          if (now !== was) void run(renameAutomationExit(owner, ownerId, was, now));
+          // A way out keeps a name: emptied, it goes back to the one it had.
+          const now = name.trim();
+          if (now === "") setName(was ?? "");
+          else if (now !== was) void run(renameAutomationExit(owner, ownerId, was, now));
         }}
       />
       <button

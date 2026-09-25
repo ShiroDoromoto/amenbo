@@ -1396,7 +1396,7 @@ mod tests {
             let down_copy: Vec<crate::model::RunDefExit> =
                 serde_json::from_str(&copy_of(tx, &run, &p.second, &p.write).exits).expect("exits");
             assert_eq!(
-                down_copy.iter().find(|e| e.name.is_none()).and_then(|e| e.then.as_ref()).and_then(|l| l.max_times),
+                down_copy.iter().find(|e| e.name.as_deref() == Some(crate::model::DONE_EXIT)).and_then(|e| e.then.as_ref()).and_then(|l| l.max_times),
                 None,
                 "the line down keeps none",
             );

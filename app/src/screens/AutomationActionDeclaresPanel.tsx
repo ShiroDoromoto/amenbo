@@ -90,7 +90,7 @@ function OutputRow({
   return (
     <div className="autostep__outline">
       <PortChip port={port} />
-      <span className="autodecl__arrow" aria-hidden="true">←</span>
+      <span className="autostep__arrow" aria-hidden="true">←</span>
       <select
         aria-label={port.name}
         value={picked}

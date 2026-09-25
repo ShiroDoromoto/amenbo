@@ -167,7 +167,7 @@ function InputRow({
           </option>
         ))}
       </select>
-      <span className="autodecl__arrow" aria-hidden="true">→</span>
+      <span className="autostep__arrow" aria-hidden="true">→</span>
       <PortChip port={input} />
     </DeclItem>
   );

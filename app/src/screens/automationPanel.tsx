@@ -12,7 +12,7 @@
 // now says, and a panel with a button would leave a box half-edited every time somebody pressed
 // another one in the picture. A box of text writes when the caret leaves it, so a name is not
 // written a letter at a time.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   addAutomationEdge,
   editAutomationEdge,
@@ -260,6 +260,11 @@ function edgeKey(edge: AutomationEdgeDto | undefined): string {
  * A line on down the picture is taken once per task, and one back to a box that takes a task starts
  * the next task rather than trying this one again. An edge that closes the task or stops the run
  * carries none, and core refuses one there.
+ *
+ * **With a `head`, the row is "way out → where to"** — the mark of the way out stands where the
+ * "next" label would, an arrow after it. A way out other than the error one that nothing is said
+ * after is then drawn in the heed colour: on that layout a row that has not been answered is picked
+ * out by its colour rather than by a sentence under the list.
  */
 export function NextRow({
   graph,
@@ -268,6 +273,7 @@ export function NextRow({
   exitName,
   arrow = false,
   run,
+  head,
 }: {
   /** The picture the line is drawn on, which is where the boxes to go on to are read from. */
   graph: PicGraph;
@@ -280,6 +286,8 @@ export function NextRow({
    *  reads as the line the picture draws. */
   arrow?: boolean;
   run: Run;
+  /** The way out's own mark, drawn ahead of the pulldown in place of the "next" label. */
+  head?: ReactNode;
 }) {
   const edge = graph.edges.find((one) => one.fromId === boxId && one.exitName === exitName);
   const [limit, setLimit] = useDraft(
@@ -326,14 +334,22 @@ export function NextRow({
     if (now !== (edge.maxTimes ?? null)) void run(editAutomationEdge(edge.id, { maxTimes: now }));
   };
 
+  const unset = head !== undefined && edge === undefined && exitName !== ERROR_EXIT;
+
   return (
-    <div className="autostep__next">
-      {arrow ? (
-        <span className="autodecl__arrow" aria-hidden="true">→</span>
+    <div className={head === undefined ? "autostep__next" : "autostep__next autostep__next--flow"}>
+      {head !== undefined ? (
+        <>
+          {head}
+          <span className="autostep__arrow" aria-hidden="true">→</span>
+        </>
+      ) : arrow ? (
+        <span className="autostep__arrow" aria-hidden="true">→</span>
       ) : (
         <span className="autostep__label">{t("auto.step.next")}</span>
       )}
       <select
+        className={unset ? "autostep__unset" : undefined}
         aria-label={exitLabel(exitName === undefined ? undefined : builtinWord(self?.builtin, exitName))}
         value={edgeKey(edge)}
         onChange={(e) => pick(e.target.value)}

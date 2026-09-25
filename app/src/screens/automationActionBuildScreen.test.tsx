@@ -20,6 +20,8 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock("../core/automations", () => ({
+  // The rows number their step by the automation's picture; none is read here.
+  useAutomation: () => null,
   useAutomationAction: () => hoisted.action,
   useAutomationActions: () => [],
   editAutomationAction: hoisted.editAction,

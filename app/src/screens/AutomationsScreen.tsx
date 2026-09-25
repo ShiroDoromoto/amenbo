@@ -19,8 +19,8 @@
 // row, and a press on the row goes to that project's own build screen rather than opening one here —
 // and nothing is made there, since making one would first ask which project it is for. The actions
 // are the device's library alone, made and changed there (`./AutomationActionsTab`). The two run
-// tabs say over their rows that they are this device's whole, because the sidebar names no project
-// to have narrowed them to.
+// tabs carry no heading over their rows: the tab already says which it is, and each row names its
+// project.
 //
 // **A definition opens into the build screen.** It is not a pane beside the list: what is being
 // looked at is one automation's whole picture, and a list kept beside it would take the width the
@@ -199,13 +199,6 @@ export function AutomationsScreen({
   return (
     <div className="autoscreen">
       {tabs}
-
-      {everywhere && (tab === "running" || tab === "history") && (
-        <div className="autotabs__head">
-          <span className="actlib__sec">{tab === "running" ? t("auto.tab.running") : t("auto.tab.history")}</span>
-          <span className="autotabs__scope">{t("auto.scope.device")}</span>
-        </div>
-      )}
 
       {tab === "running" && <RunningTab projectId={projectId} onGoToRun={onGoToRun} />}
 

@@ -84,7 +84,7 @@ export function HistoryTab({
       {history !== null && runs.length === 0 && <div className="auto__empty">{t("auto.history.empty")}</div>}
       {runs.length > 0 && (
         <ul className="autoruns autoruns--history">
-          {runs.map((run) => <RunLine key={run.run} run={run} withProject={projectId === null} />)}
+          {runs.map((run) => <RunLine key={run.run} run={run} ended withProject={projectId === null} />)}
         </ul>
       )}
 

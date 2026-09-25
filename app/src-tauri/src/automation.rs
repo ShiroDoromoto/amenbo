@@ -1419,6 +1419,7 @@ fn run_card(
         placed_action_name(store, last_def.as_ref().and_then(|def| def.placement_id))?;
     let exit_name = last_def.as_ref().and_then(|def| left_by(def, steps.last()?.exit_id));
     let builtin = last_def.as_ref().and_then(|def| def.builtin.clone());
+    let placement = last_def.as_ref().and_then(|def| def.placement_id);
     let step_name = last_def.map(|def| def.name);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
     let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
@@ -1440,6 +1441,7 @@ fn run_card(
         step_name,
         builtin,
         action_name,
+        placement,
         steps_done: steps.len(),
         exit_name,
         task: worked_task(store, stretch)?,

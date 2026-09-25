@@ -55,7 +55,7 @@ vi.mock("../core/boundFolders", () => ({
 // what the panel draws is the spot's own value plus whatever these would have added.
 vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
-import { t, tf } from "../core/i18n";
+import { t, tf, tn } from "../core/i18n";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -153,11 +153,9 @@ async function typeInto(box: HTMLInputElement, value: string) {
 }
 const boxes = () => [...container.querySelectorAll<HTMLInputElement>("input")];
 
-/** The tick box of the row that reads like this, found by the words beside it. */
-const checkFor = (label: string) =>
-  [...container.querySelectorAll<HTMLLabelElement>(".autostep__check")]
-    .find((one) => one.textContent?.includes(label))!
-    .querySelector<HTMLInputElement>("input")!;
+/** The switch that makes this spot where a run opens. */
+const entrySwitch = () =>
+  container.querySelector<HTMLInputElement>(".autostep__switch input[role=switch]")!;
 
 /** The pulldown that says what happens after one way out, found by the way out it hangs on. */
 const nextFor = (exit: string) =>
@@ -250,15 +248,19 @@ describe("the panel of one spot", () => {
     expect(hoisted.chooseAgent).toHaveBeenCalledWith(1, 11, null, null);
   });
 
-  it("names the action with its reach and a press to where it is built", async () => {
+  /// What is changed where is told by the card's shape (`AMB-T-5521`): nothing on it takes a value,
+  /// and its one press goes to where the action is written.
+  it("names the action with its reach, how many use it, and a press to where it is built", async () => {
     const opened = vi.fn();
     await render({ automation: detail(), placementId: 1, onOpenAction: opened });
-    expect(container.textContent).toContain("Take the next task");
-    expect(container.textContent).toContain(t("auto.actions.reachProject"));
-    expect(container.textContent).toContain("Takes one task off the list");
-    expect(container.textContent).toContain(t("auto.place.ownedWhat"));
+    const card = container.querySelector(".autoplace__action")!;
+    expect(card.textContent).toContain("Take the next task");
+    expect(card.textContent).toContain(t("auto.actions.reachProject"));
+    expect(card.textContent).toContain(tn("auto.actions.usedBy", 2));
+    expect(card.querySelectorAll("input, select, textarea")).toHaveLength(0);
+    expect(card.querySelectorAll("button")).toHaveLength(1);
     const press = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (one) => one.textContent === t("auto.place.open"),
+      (one) => one.textContent?.startsWith(t("auto.place.open")),
     )!;
     await act(async () => press.click());
     expect(opened).toHaveBeenCalledWith(4);
@@ -268,7 +270,7 @@ describe("the panel of one spot", () => {
     const opened = vi.fn();
     await render({ automation: detail(), placementId: 1, onOpenAction: opened, readOnly: true });
     const press = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (one) => one.textContent === t("auto.place.open"),
+      (one) => one.textContent?.startsWith(t("auto.place.open")),
     )!;
     expect(press.closest("fieldset")).toBeNull();
     await act(async () => press.click());
@@ -357,6 +359,28 @@ describe("the panel of one spot", () => {
     expect(hoisted.clearWire).toHaveBeenCalledWith(3);
   });
 
+  /// A family the action declares none of is left off, rather than drawn with a line saying so.
+  it("draws no section for inputs or settings the action does not declare", async () => {
+    await render({ automation: detail(), placementId: 1 });
+    const titles = [...container.querySelectorAll(".autostep__sectitle")].map((one) => one.textContent);
+    expect(titles).not.toContain(t("auto.step.inputs"));
+    expect(titles).not.toContain(t("auto.step.cfg"));
+    expect(titles).toContain(t("auto.step.exits"));
+  });
+
+  /// "way out → where to", and a way out with nothing said after it is picked out by colour. The
+  /// error one has an answer when nothing is said, so it never is.
+  it("marks a way out nothing is said after, and never the error one", async () => {
+    await render({ automation: detail(), placementId: 1 });
+    expect(nextFor(t("auto.step.exitUnnamed")).className).toContain("autostep__unset");
+    expect(nextFor(t("auto.pic.errorExit")).className).not.toContain("autostep__unset");
+    const said = detail({
+      edges: [{ id: 5, fromId: 1, ends: "done" }],
+    });
+    await render({ automation: said, placementId: 1 });
+    expect(nextFor(t("auto.step.exitUnnamed")).className).not.toContain("autostep__unset");
+  });
+
   it("draws the error way out last, and offers neither a rename nor a delete on it", async () => {
     await render({ automation: detail(), placementId: 1 });
     const ways = [...container.querySelectorAll(".autostep__exits li")];
@@ -378,13 +402,14 @@ describe("the panel of one spot", () => {
   /// definition, and unticking it leaves the automation with no entry at all rather than refusing.
   it("names this spot as where a run opens, and gives the entry back", async () => {
     await render({ automation: detail({ entryPlacementId: undefined }), placementId: 1 });
-    const entry = checkFor(t("auto.step.entry"));
+    expect(container.querySelector(".autostep__switch")?.textContent).toContain(t("auto.step.entry"));
+    const entry = entrySwitch();
     expect(entry.checked).toBe(false);
     await act(async () => entry.click());
     expect(hoisted.setEntry).toHaveBeenCalledWith(7, 1);
 
     await render({ automation: detail(), placementId: 1 });
-    await act(async () => checkFor(t("auto.step.entry")).click());
+    await act(async () => entrySwitch().click());
     expect(hoisted.setEntry).toHaveBeenCalledWith(7, null);
   });
 

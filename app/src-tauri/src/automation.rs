@@ -364,6 +364,21 @@ pub fn automation_action_set_scope(id: i64, project_id: Option<i64>) -> Result<W
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
+/// **Delete a library action with everything inside it** — its steps, their declarations and the
+/// picture they are drawn into ([`amenbo_core::ops::automation::action_delete`]).
+///
+/// **Core refuses it while a placement stands on it**, saying how many: the placement would be left
+/// standing on nothing, and what should stand there instead is not the list's to guess. The refusal
+/// reaches the screen as core's sentence, the way a refused move does.
+#[tauri::command]
+pub fn automation_action_remove(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automationActions"]))
+}
+
 /// **Change the step one library action opens.** Only what is `Some` is written.
 ///
 /// The fields are the step's, not the placement's: a prompt and the flags belong to the terminal
@@ -1413,6 +1428,7 @@ fn run_card(
         placed_action_name(store, last_def.as_ref().and_then(|def| def.placement_id))?;
     let exit_name = last_def.as_ref().and_then(|def| left_by(def, steps.last()?.exit_id));
     let builtin = last_def.as_ref().and_then(|def| def.builtin.clone());
+    let placement = last_def.as_ref().and_then(|def| def.placement_id);
     let step_name = last_def.map(|def| def.name);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
     let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
@@ -1434,6 +1450,7 @@ fn run_card(
         step_name,
         builtin,
         action_name,
+        placement,
         steps_done: steps.len(),
         exit_name,
         task: worked_task(store, stretch)?,

@@ -5,9 +5,14 @@
 // the picture is a placement of a library action. What that action declares — its ways out, what
 // each hands on, its inputs, its settings — and what its steps carry — the prompt and the flags — are
 // the action's, and are written on the action's own screen, where a rewrite reaches every placement
-// of it. So here they are read, and the panel says where they are written, with the press
-// that goes there. Written in two places, a reader would not know which one they were changing, nor
-// that a rewrite on one picture reached another.
+// of it. Written in two places, a reader would not know which one they were changing, nor that a
+// rewrite on one picture reached another.
+//
+// **Which is which is told by the shape, not by a sentence** (`AMB-T-5521`). The action is one card
+// with nothing to type in and a single press, "open the action", that goes to where it is written;
+// what is this spot's own is a control. A way out is its mark, read, and the pulldown after the arrow
+// is the one thing on the row to change. A family the action declares none of is not drawn at all,
+// rather than drawn empty with a line saying so.
 //
 // **What is written here is this spot's alone**: the answer a setting takes, the wire into an input,
 // what happens after each way out, whether a run opens here, and who carries out each step of the
@@ -24,7 +29,7 @@
 // another box in the picture. A box of text writes when the caret leaves it.
 //
 // **Taking the spot off is here too**, because this is what a reader has in front of them when they
-// decide against it. It leaves the library action where it is.
+// decide against it. It leaves the library action where it is, which the confirmation says.
 //
 // **A setting is answered by the control its kind takes** — never by writing a filter expression. The
 // shape each one is kept in is `./automationCfg`'s.
@@ -47,9 +52,10 @@ import { confirmDialog } from "../core/dialog";
 import { errText, isStatus, statusLabel, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 import { ExitMark, ReachChip, usedCount } from "./automationParts";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
-import { CFG_KINDS, exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
+import { exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import {
   filterRows,
   pressed,
@@ -177,14 +183,10 @@ function CfgRow({ placementId, builtin, cfg, run }: {
   const shown = builtinWord(builtin, cfg.name);
 
   return (
-    <div className="autostep__cfg">
-      <div>
-        <DeclChip
-          name={shown}
-          kind={CFG_KINDS.find((one) => one.id === cfg.kind)?.label() ?? cfg.kind}
-          required={cfg.required}
-          tone="cfg"
-        />
+    <section className="autostep__sec">
+      <div className="autostep__sectitle">
+        {shown}
+        {cfg.required && <span className="autostep__req">● {t("auto.step.required")}</span>}
       </div>
 
       {cfg.kind === "taskfilter" && (
@@ -248,13 +250,13 @@ function CfgRow({ placementId, builtin, cfg, run }: {
           onBlur={() => writeText(text) !== (cfg.value ?? null) && answer(writeText(text))}
         />
       )}
-    </div>
+    </section>
   );
 }
 
 /**
- * One step of the placed action, and who carries it out at this spot: the agent, then the model that
- * agent offers. Choosing another agent leaves the model to that agent's own default, since a model is
+ * One step of the placed action, and who carries it out at this spot, on one line: the step's name,
+ * the agent, then the model that agent offers. Choosing another agent leaves the model to that agent's own default, since a model is
  * one agent's name for it. The empty agent is nobody chosen, which the launch check names.
  */
 function AgentRow({
@@ -407,9 +409,6 @@ export function AutomationStepPanel({
     return <div className="auto__empty">{t("auto.step.none")}</div>;
   }
 
-  const takesTask = placement.exits.some((exit) =>
-    exit.outputs.some((port) => port.kind === "task_take"),
-  );
   // Taking the spot away takes the answers written on it and every line naming it, so it asks first
   // — and what it leaves is the library action, which outlives any one picture. The panel is drawn
   // from that spot, so the screen is told to stop showing it.
@@ -418,107 +417,88 @@ export function AutomationStepPanel({
     if (await run(removeAutomationPlacement(placement.id))) onRemoved();
   };
   const named = placement.exits.filter((one) => one.name !== ERROR_EXIT);
+  const graph = automationGraph(automation)!;
 
   return (
     <div className="autostep">
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
-      <div className="autostep__field">
-        <span className="autostep__label">{t("auto.place.action")}</span>
-        <div className="autoplace__action">
-          <div className="autoplace__actionhead">
-            <span className="autoplace__actionname">{builtinWord(placement.builtin, placement.name)}</span>
-            {action !== null && <ReachChip global={action.global} builtin={placement.builtin !== undefined} />}
-          </div>
-          {action !== null && action.note.trim() !== "" && (
-            <div className="autoplace__note">{builtinWord(placement.builtin, action.note)}</div>
+      {/* The action, read: nothing on the card takes a value, and the one press goes to where it is
+          written. Outside the fieldset, so a run holding the automation still lets a reader go and
+          read it (`AMB-D-961`). */}
+      <div className="autoplace__action">
+        <span className="autoplace__icon" aria-hidden="true">
+          <Icon name="gear" />
+        </span>
+        <div className="autoplace__actionbody">
+          <span className="autoplace__actionname">{builtinWord(placement.builtin, placement.name)}</span>
+          {action !== null && (
+            <div className="autoplace__meta">
+              <ReachChip global={action.global} builtin={placement.builtin !== undefined} />
+              <span>{usedCount(action.usedBy)}</span>
+            </div>
           )}
           {action !== null && action.steps.length === 0 && (
             <div className="autoplace__empty">{t("auto.place.empty")}</div>
           )}
-          <div className="autoplace__meta">
-            {action !== null && <span>{usedCount(action.usedBy)}</span>}
-            <button type="button" className="btn" onClick={() => onOpenAction(placement.actionId)}>
-              {t("auto.place.open")}
-            </button>
-          </div>
-          <div className="autostep__said">{t("auto.place.ownedWhat")}</div>
         </div>
+        <button type="button" className="autoplace__open" onClick={() => onOpenAction(placement.actionId)}>
+          {t("auto.place.open")}
+          <span aria-hidden="true"> ↗</span>
+        </button>
       </div>
 
       <fieldset className="autostep__writes" disabled={readOnly}>
-
-        <label className="autostep__check">
+        {/* A switch rather than a tick box: it reads as something to turn on. There is one start per
+            automation, and turning it on here moves it off the spot that had it — which the picture
+            shows as its mark moving. */}
+        <label className="autostep__switch">
+          <span>{t("auto.step.entry")}</span>
           <input
             type="checkbox"
+            role="switch"
             checked={automation.entryPlacementId === placement.id}
             onChange={(e) =>
               void run(setAutomationEntry(automation.id, e.target.checked ? placement.id : null))
             }
           />
-          {t("auto.step.entry")}
         </label>
-        <div className="autostep__said">{t("auto.step.entryWhat")}</div>
-
-        <div className="autostep__field">
-          <span className="autostep__label">{t("auto.step.task")}</span>
-          <span className="autostep__said">
-            {takesTask ? t("auto.step.takesTask") : t("auto.step.carriesTask")}
-          </span>
-        </div>
 
         {/* Amenbo carries a built-in out itself, and core refuses anybody chosen for it (`AMB-D-964`). */}
         {placement.steps.length > 0 && placement.builtin === undefined && (
-          <div className="autostep__field">
-            <span className="autostep__label">{t("auto.place.agents")}</span>
-            <span className="autostep__said">{t("auto.place.agentsWhat")}</span>
-            <div className="autostep__rows">
-              {placement.steps.map((step) => (
-                <AgentRow key={step.stepId} placementId={placement.id} step={step} agents={agents} run={run} />
-              ))}
-            </div>
-          </div>
+          <section className="autostep__sec">
+            <div className="autostep__sectitle">{t("auto.place.agents")}</div>
+            {placement.steps.map((step) => (
+              <AgentRow key={step.stepId} placementId={placement.id} step={step} agents={agents} run={run} />
+            ))}
+          </section>
         )}
 
-        <div className="autostep__field">
-          <span className="autostep__label">{t("auto.step.cfg")}</span>
-          {placement.settings.length === 0 && (
-            <span className="autostep__said">{t("auto.step.declaresNone")}</span>
-          )}
-          {placement.settings.map((cfg) => (
-            <CfgRow key={cfg.name} placementId={placement.id} builtin={placement.builtin} cfg={cfg} run={run} />
-          ))}
-        </div>
+        {placement.settings.map((cfg) => (
+          <CfgRow key={cfg.name} placementId={placement.id} builtin={placement.builtin} cfg={cfg} run={run} />
+        ))}
 
-        <div className="autostep__field">
-          <span className="autostep__label">{t("auto.step.inputs")}</span>
-          {placement.inputs.length === 0 && (
-            <span className="autostep__said">{t("auto.step.declaresNone")}</span>
-          )}
-          {placement.inputs.map((input) => (
-            <InputRow key={input.name} automation={automation} placement={placement} input={input} run={run} />
-          ))}
-        </div>
+        {placement.inputs.length > 0 && (
+          <section className="autostep__sec">
+            <div className="autostep__sectitle">{t("auto.step.inputs")}</div>
+            {placement.inputs.map((input) => (
+              <InputRow key={input.name} automation={automation} placement={placement} input={input} run={run} />
+            ))}
+          </section>
+        )}
 
-        <div className="autostep__field">
-          <span className="autostep__label">{t("auto.step.exits")}</span>
-          <span className="autostep__said">{t("auto.place.exitsWhat")}</span>
-          <ul className="autostep__exits">
+        <section className="autostep__sec">
+          <div className="autostep__sectitle">{t("auto.step.exits")}</div>
+          <ul className="autostep__exits autostep__exits--flow">
             {named.map((one) => (
               <li key={one.id} className="autostep__exit">
-                <div className="autostep__exithead">
-                  <ExitMark
-                    name={one.name}
-                    builtin={placement.builtin}
-                    outputs={one.outputs.map((out) => builtinWord(placement.builtin, out.name))}
-                  />
-                </div>
                 <NextRow
-                  graph={automationGraph(automation)!}
+                  graph={graph}
                   picture="automation"
                   boxId={placement.id}
                   exitName={one.name}
                   run={run}
+                  head={<ExitMark name={one.name} builtin={placement.builtin} />}
                 />
               </li>
             ))}
@@ -527,26 +507,23 @@ export function AutomationStepPanel({
                 cannot fail. Saying nothing after it stops the run and calls a person, and the row is
                 where a picture says otherwise. */}
             <li className="autostep__exiterr">
-              <div className="autostep__exithead">
-                <ExitMark name={ERROR_EXIT} />
-              </div>
               <NextRow
-                graph={automationGraph(automation)!}
+                graph={graph}
                 picture="automation"
                 boxId={placement.id}
                 exitName={ERROR_EXIT}
                 run={run}
+                head={<ExitMark name={ERROR_EXIT} />}
               />
             </li>
           </ul>
-        </div>
+        </section>
 
         <div className="actpanel__foot">
           <button type="button" className="btn btn--danger" onClick={() => void remove()}>
             {t("auto.step.placementRemove")}
           </button>
         </div>
-        <div className="autostep__said">{t("auto.step.placementRemoveWhat")}</div>
       </fieldset>
     </div>
   );

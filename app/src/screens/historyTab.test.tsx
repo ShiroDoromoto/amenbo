@@ -19,6 +19,8 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock("../core/automations", () => ({
+  // The rows number their step by the automation's picture; none is read here.
+  useAutomation: () => null,
   useRunHistory: (filter: string, project: number | null, page: number): AutomationRunHistoryDto => {
     hoisted.asked.push(`${filter} ${page}`);
     hoisted.projects.push(project);
@@ -85,6 +87,12 @@ afterEach(() => {
 });
 
 describe("the history tab", () => {
+  // Every run here is over, and how it ended is what a row is read for — so it is on a chip.
+  it("says on each row how the run ended", async () => {
+    await render();
+    expect(container.querySelector(".autorun__chip")?.textContent).toBe(t("auto.run.completed"));
+  });
+
   it("reads one page at a time and says where in the whole it is", async () => {
     await render();
     expect(container.querySelectorAll(".autorun")).toHaveLength(20);

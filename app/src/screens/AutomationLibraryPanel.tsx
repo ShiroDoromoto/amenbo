@@ -18,8 +18,15 @@
 // none.
 //
 // **A row opens in place, with the button that places it.** What a reader weighs before placing is
-// what the action asks and how it leaves — its settings, its inputs, its ways out — and that is read
-// right under the row pressed rather than at the foot of a list that may run long.
+// what the action takes in and how it leaves, and that is read right under the row pressed rather
+// than at the foot of a list that may run long. **An action of one's own and a built-in open the same
+// way**: the same two rows, what it receives and its ways out, the error one among them with its own
+// mark — so the two kinds read as one list and not as two screens.
+//
+// **A group with nothing matching the search is not drawn at all**, head and all: one "nothing
+// matches" per group said the same thing three times. What stays at the foot whatever was typed is
+// the row that makes a new action, under the name typed — the reader who searched and did not find
+// it goes on from where they are, without a sentence telling them they may.
 //
 // **On a line, the pressed way out comes to point at the new placement** and the new placement goes
 // on to where that way out used to (`insertAutomationAction`). On an empty picture the placement
@@ -34,68 +41,76 @@ import {
   useAutomationActions,
   useAutomationBuiltins,
 } from "../core/automations";
-import { errText, t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
+import { errText, t, tf } from "../core/i18n";
 import { ERROR_EXIT } from "./automationLayout";
-import { CFG_KINDS } from "./automationPanel";
 import { kindLabel } from "./automationPortKinds";
-import { BuiltinDecl } from "./AutomationBuiltinScreen";
 import { ExitMark, ReachChip, usedCount, WhereMark, type WhereTo } from "./automationParts";
 import { builtinShown } from "../core/builtinWords";
-import type { AutomationActionCardDto, AutomationBuiltinDto } from "../bindings/bindings";
+import type {
+  AutomationActionCardDto,
+  AutomationBuiltinDto,
+  AutomationPortDto,
+} from "../bindings/bindings";
 
 /** Where the picked action goes: onto a line, or onto a picture with no line yet. */
 export type PlaceTarget = { edgeId: number } | { automationId: number };
 
-/** What an opened row shows: the action's declaration, read, and the press that places it. */
+/**
+ * What an opened row declares, the same two rows for an action of one's own and a built-in: what it
+ * receives, and its ways out. Every box is born with the error way out, so it is always drawn, last.
+ */
+function Declared({
+  inputs,
+  exits,
+}: {
+  inputs: readonly AutomationPortDto[];
+  exits: readonly { name?: string | null; outputs: readonly { name: string }[] }[];
+}) {
+  const named = exits.filter((one) => one.name !== ERROR_EXIT);
+  return (
+    <div className="actdecl__rows">
+      <span className="actdecl__key">{t("auto.pic.actionIn")}</span>
+      <span className="actdecl__chips">
+        {inputs.length === 0 ? (
+          <span className="actdecl__none">{t("auto.act.none")}</span>
+        ) : (
+          inputs.map((one) => (
+            <span key={one.name} className={`actport actport--${one.kind}`}>
+              {one.name}
+              <span className="actport__kind">
+                {kindLabel(one.kind)}
+                {one.required && `・${t("auto.step.required")}`}
+              </span>
+            </span>
+          ))
+        )}
+      </span>
+      <span className="actdecl__key">{t("auto.step.exits")}</span>
+      <span className="actdecl__chips">
+        {named.map((one) => (
+          <ExitMark
+            key={one.name ?? ""}
+            name={one.name ?? undefined}
+            outputs={one.outputs.map((out) => out.name)}
+          />
+        ))}
+        <ExitMark name={ERROR_EXIT} />
+      </span>
+    </div>
+  );
+}
+
+/** What an opened row shows: the action's note and declaration, and the press that places it. */
 function Picked({ id, onPlace }: { id: number; onPlace: () => void }) {
   const action = useAutomationAction(id);
-  const none = <span className="actdecl__none">{t("auto.act.none")}</span>;
   return (
     <div className="autolib__picked">
       {action !== null && action.note.trim() !== "" && (
         <div className="autolib__note">{action.note}</div>
       )}
-      {action !== null && (
-        <div className="actdecl__rows">
-          <span className="actdecl__key">{t("auto.step.cfg")}</span>
-          <span className="actdecl__chips">
-            {action.settings.length === 0
-              ? none
-              : action.settings.map((one) => (
-                  <span key={one.name} className="actport actport--cfg">
-                    {one.name}
-                    <span className="actport__kind">
-                      {CFG_KINDS.find((kind) => kind.id === one.kind)?.label() ?? one.kind}
-                    </span>
-                  </span>
-                ))}
-          </span>
-          <span className="actdecl__key">{t("auto.step.inputs")}</span>
-          <span className="actdecl__chips">
-            {action.inputs.length === 0
-              ? none
-              : action.inputs.map((one) => (
-                  <span key={one.name} className={`actport actport--${one.kind}`}>
-                    {one.name}
-                    <span className="actport__kind">
-                      {kindLabel(one.kind)}
-                      {one.required && `・${t("auto.step.required")}`}
-                    </span>
-                  </span>
-                ))}
-          </span>
-          <span className="actdecl__key">{t("auto.step.exits")}</span>
-          <span className="actdecl__chips">
-            {action.exits
-              .filter((one) => one.name !== ERROR_EXIT)
-              .map((one) => (
-                <ExitMark key={one.id} name={one.name} outputs={one.outputs.map((out) => out.name)} />
-              ))}
-          </span>
-        </div>
-      )}
+      {action !== null && <Declared inputs={action.inputs} exits={action.exits} />}
       <div>
         <button type="button" className="btn btn--primary" onClick={onPlace}>
           {t("auto.pic.placeDo")}
@@ -119,8 +134,8 @@ export function AutomationLibraryPanel({
   where: WhereTo;
   /** The action is on the picture; the panel has nothing left to show. */
   onPlaced: () => void;
-  /** Make an action here instead — the dialog, opened on this same target. */
-  onMake: () => void;
+  /** Make an action here instead — the dialog, opened on this same target with the name typed. */
+  onMake: (name: string) => void;
 }) {
   const actions = useAutomationActions(projectId);
   const builtins = useAutomationBuiltins();
@@ -149,13 +164,18 @@ export function AutomationLibraryPanel({
   };
 
   const w = words.trim().toLowerCase();
-  const rows = (global: boolean) => {
-    const found = actions.filter(
+  const own = (global: boolean) =>
+    actions.filter(
       (one: AutomationActionCardDto) =>
         one.global === global && (w === "" || `${one.name} ${one.note}`.toLowerCase().includes(w)),
     );
-    if (found.length === 0) return <div className="autolib__none">{t("auto.actions.noMatch")}</div>;
-    return found.map((one) => (
+  // Searched in the words the reader sees, which are the screen's language and not the store's.
+  const shownBuiltins = builtins
+    .map(builtinShown)
+    .filter((one: AutomationBuiltinDto) => w === "" || `${one.name} ${one.does}`.toLowerCase().includes(w));
+
+  const rows = (found: AutomationActionCardDto[]) =>
+    found.map((one) => (
       <div key={one.id}>
         <button
           type="button"
@@ -171,15 +191,9 @@ export function AutomationLibraryPanel({
         {picked === one.id && <Picked id={one.id} onPlace={() => place(one.id)} />}
       </div>
     ));
-  };
 
-  const builtinRows = () => {
-    // Searched in the words the reader sees, which are the screen's language and not the store's.
-    const found = builtins
-      .map(builtinShown)
-      .filter((one: AutomationBuiltinDto) => w === "" || `${one.name} ${one.does}`.toLowerCase().includes(w));
-    if (found.length === 0) return <div className="autolib__none">{t("auto.actions.noMatch")}</div>;
-    return found.map((one) => (
+  const builtinRows = () =>
+    shownBuiltins.map((one) => (
       <div key={one.key}>
         <button
           type="button"
@@ -195,7 +209,7 @@ export function AutomationLibraryPanel({
         {picked === one.key && (
           <div className="autolib__picked">
             <div className="autolib__note">{one.does}</div>
-            <BuiltinDecl builtin={one} />
+            <Declared inputs={one.inputs} exits={one.exits} />
             <div>
               <button type="button" className="btn btn--primary" onClick={() => placeBuiltin(one.key)}>
                 {t("auto.pic.placeDo")}
@@ -205,7 +219,10 @@ export function AutomationLibraryPanel({
         )}
       </div>
     ));
-  };
+
+  const mine = projectId === null ? [] : own(false);
+  const shared = own(true);
+  const typed = words.trim();
 
   return (
     <>
@@ -219,21 +236,23 @@ export function AutomationLibraryPanel({
         value={words}
         onChange={(e) => setWords(e.target.value)}
       />
-      {projectId !== null && (
+      {mine.length > 0 && (
         <div className="autolib__group">
           <div className="autolib__head">
             <ReachChip global={false} />
           </div>
-          {rows(false)}
+          {rows(mine)}
         </div>
       )}
-      <div className="autolib__group">
-        <div className="autolib__head">
-          <ReachChip global />
+      {shared.length > 0 && (
+        <div className="autolib__group">
+          <div className="autolib__head">
+            <ReachChip global />
+          </div>
+          {rows(shared)}
         </div>
-        {rows(true)}
-      </div>
-      {builtins.length > 0 && (
+      )}
+      {shownBuiltins.length > 0 && (
         <div className="autolib__group">
           <div className="autolib__head">
             <ReachChip global builtin />
@@ -241,14 +260,9 @@ export function AutomationLibraryPanel({
           {builtinRows()}
         </div>
       )}
-      <div className="autolib__make">
-        <div className="autostep__said">{t("auto.lib.makeWhat")}</div>
-        <div>
-          <button type="button" className="btn" onClick={onMake}>
-            {t("auto.lib.make")}
-          </button>
-        </div>
-      </div>
+      <button type="button" className="autolib__make" onClick={() => onMake(typed)}>
+        {typed === "" ? t("auto.lib.makeNew") : tf("auto.lib.makeNamed", { name: typed })}
+      </button>
     </>
   );
 }

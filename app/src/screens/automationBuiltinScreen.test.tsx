@@ -20,10 +20,14 @@ const take: AutomationBuiltinDto = {
   usedBy: 2,
 };
 
+const bare: AutomationBuiltinDto = { ...take, settings: [], inputs: [], exits: [] };
+/** Whether the built-in is drawn with nothing on any of its three rows. */
+let empty = false;
+
 const hoisted = vi.hoisted(() => ({ action: null as AutomationActionDetailDto | null }));
 
 vi.mock("../core/automations", () => ({
-  useAutomationBuiltins: () => [take],
+  useAutomationBuiltins: () => [empty ? bare : take],
   useAutomationAction: () => hoisted.action,
   editAutomationAction: vi.fn(),
 }));
@@ -43,6 +47,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   back.mockClear();
+  empty = false;
 });
 
 afterEach(() => {
@@ -75,6 +80,22 @@ describe("a built-in, opened", () => {
     expect(container.querySelector("input, textarea, select")).toBeNull();
     await act(async () => { buttons[0]!.click(); });
     expect(back).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes back by a label that names no screen, since it is opened from more than one", async () => {
+    await act(async () => {
+      root.render(createElement(AutomationBuiltinScreen, { builtinKey: "task_take", onBack: back }));
+    });
+    expect(container.querySelector("button")?.textContent?.trim()).toBe(t("auto.builtin.back"));
+  });
+
+  it("draws a dash on every row with nothing in it, the ways out included", async () => {
+    empty = true;
+    await act(async () => {
+      root.render(createElement(AutomationBuiltinScreen, { builtinKey: "task_take", onBack: back }));
+    });
+    const none = [...container.querySelectorAll(".actdecl__none")].map((one) => one.textContent);
+    expect(none).toEqual(["—", "—", "—"]);
   });
 
   it("is where the build screen of a built-in's action lands", async () => {

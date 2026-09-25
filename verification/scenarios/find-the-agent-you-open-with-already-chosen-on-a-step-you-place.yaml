@@ -1,0 +1,102 @@
+# An action placed on an automation has a row per step saying who carries that step out, and a step
+# nobody chose for is one the launch check refuses. Before placing wrote anything there, every
+# placement came down with each of those rows reading nobody chosen, and the reader chose again once
+# per step before a run could start. So a placement is born with the answer the reader has already
+# given: the project's, else the agent they last opened a pane with (`amenbo_core::wake::step_agent`).
+#
+# ── Why the answer is given by opening a pane ───────────────────────────────────────────────────
+# Both answers are written by the screen and by nothing else. The last agent is what a press on the
+# empty frame's row leaves behind (`app/src-tauri/src/wake.rs`, `wake_chose`), and it is the one every
+# reader has given by the time they build anything — so it is the rank this road walks. There is no
+# terminal road to either answer, which is why this goal is the screen's alone.
+#
+# ── Why the agent is named ──────────────────────────────────────────────────────────────────────
+# The row reads the agent's own name, and a road reading a name has to have chosen it. The machine is
+# stood up (`can-start`), which is what lets a road name one at all; two of them, so that nobody has
+# chosen when the frame comes up and the press is the reader's rather than the only thing there was.
+id: find-the-agent-you-open-with-already-chosen-on-a-step-you-place
+title: A step of an action placed on an automation comes down carrying the agent the reader last opened a pane with
+description: >
+  Stand a machine up with two agents on it, open a pane in the project on one of them by name, and go
+  to the project's automations. Place a library action of one step on an automation that has nothing
+  on it and press its box: the row saying who carries that step out already reads the agent the pane
+  was opened with, rather than nobody chosen.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Harbour
+      dir: harbour-side
+    as: harbour
+
+  - type: action
+    domain: workspace
+    op: can-start
+    with:
+      count: 2
+
+  # One step, so the panel draws one row to read and there is no question of which.
+  - { type: action, domain: automation, op: action-add, with: { name: draft, project: harbour }, as: draft }
+  - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, prompt: write the draft }, as: write }
+  - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — placed with an agent on it", project: harbour }, as: auto }
+
+steps_gui:
+  # ── The answer, given the way a reader gives it ───────────────────────────────────────────────
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Harbour
+
+  - type: action
+    domain: workspace
+    op: pick-start
+    with:
+      agent: Claude Code
+
+  - type: action
+    domain: workspace
+    op: open-start
+
+  # ── And the placement that comes down carrying it ─────────────────────────────────────────────
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: place-action
+    with:
+      action: draft
+
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: draft
+
+  # The reading. Nobody chose on this placement, so a build that wrote nothing at placing leaves the
+  # row on nobody chosen, and the agent's name is not in it.
+  - type: assert
+    domain: automation
+    op: panel-shows
+    with:
+      field: agent
+      value: Claude Code

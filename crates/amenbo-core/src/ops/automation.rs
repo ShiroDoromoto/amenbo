@@ -1103,16 +1103,35 @@ pub fn placement_steps_default(
     placement_id: i64,
     agent: Option<&str>,
 ) -> Result<()> {
-    let Some(agent) = agent else { return Ok(()) };
+    if agent.is_none() {
+        return Ok(());
+    }
     let placement = live_placement(tx, placement_id)?;
     for step in read::automation_action_steps_of(tx.conn(), placement.action_id)? {
-        if step.builtin.is_some()
-            || read::automation_placement_step_for(tx.conn(), placement_id, step.id)?.is_some()
-        {
-            continue;
-        }
-        placement_step_set(tx, placement_id, step.id, agent, None)?;
+        placement_step_default(tx, placement_id, &step, agent)?;
     }
+    Ok(())
+}
+
+/// **Write the default agent onto one step at one placement, where nobody has chosen for it yet** —
+/// [`placement_steps_default`] for a single step. It is also what a step added to an action already
+/// placed is given at each of its placements (`AMB-T-5531`), so the new step does not stand there
+/// with nobody chosen while the steps placed with the action have somebody.
+///
+/// A choice already made stays, a built-in is passed by, and `None` writes nothing.
+pub fn placement_step_default(
+    tx: &WriteTx<'_>,
+    placement_id: i64,
+    step: &AutomationStep,
+    agent: Option<&str>,
+) -> Result<()> {
+    let Some(agent) = agent else { return Ok(()) };
+    if step.builtin.is_some()
+        || read::automation_placement_step_for(tx.conn(), placement_id, step.id)?.is_some()
+    {
+        return Ok(());
+    }
+    placement_step_set(tx, placement_id, step.id, agent, None)?;
     Ok(())
 }
 
@@ -3894,6 +3913,7 @@ mod held_by_a_run {
             "placement_insert",
             "placement_insert_new",
             "placement_steps_default",
+            "placement_step_default",
             "step_insert",
             // Reads a picture handed to it and writes nothing.
             "lines_back",

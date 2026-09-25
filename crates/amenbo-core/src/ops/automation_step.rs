@@ -474,9 +474,10 @@ fn compose(
         preamble.push_str(&format!("\n\n{}", working_on(task)));
     }
     push_block(&mut out, &preamble);
-    if def.show_task {
+    let parts = TaskParts { notes: def.show_notes, decisions: def.show_decisions, comments: def.show_comments };
+    if parts.any() {
         if let Some(task) = stretch.and_then(|s| s.task_id) {
-            push_block(&mut out, &the_task(tx, task)?);
+            push_block(&mut out, &the_task(tx, task, parts)?);
         }
     }
     if def.show_history {
@@ -507,21 +508,37 @@ fn working_on(task: i64) -> String {
     format!("The task this run is working on now is AMB-T-{task}.")
 }
 
-/// **The task this run is on, as the store holds it when the step opens** (`AMB-D-965`): its notes, the
-/// decisions linked to it and its comments, each whole and oldest first.
+/// Which parts of the task the run is on a step is handed — each on a switch of its own, all three on
+/// unless somebody turns one off.
+#[derive(Clone, Copy)]
+struct TaskParts {
+    notes: bool,
+    decisions: bool,
+    comments: bool,
+}
+
+impl TaskParts {
+    fn any(self) -> bool {
+        self.notes || self.decisions || self.comments
+    }
+}
+
+/// **The task this run is on, as the store holds it when the step opens** (`AMB-D-965`): its title, then
+/// those of its notes, the decisions linked to it and its comments the step is handed, each whole and
+/// oldest first.
 ///
 /// It is written here so the step does not spend its first turns fetching it with `task show`,
 /// `decision show` and `comment list` — and cannot forget to. What a task that this one depends on
 /// left in the code is not here: reading that stays the agent's work.
-fn the_task(tx: &WriteTx<'_>, task_id: i64) -> Result<String> {
+fn the_task(tx: &WriteTx<'_>, task_id: i64, parts: TaskParts) -> Result<String> {
     let conn = tx.conn();
     let task = read::task(conn, task_id)?.ok_or_else(|| not_found("task", task_id))?;
     let mut out = format!("## The task this run is on\n\n**AMB-T-{}** — {}", task.id, task.title.trim());
-    if !task.notes.trim().is_empty() {
+    if parts.notes && !task.notes.trim().is_empty() {
         out.push_str(&format!("\n\n### Its notes\n\n{}", task.notes.trim()));
     }
     let mut decisions = Vec::new();
-    for linked in read::decisions_for_task(conn, task_id)? {
+    for linked in if parts.decisions { read::decisions_for_task(conn, task_id)? } else { Vec::new() } {
         let body = read::decision(conn, linked.id)?.map(|d| d.body).unwrap_or_default();
         decisions.push(format!(
             "**AMB-D-{}** — {} ({})\n\n{}",
@@ -535,7 +552,7 @@ fn the_task(tx: &WriteTx<'_>, task_id: i64) -> Result<String> {
         out.push_str(&format!("\n\n### The decisions linked to it\n\n{}", decisions.join("\n\n")));
     }
     let mut comments = Vec::new();
-    for id in read::task_comment_ids(conn, task_id)? {
+    for id in if parts.comments { read::task_comment_ids(conn, task_id)? } else { Vec::new() } {
         let Some(comment) = read::task_comment(conn, id)? else {
             continue;
         };
@@ -920,6 +937,8 @@ mod tests {
                 None,
                 None,
                 Some(Some("作業フォルダ")),
+                None,
+                None,
                 None,
                 None,
                 None,
@@ -1323,7 +1342,7 @@ mod tests {
     fn a_step_told_to_go_without_the_story_is_not_given_it() {
         with_tx(|tx| {
             let p = picture(tx, true, true);
-            automation::step_update(tx, p.second.id, None, None, None, None, None, Some(false), None)
+            automation::step_update(tx, p.second.id, None, None, None, None, None, Some(false), None, None, None)
             .expect("history off");
             let run = a_run(tx, &p.automation);
             let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
@@ -1395,8 +1414,20 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let second_step = crate::ops::test_support::only_step(tx, &p.second_action);
-            automation::step_update(tx, second_step.id, None, None, None, None, None, None, Some(false))
-                .expect("task off");
+            automation::step_update(
+                tx,
+                second_step.id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(false),
+                Some(false),
+                Some(false),
+            )
+            .expect("task off");
             let (task, _, _) = a_task_with_its_context(tx, &p);
             let run = a_run(tx, &p.automation);
             let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
@@ -1406,6 +1437,43 @@ mod tests {
             let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
             assert!(!second.text.contains("## The task this run is on"), "{}", second.text);
             assert!(second.text.contains("working on now is AMB-T-"), "the preamble still names it: {}", second.text);
+        });
+    }
+
+    /// **Each part of the task is on a switch of its own**: a step that keeps the notes and lets the
+    /// decisions and the comments go is handed the task's title and notes, and nothing of the other two.
+    #[test]
+    fn a_step_handed_the_notes_alone_is_given_neither_the_decisions_nor_the_comments() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let second_step = crate::ops::test_support::only_step(tx, &p.second_action);
+            automation::step_update(
+                tx,
+                second_step.id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(false),
+                Some(false),
+            )
+            .expect("decisions and comments off");
+            let (task, _, _) = a_task_with_its_context(tx, &p);
+            let run = a_run(tx, &p.automation);
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
+            reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open")).text;
+            assert!(text.contains(&format!("## The task this run is on\n\n**AMB-T-{task}** — 直すもの")), "{text}");
+            assert!(text.contains("### Its notes\n\n## やること\n壊れた所を直す"), "{text}");
+            assert!(!text.contains("### The decisions linked to it"), "{text}");
+            assert!(!text.contains("こう直す"), "{text}");
+            assert!(!text.contains("### Its comments"), "{text}");
+            assert!(!text.contains("ここも見て"), "{text}");
         });
     }
 

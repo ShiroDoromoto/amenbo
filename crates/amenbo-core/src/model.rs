@@ -1688,10 +1688,17 @@ pub struct AutomationStep {
     /// Is the run's story so far handed to this step? On unless somebody turns it off.
     #[serde(default)]
     pub show_history: bool,
-    /// Is the task the run is on handed to this step — its notes, the decisions linked to it and its
-    /// comments? On unless somebody turns it off (`AMB-D-965`).
+    /// Are the notes of the task the run is on handed to this step? On unless somebody turns it off
+    /// (`AMB-D-965`). The decisions linked to the task and its comments have switches of their own.
     #[serde(default)]
-    pub show_task: bool,
+    pub show_notes: bool,
+    /// Are the decisions linked to the task the run is on handed to this step? On unless somebody turns
+    /// it off.
+    #[serde(default)]
+    pub show_decisions: bool,
+    /// Are the comments on the task the run is on handed to this step? On unless somebody turns it off.
+    #[serde(default)]
+    pub show_comments: bool,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -1995,7 +2002,11 @@ pub struct AutomationRunDef {
     pub report_to_task: bool,
     pub show_history: bool,
     #[serde(default)]
-    pub show_task: bool,
+    pub show_notes: bool,
+    #[serde(default)]
+    pub show_decisions: bool,
+    #[serde(default)]
+    pub show_comments: bool,
     /// The ways out, with the outputs declared on each — JSON ([`RunDefExit`]).
     pub exits: String,
     /// The inputs the step takes, each with the outputs wired into it — JSON ([`RunDefIn`]).

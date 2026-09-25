@@ -442,7 +442,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_action_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-rm", "automation_action", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted action: {id}"));
         }
-        AutomationCmd::StepAdd { action, name, prompt, interactive, work_dir, report_to_task, no_history, no_task_context } => {
+        AutomationCmd::StepAdd { action, name, prompt, interactive, work_dir, report_to_task, no_history, no_task_notes, no_task_decisions, no_task_comments } => {
             let prompt = body_arg(prompt)?;
             let new = NewStep {
                 name,
@@ -453,20 +453,22 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 // The run's story so far is handed on unless somebody turns it off, so the flag that
                 // takes it away is the one written.
                 show_history: !no_history,
-                // So is the task the run is on.
-                show_task: !no_task_context,
+                // So is the task the run is on — its notes, its decisions and its comments, each on its own.
+                show_notes: !no_task_notes,
+                show_decisions: !no_task_decisions,
+                show_comments: !no_task_comments,
             };
             let s = store.automation_step_add(action, new).map_err(CliError::from)?;
             write_envelope(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Added step: {} ({})", s.name, s.id));
         }
-        AutomationCmd::StepUpdate { id, name, prompt, interactive, work_dir, clear_work_dir, report_to_task, history, task_context } => {
+        AutomationCmd::StepUpdate { id, name, prompt, interactive, work_dir, clear_work_dir, report_to_task, history, task_notes, task_decisions, task_comments } => {
             let prompt = body_arg_opt(prompt)?;
             let work_dir = match clear_work_dir {
                 true => Some(None),
                 false => work_dir.as_deref().map(Some),
             };
             let s = store
-                .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history, task_context)
+                .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history, task_notes, task_decisions, task_comments)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.step-update", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Updated step: {} ({})", s.name, s.id));
         }
@@ -1093,8 +1095,14 @@ fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
     if !row.show_history {
         marks.push("no history".to_string());
     }
-    if !row.show_task {
-        marks.push("no task context".to_string());
+    if !row.show_notes {
+        marks.push("no task notes".to_string());
+    }
+    if !row.show_decisions {
+        marks.push("no task decisions".to_string());
+    }
+    if !row.show_comments {
+        marks.push("no task comments".to_string());
     }
     // A step that says none of these is written bare — who carries it out is the placement's to say.
     let marks = match marks.is_empty() {

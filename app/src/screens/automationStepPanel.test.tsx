@@ -74,7 +74,9 @@ function spot(over: Partial<AutomationPlacementDto> = {}): AutomationPlacementDt
     interactive: false,
     reportToTask: false,
     showHistory: true,
-    showTask: true,
+    showNotes: true,
+    showDecisions: true,
+    showComments: true,
     exits: [{ id: 10, outputs: [] }, { id: 11, name: "*", outputs: [] }],
     inputs: [],
     settings: [],
@@ -280,7 +282,7 @@ describe("the panel of one spot", () => {
     await render({ automation: detail(), placementId: 1 });
     expect(container.textContent).toContain(t("auto.place.empty"));
     hoisted.action = action({
-      steps: [{ id: 11, name: "claim", prompt: "take", interactive: false, reportToTask: false, showHistory: true, showTask: true, exits: [], inputs: [] } as unknown as AutomationActionDetailDto["steps"][number]],
+      steps: [{ id: 11, name: "claim", prompt: "take", interactive: false, reportToTask: false, showHistory: true, showNotes: true, showDecisions: true, showComments: true, exits: [], inputs: [] } as unknown as AutomationActionDetailDto["steps"][number]],
     });
     await render({ automation: detail(), placementId: 1 });
     expect(container.textContent).not.toContain(t("auto.place.empty"));

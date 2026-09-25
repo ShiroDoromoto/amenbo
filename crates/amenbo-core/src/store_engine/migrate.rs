@@ -1011,6 +1011,12 @@ pub const STEPS: &[Step] = &[
         // was never recorded, and nothing can tell now.
         apply: Apply::Custom(record_the_withheld_report),
     },
+    Step {
+        to: 72,
+        name: "split the switch that hands a step its task into its notes, its decisions and its comments",
+        // Each of the three starts where the one switch stood, so no step changes what it is handed.
+        apply: Apply::Custom(split_the_task_handed_to_the_steps),
+    },
 ];
 
 /// v71: `automation_run_step.report_withheld` — the step was built to carry its report onto the task, and
@@ -1027,6 +1033,45 @@ fn record_the_withheld_report(ctx: &Ctx<'_>) -> Result<()> {
             "ALTER TABLE automation_run_step ADD COLUMN report_withheld BOOLEAN NOT NULL DEFAULT 0 \
                  CHECK(report_withheld IN (0, 1));",
         )?;
+    }
+    Ok(())
+}
+
+/// v72: the one switch that handed a step the task it is on (`show_task`) becomes three — its notes
+/// (`show_notes`), the decisions linked to it (`show_decisions`) and its comments (`show_comments`) —
+/// on the library step and a run's copy of it.
+///
+/// **Each of the three takes the value the one switch had**, so a step is handed exactly what it was
+/// handed before: `show_task` is renamed to `show_notes`, and the two new columns are written from it.
+///
+/// **Each column is changed only where it needs to be**, v70's guard and for v53's reason. A table
+/// genesis created complete on a store that predates it has the three columns already, and v70 has
+/// appended a `show_task` beside them; that one is dropped, and there are no rows to carry over.
+fn split_the_task_handed_to_the_steps(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for table in ["automation_action_step", "automation_run_def"] {
+        let has = |name: &str| -> Result<bool> { Ok(column_names(tx, table)?.iter().any(|c| c == name)) };
+        match (has("show_task")?, has("show_notes")?) {
+            (true, false) => {
+                tx.execute_batch(&format!("ALTER TABLE {table} RENAME COLUMN show_task TO show_notes;"))?
+            }
+            (true, true) => tx.execute_batch(&format!("ALTER TABLE {table} DROP COLUMN show_task;"))?,
+            (false, false) => tx.execute_batch(&format!(
+                "ALTER TABLE {table} ADD COLUMN show_notes BOOLEAN NOT NULL DEFAULT 0 \
+                     CHECK(show_notes IN (0, 1));
+                 UPDATE {table} SET show_notes = 1;"
+            ))?,
+            (false, true) => {}
+        }
+        for column in ["show_decisions", "show_comments"] {
+            if !has(column)? {
+                tx.execute_batch(&format!(
+                    "ALTER TABLE {table} ADD COLUMN {column} BOOLEAN NOT NULL DEFAULT 0 \
+                         CHECK({column} IN (0, 1));
+                     UPDATE {table} SET {column} = show_notes;"
+                ))?;
+            }
+        }
     }
     Ok(())
 }
@@ -6905,6 +6950,51 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v72 in full, on the store shape v71 left behind: one switch for the task. Each of the three it
+    /// becomes takes its value, on the library step and a run's copy alike, so a step turned off is
+    /// handed none of the three and a step left on is handed all of them.
+    #[test]
+    fn the_switch_for_the_task_splits_into_three_that_each_keep_its_value() {
+        let dir = scratch("step-split-show-task");
+        let engine = store_at(&dir, 71);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO automation_action (id, name) VALUES (1, 'a');
+                 INSERT INTO automation_action_step (id, action_id, name, prompt, show_task) VALUES
+                     (1, 1, 'one', 'p', 1),
+                     (2, 1, 'two', 'p', 0);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, steps_through(72), &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let mut stmt = conn
+            .prepare("SELECT id, show_notes, show_decisions, show_comments FROM automation_action_step ORDER BY id")
+            .unwrap();
+        let rows = stmt
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, bool>(1)?, r.get::<_, bool>(2)?, r.get::<_, bool>(3)?)))
+            .unwrap();
+        assert_eq!(
+            rows.filter_map(|r| r.ok()).collect::<Vec<_>>(),
+            vec![(1, true, true, true), (2, false, false, false)]
+        );
+        drop(stmt);
+        for table in ["automation_action_step", "automation_run_def"] {
+            let names: Vec<String> = {
+                let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1)").unwrap();
+                let rows = stmt.query_map([table], |r| r.get::<_, String>(0)).unwrap();
+                rows.filter_map(|r| r.ok()).collect()
+            };
+            for column in ["show_notes", "show_decisions", "show_comments"] {
+                assert!(names.iter().any(|n| n == column), "{table} carries {column}: {names:?}");
+            }
+            assert!(!names.iter().any(|n| n == "show_task"), "{table} no longer carries show_task: {names:?}");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v70 in full, on the store shape v69 left behind: steps with no switch for the task. Every step
     /// already written arrives with it on — the product default, and what a step never asked reads as —
     /// rather than at the `0` the declaration carries as its not-yet-written sentinel.
@@ -6922,7 +7012,7 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(70), &mut crate::progress::ignore).unwrap();
 
         let conn = engine.conn();
         let mut stmt = conn.prepare("SELECT id, show_task FROM automation_action_step ORDER BY id").unwrap();

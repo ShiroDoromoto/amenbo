@@ -75,7 +75,9 @@ function step(over: Partial<AutomationStepDto> = {}): AutomationStepDto {
     interactive: false,
     reportToTask: false,
     showHistory: true,
-    showTask: true,
+    showNotes: true,
+    showDecisions: true,
+    showComments: true,
     // What core writes at birth: the unnamed way out, and the error one nobody can delete.
     exits: [{ id: 10, outputs: [] }, { id: 19, name: "*", outputs: [] }],
     inputs: [],
@@ -190,15 +192,22 @@ describe("the panel of one step", () => {
     expect(note.textContent).toBe(t("auto.step.reportToTaskNote"));
   });
 
-  it("hands the step its task unless the reader unticks it, and writes that onto the step (AMB-D-965)", async () => {
-    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
-    const box = [...container.querySelectorAll<HTMLLabelElement>(".autostep__check")]
-      .find((one) => one.textContent?.includes(t("auto.step.taskContext")))!
-      .querySelector("input")!;
-    expect(box.checked).toBe(true);
-    await act(async () => box.click());
-    expect(hoisted.editStep).toHaveBeenCalledWith(11, { taskContext: false });
-  });
+  it.each([
+    ["auto.step.taskNotes", { taskNotes: false }],
+    ["auto.step.taskDecisions", { taskDecisions: false }],
+    ["auto.step.taskComments", { taskComments: false }],
+  ] as const)(
+    "hands the step each part of its task unless the reader unticks it, and writes that onto the step: %s",
+    async (label, patch) => {
+      await render({ action: action(), stepId: 11, onRemoved: () => undefined });
+      const box = [...container.querySelectorAll<HTMLLabelElement>(".autostep__check")]
+        .find((one) => one.textContent?.includes(t(label)))!
+        .querySelector("input")!;
+      expect(box.checked).toBe(true);
+      await act(async () => box.click());
+      expect(hoisted.editStep).toHaveBeenCalledWith(11, patch);
+    },
+  );
 });
 
 describe("what happens after a way out", () => {

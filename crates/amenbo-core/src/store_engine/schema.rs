@@ -1075,11 +1075,13 @@ datasets! {
     // placed on two projects' automations may be run by two different models there
     // (`automation_placement_step`, `AMB-D-960`).
     //
-    // The four flags' product defaults are **not** the `0` in their declarations — that is the
+    // The six flags' product defaults are **not** the `0` in their declarations — that is the
     // not-yet-written sentinel every required column carries, and the create writes the real answer
     // over it. A step waits for a person only if it says so (`interactive`), keeps its report to the
     // run unless asked to carry it onto the task (`report_to_task`), and is handed the run's story so
-    // far and the task it is on unless told not to be (`show_history` and `show_task`, which start on).
+    // far and the task it is on — its notes, the decisions linked to it and its comments, each on a
+    // switch of its own — unless told not to be (`show_history`, `show_notes`, `show_decisions` and
+    // `show_comments`, which start on).
     //
     // `work_dir_ref` names the setting or the input the folder is taken from — a name, not a path, so
     // the answer is given once where the action is placed rather than baked into every step.
@@ -1095,7 +1097,9 @@ datasets! {
         work_dir_ref: col(OPT),
         report_to_task: bool_col,
         show_history: bool_col,
-        show_task: bool_col,
+        show_notes: bool_col,
+        show_decisions: bool_col,
+        show_comments: bool_col,
         order_key: col(ORDER_KEY),
     }
 
@@ -1281,7 +1285,9 @@ datasets! {
         work_dir_ref: col(OPT),
         report_to_task: bool_col,
         show_history: bool_col,
-        show_task: bool_col,
+        show_notes: bool_col,
+        show_decisions: bool_col,
+        show_comments: bool_col,
         exits: col(REQ),
         ins: col(REQ),
         cfg: col(REQ),

@@ -155,12 +155,16 @@ impl Driver<'_> {
                     args.push("--work-dir".into());
                     args.push(v.to_string());
                 }
-                // Both are handed on unless a flag says not to, so a road's `true` is the flag left off.
-                if opt_bool(with, "task_context") == Some(false) {
-                    args.push("--no-task-context".into());
-                }
-                if opt_bool(with, "history") == Some(false) {
-                    args.push("--no-history".into());
+                // Each is handed on unless a flag says not to, so a road's `true` is the flag left off.
+                for (key, flag) in [
+                    ("task_notes", "--no-task-notes"),
+                    ("task_decisions", "--no-task-decisions"),
+                    ("task_comments", "--no-task-comments"),
+                    ("history", "--no-history"),
+                ] {
+                    if opt_bool(with, key) == Some(false) {
+                        args.push(flag.into());
+                    }
                 }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_step", bind)?;
@@ -172,7 +176,9 @@ impl Driver<'_> {
                 let mut args: Vec<String> = vec!["automation".into(), "step-update".into(), step.to_string()];
                 let mut said = Vec::new();
                 for (key, flag, what) in [
-                    ("task_context", "--task-context", "the task the run is on"),
+                    ("task_notes", "--task-notes", "the task's notes"),
+                    ("task_decisions", "--task-decisions", "the decisions linked to the task"),
+                    ("task_comments", "--task-comments", "the comments on the task"),
                     ("history", "--history", "the run's story so far"),
                 ] {
                     if let Some(on) = opt_bool(with, key) {
@@ -183,7 +189,7 @@ impl Driver<'_> {
                 }
                 if said.is_empty() {
                     return Err(
-                        "`step-update` turns `task_context` or `history` — a step naming neither would write nothing"
+                        "`step-update` turns `task_notes`, `task_decisions`, `task_comments` or `history` — a step naming none of them would write nothing"
                             .to_string(),
                     );
                 }
@@ -927,7 +933,9 @@ fn judge_step(action: i64, view: &serde_json::Value, with: &Args) -> Result<Outc
         said.push_str(&note);
     }
     for (key, column, what) in [
-        ("task_context", "show_task", "the task the run is on"),
+        ("task_notes", "show_notes", "the task's notes"),
+        ("task_decisions", "show_decisions", "the decisions linked to the task"),
+        ("task_comments", "show_comments", "the comments on the task"),
         ("history", "show_history", "the run's story so far"),
     ] {
         if let Some(want) = opt_bool(with, key) {

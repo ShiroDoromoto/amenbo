@@ -386,10 +386,28 @@ export function AutomationActionStepPanel({
       <label className="autostep__check">
         <input
           type="checkbox"
-          checked={step.showTask}
-          onChange={(e) => void run(editAutomationStep(step.id, { taskContext: e.target.checked }))}
+          checked={step.showNotes}
+          onChange={(e) => void run(editAutomationStep(step.id, { taskNotes: e.target.checked }))}
         />
-        {t("auto.step.taskContext")}
+        {t("auto.step.taskNotes")}
+      </label>
+
+      <label className="autostep__check">
+        <input
+          type="checkbox"
+          checked={step.showDecisions}
+          onChange={(e) => void run(editAutomationStep(step.id, { taskDecisions: e.target.checked }))}
+        />
+        {t("auto.step.taskDecisions")}
+      </label>
+
+      <label className="autostep__check">
+        <input
+          type="checkbox"
+          checked={step.showComments}
+          onChange={(e) => void run(editAutomationStep(step.id, { taskComments: e.target.checked }))}
+        />
+        {t("auto.step.taskComments")}
       </label>
 
       <div className="actpanel__foot">

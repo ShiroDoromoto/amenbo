@@ -2081,7 +2081,9 @@ impl Store {
         work_dir_ref: Option<Option<&str>>,
         report_to_task: Option<bool>,
         show_history: Option<bool>,
-        show_task: Option<bool>,
+        show_notes: Option<bool>,
+        show_decisions: Option<bool>,
+        show_comments: Option<bool>,
     ) -> Result<crate::model::AutomationStep> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Step, id)], |tx| {
             crate::ops::automation::step_update(
@@ -2093,7 +2095,9 @@ impl Store {
                 work_dir_ref,
                 report_to_task,
                 show_history,
-                show_task,
+                show_notes,
+                show_decisions,
+                show_comments,
             )
         })
     }

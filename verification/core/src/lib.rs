@@ -4082,12 +4082,12 @@ const REGISTRY: &[OpSpec] = &[
     // chosen where the action is placed (`agent-set`).
     //
     // What a step is handed besides its prompt is on unless somebody turns it off: the task the run
-    // is on (`task_context` — its notes, the decisions linked to it and its comments) and the run's
-    // story so far (`history`). A road writes `false` for the one it means to leave out, and names
-    // neither for the step every other road builds.
+    // is on, part by part (`task_notes`, `task_decisions` and `task_comments` — its notes, the
+    // decisions linked to it and its comments), and the run's story so far (`history`). A road writes
+    // `false` for the one it means to leave out, and names none for the step every other road builds.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-add", required: &["target", "name", "prompt"], refs: &["target"], strings: &["name", "prompt", "work_dir_ref"], binds: true },
-    // Turning either of those two back on or off on a step already there (`target`), the rest of it
-    // left alone. A road names at least one of them, since a rewrite naming neither writes nothing.
+    // Turning any of those four back on or off on a step already there (`target`), the rest of it
+    // left alone. A road names at least one of them, since a rewrite naming none writes nothing.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-update", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The step a placement of this action opens first. An action with none is one the launch check
     // names, the way it names an automation with no entry.
@@ -4203,8 +4203,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "placement-read", required: &["name"], refs: &["target"], strings: &["name"], binds: false },
     // One step inside an action (`target`), named the way the action names it: the prompt it runs on,
     // and the ways out and the inputs it declares, read whole for the reason a placement's are.
-    // `task_context` and `history` read whether it is handed the task the run is on and the run's
-    // story so far, the two `step-add` writes.
+    // `task_notes`, `task_decisions`, `task_comments` and `history` read whether it is handed each
+    // part of the task the run is on and the run's story so far, the four `step-add` writes.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "step-read", required: &["name"], refs: &["target"], strings: &["name", "prompt"], binds: false },
     // Where leaving by one way out takes the run: on to a box (`to`), out by one of the action's own
     // ways out (`exit_to`, inside an action only), or to the end of the run (`ends`). The pair the edge
@@ -4991,8 +4991,9 @@ impl Scenario {
             // folder rather than a pane, `first` whether a hit stands at the top of the answer
             // rather than merely somewhere in it, `stops` whether the call a press starts has
             // something to ask before it can go out, `in_action` whether a way out, an edge or a
-            // wire is drawn inside an action rather than on an automation, and `task_context` and
-            // `history` whether a step is handed the task the run is on and the run's story so far.
+            // wire is drawn inside an action rather than on an automation, and `task_notes`,
+            // `task_decisions`, `task_comments` and `history` whether a step is handed each part of the
+            // task the run is on and the run's story so far.
             // The query, in whichever of its two spellings — one of them, never both and never
             // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
             // step naming a shape for one is a step that means a number and left the record out.
@@ -5061,7 +5062,9 @@ impl Scenario {
                 "first",
                 "stops",
                 "in_action",
-                "task_context",
+                "task_notes",
+                "task_decisions",
+                "task_comments",
                 "history",
             ] {
                 if let Some(v) = step.with().get(key) {
@@ -5702,7 +5705,7 @@ steps_gui:
             format!("id: x\ntitle: y\nsteps_gui:\n  - {{ type: action, domain: automation, op: panel-set, with: {with} }}\n")
         };
         let errs = |with: &str| load_str(&road(with)).unwrap().validate().unwrap_err();
-        assert!(load_str(&road("{ field: task_context, on: false }")).unwrap().validate().is_ok());
+        assert!(load_str(&road("{ field: task_notes, on: false }")).unwrap().validate().is_ok());
         assert!(errs("{ field: history }").iter().any(|e| e.message.contains("naming neither")));
         assert!(errs("{ field: history, value: x, on: true }").iter().any(|e| e.message.contains("not both")));
         assert!(errs("{ field: history, on: yes }").iter().any(|e| e.message.contains("`on` must be a boolean")));

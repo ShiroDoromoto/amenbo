@@ -572,7 +572,7 @@ prompt: string, interactive: boolean,
 /**
  * The name of the setting or the input the working folder is taken from — a name, not a path.
  */
-workDirRef?: string, reportToTask: boolean, showHistory: boolean, showTask: boolean, exits: Array<AutomationExitDto>, 
+workDirRef?: string, reportToTask: boolean, showHistory: boolean, showNotes: boolean, showDecisions: boolean, showComments: boolean, exits: Array<AutomationExitDto>, 
 /**
  * What this spot takes in, in declaration order.
  */
@@ -733,7 +733,7 @@ export type AutomationStepDto = { id: number, name: string, prompt: string, inte
 /**
  * The name of the setting or the input the working folder is taken from — a name, not a path.
  */
-workDirRef?: string, reportToTask: boolean, showHistory: boolean, showTask: boolean, exits: Array<AutomationExitDto>, 
+workDirRef?: string, reportToTask: boolean, showHistory: boolean, showNotes: boolean, showDecisions: boolean, showComments: boolean, exits: Array<AutomationExitDto>, 
 /**
  * What this step takes in, in declaration order.
  */

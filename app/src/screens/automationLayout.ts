@@ -36,6 +36,7 @@
 // reader sees where a run goes when a step fails without having to know the default. That line has no
 // `+`: there is no edge under it to put a box in on.
 import { builtinWord } from "../core/builtinWords";
+import { t } from "../core/i18n";
 import type {
   AutomationActionDetailDto,
   AutomationDetailDto,
@@ -578,20 +579,39 @@ function lineKey(kind: "edge" | "wire", id: number): string {
 }
 
 /**
- * About how wide a name on a line is written, for the room the margins keep for it. Only a guess:
- * the picture is laid out without a screen to measure on. A wide character (Japanese) takes the
- * font's size, anything else a little over half of it; the error way out is written as a word of
- * the reader's language, and none of them runs past five narrow letters.
- */
-/**
  * The way out a line hangs on, in the words it is written with: a built-in's in the screen's language,
  * anything else as core names it. Absent where the line leaves by no way out. The error way out is
- * left to the picture, which writes it as a word of its own.
+ * written as a word of its own (`exitWord`).
  */
 export function lineWord(line: Pick<PicLine, "exitName" | "builtin">): string | undefined {
   return line.exitName === undefined ? undefined : builtinWord(line.builtin, line.exitName);
 }
 
+/** The way out a line hangs on, in a word: the error one in the screen's words. Empty where the line
+ *  leaves by no way out. */
+export function exitWord(line: Pick<PicLine, "exitName" | "builtin">): string {
+  if (line.exitName === ERROR_EXIT) return t("auto.pic.errorExit");
+  return lineWord(line) ?? "";
+}
+
+/** Where the run goes where a line names no step, in a word. */
+function endWord(line: Pick<PicLine, "ends">): string {
+  if (line.ends === "done") return t("auto.pic.endsDone");
+  if (line.ends === "halt") return t("auto.pic.endsHalt");
+  return "";
+}
+
+/** The words written beside an edge: its way out, then where the run goes where it names no step. */
+export function edgeWord(line: Pick<PicLine, "exitName" | "builtin" | "ends">): string {
+  return [exitWord(line), endWord(line)].filter((one) => one !== "").join(" — ");
+}
+
+/**
+ * About how wide a name on a line is written, for the room the margins keep for it. Only a guess:
+ * the picture is laid out without a screen to measure on. A wide character (Japanese) takes the
+ * font's size, anything else a little over half of it; the error way out is written as a word of
+ * the reader's language, and none of them runs past five narrow letters.
+ */
 function wordW(exitName: string | undefined): number {
   if (exitName === undefined) return 0;
   if (exitName === ERROR_EXIT) return 40;
@@ -1121,7 +1141,7 @@ export function layOut(graph: PicGraph | null): Picture {
     LAP_PAD + leftLanes * LANE_W,
     ...lines.map((line) => {
       if (line.kind !== "edge") return 0;
-      const wide = wordW(lineWord(line));
+      const wide = wordW(edgeWord(line));
       return -(line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x);
     }),
   );
@@ -1141,10 +1161,15 @@ export function layOut(graph: PicGraph | null): Picture {
           : "next",
     ]),
   );
-  // And the room the right margin takes: the trunks, and the name written past the outermost one.
+  // And the room the right margin takes: the trunks, the name written past the outermost one, and the
+  // words of an edge that run on past the boxes — the way out and where the run goes, of the last box.
   const rightRoom = Math.max(
     LAP_PAD + rightLanes * WIRE_LANE_W,
     ...lines.map((line) => {
+      if (line.kind === "edge") {
+        const wide = wordW(edgeWord(line));
+        return (line.align === "start" ? line.at.x + wide : line.align === "middle" ? line.at.x + wide / 2 : line.at.x) - contentW;
+      }
       if (line.kind !== "wire") return 0;
       // The way out it leaves by is written first where it has a name, with a separator after it.
       const exit = line.exitName === undefined ? 0 : wordW(lineWord(line)) + BESIDE;

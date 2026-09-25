@@ -1585,7 +1585,9 @@ button.feed__target:hover { color: var(--c-accent); }
   padding-inline-start: var(--s-3);
 }
 .autostep__limit { display: flex; align-items: center; gap: var(--s-1); }
-.autostep__limit input { width: 6rem; }
+/* The count stands in the row of the select it caps, so it takes that select's height: with the
+   form padding of every input it came out nearly twice as tall as the select beside it. */
+.autostep__limit input { width: 6rem; height: var(--tap-min); padding-block: 0; }
 .autostep__exitname { font-size: var(--fs-md); }
 .autostep__out {
   display: inline-flex; align-items: baseline; gap: var(--s-1);

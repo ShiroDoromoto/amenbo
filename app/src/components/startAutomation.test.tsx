@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 // The way into a launch that is not the build screen: the empty frame (`AMB-T-5260`).
 //
-// What these guard: **the press carries nothing but the automation** — no task, no folder choice, no
-// narrowing — so it is the same run the automations tab would start;
+// What these guard: **the press carries the automation and what the person hands over, and nothing
+// else** — no task, no folder choice, no narrowing — so it is the same run the automations tab would
+// start; **every press asks what to hand over first** (`AMB-D-970`), and putting that dialog away
+// starts nothing;
 // **a project with no automations draws no entrance**, since a heading over an empty row would put
 // the subject in front of a reader who has never met it; **an archived one is not offered**, which
 // is what archiving is for; and **what the press comes back with is said where the press was made**,
@@ -22,6 +24,7 @@ vi.mock("../core/automations", () => ({
   useAutomations: () => hoisted.automations,
   launchAutomation: hoisted.launch,
 }));
+vi.mock("../core/dialog", () => ({ pickFiles: async () => ["/w/brief.md", "/w/shot.png"] }));
 
 import { t } from "../core/i18n";
 import { StartAutomation } from "./StartAutomation";
@@ -52,6 +55,15 @@ function button(label: string): HTMLButtonElement {
   const found = [...container.querySelectorAll("button")].find((b) => b.textContent?.includes(label));
   if (!found) throw new Error(`no button labelled ${label}`);
   return found;
+}
+
+
+/** Answer the dialog every start opens (`../components/LaunchHanding`) with nothing handed over. */
+async function handOver() {
+  await act(async () => {
+    document.body.querySelector<HTMLButtonElement>(".modal__card .btn--primary")!.click();
+    await new Promise((r) => setTimeout(r, 0));
+  });
 }
 
 beforeEach(() => {
@@ -97,11 +109,51 @@ describe("the entrance", () => {
 });
 
 describe("the press", () => {
-  it("carries the automation, the project, the folders and the workspace — and nothing else", async () => {
+  it("carries the automation, the project, the folders and the workspace, and hands over nothing where nothing was given", async () => {
     hoisted.automations = [card()];
     await render({ workspaceOpen: false, folders: ["/w/one", "/w/two"] });
     await act(async () => { button("Morning round").click(); });
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one", "/w/two"], false);
+    await handOver();
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one", "/w/two"], false, { text: "", files: [] });
+  });
+
+  it("hands over the text typed and the files picked in the dialog the press opens", async () => {
+    hoisted.automations = [card()];
+    await render({ folders: ["/w/one"] });
+    await act(async () => { button("Morning round").click(); });
+    expect(hoisted.launch).not.toHaveBeenCalled();
+    const box = document.body.querySelector<HTMLTextAreaElement>(".modal__card textarea")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, "  fix the login page  ");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(".launchhand__add")!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    // Each picked file is listed by its name, and one can be taken off again before the start.
+    const names = () => [...document.body.querySelectorAll(".launchhand__name")].map((one) => one.textContent);
+    expect(names()).toEqual(["brief.md", "shot.png"]);
+    await act(async () => {
+      document.body.querySelectorAll<HTMLButtonElement>(".launchhand__drop")[1]!.click();
+    });
+    expect(names()).toEqual(["brief.md"]);
+    await handOver();
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one"], true, {
+      text: "fix the login page",
+      files: ["/w/brief.md"],
+    });
+  });
+
+  it("starts nothing where the dialog is put away", async () => {
+    hoisted.automations = [card()];
+    await render();
+    await act(async () => { button("Morning round").click(); });
+    const cancel = [...document.body.querySelectorAll<HTMLButtonElement>(".modal__card .btn")]
+      .find((one) => one.textContent === t("auto.add.cancel"))!;
+    await act(async () => { cancel.click(); });
+    expect(document.body.querySelector(".modal__card")).toBeNull();
+    expect(hoisted.launch).not.toHaveBeenCalled();
   });
 
   it("puts a refusal in front of the reader, in the words core refused with", async () => {
@@ -112,6 +164,7 @@ describe("the press", () => {
     hoisted.automations = [card()];
     await render();
     await act(async () => { button("Morning round").click(); });
+    await handOver();
     expect(container.textContent).toContain("the workspace is closed");
     expect(goToRun).not.toHaveBeenCalled();
   });
@@ -121,6 +174,7 @@ describe("the press", () => {
     hoisted.automations = [card()];
     await render();
     await act(async () => { button("Morning round").click(); });
+    await handOver();
     expect(goToRun).toHaveBeenCalledWith(1, 31);
   });
 
@@ -129,9 +183,11 @@ describe("the press", () => {
     hoisted.automations = [card()];
     await render();
     await act(async () => { button("Morning round").click(); });
+    await handOver();
     expect(container.textContent).toContain("the workspace is closed");
     hoisted.launch.mockResolvedValue({ run: 4 });
     await act(async () => { button("Morning round").click(); });
+    await handOver();
     expect(container.textContent).not.toContain("the workspace is closed");
   });
 });

@@ -1,9 +1,10 @@
 // **Start one of this project's automations from the empty frame** — the way in that is not the
 // build screen (`AMB-T-5260`).
 //
-// **The press carries nothing.** Which tasks a run works, which folder its steps run in and what
-// each step is asked are all the definition's, settled while it was built, so what the reader
-// chooses here is which automation and nothing else (`amenbo_core::ops::automation_run`).
+// **The press carries what the person hands over, and nothing else.** Which tasks a run works, which
+// folder its steps run in and what each step is asked are all the definition's, settled while it was
+// built. What the reader chooses here is which automation, and then — in the dialog every press
+// opens — a text and files to hand the run as it starts (`./LaunchHanding`, `AMB-D-970`).
 //
 // **Which is why there is no way in on a task's pane.** One stood there and was taken out: a button
 // under a task reads as "run this one on this task", and the task a reader was looking at cannot
@@ -22,6 +23,7 @@
 import { useCallback, useState } from "react";
 import { launchAutomation, useAutomations } from "../core/automations";
 import { errText, t } from "../core/i18n";
+import { LaunchHanding, type Handed } from "./LaunchHanding";
 
 /**
  * The press behind either entrance: launch, and hold what came back.
@@ -44,13 +46,15 @@ export function useAutomationStart(
   // A press already out. The answer carries the pane the run opens in, so a second press before the
   // first lands would be a second run nobody asked for.
   const [starting, setStarting] = useState(false);
+  // The automation whose press is asking what to hand over, while that dialog is open (`AMB-D-970`).
+  const [asking, setAsking] = useState<{ id: number; name: string; folders: readonly string[] } | null>(null);
 
-  const start = useCallback(async (id: number, folders: readonly string[]) => {
+  const launch = useCallback(async (id: number, folders: readonly string[], handed: Handed) => {
     if (projectId === null) return;
     setRefused(null);
     setStarting(true);
     try {
-      const started = await launchAutomation(id, projectId, folders, workspaceOpen);
+      const started = await launchAutomation(id, projectId, folders, workspaceOpen, handed);
       if (started !== null) onGoToRun?.(projectId, started.run);
     } catch (e) {
       setRefused(errText(e));
@@ -59,7 +63,26 @@ export function useAutomationStart(
     }
   }, [projectId, workspaceOpen, onGoToRun]);
 
-  return { start, refused, starting };
+  /** The press: ask what to hand over first, and start once that is answered. */
+  const start = useCallback((id: number, name: string, folders: readonly string[]) => {
+    if (projectId === null) return;
+    setRefused(null);
+    setAsking({ id, name, folders });
+  }, [projectId]);
+
+  // What the screen draws for the press, wherever the press is: nothing until one is made.
+  const handing = asking === null ? null : (
+    <LaunchHanding
+      name={asking.name}
+      onClose={() => setAsking(null)}
+      onStart={(handed) => {
+        setAsking(null);
+        void launch(asking.id, asking.folders, handed);
+      }}
+    />
+  );
+
+  return { start, refused, starting, handing };
 }
 
 export function StartAutomation({
@@ -81,7 +104,7 @@ export function StartAutomation({
   onGoToRun?: (project: number, run: number) => void;
 }) {
   const automations = useAutomations(projectId);
-  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
+  const { start, refused, starting, handing } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
   const live = automations.filter((one) => !one.archived);
 
   if (live.length === 0) return null;
@@ -96,13 +119,14 @@ export function StartAutomation({
             type="button"
             className="btn"
             disabled={starting}
-            onClick={() => void start(one.id, folders)}
+            onClick={() => start(one.id, one.name, folders)}
           >
             {one.name}
           </button>
         ))}
       </div>
       {refused !== null && <p className="autostart__refused">{refused}</p>}
+      {handing}
     </div>
   );
 }

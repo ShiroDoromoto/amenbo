@@ -1160,6 +1160,11 @@ const ui = {
   "auto.place.agentOf": "Who carries out {step}",
   "auto.place.modelOf": "Model for {step}",
   "auto.start": "Start",
+  "auto.hand.title": "Start {name}",
+  "auto.hand.text": "Text to hand over",
+  "auto.hand.files": "Files to hand over",
+  "auto.hand.fileAdd": "＋ Add a file",
+  "auto.hand.fileRemove": "Remove {name}",
   "auto.launch.see": "See in the picture",
   "auto.startOne": "Start an automation",
   // The picture of the steps on the build screen: what it says about a step, and what it writes

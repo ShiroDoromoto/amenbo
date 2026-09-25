@@ -104,6 +104,15 @@ function button(label: string): HTMLButtonElement {
 }
 const blocks = () => [...container.querySelectorAll(".autolaunch__blocks li")].map((li) => li.textContent);
 
+
+/** Answer the dialog every start opens (`../components/LaunchHanding`) with nothing handed over. */
+async function handOver() {
+  await act(async () => {
+    document.body.querySelector<HTMLButtonElement>(".modal__card .btn--primary")!.click();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
 beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -166,7 +175,8 @@ describe("the automations screen", () => {
     expect(rows[0]).toContain("Morning round");
     expect(rows[0]).toContain(tf("auto.stepCount", { count: 3 }));
     await act(async () => { button(t("auto.start")).click(); });
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true);
+    await handOver();
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true, { text: "", files: [] });
   });
 
   // Whether it could start is the press's state, and why not is read off it (`AMB-T-5523`).
@@ -303,7 +313,8 @@ describe("the automations screen opened from the sidebar", () => {
     hoisted.check = { ready: true, blocks: [] };
     await renderEverywhere();
     await act(async () => { button(t("auto.start")).click(); });
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 3, [], true);
+    await handOver();
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 3, [], true, { text: "", files: [] });
     expect(goTo).not.toHaveBeenCalled();
   });
 
@@ -313,6 +324,7 @@ describe("the automations screen opened from the sidebar", () => {
     hoisted.launch.mockResolvedValue({ run: 31 });
     await renderEverywhere();
     await act(async () => { button(t("auto.start")).click(); });
+    await handOver();
     expect(wentToRun).toHaveBeenCalledWith(3, 31);
   });
 
@@ -565,7 +577,8 @@ describe("the press that starts a run", () => {
     // did not carry the answer would be refused on a guess made here (`AMB-D-753`).
     await open({ ready: true, blocks: [] }, false);
     await act(async () => { button(t("auto.start")).click(); });
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], false);
+    await handOver();
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], false, { text: "", files: [] });
   });
 
   it("says nothing of its own once the launch lands", async () => {
@@ -573,6 +586,7 @@ describe("the press that starts a run", () => {
     // (`../talk/automationStep`) — the press goes there (below). Nothing here stands in for it.
     await open({ ready: true, blocks: [] });
     await act(async () => { button(t("auto.start")).click(); });
+    await handOver();
     expect(container.querySelector(".auto__notready")).toBeNull();
   });
 
@@ -580,6 +594,7 @@ describe("the press that starts a run", () => {
     hoisted.launch.mockResolvedValue({ run: 31 });
     await open({ ready: true, blocks: [] });
     await act(async () => { button(t("auto.start")).click(); });
+    await handOver();
     expect(wentToRun).toHaveBeenCalledWith(1, 31);
   });
 
@@ -587,6 +602,7 @@ describe("the press that starts a run", () => {
     hoisted.launch.mockRejectedValue({ code: "invalid", message_en: "no" });
     await open({ ready: true, blocks: [] });
     await act(async () => { button(t("auto.start")).click(); });
+    await handOver();
     expect(wentToRun).not.toHaveBeenCalled();
   });
 
@@ -595,6 +611,7 @@ describe("the press that starts a run", () => {
     hoisted.launch.mockRejectedValue(err);
     await open({ ready: true, blocks: [] });
     await act(async () => { button(t("auto.start")).click(); });
+    await handOver();
   }
 
   it("puts a refusal in front of the reader in their own language, not core's English", async () => {

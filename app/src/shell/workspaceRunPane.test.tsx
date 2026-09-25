@@ -617,12 +617,12 @@ describe("a built-in on a run's pane", () => {
 
   it("names the second built-in in the row above when two come one after the other (AMB-T-5550)", async () => {
     await mount();
-    await arrive({ step: undefined, builtin: builtin({ seq: 1, name: "タスクに着手する", key: "take_task" }) });
+    await arrive({ step: undefined, builtin: builtin({ placement: 21, name: "タスクに着手する", key: "take_task" }) });
     await arrive({
       step: undefined,
-      builtin: builtin({ seq: 1, name: "タスクに着手する", key: "take_task", finished: true }),
+      builtin: builtin({ placement: 21, name: "タスクに着手する", key: "take_task", finished: true }),
     });
-    await arrive({ step: undefined, builtin: builtin({ seq: 2, name: "タスクを閉じる", key: "close_task" }) });
+    await arrive({ step: undefined, builtin: builtin({ placement: 22, name: "タスクを閉じる", key: "close_task" }) });
 
     // One pane and one card, and the row above it is about the built-in now standing there.
     expect(panes()).toHaveLength(1);

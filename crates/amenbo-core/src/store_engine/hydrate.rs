@@ -575,9 +575,7 @@ pub(super) fn automation_exit_row(r: &Row) -> rusqlite::Result<AutomationExit> {
         id: get(r, C.id)?,
         owner_kind: enum_req(r, C.owner_kind, AutomationOwner::parse)?,
         owner_id: get(r, C.owner_id)?,
-        // The column still admits NULL, which only a row written before v74 held; v74 gave each of
-        // those the done way out's name, and this reads one the same way.
-        name: get(r, C.name)?.unwrap_or_else(|| crate::model::DONE_EXIT.to_string()),
+        name: get(r, C.name)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

@@ -154,7 +154,8 @@ async function close() {
 function step(over: Partial<StepRun> = {}): StepRun {
   return {
     runStep: 1,
-    seq: 1,
+    automation: 3,
+    placement: 11,
     automationName: "家計簿の開発ループ",
     name: "取る",
     task: { id: 5252, ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 1 },
@@ -187,7 +188,8 @@ function runCard(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
 
 function builtin(over: Partial<BuiltinRun> = {}): BuiltinRun {
   return {
-    seq: 2,
+    automation: 3,
+    placement: 12,
     automationName: "家計簿の開発ループ",
     name: "worktree を切る",
     key: "worktree_cut",
@@ -541,7 +543,7 @@ describe("a built-in on a run's pane", () => {
     // A run that starts with a built-in has no terminal to stand its pane on, and the pane is stood
     // at once all the same (`AMB-D-964`).
     await mount();
-    await arrive({ step: undefined, builtin: builtin({ seq: 1, task: undefined }) });
+    await arrive({ step: undefined, builtin: builtin({ task: undefined }) });
 
     expect(panes()).toHaveLength(1);
     expect(card()).toHaveLength(1);
@@ -631,9 +633,9 @@ describe("a built-in on a run's pane", () => {
 
   it("gives the pane back to a terminal when the next step arrives", async () => {
     await mount();
-    await arrive({ step: undefined, builtin: builtin({ seq: 1 }) });
+    await arrive({ step: undefined, builtin: builtin() });
 
-    await arrive({ step: step({ runStep: 2, seq: 2, session: "step-2" }) });
+    await arrive({ step: step({ runStep: 2, session: "step-2" }) });
 
     expect(panes()).toHaveLength(1);
     expect(card()).toHaveLength(0);

@@ -29,30 +29,16 @@
 // **A step that could not leave its report on the task is marked on the row** (`AMB-D-963`): a step
 // built to carry its report onto the task leaves none on a closed one, and without the mark nothing
 // on screen would say why the task holds no report.
-import { useMemo, useState, type ReactNode } from "react";
-import { acknowledgeRun, pauseRun, resumeRun, stopRun, useAutomation, useLiveRuns } from "../core/automations";
+import { useState, type ReactNode } from "react";
+import { acknowledgeRun, pauseRun, resumeRun, stopRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { runReasonWord, runStatusWord } from "../core/runWords";
 import { exactLabel, listLabel, whenLabel } from "../core/i18n/format";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
-import { automationGraph, pictureOrder } from "./automationLayout";
+import { useBoxNumber } from "./boxNumber";
 import type { AutomationRunCardDto } from "../bindings/bindings";
-
-/**
- * **The number the picture gives the box a run's step was opened from** — read off the automation as
- * it stands now, the same walk the picture is numbered by. Absent before a step has opened, and where
- * that spot is no longer on the picture.
- */
-function useBoxNumber(run: Pick<AutomationRunCardDto, "automation" | "placement">): number | undefined {
-  const detail = useAutomation(run.placement === undefined ? null : run.automation);
-  const order = useMemo(() => {
-    const graph = automationGraph(detail);
-    return graph === null ? null : pictureOrder(graph);
-  }, [detail]);
-  return run.placement === undefined ? undefined : order?.numberOf.get(run.placement);
-}
 
 /**
  * The chip beside the name — the state, where the dot alone would not say it. A run under way is
@@ -106,7 +92,7 @@ export function RunLine({
   /** A row of the history — every run on it is over, and how it ended goes on the chip. */
   ended?: boolean;
 }) {
-  const no = useBoxNumber(run);
+  const no = useBoxNumber(run.automation, run.placement);
   const reason = run.status === "failed" ? runReasonWord(run) : null;
   const at = run.endedAt ?? run.startedAt;
   const chip = stateChip(run, ended);

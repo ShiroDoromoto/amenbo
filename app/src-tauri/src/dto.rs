@@ -3698,9 +3698,16 @@ pub struct AutomationStepOpenDto {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationBuiltinRunDto {
-    /// Which move of the run this is, counted from 1 — the count the row above a step's pane says.
+    /// **The automation the run was launched from**, by its id — what the picture the step's box
+    /// stands on is read from, to number the step as that picture numbers it.
     #[ts(type = "number")]
-    pub(crate) seq: i64,
+    pub(crate) automation: i64,
+    /// **The spot on the picture this step was opened from**, by the placement's id — the row numbers
+    /// the step with the number the picture's box carries (`AMB-T-5538`). Absent where the run's copy
+    /// names no spot.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) placement: Option<i64>,
     /// The automation the run was launched from, by the name it holds now. Empty where it has gone.
     pub(crate) automation_name: String,
     /// The built-in, by the name its step was written with.
@@ -3744,10 +3751,16 @@ pub struct AutomationStepRunDto {
     /// The execution row this terminal is running under — what a report or a value hangs off.
     #[ts(type = "number")]
     pub(crate) run_step: i64,
-    /// Which move of the run this is, counted from 1 (`automation_run_step.seq`). A run may walk the
-    /// same step several times, so it is the count and not the step that says how far in a reader is.
+    /// **The automation the run was launched from**, by its id — what the picture the step's box
+    /// stands on is read from, to number the step as that picture numbers it.
     #[ts(type = "number")]
-    pub(crate) seq: i64,
+    pub(crate) automation: i64,
+    /// **The spot on the picture this step was opened from**, by the placement's id — the row numbers
+    /// the step with the number the picture's box carries (`AMB-T-5538`). Absent where the run's copy
+    /// names no spot.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) placement: Option<i64>,
     /// **The automation the run was launched from**, by the name it holds now. It is what heads the
     /// row above the pane: a run's pane stands for the run, not for a place a person named
     /// (`app/src/talk/plate.ts`). Empty where the automation has since been deleted.

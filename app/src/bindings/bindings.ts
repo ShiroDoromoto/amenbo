@@ -367,9 +367,16 @@ name?: string, outputs: Array<AutomationPortDto>, };
  */
 export type AutomationBuiltinRunDto = { 
 /**
- * Which move of the run this is, counted from 1 — the count the row above a step's pane says.
+ * **The automation the run was launched from**, by its id — what the picture the step's box
+ * stands on is read from, to number the step as that picture numbers it.
  */
-seq: number, 
+automation: number, 
+/**
+ * **The spot on the picture this step was opened from**, by the placement's id — the row numbers
+ * the step with the number the picture's box carries (`AMB-T-5538`). Absent where the run's copy
+ * names no spot.
+ */
+placement?: number, 
 /**
  * The automation the run was launched from, by the name it holds now. Empty where it has gone.
  */
@@ -826,10 +833,16 @@ export type AutomationStepRunDto = {
  */
 runStep: number, 
 /**
- * Which move of the run this is, counted from 1 (`automation_run_step.seq`). A run may walk the
- * same step several times, so it is the count and not the step that says how far in a reader is.
+ * **The automation the run was launched from**, by its id — what the picture the step's box
+ * stands on is read from, to number the step as that picture numbers it.
  */
-seq: number, 
+automation: number, 
+/**
+ * **The spot on the picture this step was opened from**, by the placement's id — the row numbers
+ * the step with the number the picture's box carries (`AMB-T-5538`). Absent where the run's copy
+ * names no spot.
+ */
+placement?: number, 
 /**
  * **The automation the run was launched from**, by the name it holds now. It is what heads the
  * row above the pane: a run's pane stands for the run, not for a place a person named

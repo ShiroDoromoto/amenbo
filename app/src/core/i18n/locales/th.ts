@@ -1115,7 +1115,6 @@ export const th: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "ไม่มีอะไรกำลังทำงาน",
     "auto.history.all": "ทั้งหมด",
-    "auto.history.empty": "ไม่มีการรันที่ตรงกัน",
     "auto.history.prev": "‹ ก่อนหน้า",
     "auto.history.next": "ถัดไป ›",
     "auto.history.count": "{from}–{to} จาก {total}",

@@ -3833,6 +3833,22 @@ pub struct AutomationRunHistoryDto {
     /// How many runs a page holds. The screen counts pages with it rather than keeping its own.
     #[ts(type = "number")]
     pub(crate) page_size: usize,
+    /// **How many runs each ending holds** in the same project, whichever one the page was
+    /// narrowed to — the number each narrowing's chip carries, so an ending with none says 0
+    /// before it is pressed.
+    pub(crate) by_ending: AutomationRunEndingsDto,
+}
+
+/// How many runs of the history ended each way.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+pub struct AutomationRunEndingsDto {
+    #[ts(type = "number")]
+    pub(crate) completed: usize,
+    #[ts(type = "number")]
+    pub(crate) failed: usize,
+    #[ts(type = "number")]
+    pub(crate) canceled: usize,
 }
 
 // ───────────────────────── automation: what is under way ─────────────────────────

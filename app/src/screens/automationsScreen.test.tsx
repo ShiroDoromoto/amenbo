@@ -45,7 +45,7 @@ vi.mock("../core/automations", () => ({
   // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
   // it is the tab being reachable that matters.
   useLiveRuns: () => [],
-  useRunHistory: () => ({ runs: [], total: 0, pageSize: 20 }),
+  useRunHistory: () => ({ runs: [], total: 0, pageSize: 20, byEnding: { completed: 0, failed: 0, canceled: 0 } }),
   // The step panel's own write door. Nothing here presses a step, so the panel draws its "press one"
   // line and these are never called (`./automationStepPanel.test.tsx` is where they are).
   editAutomationStep: () => Promise.resolve(),
@@ -137,14 +137,13 @@ describe("the automations screen", () => {
     const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
     await act(async () => { tabs[2].click(); });
     expect(container.querySelector(".auto__list")).toBeNull();
-    expect(container.textContent).toContain(t("auto.running.empty"));
+    expect(container.querySelector(".autoruns__none")?.getAttribute("aria-label")).toBe(t("auto.running.empty"));
   });
 
   it("moves to the history tab, which is read a page at a time", async () => {
     await render();
     const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
     await act(async () => { tabs[3].click(); });
-    expect(container.textContent).toContain(t("auto.history.empty"));
     expect(container.querySelector(".autohist__filter")).not.toBeNull();
   });
 
@@ -210,7 +209,7 @@ describe("the automations screen", () => {
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
     await act(async () => { tabs[2].click(); });
     expect(container.textContent).not.toContain(t("auto.build.picture"));
-    expect(container.textContent).toContain(t("auto.running.empty"));
+    expect(container.querySelector(".autoruns__none")?.getAttribute("aria-label")).toBe(t("auto.running.empty"));
   });
 
   it("goes back to the list from the lit tab, as back does", async () => {

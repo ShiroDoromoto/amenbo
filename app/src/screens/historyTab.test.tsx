@@ -16,6 +16,7 @@ const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   total: 45,
   projects: [] as (number | null)[],
+  byEnding: { completed: 0, failed: 0, canceled: 0 },
 }));
 
 vi.mock("../core/automations", () => ({
@@ -30,6 +31,7 @@ vi.mock("../core/automations", () => ({
       runs: Array.from({ length: count }, (_, i) => run(1000 - from - i)),
       total: hoisted.total,
       pageSize: 20,
+      byEnding: hoisted.byEnding,
     };
   },
 }));
@@ -67,6 +69,12 @@ function button(label: string): HTMLButtonElement {
   if (!found) throw new Error(`no button labelled ${label}`);
   return found;
 }
+/** The narrowing chip whose label is `label` — it carries its count after the label. */
+function chip(label: string): HTMLButtonElement {
+  const found = [...container.querySelectorAll<HTMLButtonElement>(".actchip")].find((b) => b.firstChild?.textContent === label);
+  if (!found) throw new Error(`no chip labelled ${label}`);
+  return found;
+}
 const count = () => container.querySelector(".autohist__count")?.textContent ?? "";
 const said = (from: number, to: number, total: number) =>
   tf("auto.history.count", { from: formatNumber(from), to: formatNumber(to), total: formatNumber(total) });
@@ -78,6 +86,7 @@ beforeEach(() => {
   hoisted.asked = [];
   hoisted.projects = [];
   hoisted.total = 45;
+  hoisted.byEnding = { completed: 40, failed: 0, canceled: 5 };
 });
 
 afterEach(() => {
@@ -110,15 +119,28 @@ describe("the history tab", () => {
   it("narrows to one ending and goes back to the first page", async () => {
     await render();
     await act(async () => { button(t("auto.history.next")).click(); });
-    await act(async () => { button(t("auto.run.failed")).click(); });
+    await act(async () => { chip(t("auto.run.failed")).click(); });
     expect(hoisted.asked[hoisted.asked.length - 1]).toBe("failed 0");
   });
 
-  it("says so when nothing matches", async () => {
-    hoisted.total = 0;
+  // How many each narrowing would show is on its chip, so an ending nothing has come to reads 0
+  // before it is pressed, and an empty history needs no sentence under the chips.
+  it("says on each chip how many runs it would show", async () => {
     await render();
-    expect(container.textContent).toContain(t("auto.history.empty"));
+    const counted = (label: string) => chip(label).querySelector(".actchip__count")?.textContent;
+    expect(counted(t("auto.history.all"))).toBe("45");
+    expect(counted(t("auto.run.completed"))).toBe("40");
+    expect(counted(t("auto.run.failed"))).toBe("0");
+    expect(counted(t("auto.run.canceled"))).toBe("5");
+  });
+
+  it("draws nothing under the chips when nothing matches", async () => {
+    hoisted.total = 0;
+    hoisted.byEnding = { completed: 0, failed: 0, canceled: 0 };
+    await render();
+    expect(container.querySelector(".autoruns")).toBeNull();
     expect(container.querySelector(".autohist__pager")).toBeNull();
+    expect(chip(t("auto.history.all")).querySelector(".actchip__count")?.textContent).toBe("0");
   });
 
   it("folds the far pages of a long history behind an ellipsis", () => {

@@ -1114,7 +1114,6 @@ export const tr: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "Çalışan bir şey yok.",
     "auto.history.all": "Tümü",
-    "auto.history.empty": "Eşleşen çalıştırma yok.",
     "auto.history.prev": "‹ Önceki",
     "auto.history.next": "Sonraki ›",
     "auto.history.count": "{from}–{to} / {total}",

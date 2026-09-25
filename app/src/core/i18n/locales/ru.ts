@@ -1131,7 +1131,6 @@ export const ru: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "Ничего не выполняется.",
     "auto.history.all": "Все",
-    "auto.history.empty": "Подходящих запусков нет.",
     "auto.history.prev": "‹ Назад",
     "auto.history.next": "Далее ›",
     "auto.history.count": "{from}–{to} из {total}",

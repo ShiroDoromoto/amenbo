@@ -1131,7 +1131,6 @@ export const uk: Translation = {
     // move it (`app/src/screens/RunningTab.tsx`).
     "auto.running.empty": "Нічого не виконується.",
     "auto.history.all": "Усі",
-    "auto.history.empty": "Відповідних запусків немає.",
     "auto.history.prev": "‹ Назад",
     "auto.history.next": "Далі ›",
     "auto.history.count": "{from}–{to} з {total}",

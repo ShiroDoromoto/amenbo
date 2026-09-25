@@ -1359,7 +1359,6 @@ const ui = {
   // move it (`app/src/screens/RunningTab.tsx`).
   "auto.running.empty": "Nothing is running.",
   "auto.history.all": "All",
-  "auto.history.empty": "No runs match.",
   "auto.history.prev": "‹ Prev",
   "auto.history.next": "Next ›",
   "auto.history.count": "{from}–{to} of {total}",

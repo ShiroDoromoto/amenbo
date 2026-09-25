@@ -866,7 +866,7 @@ export async function fetchRunHistory(
   projectId: number | null,
   page: number,
 ): Promise<AutomationRunHistoryDto> {
-  if (!inTauri()) return { runs: [], total: 0, pageSize: 20 };
+  if (!inTauri()) return { runs: [], total: 0, pageSize: 20, byEnding: { completed: 0, failed: 0, canceled: 0 } };
   return invoke<AutomationRunHistoryDto>("automation_history_page", {
     only: filter === "all" ? null : filter,
     projectId,

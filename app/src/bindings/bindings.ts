@@ -689,6 +689,11 @@ exitName?: string,
 task?: AutomationRunTaskDto, };
 
 /**
+ * How many runs of the history ended each way.
+ */
+export type AutomationRunEndingsDto = { completed: number, failed: number, canceled: number, };
+
+/**
  * **One page of the "history" tab** — the runs that are over and need nobody (`AMB-D-955`).
  */
 export type AutomationRunHistoryDto = { 
@@ -704,7 +709,13 @@ total: number,
 /**
  * How many runs a page holds. The screen counts pages with it rather than keeping its own.
  */
-pageSize: number, };
+pageSize: number, 
+/**
+ * **How many runs each ending holds** in the same project, whichever one the page was
+ * narrowed to — the number each narrowing's chip carries, so an ending with none says 0
+ * before it is pressed.
+ */
+byEnding: AutomationRunEndingsDto, };
 
 /**
  * **A run, just launched** — what the press is answered with.

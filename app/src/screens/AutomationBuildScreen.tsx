@@ -65,10 +65,11 @@ import { AutomationAboutPanel } from "./AutomationAboutPanel";
 import { Panel } from "./AutomationActionBuildScreen";
 import { AutomationLibraryPanel, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
-import { automationGraph, ERROR_EXIT } from "./automationLayout";
+import { automationGraph } from "./automationLayout";
 import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationHeldBy } from "./AutomationHeldBy";
 import { AutomationStepPanel } from "./AutomationStepPanel";
+import type { WhereTo } from "./automationParts";
 import { useAutomationStart } from "../components/StartAutomation";
 import { useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
@@ -77,15 +78,13 @@ import { builtinWord } from "../core/builtinWords";
 import { Icon } from "../components/Icon";
 import type { AutomationDetailDto } from "../bindings/bindings";
 
-/** Where the library's pick will go, in a sentence: after which way out of which box, or first. */
-function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): string {
-  if (!("edgeId" in target)) return t("auto.lib.first");
+/** Where the library's pick will go: after which way out of which box, or first of all. */
+function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): WhereTo {
+  if (!("edgeId" in target)) return null;
   const edge = automation?.edges.find((one) => one.id === target.edgeId);
   const from = automation?.placements.find((one) => one.id === edge?.fromId);
   const box = from === undefined ? "" : builtinWord(from.builtin, from.name);
-  if (edge?.exitName === undefined) return tf("auto.lib.after", { box });
-  const exit = edge.exitName === ERROR_EXIT ? t("auto.pic.errorExit") : builtinWord(from?.builtin, edge.exitName);
-  return tf("auto.lib.afterExit", { box, exit });
+  return { box, exit: edge?.exitName, builtin: from?.builtin };
 }
 
 /** What the panel is showing, if anything. */

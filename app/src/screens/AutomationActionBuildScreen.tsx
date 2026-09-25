@@ -49,12 +49,12 @@ import { AutomationActionDeclaresPanel } from "./AutomationActionDeclaresPanel";
 import { AutomationActionStepPanel } from "./AutomationActionStepPanel";
 import { AutomationBuiltinScreen } from "./AutomationBuiltinScreen";
 import { AutomationHeldBy } from "./AutomationHeldBy";
-import { ReachChip } from "./AutomationActionsTab";
+import { LockMark, ReachChip, usedCount } from "./automationParts";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
 import { editAutomationAction, useAutomationAction } from "../core/automations";
 import { actionGraph } from "./automationLayout";
-import { errText, t, tf, tn } from "../core/i18n";
+import { errText, t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -101,9 +101,8 @@ function AboutRow({
           )}
         </span>
         <ReachChip global={action.global} />
-        <span className="actdecl__used">
-          {action.usedBy === 0 ? t("auto.actions.unused") : tn("auto.actions.usedBy", action.usedBy)}
-        </span>
+        <span className="actdecl__used">{usedCount(action.usedBy)}</span>
+        {elsewhere && <LockMark />}
         <button
           type="button"
           className={editing ? "btn btn--on" : "btn"}
@@ -118,7 +117,6 @@ function AboutRow({
           </button>
         )}
       </div>
-      {elsewhere && <p className="actdecl__elsewhere">{t("auto.act.globalReadOnly")}</p>}
     </div>
   );
 }
@@ -324,11 +322,7 @@ export function AutomationActionBuildScreen({
               </div>
               <div className="autostep__field">
                 <span className="autostep__label">{t("auto.actions.colUsed")}</span>
-                <span className="autostep__said">
-                  {action.usedBy === 0
-                    ? t("auto.actions.usedNone")
-                    : tf("auto.act.usedWhere", { n: action.usedBy })}
-                </span>
+                <span className="autostep__said">{usedCount(action.usedBy)}</span>
               </div>
             </>
           ) : (

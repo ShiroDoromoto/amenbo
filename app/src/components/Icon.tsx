@@ -55,6 +55,7 @@ export type IconName =
   | "pencil"
   | "bell"
   | "unlock"
+  | "lock"
   | "calendar"
   | "pin"
   | "document"
@@ -211,6 +212,13 @@ const ART: Record<IconName, ReactNode> = {
     <>
       <rect x="4.2" y="10.6" width="15.6" height="10" rx="2" />
       <path d="M8.2 10.6V6.9a3.8 3.8 0 0 1 7.2-1.7" />
+    </>
+  ),
+  // A shut padlock — something shown here that is changed somewhere else, or nowhere.
+  lock: (
+    <>
+      <rect x="4.2" y="10.6" width="15.6" height="10" rx="2" />
+      <path d="M8.2 10.6V6.9a3.8 3.8 0 0 1 7.6 0v3.7" />
     </>
   ),
   // A calendar — the day a task is due.

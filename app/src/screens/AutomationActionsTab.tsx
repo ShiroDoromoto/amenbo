@@ -42,9 +42,10 @@ import {
 } from "../core/automations";
 import { dataAdapter } from "../mock/adapter";
 import { asTyped } from "../core/keys";
-import { errText, t, tf } from "../core/i18n";
+import { errText, t } from "../core/i18n";
 import { builtinShown } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
+import { ReachChip, usedCount } from "./automationParts";
 import type { AutomationActionCardDto } from "../bindings/bindings";
 
 /**
@@ -58,24 +59,6 @@ export function firstLine(note: string): string {
 
 /** Which reach the list is narrowed to. */
 type Reach = "all" | "global" | "project" | "builtin";
-
-/**
- * The reach an action sits in, as a chip — the same one the build screen's declaration draws. A
- * built-in is kept on the device's shelf, but what it is to a reader is Amenbo's own.
- */
-export function ReachChip({ global, builtin = false }: { global: boolean; builtin?: boolean }) {
-  const tone = builtin ? "actscope actscope--builtin" : global ? "actscope actscope--global" : "actscope";
-  return (
-    <span className={tone}>
-      <em aria-hidden="true" />
-      {builtin
-        ? t("auto.actions.reachBuiltin")
-        : global
-          ? t("auto.actions.reachGlobal")
-          : t("auto.actions.reachProject")}
-    </span>
-  );
-}
 
 function matches(one: AutomationActionCardDto, words: string, reach: Reach): boolean {
   if (reach === "builtin") return false;
@@ -214,9 +197,7 @@ export function AutomationActionsTab({
                       {one.steps === 0 ? t("auto.actions.noSteps") : one.steps}
                     </span>
                     <span className={one.usedBy === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
-                      {one.usedBy === 0
-                        ? t("auto.actions.usedNone")
-                        : tf("auto.actions.usedN", { n: one.usedBy })}
+                      {usedCount(one.usedBy)}
                     </span>
                   </button>
                   {/* Only the entrance that owns it now moves it: a project its own, the sidebar a
@@ -244,9 +225,7 @@ export function AutomationActionsTab({
                     {/* A built-in is one thing Amenbo does, not steps a reader counts. */}
                     <span className="actlib__num" />
                     <span className={one.usedBy === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
-                      {one.usedBy === 0
-                        ? t("auto.actions.usedNone")
-                        : tf("auto.actions.usedN", { n: one.usedBy })}
+                      {usedCount(one.usedBy)}
                     </span>
                   </button>
                   {/* Nothing moves a built-in to another reach. */}

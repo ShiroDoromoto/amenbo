@@ -78,7 +78,7 @@ pub struct Skin {
     /// backgrounds are.
     ///
     /// One file per name, and a name the author left out keeps the drawing `Icon.tsx` holds. There
-    /// is no stroke beside it: the forty-nine drawings are each adjusted against a line 1.75 wide,
+    /// is no stroke beside it: the fifty drawings are each adjusted against a line 1.75 wide,
     /// and a skin that could move that would move it under the ones it did not replace.
     pub icons: BTreeMap<String, String>,
     /// The header keys this build does not know, in order. A skin written for a later amenbo is read
@@ -744,9 +744,9 @@ pub const ICONS: &[&str] = &[
     "activity", "arrowDown", "arrowUp", "bell", "blocked", "calendar", "check", "checkSquare",
     "chevronDown", "chevronLeft", "chevronRight", "clipboard", "clock", "close", "comment",
     "document", "dot", "error", "foldLeft", "foldRight", "folder", "gavel", "gear", "goose",
-    "hourglass", "inbox", "keyboard", "link", "menu", "more", "newWindow", "paperclip", "pause",
-    "pencil", "person", "pin", "plug", "plus", "refresh", "reorder", "reply", "robot", "rocket",
-    "search", "stop", "tag", "trash", "unlock", "warning",
+    "hourglass", "inbox", "keyboard", "link", "lock", "menu", "more", "newWindow", "paperclip",
+    "pause", "pencil", "person", "pin", "plug", "plus", "refresh", "reorder", "reply", "robot",
+    "rocket", "search", "stop", "tag", "trash", "unlock", "warning",
 ];
 
 /// The most a material's name may be. Long enough for a folder and a filename inside the zip, and
@@ -3038,7 +3038,7 @@ dark:
         let mut sorted = ICONS.to_vec();
         sorted.sort_unstable();
         assert_eq!(ICONS, sorted.as_slice(), "the list is searched by halving");
-        assert_eq!(ICONS.len(), 49);
+        assert_eq!(ICONS.len(), 50);
     }
 
     const A_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";

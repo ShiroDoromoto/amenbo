@@ -34,13 +34,14 @@ import {
   useAutomationActions,
   useAutomationBuiltins,
 } from "../core/automations";
-import { errText, t, tn } from "../core/i18n";
+import { errText, t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { ERROR_EXIT } from "./automationLayout";
 import { CFG_KINDS } from "./automationPanel";
 import { kindLabel } from "./automationPortKinds";
 import { BuiltinDecl } from "./AutomationBuiltinScreen";
+import { ExitMark, ReachChip, usedCount, WhereMark, type WhereTo } from "./automationParts";
 import { builtinShown } from "../core/builtinWords";
 import type { AutomationActionCardDto, AutomationBuiltinDto } from "../bindings/bindings";
 
@@ -90,12 +91,7 @@ function Picked({ id, onPlace }: { id: number; onPlace: () => void }) {
             {action.exits
               .filter((one) => one.name !== ERROR_EXIT)
               .map((one) => (
-                <span key={one.id} className="actport actport--exit">
-                  {one.name ?? t("auto.step.exitUnnamed")}
-                  {one.outputs.length > 0 && (
-                    <span className="actport__kind">{one.outputs.map((out) => out.name).join("・")}</span>
-                  )}
-                </span>
+                <ExitMark key={one.id} name={one.name} outputs={one.outputs.map((out) => out.name)} />
               ))}
           </span>
         </div>
@@ -119,8 +115,8 @@ export function AutomationLibraryPanel({
   target: PlaceTarget;
   /** Whose library is reached — this project's own and the device's. */
   projectId: number | null;
-  /** Where the placement will go, in a sentence: after which way out, or first of all. */
-  where: string;
+  /** Where the placement will go: after which way out of which box, or first of all. */
+  where: WhereTo;
   /** The action is on the picture; the panel has nothing left to show. */
   onPlaced: () => void;
   /** Make an action here instead — the dialog, opened on this same target. */
@@ -169,7 +165,7 @@ export function AutomationLibraryPanel({
         >
           <span className="autolib__name">{one.name}</span>
           <span className="autolib__meta">
-            {one.usedBy === 0 ? t("auto.actions.unused") : tn("auto.actions.usedBy", one.usedBy)}
+            {usedCount(one.usedBy)}
           </span>
         </button>
         {picked === one.id && <Picked id={one.id} onPlace={() => place(one.id)} />}
@@ -193,7 +189,7 @@ export function AutomationLibraryPanel({
         >
           <span className="autolib__name">{one.name}</span>
           <span className="autolib__meta">
-            {one.usedBy === 0 ? t("auto.actions.unused") : tn("auto.actions.usedBy", one.usedBy)}
+            {usedCount(one.usedBy)}
           </span>
         </button>
         {picked === one.key && (
@@ -214,7 +210,7 @@ export function AutomationLibraryPanel({
   return (
     <>
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
-      <div className="autostep__said">{where}</div>
+      <WhereMark where={where} />
       <input
         {...asTyped}
         type="search"
@@ -225,17 +221,23 @@ export function AutomationLibraryPanel({
       />
       {projectId !== null && (
         <div className="autolib__group">
-          <div className="autolib__head">{t("auto.actions.reachProject")}</div>
+          <div className="autolib__head">
+            <ReachChip global={false} />
+          </div>
           {rows(false)}
         </div>
       )}
       <div className="autolib__group">
-        <div className="autolib__head">{t("auto.lib.global")}</div>
+        <div className="autolib__head">
+          <ReachChip global />
+        </div>
         {rows(true)}
       </div>
       {builtins.length > 0 && (
         <div className="autolib__group">
-          <div className="autolib__head">{t("auto.lib.builtin")}</div>
+          <div className="autolib__head">
+            <ReachChip global builtin />
+          </div>
           {builtinRows()}
         </div>
       )}

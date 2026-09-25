@@ -85,6 +85,7 @@ pub(super) const TAKE_TASK: Builtin = Builtin {
         turned_up,
         looks_for: |cfg| expression(answer(cfg, FILTER)),
     }),
+    chooses: None,
     work: Work::InStore(take),
 };
 

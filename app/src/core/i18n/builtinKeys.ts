@@ -13,6 +13,7 @@ import { ja } from "./locales/ja";
 /** Each built-in's key, and the part of the dictionary's keys its words sit under. */
 const SECTIONS: Record<string, string> = {
   take_task: "takeTask",
+  make_task: "makeTask",
   cut_worktree: "cutWorktree",
   fold_worktree: "foldWorktree",
   close_task: "closeTask",

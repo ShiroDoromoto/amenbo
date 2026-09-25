@@ -36,6 +36,7 @@ pub(super) const FOLD_WORKTREE: Builtin = Builtin {
     ins: &[],
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }, BuiltinExit { name: UNMERGED, outs: &[] }],
     waits: None,
+    chooses: None,
     work: Work::Outside(fold),
 };
 

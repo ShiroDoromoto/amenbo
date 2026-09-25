@@ -45,6 +45,7 @@ use crate::ops::automation::{self, EdgeTarget, NewStep};
 use crate::ops::automation_builtin_close::CLOSE_TASK;
 use crate::ops::automation_builtin_cut::CUT_WORKTREE;
 use crate::ops::automation_builtin_fold::FOLD_WORKTREE;
+use crate::ops::automation_builtin_make::MAKE_TASK;
 use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::automation_report::{self, Next, Produced};
 use crate::ops::emit_update;
@@ -71,6 +72,9 @@ pub struct Builtin {
     /// How it waits, for one that can be set to ([`Waits`]).
     #[serde(skip)]
     pub waits: Option<Waits>,
+    /// Which of two ways out it leaves by, for one whose setting chooses ([`Chooses`]).
+    #[serde(skip)]
+    pub chooses: Option<Chooses>,
     /// The work itself, and where it is done ([`Work`]).
     #[serde(skip)]
     pub work: Work,
@@ -202,6 +206,20 @@ impl Waits {
     }
 }
 
+/// **Which of two ways out a built-in leaves by, as one setting chooses.** Every placement of it leaves
+/// by one of the pair and never by the other, so the other is asked of nothing: the launch check asks no
+/// line of it, and a task it would hand on through it neither makes the placement an entry nor opens a
+/// stretch of the run ([`never_leaves_by`]).
+pub struct Chooses {
+    /// The setting that chooses, and the choice on it that means [`Chooses::chosen`].
+    pub setting: &'static str,
+    pub answer: &'static str,
+    /// The way out it leaves by where that choice is made.
+    pub chosen: &'static str,
+    /// The way out it leaves by otherwise — also where the setting is left unanswered.
+    pub otherwise: &'static str,
+}
+
 /// The answer written for one setting where the step was placed — JSON, as `automation_cfg.value`
 /// holds it — or `None` where nobody answered it.
 pub fn answer<'c>(cfg: &'c [RunDefCfg], name: &str) -> Option<&'c str> {
@@ -235,8 +253,28 @@ pub fn looks_for(def: &AutomationRunDef) -> Result<Option<String>> {
 /// **The way out a placed built-in never leaves by**, as it is set there — the launch check asks no
 /// line of it. `answer` reads the placement's answer to one setting.
 pub fn never_leaves_by<'a>(key: &str, answer: impl Fn(&str) -> Option<&'a str>) -> Option<&'static str> {
-    let waits = find(key)?.waits.as_ref()?;
-    waits.chosen(answer(waits.setting)).then_some(waits.instead_of)
+    let builtin = find(key)?;
+    if let Some(waits) = &builtin.waits {
+        if waits.chosen(answer(waits.setting)) {
+            return Some(waits.instead_of);
+        }
+    }
+    let chooses = builtin.chooses.as_ref()?;
+    let chosen = answer(chooses.setting).and_then(|value| serde_json::from_str::<String>(value).ok());
+    Some(match chosen.as_deref() == Some(chooses.answer) {
+        true => chooses.otherwise,
+        false => chooses.chosen,
+    })
+}
+
+/// [`never_leaves_by`], for a run's copy of a step, read from the answers copied with it. `None` for an
+/// agent's step.
+pub fn never_leaves_by_def(def: &AutomationRunDef) -> Result<Option<&'static str>> {
+    let Some(key) = def.builtin.as_deref() else {
+        return Ok(None);
+    };
+    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    Ok(never_leaves_by(key, |setting| answer(&cfg, setting)))
 }
 
 /// **What a built-in is handed while it runs**: the store, the run and the execution it is carried
@@ -288,11 +326,13 @@ pub struct Carried {
 }
 
 /// **Every built-in this build carries.** The four `AMB-D-964` names arrive one by one on top of this
-/// ground; each is its own module, holding its definition and the work it does.
+/// ground, and the one that files a task (`AMB-D-971`) after them; each is its own module, holding its
+/// definition and the work it does.
 #[cfg(not(test))]
-const BUILTINS: &[Builtin] = &[TAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK];
+const BUILTINS: &[Builtin] = &[TAKE_TASK, MAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK];
 #[cfg(test)]
-const BUILTINS: &[Builtin] = &[TAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK, tests::STAMP, tests::FALLS];
+const BUILTINS: &[Builtin] =
+    &[TAKE_TASK, MAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK, tests::STAMP, tests::FALLS];
 
 /// Every built-in, in the order a library lists them.
 pub fn all() -> &'static [Builtin] {
@@ -567,6 +607,7 @@ mod tests {
             BuiltinExit { name: DONE_EXIT, outs: &[] },
         ],
         waits: None,
+        chooses: None,
         work: Work::InStore(|carry| {
             let stamp = carry.setting("stamp").unwrap_or("\"ok\"");
             let note = carry.input("note").unwrap_or("nothing");
@@ -585,6 +626,7 @@ mod tests {
         ins: &[],
         exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
         waits: None,
+        chooses: None,
         work: Work::InStore(|_| Err(Error::invalid("the floor gave way"))),
     };
 

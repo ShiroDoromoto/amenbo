@@ -17,6 +17,8 @@
 //! explains. They also own different globals — `tracing` is the perf subscriber's, the `log` facade is
 //! this plugin's.
 
+use std::any::Any;
+use std::panic::Location;
 use std::path::PathBuf;
 
 use tauri_plugin_log::{Builder, RotationStrategy, Target, TargetKind};
@@ -74,4 +76,84 @@ pub(crate) fn logger() -> Builder {
         builder = builder.target(Target::new(TargetKind::Stdout));
     }
     builder
+}
+
+/// Writes every panic into this log before the process goes on to unwind or abort. A release build on
+/// Windows has no console (`windows_subsystem = "windows"`), so the message the default hook prints to
+/// stderr is lost — and a panic inside a window procedure or a WebView2 callback cannot unwind, so the
+/// process aborts (`0xc0000409`, fast-fail 7) with nothing on disk to say where it happened. This line
+/// is what is left.
+///
+/// The hook it replaces still runs afterwards, so a debug build keeps its stderr message and backtrace.
+/// Each record is flushed as it is written (fern flushes a writer after every record, and the plugin's
+/// rotating file writes through on flush), and the explicit flush here keeps that true should the
+/// target ever buffer — the abort that follows a panic runs no destructors.
+///
+/// Installed after the logger is registered: a panic earlier than that has no file to go to.
+pub(crate) fn install_panic_hook() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        log::error!("{}", panic_line(info.location(), info.payload()));
+        log::logger().flush();
+        previous(info);
+    }));
+}
+
+/// One line for a panic: which thread, where, and what it said. It takes the hook's parts rather than
+/// the hook's argument, whose type name (`PanicHookInfo`) is newer than this crate's `rust-version`.
+///
+/// The message goes in whole. The panics most likely to carry a user's text are the standard library's
+/// string-slicing ones, and those give indices and a length, not the string (`tests` holds that).
+/// Messages written in this crate follow the rule at the top of this module.
+fn panic_line(location: Option<&Location<'_>>, payload: &(dyn Any + Send)) -> String {
+    let thread = std::thread::current();
+    let thread = thread.name().unwrap_or("<unnamed>");
+    let location = location
+        .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+        .unwrap_or_else(|| "<unknown>".to_string());
+    let message = payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("<non-string payload>");
+    format!("panic in thread '{thread}' at {location}: {message}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::panic_line;
+
+    /// What a slicing panic says about `s`, through the same formatting the hook uses.
+    fn line_for_slicing(s: &str, end: usize) -> String {
+        let payload = std::panic::catch_unwind(|| s[..end].len()).unwrap_err();
+        panic_line(None, payload.as_ref())
+    }
+
+    // Older toolchains quoted the sliced string in these messages, and that string can be a task's
+    // title. If a toolchain bump brings the quote back, these fail before the hook writes it to disk.
+    #[test]
+    fn a_char_boundary_panic_does_not_carry_the_string() {
+        let line = line_for_slicing("über secret", 1);
+        assert!(!line.contains("secret"), "{line}");
+        assert!(line.contains("byte index 1 is not a char boundary"), "{line}");
+    }
+
+    #[test]
+    fn an_out_of_bounds_panic_does_not_carry_the_string() {
+        let line = line_for_slicing("secret", 99);
+        assert!(!line.contains("secret"), "{line}");
+        assert!(line.contains("byte index 99"), "{line}");
+    }
+
+    #[test]
+    fn a_str_payload_is_written_as_it_is() {
+        let payload: Box<dyn std::any::Any + Send> = Box::new("called `Option::unwrap()` on a `None` value");
+        assert_eq!(
+            panic_line(None, payload.as_ref()),
+            format!(
+                "panic in thread '{}' at <unknown>: called `Option::unwrap()` on a `None` value",
+                std::thread::current().name().unwrap_or("<unnamed>")
+            )
+        );
+    }
 }

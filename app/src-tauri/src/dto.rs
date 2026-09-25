@@ -3816,6 +3816,10 @@ pub struct AutomationLaunchBlockDto {
     /// Beside them, `builtin` is the key of the built-in `step` came from and `to_builtin` the one `to`
     /// came from (`AMB-D-964`): a built-in's names are the store's Japanese, and the front end writes
     /// them in the screen's language from the key (`app/src/core/i18n`'s `errSentence`).
+    ///
+    /// `placement` is the id of the placement the reason is about, where it is about one — every reason
+    /// but the two about the automation as a whole. A name cannot say which box a reason belongs to when
+    /// the same action is placed twice; the id can, so a screen can open that box.
     pub(crate) fields: std::collections::BTreeMap<String, String>,
 }
 

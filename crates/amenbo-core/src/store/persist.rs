@@ -1949,15 +1949,18 @@ impl Store {
     /// The reach is the automation's, the run being made under it.
     ///
     /// `by` carries what the store cannot answer — which agents this machine can start, whether the
-    /// workspace is open, and who pressed ([`crate::ops::automation_run::Launcher`]).
+    /// workspace is open, and who pressed ([`crate::ops::automation_run::Launcher`]). `handed` is what
+    /// the person handed over along with it — text, and files already ingested into the blob store
+    /// ([`crate::ops::automation_run::HandedAtLaunch`]).
     pub fn automation_launch(
         &mut self,
         automation_id: i64,
         by: &crate::ops::automation_run::Launcher<'_>,
+        handed: &crate::ops::automation_run::HandedAtLaunch,
     ) -> Result<crate::model::AutomationRun> {
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::launch(tx, automation_id, by),
+            |tx| crate::ops::automation_run::launch_handing(tx, automation_id, by, handed),
         )
     }
 

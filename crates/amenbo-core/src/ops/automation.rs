@@ -886,6 +886,8 @@ pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     for def in read::automation_run_def_ids(tx.conn(), id)? {
         tx.delete_record("automation_run_def", def)?;
     }
+    // What a person handed over at launch hangs off the run itself (`AMB-D-970`).
+    orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::AutomationRun, id)?);
     tx.delete_record("automation_run", id)?;
     Ok(orphaned)
 }

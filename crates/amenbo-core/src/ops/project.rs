@@ -392,6 +392,41 @@ mod tests {
         });
     }
 
+    /// A file handed over at launch hangs off the run itself, and goes with it (`AMB-D-970`).
+    #[test]
+    fn delete_sweeps_what_was_handed_to_a_run() {
+        with_tx(|tx| {
+            let p = mk_project(tx, "消えるPJ");
+            let automation = crate::ops::automation::add(
+                tx,
+                p,
+                crate::ops::automation::NewAutomation {
+                    name: "1件やりきる".into(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let run = mk_run(tx, automation.id, p);
+            let hash = "e".repeat(64);
+            let attachment = crate::ops::attachment::add_blob(
+                tx,
+                crate::model::AttachmentTarget::AutomationRun,
+                run,
+                &hash,
+                "issue.md",
+                Some("text/markdown"),
+                12,
+                crate::model::ActorKind::Human,
+            )
+            .unwrap();
+
+            let orphaned = delete(tx, p).unwrap();
+
+            assert!(read::attachment(tx.conn(), attachment.id).unwrap().is_none());
+            assert!(orphaned.contains(&hash), "the blob it pointed at comes back as a candidate");
+        });
+    }
+
     /// A slug is derived from the name at creation time and is unique on the device (a collision escapes
     /// through a numeric suffix).
     #[test]

@@ -1303,7 +1303,7 @@ pub fn automation_launch(
         workspace_open: Some(workspace_open),
         by: Some(ActorKind::Human),
     };
-    let run = with_store_mut(|store| Ok(store.automation_launch(id, &by)?))?;
+    let run = with_store_mut(|store| Ok(store.automation_launch(id, &by, &Default::default())?))?;
     crate::automation_watch::wake();
     Ok(AutomationRunStartedDto { run: run.id })
 }

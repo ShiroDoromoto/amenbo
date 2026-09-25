@@ -101,7 +101,8 @@
 //! | v73 | `dd05c1d2` | byte-identical to v72 (v73 rewrites words in rows) |
 //! | v74 | `5a9d3898` | byte-identical to v73 (v74 names ways out in rows) |
 //! | v75 | `4af540af` | |
-//! | v76 | this commit | held equal to the live registry by the test below |
+//! | v76 | `8b81fb22` | |
+//! | v77 | this commit | held equal to the live registry by the test below |
 //!
 //! [`super::migrate::BASELINE_VERSION`] itself is **not** here: this repository's history begins with the
 //! chain already at [`OLDEST_FROZEN_VERSION`], so no build in it ever emitted a v2 store and there is no
@@ -199,6 +200,7 @@ pub fn frozen(version: i64) -> Option<&'static str> {
         74 => include_str!("schema_frozen/v74.sql"),
         75 => include_str!("schema_frozen/v75.sql"),
         76 => include_str!("schema_frozen/v76.sql"),
+        77 => include_str!("schema_frozen/v77.sql"),
         _ => return None,
     })
 }

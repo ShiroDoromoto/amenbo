@@ -34,7 +34,7 @@ use rusqlite::Connection;
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    ActorKind, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
+    ActorKind, AttachmentTarget, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
@@ -277,6 +277,29 @@ pub struct Launcher<'a> {
     pub workspace_open: Option<bool>,
     /// Who pressed launch, or `None` from a caller that says nothing about itself.
     pub by: Option<ActorKind>,
+}
+
+/// **What a person hands over when launching a run** — the entrance where a person hands something
+/// over (`AMB-D-970`). The first step the run opens is told it ([`crate::ops::automation_step`]).
+///
+/// Nothing handed is the default, and a launch that hands nothing starts as it always has.
+#[derive(Clone, Debug, Default)]
+pub struct HandedAtLaunch {
+    /// The text, as it was typed. Blank text is the same as none.
+    pub text: Option<String>,
+    /// The files, already ingested into the blob store by the caller ([`crate::blob::BlobStore`]), in
+    /// the order they were handed over. Each is attached to the run in the launch's own transaction,
+    /// so the first step never opens on a run the files have not reached yet.
+    pub files: Vec<HandedFile>,
+}
+
+/// One file handed over at launch, as [`crate::ops::attachment::add_blob`] takes it.
+#[derive(Clone, Debug)]
+pub struct HandedFile {
+    pub blob_hash: String,
+    pub filename: String,
+    pub mime: Option<String>,
+    pub size_bytes: i64,
 }
 
 /// **The models each agent offers here**, by agent id ([`crate::agent_models`]) — and only the agents
@@ -870,7 +893,46 @@ pub fn settings_of(conn: &Connection, placement: &AutomationPlacement) -> Result
 /// The run is born `running`: nothing caps how many may be under way at once, so a launch never waits
 /// (`AMB-D-947`). `started_at` is the moment of the launch itself.
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, |_| true)
+    launch_handing(tx, automation_id, by, &HandedAtLaunch::default())
+}
+
+/// [`launch`], with what a person handed over along with it ([`HandedAtLaunch`]). The text is kept on
+/// the run and the files hang off it, both written before any step is opened.
+///
+/// **A file needs somebody who handed it over.** An attachment says who put it there, and a launch
+/// whose caller says nothing about itself has no one to name, so it is refused rather than guessed at.
+pub fn launch_handing(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+    handed: &HandedAtLaunch,
+) -> Result<AutomationRun> {
+    let who = match (handed.files.is_empty(), by.by) {
+        (true, _) => None,
+        (false, Some(who)) => Some(who),
+        (false, None) => {
+            return Err(Error::invalid(
+                "a file handed over at launch needs the launcher to say who it is — pass who is launching",
+            ))
+        }
+    };
+    let text = handed.text.as_deref().filter(|t| !t.trim().is_empty());
+    let run = launch_asking(tx, automation_id, by, text, |_| true)?;
+    if let Some(who) = who {
+        for file in &handed.files {
+            crate::ops::attachment::add_blob(
+                tx,
+                AttachmentTarget::AutomationRun,
+                run.id,
+                &file.blob_hash,
+                &file.filename,
+                file.mime.as_deref(),
+                file.size_bytes,
+                who,
+            )?;
+        }
+    }
+    Ok(run)
 }
 
 /// [`launch`], with the check's lines that leave a taken task open let through — for a test of how a
@@ -882,14 +944,15 @@ pub(crate) fn launch_leaving_the_task_open(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, |unmet| !matches!(unmet, Unmet::LeavesTaskOpen { .. }))
+    launch_asking(tx, automation_id, by, None, |unmet| !matches!(unmet, Unmet::LeavesTaskOpen { .. }))
 }
 
-/// [`launch`], refusing only over what `counts` says counts.
+/// [`launch`], refusing only over what `counts` says counts, and keeping `handed` on the run.
 fn launch_asking(
     tx: &WriteTx<'_>,
     automation_id: i64,
     by: &Launcher<'_>,
+    handed: Option<&str>,
     counts: impl Fn(&Unmet) -> bool,
 ) -> Result<AutomationRun> {
     let automation: Automation = read::automation(tx.conn(), automation_id)?
@@ -931,6 +994,7 @@ fn launch_asking(
         started_at: Some(now),
         ended_at: None,
         acknowledged_at: None,
+        handed: handed.map(str::to_string),
         created_at: now,
         updated_at: now,
     };
@@ -1991,6 +2055,65 @@ mod tests {
             let err = launch(tx, automation.id, &closed).expect_err("closed");
             let Error::Invalid(msg) = err else { panic!("a closed workspace is invalid") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationWorkspaceClosed));
+        });
+    }
+
+    fn a_file(name: &str) -> HandedFile {
+        HandedFile {
+            blob_hash: "a".repeat(64),
+            filename: name.to_string(),
+            mime: Some("text/markdown".to_string()),
+            size_bytes: 12,
+        }
+    }
+
+    /// What a person hands over at launch is on the run before anything opens: the text on the run,
+    /// the files hanging off it in the order they were handed, each saying who handed it (`AMB-D-970`).
+    #[test]
+    fn a_launch_keeps_what_was_handed_over_on_the_run() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let handed = HandedAtLaunch {
+                text: Some("この issue を起票して".into()),
+                files: vec![a_file("issue.md"), a_file("log.txt")],
+            };
+            let run = launch_handing(tx, automation.id, &here(&claude()), &handed).expect("launch");
+
+            assert_eq!(run.handed.as_deref(), Some("この issue を起票して"));
+            let stored = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+            assert_eq!(stored.handed, run.handed);
+            let files = read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id)
+                .expect("files");
+            let names: Vec<_> = files.iter().map(|a| a.filename.clone().unwrap_or_default()).collect();
+            assert_eq!(names, ["issue.md", "log.txt"]);
+            assert!(files.iter().all(|a| a.created_by_kind.as_deref() == Some("ai")));
+        });
+    }
+
+    /// Blank text is no text, and a launch that hands nothing over starts as it always has.
+    #[test]
+    fn blank_text_handed_at_launch_is_none() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let handed = HandedAtLaunch { text: Some("  \n".into()), files: Vec::new() };
+            let run = launch_handing(tx, automation.id, &here(&claude()), &handed).expect("launch");
+            assert_eq!(run.handed, None);
+            let bare = launch(tx, automation.id, &here(&claude())).expect("launch");
+            assert_eq!(bare.handed, None);
+        });
+    }
+
+    /// A file has to say who handed it over, so a launcher that says nothing about itself cannot hand
+    /// one — refused before any run is made.
+    #[test]
+    fn a_file_handed_by_nobody_is_refused() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let startable = claude();
+            let nobody = Launcher { by: None, ..here(&startable) };
+            let handed = HandedAtLaunch { text: None, files: vec![a_file("issue.md")] };
+            assert!(launch_handing(tx, automation.id, &nobody, &handed).is_err());
+            assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
         });
     }
 

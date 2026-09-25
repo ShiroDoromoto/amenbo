@@ -836,13 +836,15 @@ datasets! {
     attachment {
         // The fifth kind is not a record a person wrote: it is one step of one automation run, and what
         // hangs off it is the file that step produced (`automation_run_value.attachment_id`). Without
-        // it there is nowhere in the store for those bytes to live.
+        // it there is nowhere in the store for those bytes to live. The sixth is the run as a whole:
+        // a file a person handed over when launching it (`AMB-D-970`).
         target_type: enum_col(
             "task",
             "decision",
             "task_comment",
             "decision_comment",
             "automation_run_step",
+            "automation_run",
         ),
         // Polymorphic — no `REFERENCES` can branch on a sibling `target_type` column.
         target_id: col(KEY_REF),
@@ -1252,6 +1254,9 @@ datasets! {
         started_at: ts_opt,
         ended_at: ts_opt,
         acknowledged_at: ts_opt,
+        // The text a person handed over at launch, told to the first step the run opens (`AMB-D-970`).
+        // The files handed with it hang off the run as attachments.
+        handed: col(OPT),
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is

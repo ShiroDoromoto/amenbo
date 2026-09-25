@@ -299,7 +299,7 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
         workspace_open: None,
         by: Some(ActorKind::Ai),
     };
-    let run = store.automation_launch(automation.id, &by).unwrap();
+    let run = store.automation_launch(automation.id, &by, &Default::default()).unwrap();
 
     let mine_before = version_of(&store, mine);
     let other_before = version_of(&store, other);

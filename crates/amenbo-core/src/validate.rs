@@ -440,6 +440,7 @@ pub fn orphan_attachments(conn: &Connection) -> StoreEngineResult<Vec<OrphanAtta
     const OTC: col::task_comment::Cols = col::task_comment::of("otc");
     const ODC: col::decision_comment::Cols = col::decision_comment::of("odc");
     const ORS: col::automation_run_step::Cols = col::automation_run_step::of("ors");
+    const ORN: col::automation_run::Cols = col::automation_run::of("orn");
 
     let mut sel = Select::new();
     let (att_id, att_type, att_target) =
@@ -454,6 +455,7 @@ pub fn orphan_attachments(conn: &Connection) -> StoreEngineResult<Vec<OrphanAtta
         (Tgt::TaskComment, OTC.table, same(OTC.id, AT.target_id)),
         (Tgt::DecisionComment, ODC.table, same(ODC.id, AT.target_id)),
         (Tgt::AutomationRunStep, ORS.table, same(ORS.id, AT.target_id)),
+        (Tgt::AutomationRun, ORN.table, same(ORN.id, AT.target_id)),
     ] {
         sql.left_join(table, Pred::eq(AT.target_type, kind.as_str()).and(on));
     }
@@ -464,6 +466,7 @@ pub fn orphan_attachments(conn: &Connection) -> StoreEngineResult<Vec<OrphanAtta
             Pred::is_null(OTC.id),
             Pred::is_null(ODC.id),
             Pred::is_null(ORS.id),
+            Pred::is_null(ORN.id),
         ])
         .as_ref(),
     )
@@ -707,6 +710,8 @@ mod tests {
         // foreign keys are off in this fixture, and what the check reads is the execution's own id.
         e.put_record("automation_run_step", 50, &[("seq", Value::Integer(1)), ("status", text("done"))])
             .unwrap();
+        // The sixth is a run as a whole — what was handed over when launching it.
+        e.put_record("automation_run", 60, &[("status", text("completed"))]).unwrap();
         // Even ids hang off what is there; odd ids off a number nothing was ever issued under.
         for (id, target_type, target_id) in [
             (100, "task", 1),
@@ -719,6 +724,8 @@ mod tests {
             (107, "decision_comment", 41),
             (108, "automation_run_step", 50),
             (109, "automation_run_step", 51),
+            (110, "automation_run", 60),
+            (111, "automation_run", 61),
         ] {
             e.put_record(
                 "attachment",
@@ -752,14 +759,15 @@ mod tests {
                 "attachment:103",
                 "attachment:105",
                 "attachment:107",
-                "attachment:109"
+                "attachment:109",
+                "attachment:111"
             ],
             "one per orphan and nothing else — an arm must not report the rows of a type it does not stand for"
         );
         // The sentence names both ends: which attachment, and the ref of what it hung off.
         assert_eq!(
             raised.iter().filter_map(|i| i.params.get("target").map(String::as_str)).collect::<Vec<_>>(),
-            vec!["AMB-T-2", "AMB-D-6", "AMB-TC-31", "AMB-DC-41", "automation_run_step:51"],
+            vec!["AMB-T-2", "AMB-D-6", "AMB-TC-31", "AMB-DC-41", "automation_run_step:51", "automation_run:61"],
             "each rendered in the ref space its target type is numbered in — and as the raw pair where \
              there is none",
         );
@@ -784,7 +792,8 @@ mod tests {
                 "attachment:103",
                 "attachment:105",
                 "attachment:107",
-                "attachment:109"
+                "attachment:109",
+                "attachment:111"
             ],
             "including the ones whose target hung off the other project — the target is gone, so no \
              project claims them",

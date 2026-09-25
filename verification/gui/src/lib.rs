@@ -6368,8 +6368,8 @@ impl Instructor {
                     "In the build screen's picture, confirm {} is drawn{}{}.{}",
                     box_named(with, "name", "builtin")?,
                     match step_mark(with, "unfed")? {
-                        Some(true) => ", outlined in the colour that says a required input has nothing reaching it, with the line under its name naming that input",
-                        Some(false) => ", and that it is not outlined in the colour that says a required input has nothing reaching it, and names no input under its name",
+                        Some(true) => ", outlined in the colour that says a required input has nothing reaching it, with a warning mark and the count of such inputs beside its name — resting the pointer on the mark names that input",
+                        Some(false) => ", and that it is not outlined in the colour that says a required input has nothing reaching it, and wears no warning mark beside its name",
                         None => "",
                     },
                     match step_mark(with, "entry")? {

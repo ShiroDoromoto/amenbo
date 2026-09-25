@@ -268,7 +268,6 @@ export function AutomationActionBuildScreen({
       <div className="actbuild__canvas">
         <AutomationPicture
           graph={actionGraph(action)}
-          empty={t("auto.act.empty")}
           insertLabel={t("auto.act.insert")}
           selectedBoxId={step ?? undefined}
           onPickBox={pickBox}

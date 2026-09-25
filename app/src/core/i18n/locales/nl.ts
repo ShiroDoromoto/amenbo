@@ -936,7 +936,7 @@ export const nl: Translation = {
     "auto.pic.lap": "Eén taak",
     "auto.pic.insert": "Hier een actie tussenvoegen",
     "auto.pic.errorExit": "fout",
-    "auto.pic.endsDone": "de taak is hiermee klaar",
+    "auto.pic.endsDone": "de run beëindigen",
     "auto.pic.endsHalt": "stoppen en iemand erbij halen",
     "auto.pic.unfed": "er bereikt niets {names}",
     "auto.pic.hands": "geeft {from} door aan {to}",

@@ -938,7 +938,7 @@ export const zhHant: Translation = {
     "auto.pic.lap": "一件任務",
     "auto.pic.insert": "在這裡插入一個動作",
     "auto.pic.errorExit": "出錯",
-    "auto.pic.endsDone": "這件任務到此結束",
+    "auto.pic.endsDone": "結束執行",
     "auto.pic.endsHalt": "停下來叫人",
     "auto.pic.unfed": "沒有東西送到 {names}",
     "auto.pic.hands": "把 {from} 交給 {to}",

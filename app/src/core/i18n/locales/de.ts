@@ -940,7 +940,7 @@ export const de: Translation = {
     "auto.pic.lap": "Eine Aufgabe",
     "auto.pic.insert": "Hier eine Aktion einfügen",
     "auto.pic.errorExit": "Fehler",
-    "auto.pic.endsDone": "die Aufgabe ist damit erledigt",
+    "auto.pic.endsDone": "den Lauf beenden",
     "auto.pic.endsHalt": "anhalten und eine Person rufen",
     "auto.pic.unfed": "nichts erreicht {names}",
     "auto.pic.hands": "gibt {from} an {to} weiter",

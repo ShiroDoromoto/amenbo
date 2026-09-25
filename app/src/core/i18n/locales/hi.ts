@@ -936,7 +936,7 @@ export const hi: Translation = {
     "auto.pic.lap": "एक कार्य",
     "auto.pic.insert": "यहाँ एक क्रिया जोड़ें",
     "auto.pic.errorExit": "त्रुटि",
-    "auto.pic.endsDone": "यह कार्य यहीं पूरा होता है",
+    "auto.pic.endsDone": "रन समाप्त करें",
     "auto.pic.endsHalt": "रुककर किसी व्यक्ति को बुलाएँ",
     "auto.pic.unfed": "{names} तक कुछ नहीं पहुँचता",
     "auto.pic.hands": "{from} को {to} तक पहुँचाता है",

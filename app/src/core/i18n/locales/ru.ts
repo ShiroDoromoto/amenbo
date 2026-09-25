@@ -953,7 +953,7 @@ export const ru: Translation = {
     "auto.pic.lap": "Одна задача",
     "auto.pic.insert": "Вставить сюда действие",
     "auto.pic.errorExit": "ошибка",
-    "auto.pic.endsDone": "задача на этом завершается",
+    "auto.pic.endsDone": "завершить запуск",
     "auto.pic.endsHalt": "остановиться и позвать человека",
     "auto.pic.unfed": "ничего не доходит до {names}",
     "auto.pic.hands": "передаёт {from} в {to}",

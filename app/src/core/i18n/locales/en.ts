@@ -1623,6 +1623,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   // sentences, because they are the same sentences. The list is a read that succeeded and the refusal
   // is a write that did not, so both hand over the code and the values, and both are written from
   // here (`core/i18n`'s `errSentence`).
+  invalid_action_still_placed:
+    "This action still stands on pictures — {count} in all. Take it off them before deleting it.",
+  invalid_action_placed_elsewhere:
+    "This action is placed on automations in other projects ({automations}). Take it off them before moving it into “{project}”.",
   invalid_automation_archived: "“{automation}” is archived. Bring it back before starting it.",
   invalid_automation_workspace_closed:
     "The workspace is closed, and a run draws its steps in its panes. Open it and start again.",

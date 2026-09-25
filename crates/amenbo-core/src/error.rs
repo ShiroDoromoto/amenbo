@@ -385,6 +385,10 @@ pub enum ErrorCode {
     // succeeded, this one is raised by a write that did not.
     InvalidAutomationArchived,
     InvalidAutomationWorkspaceClosed,
+    // A library action that cannot be deleted or moved for the placements standing on it. The screen
+    // shows the refusal under the action's row, so it names itself and carries what it counts and names.
+    InvalidActionStillPlaced,
+    InvalidActionPlacedElsewhere,
     NotReadyAutomation,
     NotReadyAutomationNoSteps,
     NotReadyAutomationNoEntry,
@@ -478,6 +482,8 @@ impl ErrorCode {
             ErrorCode::InvalidMigrationRollbackFailed => "invalid_migration_rollback_failed",
             ErrorCode::InvalidAutomationArchived => "invalid_automation_archived",
             ErrorCode::InvalidAutomationWorkspaceClosed => "invalid_automation_workspace_closed",
+            ErrorCode::InvalidActionStillPlaced => "invalid_action_still_placed",
+            ErrorCode::InvalidActionPlacedElsewhere => "invalid_action_placed_elsewhere",
             ErrorCode::NotReadyAutomation => "not_ready_automation",
             ErrorCode::NotReadyAutomationNoSteps => "not_ready_automation_no_steps",
             ErrorCode::NotReadyAutomationNoEntry => "not_ready_automation_no_entry",
@@ -566,6 +572,8 @@ impl ErrorCode {
         ErrorCode::InvalidMigrationRollbackFailed,
         ErrorCode::InvalidAutomationArchived,
         ErrorCode::InvalidAutomationWorkspaceClosed,
+        ErrorCode::InvalidActionStillPlaced,
+        ErrorCode::InvalidActionPlacedElsewhere,
         ErrorCode::NotReadyAutomation,
         ErrorCode::NotReadyAutomationNoSteps,
         ErrorCode::NotReadyAutomationNoEntry,
@@ -783,6 +791,8 @@ mod tests {
             "invalid_migration_rollback_failed",
             "invalid_automation_archived",
             "invalid_automation_workspace_closed",
+            "invalid_action_still_placed",
+            "invalid_action_placed_elsewhere",
             "not_ready_automation",
             "not_ready_automation_no_steps",
             "not_ready_automation_no_entry",

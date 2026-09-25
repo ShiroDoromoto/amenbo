@@ -1362,6 +1362,10 @@ export const pl: Translation = {
     not_ready_premise_unsettled: "{ref} jest nierozstrzygnięte — poczekaj, aż zostanie dopisane do końca, albo je odepnij",
     not_ready_not_started: "zaczyna się dopiero {start} — zmień datę startu, jeśli to pomyłka",
     not_ready_draft: "wciąż jest tworzone — najpierw zakończ tworzenie",
+    invalid_action_still_placed:
+      "Ta akcja nadal stoi na schematach — łącznie {count}. Zdejmij ją z nich, zanim ją usuniesz.",
+    invalid_action_placed_elsewhere:
+      "Ta akcja stoi w automatyzacjach innych projektów ({automations}). Zdejmij ją z nich, zanim przeniesiesz ją do „{project}”.",
     invalid_automation_archived: "„{automation}” jest zarchiwizowana. Przywróć ją, zanim uruchomisz.",
     invalid_automation_workspace_closed:
       "Obszar roboczy jest zamknięty, a przebieg rysuje swoje kroki w jego panelach. Otwórz go i uruchom ponownie.",

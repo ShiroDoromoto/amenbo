@@ -1362,6 +1362,10 @@ export const uk: Translation = {
     not_ready_premise_unsettled: "{ref} не вирішено — дочекайтеся, поки його допишуть, або відв'яжіть його",
     not_ready_not_started: "воно починається аж {start} — змініть дату початку, якщо вона хибна",
     not_ready_draft: "воно ще створюється — спершу завершіть створення",
+    invalid_action_still_placed:
+      "Ця дія ще стоїть на схемах — усього {count}. Приберіть її звідти, перш ніж видаляти.",
+    invalid_action_placed_elsewhere:
+      "Ця дія стоїть в автоматизаціях інших проєктів ({automations}). Приберіть її звідти, перш ніж переносити в «{project}».",
     invalid_automation_archived: "«{automation}» в архіві. Поверніть її, перш ніж запускати.",
     invalid_automation_workspace_closed:
       "Робочий простір закрито, а запуск малює свої кроки в його панелях. Відкрийте його й запустіть знову.",

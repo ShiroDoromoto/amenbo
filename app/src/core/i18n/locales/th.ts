@@ -1336,6 +1336,10 @@ export const th: Translation = {
     not_ready_premise_unsettled: "{ref} ยังไม่ยุติ — รอให้เขียนจนจบหรือปลดการเชื่อม",
     not_ready_not_started: "งานนี้เริ่มวันที่ {start} — ถ้าไม่ถูกต้องให้แก้วันเริ่ม",
     not_ready_draft: "งานนี้ยังสร้างไม่เสร็จ — กรุณาสร้างให้เสร็จก่อน",
+    invalid_action_still_placed:
+      "แอ็กชันนี้ยังวางอยู่ในแผนภาพ — รวม {count} แห่ง นำออกจากแผนภาพก่อนแล้วจึงลบ",
+    invalid_action_placed_elsewhere:
+      "แอ็กชันนี้วางอยู่ในออโตเมชันของโปรเจกต์อื่น ({automations}) นำออกจากที่นั่นก่อนแล้วจึงย้ายไปที่ “{project}”",
     invalid_automation_archived: "“{automation}” ถูกเก็บเข้าคลังแล้ว นำกลับมาก่อนจึงจะเริ่มได้",
     invalid_automation_workspace_closed:
       "พื้นที่ทำงานปิดอยู่ และการรันจะวาดขั้นตอนไว้ในช่องของพื้นที่นั้น เปิดแล้วเริ่มใหม่",

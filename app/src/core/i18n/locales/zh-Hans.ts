@@ -1337,6 +1337,10 @@ export const zhHans: Translation = {
     not_ready_premise_unsettled: "{ref} 尚未定论——等它写完或解除关联",
     not_ready_not_started: "它要到 {start} 才开始——日期不对就改开始日",
     not_ready_draft: "它还在创建中——请先完成创建",
+    invalid_action_still_placed:
+      "此动作仍放在图中——共 {count} 处。先从图中移除再删除。",
+    invalid_action_placed_elsewhere:
+      "此动作放在其他项目的自动化中（{automations}）。先从那里移除，再移到“{project}”。",
     invalid_automation_archived: "“{automation}”已归档。先取回再启动。",
     invalid_automation_workspace_closed:
       "工作区是关着的，而一次运行要把步骤画在它的窗格里。打开后再启动。",

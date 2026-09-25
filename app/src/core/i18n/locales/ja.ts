@@ -1351,6 +1351,10 @@ export const ja: Translation = {
     not_ready_premise_unsettled: "{ref} が未確定です。書き終わるのを待つかリンクを外してください",
     not_ready_not_started: "着手日 {start} より前です。日付が違うなら着手日を変えてください",
     not_ready_draft: "まだ作成中です。作成を終えてください",
+    invalid_action_still_placed:
+      "このアクションは図に置かれています（全部で {count} か所）。図から外してから消してください。",
+    invalid_action_placed_elsewhere:
+      "このアクションは、ほかのプロジェクトのオートメーション（{automations}）に置かれています。そこから外してから「{project}」へ移してください。",
     invalid_automation_archived: "「{automation}」はアーカイブ済みです。戻してから起動してください。",
     invalid_automation_workspace_closed:
       "ワークスペースが閉じています。実行はステップをそのペインに描くので、開いてから起動してください。",

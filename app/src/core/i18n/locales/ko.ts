@@ -1332,6 +1332,10 @@ export const ko: Translation = {
     not_ready_premise_unsettled: "{ref}이(가) 아직 정해지지 않았습니다 — 다 쓰일 때까지 기다리거나 연결을 푸세요",
     not_ready_not_started: "{start}부터 시작합니다 — 날짜가 잘못되었다면 시작일을 바꾸세요",
     not_ready_draft: "아직 작성 중입니다 — 먼저 작성을 마치세요",
+    invalid_action_still_placed:
+      "이 액션은 아직 그림에 놓여 있습니다(모두 {count}곳). 그림에서 뺀 다음 삭제하세요.",
+    invalid_action_placed_elsewhere:
+      "이 액션은 다른 프로젝트의 자동화({automations})에 놓여 있습니다. 거기서 뺀 다음 “{project}”(으)로 옮기세요.",
     invalid_automation_archived: "“{automation}”은(는) 보관됨입니다. 되돌린 뒤에 시작하세요.",
     invalid_automation_workspace_closed:
       "워크스페이스가 닫혀 있고, 실행은 그 창에 단계를 그립니다. 열고 다시 시작하세요.",

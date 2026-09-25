@@ -38,7 +38,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     AttachmentTarget, Automation, AutomationAction, AutomationCfg, AutomationCfgKind,
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
@@ -615,12 +615,20 @@ pub fn action_set_scope(
         }
         let elsewhere = automations_placing_outside(tx, id, project_id)?;
         if !elsewhere.is_empty() {
-            return Err(Error::invalid(format!(
-                "action '{id}' is placed on automations of other projects — {} — take it off them \
-                 before moving it into project {}",
-                elsewhere.join(", "),
-                crate::idref::project(project_id),
-            )));
+            let project = read::project_name(tx.conn(), project_id)?.unwrap_or_default();
+            let said: Vec<String> = elsewhere.iter().map(|one| one.said.clone()).collect();
+            let names: Vec<String> = elsewhere.iter().map(|one| one.name.clone()).collect();
+            return Err(Error::Invalid(
+                Msg::new(format!(
+                    "action '{id}' is placed on automations of other projects — {} — take it off them \
+                     before moving it into project {}",
+                    said.join(", "),
+                    crate::idref::project(project_id),
+                ))
+                .coded(ErrorCode::InvalidActionPlacedElsewhere)
+                .with("automations", names.join(", "))
+                .with("project", project),
+            ));
         }
     }
     let sibs = read::automation_action_siblings(tx.conn(), project_id, Some(id))?;
@@ -634,11 +642,18 @@ pub fn action_set_scope(
 
 /// The automations outside `project_id` that place this action, each named once with its project —
 /// `automation '<name>' (<id>) in project <ref> '<name>'`, in the order the placements were made.
+/// One automation outside the project that stands in the way: said in full for the English sentence,
+/// and by its name alone for the screen's, which draws the project it is moving into beside it.
+struct Outside {
+    said: String,
+    name: String,
+}
+
 fn automations_placing_outside(
     tx: &WriteTx<'_>,
     action_id: i64,
     project_id: i64,
-) -> Result<Vec<String>> {
+) -> Result<Vec<Outside>> {
     let mut seen = Vec::new();
     let mut named = Vec::new();
     for placement in read::automation_placement_ids_using_action(tx.conn(), action_id)? {
@@ -649,12 +664,15 @@ fn automations_placing_outside(
         }
         seen.push(automation.id);
         let project = read::project_name(tx.conn(), automation.project_id)?.unwrap_or_default();
-        named.push(format!(
-            "automation '{}' ({}) in project {} '{project}'",
-            automation.name,
-            automation.id,
-            crate::idref::project(automation.project_id),
-        ));
+        named.push(Outside {
+            said: format!(
+                "automation '{}' ({}) in project {} '{project}'",
+                automation.name,
+                automation.id,
+                crate::idref::project(automation.project_id),
+            ),
+            name: automation.name,
+        });
     }
     Ok(named)
 }
@@ -669,11 +687,15 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     not_under_a_run(tx, Def::Action(id))?;
     let users = read::automation_placement_ids_using_action(tx.conn(), id)?;
     if !users.is_empty() {
-        return Err(Error::invalid(format!(
-            "{} placement(s) stand on this action — take them off the pictures they are on before \
-             deleting it",
-            users.len()
-        )));
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "{} placement(s) stand on this action — take them off the pictures they are on before \
+                 deleting it",
+                users.len()
+            ))
+            .coded(ErrorCode::InvalidActionStillPlaced)
+            .with("count", users.len()),
+        ));
     }
     for wire in read::automation_wire_ids(tx.conn(), AutomationPictureOwner::Action, id)? {
         tx.delete_record("automation_wire", wire)?;
@@ -3461,7 +3483,12 @@ mod tests {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let (action, placement) = mk_placed(tx, &automation, "点検");
-            assert!(action_delete(tx, action.id).is_err());
+            let refused = action_delete(tx, action.id).expect_err("placed");
+            // The row it is pressed on shows the refusal in the reader's language, so it names itself
+            // and carries the count its sentence is written with.
+            assert_eq!(refused.code(), "invalid_action_still_placed");
+            let fields: Vec<_> = refused.fields().expect("values ride along").iter().collect();
+            assert_eq!(fields, vec![("count", "1")]);
             placement_delete(tx, placement.id).expect("take the placement off");
             action_delete(tx, action.id).expect("now it goes");
             assert!(
@@ -3535,6 +3562,9 @@ mod tests {
             action_set_scope(tx, action.id, None).expect("out");
             let other = mk_project(tx, "別");
             let refused = action_set_scope(tx, action.id, Some(other)).expect_err("placed elsewhere");
+            assert_eq!(refused.code(), "invalid_action_placed_elsewhere");
+            let fields: Vec<_> = refused.fields().expect("values ride along").iter().collect();
+            assert_eq!(fields, vec![("automations", here.name.as_str()), ("project", "別")]);
             let said = refused.to_string();
             assert!(said.contains(&here.name), "it names the automation: {said}");
             assert!(

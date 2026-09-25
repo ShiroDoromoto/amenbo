@@ -1336,6 +1336,10 @@ export const tr: Translation = {
     not_ready_premise_unsettled: "{ref} karara bağlanmadı — yazılıp bitmesini bekleyin ya da bağı kaldırın",
     not_ready_not_started: "{start} tarihinden önce başlamıyor — tarih yanlışsa başlangıç gününü değiştirin",
     not_ready_draft: "hâlâ oluşturuluyor — önce oluşturmayı bitirin",
+    invalid_action_still_placed:
+      "Bu eylem hâlâ şemalarda duruyor — toplam {count}. Silmeden önce oradan çıkar.",
+    invalid_action_placed_elsewhere:
+      "Bu eylem başka projelerin otomasyonlarına yerleştirilmiş ({automations}). “{project}” projesine taşımadan önce oradan çıkar.",
     invalid_automation_archived: "“{automation}” arşivlenmiş. Başlatmadan önce geri getir.",
     invalid_automation_workspace_closed:
       "Çalışma alanı kapalı ve bir koşu adımlarını oradaki bölmelere çizer. Aç ve yeniden başlat.",

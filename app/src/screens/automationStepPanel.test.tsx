@@ -306,6 +306,39 @@ describe("the panel of one spot", () => {
     expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "which", '{"assignee":["me-ai"]}');
   });
 
+  it("answers where the built-in that fetches looks: a form from its three, and the place in a box", async () => {
+    // Drawn from the settings core declares for it (`AMB-D-970`) — nothing here knows the built-in.
+    const one = detail({
+      placements: [
+        spot({
+          builtin: "fetch",
+          settings: [
+            { name: "形式", kind: "choice", required: true, options: '["URL","ファイルパス","コマンド"]' },
+            { name: "見に行く先", kind: "text", required: true },
+          ],
+        }),
+      ],
+    });
+    await render({ automation: one, placementId: 1 });
+    const form = selects().find((s) => s.getAttribute("aria-label") === t("auto.bi.fetch.form"))!;
+    expect([...form.options].map((o) => o.textContent)).toEqual([
+      "—",
+      t("auto.bi.fetch.url"),
+      t("auto.bi.fetch.filePath"),
+      t("auto.bi.fetch.command"),
+    ]);
+    await pick(form, "コマンド");
+    // What is written is the store's word, whatever language the list was drawn in.
+    expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "形式", '"コマンド"');
+
+    const target = boxes().find((b) => b.getAttribute("aria-label") === t("auto.bi.fetch.target"))!;
+    await typeInto(target, "gh issue list --label triage");
+    await act(async () => {
+      target.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    });
+    expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "見に行く先", '"gh issue list --label triage"');
+  });
+
   it("says the order as a sentence, and writes it beside the parts it orders", async () => {
     // The order has no label of its own: it is the end of the sentence the rows begin (`AMB-T-5412`).
     const one = detail({

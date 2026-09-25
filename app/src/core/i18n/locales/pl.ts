@@ -1143,6 +1143,7 @@ export const pl: Translation = {
     "auto.run.step": "Krok {n} · {step}",
     "auto.run.inAction": "{step} w {action}",
     "auto.run.noTask": "Nie pobrano jeszcze zadania",
+    "auto.run.waitingForTask": "Czeka na zadanie, które może pobrać",
 
     "mcp.title": "Połącz przez MCP",
     "mcp.setupTitle": "Korzystaj ze swoich projektów z poziomu AI",

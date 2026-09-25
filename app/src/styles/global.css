@@ -796,6 +796,7 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 }
 .slot__builtin-ref { font-variant-numeric: tabular-nums; }
 .slot__builtin-title { overflow-wrap: anywhere; }
+.slot__builtin-filter { max-width: 100%; color: var(--c-text-muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
 
 /* The question and the row under it, kept together: the words are what say the pills are an offer, so
    they sit closer to the row than the row sits to the press that acts on it. */

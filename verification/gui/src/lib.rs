@@ -1214,11 +1214,11 @@ impl Instructor {
             // The entry's mark is words and not colour, but they are the interface's own and in the
             // machine's language — so it is an eye's for the same reason.
             (Domain::Automation, "pictured") if with.contains_key("unfed") || with.contains_key("entry") => None,
-            // A built-in's name is Amenbo's, but it is the one name its screen is headed by, and the
-            // same in every language the interface is drawn in — so a reading finds it.
-            (Domain::Automation, "builtin-read") => {
-                Some(Expectation { text: arg_str(with, "name")?.to_string(), present: true })
-            }
+            // A built-in's words are Amenbo's, drawn in the machine's language, and a road names one
+            // by its key (`BUILTIN_WORDS`) — so a road has no word of its own on its screen or on its
+            // box for a reading to find, and both are an eye's.
+            (Domain::Automation, "builtin-read") => None,
+            (Domain::Automation, "pictured") if with.contains_key("builtin") => None,
             (Domain::Automation, "pictured") => {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
@@ -4049,9 +4049,11 @@ impl Instructor {
             // Pressing a box is what puts what it holds in the panel beside the picture. On an
             // automation's picture the box is named by the action standing on it; inside an action,
             // by the step.
+            // A built-in's box is named by its key, and pressed by what it is (`BUILTIN_WORDS`).
             (Domain::Automation, "pick-box") => format!(
-                "In the build screen's picture, press the box \"{}\".",
-                req(with, "name")?
+                "In the build screen's picture, press {}.{}",
+                box_named(with, "name", "builtin")?,
+                builtin_note(with, "builtin")
             ),
             // The `+` on a line. The box goes in **in front of** that line, so the road names the box
             // the line leaves and the way out it leaves by — the pair a line hangs on.
@@ -4093,9 +4095,11 @@ impl Instructor {
                             .unwrap_or_else(|| "<the action>".to_string())
                     ),
                     // A built-in comes last in that panel, under a head of its own, and opens under
-                    // the row with what it does before the button that places it.
+                    // the row with what it does before the button that places it. It is named by its
+                    // key, and found by what it is (`BUILTIN_WORDS`).
                     (None, None, Some(builtin)) => format!(
-                        "{plus} In the panel that opens beside the picture, under the head for the built-ins, press \"{builtin}\". Confirm what it does opens under the row, then press the button under it that places it."
+                        "{plus} In the panel that opens beside the picture, under the head for the built-ins, press the row for {} — its name is written in the interface's language. Confirm what it does opens under the row, then press the button under it that places it.",
+                        builtin_words(builtin)?.called
                     ),
                     _ => return Err(
                         "a box put in on a line is made here (`name`), picked off the library (`action`) or picked off the built-ins (`builtin`) — exactly one of the three"
@@ -4206,8 +4210,8 @@ impl Instructor {
             // A built-in's row on the actions tab, listed after the library's with a chip of its own.
             // Nothing on it builds or moves, so the press opens it to be read.
             (Domain::Automation, "builtin-open") => format!(
-                "On the actions tab, press the row for the built-in \"{}\", which is marked as built-in — the screen reading it opens in place of the list.",
-                req(with, "name")?
+                "On the actions tab, press the row for {}, which is marked as built-in — its name is written in the interface's language. The screen reading it opens in place of the list.",
+                builtin_words(req(with, "builtin")?)?.called
             ),
             // One row of the panel, written. Every control there writes on the spot, and a box of
             // text writes as the caret leaves it — so the instruction says to leave the box.
@@ -4239,11 +4243,24 @@ impl Instructor {
             // A `choice` is answered off the pulldown under it, which holds what was written out
             // under the row and nothing else. So the line names the words rather than a place in the
             // list: a road that said "the first one" would pass on a build offering anything at all.
-            (Domain::Automation, "answer-choice") => format!(
-                "In the panel showing what the pressed box holds, under the setting \"{}\", open the pulldown of what it offers and choose \"{}\".",
-                req(with, "setting")?,
-                req(with, "value")?
-            ),
+            // A built-in's setting and its choices are the store's words (`builtin` names whose), and are
+            // pointed at by what they are, in whatever language the panel draws them (`BUILTIN_WORDS`).
+            (Domain::Automation, "answer-choice") => match arg_str(with, "builtin") {
+                None => format!(
+                    "In the panel showing what the pressed box holds, under the setting \"{}\", open the pulldown of what it offers and choose \"{}\".",
+                    req(with, "setting")?,
+                    req(with, "value")?
+                ),
+                Some(key) => {
+                    let builtin = builtin_words(key)?;
+                    format!(
+                        "In the panel showing what the pressed box holds, under {} of {}, open the pulldown of what it offers and choose {} — each written in the interface's language.",
+                        builtin.word(req(with, "setting")?)?,
+                        builtin.called,
+                        builtin.word(req(with, "value")?)?
+                    )
+                }
+            },
             // **Declaring on the panel.** What is declared is an action's or a step's, so the panel
             // is one on the action build screen: the action's input or output, opened with
             // `open-part`, or a pressed step. A spot on an automation declares nothing (it reads what
@@ -6290,18 +6307,19 @@ impl Instructor {
             // A built-in opened to be read. What it declares is listed as names on its rows, and the
             // rows are the whole of it: nothing on the screen writes, so the way back is the one press.
             (Domain::Automation, "builtin-read") => {
+                let builtin = builtin_words(req(with, "builtin")?)?;
                 let rows = |key: &str, row: &str| -> Result<String, String> {
                     match with.get(key) {
                         None => Ok(String::new()),
                         Some(_) => {
-                            let listed = names(with, key)?;
+                            let listed = builtin.listed(with, key)?;
                             Ok(format!(", the row for {row} listing{listed}"))
                         }
                     }
                 };
                 format!(
-                    "Confirm the screen reading the built-in \"{}\" is open: its name over it, what it does beside the chip marking it as built-in, and the line saying it is Amenbo's own and is not changed{}{}{}. Confirm nothing on it can be written in or pressed but the button that goes back.",
-                    req(with, "name")?,
+                    "Confirm the screen reading {} is open, every word of it in the interface's language: its name over it, what it does beside the chip marking it as built-in, and the line saying it is Amenbo's own and is not changed{}{}{}. Confirm nothing on it can be written in or pressed but the button that goes back.",
+                    builtin.called,
                     rows("settings", "settings")?,
                     rows("exits", "ways out")?,
                     match with.get("used_by") {
@@ -6317,8 +6335,8 @@ impl Instructor {
             // whole — so a road naming it is asking an eye rather than a reading.
             (Domain::Automation, "pictured") => match present(with) {
                 true => format!(
-                    "In the build screen's picture, confirm a box \"{}\" is drawn{}{}.",
-                    req(with, "name")?,
+                    "In the build screen's picture, confirm {} is drawn{}{}.{}",
+                    box_named(with, "name", "builtin")?,
                     match step_mark(with, "unfed")? {
                         Some(true) => ", outlined in the colour that says a required input has nothing reaching it, with the line under its name naming that input",
                         Some(false) => ", and that it is not outlined in the colour that says a required input has nothing reaching it, and names no input under its name",
@@ -6328,38 +6346,49 @@ impl Instructor {
                         Some(true) => ", with the words saying a run starts here written in it, above its name",
                         Some(false) => ", with no words saying a run starts here written in it",
                         None => "",
-                    }
+                    },
+                    builtin_note(with, "builtin")
                 ),
                 false => format!(
-                    "In the build screen's picture, confirm no box \"{}\" is drawn.",
-                    req(with, "name")?
+                    "In the build screen's picture, confirm {} is not drawn.{}",
+                    box_named(with, "name", "builtin")?,
+                    builtin_note(with, "builtin")
                 ),
             },
             // A line leaving one box, and what is written along it: the way out's own name, and
             // where leaving by it goes. `present: false` is the line taken away — nothing said about
             // where that way out goes, which names no end because there is none.
-            (Domain::Automation, "line-pictured") if !present(with) => match (arg_str(with, "to"), arg_str(with, "ends")) {
+            (Domain::Automation, "line-pictured") if !present(with) => match (arg_str(with, "to").or(arg_str(with, "to_builtin")), arg_str(with, "ends")) {
                 (None, None) => format!(
                     "In the build screen's picture, confirm no line leaves the box \"{}\" by {}.",
                     req(with, "from")?,
                     way_out(with)
                 ),
                 _ => return Err(
-                    "a line that is not drawn goes nowhere — leave `to` and `ends` out of it".to_string(),
+                    "a line that is not drawn goes nowhere — leave `to`, `to_builtin` and `ends` out of it".to_string(),
                 ),
             },
             (Domain::Automation, "line-pictured") => format!(
                 "In the build screen's picture, confirm a line leaves the box \"{}\" by {}, {}.",
                 req(with, "from")?,
                 way_out(with),
-                match (arg_str(with, "to"), arg_str(with, "ends")) {
-                    (Some(to), None) => format!("going on to the box \"{to}\""),
+                // A built-in it goes on to is named by its key (`BUILTIN_WORDS`).
+                match (
+                    match (arg_str(with, "to"), arg_str(with, "to_builtin")) {
+                        (Some(_), Some(_)) => return Err("a line goes on to one box — `to` or `to_builtin`, not both".to_string()),
+                        (to, None) => to.map(|to| format!("the box \"{to}\"")),
+                        (None, Some(key)) => Some(format!("the box of {}", builtin_words(key)?.called)),
+                    }
+                    .as_deref(),
+                    arg_str(with, "ends"),
+                ) {
+                    (Some(to), None) => format!("going on to {to}"),
                     (None, Some("done")) => "and that what is written at its foot says the task is finished".to_string(),
                     (None, Some("halt")) => "and that what is written at its foot says the run stops and calls a person".to_string(),
                     (None, Some("exit")) => format!("going into the output {} in the output frame under the picture", action_output(with)),
                     (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt / exit")),
                     _ => return Err(
-                        "a line goes on to a box (`to`) or ends the task or the run (`ends`), never both and never neither"
+                        "a line goes on to a box (`to`, or `to_builtin`) or ends the task or the run (`ends`), never both and never neither"
                             .to_string(),
                     ),
                 }
@@ -6616,6 +6645,115 @@ fn action_output(with: &Args) -> String {
         None => "that stands for its only way out".to_string(),
         Some("*") => "that stands for its error way out".to_string(),
         Some(name) => format!("\"{name}\""),
+    }
+}
+
+/// **Amenbo's built-ins, as a screen road points at them.**
+///
+/// A built-in's words are Amenbo's, and the screen draws them in the machine's language — so no road
+/// quotes them. It names the built-in by its key, and a setting, a choice or a way out of it by the
+/// word the store keeps it under: the same word a terminal road draws an edge off it with. What an
+/// operator is told is what each one is, which they find in whatever language the screen is in. A
+/// reading looks for the road's own words on a shot, and there are none here — so a step that would
+/// read a built-in's words is an eye's.
+struct BuiltinWords {
+    key: &'static str,
+    /// What it is, as the operator is told to find it.
+    called: &'static str,
+    /// Each word the store keeps for it — its settings and their choices, its inputs, its ways out
+    /// and what they hand on — and what that word is.
+    words: &'static [(&'static str, &'static str)],
+}
+
+const BUILTIN_WORDS: &[BuiltinWords] = &[
+    BuiltinWords {
+        key: "take_task",
+        called: "the built-in that takes a task (it reserves the next task its filter matches)",
+        words: &[
+            ("絞り込み", "the setting saying which tasks it takes (its filter)"),
+            ("着手できるタスクが無いとき", "the setting saying what it does when there is no task to take"),
+            ("着手できるタスクが出るまで待つ", "the choice that waits until there is a task to take"),
+            (
+                "待たずに終了条件「着手できるタスクが無い」へ進む",
+                "the choice that does not wait, and leaves by the way out for there being no task to take",
+            ),
+            ("着手した", "the way out for having taken a task"),
+            ("着手できるタスクが無い", "the way out for there being no task to take"),
+            ("タスク", "the task it took"),
+        ],
+    },
+    BuiltinWords {
+        key: "cut_worktree",
+        called: "the built-in that cuts a worktree for the task",
+        words: &[("worktree", "the path of the worktree it cut")],
+    },
+    BuiltinWords {
+        key: "fold_worktree",
+        called: "the built-in that folds the task's worktree away",
+        words: &[("未マージ", "the way out for a branch not yet merged")],
+    },
+    BuiltinWords {
+        key: "close_task",
+        called: "the built-in that closes the task",
+        words: &[("コミット", "the input for the commit it records")],
+    },
+];
+
+/// The built-in a road names by `key`, or why there is none.
+fn builtin_words(key: &str) -> Result<&'static BuiltinWords, String> {
+    BUILTIN_WORDS.iter().find(|one| one.key == key).ok_or_else(|| {
+        let known: Vec<&str> = BUILTIN_WORDS.iter().map(|one| one.key).collect();
+        format!("no built-in has the key `{key}` — it is {}", known.join(" / "))
+    })
+}
+
+impl BuiltinWords {
+    /// What the store's `word` is on this built-in, as the operator is told it.
+    fn word(&self, word: &str) -> Result<&'static str, String> {
+        self.words
+            .iter()
+            .find(|(one, _)| *one == word)
+            .map(|(_, what)| *what)
+            .ok_or_else(|| format!("the built-in `{}` keeps no word `{word}`", self.key))
+    }
+
+    /// The store's words listed under `key`, each said as what it is.
+    fn listed(&self, with: &Args, key: &str) -> Result<String, String> {
+        let entries = with
+            .get(key)
+            .and_then(|v| v.as_sequence())
+            .ok_or_else(|| format!("arg `{key}` is a selection, so it is a list"))?;
+        let words = entries
+            .iter()
+            .map(|one| {
+                let word = one.as_str().ok_or_else(|| format!("every entry under `{key}` must be a name"))?;
+                self.word(word).map(str::to_string)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(match words.as_slice() {
+            [] => " none of them".to_string(),
+            words => format!(" {}", listed(words)),
+        })
+    }
+}
+
+/// The box a road names: by the name it gave (`name_key`), or a built-in by its key (`builtin_key`) —
+/// one of the two, in the words the operator is told to find it by. A built-in's is followed by
+/// [`builtin_note`], as a sentence of its own.
+/// What the operator is told after a box named by a built-in's key: its name is not the road's to quote.
+fn builtin_note(with: &Args, builtin_key: &str) -> &'static str {
+    match with.contains_key(builtin_key) {
+        true => " Its name is written in the interface's language.",
+        false => "",
+    }
+}
+
+fn box_named(with: &Args, name_key: &str, builtin_key: &str) -> Result<String, String> {
+    match (arg_str(with, name_key), arg_str(with, builtin_key)) {
+        (Some(name), None) => Ok(format!("the box \"{name}\"")),
+        (None, Some(key)) => Ok(format!("the box of {}", builtin_words(key)?.called)),
+        (Some(_), Some(_)) => Err(format!("a box is named by `{name_key}` or by `{builtin_key}`, not both")),
+        (None, None) => Err(format!("name the box — `{name_key}`, or `{builtin_key}` for a built-in's key")),
     }
 }
 
@@ -8588,41 +8726,73 @@ steps_gui:
         assert!(ins.assert(Domain::Automation, "held-by", &with).is_ok());
     }
 
-    /// A built-in is named on the screen by the name its row draws, at each of the three places a
-    /// road meets one: its row on the actions tab, the head for the built-ins a line's `+` opens, and
-    /// the screen that reads it. The screen is read by that name, which is the same in every language.
+    /// A built-in is named by its key at each place a road meets one — its row on the actions tab, the
+    /// head for the built-ins a line's `+` opens, the screen that reads it, and its box on the picture
+    /// — and what it declares by the store's words. Its words are drawn in the machine's language, so
+    /// the operator is told what each one is and never its words, and nothing of it is read off a shot.
     #[test]
-    fn a_built_in_is_opened_placed_and_read_by_the_name_its_row_draws() {
+    fn a_built_in_is_named_by_its_key_and_told_by_what_it_is() {
         let s = load(r#"
 id: x
 title: y
 steps_gui:
-  - { type: action, domain: automation, op: builtin-open, with: { name: タスクに着手する } }
-  - { type: assert, domain: automation, op: builtin-read, with: { name: タスクに着手する, settings: [絞り込み], exits: [着手した, 着手できるタスクが無い], used_by: 0 } }
-  - { type: action, domain: automation, op: insert-box, with: { after: draft, exit: drafted, builtin: タスクに着手する } }
+  - { type: action, domain: automation, op: builtin-open, with: { builtin: take_task } }
+  - { type: assert, domain: automation, op: builtin-read, with: { builtin: take_task, settings: [絞り込み], exits: [着手した, 着手できるタスクが無い], used_by: 0 } }
+  - { type: action, domain: automation, op: insert-box, with: { after: draft, exit: drafted, builtin: take_task } }
   - { type: action, domain: automation, op: open-placed }
-  - { type: assert, domain: automation, op: builtin-read, with: { name: タスクに着手する, used_by: 1 } }
+  - { type: assert, domain: automation, op: builtin-read, with: { builtin: take_task, used_by: 1 } }
+  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
+  - { type: assert, domain: automation, op: pictured, with: { builtin: take_task } }
+  - { type: assert, domain: automation, op: line-pictured, with: { from: draft, exit: drafted, to_builtin: close_task } }
+  - { type: action, domain: automation, op: answer-choice, with: { builtin: take_task, setting: 着手できるタスクが無いとき, value: 着手できるタスクが出るまで待つ } }
 "#);
         let mut ins = Instructor::new();
         let steps = s.steps(Driver::Gui);
         let lines: Vec<String> = steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
-        assert!(lines[0].contains("\"タスクに着手する\"") && lines[0].contains("built-in"), "{}", lines[0]);
+        let take = "the built-in that takes a task";
+        for line in &lines {
+            assert!(!line.contains("タスクに着手する"), "a built-in's name is never quoted: {line}");
+        }
+        assert!(lines[0].contains(take) && lines[0].contains("interface's language"), "{}", lines[0]);
         assert!(
-            lines[1].contains("settings listing 絞り込み")
-                && lines[1].contains("ways out listing 着手した, 着手できるタスクが無い")
+            lines[1].contains("settings listing the setting saying which tasks it takes")
+                && lines[1].contains("the way out for having taken a task and the way out for there being no task to take")
                 && lines[1].contains("no automation runs it"),
             "{}", lines[1]
         );
-        assert!(lines[2].contains("head for the built-ins") && lines[2].contains("\"タスクに着手する\""), "{}", lines[2]);
+        assert!(lines[2].contains("head for the built-ins") && lines[2].contains(take), "{}", lines[2]);
         assert!(lines[3].contains("opens the action's build screen"), "{}", lines[3]);
         assert!(lines[4].contains("run by one automation"), "{}", lines[4]);
+        assert!(lines[5].contains("press the box of") && lines[5].contains(take), "{}", lines[5]);
+        assert!(lines[6].contains(take), "{}", lines[6]);
+        assert!(lines[7].contains("going on to the box of the built-in that closes the task"), "{}", lines[7]);
+        assert!(
+            lines[8].contains("the setting saying what it does when there is no task to take")
+                && lines[8].contains("the choice that waits until there is a task to take"),
+            "{}", lines[8]
+        );
 
-        let read = ins.expectation(&steps[4]);
-        assert_eq!(read.map(|e| e.text), Some("タスクに着手する".to_string()), "the screen is read by the name over it");
-        let with = serde_yaml::from_str::<Args>("{ after: draft, action: act, builtin: タスクに着手する }").unwrap();
+        assert!(ins.expectation(&steps[1]).is_none(), "the screen's words are the machine's, not the road's");
+        assert!(ins.expectation(&steps[6]).is_none(), "and so are the box's");
+        let with = serde_yaml::from_str::<Args>("{ after: draft, action: act, builtin: take_task }").unwrap();
         assert!(
             ins.action(Domain::Automation, "insert-box", &with).is_err(),
             "a box picked off the library and off the built-ins at once is refused"
+        );
+        let with = serde_yaml::from_str::<Args>("{ builtin: タスクに着手する }").unwrap();
+        assert!(
+            ins.action(Domain::Automation, "builtin-open", &with).is_err(),
+            "a built-in is named by its key, and its name is not one"
+        );
+        let with = serde_yaml::from_str::<Args>("{ builtin: take_task, setting: 絞り込み, value: 着手した }").unwrap();
+        assert!(
+            ins.action(Domain::Automation, "answer-choice", &with).is_ok(),
+            "a word the built-in keeps is told by what it is"
+        );
+        let with = serde_yaml::from_str::<Args>("{ builtin: take_task, setting: nope, value: 着手した }").unwrap();
+        assert!(
+            ins.action(Domain::Automation, "answer-choice", &with).is_err(),
+            "a word it does not keep is refused"
         );
     }
 

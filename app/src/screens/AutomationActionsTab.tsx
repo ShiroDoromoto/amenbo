@@ -43,6 +43,7 @@ import {
 import { dataAdapter } from "../mock/adapter";
 import { asTyped } from "../core/keys";
 import { errText, t, tf } from "../core/i18n";
+import { builtinShown } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import type { AutomationActionCardDto } from "../bindings/bindings";
 
@@ -116,7 +117,7 @@ export function AutomationActionsTab({
   const shownBuiltins = useMemo(
     () =>
       reach === "all" || reach === "builtin"
-        ? builtins.filter((one) => said(`${one.name} ${one.does}`, words))
+        ? builtins.map(builtinShown).filter((one) => said(`${one.name} ${one.does}`, words))
         : [],
     [builtins, words, reach],
   );

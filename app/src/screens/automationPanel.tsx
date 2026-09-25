@@ -25,6 +25,7 @@ import { useBoundFolders } from "../core/boundFolders";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
 import { t, tf } from "../core/i18n";
+import { builtinWord } from "../core/builtinWords";
 import { ERROR_EXIT, pictureOrder, type PicGraph } from "./automationLayout";
 import type {
   AgentModelListDto,
@@ -270,8 +271,9 @@ export function NextRow({
     edge === undefined || edge.maxTimes === undefined ? "" : String(edge.maxTimes),
   );
   const order = pictureOrder(graph);
-  const numbered = (one: { id: number; name: string }) =>
-    `${order.numberOf.get(one.id) ?? "?"}. ${one.name}`;
+  const numbered = (one: { id: number; name: string; builtin?: string }) =>
+    `${order.numberOf.get(one.id) ?? "?"}. ${builtinWord(one.builtin, one.name)}`;
+  const self = graph.boxes.find((one) => one.id === boxId);
   const loops =
     edge?.ends === "go" &&
     edge.toId !== undefined &&
@@ -313,7 +315,7 @@ export function NextRow({
     <div className="autostep__next">
       <span className="autostep__label">{t("auto.step.next")}</span>
       <select
-        aria-label={exitLabel(exitName)}
+        aria-label={exitLabel(exitName === undefined ? undefined : builtinWord(self?.builtin, exitName))}
         value={edgeKey(edge)}
         onChange={(e) => pick(e.target.value)}
       >

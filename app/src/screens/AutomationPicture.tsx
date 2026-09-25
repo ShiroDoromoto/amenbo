@@ -20,7 +20,7 @@
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
 // every time the definition is read again.
 import { useId } from "react";
-import { layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
+import { layOut, lineWord, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { Icon } from "../components/Icon";
@@ -28,7 +28,7 @@ import { Icon } from "../components/Icon";
 /** The way out a line hangs on, in a word. Empty for the unnamed one, which has no name to write. */
 function exitWord(line: PicLine): string {
   if (line.exitName === ERROR_EXIT) return t("auto.pic.errorExit");
-  return line.exitName ?? "";
+  return lineWord(line) ?? "";
 }
 
 /** One way out of the action, in words: the unnamed one and the error one have names of their own. */

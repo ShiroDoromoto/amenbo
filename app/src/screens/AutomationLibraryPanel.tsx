@@ -41,6 +41,7 @@ import { ERROR_EXIT } from "./automationLayout";
 import { CFG_KINDS } from "./automationPanel";
 import { kindLabel } from "./automationPortKinds";
 import { BuiltinDecl } from "./AutomationBuiltinScreen";
+import { builtinShown } from "../core/builtinWords";
 import type { AutomationActionCardDto, AutomationBuiltinDto } from "../bindings/bindings";
 
 /** Where the picked action goes: onto a line, or onto a picture with no line yet. */
@@ -177,9 +178,10 @@ export function AutomationLibraryPanel({
   };
 
   const builtinRows = () => {
-    const found = builtins.filter(
-      (one: AutomationBuiltinDto) => w === "" || `${one.name} ${one.does}`.toLowerCase().includes(w),
-    );
+    // Searched in the words the reader sees, which are the screen's language and not the store's.
+    const found = builtins
+      .map(builtinShown)
+      .filter((one: AutomationBuiltinDto) => w === "" || `${one.name} ${one.does}`.toLowerCase().includes(w));
     if (found.length === 0) return <div className="autolib__none">{t("auto.actions.noMatch")}</div>;
     return found.map((one) => (
       <div key={one.key}>

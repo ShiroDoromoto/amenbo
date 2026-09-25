@@ -11,6 +11,7 @@
 // second, and a list would be asked of every task there is.
 import type { BuiltinRun } from "../talk/automationStep";
 import { t } from "../core/i18n";
+import { builtinWord } from "../core/builtinWords";
 
 export function BuiltinCard({ builtin }: { builtin: BuiltinRun }) {
   return (
@@ -20,7 +21,7 @@ export function BuiltinCard({ builtin }: { builtin: BuiltinRun }) {
       <span className="slot__builtin-state">
         {t(builtin.waiting ? "auto.run.waitingForTask" : builtin.finished ? "face.builtinDone" : "face.builtinDoing")}
       </span>
-      <strong className="slot__builtin-name">{builtin.name}</strong>
+      <strong className="slot__builtin-name">{builtinWord(builtin.key, builtin.name)}</strong>
       {builtin.waiting && builtin.looksFor !== undefined && (
         <code className="slot__builtin-filter">{builtin.looksFor}</code>
       )}

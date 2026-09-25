@@ -13,7 +13,7 @@
 id: take-a-task-with-the-built-in-that-takes-one
 title: The built-in that takes a task reserves the one handed to the AI, and a run with none to take ends
 description: >
-  Place the built-in "タスクに着手する" as an automation's entry, with the way out that took a task going
+  Place the built-in that takes a task (`take_task`) as an automation's entry, with the way out that took a task going
   on to an agent's step and the way out that found none closing the run. Start it while no task is
   handed to the AI, and read the run over on the history tab. Hand a task to the AI, start it again,
   and read the task gone to in_progress and the agent's step in the run's pane working it.

@@ -34,6 +34,7 @@
 // with nothing said about what follows, which core reads as stopping the run and calling a person
 // (`amenbo_core::ops::automation::edge_delete`). So an edge on that way out *is* the change, and a
 // box that never had one has no line here to draw.
+import { builtinWord } from "../core/builtinWords";
 import type {
   AutomationActionDetailDto,
   AutomationDetailDto,
@@ -198,6 +199,11 @@ export type PicLine = {
   leaves?: boolean;
   /** The way out this edge hangs on, as core names it. Absent for the unnamed one and for a wire. */
   exitName?: string;
+  /**
+   * The built-in the box this edge leaves is, by its key: its way out is written in the screen's
+   * language (`lineWord`), while `exitName` stays the store's word the edge is matched on.
+   */
+  builtin?: string;
   /** How the run goes on where this edge names no box — it closes the task, or it stops. */
   ends?: "done" | "halt";
   /** What is handed on, for a wire: the way out's output, and every input it lands in. */
@@ -546,6 +552,15 @@ function lineKey(kind: "edge" | "wire", id: number): string {
  * font's size, anything else a little over half of it; the error way out is written as a word of
  * the reader's language, and none of them runs past five narrow letters.
  */
+/**
+ * The way out a line hangs on, in the words it is written with: a built-in's in the screen's language,
+ * anything else as core names it. Absent for the unnamed one. The error way out is left to the picture,
+ * which writes it as a word of its own.
+ */
+export function lineWord(line: Pick<PicLine, "exitName" | "builtin">): string | undefined {
+  return line.exitName === undefined ? undefined : builtinWord(line.builtin, line.exitName);
+}
+
 function wordW(exitName: string | undefined): number {
   if (exitName === undefined) return 0;
   if (exitName === ERROR_EXIT) return 40;
@@ -595,7 +610,8 @@ export function layOut(graph: PicGraph | null): Picture {
         at.set(boxId, { lap: nth, row: depth });
         nodes.push({
           boxId,
-          name: box.name,
+          // A built-in's words are drawn in the screen's language; the box's own name stays the store's.
+          name: builtinWord(box.builtin, box.name),
           x: startX + column * (NODE_W + COL_GAP),
           y: rowY,
           w: NODE_W,
@@ -608,7 +624,7 @@ export function layOut(graph: PicGraph | null): Picture {
             ? []
             : box.inputs
                 .filter((port) => port.required && !fed(graph, boxes, live, boxId, port.name))
-                .map((port) => port.name),
+                .map((port) => builtinWord(box.builtin, port.name)),
         });
       });
     });
@@ -775,6 +791,7 @@ export function layOut(graph: PicGraph | null): Picture {
         points: [{ x: sx, y: sy }, { x: sx, y: foot }],
         back: false,
         exitName: edge.exitName,
+        builtin: from.builtin,
         ends: edge.ends === "done" || edge.ends === "halt" ? edge.ends : undefined,
         at: { x: sx - 6, y: foot + OVER },
         align: "start",
@@ -799,6 +816,7 @@ export function layOut(graph: PicGraph | null): Picture {
         back: false,
         leaves: edge.ends === "exit",
         exitName: edge.exitName,
+        builtin: from.builtin,
         at: straight ? { x: Math.min(sx, tx) - BESIDE, y: mid + 4 } : { x: across, y: mid - OVER },
         align: straight ? "end" : "middle",
       });
@@ -833,6 +851,7 @@ export function layOut(graph: PicGraph | null): Picture {
           back,
           leaves: edge.ends === "exit",
           exitName: edge.exitName,
+          builtin: from.builtin,
           // Outside the lane, beside its `+`: inside it are the boxes.
           at: { x: laneX - BESIDE, y: middle + 4 },
           align: "end",
@@ -878,7 +897,7 @@ export function layOut(graph: PicGraph | null): Picture {
       trunk = {
         key: lineKey("wire", wire.id),
         fromId: wire.fromId,
-        port: wire.fromPortName,
+        port: builtinWord(from.builtin, wire.fromPortName),
         sx: from.x + from.w,
         sy: Math.max(from.y + WIRE_IN, from.y + from.h - WIRE_IN - nth * WORD_H),
         ends: [],
@@ -893,14 +912,14 @@ export function layOut(graph: PicGraph | null): Picture {
     trunk.ends.push(
       hemmed
         ? {
-            input: wire.toPortName,
+            input: builtinWord(to.builtin, wire.toPortName),
             x: to.x + to.w - WIRE_IN - nth * WORD_H,
             y: to.y,
             // A row apart per input, and all of them under the legs of the edges coming into the row.
             across: to.y - WIRE_OVER - nth * WIRE_OVER,
           }
         : {
-            input: wire.toPortName,
+            input: builtinWord(to.builtin, wire.toPortName),
             x: to.x + to.w,
             y: Math.min(to.y + WIRE_IN + nth * WORD_H, to.y + to.h - WIRE_IN / 2),
             across: Math.min(to.y + WIRE_IN + nth * WORD_H, to.y + to.h - WIRE_IN / 2),
@@ -951,7 +970,7 @@ export function layOut(graph: PicGraph | null): Picture {
     LAP_PAD + leftLanes * LANE_W,
     ...lines.map((line) => {
       if (line.kind !== "edge") return 0;
-      const wide = wordW(line.exitName);
+      const wide = wordW(lineWord(line));
       return -(line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x);
     }),
   );

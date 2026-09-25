@@ -22,6 +22,7 @@
 import { useState, type ReactNode } from "react";
 import { acknowledgeRun, pauseRun, resumeRun, stopRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
+import { builtinWord } from "../core/builtinWords";
 import { exactLabel, whenLabel } from "../core/i18n/format";
 import { ErrorNote } from "../components/ErrorNote";
 import type { AutomationRunCardDto } from "../bindings/bindings";
@@ -102,9 +103,13 @@ export function RunLine({
               n: run.stepsDone,
               // Which step, in full — the action and the step as one value, so the language orders
               // the two and the count is counted of the pair.
+              // A built-in's step and the action it stands for are drawn in the screen's language.
               step: run.actionName === undefined
-                ? run.stepName
-                : tf("auto.run.inAction", { action: run.actionName, step: run.stepName }),
+                ? builtinWord(run.builtin, run.stepName)
+                : tf("auto.run.inAction", {
+                    action: builtinWord(run.builtin, run.actionName),
+                    step: builtinWord(run.builtin, run.stepName),
+                  }),
             })}
         </span>
         <span className="autorun__task">

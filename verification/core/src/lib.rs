@@ -4238,15 +4238,20 @@ const REGISTRY: &[OpSpec] = &[
     // **A box is a fixed size and the name in it is cut at two lines**, so a road gives its actions
     // and steps names short enough to stand whole — what is read here is the shot, and a cut name is
     // not on it.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "pictured", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    //
+    // **A built-in's box is named by its key** (`builtin`), in place of `name`. Its name is Amenbo's
+    // and drawn in the machine's language, so a road that quoted it would pass in one language only;
+    // the driver says what the built-in is, and the box is an eye's.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "pictured", required: &[], refs: &[], strings: &["name", "builtin"], binds: false },
     // A line leaving one box, and what is written along it: the way out's own name, and where it
-    // goes — on to a box (`to`), or to the end of the task or the run (`ends`). `present: false` is
-    // no line leaving by that way out, and names neither.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "line-pictured", required: &["from"], refs: &[], strings: &["from", "exit", "to", "ends", "exit_to"], binds: false },
+    // goes — on to a box (`to`, or `to_builtin` for a built-in's by its key), or to the end of the task
+    // or the run (`ends`). `present: false` is no line leaving by that way out, and names neither.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "line-pictured", required: &["from"], refs: &[], strings: &["from", "exit", "to", "to_builtin", "ends", "exit_to"], binds: false },
     // The dashed outline around the boxes one task is worked by, named by the box that takes it.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lap-pictured", required: &["head"], refs: &[], strings: &["head"], binds: false },
-    // Pressing a box, which is what puts what it holds in the panel beside the picture.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-box", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // Pressing a box, which is what puts what it holds in the panel beside the picture. A built-in's
+    // box is named by its key (`builtin`), for `pictured`'s reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-box", required: &[], refs: &[], strings: &["name", "builtin"], binds: false },
     // The `+` on an automation's picture, and the library it opens in the panel. The box is put in
     // **in front of** the line named: `after` is the box the line leaves and `exit` the way out it
     // leaves by, which is the pair a line hangs on.
@@ -4257,8 +4262,9 @@ const REGISTRY: &[OpSpec] = &[
     // screen, so a road that names a prompt, ways out or inputs here is refused.
     //
     // Or one of Amenbo's built-ins (`builtin`), picked under the library's own head for them. It is
-    // named by the name its row draws and not by its key: a screen road is written in what the
-    // reader sees, and a built-in is defined in the code, so no binding stands for it.
+    // named by its key, the one word of it that is the same in every language: what its row draws is
+    // Amenbo's own, in the machine's language, so the driver says what the built-in is and the
+    // operator finds it by that.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after"], refs: &["action"], strings: &["after", "exit", "name", "reach", "builtin"], binds: false },
     // The `+ output artefact` on a way out, and the dialog it opens.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
@@ -4304,12 +4310,13 @@ const REGISTRY: &[OpSpec] = &[
     //
     // **A built-in, read and never built.** The actions tab lists the built-ins after
     // the library's rows, and a press on one opens the screen that reads its definition in place of
-    // the list. A built-in is named by the name its row draws, for `insert-box`'s reason.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "builtin-open", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // the list. A built-in is named by its key (`builtin`), for `insert-box`'s reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "builtin-open", required: &["builtin"], refs: &[], strings: &["builtin"], binds: false },
     // That screen, read: the built-in's name over it, the line saying it is Amenbo's own and not
-    // changed, and nothing to press but the way back. `settings` and `exits` are the names its rows
-    // list, and `used_by` the automations placing it — the number a placement has just moved.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "builtin-read", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // changed, and nothing to press but the way back. `settings` and `exits` are what its rows list,
+    // each by the word the store keeps it under — the word a terminal road draws an edge off it with —
+    // and `used_by` the automations placing it, the number a placement has just moved.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "builtin-read", required: &["builtin"], refs: &[], strings: &["builtin"], binds: false },
     //
     // The panel beside the picture — what the pressed box holds. `field` is the row it is read on or
     // written in, named the way the panel names it rather than by the column underneath: a road reads
@@ -4329,7 +4336,11 @@ const REGISTRY: &[OpSpec] = &[
     // pulldown holds is what somebody wrote out under the row (`redeclare`'s `choices`) and nothing
     // else, so a road naming a line by its words is reading that writing back — which is the only
     // reading the panel gives of it, there being no control that shows the list as a list.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-choice", required: &["setting", "value"], refs: &[], strings: &["setting", "value"], binds: false },
+    //
+    // A built-in's setting is Amenbo's writing, not the road's, and drawn in the machine's language:
+    // `builtin` names whose it is by its key, and `setting` and `value` are then the words the store
+    // keeps them under.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-choice", required: &["setting", "value"], refs: &[], strings: &["setting", "value", "builtin"], binds: false },
     // What fills one of a box's inputs, picked from what fits rather than drawn.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-wire", required: &["input", "from"], refs: &[], strings: &["input", "from"], binds: false },
     //
@@ -4987,6 +4998,18 @@ impl Scenario {
                     errs.push(at(i, "a placement places one thing — name `action` or `builtin`, not both".to_string()));
                 } else if !action && !builtin {
                     errs.push(at(i, "what is placed is missing — write `action` naming a library action, or `builtin` naming a built-in's key".to_string()));
+                }
+            }
+
+            // A box on the picture is named one way: by the name the road gave it, or a built-in's by
+            // its key — never both and never neither.
+            if step.domain() == Domain::Automation && matches!(step.op(), "pictured" | "pick-box") {
+                let name = step.with().contains_key("name");
+                let builtin = step.with().contains_key("builtin");
+                if name && builtin {
+                    errs.push(at(i, "a box is named one way — `name`, or `builtin` for a built-in's key, not both".to_string()));
+                } else if !name && !builtin {
+                    errs.push(at(i, "which box is missing — write `name`, or `builtin` naming a built-in's key".to_string()));
                 }
             }
 

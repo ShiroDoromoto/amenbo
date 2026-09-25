@@ -63,7 +63,7 @@ steps_gui:
     with:
       from: take
       exit: got one
-      to: タスクを閉じる
+      to_builtin: close_task
 
   - type: action
     domain: automation
@@ -96,7 +96,7 @@ steps_gui:
     op: line-pictured
     with:
       from: work
-      to: タスクを閉じる
+      to_builtin: close_task
 
   # Placed but empty: the launch place names it, rather than letting a run start into nothing.
   - type: assert

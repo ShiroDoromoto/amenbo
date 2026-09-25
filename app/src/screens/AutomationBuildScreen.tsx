@@ -73,6 +73,7 @@ import { useAutomationStart } from "../components/StartAutomation";
 import { useAutomation, useLaunchCheck } from "../core/automations";
 import { useBoundFolders } from "../core/boundFolders";
 import { errSentence, t, tf } from "../core/i18n";
+import { builtinWord } from "../core/builtinWords";
 import { Icon } from "../components/Icon";
 import type { AutomationDetailDto } from "../bindings/bindings";
 
@@ -80,9 +81,10 @@ import type { AutomationDetailDto } from "../bindings/bindings";
 function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): string {
   if (!("edgeId" in target)) return t("auto.lib.first");
   const edge = automation?.edges.find((one) => one.id === target.edgeId);
-  const box = automation?.placements.find((one) => one.id === edge?.fromId)?.name ?? "";
+  const from = automation?.placements.find((one) => one.id === edge?.fromId);
+  const box = from === undefined ? "" : builtinWord(from.builtin, from.name);
   if (edge?.exitName === undefined) return tf("auto.lib.after", { box });
-  const exit = edge.exitName === ERROR_EXIT ? t("auto.pic.errorExit") : edge.exitName;
+  const exit = edge.exitName === ERROR_EXIT ? t("auto.pic.errorExit") : builtinWord(from?.builtin, edge.exitName);
   return tf("auto.lib.afterExit", { box, exit });
 }
 
@@ -234,7 +236,7 @@ export function AutomationBuildScreen({
       )}
 
       {pressed !== null && (
-        <Panel place={t("auto.build.step")} title={pressed.name} onClose={close}>
+        <Panel place={t("auto.build.step")} title={builtinWord(pressed.builtin, pressed.name)} onClose={close}>
           <AutomationStepPanel
             automation={automation}
             placementId={pressed.id}

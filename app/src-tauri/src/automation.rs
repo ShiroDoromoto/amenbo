@@ -1402,6 +1402,7 @@ fn run_card(
     };
     let action_name =
         placed_action_name(store, last_def.as_ref().and_then(|def| def.placement_id))?;
+    let builtin = last_def.as_ref().and_then(|def| def.builtin.clone());
     let step_name = last_def.map(|def| def.name);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
     let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
@@ -1421,6 +1422,7 @@ fn run_card(
             && amenbo_core::ops::automation_run::is_waiting(conn, run.id)?,
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
         step_name,
+        builtin,
         action_name,
         steps_done: steps.len(),
         task: worked_task(store, stretch)?,

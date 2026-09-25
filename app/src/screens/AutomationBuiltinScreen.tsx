@@ -13,6 +13,7 @@
 // **The declaration is the one the library panel shows under a picked row** (`BuiltinDecl`), so a
 // reader sees the same three rows wherever they weigh one.
 import { useAutomationBuiltins } from "../core/automations";
+import { builtinShown } from "../core/builtinWords";
 import { t, tn } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import { ReachChip } from "./AutomationActionsTab";
@@ -20,7 +21,10 @@ import { CFG_KINDS } from "./automationPanel";
 import { kindLabel } from "./automationPortKinds";
 import type { AutomationBuiltinDto } from "../bindings/bindings";
 
-/** What a built-in reads, takes and leaves by — the three rows a reader weighs before placing one. */
+/**
+ * What a built-in reads, takes and leaves by — the three rows a reader weighs before placing one. It
+ * draws the words it is handed, so it is handed them in the screen's language (`builtinShown`).
+ */
 export function BuiltinDecl({ builtin }: { builtin: AutomationBuiltinDto }) {
   const none = <span className="actdecl__none">{t("auto.act.none")}</span>;
   return (
@@ -76,7 +80,8 @@ export function AutomationBuiltinScreen({
   builtinKey: string;
   onBack: () => void;
 }) {
-  const builtin = useAutomationBuiltins().find((one) => one.key === builtinKey) ?? null;
+  const found = useAutomationBuiltins().find((one) => one.key === builtinKey);
+  const builtin = found === undefined ? null : builtinShown(found);
   return (
     <div className="actbuild">
       <div className="actbuild__head">

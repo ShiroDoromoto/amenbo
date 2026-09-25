@@ -1606,8 +1606,9 @@ pub struct AutomationAction {
     /// What this action is for, in the builder's own words. It is shown on the build screen and on
     /// the library's row, and a launch never carries it, the same way [`Automation::notes`] does not.
     pub note: String,
-    /// The step this action opens first. `None` while it is still being built; launching an
-    /// automation that places it is refused at the launch check, not here.
+    /// The step this action opens first. The first step written takes it, and deleting it hands it to
+    /// the first step left (`AMB-T-5517`), so it is `None` only while the action has no step or after
+    /// it is cleared; launching an automation that places it then is refused at the launch check, not here.
     #[serde(default)]
     pub entry_step_id: Option<i64>,
     /// **The built-in this action stands for**, by its key, or `None` for one a person wrote

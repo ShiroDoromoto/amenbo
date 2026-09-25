@@ -707,6 +707,7 @@ pub(super) fn automation_run_step_row(r: &Row) -> rusqlite::Result<AutomationRun
         seq: get(r, C.seq)?,
         exit_id: get(r, C.exit_id)?,
         report: get(r, C.report)?,
+        report_withheld: get(r, C.report_withheld)?,
         status: enum_req(r, C.status, AutomationRunStepStatus::parse)?,
         started_at: ts_opt(r, C.started_at)?,
         ended_at: ts_opt(r, C.ended_at)?,

@@ -1324,6 +1324,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .autostart__note { margin: 0; font-size: var(--fs-md); color: var(--c-text-muted); }
 /* Marked on the heed step rather than the stop: a launch that was refused has broken nothing. */
 .autostart__refused { margin: 0; font-size: var(--fs-md); color: var(--c-heed); }
+/* The way to the workspace, beside the line that refused a launch because it is closed. Its own
+   colour, not the line's: opening a window is the way on, not part of what went wrong. */
+.autorefused__open { margin-left: var(--s-2); color: var(--c-text); }
 
 /* ----- the picture of the steps (`screens/AutomationPicture.tsx`) -----
    Every position on it is worked out from the definition (`screens/automationLayout.ts`) and

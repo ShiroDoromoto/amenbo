@@ -938,6 +938,7 @@ export const de: Translation = {
     "auto.hand.unchosen": "Nicht gewählt",
     "auto.hand.nothing": "Diese Automation nimmt beim Start nichts entgegen.",
     "auto.launch.see": "Im Bild zeigen",
+    "auto.launch.openWorkspace": "Arbeitsbereich öffnen",
     "auto.startOne": "Eine Automation starten",
     "auto.pic.lap": "Eine Aufgabe",
     "auto.pic.insert": "Hier eine Aktion einfügen",

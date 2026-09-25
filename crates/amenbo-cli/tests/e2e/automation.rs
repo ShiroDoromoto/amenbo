@@ -636,6 +636,33 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
     assert!(stopped["automation_run"]["stopped_reason"].is_null(), "a cancel carries no reason");
 }
 
+/// **What a person hands over comes in on the launch itself** (`AMB-D-970`): a text, from an argument
+/// or from stdin, and files, attached to the run. A file that cannot be read is refused before anything
+/// is started, so no run is left holding half of what it was handed.
+#[test]
+fn a_launch_takes_a_text_and_files_for_its_first_step() {
+    let cli = Cli::new();
+    let (a, _, _) = a_launchable(&cli);
+    let note = cli.home.join("draft.md");
+    std::fs::write(&note, "# a draft\n").unwrap();
+
+    let started = cli.json(&[
+        "automation", "start", &a, "--text", "file this", "--file", note.to_str().unwrap(), "--json",
+    ]);
+    assert_eq!(started["automation_run"]["handed"].as_str(), Some("file this"));
+    let run = id_of(&started, "automation_run");
+    cli.json(&["automation", "stop", &run, "--json"]);
+
+    let missing = cli.home.join("not-there.md");
+    let (err, code) = cli.run_err(&[
+        "automation", "start", &a, "--file", missing.to_str().unwrap(), "--json",
+    ]);
+    assert_ne!(code, 0, "an unreadable file is refused: {err}");
+    assert!(err.contains("not_found"), "{err}");
+    let runs = cli.json(&["automation", "run-list", "--automation", &a, "--json"]);
+    assert_eq!(runs["count"].as_u64(), Some(1), "only the first launch made a run: {runs}");
+}
+
 /// The launch check refuses an unfinished automation and names what is missing. Nothing on the
 /// building side ever did: a picture is half-built for as long as somebody is drawing it, and this is
 /// the moment a person is about to be let down by one.

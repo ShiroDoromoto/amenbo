@@ -79,32 +79,51 @@ pub(crate) fn attach_file(
     source: &str,
     name: Option<String>,
 ) -> Result<amenbo_core::model::Attachment, CliError> {
-    let a = {
-        let path = std::path::Path::new(source);
-        let meta = std::fs::metadata(path).map_err(|e| CliError {
-            code: "not_found",
-            message: format!("cannot read file '{source}': {e}"),
-            hint: Some("pass a readable file path, or use --url to attach an external link".to_string()),
-            exit: 1,
-        })?;
-        if !meta.is_file() {
-            return Err(CliError { code: "invalid_value", message: format!("'{source}' is not a regular file"), hint: None, exit: 2 });
-        }
-        // What the file *is* comes from the file, and `--name` only renames it: read the type off the
-        // source's own name, never off the label, which carries no extension when it is a sentence.
-        let on_disk = path.file_name().and_then(|n| n.to_str());
-        let mime = on_disk.and_then(amenbo_core::blob::mime_from_filename);
-        let filename = match name {
-            Some(label) => keep_the_suffix(&label, on_disk),
-            None => on_disk.unwrap_or("attachment").to_string(),
-        };
-        // Check the per-file limit (which varies by type) before ingesting — it is what stops a runaway.
-        store.config.attachment_limits.check_per_file(mime, meta.len()).map_err(CliError::from)?;
-        let blob = store.blobs().ingest_path(path).map_err(CliError::from)?;
-        store.attach_blob(target_type, target_id, &blob.hash, &filename, mime, blob.size_bytes as i64, flags.facet()?)
-            .map_err(CliError::from)?
+    let file = file_to_ingest(store, source, name)?;
+    let blob = file.ingest(store)?;
+    store.attach_blob(target_type, target_id, &blob.hash, &file.filename, file.mime, blob.size_bytes as i64, flags.facet()?)
+        .map_err(CliError::from)
+}
+
+/// A file read and measured, and not yet ingested: everything [`attach_file`] checks before the bytes
+/// are copied in. It is its own step so a caller holding several files can check every one of them
+/// before ingesting any (`automation start --file`), and a refusal of the third strands nothing.
+pub(crate) struct FileToIngest {
+    path: std::path::PathBuf,
+    pub(crate) filename: String,
+    pub(crate) mime: Option<&'static str>,
+}
+
+impl FileToIngest {
+    /// Copy the bytes into the blob store.
+    pub(crate) fn ingest(&self, store: &Store) -> Result<amenbo_core::blob::BlobRef, CliError> {
+        store.blobs().ingest_path(&self.path).map_err(CliError::from)
+    }
+}
+
+/// Read `source`'s metadata and hold it to the per-file limit, without ingesting it.
+pub(crate) fn file_to_ingest(store: &Store, source: &str, name: Option<String>) -> Result<FileToIngest, CliError> {
+    let path = std::path::Path::new(source);
+    let meta = std::fs::metadata(path).map_err(|e| CliError {
+        code: "not_found",
+        message: format!("cannot read file '{source}': {e}"),
+        hint: Some("pass a readable file path, or use --url to attach an external link".to_string()),
+        exit: 1,
+    })?;
+    if !meta.is_file() {
+        return Err(CliError { code: "invalid_value", message: format!("'{source}' is not a regular file"), hint: None, exit: 2 });
+    }
+    // What the file *is* comes from the file, and `--name` only renames it: read the type off the
+    // source's own name, never off the label, which carries no extension when it is a sentence.
+    let on_disk = path.file_name().and_then(|n| n.to_str());
+    let mime = on_disk.and_then(amenbo_core::blob::mime_from_filename);
+    let filename = match name {
+        Some(label) => keep_the_suffix(&label, on_disk),
+        None => on_disk.unwrap_or("attachment").to_string(),
     };
-    Ok(a)
+    // Check the per-file limit (which varies by type) before ingesting — it is what stops a runaway.
+    store.config.attachment_limits.check_per_file(mime, meta.len()).map_err(CliError::from)?;
+    Ok(FileToIngest { path: path.to_path_buf(), filename, mime })
 }
 
 /// The `attach` group (ls/show/open/rm). Adding lives on `task attach` / `decision attach`.

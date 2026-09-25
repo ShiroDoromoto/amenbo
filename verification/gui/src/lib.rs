@@ -4384,7 +4384,7 @@ impl Instructor {
             // The press that makes a run. It is the build screen's, and the two other ways in below
             // make the same run without handing anything over either.
             (Domain::Automation, "start") => {
-                "On the build screen's head, press the button that starts a run.".to_string()
+                format!("On the build screen's head, press the button that starts a run. {HAND_NOTHING}")
             }
             // Pressing a reason under the head. What it does is the picture's own press: the box it
             // names is picked out and its panel opens, so the step says so and a road reads the panel
@@ -4528,13 +4528,13 @@ impl Instructor {
             // The way in that is not the build screen. It hands nothing over at the press: which task
             // and which folder are the definition's.
             (Domain::Automation, "start-from-frame") => format!(
-                "In the workspace, on a page with room left on it, press the empty frame's control that starts an automation, then pick \"{}\".",
+                "In the workspace, on a page with room left on it, press the empty frame's control that starts an automation, then pick \"{}\". {HAND_NOTHING}",
                 self.target_label(with)
             ),
             // The press beside a row of the list the sidebar opens — beside it, not inside it, so it
             // starts the run rather than going to the project.
             (Domain::Automation, "start-from-list") => format!(
-                "On the automations tab the sidebar opened, press the button beside the row for \"{}\" that starts it.",
+                "On the automations tab the sidebar opened, press the button beside the row for \"{}\" that starts it. {HAND_NOTHING}",
                 self.target_label(with)
             ),
             // The row itself goes to the automation's own project and opens it there.
@@ -6709,6 +6709,11 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
         called: "the built-in that closes the task",
         words: &[("コミット", "the input for the commit it records")],
     },
+    BuiltinWords {
+        key: "split_by_dim",
+        called: "the built-in that splits the task by its value on one axis",
+        words: &[("分類なし", "the way out for a task with no value on that axis")],
+    },
 ];
 
 /// The built-in a road names by `key`, or why there is none.
@@ -6759,6 +6764,12 @@ fn builtin_note(with: &Args, builtin_key: &str) -> &'static str {
         false => "",
     }
 }
+
+/// **What every start asks before it starts**: a dialog for a text and files to hand
+/// the run. A road that hands nothing answers it empty, which starts the run as a press did before
+/// the dialog was there.
+const HAND_NOTHING: &str =
+    "In the dialog that opens asking what to hand the run, leave the text and the files empty and press its start button.";
 
 fn box_named(with: &Args, name_key: &str, builtin_key: &str) -> Result<String, String> {
     match (arg_str(with, name_key), arg_str(with, builtin_key)) {

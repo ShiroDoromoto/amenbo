@@ -285,7 +285,7 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
         .unwrap();
     store.automation_set_entry(automation.id, Some(placement.id)).unwrap();
     let on = AutomationPictureOwner::Automation;
-    let close = store.automation_builtin_place(automation.id, "close_task").unwrap();
+    let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
     store.automation_edge_add(on, placement.id, Some("取った"), EdgeTarget::Go(close.id), None).unwrap();
     store.automation_edge_add(on, close.id, None, EdgeTarget::Done, None).unwrap();
     store.automation_edge_add(on, placement.id, None, EdgeTarget::Done, None).unwrap();

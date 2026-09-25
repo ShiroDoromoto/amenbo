@@ -1038,6 +1038,11 @@ datasets! {
         // and never edited: the ways out and the outputs they declare have to be the ones the code
         // leaves by.
         builtin: col(OPT),
+        // The axis a built-in that splits by one splits by (`AMB-D-972`), or NULL for every other
+        // action. Its ways out are that axis's values, so there is one such action per axis rather than
+        // one per key. An axis deleted from under it leaves it with none, and carrying it out then falls
+        // over rather than guess.
+        builtin_dimension_id: fk_opt("dimension", "SET NULL"),
         order_key: col(ORDER_KEY),
     }
 

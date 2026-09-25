@@ -1859,6 +1859,10 @@ pub enum AutomationCmd {
         /// place one of Amenbo's built-ins instead (`automation builtin-list` names them)
         #[arg(long, value_name = "KEY")]
         builtin: Option<String>,
+        /// the axis `split_by_dim` splits by (name or ID) — one a task holds one value of. Its ways out
+        /// are that axis's values, and the one for a task with none
+        #[arg(long, value_name = "AXIS", requires = "builtin")]
+        axis: Option<String>,
     },
     /// Take a placement off its automation with the answers and lines hanging on it — confirms unless -y
     PlaceRm {
@@ -2274,12 +2278,18 @@ pub enum AutomationCmd {
         id: i64,
     },
 
-    /// Start an automation: check it, copy what is placed on it into a run, and start it. It takes nothing
-    /// else — the tasks a step works on and the folder it runs in are the automation's own answers,
-    /// given while it was built
+    /// Start an automation: check it, copy what is placed on it into a run, and start it. The tasks a
+    /// step works on and the folder it runs in are the automation's own answers, given while it was
+    /// built; what is handed over here — a text and files — goes to the run's first step
     Start {
         /// automation id
         id: i64,
+        /// a text for the first step to take in, as Markdown. Pass `-` to read it from stdin
+        #[arg(long, value_name = "TEXT")]
+        text: Option<String>,
+        /// a file for the first step to take in, attached to the run (repeat for several)
+        #[arg(long = "file", value_name = "PATH")]
+        files: Vec<String>,
     },
     /// Ask a run to pause. A step under way finishes first and the run pauses at the end of it,
     /// keeping the task it is working

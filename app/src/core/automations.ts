@@ -788,10 +788,18 @@ export async function launchAutomation(
   projectId: number,
   folders: readonly string[],
   workspaceOpen: boolean,
+  /** What the person hands the run as it starts (`AMB-D-970`): a text, and files by their paths. */
+  handed: { text: string; files: readonly string[] } = { text: "", files: [] },
 ): Promise<AutomationRunStartedDto | null> {
   if (!inTauri()) return null;
   const agents = await startableAgents(projectId, folders);
-  return invoke<AutomationRunStartedDto>("automation_launch", { id, agents, workspaceOpen });
+  return invoke<AutomationRunStartedDto>("automation_launch", {
+    id,
+    agents,
+    workspaceOpen,
+    text: handed.text === "" ? null : handed.text,
+    files: handed.files.length === 0 ? null : [...handed.files],
+  });
 }
 
 /** Subscribing read of the launch check for one automation. */

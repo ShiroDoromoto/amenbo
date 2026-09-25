@@ -281,6 +281,10 @@ describe("the pane a run is drawn in", () => {
       press.click();
       await new Promise((r) => setTimeout(r, 0));
     });
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(".modal__card .btn--primary")!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
     expect(panes()).toHaveLength(1);
     expect(worked()).toBe("run-7");
 

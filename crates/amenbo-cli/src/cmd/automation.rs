@@ -28,7 +28,7 @@ use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::model::AutomationPictureOwner;
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewStep};
 use amenbo_core::ops::automation_report::{Next, Produced};
-use amenbo_core::ops::automation_run::Launcher;
+use amenbo_core::ops::automation_run::{HandedAtLaunch, HandedFile, Launcher};
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{ActionView, AutomationView, PlacementView, StepView};
 use amenbo_core::time::Timestamp;
@@ -309,11 +309,15 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             };
             write_envelope(flags, "automation.entry-set", "automation", serde_json::to_value(&a).unwrap(), Some(vec!["entry_placement_id".to_string()]), false, line);
         }
-        AutomationCmd::PlaceAdd { automation, action, builtin } => {
+        AutomationCmd::PlaceAdd { automation, action, builtin, axis } => {
             // clap holds exactly one of the two: `--action` is required unless `--builtin` is given.
             let (p, what) = match (action, builtin) {
                 (_, Some(key)) => {
-                    let p = store.automation_builtin_place(automation, &key).map_err(CliError::from)?;
+                    let axis = match axis {
+                        Some(axis) => Some(store.resolve_dimension(None, &axis).map_err(CliError::from)?),
+                        None => None,
+                    };
+                    let p = store.automation_builtin_place(automation, &key, axis).map_err(CliError::from)?;
                     (p, format!("the built-in '{key}'"))
                 }
                 (Some(action), None) => {
@@ -722,7 +726,25 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
         }
 
-        AutomationCmd::Start { id } => {
+        AutomationCmd::Start { id, text, files } => {
+            let text = crate::cmd::arg::body_arg_opt(text)?;
+            // Every file is read and held to its limit before any is ingested, so a refusal of the last
+            // strands none of the ones before it. A launch refused after the ingest leaves its bytes to
+            // `doctor --fix`, as an attach refused after it does (`crate::cmd::attach::attach_add`).
+            let files = files
+                .iter()
+                .map(|path| crate::cmd::attach::file_to_ingest(store, path, None))
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut handed = HandedAtLaunch { text, files: Vec::new() };
+            for file in &files {
+                let blob = file.ingest(store)?;
+                handed.files.push(HandedFile {
+                    blob_hash: blob.hash,
+                    filename: file.filename.clone(),
+                    mime: file.mime.map(str::to_string),
+                    size_bytes: blob.size_bytes as i64,
+                });
+            }
             let known = startable(store);
             let by = Launcher {
                 startable: known.as_deref(),
@@ -737,7 +759,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 workspace_open: None,
                 by: Some(flags.facet()?),
             };
-            let r = store.automation_launch(id, &by, &Default::default()).map_err(CliError::from)?;
+            let r = store.automation_launch(id, &by, &handed).map_err(CliError::from)?;
             let line = format!("✓ Run {} started", r.id);
             write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
         }

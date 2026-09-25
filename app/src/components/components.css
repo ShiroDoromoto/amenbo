@@ -1611,6 +1611,16 @@ button.feed__target:hover { color: var(--c-accent); }
    dialog takes is what the panel shows, and a second arrangement for the same fields would make the
    two read as two subjects. */
 .autodlg__title { margin: 0 0 var(--s-3); font-size: var(--fs-xl); font-weight: var(--fw-bold); }
+/* What a person hands a run as they start it (`../components/LaunchHanding`): the files picked so far,
+   one to a line, each with the press that takes it off again. */
+.launchhand { display: flex; flex-direction: column; gap: var(--s-3); }
+.launchhand .autodlg__title { margin: 0; }
+.launchhand__files { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-1); }
+.launchhand__file { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); min-width: 0; }
+.launchhand__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.launchhand__drop { border: 0; background: none; padding: 0; cursor: pointer; color: var(--c-text-muted); }
+.launchhand__drop:hover { color: var(--c-text); }
+.launchhand__add { align-self: flex-start; }
 /* A dialog whose parts are a picture, a field and a row of chips as well as its buttons: each stands
    apart from the next by the same gap rather than by margins of their own. */
 .autodlg__stack { display: flex; flex-direction: column; gap: var(--s-3); }

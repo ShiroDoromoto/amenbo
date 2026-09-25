@@ -288,7 +288,7 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
 #[tauri::command]
 pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_place(automation_id, &key)?;
+        store.automation_builtin_place(automation_id, &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -300,7 +300,7 @@ pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<Write
 #[tauri::command]
 pub fn automation_builtin_insert(edge_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert(edge_id, &key)?;
+        store.automation_builtin_insert(edge_id, &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -1286,11 +1286,19 @@ fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
 /// is running (`AMB-D-945`), so no entrance into a run carries its own copy of "and then open the
 /// next one". This press only nudges that thread ([`crate::automation_watch::wake`]), so the pane is
 /// stood at once rather than at the end of its wait.
+///
+/// **What the person hands over with the press** (`AMB-D-970`): `text`, and `files` by their paths on
+/// this machine. The files are ingested the way an attachment is ([`crate::commands::attachment_add`]):
+/// the per-file cap checked, then streamed into the blob store. They go into the store before the
+/// launch, and onto the run in the launch's own transaction ([`automation_run::HandedAtLaunch`]) — a
+/// launch refused afterwards leaves a blob nothing names, which the blob sweep takes like any other.
 #[tauri::command]
 pub fn automation_launch(
     id: i64,
     agents: Option<Vec<String>>,
     workspace_open: bool,
+    text: Option<String>,
+    files: Option<Vec<String>>,
 ) -> Result<AutomationRunStartedDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_launch");
     // The models are read here, as the check reads them (`automation_launch_check`): the press is
@@ -1303,9 +1311,38 @@ pub fn automation_launch(
         workspace_open: Some(workspace_open),
         by: Some(ActorKind::Human),
     };
-    let run = with_store_mut(|store| Ok(store.automation_launch(id, &by, &Default::default())?))?;
+    let run = with_store_mut(|store| {
+        let mut handed = automation_run::HandedAtLaunch { text, files: Vec::new() };
+        for path in files.unwrap_or_default() {
+            handed.files.push(handed_file(store, &path)?);
+        }
+        Ok(store.automation_launch(id, &by, &handed)?)
+    })?;
     crate::automation_watch::wake();
     Ok(AutomationRunStartedDto { run: run.id })
+}
+
+/// One file handed over at launch, taken in from where it is on this machine: a regular file, within
+/// the per-file cap, streamed into the blob store.
+fn handed_file(
+    store: &mut amenbo_core::Store,
+    path: &str,
+) -> Result<automation_run::HandedFile, CmdError> {
+    let src = std::path::Path::new(path);
+    let meta = std::fs::metadata(src).map_err(|e| format!("cannot read the file '{path}': {e}"))?;
+    if !meta.is_file() {
+        return Err(format!("'{path}' is not a regular file").into());
+    }
+    let filename = src.file_name().and_then(|n| n.to_str()).unwrap_or("attachment").to_string();
+    let mime = amenbo_core::blob::mime_from_filename(&filename);
+    store.config.attachment_limits.check_per_file(mime, meta.len())?;
+    let blob = store.blobs().ingest_path(src)?;
+    Ok(automation_run::HandedFile {
+        blob_hash: blob.hash,
+        filename,
+        mime: mime.map(str::to_string),
+        size_bytes: blob.size_bytes as i64,
+    })
 }
 
 /// **What is under way right now**, across every project — the rows of the "running" tab.

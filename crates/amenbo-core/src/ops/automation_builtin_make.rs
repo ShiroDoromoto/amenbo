@@ -9,8 +9,9 @@
 //! exists, and the task this run works from here on. Filed and reserved as two acts, the task would stand
 //! `todo` between them, and a run waiting for a task to take looks once a second.
 //!
-//! **Everything the task is filed with is decided where it is placed**: what it depends on, how it is
-//! classified, who it is given to and how urgent it is. A task that is not to be picked up yet says so by
+//! **Everything the task is filed with is decided where it is placed**: what it depends on — the task
+//! this run works, and tasks named by their number — how it is classified, who it is given to, how
+//! urgent it is, the decisions it is linked to and the folder it is worked in. A task that is not to be picked up yet says so by
 //! those, never by `blocked` — that is for a task nobody can move (`AMB-D-966`).
 //!
 //! **What only reading the task can decide is the step before it's to choose** — a classification like
@@ -24,9 +25,9 @@
 //!
 //! **A setting it cannot follow files nothing.** A built-in that falls over leaves by the error way out
 //! inside the transaction that opened its step, and nothing takes back what it wrote before that — so
-//! every refusal the writes would raise is asked first ([`refusal`]): a classification it cannot find or
-//! may not use, a required axis left empty, a task to depend on that would keep the new one from being
-//! taken.
+//! every refusal the writes would raise is asked first ([`refusal`]): a task, a decision or a folder it
+//! cannot find in this run's project, a classification it cannot find or may not use, a required axis
+//! left empty, a task to depend on that would keep the new one from being taken.
 
 use crate::error::{Error, Result};
 use crate::model::{ActorKind, AutomationCfgKind, AutomationPortKind, Priority};
@@ -34,7 +35,7 @@ use crate::ops::automation_builtin::{
     Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Chooses, Work,
 };
 use crate::ops::automation_report::{self, Produced};
-use crate::ops::task::{self, NewTask};
+use crate::ops::task::{self, parse_number_ref, parse_typed_ref, NewTask, TypedKind};
 use crate::store_engine::read;
 
 /// The way out it leaves by once it has filed a task and left it not started.
@@ -65,6 +66,12 @@ pub const CLASSIFY: &str = "分類";
 /// The setting that names the axes the step before it chooses a value on: one axis a line. The step
 /// is shown their open values ([`choosable`]).
 pub const AI_AXES: &str = "AI に選ばせる軸";
+/// The setting that names tasks for it to depend on, one a line.
+pub const DEPENDS_ON_TASKS: &str = "依存させる既存のタスク";
+/// The setting that names decisions to link it to, one a line.
+pub const DECISIONS: &str = "リンクする決定";
+/// The setting that names the folder it is worked in — one of this project's linked folders.
+pub const FOLDER: &str = "作業フォルダ";
 /// The setting that says who it is given to.
 pub const ASSIGNEE: &str = "担当";
 /// The setting that says how urgent it is.
@@ -94,6 +101,7 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
             required: false,
             options: Some(r#"["なし","この run が扱っているタスク"]"#),
         },
+        BuiltinSetting { name: DEPENDS_ON_TASKS, kind: AutomationCfgKind::Text, required: false, options: None },
         BuiltinSetting { name: CLASSIFY, kind: AutomationCfgKind::Text, required: false, options: None },
         BuiltinSetting { name: AI_AXES, kind: AutomationCfgKind::Text, required: false, options: None },
         BuiltinSetting {
@@ -108,6 +116,8 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
             required: false,
             options: Some(r#"["なし","高","中","低"]"#),
         },
+        BuiltinSetting { name: DECISIONS, kind: AutomationCfgKind::Text, required: false, options: None },
+        BuiltinSetting { name: FOLDER, kind: AutomationCfgKind::Folder, required: false, options: None },
     ],
     ins: &[
         BuiltinPort { name: TITLE, kind: AutomationPortKind::Value, required: true },
@@ -133,13 +143,16 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     let takes = choice(carry, WHAT_THEN)?.as_deref() == Some(TAKE_IT);
     let title = carry.input(TITLE).map(str::trim).unwrap_or_default();
     // Read before anything is written, so a setting that cannot be followed files nothing.
-    let depends_on = match choice(carry, DEPENDS_ON)?.as_deref() {
-        Some(THE_RUNS_TASK) => Some(the_runs_task(carry, takes)?),
-        _ => None,
+    let mut depends_on = match choice(carry, DEPENDS_ON)?.as_deref() {
+        Some(THE_RUNS_TASK) => vec![the_runs_task(carry, takes)?],
+        _ => Vec::new(),
     };
+    depends_on.extend(named(carry, DEPENDS_ON_TASKS, TypedKind::Task)?);
+    let decisions = named(carry, DECISIONS, TypedKind::Decision)?;
+    let at_binding_id = folder(carry)?;
     let mut values = classification(carry)?;
     values.extend(chosen(carry, &values)?);
-    refusal(carry, &values, depends_on.filter(|_| takes))?;
+    refusal(carry, &values, if takes { &depends_on } else { &[] })?;
     let assignee = match choice(carry, ASSIGNEE)?.as_deref() {
         Some(HUMAN) => Some(ActorKind::Human),
         Some(AI) => Some(ActorKind::Ai),
@@ -163,7 +176,7 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
             priority,
             notes: carry.input(NOTES).unwrap_or_default().to_string(),
             created_by_kind: Some(ActorKind::Ai),
-            at_binding_id: None,
+            at_binding_id,
             made_in: None,
         },
     )?;
@@ -173,8 +186,11 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     if assignee.is_some() {
         task::set_assignee(tx, filed.id, assignee)?;
     }
-    if let Some(blocker) = depends_on {
+    for blocker in depends_on {
         crate::ops::dependency::add(tx, filed.id, blocker, Some(ActorKind::Ai))?;
+    }
+    for decision in decisions {
+        crate::ops::decision::link(tx, decision, filed.id)?;
     }
     let filed = task::finish_creating(tx, filed.id)?;
 
@@ -216,7 +232,7 @@ fn the_runs_task(carry: &Carry<'_, '_>, takes: bool) -> Result<i64> {
 /// **What the writes would refuse, asked before any of them is made** (the module's last paragraph): a
 /// closed value, a required axis with no value, and — where the new task is taken — a task it depends on
 /// that is not closed yet, which would leave it not ready to take.
-fn refusal(carry: &Carry<'_, '_>, values: &[(i64, i64)], taken_after: Option<i64>) -> Result<()> {
+fn refusal(carry: &Carry<'_, '_>, values: &[(i64, i64)], taken_after: &[i64]) -> Result<()> {
     let conn = carry.tx.conn();
     for &(_, value_id) in values {
         let value = read::dimension_value(conn, value_id)?
@@ -237,7 +253,7 @@ fn refusal(carry: &Carry<'_, '_>, values: &[(i64, i64)], taken_after: Option<i64
             empty.join(", ")
         )));
     }
-    if let Some(blocker) = taken_after {
+    for &blocker in taken_after {
         let open = read::task(conn, blocker)?.is_some_and(|task| !task.status.is_closed());
         if open {
             return Err(Error::invalid(format!(
@@ -246,6 +262,57 @@ fn refusal(carry: &Carry<'_, '_>, values: &[(i64, i64)], taken_after: Option<i64
         }
     }
     Ok(())
+}
+
+/// **The tasks or the decisions one setting names**, one a line — `AMB-T-12`, `T-12`, `#12` or `12` for
+/// a task, the same with `D` for a decision. Each has to be one of this run's project's: a task filed in
+/// one project and tied to another's is the context of that other project leaking in.
+fn named(carry: &Carry<'_, '_>, setting: &str, kind: TypedKind) -> Result<Vec<i64>> {
+    let Some(written) = choice(carry, setting)? else {
+        return Ok(Vec::new());
+    };
+    let conn = carry.tx.conn();
+    let mut ids = Vec::new();
+    for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let number = match parse_typed_ref(line) {
+            Some((named, n)) if named == kind => Some(n),
+            Some(_) => None,
+            None => parse_number_ref(line),
+        };
+        let id = i64::from(number.ok_or_else(|| {
+            Error::invalid(format!("'{setting}' reads one number a line, and '{line}' is not one"))
+        })?);
+        let project = match kind {
+            TypedKind::Task => read::task(conn, id)?.map(|task| task.project_id),
+            TypedKind::Decision => read::decision(conn, id)?.map(|decision| Some(decision.project_id)),
+        };
+        if project != Some(Some(carry.run.project_id)) {
+            return Err(Error::invalid(format!("'{setting}' names '{line}', which is not in this project")));
+        }
+        ids.push(id);
+    }
+    Ok(ids)
+}
+
+/// **The folder [`FOLDER`] names**, as one of this run's project's linked folders — by its path as
+/// recorded, or as it resolves on this machine. A task's folder is one of its own project's
+/// (`AMB-D-648`).
+fn folder(carry: &Carry<'_, '_>) -> Result<Option<i64>> {
+    let Some(written) = choice(carry, FOLDER)? else {
+        return Ok(None);
+    };
+    let folders: Vec<_> = crate::overview::bound_folders(carry.tx.conn())?
+        .into_iter()
+        .filter(|f| f.project_id == carry.run.project_id)
+        .collect();
+    let canonical = crate::binding::canonical_dir(&written).ok().map(|p| p.to_string_lossy().to_string());
+    folders
+        .iter()
+        .find(|f| f.dir == written || Some(&f.dir) == canonical.as_ref())
+        .map(|f| Some(f.id))
+        .ok_or_else(|| {
+            Error::invalid(format!("'{FOLDER}' names '{written}', which is not one of this project's linked folders"))
+        })
 }
 
 /// **The values [`CLASSIFY`] names**, one `axis=value` a line, each looked up among this run's project's
@@ -579,6 +646,53 @@ mod tests {
         });
     }
 
+    /// **Tasks and decisions named by their number, and a linked folder, are on the task it files** —
+    /// alongside the run's task, which it depends on too.
+    #[test]
+    fn named_tasks_decisions_and_a_folder_are_on_the_task_it_files() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            let earlier = crate::ops::test_support::mk_task_in(tx, "earlier", Some(p.project));
+            let decision = crate::ops::test_support::mk_decision_in(tx, "why", p.project);
+            let mut reg = crate::binding::Registry::default();
+            reg.project_dirs.entry(p.project).or_default().insert("/work/here".to_string());
+            crate::overview::write_bindings(tx, &reg).expect("bind");
+            let binding = crate::overview::bound_folders(tx.conn()).expect("folders")[0].id;
+            answer(tx, &p, DEPENDS_ON, THE_RUNS_TASK);
+            answer(tx, &p, DEPENDS_ON_TASKS, &format!("AMB-T-{earlier}\n"));
+            answer(tx, &p, DECISIONS, &format!("D-{decision}"));
+            answer(tx, &p, FOLDER, "/work/here");
+            let (_, first, run_step_id, _) = carried(tx, &p, false);
+            let (filed, _) = handed(tx, run_step_id);
+            for blocker in [first, earlier] {
+                assert!(read::dependency_id(tx.conn(), filed.id, blocker).expect("read").is_some(), "{blocker}");
+            }
+            assert!(read::decision_task_link_id(tx.conn(), decision, filed.id).expect("read").is_some());
+            assert_eq!(filed.at_binding_id, Some(binding));
+        });
+    }
+
+    /// **A number that is not this project's, or a folder it has not linked, files nothing.**
+    #[test]
+    fn a_number_or_a_folder_it_cannot_find_here_files_nothing() {
+        for (setting, written) in [
+            (DEPENDS_ON_TASKS, "AMB-T-999"),
+            (DEPENDS_ON_TASKS, "AMB-D-1"),
+            (DECISIONS, "D-999"),
+            (FOLDER, "/nowhere"),
+        ] {
+            with_tx(|tx| {
+                let p = picture(tx);
+                answer(tx, &p, setting, written);
+                let (_, first, run_step_id, next) = carried(tx, &p, false);
+                assert!(matches!(next, Next::Halted(_)), "{setting} {written}: {next:?}");
+                let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+                assert!(ran.report.contains(setting), "{}", ran.report);
+                assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
+            });
+        }
+    }
+
     /// **Taking it and depending on the run's task means the task the stretch before worked.**
     #[test]
     fn taking_it_the_runs_task_is_the_one_before() {
@@ -750,5 +864,7 @@ mod tests {
         assert_eq!(offered(DEPENDS_ON), vec![NONE, THE_RUNS_TASK]);
         assert_eq!(offered(ASSIGNEE), vec![NONE, HUMAN, AI]);
         assert_eq!(offered(PRIORITY), vec![NONE, HIGH, MEDIUM, LOW]);
+        let kinds: Vec<_> = MAKE_TASK.settings.iter().map(|s| (s.name, s.kind)).collect();
+        assert!(kinds.contains(&(FOLDER, AutomationCfgKind::Folder)));
     }
 }

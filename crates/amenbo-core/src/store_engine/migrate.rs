@@ -1017,7 +1017,48 @@ pub const STEPS: &[Step] = &[
         // Each of the three starts where the one switch stood, so no step changes what it is handed.
         apply: Apply::Custom(split_the_task_handed_to_the_steps),
     },
+    Step {
+        to: 73,
+        name: "call the choice that does not wait for a task to take by the way out it leaves by",
+        apply: Apply::Custom(rename_the_choice_that_goes_on),
+    },
 ];
+
+/// v73: the built-in that takes a task names its choice that does not wait after the way out it leaves by
+/// in the word the screens now use for a way out, where it used the word they used before.
+///
+/// **A built-in's words are rows**, written once when its library action is laid down, and the screen
+/// finds the language to draw one in by looking the stored word up in the Japanese dictionary
+/// (`auto.bi.*`). So the word is rewritten wherever it was stored: in the choices the library action
+/// offers, in the answer a placement gave, and in a run's copy of both — a run that has ended still draws
+/// its settings.
+///
+/// **Only the built-in's own rows are touched.** A person's action may offer a choice spelled the same,
+/// and that one is theirs; the rows are found through the action's `builtin` key.
+///
+/// **The words are frozen text**, like every step's: the constant the build carries moves on, this does
+/// not. Neither word has a quote or a backslash in it, so the one `REPLACE` reaches it at every depth of
+/// JSON it sits in.
+fn rename_the_choice_that_goes_on(ctx: &Ctx<'_>) -> Result<()> {
+    const WAS: &str = "待たずに終了条件「着手できるタスクが無い」へ進む";
+    const NOW: &str = "待たずに出口「着手できるタスクが無い」へ進む";
+    ctx.tx.execute(
+        "UPDATE automation_cfg SET options = REPLACE(options, ?1, ?2), value = REPLACE(value, ?1, ?2)
+         WHERE name = '着手できるタスクが無いとき'
+           AND ((owner_kind = 'action'
+                 AND owner_id IN (SELECT id FROM automation_action WHERE builtin = 'take_task'))
+             OR (owner_kind = 'placement'
+                 AND owner_id IN (SELECT p.id FROM automation_placement p
+                                  JOIN automation_action a ON a.id = p.action_id
+                                  WHERE a.builtin = 'take_task')))",
+        rusqlite::params![WAS, NOW],
+    )?;
+    ctx.tx.execute(
+        "UPDATE automation_run_def SET cfg = REPLACE(cfg, ?1, ?2) WHERE builtin = 'take_task'",
+        rusqlite::params![WAS, NOW],
+    )?;
+    Ok(())
+}
 
 /// v71: `automation_run_step.report_withheld` — the step was built to carry its report onto the task, and
 /// the task was closed by then, so the report stayed on the run alone (`AMB-D-963`).
@@ -6947,6 +6988,58 @@ mod tests {
             .query_row("SELECT report_withheld FROM automation_run_step WHERE id = 1", [], |r| r.get(0))
             .unwrap();
         assert!(!withheld);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v73 in full, on the store shape v72 left behind: the built-in that takes a task, placed and run,
+    /// with its old word in the choices, in the answer and in the run's copy — and a person's action that
+    /// offers the same word. The built-in's rows say the new word; the person's still say theirs.
+    #[test]
+    fn the_choice_that_goes_on_is_called_by_its_way_out_on_the_builtin_alone() {
+        const WAS: &str = "待たずに終了条件「着手できるタスクが無い」へ進む";
+        const NOW: &str = "待たずに出口「着手できるタスクが無い」へ進む";
+        let dir = scratch("builtin-take-go-on");
+        let engine = store_at(&dir, 72);
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, name, builtin) VALUES (1, 'タスクに着手する', 'take_task'), (2, 'mine', NULL);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (1, 1, 1), (2, 1, 2);
+                 INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, options, value) VALUES
+                     (1, 'action', 1, '着手できるタスクが無いとき', 'choice', '["{WAS}","着手できるタスクが出るまで待つ"]', NULL),
+                     (2, 'placement', 1, '着手できるタスクが無いとき', 'choice', NULL, '"{WAS}"'),
+                     (3, 'action', 2, '着手できるタスクが無いとき', 'choice', '["{WAS}"]', NULL),
+                     (4, 'placement', 2, '着手できるタスクが無いとき', 'choice', NULL, '"{WAS}"');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'completed');
+                 INSERT INTO automation_run_def (id, run_id, name, prompt, builtin, cfg) VALUES
+                     (1, 1, 'タスクに着手する', NULL, 'take_task',
+                      '[{{"name":"着手できるタスクが無いとき","kind":"choice","required":false,"options":"[\"{WAS}\"]","value":"\"{WAS}\""}}]'),
+                     (2, 1, 'mine', 'p', NULL, '[{{"name":"着手できるタスクが無いとき","value":"\"{WAS}\""}}]');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(73), &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let cfg = |id: i64| -> String {
+            conn.query_row(
+                "SELECT COALESCE(options, '') || COALESCE(value, '') FROM automation_cfg WHERE id = ?1",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        let copy = |id: i64| -> String {
+            conn.query_row("SELECT cfg FROM automation_run_def WHERE id = ?1", [id], |r| r.get(0)).unwrap()
+        };
+        for (what, text) in [("the choices", cfg(1)), ("the answer", cfg(2)), ("the run's copy", copy(1))] {
+            assert!(text.contains(NOW) && !text.contains(WAS), "{what} on the built-in: {text}");
+        }
+        for (what, text) in [("the choices", cfg(3)), ("the answer", cfg(4)), ("the run's copy", copy(2))] {
+            assert!(text.contains(WAS) && !text.contains(NOW), "{what} on a person's action: {text}");
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 

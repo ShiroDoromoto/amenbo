@@ -90,13 +90,21 @@ export function ExitMark({
   );
 }
 
-/** Where a placement is about to go: after one way out of one box, or onto a picture with no line. */
-export type WhereTo = { box: string; exit: string | undefined; builtin?: string | null } | null;
+/**
+ * Where a placement is about to go: after one way out of one box, or onto a picture with no line.
+ * `next` is the box that way out leads to now, which the placement will come to lead to instead.
+ */
+export type WhereTo = {
+  box: string;
+  exit: string | undefined;
+  builtin?: string | null;
+  next?: string;
+} | null;
 
 /**
  * Where a placement is about to go, as a small picture of the line it goes on: the box before it,
- * the way out it hangs on, and a dashed "here". Onto an empty picture there is nothing before it,
- * so the "here" stands alone.
+ * the way out it hangs on, a dashed "here", and the box after it where the line goes on to one.
+ * Onto an empty picture there is nothing before it, so the "here" stands alone.
  */
 export function WhereMark({ where }: { where: WhereTo }) {
   return (
@@ -110,6 +118,12 @@ export function WhereMark({ where }: { where: WhereTo }) {
         </>
       )}
       <span className="wheremark__here">{t("auto.lib.here")}</span>
+      {where?.next !== undefined && (
+        <>
+          <span className="wheremark__line" aria-hidden="true">─▶</span>
+          <span className="wheremark__box">{where.next}</span>
+        </>
+      )}
     </div>
   );
 }

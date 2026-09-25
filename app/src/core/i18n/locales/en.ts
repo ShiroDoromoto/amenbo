@@ -1187,12 +1187,12 @@ const ui = {
   "auto.pic.place": "Place an action",
   "auto.pic.placeDo": "Place",
   "auto.pic.first": "＋ Place the first action",
-  "auto.lib.makeWhat": "Not in the library? Make one and place it",
   "auto.lib.here": "Here",
+  "auto.lib.makeNew": "＋ Make a new one",
+  "auto.lib.makeNamed": "＋ Make a new one named “{name}”",
   "auto.lockMark": "Can’t be changed here",
-  "auto.lib.make": "Make a new one and place it",
-  "auto.make.go": "Make it and open the action",
-  "auto.make.said": "An empty action is placed where you pressed, and its build screen opens so you can build what is inside. Until it is built, this automation cannot be started.",
+  "auto.lib.make": "Make an action and place it",
+  "auto.make.go": "Make and open",
   // The panel beside the picture: what the pressed step holds, field by field. The three rows a
   // task filter is answered on borrow the words the board's filters already use
   // (`filter.dim.*`, `filter.opt.assignee.*`); only the premises row is this panel's own.
@@ -1374,7 +1374,7 @@ const ui = {
   "auto.run.canceled": "Canceled",
   "auto.run.acknowledge": "Acknowledge",
   "auto.run.paused": "Paused",
-  "auto.run.pausing": "Pausing after this step",
+  "auto.run.pausing": "Pausing",
   "auto.run.crashed": "its step ended without reporting",
   "auto.run.maxTimes": "it went round too many times",
   "auto.run.noAgent": "its agent could not be started",
@@ -1384,8 +1384,8 @@ const ui = {
   "auto.run.leftTaskOpen": "it tried to go on without closing its task",
   "auto.run.step": "Step {n} · {step}",
   "auto.run.inAction": "{step} in {action}",
-  "auto.run.noTask": "No task taken yet",
   "auto.run.waitingForTask": "Waiting for a task it can take",
+  "auto.run.taskWait": "Waiting for a task",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,

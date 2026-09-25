@@ -323,6 +323,14 @@ describe("the automations screen opened from the sidebar", () => {
     expect(button(t("auto.start")).disabled).toBe(true);
   });
 
+  it("puts no heading over the run tabs, from the sidebar or a project", async () => {
+    await renderEverywhere();
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
+    await act(async () => { tabs[2].click(); });
+    expect(container.querySelector(".autotabs__head")).toBeNull();
+    await act(async () => { tabs[3].click(); });
+    expect(container.querySelector(".autotabs__head")).toBeNull();
+  });
 });
 
 describe("arriving on the sidebar with a global action", () => {
@@ -366,7 +374,7 @@ describe("the panel beside the picture", () => {
     await act(async () => { button(t("auto.pic.first")).click(); });
     expect(panelPlace()).toBe(t("auto.pic.place"));
     expect(container.querySelector(".wheremark")?.textContent).toBe(t("auto.lib.here"));
-    expect(container.textContent).toContain(t("auto.lib.make"));
+    expect(container.textContent).toContain(t("auto.lib.makeNew"));
   });
 
   it("opens the definition's own fields from Edit, and keeps them open on a second press", async () => {

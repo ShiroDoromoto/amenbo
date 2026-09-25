@@ -22,8 +22,9 @@
 //
 // **A dialog opens for one thing only: making an action on the spot** (`./AutomationActionMake`).
 // Picking one off the shelf is done beside the picture, where the line it goes on can still be seen.
-// The dialog asks a name and a library, puts the empty action where it was asked for, and the screen
-// goes on to that action's own build screen, where its inside is built (`AMB-D-956`).
+// The dialog asks a name and a library under the same small picture of where it goes, puts the
+// empty action there, and the screen goes on to that action's own build screen, where its inside is
+// built (`AMB-D-956`). The name the library's box was searched with comes along as the name typed.
 //
 // **What stands on the picture is a placement of a library action** (`AMB-D-949`). Nothing here
 // writes a step: a step is inside the action, and the screen that draws those is the action's own.
@@ -85,8 +86,10 @@ function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): W
   if (!("edgeId" in target)) return null;
   const edge = automation?.edges.find((one) => one.id === target.edgeId);
   const from = automation?.placements.find((one) => one.id === edge?.fromId);
+  const to = automation?.placements.find((one) => one.id === edge?.toId);
   const box = from === undefined ? "" : builtinWord(from.builtin, from.name);
-  return { box, exit: edge?.exitName, builtin: from?.builtin };
+  const next = to === undefined ? undefined : builtinWord(to.builtin, to.name);
+  return { box, exit: edge?.exitName, builtin: from?.builtin, next };
 }
 
 /** What the panel is showing, if anything. */
@@ -119,7 +122,8 @@ export function AutomationBuildScreen({
   // reader would be one they did not choose.
   const [showing, setShowing] = useState<Showing | null>(null);
   // Where the dialog that makes an action on the spot is about to put it, while it is open.
-  const [making, setMaking] = useState<PlaceTarget | null>(null);
+  // The dialog's target, and the name the library's search box held when it was pressed.
+  const [making, setMaking] = useState<{ target: PlaceTarget; name: string } | null>(null);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
@@ -213,7 +217,7 @@ export function AutomationBuildScreen({
             projectId={projectId}
             where={whereTo(automation, showing.target)}
             onPlaced={close}
-            onMake={() => setMaking(showing.target)}
+            onMake={(name) => setMaking({ target: showing.target, name })}
           />
         </Panel>
       )}
@@ -243,7 +247,9 @@ export function AutomationBuildScreen({
 
       {making !== null && (
         <AutomationActionMake
-          into={making}
+          into={making.target}
+          name={making.name}
+          where={whereTo(automation, making.target)}
           projectId={projectId}
           onMade={(actionId) => {
             close();

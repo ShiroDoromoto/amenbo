@@ -18,8 +18,9 @@
 // automation is its project's, so the list there names the project on each row, starts one from the
 // row, and a press on the row goes to that project's own build screen rather than opening one here —
 // and nothing is made there, since making one would first ask which project it is for. The actions
-// are the device's library alone, made and changed there (`./AutomationActionsTab`). Nothing over the
-// run tabs says they are this device's whole: every row there names its project, which says it.
+// are the device's library alone, made and changed there (`./AutomationActionsTab`). The two run
+// tabs carry no heading over their rows: the tab already says which it is, and each row names its
+// project.
 //
 // **A definition opens into the build screen.** It is not a pane beside the list: what is being
 // looked at is one automation's whole picture, and a list kept beside it would take the width the

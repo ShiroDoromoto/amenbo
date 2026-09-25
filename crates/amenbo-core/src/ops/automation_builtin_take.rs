@@ -47,7 +47,7 @@ pub const WHEN_NONE: &str = "着手できるタスクが無いとき";
 /// The choice on [`WHEN_NONE`] that waits for one.
 pub const WAIT: &str = "着手できるタスクが出るまで待つ";
 /// The choice on [`WHEN_NONE`] that leaves by [`NONE_TO_TAKE`] — also what it does left unanswered.
-pub const GO_ON: &str = "待たずに終了条件「着手できるタスクが無い」へ進む";
+pub const GO_ON: &str = "待たずに出口「着手できるタスクが無い」へ進む";
 
 /// What every search adds to the filter, whatever the setting says.
 const TAKEABLE: &str = "status:todo ready:yes";
@@ -67,7 +67,7 @@ pub(super) const TAKE_TASK: Builtin = Builtin {
             name: WHEN_NONE,
             kind: AutomationCfgKind::Choice,
             required: false,
-            options: Some(r#"["待たずに終了条件「着手できるタスクが無い」へ進む","着手できるタスクが出るまで待つ"]"#),
+            options: Some(r#"["待たずに出口「着手できるタスクが無い」へ進む","着手できるタスクが出るまで待つ"]"#),
         },
     ],
     ins: &[],

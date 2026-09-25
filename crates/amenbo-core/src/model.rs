@@ -2204,6 +2204,11 @@ pub struct AutomationRunStep {
     #[serde(default)]
     pub exit_id: Option<i64>,
     pub report: String,
+    /// **Whether the report was kept off the task it was owed to** — the step was built to carry its
+    /// report onto the task (`report_to_task`), and the task was closed by then, so nobody would have
+    /// read it there (`AMB-D-963`). The report itself is still [`AutomationRunStep::report`].
+    #[serde(default)]
+    pub report_withheld: bool,
     pub status: AutomationRunStepStatus,
     #[serde(default)]
     pub started_at: Option<Timestamp>,

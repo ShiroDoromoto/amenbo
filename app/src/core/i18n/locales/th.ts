@@ -937,7 +937,7 @@ export const th: Translation = {
     "auto.pic.lap": "หนึ่งงาน",
     "auto.pic.insert": "แทรกแอ็กชันตรงนี้",
     "auto.pic.errorExit": "ข้อผิดพลาด",
-    "auto.pic.endsDone": "งานนี้จบตรงนี้",
+    "auto.pic.endsDone": "จบการรัน",
     "auto.pic.endsHalt": "หยุดแล้วเรียกคน",
     "auto.pic.unfed": "ไม่มีอะไรไปถึง {names}",
     "auto.pic.hands": "ส่ง {from} ไปยัง {to}",

@@ -4154,7 +4154,7 @@ impl Instructor {
                 way_out(with),
                 match (arg_str(with, "to"), arg_str(with, "ends")) {
                     (Some(to), None) => format!("choose the line that opens \"{to}\""),
-                    (None, Some("done")) => "choose the line saying the task is finished".to_string(),
+                    (None, Some("done")) => "choose the line saying the run ends".to_string(),
                     (None, Some("halt")) => "choose the line saying the run stops and calls a person".to_string(),
                     // Inside an action, a step may end the action by one of its outputs — the way out
                     // of the action it returns to, named in `exit_to` (left out, the unnamed one).
@@ -4162,7 +4162,7 @@ impl Instructor {
                     (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt / exit")),
                     (None, None) => "choose the line saying nothing is said yet".to_string(),
                     (Some(_), Some(_)) => return Err(
-                        "a way out goes on to a box (`to`) or ends the task or the run (`ends`), never both"
+                        "a way out goes on to a box (`to`) or ends the run (`ends`), never both"
                             .to_string(),
                     ),
                 },
@@ -6404,12 +6404,12 @@ impl Instructor {
                     arg_str(with, "ends"),
                 ) {
                     (Some(to), None) => format!("going on to {to}"),
-                    (None, Some("done")) => "and that what is written at its foot says the task is finished".to_string(),
+                    (None, Some("done")) => "and that what is written at its foot says the run ends".to_string(),
                     (None, Some("halt")) => "and that what is written at its foot says the run stops and calls a person".to_string(),
                     (None, Some("exit")) => format!("going into the output {} in the output frame under the picture", action_output(with)),
                     (None, Some(other)) => return Err(format!("`ends` does not know `{other}` — it is done / halt / exit")),
                     _ => return Err(
-                        "a line goes on to a box (`to`, or `to_builtin`) or ends the task or the run (`ends`), never both and never neither"
+                        "a line goes on to a box (`to`, or `to_builtin`) or ends the run (`ends`), never both and never neither"
                             .to_string(),
                     ),
                 }
@@ -8749,7 +8749,7 @@ steps_gui:
         assert!(lines[1].contains("Morning round") && lines[1].contains("3 actions"), "{}", lines[1]);
         assert!(lines[2].contains("\"Evening round\"") && lines[2].contains("build screen"), "{}", lines[2]);
         assert!(lines[6].contains("\"got one\"") && lines[6].contains("\"work\""), "{}", lines[6]);
-        assert!(lines[7].contains("the task is finished"), "{}", lines[7]);
+        assert!(lines[7].contains("the run ends"), "{}", lines[7]);
         assert!(lines[15].contains("output artefact") && lines[15].contains("a value"), "{}", lines[15]);
         assert!(lines[16].contains("nothing reaches one of a box's required inputs"), "{}", lines[16]);
         assert!(lines[19].contains("\"work\"") && lines[19].contains("\"build\""), "{}", lines[19]);

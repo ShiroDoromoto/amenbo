@@ -933,7 +933,7 @@ export const ko: Translation = {
     "auto.pic.lap": "작업 하나",
     "auto.pic.insert": "여기에 액션을 넣기",
     "auto.pic.errorExit": "오류",
-    "auto.pic.endsDone": "이 작업을 끝냅니다",
+    "auto.pic.endsDone": "실행을 끝냅니다",
     "auto.pic.endsHalt": "멈추고 사람을 부릅니다",
     "auto.pic.unfed": "{names}에 아무것도 닿지 않습니다",
     "auto.pic.hands": "{from}을(를) {to}(으)로 넘깁니다",

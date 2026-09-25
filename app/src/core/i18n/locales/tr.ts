@@ -936,7 +936,7 @@ export const tr: Translation = {
     "auto.pic.lap": "Bir görev",
     "auto.pic.insert": "Buraya bir eylem ekle",
     "auto.pic.errorExit": "hata",
-    "auto.pic.endsDone": "görev burada biter",
+    "auto.pic.endsDone": "çalıştırmayı bitir",
     "auto.pic.endsHalt": "dur ve birini çağır",
     "auto.pic.unfed": "{names} girdisine hiçbir şey ulaşmıyor",
     "auto.pic.hands": "{from} değerini {to} girdisine verir",

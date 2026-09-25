@@ -1176,7 +1176,7 @@ const ui = {
   "auto.pic.lap": "One task",
   "auto.pic.insert": "Put an action in here",
   "auto.pic.errorExit": "error",
-  "auto.pic.endsDone": "the task is finished",
+  "auto.pic.endsDone": "end the run",
   "auto.pic.endsHalt": "stop and call a person",
   "auto.pic.unfed": "nothing reaches {names}",
   "auto.pic.hands": "hands {from} on to {to}",

@@ -937,7 +937,7 @@ export const vi: Translation = {
     "auto.pic.lap": "Một công việc",
     "auto.pic.insert": "Chèn một hành động vào đây",
     "auto.pic.errorExit": "lỗi",
-    "auto.pic.endsDone": "công việc kết thúc ở đây",
+    "auto.pic.endsDone": "kết thúc lần chạy",
     "auto.pic.endsHalt": "dừng lại và gọi người",
     "auto.pic.unfed": "không có gì đến được {names}",
     "auto.pic.hands": "chuyển {from} sang {to}",

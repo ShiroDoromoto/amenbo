@@ -949,7 +949,7 @@ export const ptBR: Translation = {
     "auto.pic.lap": "Uma tarefa",
     "auto.pic.insert": "Inserir uma ação aqui",
     "auto.pic.errorExit": "erro",
-    "auto.pic.endsDone": "a tarefa fica concluída",
+    "auto.pic.endsDone": "encerrar a execução",
     "auto.pic.endsHalt": "parar e chamar uma pessoa",
     "auto.pic.unfed": "nada chega a {names}",
     "auto.pic.hands": "entrega {from} a {to}",

@@ -953,7 +953,7 @@ export const pl: Translation = {
     "auto.pic.lap": "Jedno zadanie",
     "auto.pic.insert": "Wstaw tu akcję",
     "auto.pic.errorExit": "błąd",
-    "auto.pic.endsDone": "zadanie kończy się tutaj",
+    "auto.pic.endsDone": "zakończ uruchomienie",
     "auto.pic.endsHalt": "zatrzymaj się i zawołaj człowieka",
     "auto.pic.unfed": "nic nie dociera do {names}",
     "auto.pic.hands": "przekazuje {from} do {to}",

@@ -948,7 +948,7 @@ export const it: Translation = {
     "auto.pic.lap": "Un'attività",
     "auto.pic.insert": "Inserisci qui un’azione",
     "auto.pic.errorExit": "errore",
-    "auto.pic.endsDone": "l'attività è conclusa",
+    "auto.pic.endsDone": "terminare l'esecuzione",
     "auto.pic.endsHalt": "fermarsi e chiamare una persona",
     "auto.pic.unfed": "niente arriva a {names}",
     "auto.pic.hands": "passa {from} a {to}",

@@ -1052,7 +1052,7 @@ export const ja: Translation = {
     "auto.bi.takeTask.does": "絞り込みに合う未着手で ready のタスクを並び順どおりに探し、先頭から予約して進行中にする",
     "auto.bi.takeTask.filter": "絞り込み",
     "auto.bi.takeTask.whenNone": "着手できるタスクが無いとき",
-    "auto.bi.takeTask.goOn": "待たずに終了条件「着手できるタスクが無い」へ進む",
+    "auto.bi.takeTask.goOn": "待たずに出口「着手できるタスクが無い」へ進む",
     "auto.bi.takeTask.wait": "着手できるタスクが出るまで待つ",
     "auto.bi.takeTask.taken": "着手した",
     "auto.bi.takeTask.noneToTake": "着手できるタスクが無い",

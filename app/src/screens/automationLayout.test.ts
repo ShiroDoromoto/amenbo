@@ -643,6 +643,36 @@ describe("the picture of an automation", () => {
     expect(lane.at.x - "again".length * 7).toBeGreaterThanOrEqual(0);
   });
 
+  /// A long lane's `+` halfway along it stood beside some other box, apart from its name (`AMB-T-5596`).
+  it("puts the + of a line in the margin by its name, at the box it leaves", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({ id: 2, name: "work" }),
+          step({ id: 3, name: "check" }),
+          step({ id: 4, name: "review", exits: [{ id: 41, name: "again", outputs: [] }] }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 3, toId: 4 }),
+          edge({ id: 4, fromId: 4, exitName: "again", toId: 1 }),
+        ],
+      }),
+    );
+    const lane = picture.lines.find((one) => one.key === "edge-4")!;
+    const plus = picture.inserts.find((one) => one.edgeId === 4)!;
+    const [, , turn, foot] = lane.points;
+    expect(plus.x).toBe(turn!.x);
+    expect(plus.y).toBeLessThan(turn!.y);
+    expect(plus.y).toBeGreaterThan(foot!.y);
+    expect(Math.abs(plus.y - lane.at.y)).toBeLessThanOrEqual(20);
+    // Nearer the box it leaves than the one it goes back to.
+    expect(turn!.y - plus.y).toBeLessThan(plus.y - foot!.y);
+  });
+
   it("puts a + on every edge and on no wire", () => {
     const picture = layOut(
       detail({

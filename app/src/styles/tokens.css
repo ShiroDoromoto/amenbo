@@ -131,8 +131,8 @@
   --c-stop: #c0392b;              /* nothing moves until a hand is put to it */
   --c-heed: #995d18;              /* it moves — know this while it does */
   /* The two as a ground, for a chip or a band that says the word in them. */
-  --c-stop-weak: #f9e3e0;
-  --c-heed-weak: #f5ead9;
+  --c-stop-weak: #fcefed;
+  --c-heed-weak: #faf3e8;
   --c-plain: var(--c-text-muted); /* nothing is asked */
 
   /* ----- the ink on a fill -----

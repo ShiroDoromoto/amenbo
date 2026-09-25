@@ -495,7 +495,7 @@ input[type="color"] {
   padding: 1px 0;
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .slot__runact:hover:not(:disabled) { color: var(--c-text); }
 .slot__runact:disabled { opacity: 0.4; }
@@ -511,7 +511,7 @@ input[type="color"] {
   display: flex; align-items: center; gap: var(--s-2);
   margin: 0 calc(-1 * var(--s-1));
   padding: var(--s-1) var(--s-2);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   white-space: nowrap;
 }
 .slot__band--fail {
@@ -2977,7 +2977,7 @@ body.dragging-row { user-select: none; }
   content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%;
   background: var(--state-dot, var(--state, var(--c-text-faint)));
 }
-.plate__state[data-state="running"] { --state: var(--c-ai); --state-bg: var(--c-bg); }
+.plate__state[data-state="running"] { --state: var(--c-ai); }
 .plate__state[data-state="running"]::before { animation: plate-running 1.2s ease-in-out infinite; }
 .plate__state[data-state="paused"] { --state: var(--c-heed); --state-bg: var(--c-heed-weak); }
 .plate__state[data-state="completed"] { --state: var(--c-text-muted); --state-dot: var(--c-done); }

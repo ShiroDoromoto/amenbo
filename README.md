@@ -37,6 +37,8 @@ which an agent writes through the CLI and you read in the desktop app.
   It ships with the build, so there is no command reference to drift out of date.
 - **Automations** — a picture drawn once and walked by agents: each step is a prompt and
   an agent to carry it out, and the way out a step leaves through decides what runs next.
+  Taking a task, closing it and cutting its worktree are Amenbo's own built-ins, so a prompt
+  is left with what needs an agent's judgement.
   A run opens one terminal per step and reads back what the step reports, so what has been
   done and what comes next is in the store rather than in an agent's memory of it.
 
@@ -343,24 +345,43 @@ amenbo decision list --filter "status:decided draft:no" --json
 amenbo decision list --filter "dim:Area=Design" --json           # the same axes the tasks are filed on, folded the same way (`=none` is unclassified)
 amenbo decision list --filter "status:decided superseded:no" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend). To narrow by keyword, `amenbo search <word> --kind decision` says which ones to read
 
-# Automations: a picture drawn once and walked by agents, in three layers. An automation
-# places library actions; an action holds steps; one step is one prompt and the ways out it may
-# leave through. Who carries a step out is chosen where its action is placed. An edge says what happens after each way out is
-# taken, and a wire hands one spot's result to the next. A run opens a terminal per step and
+# Automations: a picture drawn once and walked, in three layers. An automation places library
+# actions; an action holds steps; one step is one prompt and the ways out it may leave through.
+# Who carries a step out is chosen where its action is placed. An edge says what happens after each
+# way out is taken, and a wire hands one spot's result to the next. A run opens a terminal per step and
 # waits for that step to report, so the loop belongs to the store.
-amenbo automation add --name "Review and fix"          # the picture itself; what every step is told first is Amenbo's own
-amenbo automation action-add --name "Review"           # a unit worth using twice, in the library
-amenbo automation step-add 7 --name "Review" --prompt -  # one step of it = one terminal
+# Taking a task, closing it, and cutting and folding its worktree are Amenbo's built-ins: actions it
+# carries out itself, with no terminal and no prompt. One is placed on a picture as an action of its
+# own, never put inside an action you wrote. A prompt is left with what needs an agent's judgement:
+# the work itself, a review, how a PR and its CI are handled. A name in <angle brackets> below is a
+# built-in's own, as `builtin-list` prints it.
+amenbo automation add --name "Work the queue"          # the picture itself; what every step is told first is Amenbo's own
+amenbo automation builtin-list                         # take_task, cut_worktree, fold_worktree, close_task — with the names of what each reads, hands on and leaves by
+amenbo automation place-add 3 --builtin take_task      # 31: reserves the first task its filter finds
+amenbo automation cfg-set 31 --name "<filter>" --assignee me-ai --dim "Area=Core" # which tasks it takes (unanswered: the ones handed to the AI)
+amenbo automation cfg-set 31 --name "<when none>" --choice "<wait>" # or wait for one to turn up, until a person pauses or stops the run
+amenbo automation place-add 3 --builtin cut_worktree   # 32: the task's worktree, from the newest of the remote's default branch
+amenbo automation action-add --name "Implement"        # 7: a unit worth using twice, in the library
+amenbo automation step-add 7 --name "Implement" --prompt - --work-dir worktree # 11: one step of it = one terminal, run in the folder it is handed
+amenbo automation port-add --action 7 --name worktree --kind value --required  # what the action takes in
+amenbo automation wire-add --in-action --from 0 --from-port worktree --to 11 --to-port worktree # `0` is the action itself: what it takes in, handed to a step
 amenbo automation action-entry-set 7 --step 11         # the step a placement of it opens first
+amenbo automation exit-add --action 7 --name "gave up" # a way out a placement may leave by (every one has the unnamed one and `*`)
+amenbo automation edge-add --in-action --from 11: --exit-to # inside an action: leave it by a way out it declares
+amenbo automation edge-add --in-action --from "11:gave up" --exit-to "gave up"
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
-amenbo automation place-add 3 --action 7               # put that action on the picture
-amenbo automation agent-set 31 --step 11 --agent claude # who carries that step out at this spot (--model too)
-amenbo automation exit-add --action 7 --name "something to fix" # a way out a placement may leave by
-amenbo automation port-add --exit 21 --name report --kind file  # what that way out hands on
-amenbo automation edge-add --from "31:something to fix" --to 32 # what happens after it (--max-times caps a way back)
-amenbo automation wire-add --from "31:something to fix" --from-port report --to 32 --to-port report
-amenbo automation edge-add --in-action --from 11:approved --exit-to approved # inside an action: leave it by a way out it declares
-amenbo automation wire-add --in-action --from 0 --from-port task --to 11 --to-port task # `0` is the action itself: what it takes in, handed to a step
+amenbo automation place-add 3 --action 7               # 33: put that action on the picture
+amenbo automation agent-set 33 --step 11 --agent claude # who carries that step out at this spot (--model too)
+amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in
+amenbo automation place-add 3 --builtin close_task     # 35: done, with the commit handed to it recorded
+amenbo automation edge-add --from "31:<taken>" --to 32 # what happens after each way out (--max-times caps a way back)
+amenbo automation edge-add --from 32: --to 33
+amenbo automation wire-add --from 32: --from-port worktree --to 33 --to-port worktree
+amenbo automation edge-add --from 33: --to 34
+amenbo automation edge-add --from "33:gave up" --halt  # stop the run and call a person
+amenbo automation edge-add --from 34: --to 35
+amenbo automation edge-add --from "34:<unmerged>" --to 33 --max-times 3
+amenbo automation edge-add --from 35: --to 31          # and on to the next task
 amenbo automation entry-set 3 --placement 31           # where a run starts
 amenbo automation list                                 # what this project has, and how built each is
 amenbo automation show 3                               # one whole definition, every spot resolved
@@ -370,9 +391,9 @@ amenbo automation start 3                              # away it goes
 amenbo automation pause 7                              # ...at the end of the step under way
 amenbo automation stop 7                               # ...now, handing the task back to todo
 # Inside a step's own terminal, the agent carrying it out reports through three more:
-# `automation step-take` (the task the step is about), `automation step-out` (each thing it hands on)
-# and `automation step-done` (the way out taken — by the id the step's text lists for it — and what
-# it did). Those three, with `list` / `show` /
+# `automation step-take` (the task the step is about, where no built-in took it), `automation
+# step-out` (each thing it hands on) and `automation step-done` (the way out taken — by the id the
+# step's text lists for it — and what it did). Those three, with `list` / `show` /
 # `action-list` / `action-show` / `run-list` / `run-show` to read where it stands, are all that
 # terminal reaches — every other verb here is typed outside a run.
 amenbo automation run-list --task AMB-T-<n> --json     # the runs that worked one task

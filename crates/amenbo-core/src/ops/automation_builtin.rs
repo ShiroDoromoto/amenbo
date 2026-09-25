@@ -24,6 +24,12 @@
 //!
 //! **One can be set to wait** ([`Waits`], `AMB-D-969`). Until what it waits for turns up, opening it
 //! writes nothing, and the run stands before it as `running`; the watch opens it again on every look.
+//!
+//! **What drives git is done before the transaction, not in it** ([`Work::Outside`]). Opening a step is
+//! one write transaction, and a fetch from a slow remote held inside it would keep every other writer to
+//! the store waiting — the CLI, the GUI and the other runs. So a built-in that works outside the store
+//! does its work first ([`work_outside`]), reading the store only to find its way, and the transaction
+//! that opens the step writes down what came of it.
 
 use rusqlite::Connection;
 use serde::Serialize;
@@ -32,7 +38,7 @@ use crate::error::{Error, Result};
 use crate::model::{
     AutomationAction, AutomationCfgKind, AutomationOwner, AutomationPictureOwner,
     AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef,
-    AutomationRunStep, RunDefCfg, RunDefExit, ACTION_BOUNDARY, ERROR_EXIT,
+    AutomationRunStatus, AutomationRunStep, RunDefCfg, RunDefExit, ACTION_BOUNDARY, ERROR_EXIT,
 };
 use crate::ops::automation::{self, EdgeTarget, NewStep};
 use crate::ops::automation_builtin_close::CLOSE_TASK;
@@ -64,9 +70,79 @@ pub struct Builtin {
     /// How it waits, for one that can be set to ([`Waits`]).
     #[serde(skip)]
     pub waits: Option<Waits>,
-    /// The work itself ([`Carry`]).
+    /// The work itself, and where it is done ([`Work`]).
     #[serde(skip)]
-    pub run: fn(&Carry<'_, '_>) -> Result<Carried>,
+    pub work: Work,
+}
+
+/// **Where a built-in's work is done.**
+pub enum Work {
+    /// Inside the transaction that opens its step ([`Carry`]) — work that reads and writes the store and
+    /// nothing else.
+    InStore(fn(&Carry<'_, '_>) -> Result<Carried>),
+    /// **Before that transaction** ([`Outside`]) — work that drives git, which can take as long as the
+    /// remote does. It reads the store to find its way and writes nothing; what it hands back
+    /// ([`Worked`]) is written down when the step is opened.
+    ///
+    /// A built-in of this kind takes no input, never waits and takes no task: those are what the
+    /// opening decides after this work is done, so none of them could hold it back.
+    Outside(fn(&Outside<'_>) -> Result<Worked>),
+}
+
+/// **What a built-in working outside the store is handed**: the store to read, the run, and the task the
+/// stretch under way is about.
+pub struct Outside<'a> {
+    pub conn: &'a Connection,
+    pub run: &'a AutomationRun,
+    /// The task the stretch under way is about, or `None` before one is taken.
+    pub task_id: Option<i64>,
+}
+
+/// **How a built-in working outside the store finished** — [`Carried`], with what it hands on through
+/// the way out it leaves by, since it had no store to put that down in.
+#[derive(Debug)]
+pub struct Worked {
+    /// `None` is the unnamed way out.
+    pub exit: Option<&'static str>,
+    pub report: String,
+    /// Each output of that way out it fills, and the value.
+    pub hands: Vec<(&'static str, String)>,
+}
+
+/// **The work a built-in did outside the store**, done before the transaction that opens its step and
+/// handed to it ([`super::automation_step::open`]).
+pub struct DoneOutside {
+    /// The copy of the step it was done for — a result is not written down on another.
+    run_def_id: i64,
+    worked: Result<Worked>,
+}
+
+/// **Do a built-in's work outside the store**, for the step about to be opened — `None` where that
+/// step is not a built-in working there, or its run is no longer running and will open nothing.
+///
+/// A work that went wrong is not an error here: it is handed on, and the step leaves by the error way
+/// out, as it would have for a failure inside.
+///
+/// **The store may move before the step is opened**, since no transaction holds it. Where the run was
+/// stopped in between, the opening refuses and what the work did stays done without a record — a
+/// worktree cut and not written anywhere, which the next cut for that task is refused on.
+pub fn work_outside(conn: &Connection, run_id: i64, run_def_id: i64) -> Result<Option<DoneOutside>> {
+    let Some(def) = read::automation_run_def(conn, run_def_id)? else {
+        return Ok(None);
+    };
+    let Some(Work::Outside(work)) = def.builtin.as_deref().and_then(find).map(|b| &b.work) else {
+        return Ok(None);
+    };
+    let Some(run) = read::automation_run(conn, run_id)?
+        .filter(|run| run.id == def.run_id && run.status == AutomationRunStatus::Running)
+    else {
+        return Ok(None);
+    };
+    // The stretch under way, as the opening reads it: a built-in working here takes no task, so it
+    // joins that one and opens none.
+    let task_id = read::automation_run_task_last(conn, run_id)?.and_then(|s| s.task_id);
+    let worked = work(&Outside { conn, run: &run, task_id });
+    Ok(Some(DoneOutside { run_def_id, worked }))
 }
 
 /// A setting a built-in reads.
@@ -401,6 +477,11 @@ fn unborn_unless_declared(
 /// and the picture decides what follows (left alone, a person is called). So does a copy whose key this
 /// build does not know — a store carried back to an older Amenbo — and a way out the code named that
 /// the copy does not declare.
+///
+/// **A built-in working outside the store is not worked here** ([`Work::Outside`]): what it did is
+/// `outside`, done before this transaction, and only written down. Handed nothing, it leaves by the
+/// error way out rather than drive git with every other writer waiting.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn carry_out(
     tx: &WriteTx<'_>,
     run: &AutomationRun,
@@ -409,12 +490,26 @@ pub(crate) fn carry_out(
     exits: &[RunDefExit],
     ins: &[(String, Option<String>)],
     task_id: Option<i64>,
+    outside: Option<DoneOutside>,
 ) -> Result<Next> {
     let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
     let key = def.builtin.as_deref().unwrap_or_default();
     let carried = known(key).and_then(|builtin| {
         let carry = Carry { tx, run, run_step, task_id, exits, ins, cfg: &cfg };
-        (builtin.run)(&carry)
+        match &builtin.work {
+            Work::InStore(work) => work(&carry),
+            Work::Outside(_) => match outside.filter(|done| done.run_def_id == def.id) {
+                Some(done) => done.worked.and_then(|worked| {
+                    for (port, value) in &worked.hands {
+                        carry.put(worked.exit, port, Produced::Value(value))?;
+                    }
+                    Ok(Carried { exit: worked.exit, report: worked.report })
+                }),
+                None => Err(Error::invalid(format!(
+                    "the built-in '{key}' works outside the store, and that was not done before its step was opened"
+                ))),
+            },
+        }
     });
     let (exit, report) = match carried {
         Ok(carried) => (carried.exit, carried.report),
@@ -471,13 +566,13 @@ mod tests {
             BuiltinExit { name: None, outs: &[] },
         ],
         waits: None,
-        run: |carry| {
+        work: Work::InStore(|carry| {
             let stamp = carry.setting("stamp").unwrap_or("\"ok\"");
             let note = carry.input("note").unwrap_or("nothing");
             let stamped = format!("{note} {stamp}");
             carry.put(Some("stamped"), "stamped", Produced::Value(&stamped))?;
             Ok(Carried { exit: Some("stamped"), report: format!("stamped {note}") })
-        },
+        }),
     };
 
     /// A built-in that falls over every time.
@@ -489,13 +584,14 @@ mod tests {
         ins: &[],
         exits: &[BuiltinExit { name: None, outs: &[] }],
         waits: None,
-        run: |_| Err(Error::invalid("the floor gave way")),
+        work: Work::InStore(|_| Err(Error::invalid("the floor gave way"))),
     };
 
     use crate::model::{ActorKind, Automation, AutomationPlacement, AutomationRunStatus, AutomationStep};
     use crate::ops::automation::NewAutomation;
     use crate::ops::automation_run::{check, launch_leaving_the_task_open as launch, nothing_asked, Launcher, Unmet};
-    use crate::ops::automation_step::{open, Opened};
+    use crate::ops::automation_step::Opened;
+    use crate::ops::test_support::open;
     use crate::ops::test_support::{mk_out, mk_placed, mk_project, mk_task_in, with_tx};
 
     /// An agent's step that takes a task and hands on a note through "found", followed by the built-in
@@ -566,6 +662,18 @@ mod tests {
         match automation_report::done(tx, opening.run_step.id, found, "took one").expect("done") {
             Next::Step(def) => *def,
             other => panic!("the run goes on to the built-in, not {other:?}"),
+        }
+    }
+
+    /// **A built-in working outside the store takes no input, never waits and takes no task** — the
+    /// opening decides those after its work is done, so none of them may hold that work back.
+    #[test]
+    fn a_built_in_working_outside_is_held_back_by_nothing_the_opening_decides() {
+        for builtin in all().iter().filter(|b| matches!(b.work, Work::Outside(_))) {
+            assert!(builtin.ins.is_empty(), "{} takes an input", builtin.key);
+            assert!(builtin.waits.is_none(), "{} can wait", builtin.key);
+            let takes = builtin.exits.iter().flat_map(|e| e.outs).any(|p| p.kind == AutomationPortKind::TaskTake);
+            assert!(!takes, "{} takes a task", builtin.key);
         }
     }
 

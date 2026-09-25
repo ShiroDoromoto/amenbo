@@ -1907,7 +1907,7 @@ mod tests {
             assert_eq!(first.placement_id, Some(placement.id));
 
             // A step under way is nobody's to open a second time.
-            let opening = match crate::ops::automation_step::open(tx, run.id, first.id, None)
+            let opening = match crate::ops::test_support::open(tx, run.id, first.id, None)
                 .expect("open")
             {
                 crate::ops::automation_step::Opened::Ready(ready) => *ready,
@@ -1938,7 +1938,7 @@ mod tests {
 
             // Carried out on the spot, it closes the task and the run with it: nothing is waiting, and
             // the run is no longer running.
-            crate::ops::automation_step::open(tx, run.id, close.id, None).expect("close");
+            crate::ops::test_support::open(tx, run.id, close.id, None).expect("close");
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
             assert_eq!(
                 read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,
@@ -2018,7 +2018,7 @@ mod tests {
         let Waiting::Step(entry) = next_def(tx.conn(), run.id).expect("next") else {
             panic!("the entry is what a fresh run waits for")
         };
-        let opening = match crate::ops::automation_step::open(tx, run.id, entry.id, None).expect("open") {
+        let opening = match crate::ops::test_support::open(tx, run.id, entry.id, None).expect("open") {
             crate::ops::automation_step::Opened::Ready(ready) => *ready,
             crate::ops::automation_step::Opened::Stopped { missing, .. } => {
                 panic!("stopped for {missing:?}")

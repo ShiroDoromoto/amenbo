@@ -27,7 +27,7 @@ use rusqlite::Connection;
 use crate::error::Result;
 use crate::model::{AutomationCfgKind, AutomationPortKind, AutomationRun, RunDefCfg};
 use crate::ops::automation_builtin::{
-    answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Waits,
+    answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Waits, Work,
 };
 use crate::ops::automation_report;
 use crate::ops::automation_step::{taskfilter_expr, taskfilter_sort, TASKFILTER_SORT_DEFAULT};
@@ -85,7 +85,7 @@ pub(super) const TAKE_TASK: Builtin = Builtin {
         turned_up,
         looks_for: |cfg| expression(answer(cfg, FILTER)),
     }),
-    run: take,
+    work: Work::InStore(take),
 };
 
 fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
@@ -175,7 +175,8 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{check, is_waiting, launch, next_def, nothing_asked, Launcher, Unmet, Waiting};
-    use crate::ops::automation_step::{open, Opened};
+    use crate::ops::automation_step::Opened;
+    use crate::ops::test_support::open;
     use crate::ops::automation_stop;
     use crate::ops::task::{self, TaskPatch};
     use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, way_out, with_tx};

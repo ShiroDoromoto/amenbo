@@ -18,7 +18,7 @@
 
 use crate::error::{Error, Result};
 use crate::model::{ActorKind, AutomationPortKind, AutomationRunStep, AutomationRunStepStatus, TaskStatus};
-use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Carried, Carry};
+use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Carried, Carry, Work};
 use crate::store_engine::{read, WriteTx};
 
 /// The input the commit's SHA is handed in on.
@@ -32,7 +32,7 @@ pub(crate) const CLOSE_TASK: Builtin = Builtin {
     ins: &[BuiltinPort { name: COMMIT, kind: AutomationPortKind::Value, required: false }],
     exits: &[BuiltinExit { name: None, outs: &[] }],
     waits: None,
-    run: close,
+    work: Work::InStore(close),
 };
 
 fn close(carry: &Carry<'_, '_>) -> Result<Carried> {
@@ -113,7 +113,8 @@ mod tests {
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::automation_report::{self, Next, Produced};
     use crate::ops::automation_run::{launch, nothing_asked, Launcher};
-    use crate::ops::automation_step::{open, Opened};
+    use crate::ops::automation_step::Opened;
+    use crate::ops::test_support::open;
     use crate::ops::test_support::{mk_out, mk_placed, mk_project, mk_task_in, only_step, out_port, with_tx};
 
     /// Take a task, work on it — handing the commit on — and close it: the line a run walks for each

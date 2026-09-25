@@ -2018,14 +2018,19 @@ impl Store {
     ///
     /// `startable` is what this machine can start, handed in the way the launch takes it
     /// (`AMB-D-792`): `None` is nobody asked, and then no step is judged on its agent.
+    ///
+    /// **A built-in that drives git does that first, outside the transaction**
+    /// ([`crate::ops::automation_builtin::work_outside`]): a fetch waits on the remote, and every other
+    /// writer to the store would wait on it too. The transaction writes down what came of it.
     pub fn automation_step_open(
         &mut self,
         run_id: i64,
         run_def_id: i64,
         startable: Option<&[String]>,
     ) -> Result<crate::ops::automation_step::Opened> {
+        let outside = crate::ops::automation_builtin::work_outside(self.engine.conn(), run_id, run_def_id)?;
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_step::open(tx, run_id, run_def_id, startable)
+            crate::ops::automation_step::open(tx, run_id, run_def_id, startable, outside)
         })
     }
 

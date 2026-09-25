@@ -9,6 +9,9 @@
 //! cut from `origin/<default>` ([`worktree_cut::start_from_origin`]). The main worktree is not touched:
 //! whatever it stands on, and whatever it has not pulled, a person may be working there.
 //!
+//! **Done before the step's transaction** ([`Work::Outside`]): the fetch waits on the remote, and the
+//! store is only read to find the task and its repository.
+//!
 //! **The repository is the project's.** A task that names one of its project's folders is cut from that
 //! folder's repository. One that names none is cut from the repository the project's folders are in —
 //! and refused where they are in more than one, since which of them the task belongs to is not written
@@ -22,8 +25,7 @@ use rusqlite::Connection;
 
 use crate::error::{Error, Result};
 use crate::model::AutomationPortKind;
-use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Carried, Carry};
-use crate::ops::automation_report::Produced;
+use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Outside, Work, Worked};
 use crate::store_engine::read;
 use crate::worktree_cut::{self, Refusal};
 
@@ -41,21 +43,21 @@ pub(super) const CUT_WORKTREE: Builtin = Builtin {
         outs: &[BuiltinPort { name: WORKTREE, kind: AutomationPortKind::Value, required: true }],
     }],
     waits: None,
-    run: cut,
+    work: Work::Outside(cut),
 };
 
-fn cut(carry: &Carry<'_, '_>) -> Result<Carried> {
-    let task_id = carry
+fn cut(outside: &Outside<'_>) -> Result<Worked> {
+    let task_id = outside
         .task_id
         .ok_or_else(|| Error::invalid("there is no task to cut a worktree for — the run has not taken one"))?;
-    let task = read::task(carry.tx.conn(), task_id)?
+    let task = read::task(outside.conn, task_id)?
         .ok_or_else(|| Error::not_found(format!("task AMB-T-{task_id}")))?;
-    let root = repository(carry.tx.conn(), carry.run.project_id, task.at_binding_id)?;
+    let root = repository(outside.conn, outside.run.project_id, task.at_binding_id)?;
     let cut = worktree_cut::layout(&root, &task_id.to_string());
     let from = worktree_cut::start_from_origin(&cut).map_err(refused)?;
     let path = cut.worktree.to_string_lossy().into_owned();
-    carry.put(None, WORKTREE, Produced::Value(&path))?;
-    Ok(Carried { exit: None, report: format!("cut {path} on {} from {from}", cut.branch) })
+    let report = format!("cut {path} on {} from {from}", cut.branch);
+    Ok(Worked { exit: None, report, hands: vec![(WORKTREE, path)] })
 }
 
 /// **The repository the task is worked in**: the one its own folder is in, or else the one every
@@ -148,7 +150,8 @@ mod tests {
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{launch_leaving_the_task_open as launch, nothing_asked, Launcher};
-    use crate::ops::automation_step::{open, Opened};
+    use crate::ops::automation_step::Opened;
+    use crate::ops::test_support::open;
     use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};
     use super::fixture::{bind, git, repositories};
     use crate::store_engine::WriteTx;
@@ -229,6 +232,41 @@ mod tests {
             assert_eq!(git(&expected, &["rev-parse", "--abbrev-ref", "HEAD"]), format!("task/{task}"));
             assert_eq!(git(&app, &["rev-parse", "HEAD"]), before, "the project's checkout is not pulled");
             assert_eq!(git(&app, &["rev-parse", "--abbrev-ref", "HEAD"]), "main", "nor switched");
+        });
+    }
+
+    /// **Inside the step's transaction it drives no git** — handed no work done beforehand, the step
+    /// leaves by the error way out and nothing is cut.
+    #[test]
+    fn handed_nothing_done_beforehand_it_cuts_nothing() {
+        with_tx(|tx| {
+            let (app, _) = repositories("builtin-cut-inside");
+            let project = mk_project(tx, "amenbo");
+            bind(tx, project, &[&app]);
+            let automation = picture(tx, project);
+            let task = for_ai(tx, project);
+            let claude = ["claude".to_string()];
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                workspace_open: Some(true),
+                by: Some(ActorKind::Ai),
+            };
+            let run = launch(tx, automation.id, &by).expect("launch");
+            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| d.entry)
+                .expect("the entry");
+            let Opened::Carried { next: Next::Step(cut), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
+            else {
+                panic!("the take goes on to the cut");
+            };
+            let opened = crate::ops::automation_step::open(tx, run.id, cut.id, Some(&claude), None).expect("cut");
+            let Opened::Carried { next, .. } = opened else { panic!("a built-in is carried out") };
+            assert!(matches!(next, Next::Halted(_)), "it leaves by the error way out: {next:?}");
+            let root = worktree_cut::git_root(&app).expect("root");
+            assert!(!worktree_cut::layout(&root, &task.to_string()).worktree.exists(), "nothing was cut");
         });
     }
 

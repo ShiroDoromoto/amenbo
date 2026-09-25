@@ -177,6 +177,18 @@ pub(crate) mod test_support {
         f(&tx);
     }
 
+    /// **Open one step of a run, the work outside the store and all**, in the one transaction a test
+    /// runs in ([`crate::ops::automation_step::open`] takes that work done beforehand).
+    pub(crate) fn open(
+        tx: &WriteTx<'_>,
+        run_id: i64,
+        run_def_id: i64,
+        startable: Option<&[String]>,
+    ) -> crate::error::Result<crate::ops::automation_step::Opened> {
+        let outside = crate::ops::automation_builtin::work_outside(tx.conn(), run_id, run_def_id)?;
+        crate::ops::automation_step::open(tx, run_id, run_def_id, startable, outside)
+    }
+
     /// An empty in-memory engine (`let tx = &e.write().unwrap();` opens a write transaction).
     pub(crate) fn new_engine() -> StoreEngine {
         StoreEngine::open_in_memory().expect("in-memory engine")

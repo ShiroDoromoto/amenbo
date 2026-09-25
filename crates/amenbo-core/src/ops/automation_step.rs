@@ -98,11 +98,16 @@ fn not_found(what: &str, id: i64) -> Error {
 /// **`startable` is what this machine can start**, handed in for the reason
 /// [`crate::ops::automation_run::Launcher`] hands it in: the store cannot see a person's `PATH`.
 /// `None` is nobody asked, and then no step is judged on its agent (`AMB-D-792`).
+///
+/// **`outside` is a built-in's work that drives git, already done** before this transaction
+/// ([`super::automation_builtin::work_outside`]), so the fetch does not hold every other writer to
+/// the store while it waits on the remote. Here it is only written down.
 pub fn open(
     tx: &WriteTx<'_>,
     run_id: i64,
     run_def_id: i64,
     startable: Option<&[String]>,
+    outside: Option<super::automation_builtin::DoneOutside>,
 ) -> Result<Opened> {
     let conn = tx.conn();
     let run = read::automation_run(conn, run_id)?.ok_or_else(|| not_found("run", run_id))?;
@@ -190,7 +195,8 @@ pub fn open(
         let ins: Vec<(String, Option<String>)> =
             handed.iter().map(|h| (h.port.name.clone(), h.from.value.clone())).collect();
         let task_id = stretch.as_ref().and_then(|s| s.task_id);
-        let next = super::automation_builtin::carry_out(tx, &run, &run_step, &def, &exits, &ins, task_id)?;
+        let next =
+            super::automation_builtin::carry_out(tx, &run, &run_step, &def, &exits, &ins, task_id, outside)?;
         return Ok(Opened::Carried { run_step_id: run_step.id, next });
     }
     let text = compose(tx, &def, &exits, &handed, stretch.as_ref())?;
@@ -737,6 +743,7 @@ fn handing_back(exits: &[RunDefExit]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ops::test_support::open;
     use crate::model::{
         ActorKind, Automation, AutomationAction, AutomationPictureOwner, AutomationPlacement,
     };

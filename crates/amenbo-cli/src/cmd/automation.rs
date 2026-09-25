@@ -972,12 +972,15 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
         human(flags, format!("    set  {}", one_cfg(cfg)));
     }
     for one in &placement.steps {
-        let who = match &one.chosen {
-            Some(c) => match &c.model {
+        // Nobody is chosen for a built-in, and nobody ever will be: Amenbo carries it out itself
+        // (`AMB-D-964`), so saying "nobody chosen" there reads as a choice left undone.
+        let who = match (&one.step.builtin, &one.chosen) {
+            (Some(key), _) => format!("carried out by Amenbo (built-in {key})"),
+            (None, Some(c)) => match &c.model {
                 Some(model) => format!("carried out by {} ({model})", c.agent),
                 None => format!("carried out by {}", c.agent),
             },
-            None => "nobody chosen to carry it out".to_string(),
+            (None, None) => "nobody chosen to carry it out".to_string(),
         };
         human(flags, format!("    step {} {}  {who}", one.step.id, one.step.name));
     }

@@ -2135,6 +2135,23 @@ export type HookOfferDto = {
 cmd: string, };
 
 /**
+ * **A place on the ledger a run's pane sends the reader to** (`AMB-T-5539`): one automation's build
+ * screen, with the box the run stopped at pressed where there is one, or — with no automation named —
+ * the project's automations on the "history" tab. It is asked for from the workspace and followed on
+ * the board, so when the two are separate windows it crosses between them
+ * (`crate::windows::show_ledger`), the way a ref does ([`RefTargetDto`]).
+ */
+export type LedgerPlaceDto = { project: number, 
+/**
+ * The automation whose build screen to open. Absent is the history tab.
+ */
+automation?: number, 
+/**
+ * The box to press on that screen — the placement the run stopped at.
+ */
+placement?: number, };
+
+/**
  * A reference to a task a decision spawned. A [`DecisionRefDto`] plus **status**, so the screen can
  * answer "is this decision's work finished yet?". Completed ones are muted on the screen side.
  */

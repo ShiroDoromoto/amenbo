@@ -88,6 +88,17 @@ describe("navReduce", () => {
     expect(navReduce(s0, { type: "forward" })).toBe(s0);
   });
 
+  it("pushes a move to the project already in front, where it arrives with something open (AMB-T-5539)", () => {
+    let s = start(L(p("1")));
+    s = push(s, L({ type: "project", id: "1", automation: 8, placement: 21, nth: 1 }));
+    expect(s.index).toBe(1);
+    // The same button pressed again is another arrival.
+    s = push(s, L({ type: "project", id: "1", automation: 8, placement: 21, nth: 2 }));
+    expect(s.index).toBe(2);
+    s = push(s, L({ type: "project", id: "1", runs: "history", nth: 3 }));
+    expect(s.index).toBe(3);
+  });
+
   it("push after going back truncates the forward tail", () => {
     let s = start(L(v("a")));
     s = push(s, L(v("b")));

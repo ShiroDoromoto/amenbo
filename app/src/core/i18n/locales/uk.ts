@@ -1134,6 +1134,8 @@ export const uk: Translation = {
     "auto.run.failed": "Збій",
     "auto.run.canceled": "Скасовано",
     "auto.run.acknowledge": "Переглянуто",
+    "auto.run.seePicture": "Переглянути на схемі",
+    "auto.run.seeHistory": "Переглянути в історії",
     "auto.run.paused": "Призупинено",
     "auto.run.pausing": "Чекає паузи",
     "auto.run.crashed": "крок завершився, не звітувавши",

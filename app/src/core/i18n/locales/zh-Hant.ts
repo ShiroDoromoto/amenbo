@@ -1119,6 +1119,8 @@ export const zhHant: Translation = {
     "auto.run.failed": "失敗",
     "auto.run.canceled": "已取消",
     "auto.run.acknowledge": "已確認",
+    "auto.run.seePicture": "在圖中查看",
+    "auto.run.seeHistory": "在歷史中查看",
     "auto.run.paused": "已暫停",
     "auto.run.pausing": "等待暫停",
     "auto.run.crashed": "步驟未回報就結束了",

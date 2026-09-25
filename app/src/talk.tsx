@@ -35,7 +35,7 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { OpenInDto } from "./bindings/bindings";
+import type { LedgerPlaceDto, OpenInDto } from "./bindings/bindings";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { NoticeToast } from "./components/NoticeToast";
 import { currentLang, errText, t, tf } from "./core/i18n";
@@ -140,6 +140,15 @@ function TalkWindow() {
     selectTask: (id) => void invoke("show_ref", { kind: "task", id }).catch(() => {}),
     selectDecision: (id) => {
       if (id !== null) void invoke("show_ref", { kind: "decision", id }).catch(() => {});
+    },
+    // A run's pane followed to the ledger, which is the other window here (`crate::windows::show_ledger`).
+    openAutomation: (project, automation, placement) => {
+      const place: LedgerPlaceDto = { project, automation, ...(placement === null ? {} : { placement }) };
+      void invoke("show_ledger", { place }).catch(() => {});
+    },
+    openRunHistory: (project) => {
+      const place: LedgerPlaceDto = { project };
+      void invoke("show_ledger", { place }).catch(() => {});
     },
   }), []);
 

@@ -1130,6 +1130,8 @@ export const ptBR: Translation = {
     "auto.run.failed": "Falhou",
     "auto.run.canceled": "Cancelada",
     "auto.run.acknowledge": "Visto",
+    "auto.run.seePicture": "Ver no diagrama",
+    "auto.run.seeHistory": "Ver no histórico",
     "auto.run.paused": "Pausada",
     "auto.run.pausing": "Pausando",
     "auto.run.crashed": "a etapa terminou sem relatar",

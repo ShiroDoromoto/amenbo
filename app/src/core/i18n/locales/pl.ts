@@ -1134,6 +1134,8 @@ export const pl: Translation = {
     "auto.run.failed": "Nieudane",
     "auto.run.canceled": "Anulowane",
     "auto.run.acknowledge": "Widziane",
+    "auto.run.seePicture": "Zobacz na schemacie",
+    "auto.run.seeHistory": "Zobacz w historii",
     "auto.run.paused": "Wstrzymane",
     "auto.run.pausing": "Wstrzymywanie",
     "auto.run.crashed": "krok zakończył się bez zgłoszenia",

@@ -736,6 +736,7 @@ pub fn run() {
       frames::save_talk_layout,
       launch::elevated,
       windows::show_ref,
+      windows::show_ledger,
       folder::folder_entries,
       folder_git::folder_git_status,
       folder_git::folder_git_log,

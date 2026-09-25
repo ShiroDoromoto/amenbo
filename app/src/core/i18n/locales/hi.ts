@@ -1117,6 +1117,8 @@ export const hi: Translation = {
     "auto.run.failed": "विफल",
     "auto.run.canceled": "रद्द",
     "auto.run.acknowledge": "देख लिया",
+    "auto.run.seePicture": "चित्र में देखें",
+    "auto.run.seeHistory": "इतिहास में देखें",
     "auto.run.paused": "रुका हुआ",
     "auto.run.pausing": "रुकने वाला",
     "auto.run.crashed": "चरण बिना रिपोर्ट किए समाप्त हो गया",

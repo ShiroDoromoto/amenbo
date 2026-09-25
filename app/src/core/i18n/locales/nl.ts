@@ -1117,6 +1117,8 @@ export const nl: Translation = {
     "auto.run.failed": "Mislukt",
     "auto.run.canceled": "Geannuleerd",
     "auto.run.acknowledge": "Gezien",
+    "auto.run.seePicture": "Bekijk in de tekening",
+    "auto.run.seeHistory": "Bekijk in de geschiedenis",
     "auto.run.paused": "Gepauzeerd",
     "auto.run.pausing": "Pauzeert zo",
     "auto.run.crashed": "de stap eindigde zonder te melden",

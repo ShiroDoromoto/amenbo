@@ -1362,6 +1362,8 @@ const ui = {
   "auto.run.failed": "Failed",
   "auto.run.canceled": "Canceled",
   "auto.run.acknowledge": "Acknowledge",
+  "auto.run.seePicture": "See the picture",
+  "auto.run.seeHistory": "See the history",
   "auto.run.paused": "Paused",
   "auto.run.pausing": "Pausing",
   "auto.run.crashed": "its step ended without reporting",

@@ -1121,6 +1121,8 @@ export const de: Translation = {
     "auto.run.failed": "Fehlgeschlagen",
     "auto.run.canceled": "Abgebrochen",
     "auto.run.acknowledge": "Gesehen",
+    "auto.run.seePicture": "Im Bild ansehen",
+    "auto.run.seeHistory": "Im Verlauf ansehen",
     "auto.run.paused": "Pausiert",
     "auto.run.pausing": "Pausiert gleich",
     "auto.run.crashed": "der Schritt endete, ohne sich zu melden",

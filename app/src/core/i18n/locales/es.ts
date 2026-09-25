@@ -1129,6 +1129,8 @@ export const es: Translation = {
     "auto.run.failed": "Fallida",
     "auto.run.canceled": "Cancelada",
     "auto.run.acknowledge": "Visto",
+    "auto.run.seePicture": "Ver en el diagrama",
+    "auto.run.seeHistory": "Ver en el historial",
     "auto.run.paused": "En pausa",
     "auto.run.pausing": "Pausando",
     "auto.run.crashed": "el paso terminó sin informar",

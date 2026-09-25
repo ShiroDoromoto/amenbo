@@ -156,8 +156,10 @@ function ExitRow({
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => {
-            const now = name.trim() === "" ? null : name.trim();
-            if (now !== was) void run(renameAutomationExit("action", actionId, was, now));
+            // A way out keeps a name: emptied, it goes back to the one it had.
+            const now = name.trim();
+            if (now === "") setName(was ?? "");
+            else if (now !== was) void run(renameAutomationExit("action", actionId, was, now));
           }}
         />
         <button type="button" className="btn autostep__outadd" onClick={onAddOutput}>

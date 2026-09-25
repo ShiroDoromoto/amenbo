@@ -22,6 +22,11 @@ use amenbo_scenario::{Args, Domain};
 
 use crate::{opt_bool, req_i64, req_str, unmapped, Driver, Outcome};
 
+/// The name of the way out every step and every action is born with — core's `DONE_EXIT`, spelled
+/// here because this crate reads the product from outside. A road that leaves the way out unsaid means
+/// this one, as `4:` does on the command line.
+const DONE_EXIT: &str = "完了";
+
 impl Driver<'_> {
     pub(crate) fn automation_action(
         &mut self,
@@ -1006,11 +1011,8 @@ impl Picture {
 /// out (`exit_to`), or to an end of its own (`ends`).
 fn judge_edge(owner: i64, picture: &Picture, with: &Args) -> Result<Outcome, String> {
     let from = req_str(with, "from")?;
-    let exit = with.get("exit").and_then(|v| v.as_str()).unwrap_or("");
-    let named = match exit {
-        "" => "the unnamed way out".to_string(),
-        other => format!("`{other}`"),
-    };
+    let exit = with.get("exit").and_then(|v| v.as_str()).filter(|e| !e.is_empty()).unwrap_or(DONE_EXIT);
+    let named = format!("`{exit}`");
     let Some(from_id) = picture.box_named(from)? else {
         return Ok(Outcome::assert(false, format!("{owner} has no box `{from}` to leave (MISMATCH)")));
     };
@@ -1039,6 +1041,7 @@ fn judge_edge(owner: i64, picture: &Picture, with: &Args) -> Result<Outcome, Str
             ));
         }
         (None, Some(want), None) => {
+            let want = if want.is_empty() { DONE_EXIT } else { want };
             let got = exit_named(view, edge["exit_to_id"].as_i64()).unwrap_or_default();
             pass = ends == "exit" && got == want;
             said.push_str(&format!(
@@ -1100,8 +1103,8 @@ fn exit_named(view: &serde_json::Value, id: Option<i64>) -> Option<String> {
         .map(|one| one["exit"]["name"].as_str().unwrap_or("").to_string())
 }
 
-/// The ways out a box declares, named the way an edge names one: the unnamed one it is born with is
-/// the empty name, and the error one is `*`.
+/// The ways out a box declares, named the way an edge names one: the error one is `*`. A way out
+/// with no name — which no build from v71 on writes — reads as the empty name.
 fn exit_names(declarer: &serde_json::Value) -> Vec<String> {
     rows_of(declarer, "exits")
         .iter()
@@ -1284,7 +1287,7 @@ mod tests {
                     "placement": { "id": 1, "action_id": 1 },
                     "action": { "id": 1, "name": "take" },
                     "exits": [
-                        { "exit": { "id": 1, "name": null }, "outputs": [] },
+                        { "exit": { "id": 1, "name": "完了" }, "outputs": [] },
                         { "exit": { "id": 2, "name": "*" }, "outputs": [] },
                         { "exit": { "id": 5, "name": "got one" }, "outputs": [] },
                     ],
@@ -1298,7 +1301,7 @@ mod tests {
                     "placement": { "id": 2, "action_id": 2 },
                     "action": { "id": 2, "name": "review" },
                     "exits": [
-                        { "exit": { "id": 3, "name": null }, "outputs": [] },
+                        { "exit": { "id": 3, "name": "完了" }, "outputs": [] },
                         { "exit": { "id": 4, "name": "*" }, "outputs": [] },
                     ],
                     "inputs": [],
@@ -1322,7 +1325,7 @@ mod tests {
                 {
                     "step": { "id": 1, "name": "look", "prompt": "look for the next task" },
                     "exits": [
-                        { "exit": { "id": 6, "name": null }, "outputs": [] },
+                        { "exit": { "id": 6, "name": "完了" }, "outputs": [] },
                         { "exit": { "id": 7, "name": "*" }, "outputs": [] },
                         { "exit": { "id": 8, "name": "found" }, "outputs": [] },
                     ],
@@ -1331,7 +1334,7 @@ mod tests {
                 {
                     "step": { "id": 2, "name": "claim", "prompt": "take it" },
                     "exits": [
-                        { "exit": { "id": 9, "name": null }, "outputs": [] },
+                        { "exit": { "id": 9, "name": "完了" }, "outputs": [] },
                         { "exit": { "id": 10, "name": "*" }, "outputs": [] },
                     ],
                     "inputs": [],
@@ -1343,7 +1346,7 @@ mod tests {
             ],
             "wires": [],
             "exits": [
-                { "exit": { "id": 11, "name": null }, "outputs": [] },
+                { "exit": { "id": 11, "name": "完了" }, "outputs": [] },
                 { "exit": { "id": 12, "name": "*" }, "outputs": [] },
                 { "exit": { "id": 13, "name": "got one" }, "outputs": [] },
             ],
@@ -1359,7 +1362,7 @@ mod tests {
             1,
             &automation(),
             &with(
-                r#"{ name: take, exits: ["", "*", got one], inputs: [brief],
+                r#"{ name: take, exits: [完了, "*", got one], inputs: [brief],
                      settings: { how many: 3, where to work: ~ } }"#,
             ),
         )
@@ -1372,14 +1375,14 @@ mod tests {
     #[test]
     fn a_family_read_whole_catches_one_nobody_wrote() {
         for asked in [
-            r#"{ name: take, exits: ["", "*"] }"#,
+            r#"{ name: take, exits: [完了, "*"] }"#,
             r#"{ name: take, inputs: [] }"#,
             r#"{ name: take, settings: { how many: 3 } }"#,
         ] {
             let read = judge_placement(1, &automation(), &with(asked)).expect("a verdict");
             assert!(!read.pass, "asking `{asked}` should have caught the rest: {}", read.note);
         }
-        let read = judge_step(1, &action(), &with(r#"{ name: look, exits: ["", "*"] }"#))
+        let read = judge_step(1, &action(), &with(r#"{ name: look, exits: [完了, "*"] }"#))
             .expect("a verdict");
         assert!(!read.pass, "a step's ways out are read whole too: {}", read.note);
     }
@@ -1413,7 +1416,7 @@ mod tests {
         let read = judge_step(
             1,
             &action(),
-            &with(r#"{ name: look, prompt: look for the next task, exits: ["", "*", found], inputs: [brief] }"#),
+            &with(r#"{ name: look, prompt: look for the next task, exits: [完了, "*", found], inputs: [brief] }"#),
         )
         .expect("a verdict");
         assert!(read.pass, "{}", read.note);
@@ -1446,7 +1449,7 @@ mod tests {
             assert!(read.pass, "{}", read.note);
         }
 
-        // The way out is half of what an edge hangs on, so the unnamed one of a box whose edge leaves
+        // The way out is half of what an edge hangs on, so the done one of a box whose edge leaves
         // by a named one is nothing at all.
         let elsewhere = judge_edge(1, &picture, &with("{ from: take, to: review }")).expect("a verdict");
         assert!(!elsewhere.pass, "{}", elsewhere.note);

@@ -22,7 +22,7 @@ use crate::model::{
     ActorKind, AttachmentTarget, AutomationPictureOwner, AutomationPortDirection,
     AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStep,
     AutomationRunStepStatus, AutomationRunTask, AutomationRunValue, AutomationStoppedReason,
-    RunDefExit, RunDefLine, RunDefPort, Task, TaskStatus, ERROR_EXIT,
+    RunDefExit, RunDefLine, RunDefPort, Task, TaskStatus, DONE_EXIT, ERROR_EXIT,
 };
 use crate::ops::automation_run::{self, Onward};
 use crate::ops::automation_stop::{self, Ended, Ending};
@@ -304,10 +304,10 @@ pub fn done(
     };
     let took_a_task = stretch.as_ref().is_some_and(|s| s.task_id.is_some());
 
-    // The way out, as the step's copy declares it: by its id, or — left unsaid — the unnamed one.
+    // The way out, as the step's copy declares it: by its id, or — left unsaid — the done one.
     let Some(taken) = exits.iter().find(|e| match exit_id {
         Some(id) => e.id == id,
-        None => e.name.is_none(),
+        None => e.name.as_deref() == Some(DONE_EXIT),
     }) else {
         return Err(undeclared(&def.name, exit_id, &exits));
     };
@@ -386,7 +386,7 @@ pub(crate) fn closed(tx: &WriteTx<'_>, task_id: i64) -> Result<bool> {
 fn undeclared(step: &str, said: Option<i64>, exits: &[RunDefExit]) -> Error {
     let said = match said {
         Some(id) => format!("--exit {id}"),
-        None => "left unnamed (--exit left off)".to_string(),
+        None => format!("called '{DONE_EXIT}' (--exit left off)"),
     };
     let ways: Vec<String> = exits
         .iter()
@@ -796,8 +796,8 @@ mod tests {
             let unnamed = exits_of(&read::automation_run_def(tx.conn(), step.run_def_id).unwrap().unwrap())
                 .unwrap()
                 .into_iter()
-                .find(|e| e.name.is_none())
-                .expect("the unnamed way out")
+                .find(|e| e.name.as_deref() == Some(DONE_EXIT))
+                .expect("the done way out")
                 .id;
             let on_unnamed = out_port(tx, step.id, Some(unnamed), "note");
             assert_ne!(on_found, on_unnamed, "one name, two ports");
@@ -957,7 +957,7 @@ mod tests {
                 let message = err.to_string();
                 assert!(message.contains(&format!("--exit {said}")), "what was said: {message}");
                 assert!(message.contains(&format!("--exit {found} (\"found\")")), "{message}");
-                assert!(message.contains("(the unnamed way out)"), "{message}");
+                assert!(message.contains("(\"完了\")"), "{message}");
                 assert!(message.contains(&format!("--exit {error} (the error way out")), "{message}");
             }
             let still = read::automation_run_step(tx.conn(), step.run_step.id)

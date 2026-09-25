@@ -557,7 +557,7 @@ pub enum Command {
     ///
     /// **An edge and a wire name a way out by name, not by key**, because an action's declarations can
     /// be rewritten underneath a step that points at it. Written `<step>:<way out>` — `4:` is the
-    /// unnamed way out, `4:*` the error one.
+    /// done way out, `4:*` the error one.
     Automation {
         #[command(subcommand)]
         sub: AutomationCmd,
@@ -2012,8 +2012,8 @@ pub enum AutomationCmd {
         /// step id
         id: i64,
     },
-    /// Declare a way out of a step or a library action. Both are born carrying the unnamed way out and
-    /// the error one (`*`), so this is for the second and every one after it
+    /// Declare a way out of a step or a library action. Both are born carrying the done way out
+    /// and the error one (`*`), so this is for the second and every one after it
     ExitAdd {
         /// the step that declares it
         #[arg(long, value_name = "ID", conflicts_with = "action")]
@@ -2025,16 +2025,14 @@ pub enum AutomationCmd {
         #[arg(long)]
         name: String,
     },
-    /// Rename a way out. The edges and wires on it key it by its id, so they stay on it
+    /// Rename a way out. The edges and wires on it key it by its id, so they stay on it. A way out
+    /// keeps a name: there is no leaving it without one
     ExitRename {
         /// way out id
         id: i64,
         /// the new name
-        #[arg(long, conflicts_with = "clear")]
-        name: Option<String>,
-        /// make it the unnamed way out
         #[arg(long)]
-        clear: bool,
+        name: String,
     },
     /// Delete a way out with the outputs declared on it and the edges and wires keyed to it — confirms
     /// unless -y
@@ -2178,13 +2176,13 @@ pub enum AutomationCmd {
         /// its placements)
         #[arg(long)]
         in_action: bool,
-        /// where it leaves from, `<box>:<way out>` — `4:` is the unnamed way out, `4:*` the error one
+        /// where it leaves from, `<box>:<way out>` — `4:` is the done way out, `4:*` the error one
         #[arg(long, value_name = "BOX:EXIT")]
         from: String,
         /// go on to this box
         #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt", "exit_to"])]
         to: Option<i64>,
-        /// leave the action by the way out it declares under this name — bare, its unnamed one. With
+        /// leave the action by the way out it declares under this name — bare, the done one. With
         /// --in-action only: an automation's picture has nothing outside it
         #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
         exit_to: Option<String>,
@@ -2209,7 +2207,7 @@ pub enum AutomationCmd {
         /// go on to this box
         #[arg(long, value_name = "ID", conflicts_with_all = ["done", "halt", "exit_to"])]
         to: Option<i64>,
-        /// leave the action by the way out it declares under this name — bare, its unnamed one. With
+        /// leave the action by the way out it declares under this name — bare, the done one. With
         /// --in-action only: an automation's picture has nothing outside it
         #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
         exit_to: Option<String>,
@@ -2237,7 +2235,7 @@ pub enum AutomationCmd {
         /// its placements)
         #[arg(long)]
         in_action: bool,
-        /// where it comes from, `<box>:<way out>` — `4:` is the unnamed way out, `4:*` the error one.
+        /// where it comes from, `<box>:<way out>` — `4:` is the done way out, `4:*` the error one.
         /// With --in-action, `0` is the action itself, handing on an input it declares
         #[arg(long, value_name = "BOX:EXIT")]
         from: String,
@@ -2323,7 +2321,7 @@ pub enum AutomationCmd {
         /// what this step did, for the record and for the steps after it (`-` reads stdin)
         #[arg(long, value_name = "TEXT")]
         report: String,
-        /// the way out taken, by the id the step's text lists for it. Left out is the unnamed one
+        /// the way out taken, by the id the step's text lists for it. Left out is the done one
         #[arg(long, value_name = "ID")]
         exit: Option<i64>,
         /// one more thing produced, `<id>=<value>` — repeat for several

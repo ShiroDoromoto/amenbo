@@ -1022,7 +1022,73 @@ pub const STEPS: &[Step] = &[
         name: "call the choice that does not wait for a task to take by the way out it leaves by",
         apply: Apply::Custom(rename_the_choice_that_goes_on),
     },
+    Step {
+        to: 74,
+        name: "give every way out a name, the unnamed one taking the done way out's",
+        apply: Apply::Custom(name_the_unnamed_ways_out),
+    },
 ];
+
+/// v74: no way out goes without a name (`AMB-T-5516`).
+///
+/// Every step and every action was born with an unnamed way out, which a picture drew blank on its line
+/// and read as "the only one" even beside others. Each of them now carries the name a new owner is
+/// born with ([`crate::model::DONE_EXIT`]), and so does each unnamed way out in a run's copy of a step
+/// (`automation_run_def.exits`), so that a run already under way finds the name its built-ins and a
+/// `step-done` with no `--exit` now look for.
+///
+/// **A name already taken on the same owner is not taken twice.** Names are unique within an owner,
+/// so where someone had already given that name to another of its ways out, the unnamed one
+/// takes it with its row id after it, in brackets, instead.
+///
+/// Spelled as frozen text, as every step's is: the name is written here, not read from the constant.
+fn name_the_unnamed_ways_out(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    tx.execute_batch(
+        "UPDATE automation_exit SET name = '完了'
+          WHERE name IS NULL
+            AND NOT EXISTS (SELECT 1 FROM automation_exit o
+                             WHERE o.owner_kind = automation_exit.owner_kind
+                               AND o.owner_id = automation_exit.owner_id
+                               AND o.name = '完了');
+         UPDATE automation_exit SET name = '完了 (' || id || ')' WHERE name IS NULL;",
+    )?;
+
+    let mut copies: Vec<(i64, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare("SELECT id, exits FROM automation_run_def")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        for row in rows {
+            copies.push(row?);
+        }
+    }
+    for (def_id, exits) in copies {
+        let Ok(mut exits) = serde_json::from_str::<Vec<serde_json::Value>>(&exits) else { continue };
+        let taken = exits.iter().any(|e| e.get("name").and_then(|n| n.as_str()) == Some("完了"));
+        let mut changed = false;
+        for exit in exits.iter_mut() {
+            let unnamed = exit.get("name").is_none_or(serde_json::Value::is_null);
+            if !unnamed {
+                continue;
+            }
+            let name = match (taken, exit.get("id").and_then(|i| i.as_i64())) {
+                (true, Some(id)) => format!("完了 ({id})"),
+                _ => "完了".to_string(),
+            };
+            if let Some(map) = exit.as_object_mut() {
+                map.insert("name".to_string(), serde_json::Value::from(name));
+                changed = true;
+            }
+        }
+        if changed {
+            tx.execute(
+                "UPDATE automation_run_def SET exits = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::Value::Array(exits).to_string(), def_id],
+            )?;
+        }
+    }
+    Ok(())
+}
 
 /// v73: the built-in that takes a task names its choice that does not wait after the way out it leaves by
 /// in the word the screens now use for a way out, where it used the word they used before.
@@ -9170,5 +9236,52 @@ mod tests {
         let kept = engine.get_meta("talk.layout").unwrap().expect("the arrangement");
         let row: serde_json::Value = serde_json::from_str(&kept).unwrap();
         assert_eq!(row["panes"][0]["size"].as_str(), Some("whole"));
+    }
+
+    /// v74 gives every unnamed way out the done way out's name — on the rows and in a run's copies — and
+    /// gives the one whose owner already had a way out of that name one of its own instead.
+    #[test]
+    fn every_way_out_is_named_and_a_taken_name_is_not_taken_twice() {
+        let dir = scratch("name-the-ways-out");
+        let engine = store_at(&dir, 70);
+        engine
+            .conn()
+            .execute_batch(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name) VALUES
+                     (21, 'step', 11, NULL), (22, 'step', 11, '*'),
+                     (23, 'step', 12, NULL), (24, 'step', 12, '完了');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, name, agent, exits, ins, cfg) VALUES
+                     (81, 1, '書く', 'claude', '[{"id":21,"name":null,"outs":[]},{"id":22,"name":"*","outs":[]}]', '[]', '[]'),
+                     (82, 1, '直す', 'claude', '[{"id":23,"outs":[]},{"id":24,"name":"完了","outs":[]}]', '[]', '[]');"#,
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let name = |id: i64| -> Option<String> {
+            engine
+                .conn()
+                .query_row("SELECT name FROM automation_exit WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(name(21).as_deref(), Some("完了"));
+        assert_eq!(name(22).as_deref(), Some("*"), "the error way out keeps its name");
+        assert_eq!(name(23).as_deref(), Some("完了 (23)"), "its owner already had a 完了");
+        assert_eq!(name(24).as_deref(), Some("完了"));
+
+        let copy = |id: i64| -> Vec<Option<String>> {
+            let json: String = engine
+                .conn()
+                .query_row("SELECT exits FROM automation_run_def WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap();
+            let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&json).expect("today's shape");
+            exits.into_iter().map(|e| e.name).collect()
+        };
+        assert_eq!(copy(81), vec![Some("完了".to_string()), Some("*".to_string())]);
+        assert_eq!(copy(82), vec![Some("完了 (23)".to_string()), Some("完了".to_string())]);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

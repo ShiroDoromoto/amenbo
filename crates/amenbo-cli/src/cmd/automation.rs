@@ -42,7 +42,7 @@ use crate::cmd::task::resolve_task;
 use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
 
 /// Where an edge or a wire leaves from, as one token: `<box>:<way out>`. `4` and `4:` are both the
-/// unnamed way out, `4:*` the error one.
+/// done way out, `4:*` the error one.
 ///
 /// **Written as one token because the two halves are one place.** A way out is named against whichever
 /// of the box and the action standing on it declares it, so a name without the box it is read on names
@@ -56,7 +56,7 @@ fn parse_point(s: &str) -> Result<(i64, Option<String>), CliError> {
     let whose: i64 = whose.trim().parse().map_err(|_| CliError {
         code: "invalid_value",
         message: format!("'{s}' does not name a box and a way out."),
-        hint: Some("Write it as <box>:<way out> — `4:` is the unnamed way out, `4:*` the error one.".to_string()),
+        hint: Some("Write it as <box>:<way out> — `4:` is the done way out, `4:*` the error one.".to_string()),
         exit: 2,
     })?;
     Ok((whose, exit))
@@ -107,7 +107,7 @@ fn declarer_from_flags(step: Option<i64>, action: Option<i64>) -> Result<(Automa
 }
 
 /// Where an edge goes, from the four flags that say so. `--to` names the next box; `--exit-to` leaves
-/// the action the picture is inside, bare for its unnamed way out; the other two end the run.
+/// the action the picture is inside, bare for its done way out; the other two end the run.
 fn edge_target(to: Option<i64>, exit_to: Option<String>, done: bool, halt: bool) -> Result<EdgeTarget, CliError> {
     match (to, exit_to, done, halt) {
         (Some(to), None, false, false) => Ok(EdgeTarget::Go(to)),
@@ -484,18 +484,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let e = store.automation_exit_add(owner_kind, owner_id, Some(&name)).map_err(CliError::from)?;
             write_envelope(flags, "automation.exit-add", "automation_exit", serde_json::to_value(&e).unwrap(), None, false, format!("✓ Added way out: {} ({})", name, e.id));
         }
-        AutomationCmd::ExitRename { id, name, clear } => {
-            if name.is_none() && !clear {
-                return Err(CliError {
-                    code: "invalid_value",
-                    message: "give the new name with --name, or --clear to make it the unnamed way out.".to_string(),
-                    hint: None,
-                    exit: 2,
-                });
-            }
-            let e = store.automation_exit_rename(id, name.as_deref()).map_err(CliError::from)?;
-            let shown = e.name.clone().unwrap_or_else(|| "(unnamed)".to_string());
-            write_envelope(flags, "automation.exit-rename", "automation_exit", serde_json::to_value(&e).unwrap(), Some(vec!["name".to_string()]), false, format!("✓ Renamed way out: {shown} ({})", e.id));
+        AutomationCmd::ExitRename { id, name } => {
+            let e = store.automation_exit_rename(id, Some(&name)).map_err(CliError::from)?;
+            write_envelope(flags, "automation.exit-rename", "automation_exit", serde_json::to_value(&e).unwrap(), Some(vec!["name".to_string()]), false, format!("✓ Renamed way out: {name} ({})", e.id));
         }
         AutomationCmd::ExitRm { id } => {
             if !confirm(flags, "delete way out")? {

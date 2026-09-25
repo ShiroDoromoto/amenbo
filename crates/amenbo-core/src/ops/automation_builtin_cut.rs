@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 
 use crate::error::{Error, Result};
-use crate::model::AutomationPortKind;
+use crate::model::{AutomationPortKind, DONE_EXIT};
 use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Outside, Work, Worked};
 use crate::store_engine::read;
 use crate::worktree_cut::{self, Refusal};
@@ -39,7 +39,7 @@ pub(super) const CUT_WORKTREE: Builtin = Builtin {
     settings: &[],
     ins: &[],
     exits: &[BuiltinExit {
-        name: None,
+        name: DONE_EXIT,
         outs: &[BuiltinPort { name: WORKTREE, kind: AutomationPortKind::Value, required: true }],
     }],
     waits: None,
@@ -57,7 +57,7 @@ fn cut(outside: &Outside<'_>) -> Result<Worked> {
     let from = worktree_cut::start_from_origin(&cut).map_err(refused)?;
     let path = cut.worktree.to_string_lossy().into_owned();
     let report = format!("cut {path} on {} from {from}", cut.branch);
-    Ok(Worked { exit: None, report, hands: vec![(WORKTREE, path)] })
+    Ok(Worked { exit: DONE_EXIT, report, hands: vec![(WORKTREE, path)] })
 }
 
 /// **The repository the task is worked in**: the one its own folder is in, or else the one every

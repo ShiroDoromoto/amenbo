@@ -4410,6 +4410,13 @@ const REGISTRY: &[OpSpec] = &[
     // Taking that pane away, once its run is over: while the run is going or held the control cannot
     // be pressed, so a road stops the run first (`press-run` with `on: pane`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "close-run-pane", required: &[], refs: &["target"], strings: &[], binds: false },
+    // **The two ways from a run's pane to the ledger.** A failed run's band carries the
+    // press that opens the automation's build screen with the box it stopped at picked out — named the
+    // way `pick-box` names one, by `box` or, for a built-in, by its key (`builtin`) — and a run that is
+    // over carries on its header's line the press that opens the automations on the history tab. Both
+    // bring the ledger forward, from the workspace's own window as well as from the one it shares.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "see-picture", required: &[], refs: &["target"], strings: &["box", "builtin"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "see-history", required: &[], refs: &["target"], strings: &[], binds: false },
     //
     // **What a step of a run types**, typed where the run opened a terminal for it. Which step is
     // being answered is not in any of them: it comes off the environment the window set on that

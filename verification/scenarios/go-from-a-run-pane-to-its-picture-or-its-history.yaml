@@ -1,0 +1,158 @@
+# A run is watched in its pane, and read on the ledger: the picture it runs on, and the history of the
+# runs that are over. The pane carries the two ways across — a failed run's band opens
+# the build screen with the box it stopped at picked out, and a run that is over opens the history tab.
+#
+# Two runs of one automation walk both, and the second walks from the workspace's own window, which is
+# where the press has to cross to the other one. The first finds no task handed to the AI and closes
+# the run, which is over without failing — a failed run is kept on the running tab until somebody
+# acknowledges it, so it is one that ends well that the history shows at once. The second is handed a
+# task, takes it, and stops for a person there, which fails it at the built-in's box.
+id: go-from-a-run-pane-to-its-picture-or-its-history
+title: A run's pane goes to the history once the run is over, and to the box it stopped at when it failed
+description: >
+  Start an automation whose built-in that takes a task closes the run when there is none and stops for
+  a person when it took one. With nothing handed to the AI the run is over; its pane's "see the
+  history" opens the history tab with the run on it. Split the workspace into its own window, hand a
+  task to the AI and start the automation again: the run fails at the built-in, and its band's "see the
+  picture" brings the ledger forward on the build screen with that box picked out.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
+
+  # Left unhanded, so the first run finds nothing to take.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the second run takes }, as: seed }
+
+  # The built-in alone, as the entry: having taken a task it stops for a person, and finding none it
+  # closes the run.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that stops where it took a task" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, halt: true } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: empty_handed
+
+  # Over, and the pane says where it is read from now.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: empty_handed
+      state: completed
+      present: true
+
+  - type: action
+    domain: automation
+    op: see-history
+    with:
+      target: empty_handed
+
+  - type: assert
+    domain: automation
+    op: history-row
+    with:
+      target: empty_handed
+      state: completed
+
+  # Into a window of its own. From here every step names the window it is in, there being two.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: split-out
+    window: Amenbo
+
+  - type: action
+    domain: task
+    op: assign
+    window: Amenbo
+    with:
+      target: seed
+      assignee: me-ai
+
+  - type: action
+    domain: task
+    op: finish-creating
+    window: Amenbo
+    with:
+      target: seed
+
+  - type: action
+    domain: automation
+    op: screen
+    window: Amenbo
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    window: Amenbo
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    window: Amenbo
+    with:
+      target: auto
+    as: stopped
+
+  # Failed where it took the task, and the band says so and carries the way to the picture.
+  - type: assert
+    domain: automation
+    op: run-pane
+    window: "Amenbo — "
+    with:
+      target: stopped
+      state: failed
+      reason: halted
+      present: true
+
+  - type: action
+    domain: automation
+    op: see-picture
+    window: "Amenbo — "
+    with:
+      target: stopped
+      builtin: take_task

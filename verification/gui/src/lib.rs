@@ -4401,6 +4401,18 @@ impl Instructor {
                 "In the workspace, press the control that takes away the pane this run is drawn in. Confirm it goes without a question: the run is over, and there is nothing of it left to lose."
                     .to_string()
             }
+            // From a run's pane to the ledger. What the press lands on is said in the
+            // same line, the way `press-reason` says it: the box picked out is the whole point of the
+            // press, and a build that opened the screen on nothing would pass a line that stopped at
+            // the screen.
+            (Domain::Automation, "see-picture") => format!(
+                "In the workspace, on the band under the header of the pane this run is drawn in, press the button that shows it on the picture. Confirm the ledger comes forward on the automation's build screen, with {} picked out on the picture and its panel open beside it.",
+                box_named(with, "box", "builtin")?
+            ),
+            (Domain::Automation, "see-history") => {
+                "In the workspace, on the header of the pane this run is drawn in, press the button that shows it in the history. Confirm the ledger comes forward on the automations' history tab."
+                    .to_string()
+            }
             // **What a step of a run types.** The command is written out because it is the whole of
             // the step: which step is being answered comes off the environment the window opened that
             // terminal with, so the same words typed in any other pane are refused.
@@ -8820,6 +8832,34 @@ steps_gui:
         assert!(lines[0].contains("press the reason") && lines[0].contains("\"work\" is picked out"), "{}", lines[0]);
         assert!(lines[1].contains("its line is a press"), "{}", lines[1]);
         assert!(lines[2].contains("not a press") && lines[2].contains("opens nothing"), "{}", lines[2]);
+    }
+
+    /// A run's pane goes to the ledger two ways, and the picture's says which box it
+    /// lands on — a built-in's by what it is, the way `pick-box` names one.
+    #[test]
+    fn a_run_pane_goes_to_the_picture_it_stopped_on_and_to_the_history() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: see-picture
+    with: { builtin: take_task }
+  - type: action
+    domain: automation
+    op: see-picture
+    with: { box: work }
+  - type: action
+    domain: automation
+    op: see-history
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).expect("every step renders")).collect();
+        assert!(lines[0].contains("band under the header") && lines[0].contains("the box of"), "{}", lines[0]);
+        assert!(lines[1].contains("the box \"work\" picked out"), "{}", lines[1]);
+        assert!(lines[2].contains("history tab"), "{}", lines[2]);
     }
 
     /// `held-by` lists a run, so a road reading the hold names which one; only the release names

@@ -315,6 +315,7 @@ function heldRun(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     pauseRequested: false,
     waiting: false,
     stepsDone: 1,
+    acknowledged: false,
     ...over,
   };
 }

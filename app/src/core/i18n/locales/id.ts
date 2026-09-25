@@ -598,7 +598,8 @@ export const id: Translation = {
     "face.runStep": "Langkah {n}",
     "face.runNo": "Eksekusi {n}",
     "face.runTask": "Tugas {n}",
-    "face.dropRunConfirm": "Hapus panel ini? Eksekusinya dihentikan, tugas yang sedang dikerjakannya kembali ke Akan dikerjakan, dan satu baris pada tugas itu mengatakannya.",
+    "face.dropRunLive": "Tidak bisa dihapus sampai eksekusi selesai",
+    "face.runStoppedAt": "Berhenti di {exit}",
     "quit.confirm": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, tetapi yang sedang berjalan di dalamnya tidak.",
     "quit.confirmNotAll": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",
 
@@ -606,7 +607,6 @@ export const id: Translation = {
     "face.builtinDoing": "Amenbo sedang menjalankannya",
     "face.builtinDone": "Amenbo telah menjalankannya",
     "face.builtinExit": "Keluaran: {exit}",
-    "face.runFailedAt": "{step} · Keluaran: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI belum memiliki metode autentikasi. Jalur yang disebutkan hanya milik panel ini dan ikut terhapus — yang perlu diatur adalah ~/.gemini/settings.json milik Anda sendiri.",
     "face.noWayBack": "Percakapan ini tidak bisa dibuka lagi.",

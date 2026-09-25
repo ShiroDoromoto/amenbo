@@ -4383,20 +4383,21 @@ const REGISTRY: &[OpSpec] = &[
     // what on it is named.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch", required: &["ready"], refs: &[], strings: &["reason", "box", "at"], binds: false },
     //
-    // The pane a run is drawn in, and what its header carries: which step, how many tasks
-    // in, the run's own number and the task it is on. The step is said with the action it was opened
+    // The pane a run is drawn in, and what its header carries: the run's own number and which step
+    // on the name's line, and the task it is on with how many tasks in on the line under it. The step is said with the action it was opened
     // from (`action`), as one value — the step is one terminal, and which action it belongs to is
     // what says where on the automation's picture the run has got to. A run whose placement has been
     // taken off the picture since says the step alone. `label` reads a pane's name and nothing else,
     // which is why this one is here.
     //
     // `state` is where the run stands, said at the end of the name's line, and `reason` why a failed
-    // one failed, said on a line of its own under the header — both spelled as `run-row` spells them,
+    // one failed, said on a band under the header — both spelled as `run-row` spells them,
     // so a road reads the run the same way on the pane and on the tab, in whichever language the
     // screen is drawn. The pane outlives the step it was opened for, which is why a run that is over
     // is read here at all.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "action", "state", "reason"], binds: false },
-    // Closing that pane, which is a way of stopping the run and says so before it does.
+    // Taking that pane away, once its run is over: while the run is going or held the control cannot
+    // be pressed, so a road stops the run first (`press-run` with `on: pane`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "close-run-pane", required: &[], refs: &["target"], strings: &[], binds: false },
     //
     // **What a step of a run types**, typed where the run opened a terminal for it. Which step is

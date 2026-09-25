@@ -3916,4 +3916,8 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) task: Option<AutomationRunTaskDto>,
+    /// **Whether somebody has said they saw the failure** — what moves a failed run off the
+    /// "running" tab and onto the "history" one. Only a failure is ever acknowledged, so it is false
+    /// on every other state.
+    pub(crate) acknowledged: bool,
 }

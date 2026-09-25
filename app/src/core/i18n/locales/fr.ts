@@ -607,7 +607,8 @@ export const fr: Translation = {
     "face.runStep": "Étape {n}",
     "face.runNo": "Exécution {n}",
     "face.runTask": "Tâche {n}",
-    "face.dropRunConfirm": "Supprimer ce volet ? L'exécution est arrêtée, la tâche sur laquelle elle était repasse À faire, et une ligne sur cette tâche le dit.",
+    "face.dropRunLive": "Impossible de la retirer avant la fin de l'exécution",
+    "face.runStoppedAt": "Arrêtée à {exit}",
     "quit.confirm": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, pas ce qu'elles exécutaient.",
     "quit.confirmNotAll": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, sauf dans les volets qui font tourner {names}. Ce qu'elles exécutaient ne revient pas non plus.",
 
@@ -615,7 +616,6 @@ export const fr: Translation = {
     "face.builtinDoing": "Amenbo est en train de l'exécuter",
     "face.builtinDone": "Amenbo l'a exécuté",
     "face.builtinExit": "Sortie: {exit}",
-    "face.runFailedAt": "{step} · Sortie: {exit}",
 
     "face.endedGeminiUnset": "Aucune méthode d'authentification n'est définie pour Gemini CLI. Le chemin indiqué appartient à ce volet et disparaît avec lui — celui à modifier est votre propre ~/.gemini/settings.json.",
     "face.noWayBack": "Cette conversation ne peut plus être ouverte.",

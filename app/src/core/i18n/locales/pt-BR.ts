@@ -608,7 +608,8 @@ export const ptBR: Translation = {
     "face.runStep": "Passo {n}",
     "face.runNo": "Execução {n}",
     "face.runTask": "Tarefa {n}",
-    "face.dropRunConfirm": "Remover este painel? A execução é interrompida, a tarefa em que ela estava volta para A fazer, e uma linha nessa tarefa diz isso.",
+    "face.dropRunLive": "Não dá para remover até a execução terminar",
+    "face.runStoppedAt": "Parou em {exit}",
     "quit.confirm": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução; o que estava rodando nelas, não.",
     "quit.confirmNotAll": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução, exceto nos painéis com {names}. O que estava rodando nelas também não volta.",
 
@@ -616,7 +617,6 @@ export const ptBR: Translation = {
     "face.builtinDoing": "O Amenbo está executando isto",
     "face.builtinDone": "O Amenbo executou isto",
     "face.builtinExit": "Saída: {exit}",
-    "face.runFailedAt": "{step} · Saída: {exit}",
 
     "face.endedGeminiUnset": "O Gemini CLI não tem um método de autenticação definido. O caminho indicado pertence apenas a este painel e some com ele — o arquivo a editar é o seu próprio ~/.gemini/settings.json.",
     "face.noWayBack": "Esta conversa não pode mais ser aberta.",

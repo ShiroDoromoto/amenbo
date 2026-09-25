@@ -1437,6 +1437,7 @@ fn run_card(
         steps_done: steps.len(),
         exit_name,
         task: worked_task(store, stretch)?,
+        acknowledged: run.acknowledged_at.is_some(),
     })
 }
 

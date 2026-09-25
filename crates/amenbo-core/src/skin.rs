@@ -734,7 +734,7 @@ pub const SPOTS: &[&str] = &[
 pub const SPOT_DEFAULT: &str = "center";
 
 /// The icons a skin may put its own drawing in place of, by the name each one is drawn under
-/// (`AMB-D-937`). Forty-nine, and they are the whole set the window draws — a name the document
+/// (`AMB-D-937`). Fifty-one, and they are the whole set the window draws — a name the document
 /// leaves out keeps this build's own drawing, so a skin replaces as few of them as it likes.
 ///
 /// Sorted, and held against `IconName` in `app/src/components/Icon.tsx` by
@@ -745,8 +745,8 @@ pub const ICONS: &[&str] = &[
     "chevronDown", "chevronLeft", "chevronRight", "clipboard", "clock", "close", "comment",
     "document", "dot", "error", "foldLeft", "foldRight", "folder", "gavel", "gear", "goose",
     "hourglass", "inbox", "keyboard", "link", "lock", "menu", "more", "newWindow", "paperclip",
-    "pause", "pencil", "person", "pin", "plug", "plus", "refresh", "reorder", "reply", "robot",
-    "rocket", "search", "stop", "tag", "trash", "unlock", "warning",
+    "pause", "pencil", "person", "pin", "play", "plug", "plus", "refresh", "reorder", "reply",
+    "robot", "rocket", "search", "stop", "tag", "trash", "unlock", "warning",
 ];
 
 /// The most a material's name may be. Long enough for a folder and a filename inside the zip, and
@@ -3038,7 +3038,7 @@ dark:
         let mut sorted = ICONS.to_vec();
         sorted.sort_unstable();
         assert_eq!(ICONS, sorted.as_slice(), "the list is searched by halving");
-        assert_eq!(ICONS.len(), 50);
+        assert_eq!(ICONS.len(), 51);
     }
 
     const A_PNG: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";

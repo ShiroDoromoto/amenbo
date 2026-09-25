@@ -595,7 +595,8 @@ export const zhHant: Translation = {
     "face.runStep": "第 {n} 步",
     "face.runNo": "執行 {n}",
     "face.runTask": "第 {n} 個任務",
-    "face.dropRunConfirm": "要移除此窗格嗎？執行會停下，它正在處理的任務回到待辦，並在那條任務上留下一行說明。",
+    "face.dropRunLive": "執行結束前無法移除",
+    "face.runStoppedAt": "停在 {exit}",
     "quit.confirm": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，正在跑的東西不會。",
     "quit.confirmNotAll": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，但跑著 {names} 的窗格不會。正在跑的東西也不會。",
 
@@ -603,7 +604,6 @@ export const zhHant: Translation = {
     "face.builtinDoing": "Amenbo 正在執行",
     "face.builtinDone": "Amenbo 已執行",
     "face.builtinExit": "出口: {exit}",
-    "face.runFailedAt": "{step} · 出口: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI 尚未設定驗證方式。它列出的路徑只屬於此窗格，會隨之捨棄——要設定的是你自己的 ~/.gemini/settings.json。",
     "face.noWayBack": "這段對話已經打不開了。",

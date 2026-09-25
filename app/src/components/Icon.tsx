@@ -73,6 +73,7 @@ export type IconName =
   | "robot"
   | "dot"
   | "pause"
+  | "play"
   | "stop"
   | "newWindow"
   | "foldLeft"
@@ -98,6 +99,9 @@ const DRAWN = {
   // A square — the work in this pane has stopped. Not the pause: a pause is somebody's turn, and a
   // stop is a fact the ledger holds about the task, with nobody being asked for anything.
   stop: ["M5.6 5.6h12.8v12.8H5.6z"],
+  // A triangle pointing on — something held is picked up again. The pause's other half, in the same
+  // transport family, so the press that answers a pause reads as its opposite.
+  play: ["M7.4 5.2 18.6 12 7.4 18.8z"],
   // A warning triangle — grounds that are not settled.
   warning: [
     "M12.9 4.3l8.6 14.9a1 1 0 0 1-.9 1.5H3.4a1 1 0 0 1-.9-1.5l8.6-14.9a1 1 0 0 1 1.8 0z",
@@ -401,6 +405,7 @@ const ART: Record<IconName, ReactNode> = {
   // (`components.css`) turns the convention round for it.
   dot: <circle cx="12" cy="12" r="5.4" />,
   pause: drawn("pause"),
+  play: drawn("play"),
   stop: drawn("stop"),
   // Two panes, one lifted off the other — the terminal put into a window of its own. It is drawn as
   // the same thing twice because that is what the press does: the face is still here, and one of it

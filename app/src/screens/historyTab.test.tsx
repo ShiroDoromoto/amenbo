@@ -43,6 +43,7 @@ function run(id: number): AutomationRunCardDto {
     pauseRequested: false,
     waiting: false,
     stepsDone: 3,
+    acknowledged: false,
     endedAt: "2026-09-23T00:00:00Z",
   };
 }

@@ -667,7 +667,8 @@ const ui = {
   "face.runStep": "Step {n}",
   "face.runNo": "Run {n}",
   "face.runTask": "Task {n}",
-  "face.dropRunConfirm": "Remove this pane? The run is stopped, the task it was working goes back to To do, and a line on that task says so.",
+  "face.dropRunLive": "Can't be removed while the run is going",
+  "face.runStoppedAt": "Stopped at {exit}",
   // The way out of the whole app, which ends every terminal at once and is asked about for the same
   // reason one pane is (`app/src/shell/openPanes.ts`, `crate::quit`). It is its own sentence rather
   // than the pane's: what is being left behind is every session in the process, and one about "this
@@ -694,7 +695,6 @@ const ui = {
   "face.builtinDoing": "Amenbo is carrying this out",
   "face.builtinDone": "Amenbo carried this out",
   "face.builtinExit": "Exit: {exit}",
-  "face.runFailedAt": "{step} · exit: {exit}",
   "face.endedGeminiUnset": "Gemini CLI has no authentication method set. The path it names is this pane's own and goes with it — the one to set is your own ~/.gemini/settings.json.",
   "face.noWayBack": "This conversation cannot be opened again.",
   "face.projects": "Projects",

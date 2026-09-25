@@ -116,6 +116,15 @@ export async function mountAgentFrame(
   // Whether this frame still stands for a step whose terminal the host started (`PaneStart.runStep`).
   // Spent at the first look: after that, what is started here is what a person asks for.
   let stepping = start.runStep != null;
+  // **A run's pane has no closed row** (`AMB-T-5529`). What would stand there is a way to start
+  // something else in the run's place, under the run's header — a terminal the row would go on naming
+  // as the run's step. The pane says how the run ended, and is taken away when the reader is done
+  // with it.
+  const forRun = start.runStep != null;
+  /** The closed frame's row, where this frame has one. */
+  const closedRow = (choice: string | null) => {
+    if (!forRun) frame.append(row(choice));
+  };
   // Which pane the frame is on. A terminal takes a round trip to mount, and the frame can be cleared
   // while one is in flight — so what comes back is checked against this and thrown away if the frame
   // has moved on. Without it a pane nobody can see keeps its PTY open for the life of the window.
@@ -147,9 +156,9 @@ export async function mountAgentFrame(
     stepping = false;
     if (mine) return open(null, start);
     // A step's terminal that is no longer running was carried out once already, while this pane was
-    // not drawn. Nothing is started for it again: the frame puts up its closed row, which is what a
-    // pane that watched the step end would be showing now (`PaneStart.runStep`).
-    if (forStep) return void frame.append(row(null));
+    // not drawn. Nothing is started for it again: the frame is left as a pane that watched the step
+    // end would be showing now (`PaneStart.runStep`).
+    if (forStep) return closedRow(null);
     // A place that came back holding a way into what was running in it opens on that, and is asked
     // nothing: where it works and what runs in it were both answered a run ago, and the probe would
     // only be putting the same question again (`AMB-D-869`). It is not kept as a fresh choice
@@ -203,7 +212,7 @@ export async function mountAgentFrame(
       },
       closed: (session, code, noWayBack) => {
         on.closed(session, code, noWayBack);
-        if (mine === showing) frame.append(row(choice));
+        if (mine === showing) closedRow(choice);
       },
     };
     // The place stays this frame's whichever road the pane came by, because it is what a way back
@@ -224,7 +233,7 @@ export async function mountAgentFrame(
         if (mine !== showing) return;
         pane.className = "agent__failed";
         pane.textContent = errText(e, lang);
-        frame.append(row(choice));
+        closedRow(choice);
       });
   };
 

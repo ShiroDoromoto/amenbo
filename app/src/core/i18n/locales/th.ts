@@ -598,7 +598,8 @@ export const th: Translation = {
     "face.runStep": "ขั้นที่ {n}",
     "face.runNo": "การรัน {n}",
     "face.runTask": "งานที่ {n}",
-    "face.dropRunConfirm": "เอาบานหน้าต่างนี้ออกไหม การรันจะหยุดลง งานที่มันทำอยู่จะกลับไปเป็นรอทำ และจะมีหนึ่งบรรทัดบนงานนั้นบอกไว้",
+    "face.dropRunLive": "ลบไม่ได้จนกว่าการรันจะจบ",
+    "face.runStoppedAt": "หยุดที่ {exit}",
     "quit.confirm": "ออกจาก Amenbo ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง บทสนทนาจะกลับมาในการเปิดครั้งถัดไป แต่สิ่งที่กำลังทำงานอยู่จะไม่กลับมา",
     "quit.confirmNotAll": "ออกจาก Amenbo ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง บทสนทนาจะกลับมาในการเปิดครั้งถัดไป ยกเว้นบานหน้าต่างที่รัน {names} สิ่งที่กำลังทำงานอยู่ก็จะไม่กลับมาเช่นกัน",
 
@@ -606,7 +607,6 @@ export const th: Translation = {
     "face.builtinDoing": "Amenbo กำลังดำเนินการ",
     "face.builtinDone": "Amenbo ดำเนินการเสร็จแล้ว",
     "face.builtinExit": "ทางออก: {exit}",
-    "face.runFailedAt": "{step} · ทางออก: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI ยังไม่ได้ตั้งค่าวิธียืนยันตัวตน เส้นทางที่แสดงเป็นของแผงนี้เท่านั้นและจะถูกลบไปพร้อมกัน — ไฟล์ที่ต้องตั้งค่าคือ ~/.gemini/settings.json ของคุณเอง",
     "face.noWayBack": "เปิดบทสนทนานี้อีกไม่ได้แล้ว",

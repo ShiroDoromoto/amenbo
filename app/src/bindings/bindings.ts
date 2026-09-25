@@ -679,7 +679,13 @@ exitName?: string,
  * ([`amenbo_core::model::AutomationRunTask`]), and this is the one it is in now — the same
  * shape the row over its pane says it in.
  */
-task?: AutomationRunTaskDto, };
+task?: AutomationRunTaskDto, 
+/**
+ * **Whether somebody has said they saw the failure** — what moves a failed run off the
+ * "running" tab and onto the "history" one. Only a failure is ever acknowledged, so it is false
+ * on every other state.
+ */
+acknowledged: boolean, };
 
 /**
  * **One page of the "history" tab** — the runs that are over and need nobody (`AMB-D-955`).

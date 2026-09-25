@@ -6,7 +6,7 @@
 // are the same run: a reader who sees "failed" on the pane and goes to the tab to find out more has to
 // be able to find the line that says the same.
 import type { AutomationRunCardDto } from "../bindings/bindings";
-import { t, tf } from "./i18n";
+import { t } from "./i18n";
 import { builtinWord } from "./builtinWords";
 import type { RunState } from "../talk/nameplate";
 
@@ -57,33 +57,24 @@ export function runExitWord(builtin: string | null | undefined, name: string): s
 }
 
 /**
- * **Where a run stands, as the row over its pane says it** (`../talk/nameplate`, `AMB-T-5506`) — or
- * null until the run has been read, and then the row says nothing of its state rather than guessing.
+ * **Where a run stands, as its pane says it** (`../talk/nameplate`, `AMB-T-5506`) — or null until the
+ * run has been read, and then the pane says nothing of its state rather than guessing.
  *
- * A failure says where as well as why: the step it failed in, and the way out that step left by where
- * it left by one. A program that exited before it reported left by none, and then the step is all
- * there is to say.
+ * A failure says one thing under the row, and never where: the row above it already names the step
+ * (`AMB-T-5529`). A step that stopped at a way out calling for a person is said by that way out, the
+ * mark the picture draws it with; every other failure is said by its reason.
  */
 export function runStateOf(run: AutomationRunCardDto | undefined): RunState | null {
   if (run === undefined) return null;
   const failed = run.status === "failed";
+  const byExit = failed && run.stoppedReason === "halted" && run.exitName !== undefined;
   return {
     status: run.status,
     word: runStatusWord(run),
     pauseRequested: run.pauseRequested,
-    why: failed ? runReasonWord(run) : null,
-    where: failed ? runWhere(run) : null,
+    why: failed && !byExit ? runReasonWord(run) : null,
+    exit: byExit ? runExitWord(run.builtin, run.exitName!) : null,
+    errorExit: byExit && run.exitName === ERROR_EXIT,
+    acknowledged: run.acknowledged,
   };
-}
-
-/** The step a run is on or ended on, and the way out it left by — or null before any step opened. */
-function runWhere(run: AutomationRunCardDto): string | null {
-  if (run.stepName === undefined) return null;
-  const step = builtinWord(run.builtin, run.stepName);
-  const which = run.actionName === undefined
-    ? step
-    : tf("auto.run.inAction", { action: builtinWord(run.builtin, run.actionName), step });
-  return run.exitName === undefined
-    ? which
-    : tf("face.runFailedAt", { step: which, exit: runExitWord(run.builtin, run.exitName) });
 }

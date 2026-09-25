@@ -3,15 +3,16 @@
 # anybody can pick it up. Without that, a reader looking at that task would find it held by a run
 # that no longer exists.
 #
-# The road it is walked by is the pane, because that is where a person ends a run — the press is
-# about being rid of the pane, and the handing back happens behind it.
+# The road it is walked by is the pane, because that is where a person watching a run ends it — the
+# stop on the line over the pane, and the handing back happens behind it.
 id: get-back-the-task-a-stopped-run-had-taken
 title: Ending a run hands the task it had taken back, and says on the task what happened
 description: >
-  Start a run, let its first step take a task, then take the pane away. Read the three things that
-  leaves behind: the task is `todo` again, its timeline says the run was canceled, and the run's row
-  on the history tab says so too. What separates this road from close-the-pane-a-run-is-drawn-in is
-  the task — that one stops a run that never took any, and the giving back is not on it.
+  Start a run, let its first step take a task, then stop the run from the line over its pane. Read the
+  three things that leaves behind: the task is `todo` again, its timeline says the run was canceled,
+  and the run's row on the history tab says so too. What separates this road from
+  close-the-pane-a-run-is-drawn-in is the task — that one stops a run that never took any, and the
+  giving back is not on it.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
 
@@ -104,9 +105,11 @@ steps_gui:
 
   - type: action
     domain: automation
-    op: close-run-pane
+    op: press-run
     with:
       target: run
+      press: stop
+      on: pane
 
   # Back where anybody can pick it up. A task left `in_progress` behind a run that is gone is work
   # nobody is doing and nobody can take.

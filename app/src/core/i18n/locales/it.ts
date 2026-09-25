@@ -607,7 +607,8 @@ export const it: Translation = {
     "face.runStep": "Passo {n}",
     "face.runNo": "Esecuzione {n}",
     "face.runTask": "Attività {n}",
-    "face.dropRunConfirm": "Rimuovere questo riquadro? L'esecuzione viene fermata, l'attività su cui stava lavorando torna a Da fare, e una riga su quell'attività lo dice.",
+    "face.dropRunLive": "Non si può rimuovere finché l'esecuzione non termina",
+    "face.runStoppedAt": "Fermata a {exit}",
     "quit.confirm": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, ciò che stavano eseguendo no.",
     "quit.confirmNotAll": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, tranne nei riquadri con {names}. Non torna nemmeno ciò che stavano eseguendo.",
 
@@ -615,7 +616,6 @@ export const it: Translation = {
     "face.builtinDoing": "Amenbo lo sta eseguendo",
     "face.builtinDone": "Amenbo lo ha eseguito",
     "face.builtinExit": "Uscita: {exit}",
-    "face.runFailedAt": "{step} · Uscita: {exit}",
 
     "face.endedGeminiUnset": "Per Gemini CLI non è impostato alcun metodo di autenticazione. Il percorso indicato appartiene solo a questo riquadro e sparisce con esso: quello da modificare è il tuo ~/.gemini/settings.json.",
     "face.noWayBack": "Questa conversazione non si può più aprire.",

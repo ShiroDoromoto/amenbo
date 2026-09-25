@@ -341,7 +341,7 @@ function AutomationLine({
   const { card, projectId, projectName } = row;
   const folders = useBoundFolders(projectId).live.map((one) => one.path);
   const check = useLaunchCheck(card.id, projectId, folders);
-  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
+  const { start, refused, starting, handing } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
   // What is in the way, read off the press on hover — the build screen's own list, in its words.
   const blocked = check === null || check.ready ? undefined : check.blocks.map((block) => errSentence(block)).join("\n");
   return (
@@ -367,13 +367,14 @@ function AutomationLine({
             type="button"
             className="btn btn--primary"
             disabled={check?.ready !== true || starting}
-            onClick={() => void start(card.id, folders)}
+            onClick={() => start(card.id, card.name, folders)}
           >
             {t("auto.start")}
           </button>
         </span>
       </div>
       {refused !== null && <div className="autolist__refused">{refused}</div>}
+      {handing}
     </>
   );
 }

@@ -134,7 +134,7 @@ export function AutomationBuildScreen({
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
   // is where an automation is built, not a third place for a launch to behave differently.
-  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
+  const { start, refused, starting, handing } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
 
   const pressed =
     showing?.kind === "box"
@@ -168,11 +168,12 @@ export function AutomationBuildScreen({
           type="button"
           className="btn btn--primary"
           disabled={check?.ready !== true || starting || projectId === null}
-          onClick={() => void start(id, folders.live.map((one) => one.path))}
+          onClick={() => start(id, automation?.name ?? "", folders.live.map((one) => one.path))}
         >
           {t("auto.start")}
         </button>
       </div>
+      {handing}
 
       {((check !== null && !check.ready) || refused !== null) && (
         <div className="autolaunch">

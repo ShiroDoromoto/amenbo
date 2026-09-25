@@ -1327,6 +1327,10 @@ export const vi: Translation = {
     not_ready_premise_unsettled: "{ref} chưa ngã ngũ — hãy chờ viết xong hoặc gỡ mối nối",
     not_ready_not_started: "việc này đến {start} mới bắt đầu — hãy sửa ngày bắt đầu nếu sai",
     not_ready_draft: "việc này vẫn đang được tạo — hãy hoàn tất việc tạo trước",
+    invalid_action_still_placed:
+      "Hành động này vẫn nằm trên sơ đồ — tổng cộng {count}. Gỡ nó ra trước khi xóa.",
+    invalid_action_placed_elsewhere:
+      "Hành động này đang được đặt trong tự động hóa của dự án khác ({automations}). Gỡ nó ra trước khi chuyển sang “{project}”.",
     invalid_automation_archived: "“{automation}” đã lưu trữ. Đưa nó trở lại trước khi chạy.",
     invalid_automation_workspace_closed:
       "Không gian làm việc đang đóng, và một lượt chạy vẽ các bước của nó trong các khung ở đó. Mở ra rồi chạy lại.",

@@ -1345,6 +1345,10 @@ export const fr: Translation = {
     not_ready_premise_unsettled: "{ref} n'est pas tranchée — attendez qu'elle soit écrite jusqu'au bout ou retirez le lien",
     not_ready_not_started: "elle ne commence que le {start} — changez la date de début si ce n'est pas la bonne",
     not_ready_draft: "elle est encore en cours de création — terminez d'abord sa création",
+    invalid_action_still_placed:
+      "Cette action figure encore dans des schémas — {count} au total. Retirez-la avant de la supprimer.",
+    invalid_action_placed_elsewhere:
+      "Cette action est placée dans des automatisations d’autres projets ({automations}). Retirez-la avant de la déplacer dans « {project} ».",
     invalid_automation_archived: "« {automation} » est archivée. Sortez-la des archives avant de la lancer.",
     invalid_automation_workspace_closed:
       "L’espace de travail est fermé, et une exécution dessine ses étapes dans ses volets. Ouvrez-le et relancez.",

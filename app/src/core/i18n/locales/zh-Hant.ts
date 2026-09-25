@@ -1328,6 +1328,10 @@ export const zhHant: Translation = {
     not_ready_premise_unsettled: "{ref} 尚未定案——等它寫完或解除連結",
     not_ready_not_started: "它要到 {start} 才開始——日期不對就改開始日",
     not_ready_draft: "它還在建立中——請先完成建立",
+    invalid_action_still_placed:
+      "此動作仍放在圖中——共 {count} 處。先從圖中移除再刪除。",
+    invalid_action_placed_elsewhere:
+      "此動作放在其他專案的自動化中（{automations}）。先從那裡移除，再移到「{project}」。",
     invalid_automation_archived: "「{automation}」已封存。先取回再啟動。",
     invalid_automation_workspace_closed:
       "工作區是關著的，而一次執行要把步驟畫在它的窗格裡。打開後再啟動。",

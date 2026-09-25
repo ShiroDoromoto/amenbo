@@ -1353,6 +1353,10 @@ export const ru: Translation = {
     not_ready_premise_unsettled: "{ref} не решена — дождитесь, пока её допишут, или уберите связь",
     not_ready_not_started: "она начинается только {start} — измените дату начала, если она неверна",
     not_ready_draft: "она ещё создаётся — сначала завершите создание",
+    invalid_action_still_placed:
+      "Это действие всё ещё стоит на схемах — всего {count}. Уберите его оттуда, прежде чем удалять.",
+    invalid_action_placed_elsewhere:
+      "Это действие стоит в автоматизациях других проектов ({automations}). Уберите его оттуда, прежде чем переносить в «{project}».",
     invalid_automation_archived: "«{automation}» в архиве. Верните её, прежде чем запускать.",
     invalid_automation_workspace_closed:
       "Рабочее пространство закрыто, а запуск рисует свои шаги в его панелях. Откройте его и запустите снова.",

@@ -1328,6 +1328,10 @@ export const id: Translation = {
     not_ready_premise_unsettled: "{ref} belum selesai diputuskan — tunggu sampai selesai ditulis atau lepaskan tautannya",
     not_ready_not_started: "tugas ini baru mulai {start} — ubah tanggal mulai kalau itu keliru",
     not_ready_draft: "tugas ini masih dibuat — selesaikan pembuatannya dulu",
+    invalid_action_still_placed:
+      "Aksi ini masih ada di gambar — total {count}. Keluarkan dulu dari sana sebelum menghapusnya.",
+    invalid_action_placed_elsewhere:
+      "Aksi ini dipasang di otomatisasi proyek lain ({automations}). Keluarkan dulu dari sana sebelum memindahkannya ke “{project}”.",
     invalid_automation_archived: "“{automation}” sudah diarsipkan. Kembalikan dulu sebelum menjalankannya.",
     invalid_automation_workspace_closed:
       "Ruang kerja tertutup, dan sebuah jalannya menggambar langkahnya di panel ruang itu. Buka lalu jalankan lagi.",

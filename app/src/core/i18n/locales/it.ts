@@ -1345,6 +1345,10 @@ export const it: Translation = {
     not_ready_premise_unsettled: "{ref} non è risolta: aspetta che sia scritta fino in fondo o togli il collegamento",
     not_ready_not_started: "non comincia prima del {start}: cambia la data di inizio se non è quella giusta",
     not_ready_draft: "è ancora in fase di creazione: completa prima la creazione",
+    invalid_action_still_placed:
+      "Questa azione è ancora negli schemi: {count} in tutto. Toglila da lì prima di eliminarla.",
+    invalid_action_placed_elsewhere:
+      "Questa azione è posizionata in automazioni di altri progetti ({automations}). Toglila da lì prima di spostarla in «{project}».",
     invalid_automation_archived: "«{automation}» è archiviata. Riportala indietro prima di avviarla.",
     invalid_automation_workspace_closed:
       "L’area di lavoro è chiusa, e un’esecuzione disegna i suoi passi nei suoi riquadri. Aprila e avvia di nuovo.",

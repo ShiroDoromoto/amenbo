@@ -1345,6 +1345,10 @@ export const ptBR: Translation = {
     not_ready_premise_unsettled: "{ref} não está resolvida — espere terminarem de escrevê-la ou desvincule",
     not_ready_not_started: "ela só começa em {start} — mude a data de início se não for essa",
     not_ready_draft: "ela ainda está sendo criada — termine a criação primeiro",
+    invalid_action_still_placed:
+      "Esta ação ainda está em diagramas — {count} no total. Tire-a deles antes de excluí-la.",
+    invalid_action_placed_elsewhere:
+      "Esta ação está colocada em automações de outros projetos ({automations}). Tire-a delas antes de movê-la para “{project}”.",
     invalid_automation_archived: "“{automation}” está arquivada. Recupere-a antes de iniciá-la.",
     invalid_automation_workspace_closed:
       "O espaço de trabalho está fechado, e uma execução desenha seus passos nos painéis dele. Abra-o e inicie de novo.",

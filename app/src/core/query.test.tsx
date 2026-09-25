@@ -9,8 +9,9 @@ import { act, createElement, StrictMode, useState, type ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  __queryCache, invalidateAllQueries, invalidateQueries, invalidateScopes, useQuery, type QueryKey,
+  __queryCache, invalidateAllQueries, invalidateQueries, invalidateScopes, SCOPE_WATCHERS, useQuery, type QueryKey,
 } from "./query";
+import { ACK_WATCHERS } from "./mutations";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -242,5 +243,30 @@ describe("invalidateScopes — a scope reaches the queries drawn from it", () =>
     invalidateScopes(new Set(["tasks"]));
     await settle();
     expect([count("board"), count("decs")]).toEqual([2, 3]);
+  });
+  // `automation add` / `automation update` typed at the terminal fold to "automations". The list, the
+  // definition and the launch check were refetched after a write made on screen and not after this one
+  // (`AMB-T-5495`), so the list stayed as it was until "refresh to the latest" was pressed.
+  it("refetches the automations list, a definition and its launch check when an automation moves", async () => {
+    render(
+      createElement(
+        "div",
+        null,
+        createElement(KeyProbe, { qkey: ["automations", 1], k: "list" }),
+        createElement(KeyProbe, { qkey: ["automation", 7], k: "def" }),
+        createElement(KeyProbe, { qkey: ["automationLaunchCheck", 7], k: "check" }),
+      ),
+    );
+    await settle();
+    invalidateScopes(new Set(["automations"]));
+    await settle();
+    expect([count("list"), count("def"), count("check")]).toEqual([2, 2, 2]);
+  });
+
+  // The ack's table and this one are written apart, and a namespace in the first and not the second
+  // is the bug above: refetched after a write made on screen, stale after the same write from outside.
+  it("watches every namespace a write ack refetches", () => {
+    const missing = Object.keys(ACK_WATCHERS).filter((ns) => !(ns in SCOPE_WATCHERS));
+    expect(missing).toEqual([]);
   });
 });

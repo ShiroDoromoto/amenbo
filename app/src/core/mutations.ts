@@ -91,51 +91,65 @@ function applyAck(ack: WriteAck): Promise<void> {
   const tasks = new Set(ack.tasks);
   const decisions = new Set(ack.decisions);
   invalidateQueries((key: QueryKey) => {
-    switch (key[0]) {
-      case "task": return tasks.has(key[1] as number);
-      case "decision": return decisions.has(key[1] as number);
-      case "taskPage":
-      case "smartView": return scopes.has("tasks");
-      // The board's dimension assignments (which task sits on which value of which axis). Assigning one,
-      // and every edit to the axes themselves, acks with the "tasks" scope — which is what keeps the
-      // filter chips and the classification drawn on the cards from answering with a stale map.
-      case "dimAssign": return scopes.has("tasks");
-      // Its decision twin: what the decisions tab narrows by. Assigning a value to a decision acks with
-      // the "decisions" scope, and an edit to the axes themselves with "tasks" — so both are watched, or
-      // a renamed value would leave the chips answering off a map that no longer names it.
-      case "decisionDimAssign": return scopes.has("decisions") || scopes.has("tasks");
-      case "archivedProjects": return scopes.has("tasks");
-      case "decisions": return scopes.has("decisions");
-      case "decisionComments": return decisions.has(key[1] as number);
-      case "attachments": return tasks.has(Number(key[2])) || decisions.has(Number(key[2]));
-      case "commits": return tasks.has(key[1] as number);
-      // The library the "actions" tab draws. Rewriting a prompt acks with this scope, and what goes
-      // stale is the whole list rather than one row: the prompt shown is the row's own, and the
-      // count beside it is read off the steps pointing at it.
-      case "automationActions": return scopes.has("automationActions");
-      // One library action's whole definition, as its build screen reads it (`AMB-T-5315`). Every
-      // write that screen makes lands in one of the action's tables — a step, a line, a declaration —
-      // and what goes stale is the whole answer, the picture and both panels being three readings of
-      // it. It is watched apart from the list above for `automation`'s reason: the list is redrawn
-      // for rows gained, lost and renamed, and this is one definition's own read.
-      case "automationAction": return scopes.has("automationActions");
-      // The definitions of one project, as the "automations" tab lists them. A write reaches it for
-      // three reasons: the list gains or loses a row, a row it keeps is renamed or put out of the
-      // way, and the step count drawn on each row is read off the steps the build screen is adding
-      // and removing. None of the three is one definition's own read, which is why this is watched
-      // apart from `automation` below.
-      case "automations": return scopes.has("automations");
-      // One automation's whole definition, and whether it could be started. Every write the build
-      // screen makes lands in one of the definition's tables, and what goes stale is the whole
-      // answer — the picture, the step panel and the launch check are three readings of it
-      // (`core/automations`).
-      case "automation":
-      case "automationLaunchCheck": return scopes.has("automations");
-      default: return false;
-    }
+    const stale = ACK_WATCHERS[String(key[0])];
+    return stale !== undefined && stale(key, scopes, tasks, decisions);
   });
   return loadSnapshot();
 }
+
+type AckWatcher = (
+  key: QueryKey,
+  scopes: ReadonlySet<string>,
+  tasks: ReadonlySet<number>,
+  decisions: ReadonlySet<number>,
+) => boolean;
+
+/**
+ * Key namespace → whether a write ack leaves it stale. Every namespace here has to be in
+ * `query.SCOPE_WATCHERS` too, or it is refetched after a write made on screen and left stale after
+ * the same write typed at the terminal — `query.test` holds the two against each other.
+ */
+export const ACK_WATCHERS: Readonly<Record<string, AckWatcher>> = {
+  task: (key, _s, tasks) => tasks.has(key[1] as number),
+  decision: (key, _s, _t, decisions) => decisions.has(key[1] as number),
+  taskPage: (_k, scopes) => scopes.has("tasks"),
+  smartView: (_k, scopes) => scopes.has("tasks"),
+  // The board's dimension assignments (which task sits on which value of which axis). Assigning one,
+  // and every edit to the axes themselves, acks with the "tasks" scope — which is what keeps the
+  // filter chips and the classification drawn on the cards from answering with a stale map.
+  dimAssign: (_k, scopes) => scopes.has("tasks"),
+  // Its decision twin: what the decisions tab narrows by. Assigning a value to a decision acks with
+  // the "decisions" scope, and an edit to the axes themselves with "tasks" — so both are watched, or
+  // a renamed value would leave the chips answering off a map that no longer names it.
+  decisionDimAssign: (_k, scopes) => scopes.has("decisions") || scopes.has("tasks"),
+  archivedProjects: (_k, scopes) => scopes.has("tasks"),
+  decisions: (_k, scopes) => scopes.has("decisions"),
+  decisionComments: (key, _s, _t, decisions) => decisions.has(key[1] as number),
+  attachments: (key, _s, tasks, decisions) => tasks.has(Number(key[2])) || decisions.has(Number(key[2])),
+  commits: (key, _s, tasks) => tasks.has(key[1] as number),
+  // The library the "actions" tab draws. Rewriting a prompt acks with this scope, and what goes
+  // stale is the whole list rather than one row: the prompt shown is the row's own, and the
+  // count beside it is read off the steps pointing at it.
+  automationActions: (_k, scopes) => scopes.has("automationActions"),
+  // One library action's whole definition, as its build screen reads it (`AMB-T-5315`). Every
+  // write that screen makes lands in one of the action's tables — a step, a line, a declaration —
+  // and what goes stale is the whole answer, the picture and both panels being three readings of
+  // it. It is watched apart from the list above for `automation`'s reason: the list is redrawn
+  // for rows gained, lost and renamed, and this is one definition's own read.
+  automationAction: (_k, scopes) => scopes.has("automationActions"),
+  // The definitions of one project, as the "automations" tab lists them. A write reaches it for
+  // three reasons: the list gains or loses a row, a row it keeps is renamed or put out of the
+  // way, and the step count drawn on each row is read off the steps the build screen is adding
+  // and removing. None of the three is one definition's own read, which is why this is watched
+  // apart from `automation` below.
+  automations: (_k, scopes) => scopes.has("automations"),
+  // One automation's whole definition, and whether it could be started. Every write the build
+  // screen makes lands in one of the definition's tables, and what goes stale is the whole
+  // answer — the picture, the step panel and the launch check are three readings of it
+  // (`core/automations`).
+  automation: (_k, scopes) => scopes.has("automations"),
+  automationLaunchCheck: (_k, scopes) => scopes.has("automations"),
+};
 
 /** Browser fallback: mutate the cache in the mock and publish it (with a coarse query refetch). */
 function mockMutate(fn: (snap: Snapshot) => Snapshot): void {

@@ -95,48 +95,63 @@ export function invalidateAllQueries(): void {
  * attachment scope (CLI `attach` and the like) refetches every open viewer.
  */
 export function invalidateScopes(scopes: ReadonlySet<string>): void {
-  const touchesScope = (ns: string) => scopes.has(ns);
   invalidateQueries((key: QueryKey) => {
-    switch (key[0]) {
-      case "taskPage": return touchesScope("tasks");
-      case "smartView": return touchesScope("tasks");
-      case "task": return touchesScope("tasks");
-      case "archivedProjects": return touchesScope("projects") || touchesScope("tasks");
-      case "decisions": return touchesScope("decisions");
-      case "decision": return touchesScope("decisions");
-      case "decisionComments": return touchesScope("decisions");
-      // The two classification maps — which task, and which decision, sits on which value of which
-      // axis. Each is watched on its own side and on "tasks" besides, because the axes and their
-      // values fold there whichever side carries them: a value renamed or deleted from the CLI has to
-      // reach both, or the chips go on answering off a map that no longer names it.
-      case "dimAssign": return touchesScope("tasks");
-      case "decisionDimAssign": return touchesScope("decisions") || touchesScope("tasks");
-      case "attachments": return touchesScope("attachments");
-      // A page of hits is drawn from every face at once — a task's words, a decision's, a comment on
-      // either, an axis label, an attachment's name — so it goes stale on any of the scopes those sit in.
-      case "search": return touchesScope("tasks") || touchesScope("decisions") || touchesScope("attachments");
-      // The Viewer's pane. What moves under it from outside this window is `viewer setup` writing the
-      // three fields the state is read from, which folds to this scope. The queue's length and the date
-      // of the last send are **not** on the feed: the queue moves on every write a carrier reads out, so
-      // putting it there would double the feed for a number a person glances at rather than watches.
-      case "viewer-state": return touchesScope("viewer");
-      case "viewer-pairing": return touchesScope("viewer");
-      // The "running" tab's rows. What moves them is a run being launched, moving on to its next step
-      // or ending — every one of which is a row of `automation_run`, of the stretch it is spending on
-      // a task, or of the steps it has opened (`core/changes`).
-      case "automationRuns": return touchesScope("automationRuns");
-      // The library the "actions" tab draws. It moves on two kinds of row — the action itself, and a
-      // step being pointed at one or away from one, which is what the count beside each action is —
-      // and both fold to this scope.
-      case "automationActions": return touchesScope("automationActions");
-      // One action's whole definition, as its build screen reads it. The same scope: every row that
-      // definition is built from — a step, a line between two of them, a declaration — folds there
-      // (`core/changes`), and what goes stale is the whole answer.
-      case "automationAction": return touchesScope("automationActions");
-      default: return false;
-    }
+    const watched = SCOPE_WATCHERS[String(key[0])];
+    return watched !== undefined && watched.some((s) => scopes.has(s));
   });
 }
+
+/**
+ * Key namespace → the scopes whose external change leaves it stale (any one of them refetches it). A
+ * namespace missing here is never refetched by a write from outside the window, so every namespace
+ * `mutations`' ack table refetches has to be here too — `query.test` holds the two against each other.
+ */
+export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
+  taskPage: ["tasks"],
+  smartView: ["tasks"],
+  task: ["tasks"],
+  // The commit SHAs recorded on a task, on its detail pane. `task commit add` is typed at the
+  // terminal, and `task_commit` folds to "tasks" (`core/changes`).
+  commits: ["tasks"],
+  archivedProjects: ["projects", "tasks"],
+  decisions: ["decisions"],
+  decision: ["decisions"],
+  decisionComments: ["decisions"],
+  // The two classification maps — which task, and which decision, sits on which value of which
+  // axis. Each is watched on its own side and on "tasks" besides, because the axes and their
+  // values fold there whichever side carries them: a value renamed or deleted from the CLI has to
+  // reach both, or the chips go on answering off a map that no longer names it.
+  dimAssign: ["tasks"],
+  decisionDimAssign: ["decisions", "tasks"],
+  attachments: ["attachments"],
+  // A page of hits is drawn from every face at once — a task's words, a decision's, a comment on
+  // either, an axis label, an attachment's name — so it goes stale on any of the scopes those sit in.
+  search: ["tasks", "decisions", "attachments"],
+  // The Viewer's pane. What moves under it from outside this window is `viewer setup` writing the
+  // three fields the state is read from, which folds to this scope. The queue's length and the date
+  // of the last send are **not** on the feed: the queue moves on every write a carrier reads out, so
+  // putting it there would double the feed for a number a person glances at rather than watches.
+  "viewer-state": ["viewer"],
+  "viewer-pairing": ["viewer"],
+  // The "running" tab's rows. What moves them is a run being launched, moving on to its next step
+  // or ending — every one of which is a row of `automation_run`, of the stretch it is spending on
+  // a task, or of the steps it has opened (`core/changes`).
+  automationRuns: ["automationRuns"],
+  // The library the "actions" tab draws. It moves on two kinds of row — the action itself, and a
+  // step being pointed at one or away from one, which is what the count beside each action is —
+  // and both fold to this scope.
+  automationActions: ["automationActions"],
+  // One action's whole definition, as its build screen reads it. The same scope: every row that
+  // definition is built from — a step, a line between two of them, a declaration — folds there
+  // (`core/changes`), and what goes stale is the whole answer.
+  automationAction: ["automationActions"],
+  // The "automations" tab's list, one automation's whole definition, and whether it could be
+  // started. `automation add` / `automation update` at the terminal fold to this scope, and so does
+  // every table the definition is built in (`core/changes`).
+  automations: ["automations"],
+  automation: ["automations"],
+  automationLaunchCheck: ["automations"],
+};
 
 function setState(e: Entry, next: QueryState<unknown>): void {
   e.state = next;

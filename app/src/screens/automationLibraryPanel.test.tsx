@@ -2,13 +2,17 @@
 // The library in the build screen's panel (`AMB-T-5360`).
 //
 // What these guard: **both reaches are offered, each under its own head**; **the box narrows by what
-// the name and the note say**; **a row opens in place with the press that places it**, and that
+// the name and the note say, and a group with nothing left is not drawn at all**; **a row opens in
+// place with what it receives and its ways out, the error one included**, and the press that places
+// it, and that
 // press **goes through the door the target names** — a line, or a picture with none yet; **a refusal
 // is drawn and leaves the panel standing**, rather than closing on a placement that did not happen;
-// and **making one here is handed back to the screen**, which opens the dialog.
+// and **making one here is the list's last row, named after what was typed**, and is handed back to
+// the screen with that name, which opens the dialog.
 //
 // And the built-ins (`AMB-D-964`): **they come third under their own head, and not at all while the
-// build carries none**; **a picked one shows what it does and declares**; and **placing one names it by
+// build carries none**; **a picked one shows what it does, and declares it the way an action of one's
+// own does**; and **placing one names it by
 // its key** through the built-in's own doors, on a line or on an empty picture.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -17,6 +21,7 @@ import type { AutomationActionCardDto, AutomationBuiltinDto } from "../bindings/
 
 const hoisted = vi.hoisted(() => ({
   actions: [] as AutomationActionCardDto[],
+  detail: null as unknown,
   builtins: [] as AutomationBuiltinDto[],
   insert: vi.fn((..._args: unknown[]) => Promise.resolve()),
   place: vi.fn((..._args: unknown[]) => Promise.resolve()),
@@ -26,9 +31,8 @@ const hoisted = vi.hoisted(() => ({
 
 vi.mock("../core/automations", () => ({
   useAutomationActions: () => hoisted.actions,
-  // What an opened row reads. Its chips are the declaration band's (`./AutomationActionBuildScreen`);
-  // here it is the press under them that matters.
-  useAutomationAction: () => null,
+  // What an opened row reads.
+  useAutomationAction: () => hoisted.detail,
   insertAutomationAction: hoisted.insert,
   placeAutomationAction: hoisted.place,
   useAutomationBuiltins: () => hoisted.builtins,
@@ -36,7 +40,7 @@ vi.mock("../core/automations", () => ({
   placeAutomationBuiltin: hoisted.placeBuiltin,
 }));
 
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { AutomationLibraryPanel, type PlaceTarget } from "./AutomationLibraryPanel";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -56,7 +60,7 @@ async function render(target: PlaceTarget = { edgeId: 9 }) {
       createElement(AutomationLibraryPanel, {
         target,
         projectId: 1,
-        where: { box: "Take a task", exit: "taken" },
+        where: { box: "Take a task", exit: "taken", next: "Build it" },
         onPlaced: placed,
         onMake: make,
       }),
@@ -87,6 +91,7 @@ beforeEach(() => {
     card({ id: 4, name: "Review", note: "reads the draft back" }),
     card({ id: 5, name: "Publish", global: true, usedBy: 2 }),
   ];
+  hoisted.detail = null;
   hoisted.insert.mockClear();
   hoisted.insert.mockResolvedValue(undefined);
   hoisted.place.mockClear();
@@ -100,10 +105,13 @@ afterEach(() => {
 });
 
 describe("where the pick goes", () => {
-  it("draws the box before it, the way out it hangs on and a dashed here, rather than a sentence", async () => {
+  it("draws the box before it, the way out it hangs on, a dashed here and the box after it, rather than a sentence", async () => {
     await render();
     const where = container.querySelector(".wheremark")!;
-    expect(where.querySelector(".wheremark__box")?.textContent).toBe("Take a task");
+    expect([...where.querySelectorAll(".wheremark__box")].map((one) => one.textContent)).toEqual([
+      "Take a task",
+      "Build it",
+    ]);
     expect(where.querySelector(".actport--exit")?.textContent).toBe("taken");
     expect(where.querySelector(".wheremark__here")?.textContent).toBe(t("auto.lib.here"));
   });
@@ -119,12 +127,47 @@ describe("the library in the panel", () => {
     expect(groups[1]!.textContent).toContain("Publish");
   });
 
-  it("narrows by what the name and the note say", async () => {
+  it("narrows by what the name and the note say, and leaves out a group with nothing left", async () => {
     await render();
     await typeInto(container.querySelector<HTMLInputElement>("input")!, "draft");
     expect(rows().some((one) => one.includes("Review"))).toBe(true);
     expect(rows().some((one) => one.includes("Publish"))).toBe(false);
-    expect(container.textContent).toContain(t("auto.actions.noMatch"));
+    const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
+    expect(heads).toEqual([t("auto.actions.reachProject")]);
+  });
+
+  it("leaves only the row that makes one when nothing matches", async () => {
+    await render();
+    await typeInto(container.querySelector<HTMLInputElement>("input")!, "nowhere");
+    expect(container.querySelectorAll(".autolib__group")).toHaveLength(0);
+    expect(container.querySelector(".autolib__make")?.textContent).toBe(
+      tf("auto.lib.makeNamed", { name: "nowhere" }),
+    );
+  });
+
+  it("opens a row with what it receives and its ways out, the error one last", async () => {
+    hoisted.detail = {
+      id: 4,
+      name: "Review",
+      note: "reads the draft back",
+      global: false,
+      usedBy: 0,
+      inputs: [{ name: "worktree", kind: "file", required: true }],
+      settings: [{ name: "depth", kind: "text", required: false }],
+      exits: [
+        { id: 1, name: "passed", outputs: [] },
+        { id: 2, name: "*", outputs: [] },
+      ],
+    };
+    await render();
+    await act(async () => { button("Review").click(); });
+    const picked = container.querySelector(".autolib__picked")!;
+    const keys = [...picked.querySelectorAll(".actdecl__key")].map((one) => one.textContent);
+    expect(keys).toEqual([t("auto.pic.actionIn"), t("auto.step.exits")]);
+    expect(picked.textContent).toContain("worktree");
+    expect(picked.textContent).not.toContain("depth");
+    const exits = [...picked.querySelectorAll(".actport--exit, .actport--error")].map((one) => one.textContent);
+    expect(exits).toEqual(["passed", t("auto.pic.errorExit")]);
   });
 
   it("puts the picked action in on the line it was opened from", async () => {
@@ -155,8 +198,15 @@ describe("the library in the panel", () => {
 
   it("hands making one back to the screen", async () => {
     await render();
-    await act(async () => { button(t("auto.lib.make")).click(); });
-    expect(make).toHaveBeenCalledTimes(1);
+    await act(async () => { button(t("auto.lib.makeNew")).click(); });
+    expect(make).toHaveBeenCalledWith("");
+  });
+
+  it("hands the name typed along with it", async () => {
+    await render();
+    await typeInto(container.querySelector<HTMLInputElement>("input")!, " Lint ");
+    await act(async () => { button(tf("auto.lib.makeNamed", { name: "Lint" })).click(); });
+    expect(make).toHaveBeenCalledWith("Lint");
   });
 });
 
@@ -198,14 +248,15 @@ describe("the built-ins in the panel", () => {
     expect(heads).not.toContain(t("auto.actions.reachBuiltin"));
   });
 
-  it("show what a picked one does and declares", async () => {
+  it("show what a picked one does, and declare it the way an action of one's own does", async () => {
     await render();
     await act(async () => { button("Take a task").click(); });
     const picked = container.querySelector(".autolib__picked")!;
     expect(picked.textContent).toContain("reserves the first task the filter finds");
-    expect(picked.textContent).toContain("filter");
-    expect(picked.textContent).toContain("taken");
-    expect(picked.textContent).toContain(t("auto.step.exitUnnamed"));
+    const keys = [...picked.querySelectorAll(".actdecl__key")].map((one) => one.textContent);
+    expect(keys).toEqual([t("auto.pic.actionIn"), t("auto.step.exits")]);
+    const exits = [...picked.querySelectorAll(".actport--exit, .actport--error")].map((one) => one.textContent);
+    expect(exits).toEqual(["takentask", t("auto.step.exitUnnamed"), t("auto.pic.errorExit")]);
   });
 
   it("put one in on the line by its key", async () => {

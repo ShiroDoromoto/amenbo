@@ -19,7 +19,7 @@ given:
   # stands up. `runs` keeps the stand-in standing and carries out what is typed at it, which is what
   # lets a typed `exit` end the program itself.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
-  # One action holding one step, which leaves by the unnamed way out and takes nothing in: the only
+  # One action holding one step, which leaves by the done way out and takes nothing in: the only
   # thing that can end this run early is its program going.
   - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
   - { type: action, domain: automation, op: step-add, with: { target: work, name: do, prompt: do the work and report }, as: do }

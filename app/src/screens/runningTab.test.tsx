@@ -7,7 +7,9 @@
 // **how far in it is names the action the step was opened from**, two spots standing on the same
 // action running steps of the same names (`AMB-D-949`), **and falls back to the step alone where that
 // spot has been taken off the picture**;
-// **a run with no task says it has not taken one yet, and only while it still can**;
+// **how far in it is carries the number the picture gives the spot's box**, so the row and the
+// picture name the same place the same way;
+// **a run with no task says nothing of one, and a run waiting for one says so in the task's place**;
 // **a pause that has been asked for reads as neither of the two states it sits between**, since a run
 // told "running" would be pressed again and one told "paused" is not stopped yet; **the buttons match
 // the state** — a paused run is picked up rather than paused again, and a failure carries only the
@@ -20,6 +22,8 @@ import type { AutomationRunCardDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   runs: [] as AutomationRunCardDto[],
+  /** The automation every run here is of, as its picture reads — or nothing where it is gone. */
+  detail: null as unknown,
   /** Every write the buttons asked for, in order. */
   moved: [] as string[],
   /** What the next press should fail with, or nothing. */
@@ -28,6 +32,7 @@ const hoisted = vi.hoisted(() => ({
 
 vi.mock("../core/automations", () => ({
   useLiveRuns: () => hoisted.runs,
+  useAutomation: (id: number | null) => (id === null ? null : hoisted.detail),
   pauseRun: (run: number) => move(`pause ${run}`),
   resumeRun: (run: number) => move(`resume ${run}`),
   stopRun: (run: number) => move(`stop ${run}`),
@@ -64,6 +69,17 @@ function run(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
   };
 }
 
+/** Two spots, the first leading to the second: the picture numbers them ① and ②. */
+function picture(): unknown {
+  const spot = (id: number, name: string) => ({ id, name, exits: [{ id: id * 10, name: "done", outputs: [] }], inputs: [] });
+  return {
+    entryPlacementId: 20,
+    placements: [spot(20, "Groundwork"), spot(21, "Build")],
+    edges: [{ id: 1, fromId: 20, exitId: 200, ends: "go", toId: 21 }],
+    wires: [],
+  };
+}
+
 async function render(runs: AutomationRunCardDto[], projectId: number | null = null) {
   hoisted.runs = runs;
   await act(async () => {
@@ -87,6 +103,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   hoisted.runs = [];
+  hoisted.detail = picture();
   hoisted.moved = [];
   hoisted.refuse = null;
   went = [];
@@ -104,58 +121,63 @@ describe("the running tab", () => {
   });
 
   it("says what each run is, how far in it is, and what it is on", async () => {
-    await render([run({ stepName: "Take one", actionName: "Groundwork", stepsDone: 2, task: { id: 51, ref: "AMB-T-51", title: "Draw the tab", seq: 1 } })]);
+    await render([run({ stepName: "Take one", actionName: "Groundwork", placement: 20, task: { id: 51, ref: "AMB-T-51", title: "Draw the tab", seq: 1 } })]);
     const row = container.querySelector(".autorun__go")?.textContent ?? "";
     expect(row).toContain("Morning round");
-    expect(row).toContain(tf("auto.run.step", {
-      n: 2,
-      step: tf("auto.run.inAction", { action: "Groundwork", step: "Take one" }),
-    }));
+    expect(container.querySelector(".autorun__step .autopic__no")?.textContent).toBe("1");
+    expect(container.querySelector(".autorun__stepname")?.textContent)
+      .toBe(tf("auto.run.inAction", { action: "Groundwork", step: "Take one" }));
     expect(row).toContain("AMB-T-51");
     expect(row).toContain("Draw the tab");
     // The tab crosses projects, so each row says which one it is about.
     expect(row).toContain("amenbo");
-    expect(row).toContain(t("auto.run.running"));
+    // Under way is the plain case: the dot says it, and no chip stands beside the name.
+    expect(container.querySelector(".autorun__dot")?.getAttribute("aria-label")).toBe(t("auto.run.running"));
+    expect(container.querySelector(".autorun__chip")).toBeNull();
   });
 
-  it("says a run that has not taken a task yet has not, and says nothing of one that ended without", async () => {
+  it("numbers the step by the box of the spot it was opened from", async () => {
+    await render([run({ stepName: "Compile", actionName: "Build", placement: 21 })]);
+    expect(container.querySelector(".autorun__step .autopic__no")?.textContent).toBe("2");
+  });
+
+  it("says nothing of a task a run has not taken", async () => {
     await render([run({ run: 1 }), run({ run: 2, status: "paused" }), run({ run: 3, status: "failed" })]);
-    const tasks = [...container.querySelectorAll(".autorun__task")].map((one) => one.textContent);
-    expect(tasks).toEqual([t("auto.run.noTask"), t("auto.run.noTask"), ""]);
+    expect(container.querySelectorAll(".autorun__task")).toHaveLength(0);
   });
 
   it("says a run waiting for a task to take is waiting, in place of the task it last closed", async () => {
     const closed = { id: 12, ref: "AMB-T-12", title: "the last one", seq: 1 };
     await render([run({ waiting: true, task: closed })]);
-    expect(container.querySelector(".autorun__state")?.textContent).toBe(t("auto.run.running"));
-    expect(container.querySelector(".autorun__task")?.textContent).toBe(t("auto.run.waitingForTask"));
+    expect(container.querySelector(".autorun__task")?.textContent).toBe(`⏳${t("auto.run.taskWait")}`);
+    expect(container.textContent).not.toContain("AMB-T-12");
   });
 
   /// A spot taken off the picture while its run walks on leaves the step with nothing to be inside
-  /// of. The line says the step alone rather than a name the picture no longer holds.
+  /// of and no box to be numbered by. The line says the step alone.
   it("says the step alone where the spot it was opened from has gone", async () => {
-    await render([run({ stepName: "Take one", stepsDone: 2 })]);
-    const row = container.querySelector(".autorun__go")?.textContent ?? "";
-    expect(row).toContain(tf("auto.run.step", { n: 2, step: "Take one" }));
+    await render([run({ stepName: "Take one", placement: 99 })]);
+    expect(container.querySelector(".autorun__step")?.textContent).toBe("Take one");
   });
 
   /// A built-in's step is written into the run in the store's Japanese; the row draws it in the
   /// screen's language, by the key the step carries. An agent's step carries none and is left alone.
-  it("says a built-in's step in the screen's language", async () => {
+  /// A spot whose action is one step of the same name says the name once.
+  it("says a built-in's step in the screen's language, and the one name once", async () => {
     await render([
-      run({ run: 1, builtin: "take_task", stepName: "タスクに着手する", actionName: "タスクに着手する", stepsDone: 1 }),
-      run({ run: 2, stepName: "タスクに着手する", stepsDone: 1 }),
+      run({ run: 1, builtin: "take_task", stepName: "タスクに着手する", actionName: "タスクに着手する" }),
+      run({ run: 2, stepName: "タスクに着手する" }),
     ]);
-    const [built, own] = [...container.querySelectorAll(".autorun__step")].map((one) => one.textContent);
+    const [built, own] = [...container.querySelectorAll(".autorun__stepname")].map((one) => one.textContent);
     const name = builtinWord("take_task", "タスクに着手する");
     expect(name).not.toBe("タスクに着手する");
-    expect(built).toBe(tf("auto.run.step", { n: 1, step: tf("auto.run.inAction", { action: name, step: name }) }));
-    expect(own).toBe(tf("auto.run.step", { n: 1, step: "タスクに着手する" }));
+    expect(built).toBe(name);
+    expect(own).toBe("タスクに着手する");
   });
 
   it("reads a pause that has been asked for as neither running nor paused", async () => {
     await render([run({ pauseRequested: true })]);
-    expect(container.textContent).toContain(t("auto.run.pausing"));
+    expect(container.querySelector(".autorun__chip")?.textContent).toBe(`⏸${t("auto.run.pausing")}`);
     expect(button(t("auto.run.pause")).disabled).toBe(true);
   });
 
@@ -170,7 +192,9 @@ describe("the running tab", () => {
     await render([run({ status: "failed", stoppedReason: "crashed" })]);
     expect(labels()).not.toContain(t("auto.run.stop"));
     expect(labels()).not.toContain(t("auto.run.pause"));
-    expect(container.textContent).toContain(t("auto.run.failed"));
+    // Not acknowledged yet: the row is painted rather than chipped, and says why.
+    expect(container.querySelector(".autorun--failed")).not.toBeNull();
+    expect(container.querySelector(".autorun__dot")?.getAttribute("aria-label")).toBe(t("auto.run.failed"));
     expect(container.textContent).toContain(t("auto.run.crashed"));
     await act(async () => { button(t("auto.run.acknowledge")).click(); });
     expect(hoisted.moved).toEqual(["acknowledge 4"]);

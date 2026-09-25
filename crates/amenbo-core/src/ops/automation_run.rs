@@ -1534,7 +1534,7 @@ mod tests {
                 checked(tx, &automation),
                 vec![Unmet::LeavesTaskOpen {
                     step: "直す".into(),
-                    exit: None,
+                    exit: Some(crate::model::DONE_EXIT.into()),
                     to: None,
                     builtin: None,
                     to_builtin: None,
@@ -1562,7 +1562,7 @@ mod tests {
                 checked(tx, &automation),
                 vec![Unmet::LeavesTaskOpen {
                     step: "直す".into(),
-                    exit: None,
+                    exit: Some(crate::model::DONE_EXIT.into()),
                     to: Some("取る".into()),
                     builtin: None,
                     to_builtin: None,
@@ -2308,8 +2308,13 @@ mod tests {
             a_second_step(tx, &action, &placement);
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::OpenExit { step: "見直す".into(), exit: None, builtin: None, placement: placement.id }],
-                "the second step's unnamed way out leads nowhere inside the action",
+                vec![Unmet::OpenExit {
+                    step: "見直す".into(),
+                    exit: Some(crate::model::DONE_EXIT.into()),
+                    builtin: None,
+                    placement: placement.id,
+                }],
+                "the second step's done way out leads nowhere inside the action",
             );
         });
     }
@@ -2360,7 +2365,7 @@ mod tests {
             assert!(
                 unmet.contains(&Unmet::OpenExit {
                     step: "見直す".into(),
-                    exit: None,
+                    exit: Some(crate::model::DONE_EXIT.into()),
                     builtin: None,
                     placement: placement.id,
                 }),
@@ -2476,7 +2481,12 @@ mod tests {
             .expect("on to the second placement");
             let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
             let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
-            let about = |at: i64| Unmet::OpenExit { step: "見直す".into(), exit: None, builtin: None, placement: at };
+            let about = |at: i64| Unmet::OpenExit {
+                step: "見直す".into(),
+                exit: Some(crate::model::DONE_EXIT.into()),
+                builtin: None,
+                placement: at,
+            };
             assert!(unmet.contains(&about(first.id)), "{unmet:?}");
             assert!(unmet.contains(&about(again.id)), "{unmet:?}");
             let fields = about(again.id).msg().fields().iter().map(|(k, v)| (k, v.to_string())).collect::<Vec<_>>();

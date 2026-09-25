@@ -203,6 +203,16 @@ export async function setAutomationActionScope(id: number, projectId: number | n
 }
 
 /**
+ * **Delete a library action** and everything inside it. Core refuses it while a placement stands on
+ * it, saying how many; the refusal reaches the caller as core's own sentence
+ * (`amenbo_core::ops::automation::action_delete`).
+ */
+export async function removeAutomationAction(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_remove", { id });
+}
+
+/**
  * Rename a library action, or rewrite what it is for. The name and the note are all that is the
  * action's own: the prompt and the flags belong to its steps (`editAutomationStep`), and who carries
  * each step out to where the action is placed (`chooseAutomationAgent`).
@@ -524,17 +534,16 @@ export async function declareAutomationExit(
 }
 
 /**
- * **Rename one way out**, `null` being the unnamed one at either end.
+ * **Rename one way out.** A way out keeps a name, so there is no renaming it to nothing — core refuses
+ * it. `from` is `null` only for a way out written before every one was given a name.
  *
- * **Every edge and every wire that named the old name is parted from it.** Core leaves them pointing
- * at a name nobody declares rather than rewriting the graph around them, so the parting is visible in
- * the picture — which is where a reader can act on it.
+ * **Every edge and every wire on it stays on it.** Core keys them by the way out's row, not its name.
  */
 export async function renameAutomationExit(
   owner: Declarer,
   ownerId: number,
   from: string | null,
-  to: string | null,
+  to: string,
 ): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("automation_exit_rename", { owner, ownerId, from, to });

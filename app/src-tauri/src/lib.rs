@@ -488,6 +488,7 @@ pub fn run() {
       automation::automation_action_add,
       automation::automation_action_edit,
       automation::automation_action_set_scope,
+      automation::automation_action_remove,
       automation::automation_builtin_page,
       automation::automation_builtin_place,
       automation::automation_builtin_insert,

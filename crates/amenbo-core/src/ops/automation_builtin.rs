@@ -38,7 +38,8 @@ use crate::error::{Error, Result};
 use crate::model::{
     AutomationAction, AutomationCfgKind, AutomationOwner, AutomationPictureOwner,
     AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef,
-    AutomationRunStatus, AutomationRunStep, RunDefCfg, RunDefExit, ACTION_BOUNDARY, ERROR_EXIT,
+    AutomationRunStatus, AutomationRunStep, RunDefCfg, RunDefExit, ACTION_BOUNDARY, DONE_EXIT,
+    ERROR_EXIT,
 };
 use crate::ops::automation::{self, EdgeTarget, NewStep};
 use crate::ops::automation_builtin_close::CLOSE_TASK;
@@ -102,8 +103,7 @@ pub struct Outside<'a> {
 /// the way out it leaves by, since it had no store to put that down in.
 #[derive(Debug)]
 pub struct Worked {
-    /// `None` is the unnamed way out.
-    pub exit: Option<&'static str>,
+    pub exit: &'static str,
     pub report: String,
     /// Each output of that way out it fills, and the value.
     pub hands: Vec<(&'static str, String)>,
@@ -163,10 +163,11 @@ pub struct BuiltinPort {
     pub required: bool,
 }
 
-/// A way out a built-in leaves by — `None` being the unnamed one — and what it hands on through it.
+/// A way out a built-in leaves by, and what it hands on through it. [`DONE_EXIT`] is the one every
+/// owner is born with; any other is declared beside it.
 #[derive(Debug, Serialize)]
 pub struct BuiltinExit {
-    pub name: Option<&'static str>,
+    pub name: &'static str,
     pub outs: &'static [BuiltinPort],
 }
 
@@ -265,11 +266,11 @@ impl Carry<'_, '_> {
 
     /// **Put down one thing this built-in hands on**, on the output of that name on the way out it is
     /// about to leave by — the door an agent's step puts it down through ([`automation_report::out`]).
-    pub fn put(&self, exit: Option<&str>, port: &str, produced: Produced<'_>) -> Result<()> {
+    pub fn put(&self, exit: &str, port: &str, produced: Produced<'_>) -> Result<()> {
         let declared = self
             .exits
             .iter()
-            .find(|e| e.name.as_deref() == exit)
+            .find(|e| e.name.as_deref() == Some(exit))
             .and_then(|e| e.outs.iter().find(|p| p.name == port))
             .ok_or_else(|| {
                 Error::invalid(format!("the built-in hands on no '{port}' through that way out"))
@@ -282,8 +283,7 @@ impl Carry<'_, '_> {
 /// **How a built-in finished**: the way out it leaves by, and the report the run keeps of it.
 #[derive(Debug)]
 pub struct Carried {
-    /// `None` is the unnamed way out.
-    pub exit: Option<&'static str>,
+    pub exit: &'static str,
     pub report: String,
 }
 
@@ -327,10 +327,11 @@ fn step_of(tx: &WriteTx<'_>, action_id: i64, builtin: &Builtin) -> Result<crate:
     let step = automation::step_add(tx, action_id, NewStep::new(builtin.name, ""))?;
     unborn_unless_declared(tx, builtin, AutomationOwner::Step, step.id)?;
     for exit in builtin.exits {
-        if let Some(name) = exit.name {
-            automation::exit_add(tx, AutomationOwner::Step, step.id, Some(name))?;
+        if exit.name != DONE_EXIT {
+            automation::exit_add(tx, AutomationOwner::Step, step.id, Some(exit.name))?;
         }
-        let owner = read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, step.id, exit.name)?
+        let owner =
+            read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, step.id, Some(exit.name))?
             .ok_or_else(|| Error::invalid("the way out was not written"))?;
         for out in exit.outs {
             automation::port_add(
@@ -379,11 +380,11 @@ pub fn action(tx: &WriteTx<'_>, key: &str) -> Result<AutomationAction> {
     unborn_unless_declared(tx, builtin, AutomationOwner::Action, action.id)?;
     let step = step_of(tx, action.id, builtin)?;
     for exit in builtin.exits {
-        if let Some(name) = exit.name {
-            automation::exit_add(tx, AutomationOwner::Action, action.id, Some(name))?;
+        if exit.name != DONE_EXIT {
+            automation::exit_add(tx, AutomationOwner::Action, action.id, Some(exit.name))?;
         }
         let owner =
-            read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action.id, exit.name)?
+            read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action.id, Some(exit.name))?
                 .ok_or_else(|| Error::invalid("the way out was not written"))?;
         for out in exit.outs {
             automation::port_add(
@@ -397,14 +398,14 @@ pub fn action(tx: &WriteTx<'_>, key: &str) -> Result<AutomationAction> {
             )?;
         }
     }
-    let every_exit = builtin.exits.iter().map(|e| e.name).chain([Some(ERROR_EXIT)]);
+    let every_exit = builtin.exits.iter().map(|e| e.name).chain([ERROR_EXIT]);
     for name in every_exit {
         automation::edge_add(
             tx,
             AutomationPictureOwner::Action,
             step.id,
-            name,
-            EdgeTarget::Exit(name.map(str::to_string)),
+            Some(name),
+            EdgeTarget::Exit(Some(name.to_string())),
             None,
         )?;
     }
@@ -414,7 +415,7 @@ pub fn action(tx: &WriteTx<'_>, key: &str) -> Result<AutomationAction> {
                 tx,
                 AutomationPictureOwner::Action,
                 step.id,
-                exit.name,
+                Some(exit.name),
                 out.name,
                 ACTION_BOUNDARY,
                 out.name,
@@ -449,7 +450,7 @@ pub fn action(tx: &WriteTx<'_>, key: &str) -> Result<AutomationAction> {
     Ok(marked)
 }
 
-/// **Every owner is born with an unnamed way out; a built-in keeps it only where it leaves by one.** Left
+/// **Every owner is born with [`DONE_EXIT`]; a built-in keeps it only where it leaves by it.** Left
 /// standing with nothing after it, it would be a way out the launch check asks a line for and the code
 /// never takes.
 fn unborn_unless_declared(
@@ -458,11 +459,11 @@ fn unborn_unless_declared(
     owner: AutomationOwner,
     owner_id: i64,
 ) -> Result<()> {
-    if builtin.exits.iter().any(|e| e.name.is_none()) {
+    if builtin.exits.iter().any(|e| e.name == DONE_EXIT) {
         return Ok(());
     }
-    if let Some(unnamed) = read::automation_exit_by_name(tx.conn(), owner, owner_id, None)? {
-        automation::exit_delete(tx, unnamed.id)?;
+    if let Some(done) = read::automation_exit_by_name(tx.conn(), owner, owner_id, Some(DONE_EXIT))? {
+        automation::exit_delete(tx, done.id)?;
     }
     Ok(())
 }
@@ -513,9 +514,9 @@ pub(crate) fn carry_out(
     });
     let (exit, report) = match carried {
         Ok(carried) => (carried.exit, carried.report),
-        Err(e) => (Some(ERROR_EXIT), e.to_string()),
+        Err(e) => (ERROR_EXIT, e.to_string()),
     };
-    let leaves_by = |name: Option<&str>| exits.iter().find(|e| e.name.as_deref() == name).map(|e| e.id);
+    let leaves_by = |name: &str| exits.iter().find(|e| e.name.as_deref() == Some(name)).map(|e| e.id);
     let Some(exit_id) = leaves_by(exit) else {
         return fell_over(tx, run_step, exits, &format!("the built-in '{key}' left by a way out this step does not declare"));
     };
@@ -523,7 +524,7 @@ pub(crate) fn carry_out(
         Ok(next) => Ok(next),
         // What the code named would not finish the step — a required output it did not put down, or a
         // report it owed. That is the built-in falling over, and it is said as such.
-        Err(e) if exit != Some(ERROR_EXIT) => fell_over(tx, run_step, exits, &e.to_string()),
+        Err(e) if exit != ERROR_EXIT => fell_over(tx, run_step, exits, &e.to_string()),
         Err(e) => Err(e),
     }
 }
@@ -560,18 +561,18 @@ mod tests {
         ins: &[BuiltinPort { name: "note", kind: AutomationPortKind::Value, required: false }],
         exits: &[
             BuiltinExit {
-                name: Some("stamped"),
+                name: "stamped",
                 outs: &[BuiltinPort { name: "stamped", kind: AutomationPortKind::Value, required: true }],
             },
-            BuiltinExit { name: None, outs: &[] },
+            BuiltinExit { name: DONE_EXIT, outs: &[] },
         ],
         waits: None,
         work: Work::InStore(|carry| {
             let stamp = carry.setting("stamp").unwrap_or("\"ok\"");
             let note = carry.input("note").unwrap_or("nothing");
             let stamped = format!("{note} {stamp}");
-            carry.put(Some("stamped"), "stamped", Produced::Value(&stamped))?;
-            Ok(Carried { exit: Some("stamped"), report: format!("stamped {note}") })
+            carry.put("stamped", "stamped", Produced::Value(&stamped))?;
+            Ok(Carried { exit: "stamped", report: format!("stamped {note}") })
         }),
     };
 
@@ -582,7 +583,7 @@ mod tests {
         does: "never finishes",
         settings: &[],
         ins: &[],
-        exits: &[BuiltinExit { name: None, outs: &[] }],
+        exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
         waits: None,
         work: Work::InStore(|_| Err(Error::invalid("the floor gave way"))),
     };
@@ -621,7 +622,7 @@ mod tests {
         automation::edge_add(tx, on, first.id, Some("found"), EdgeTarget::Go(builtin.id), None).expect("on");
         automation::edge_add(tx, on, first.id, None, EdgeTarget::Done, None).expect("closes");
         for exit in find(key).expect("known").exits {
-            automation::edge_add(tx, on, builtin.id, exit.name, EdgeTarget::Done, None).expect("closes");
+            automation::edge_add(tx, on, builtin.id, Some(exit.name), EdgeTarget::Done, None).expect("closes");
         }
         let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
         Picture { automation, project, first, builtin }
@@ -699,17 +700,18 @@ mod tests {
                     .map(|e| e.name)
                     .collect()
             };
-            let expected = vec![None, Some(ERROR_EXIT.to_string()), Some("stamped".to_string())];
+            let expected =
+                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string()), Some("stamped".to_string())];
             assert_eq!(names(AutomationOwner::Step, step.id), expected);
             assert_eq!(names(AutomationOwner::Action, written.id), expected);
 
-            // A built-in with no unnamed way out keeps none: nothing would ever leave by it.
+            // A built-in that leaves by the done way out alone keeps the pair every owner is born with.
             let falls = action(tx, "test_falls").expect("write");
             let falls_step = written_step(tx, falls.id);
             assert_eq!(
                 names(AutomationOwner::Step, falls_step.id),
-                vec![None, Some(ERROR_EXIT.to_string())],
-                "the one it declares is the unnamed one",
+                vec![Some(DONE_EXIT.to_string()), Some(ERROR_EXIT.to_string())],
+                "the one it declares is 完了",
             );
 
             assert!(action(tx, "no_such").is_err(), "a key this build does not carry is refused");
@@ -871,7 +873,7 @@ mod tests {
             }
             words.extend(builtin.ins.iter().map(|port| port.name.to_string()));
             for exit in builtin.exits {
-                words.extend(exit.name.map(str::to_string));
+                words.insert(exit.name.to_string());
                 words.extend(exit.outs.iter().map(|port| port.name.to_string()));
             }
             assert_eq!(written, words, "`{}`'s words against the dictionary's `auto.bi.{section}.*`", builtin.key);

@@ -1017,7 +1017,114 @@ pub const STEPS: &[Step] = &[
         // Each of the three starts where the one switch stood, so no step changes what it is handed.
         apply: Apply::Custom(split_the_task_handed_to_the_steps),
     },
+    Step {
+        to: 73,
+        name: "call the choice that does not wait for a task to take by the way out it leaves by",
+        apply: Apply::Custom(rename_the_choice_that_goes_on),
+    },
+    Step {
+        to: 74,
+        name: "give every way out a name, the unnamed one taking the done way out's",
+        apply: Apply::Custom(name_the_unnamed_ways_out),
+    },
 ];
+
+/// v74: no way out goes without a name (`AMB-T-5516`).
+///
+/// Every step and every action was born with an unnamed way out, which a picture drew blank on its line
+/// and read as "the only one" even beside others. Each of them now carries the name a new owner is
+/// born with ([`crate::model::DONE_EXIT`]), and so does each unnamed way out in a run's copy of a step
+/// (`automation_run_def.exits`), so that a run already under way finds the name its built-ins and a
+/// `step-done` with no `--exit` now look for.
+///
+/// **A name already taken on the same owner is not taken twice.** Names are unique within an owner,
+/// so where someone had already given that name to another of its ways out, the unnamed one
+/// takes it with its row id after it, in brackets, instead.
+///
+/// Spelled as frozen text, as every step's is: the name is written here, not read from the constant.
+fn name_the_unnamed_ways_out(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    tx.execute_batch(
+        "UPDATE automation_exit SET name = '完了'
+          WHERE name IS NULL
+            AND NOT EXISTS (SELECT 1 FROM automation_exit o
+                             WHERE o.owner_kind = automation_exit.owner_kind
+                               AND o.owner_id = automation_exit.owner_id
+                               AND o.name = '完了');
+         UPDATE automation_exit SET name = '完了 (' || id || ')' WHERE name IS NULL;",
+    )?;
+
+    let mut copies: Vec<(i64, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare("SELECT id, exits FROM automation_run_def")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        for row in rows {
+            copies.push(row?);
+        }
+    }
+    for (def_id, exits) in copies {
+        let Ok(mut exits) = serde_json::from_str::<Vec<serde_json::Value>>(&exits) else { continue };
+        let taken = exits.iter().any(|e| e.get("name").and_then(|n| n.as_str()) == Some("完了"));
+        let mut changed = false;
+        for exit in exits.iter_mut() {
+            let unnamed = exit.get("name").is_none_or(serde_json::Value::is_null);
+            if !unnamed {
+                continue;
+            }
+            let name = match (taken, exit.get("id").and_then(|i| i.as_i64())) {
+                (true, Some(id)) => format!("完了 ({id})"),
+                _ => "完了".to_string(),
+            };
+            if let Some(map) = exit.as_object_mut() {
+                map.insert("name".to_string(), serde_json::Value::from(name));
+                changed = true;
+            }
+        }
+        if changed {
+            tx.execute(
+                "UPDATE automation_run_def SET exits = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::Value::Array(exits).to_string(), def_id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// v73: the built-in that takes a task names its choice that does not wait after the way out it leaves by
+/// in the word the screens now use for a way out, where it used the word they used before.
+///
+/// **A built-in's words are rows**, written once when its library action is laid down, and the screen
+/// finds the language to draw one in by looking the stored word up in the Japanese dictionary
+/// (`auto.bi.*`). So the word is rewritten wherever it was stored: in the choices the library action
+/// offers, in the answer a placement gave, and in a run's copy of both — a run that has ended still draws
+/// its settings.
+///
+/// **Only the built-in's own rows are touched.** A person's action may offer a choice spelled the same,
+/// and that one is theirs; the rows are found through the action's `builtin` key.
+///
+/// **The words are frozen text**, like every step's: the constant the build carries moves on, this does
+/// not. Neither word has a quote or a backslash in it, so the one `REPLACE` reaches it at every depth of
+/// JSON it sits in.
+fn rename_the_choice_that_goes_on(ctx: &Ctx<'_>) -> Result<()> {
+    const WAS: &str = "待たずに終了条件「着手できるタスクが無い」へ進む";
+    const NOW: &str = "待たずに出口「着手できるタスクが無い」へ進む";
+    ctx.tx.execute(
+        "UPDATE automation_cfg SET options = REPLACE(options, ?1, ?2), value = REPLACE(value, ?1, ?2)
+         WHERE name = '着手できるタスクが無いとき'
+           AND ((owner_kind = 'action'
+                 AND owner_id IN (SELECT id FROM automation_action WHERE builtin = 'take_task'))
+             OR (owner_kind = 'placement'
+                 AND owner_id IN (SELECT p.id FROM automation_placement p
+                                  JOIN automation_action a ON a.id = p.action_id
+                                  WHERE a.builtin = 'take_task')))",
+        rusqlite::params![WAS, NOW],
+    )?;
+    ctx.tx.execute(
+        "UPDATE automation_run_def SET cfg = REPLACE(cfg, ?1, ?2) WHERE builtin = 'take_task'",
+        rusqlite::params![WAS, NOW],
+    )?;
+    Ok(())
+}
 
 /// v71: `automation_run_step.report_withheld` — the step was built to carry its report onto the task, and
 /// the task was closed by then, so the report stayed on the run alone (`AMB-D-963`).
@@ -6950,6 +7057,58 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v73 in full, on the store shape v72 left behind: the built-in that takes a task, placed and run,
+    /// with its old word in the choices, in the answer and in the run's copy — and a person's action that
+    /// offers the same word. The built-in's rows say the new word; the person's still say theirs.
+    #[test]
+    fn the_choice_that_goes_on_is_called_by_its_way_out_on_the_builtin_alone() {
+        const WAS: &str = "待たずに終了条件「着手できるタスクが無い」へ進む";
+        const NOW: &str = "待たずに出口「着手できるタスクが無い」へ進む";
+        let dir = scratch("builtin-take-go-on");
+        let engine = store_at(&dir, 72);
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, name, builtin) VALUES (1, 'タスクに着手する', 'take_task'), (2, 'mine', NULL);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (1, 1, 1), (2, 1, 2);
+                 INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, options, value) VALUES
+                     (1, 'action', 1, '着手できるタスクが無いとき', 'choice', '["{WAS}","着手できるタスクが出るまで待つ"]', NULL),
+                     (2, 'placement', 1, '着手できるタスクが無いとき', 'choice', NULL, '"{WAS}"'),
+                     (3, 'action', 2, '着手できるタスクが無いとき', 'choice', '["{WAS}"]', NULL),
+                     (4, 'placement', 2, '着手できるタスクが無いとき', 'choice', NULL, '"{WAS}"');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'completed');
+                 INSERT INTO automation_run_def (id, run_id, name, prompt, builtin, cfg) VALUES
+                     (1, 1, 'タスクに着手する', NULL, 'take_task',
+                      '[{{"name":"着手できるタスクが無いとき","kind":"choice","required":false,"options":"[\"{WAS}\"]","value":"\"{WAS}\""}}]'),
+                     (2, 1, 'mine', 'p', NULL, '[{{"name":"着手できるタスクが無いとき","value":"\"{WAS}\""}}]');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(73), &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let cfg = |id: i64| -> String {
+            conn.query_row(
+                "SELECT COALESCE(options, '') || COALESCE(value, '') FROM automation_cfg WHERE id = ?1",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        let copy = |id: i64| -> String {
+            conn.query_row("SELECT cfg FROM automation_run_def WHERE id = ?1", [id], |r| r.get(0)).unwrap()
+        };
+        for (what, text) in [("the choices", cfg(1)), ("the answer", cfg(2)), ("the run's copy", copy(1))] {
+            assert!(text.contains(NOW) && !text.contains(WAS), "{what} on the built-in: {text}");
+        }
+        for (what, text) in [("the choices", cfg(3)), ("the answer", cfg(4)), ("the run's copy", copy(2))] {
+            assert!(text.contains(WAS) && !text.contains(NOW), "{what} on a person's action: {text}");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v72 in full, on the store shape v71 left behind: one switch for the task. Each of the three it
     /// becomes takes its value, on the library step and a run's copy alike, so a step turned off is
     /// handed none of the three and a step left on is handed all of them.
@@ -9077,5 +9236,52 @@ mod tests {
         let kept = engine.get_meta("talk.layout").unwrap().expect("the arrangement");
         let row: serde_json::Value = serde_json::from_str(&kept).unwrap();
         assert_eq!(row["panes"][0]["size"].as_str(), Some("whole"));
+    }
+
+    /// v74 gives every unnamed way out the done way out's name — on the rows and in a run's copies — and
+    /// gives the one whose owner already had a way out of that name one of its own instead.
+    #[test]
+    fn every_way_out_is_named_and_a_taken_name_is_not_taken_twice() {
+        let dir = scratch("name-the-ways-out");
+        let engine = store_at(&dir, 70);
+        engine
+            .conn()
+            .execute_batch(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name) VALUES
+                     (21, 'step', 11, NULL), (22, 'step', 11, '*'),
+                     (23, 'step', 12, NULL), (24, 'step', 12, '完了');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, name, agent, exits, ins, cfg) VALUES
+                     (81, 1, '書く', 'claude', '[{"id":21,"name":null,"outs":[]},{"id":22,"name":"*","outs":[]}]', '[]', '[]'),
+                     (82, 1, '直す', 'claude', '[{"id":23,"outs":[]},{"id":24,"name":"完了","outs":[]}]', '[]', '[]');"#,
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let name = |id: i64| -> Option<String> {
+            engine
+                .conn()
+                .query_row("SELECT name FROM automation_exit WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(name(21).as_deref(), Some("完了"));
+        assert_eq!(name(22).as_deref(), Some("*"), "the error way out keeps its name");
+        assert_eq!(name(23).as_deref(), Some("完了 (23)"), "its owner already had a 完了");
+        assert_eq!(name(24).as_deref(), Some("完了"));
+
+        let copy = |id: i64| -> Vec<Option<String>> {
+            let json: String = engine
+                .conn()
+                .query_row("SELECT exits FROM automation_run_def WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap();
+            let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&json).expect("today's shape");
+            exits.into_iter().map(|e| e.name).collect()
+        };
+        assert_eq!(copy(81), vec![Some("完了".to_string()), Some("*".to_string())]);
+        assert_eq!(copy(82), vec![Some("完了 (23)".to_string()), Some("完了".to_string())]);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

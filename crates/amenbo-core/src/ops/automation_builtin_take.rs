@@ -47,7 +47,7 @@ pub const WHEN_NONE: &str = "着手できるタスクが無いとき";
 /// The choice on [`WHEN_NONE`] that waits for one.
 pub const WAIT: &str = "着手できるタスクが出るまで待つ";
 /// The choice on [`WHEN_NONE`] that leaves by [`NONE_TO_TAKE`] — also what it does left unanswered.
-pub const GO_ON: &str = "待たずに終了条件「着手できるタスクが無い」へ進む";
+pub const GO_ON: &str = "待たずに出口「着手できるタスクが無い」へ進む";
 
 /// What every search adds to the filter, whatever the setting says.
 const TAKEABLE: &str = "status:todo ready:yes";
@@ -67,16 +67,16 @@ pub(super) const TAKE_TASK: Builtin = Builtin {
             name: WHEN_NONE,
             kind: AutomationCfgKind::Choice,
             required: false,
-            options: Some(r#"["待たずに終了条件「着手できるタスクが無い」へ進む","着手できるタスクが出るまで待つ"]"#),
+            options: Some(r#"["待たずに出口「着手できるタスクが無い」へ進む","着手できるタスクが出るまで待つ"]"#),
         },
     ],
     ins: &[],
     exits: &[
         BuiltinExit {
-            name: Some(TAKEN),
+            name: TAKEN,
             outs: &[BuiltinPort { name: TASK, kind: AutomationPortKind::TaskTake, required: true }],
         },
-        BuiltinExit { name: Some(NONE_TO_TAKE), outs: &[] },
+        BuiltinExit { name: NONE_TO_TAKE, outs: &[] },
     ],
     waits: Some(Waits {
         setting: WHEN_NONE,
@@ -98,7 +98,7 @@ fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
             match automation_report::take(carry.tx, carry.run_step.id, candidate.id) {
                 Ok(task) => {
                     return Ok(Carried {
-                        exit: Some(TAKEN),
+                        exit: TAKEN,
                         report: format!("took AMB-T-{} {}", task.id, task.title),
                     })
                 }
@@ -112,7 +112,7 @@ fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
         }
         offset += PAGE;
     }
-    Ok(Carried { exit: Some(NONE_TO_TAKE), report: format!("no task `{expr}` lists could be taken") })
+    Ok(Carried { exit: NONE_TO_TAKE, report: format!("no task `{expr}` lists could be taken") })
 }
 
 /// **Whether there is a task to take now** — the one question asked while it waits. One row is read,

@@ -6307,13 +6307,9 @@ fn automation_rows<T>(
     Ok(rows)
 }
 
-/// `name = ?` where a `None` name is the unnamed way out — `NULL`, which no `=` ever matches, so the
-/// two cases are different SQL rather than one parameter.
-fn named_or_unnamed<E: Expr<Ty = SqlText>>(col: E, name: Option<&str>) -> Pred {
-    match name {
-        Some(n) => Pred::eq(col, n),
-        None => Pred::is_null(col),
-    }
+/// `name = ?` where a `None` name is the way out left unsaid — [`crate::model::DONE_EXIT`].
+fn named_or_done<E: Expr<Ty = SqlText>>(col: E, name: Option<&str>) -> Pred {
+    Pred::eq(col, name.unwrap_or(crate::model::DONE_EXIT))
 }
 
 /// The `automation_action` record with this id.
@@ -6498,8 +6494,8 @@ pub fn automation_exits_of(
     )
 }
 
-/// One owner's way out under this name — `None` for the unnamed one. Names are unique within an owner,
-/// so this answers at most one row.
+/// One owner's way out under this name — `None` for [`crate::model::DONE_EXIT`]. Names are unique
+/// within an owner, so this answers at most one row.
 pub fn automation_exit_by_name(
     conn: &Connection,
     owner_kind: crate::model::AutomationOwner,
@@ -6509,7 +6505,7 @@ pub fn automation_exit_by_name(
     const X: col::automation_exit::Cols = col::automation_exit::ALL;
     let pred = Pred::eq(X.owner_kind, owner_kind.as_str())
         .and(Pred::eq(X.owner_id, owner_id))
-        .and(named_or_unnamed(X.name, name));
+        .and(named_or_done(X.name, name));
     Ok(automation_rows(conn, X.table, &pred, &[Sort::by(X.id)], super::hydrate::automation_exit_row)?
         .into_iter()
         .next())

@@ -31,6 +31,9 @@ export type Plate = {
   /** The run has moved on — started, paused, ended — while this step's pane stands (`AMB-T-5506`).
    *  Nothing on an ordinary pane, for `took`'s reason. */
   stated(state: RunState | null): void;
+  /** The number of the box the step was opened from has been read off the picture, or has gone from
+   *  it (`AMB-T-5538`). Nothing on an ordinary pane, for `took`'s reason. */
+  numbered(box: number | null): void;
   /** Take the label away. */
   stop(): void;
   /**
@@ -164,6 +167,11 @@ export function mountPlate(
     stated: (state) => {
       if (run === null) return;
       run = { ...run, state };
+      redraw();
+    },
+    numbered: (box) => {
+      if (run === null) return;
+      run = { ...run, box };
       redraw();
     },
     // A pane that has been taken down has no row to read: what it said was about a session that is

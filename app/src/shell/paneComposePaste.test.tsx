@@ -59,7 +59,7 @@ vi.mock("../core/ipc", () => ({
 }));
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
-    opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {},
+    opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {}, numbered: () => {},
     focused: () => {}, stop: () => {},
   }),
 }));

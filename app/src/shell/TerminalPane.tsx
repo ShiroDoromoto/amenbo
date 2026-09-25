@@ -35,6 +35,7 @@ import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
 import { BuiltinCard } from "./BuiltinCard";
+import { useBoxNumber } from "../screens/boxNumber";
 import type { BuiltinRun } from "../talk/automationStep";
 import type { Size } from "../talk/layout";
 
@@ -675,6 +676,14 @@ export function TerminalPane({
   useEffect(() => {
     plateRef.current?.stated(stood);
   }, [stood?.status, stood?.word]);
+
+  // **The number of the box the step was opened from** (`AMB-T-5538`), read off the automation's
+  // picture as it stands. It lands after the row is drawn — the picture is a read of its own — and a
+  // rebuilt picture renumbers it, so the row is told rather than the pane built again.
+  const box = useBoxNumber(run?.automationId ?? null, run?.placement ?? undefined) ?? null;
+  useEffect(() => {
+    plateRef.current?.numbered(box);
+  }, [box]);
 
   // The name as it stands, ready to be typed over. A box opened on a pane already called something is
   // opened to change that name, and a reader who has to clear it first is being asked to type the old

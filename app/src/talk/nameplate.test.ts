@@ -78,6 +78,9 @@ describe("the row above a run's pane", () => {
     automation: "家計簿の開発ループ",
     run: 7,
     step: "取る",
+    automationId: 3,
+    placement: 11,
+    box: null,
     action: "下ごしらえ",
     task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 2 },
     state: null,
@@ -116,6 +119,20 @@ describe("the row above a run's pane", () => {
     expect(host.querySelector(".plate-run__nth")?.textContent).toBe(tf("face.runTask", { n: 2 }));
     expect(host.querySelector(".plate-peek__task")?.textContent)
       .toBe("AMB-T-5252 ペインのヘッダを描く");
+  });
+
+  /// The step is numbered as the picture numbers its box (`AMB-T-5538`) — and where that number is not
+  /// known, the row says the step without one rather than a count the picture does not draw.
+  it("numbers the step with its box on the picture, and with nothing while that is not known", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, box: 2 } });
+    expect(host.querySelector(".plate__step .plate__box")?.textContent).toBe("2");
+    expect(host.querySelector(".plate__step")?.textContent).toBe("2下ごしらえ›取る");
+
+    draw({ name: "/work/a", dot: STILL, run: RUN });
+    expect(host.querySelector(".plate__step .plate__box")).toBeNull();
   });
 
   /// An action of one step is most often named after it, and the same word twice says nothing.

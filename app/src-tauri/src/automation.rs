@@ -1664,7 +1664,8 @@ fn open_one(
                 run.project_id,
                 Some(AutomationStepRunDto {
                     run_step: ready.run_step.id,
-                    seq: ready.run_step.seq,
+                    automation: run.automation_id,
+                    placement: def.placement_id,
                     automation_name: automation_name(store, run.automation_id)?,
                     name: def.name.clone(),
                     action_name: placed_action_name(store, def.placement_id)?,
@@ -1739,7 +1740,8 @@ fn open_one(
                 )))
             })?;
             let builtin = AutomationBuiltinRunDto {
-                seq: run_step.seq,
+                automation: run.automation_id,
+                placement: def.placement_id,
                 automation_name: automation_name(store, run.automation_id)?,
                 name: def.name.clone(),
                 key: def.builtin.clone().unwrap_or_default(),
@@ -1795,8 +1797,7 @@ fn standing_wait(app: &tauri::AppHandle, run_id: i64) -> Option<AutomationStepOp
 /// **A built-in about to be carried out**, as its pane is told before Amenbo starts on it — and which
 /// project's pane that is.
 ///
-/// Nothing is written for it yet, so the count is the one the execution is about to be given, and the
-/// task is the one the stretch under way is on. A built-in that takes a task opens a stretch of its
+/// Nothing is written for it yet, so the task is the one the stretch under way is on. A built-in that takes a task opens a stretch of its
 /// own (`amenbo_core::ops::automation_step::open`), so it is on none until it has taken one.
 fn builtin_about_to(
     store: &amenbo_core::Store,
@@ -1814,9 +1815,9 @@ fn builtin_about_to(
         true => None,
         false => read::automation_run_task_last(conn, run_id)?.map(|s| s.id),
     };
-    let seq = read::automation_run_steps_of(conn, run_id)?.last().map_or(0, |s| s.seq) + 1;
     Ok((run.project_id, AutomationBuiltinRunDto {
-        seq,
+        automation: run.automation_id,
+        placement: def.placement_id,
         automation_name: automation_name(store, run.automation_id)?,
         name: def.name.clone(),
         key: def.builtin.clone().unwrap_or_default(),

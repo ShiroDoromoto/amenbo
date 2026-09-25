@@ -46,7 +46,7 @@ vi.mock("../core/ipc", () => ({ invoke: vi.fn(async () => undefined) }));
 // only that it is still there while the box stands in its place.
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
-    opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {},
+    opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {}, numbered: () => {},
     focused: () => {}, stop: () => {},
   }),
 }));
@@ -158,7 +158,8 @@ describe("naming a pane", () => {
   it("offers no name on a run's pane, whose row is headed with the automation", async () => {
     // A name given there would be kept against the place and never drawn (`AMB-T-5529`).
     await pane(new Map(), {
-      automation: "家計簿の開発ループ", run: 7, step: "取る", action: null, task: null, state: null,
+      automation: "家計簿の開発ループ", run: 7, step: "取る", automationId: 3, placement: null, box: null,
+      action: null, task: null, state: null,
     });
     await opened();
 

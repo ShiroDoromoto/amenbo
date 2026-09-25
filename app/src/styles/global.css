@@ -2921,6 +2921,8 @@ body.dragging-row { user-select: none; }
 }
 .plate__step b { font-weight: 700; }
 .plate__step .plate__into { margin-inline: var(--s-1); }
+/* The number of the box the step was opened from, drawn as the picture draws it (`AMB-T-5538`). */
+.plate__step .plate__box { margin-inline-end: var(--s-1); vertical-align: 1px; }
 
 /* The task the run is working, on the line under the name (`../talk/nameplate`). The reference is the
    ledger's own, which is what a person types to reach it; the title beside it says which task it is,

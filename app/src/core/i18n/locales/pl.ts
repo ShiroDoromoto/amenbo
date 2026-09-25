@@ -611,7 +611,8 @@ export const pl: Translation = {
     "face.runStep": "Krok {n}",
     "face.runNo": "Uruchomienie {n}",
     "face.runTask": "Zadanie {n}",
-    "face.dropRunConfirm": "Usunąć ten panel? Uruchomienie zostanie zatrzymane, zadanie, nad którym pracowało, wróci na Do zrobienia, a wiersz na tym zadaniu to odnotuje.",
+    "face.dropRunLive": "Nie można usunąć, dopóki uruchomienie się nie skończy",
+    "face.runStoppedAt": "Zatrzymano na {exit}",
     "quit.confirm": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, ale to, co w nich działało — nie.",
     "quit.confirmNotAll": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, poza panelami z {names}. To, co w nich działało, też nie wróci.",
 
@@ -619,7 +620,6 @@ export const pl: Translation = {
     "face.builtinDoing": "Amenbo właśnie to wykonuje",
     "face.builtinDone": "Amenbo to wykonało",
     "face.builtinExit": "Wyjście: {exit}",
-    "face.runFailedAt": "{step} · wyjście: {exit}",
 
     "face.endedGeminiUnset": "Dla Gemini CLI nie ustawiono metody uwierzytelniania. Podana ścieżka należy tylko do tego panelu i znika wraz z nim — ustaw ją we własnym pliku ~/.gemini/settings.json.",
     "face.noWayBack": "Tej rozmowy nie da się już otworzyć.",

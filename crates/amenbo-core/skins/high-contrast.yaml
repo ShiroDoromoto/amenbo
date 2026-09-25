@@ -133,6 +133,7 @@ dark:
   c-pri-med: "#ffb24d"
   c-rule: "#a6a6a6"
   c-stop: "#ff8a7e"
+  c-stop-weak: "#260e0c"
   c-sunken: "#141414"
   c-surface: "#000000"
   c-text: "#ffffff"

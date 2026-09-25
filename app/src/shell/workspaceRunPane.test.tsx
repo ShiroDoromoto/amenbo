@@ -38,6 +38,8 @@ const hoisted = vi.hoisted(() => ({
   paused: [] as number[],
   /** The runs the pane asked to be picked up again, in order. */
   resumed: [] as number[],
+  /** The failed runs the pane said were seen, in order. */
+  acknowledged: [] as number[],
   /** What the question above a removal is answered with. */
   says: true,
   /** The steps the host says are running as the face comes up (`standingSteps`). */
@@ -100,6 +102,10 @@ vi.mock("../core/automations", async (importOriginal) => ({
   },
   resumeRun: (run: number) => {
     hoisted.resumed.push(run);
+    return Promise.resolve();
+  },
+  acknowledgeRun: (run: number) => {
+    hoisted.acknowledged.push(run);
     return Promise.resolve();
   },
 }));
@@ -173,6 +179,7 @@ function runCard(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     stepName: "取る",
     stepsDone: 1,
     reportWithheld: [],
+    acknowledged: false,
     ...over,
   };
 }
@@ -214,6 +221,7 @@ beforeEach(() => {
   hoisted.stopped = [];
   hoisted.paused = [];
   hoisted.resumed = [];
+  hoisted.acknowledged = [];
   hoisted.says = true;
   hoisted.standing = [];
   hoisted.cards = [];
@@ -312,8 +320,7 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     await arrive();
 
     expect(q(".plate__step b")[0]?.textContent).toBe("取る");
-    expect(q(".plate__step")[0]?.textContent).toContain("1");
-    expect(q(".plate__no")[0]?.textContent).toContain("7");
+    expect(q(".plate__no")[0]?.textContent).toBe("#7");
     expect(q(".plate-run__task")[0]?.textContent).toBe("AMB-T-5252");
     expect(q(".plate-run__title")[0]?.textContent).toBe("ペインのヘッダを描く");
     expect(q(".plate__auto")[0]?.hidden).toBe(false);
@@ -346,7 +353,7 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     await arrive();
 
     expect(q(".plate__state")[0]?.hidden).toBe(true);
-    expect(q(".plate-fail")[0]?.hidden).toBe(true);
+    expect(q(".slot__band")).toHaveLength(0);
   });
 
   it("says the run is running, and that it has completed once it has, on the same pane", async () => {
@@ -365,12 +372,14 @@ describe("what the row above a run's pane says, and what closing it does", () =>
 
     expect(q(".plate__state")[0]?.textContent).toBe(t("auto.run.completed"));
     expect(q(".plate__state")[0]?.dataset.state).toBe("completed");
-    expect(q(".plate-fail")[0]?.hidden).toBe(true);
+    expect(q(".slot__band")).toHaveLength(0);
     // Only the row moved: the step and its terminal are the same ones.
     expect(hoisted.opened).toHaveLength(openings);
   });
 
-  it("says why a failed run failed, and at which step and way out", async () => {
+  it("says a failure at a way out by that way out, and takes the reader's word that it was seen", async () => {
+    // The row already says which step, so the band says only why — here the way out that called for
+    // a person, drawn as the picture draws it — and holds the press that answers it (`AMB-T-5529`).
     hoisted.cards = [runCard({
       status: "failed",
       stoppedReason: "halted",
@@ -381,32 +390,44 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     await arrive();
 
     expect(q(".plate__state")[0]?.textContent).toBe(t("auto.run.failed"));
-    expect(q(".plate-fail")[0]?.hidden).toBe(false);
-    expect(q(".plate-fail__why")[0]?.textContent).toBe(t("auto.run.halted"));
-    expect(q(".plate-fail__where")[0]?.textContent).toBe(tf("face.runFailedAt", {
-      step: tf("auto.run.inAction", { action: "下ごしらえ", step: "取る" }),
-      exit: t("auto.pic.errorExit"),
-    }));
+    expect(q(".slot__band")).toHaveLength(1);
+    expect(q(".slot__exit")[0]?.textContent).toBe(t("auto.pic.errorExit"));
+    expect(q(".slot__exit--error")).toHaveLength(1);
+    expect(q(".slot__band-why")[0]?.textContent)
+      .toBe(tf("face.runStoppedAt", { exit: t("auto.pic.errorExit") }));
+
+    await act(async () => {
+      q(".slot__bandact")[0]!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.acknowledged).toEqual([7]);
+
+    // Once seen, the band stays to say why, with nothing left to press.
+    hoisted.cards = [runCard({ status: "failed", stoppedReason: "halted", exitName: "*", acknowledged: true })];
+    await arrive();
+    expect(q(".slot__band")).toHaveLength(1);
+    expect(q(".slot__bandact")).toHaveLength(0);
   });
 
-  it("says the step alone where a failed run's step left by no way out", async () => {
-    // A program that exited before it reported left by none (`crashed`).
+  it("says any other failure by its reason", async () => {
+    // A program that exited before it reported left by no way out (`crashed`).
     hoisted.cards = [runCard({ status: "failed", stoppedReason: "crashed" })];
     await mount();
     await arrive();
 
-    expect(q(".plate-fail__why")[0]?.textContent).toBe(t("auto.run.crashed"));
-    expect(q(".plate-fail__where")[0]?.textContent).toBe("取る");
+    expect(q(".slot__band-why")[0]?.textContent).toBe(t("auto.run.crashed"));
+    expect(q(".slot__exit")).toHaveLength(0);
   });
 
-  it("holds and stops a going run from its pane, in the running tab's words", async () => {
+  it("holds and stops a going run from its pane, named in the running tab's words", async () => {
     // A reader watching a run is in its pane, and had to go to the running tab to act on it
-    // (`AMB-T-5507`). Stopping from here keeps the pane: that is the end control's, and it asks first.
+    // (`AMB-T-5507`). They are marks, named for a reader who cannot see them (`AMB-T-5529`).
+    // Stopping from here keeps the pane.
     hoisted.cards = [runCard()];
     await mount();
     await arrive();
     const acts = () => q(".slot__runact");
-    expect(acts().map((b) => b.textContent)).toEqual([t("auto.run.pause"), t("auto.run.stop")]);
+    expect(acts().map((b) => b.getAttribute("aria-label"))).toEqual([t("auto.run.pause"), t("auto.run.stop")]);
 
     await act(async () => {
       acts()[0]!.click();
@@ -435,7 +456,7 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     hoisted.cards = [runCard({ status: "paused" })];
     await mount();
     await arrive();
-    expect(q(".slot__runact").map((b) => b.textContent)).toEqual([t("auto.run.resume"), t("auto.run.stop")]);
+    expect(q(".slot__runact").map((b) => b.getAttribute("aria-label"))).toEqual([t("auto.run.resume"), t("auto.run.stop")]);
 
     await act(async () => {
       q(".slot__runact")[0]!.click();
@@ -454,30 +475,43 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     expect(q(".slot__runact")).toHaveLength(0);
   });
 
-  it("stops the run when the pane is closed, and takes the place away", async () => {
-    // A run left going with its pane gone is one nobody can see, reach or stop. What it was holding
-    // is handed back by core, which is why nothing of that is worked out here (`AMB-T-5247`).
+  it("cannot be taken away while its run is going", async () => {
+    // A run left going with its pane gone is one nobody can see, reach or stop — and a pane press
+    // that stopped a run on the way out was one made meaning only to tidy the page (`AMB-T-5529`).
+    hoisted.cards = [runCard()];
     await mount();
     await arrive();
 
+    expect((q(".slot__end")[0] as HTMLButtonElement).disabled).toBe(true);
     await close();
 
-    expect(hoisted.stopped).toEqual([7]);
+    expect(hoisted.stopped).toEqual([]);
+    expect(panes()).toHaveLength(1);
+  });
+
+  it("is taken away once its run is over, and stops nothing on the way", async () => {
+    hoisted.cards = [runCard({ status: "completed", exitName: "" })];
+    await mount();
+    await arrive();
+
+    expect((q(".slot__end")[0] as HTMLButtonElement).disabled).toBe(false);
+    await close();
+
+    expect(hoisted.stopped).toEqual([]);
     expect(panes()).toHaveLength(0);
-    // The terminal ends too, and after the stop: a step whose terminal had gone first would have
-    // reported nothing either way.
     expect(hoisted.ended).toEqual(["step-1"]);
   });
 
-  it("stops nothing where the question was answered no", async () => {
+  it("asks nothing once its run is over, there being no conversation to lose", async () => {
+    // Every step opens a conversation of its own, so a run's place holds no way back to lose.
+    hoisted.cards = [runCard({ status: "completed", exitName: "" })];
     await mount();
     await arrive();
     hoisted.says = false;
 
     await close();
 
-    expect(hoisted.stopped).toEqual([]);
-    expect(panes()).toHaveLength(1);
+    expect(panes()).toHaveLength(0);
   });
 
   it("stops nothing when an ordinary pane is closed", async () => {

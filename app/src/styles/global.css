@@ -476,11 +476,13 @@ input[type="color"] {
   border: 0; background: transparent;
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
-.slot__end:hover { color: var(--c-text); }
+.slot__end:hover:not(:disabled) { color: var(--c-text); }
+/* A run's pane while its run is going or held: the press is drawn, and cannot be made. */
+.slot__end:disabled { opacity: 0.3; }
 /* **A run's moves on its pane** (`../shell/TerminalPane`, `AMB-T-5507`): pause or resume, and stop.
-   Words rather than marks, because they are the "running" tab's words and a reader moving between the
-   two reads the same press. Drawn as quietly as the controls beside them — a face split four ways
-   draws this row four times. They never shrink: a narrow pane gives up the name before them. */
+   Marks rather than words (`AMB-T-5529`), standing straight after the state they act on, so the row's
+   words are left to the automation's name. Drawn as quietly as the controls beside them — a face split
+   four ways draws this row four times. They never shrink: a narrow pane gives up the name before them. */
 .slot__runacts {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; gap: var(--s-1);
@@ -488,13 +490,57 @@ input[type="color"] {
 }
 .slot__runact {
   flex: 0 0 auto;
-  padding: 0 var(--s-1);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.6rem;
+  padding: 1px 0;
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1.4;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .slot__runact:hover:not(:disabled) { color: var(--c-text); }
-.slot__runact:disabled { opacity: 0.5; }
+.slot__runact:disabled { opacity: 0.4; }
+/* Stop is the one of the two that cannot be taken back, so it is drawn in the stop colour. */
+.slot__runact--stop { color: var(--c-stop); border-color: var(--c-stop); }
+.slot__runact--stop:hover:not(:disabled) { color: var(--c-stop); background: var(--c-stop-weak); }
+
+/* **What a failed run is waiting for** (`../shell/TerminalPane`, `AMB-T-5529`), on a band between the
+   header and the terminal, in the stop colour. One line: why it stopped, and the press that answers
+   it at the far end. */
+.slot__band {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--s-2);
+  margin: 0 calc(-1 * var(--s-1));
+  padding: var(--s-1) var(--s-2);
+  font-size: var(--fs-md);
+  white-space: nowrap;
+}
+.slot__band--fail {
+  background: var(--c-stop-weak);
+  color: var(--c-stop);
+  border-top: var(--border-w) var(--border-style) var(--c-stop);
+}
+.slot__band-why {
+  flex: 1 1 auto; min-width: 0;
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  overflow: hidden; text-overflow: ellipsis;
+}
+.slot__bandact {
+  flex: 0 0 auto;
+  padding: 1px var(--s-2);
+  border: var(--border-w) var(--border-style) var(--c-accent); border-radius: var(--r-sm);
+  background: var(--c-accent);
+  color: var(--c-on-accent); font-size: var(--fs-xs); font-weight: 600;
+}
+.slot__bandact:disabled { opacity: 0.5; }
+/* The way out a step stopped at, drawn as the picture draws a way out: a chip with its name, the error
+   one dashed apart from the rest. */
+.slot__exit {
+  flex: 0 0 auto;
+  padding: 0 var(--s-2);
+  border: var(--border-w) solid var(--c-accent); border-radius: 999px;
+  color: var(--c-text); font-size: var(--fs-xs);
+}
+.slot__exit--error { border-style: dashed; border-color: var(--c-stop); color: var(--c-stop); }
 /* The row's menu, which holds what the pane can be handed rather than what it can be rid of. It is
    drawn the same quiet way as the control beside it: a face split four ways draws this row four
    times, and two loud buttons in each would be eight things competing with the terminals. */
@@ -2834,7 +2880,7 @@ body.dragging-row { user-select: none; }
 }
 /* Spelled out for the reason `.plate[hidden]` is: the run's parts are drawn on the same row as an
    ordinary pane's name, and are away there. */
-.plate__auto[hidden], .plate__no[hidden], .plate__step[hidden], .plate__nth[hidden] { display: none; }
+.plate__auto[hidden], .plate__no[hidden], .plate__into[hidden], .plate__step[hidden] { display: none; }
 
 /* **A run's pane is drawn in the run's colour** (`AMB-T-5428`): the frame is edged in it and the
    header is laid on its wash, so a run's pane is told from a person's at a glance across the page —
@@ -2856,28 +2902,25 @@ body.dragging-row { user-select: none; }
 .plate--run { padding-bottom: 0; color: var(--c-ai); font-weight: 600; }
 .plate--run .plate__name { flex: 0 1 auto; color: var(--c-ai); }
 
-/* Where the run has got to, after the name (`../talk/nameplate`). Each is set off from what is before
-   it by a point, as one sentence about the run rather than four words beside each other.
+/* Which run, and which step it is on, after the name (`../talk/nameplate`): `#12 › step`.
 
-   **The pane is what decides how many of them are drawn**, not the window: the row is measured
-   against `.slot__plate`, and a pane a sixth of the page wide holds fewer words than the same row in
-   the split-out window. They are given up from the least useful end — the run's own number and how
-   many tasks in first — so the narrowest pane still says which step is running. The step is the one
-   that shrinks, and the whole of it is the terminal's to say. */
-.plate__no, .plate__step, .plate__nth { flex: 0 0 auto; }
-.plate__no::before, .plate__step::before, .plate__nth::before {
-  content: "·";
-  margin-inline-end: var(--s-2);
-}
+   **The pane is what decides how much of it is drawn**, not the window: the row is measured against
+   `.slot__plate`, and a pane a sixth of the page wide holds fewer words than the same row in the
+   split-out window. The step is cut before the name (`AMB-T-5529`) — the name is what says which
+   automation this is, and the step is the terminal's to say at length — and the run's number is the
+   first thing given up whole. */
+.plate__no, .plate__into { flex: 0 0 auto; }
+.plate__no { font-weight: 400; font-variant-numeric: tabular-nums; color: var(--c-text-muted); }
+.plate__into { color: var(--c-text-faint); font-weight: 400; }
 .plate__step {
-  flex: 1 1 auto;
+  flex: 0 100 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 400;
 }
 .plate__step b { font-weight: 700; }
-.plate__no, .plate__nth { font-weight: 400; font-variant-numeric: tabular-nums; }
+.plate__step .plate__into { margin-inline: var(--s-1); }
 
 /* The task the run is working, on the line under the name (`../talk/nameplate`). The reference is the
    ledger's own, which is what a person types to reach it; the title beside it says which task it is,
@@ -2895,7 +2938,7 @@ body.dragging-row { user-select: none; }
   white-space: nowrap;
 }
 .plate-run[hidden] { display: none; }
-.plate-run__label, .plate-run__task { flex: 0 0 auto; }
+.plate-run__task, .plate-run__nth { flex: 0 0 auto; }
 .plate-run__task { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .plate-run__title {
   flex: 0 1 auto;
@@ -2904,6 +2947,13 @@ body.dragging-row { user-select: none; }
   text-overflow: ellipsis;
   color: var(--c-text);
 }
+/* Which task of the run it is, as a chip after the title: it counts tasks, so it stands with one. */
+.plate-run__nth {
+  padding: 0 var(--s-1);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.plate-run__nth:empty { display: none; }
 /* **Where the run stands**, last on the name's line (`../talk/nameplate`, `AMB-T-5506`). The word and a
    dot in the state's colour, the colours being the "running" tab's own (`.autorun--*`), so a state
    reads the same on the pane and on the tab. It never shrinks: it is what a reader glancing at the
@@ -2915,7 +2965,10 @@ body.dragging-row { user-select: none; }
 .plate__state {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; gap: var(--s-1);
-  margin-inline-start: var(--s-2);
+  margin-inline-start: auto;
+  padding: 0 var(--s-2);
+  border-radius: 999px;
+  background: var(--state-bg, transparent);
   font-size: var(--fs-xs); font-weight: 700;
   color: var(--state, var(--c-text-muted));
 }
@@ -2926,9 +2979,9 @@ body.dragging-row { user-select: none; }
 }
 .plate__state[data-state="running"] { --state: var(--c-ai); }
 .plate__state[data-state="running"]::before { animation: plate-running 1.2s ease-in-out infinite; }
-.plate__state[data-state="paused"] { --state: var(--c-heed); }
+.plate__state[data-state="paused"] { --state: var(--c-heed); --state-bg: var(--c-heed-weak); }
 .plate__state[data-state="completed"] { --state: var(--c-text-muted); --state-dot: var(--c-done); }
-.plate__state[data-state="failed"] { --state: var(--c-stop); }
+.plate__state[data-state="failed"] { --state: var(--c-stop); --state-bg: var(--c-stop-weak); }
 .plate__state[data-state="canceled"] { --state: var(--c-text-muted); }
 @keyframes plate-running {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -2938,21 +2991,5 @@ body.dragging-row { user-select: none; }
   .plate__state[data-state="running"]::before { animation: none; }
 }
 
-/* **Why and where a run failed**, on a line of its own under the name, in the stop colour. One line,
-   like the task's, for the same reason; the reason is kept and the place is what is cut. */
-.plate-fail {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
-  padding: 0 var(--s-2) var(--s-2);
-  font-size: var(--fs-xs);
-  color: var(--c-stop);
-  white-space: nowrap;
-}
-.plate-fail[hidden], .plate-fail__why[hidden], .plate-fail__where[hidden] { display: none; }
-.plate-fail__why { flex: 0 0 auto; font-weight: 700; }
-.plate-fail__where { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-
-@container (max-width: 20rem) { .plate-run__label { display: none; } }
-@container (max-width: 15rem) { .plate__no, .plate__nth { display: none; } }
+@container (max-width: 15rem) { .plate__no, .plate-run__nth { display: none; } }
 @container (max-width: 11rem) { .plate-run__title { display: none; } }

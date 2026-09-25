@@ -3947,4 +3947,8 @@ pub struct AutomationRunCardDto {
     /// built to carry its report onto the task, and the task was closed by then (`AMB-D-963`). Empty
     /// where every report went where it was owed.
     pub(crate) report_withheld: Vec<String>,
+    /// **Whether somebody has said they saw the failure** — what moves a failed run off the
+    /// "running" tab and onto the "history" one. Only a failure is ever acknowledged, so it is false
+    /// on every other state.
+    pub(crate) acknowledged: bool,
 }

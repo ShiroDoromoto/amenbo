@@ -1730,14 +1730,15 @@ export function WorkspaceFace({
                     run={frame.run === null || on === undefined ? null : {
                       run: frame.run,
                       automation: on.automationName,
-                      seq: on.seq,
                       // A built-in's name, and the action standing where it was opened from, are
                       // drawn in the screen's language (`builtinWord`); an agent's step has no key.
                       step: builtinWord(builtin?.key, on.name),
                       // Which spot of the picture this step was opened from, said by the action
                       // standing there (`AMB-D-949`). Null where that spot has since been taken off.
                       action: on.actionName === undefined ? null : builtinWord(builtin?.key, on.actionName),
-                      task: on.task ?? null,
+                      // A built-in waiting for the next task is on none: what it still carries is the task
+                      // the run closed before it, and a line naming that one would say the run was on it.
+                      task: builtin?.waiting ? null : on.task ?? null,
                       // Whether the run is going, held or over, and where a failure failed
                       // (`AMB-T-5506`). Null until it has been read.
                       state: runStateOf(runCardOf.get(frame.run)),
@@ -1778,9 +1779,9 @@ export function WorkspaceFace({
                       setLayout((was) => closedFrame(was, id));
                       startNow.current.delete(id);
                       startWith.current.delete(id);
-                      // A run's pane takes its step with it. The run was stopped on the way out
-                      // (`./TerminalPane`), and a step left here would put the row back the moment a
-                      // pane of that id stood again.
+                      // A run's pane takes its step with it. Its run is over — the pane cannot be taken
+                      // away before (`./TerminalPane`) — and a step left here would put the row back the
+                      // moment a pane of that id stood again.
                       setSteps((had) => droppedFrom(had, id));
                       setBuiltins((had) => droppedFrom(had, id));
                     }}

@@ -1460,6 +1460,7 @@ fn run_card(
         exit_name,
         task: worked_task(store, stretch)?,
         report_withheld,
+        acknowledged: run.acknowledged_at.is_some(),
     })
 }
 

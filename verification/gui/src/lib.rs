@@ -4386,10 +4386,10 @@ impl Instructor {
             (Domain::Automation, "start") => {
                 "On the build screen's head, press the button that starts a run.".to_string()
             }
-            // Closing the pane a run is drawn in, which is a way of stopping the run — and the
-            // question put before it closes says so.
+            // Taking away the pane a run is drawn in, once the run is over. While the run is going or
+            // held the control cannot be pressed (`pane_state`), so this stops nothing.
             (Domain::Automation, "close-run-pane") => {
-                "In the workspace, press the control that takes away the pane this run is drawn in, and confirm the question it puts."
+                "In the workspace, press the control that takes away the pane this run is drawn in. Confirm it goes without a question: the run is over, and there is nothing of it left to lose."
                     .to_string()
             }
             // **What a step of a run types.** The command is written out because it is the whole of
@@ -6470,13 +6470,13 @@ impl Instructor {
                     }
                 ),
             },
-            // The pane a run is drawn in, and what its header carries — the run on the name's own
-            // line and the task on the line under it. `label` reads a pane's name and
-            // nothing else, which is why this one is here. Where the run stands is read off the same
-            // header, in the words `run-row` reads the tab in.
+            // The pane a run is drawn in, and what its header carries — the run and its step on the
+            // name's own line, and the task with how many tasks in on the line under it. `label` reads
+            // a pane's name and nothing else, which is why this one is here. Where the run stands is
+            // read off the same header, in the words `run-row` reads the tab in.
             (Domain::Automation, "run-pane") => match present(with) {
                 true => format!(
-                    "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands in front of its name, and that its header carries on the name's line the run's own number, which step it is on{} and how many tasks in it is{}{}{}.",
+                    "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands in front of its name, and that its header carries on the name's line the run's own number and which step it is on{}{}{}{}.",
                     // The step and the action it was opened from are one value on the screen, in the
                     // order the reader's language puts them — so the line names both and leaves the
                     // order to the eye.
@@ -6487,7 +6487,7 @@ impl Instructor {
                         (None, None) => String::new(),
                     },
                     match with.get("nth") {
-                        Some(_) => format!(" ({})", count(with, "nth")?),
+                        Some(_) => format!(", with how many tasks into the run it is on the line under it ({})", count(with, "nth")?),
                         None => String::new(),
                     },
                     // The line under the name stands only while the run is working a task, so a road
@@ -6973,12 +6973,13 @@ fn run_ending(reason: &str) -> Result<&'static str, String> {
 }
 
 /// **Where a run stands, as the header over its pane says it** — the end of the name's line, and for a
-/// failure the line under the header that says why and where. Nothing where the road did not ask.
+/// failure the band under the header that says why and holds the press that acknowledges it. Nothing
+/// where the road did not ask.
 ///
-/// The words are the running tab's (`run_state`) but for a failure: the tab's row waits for somebody to
-/// acknowledge it, and the pane has nothing to acknowledge with. A failure's line names the step it
-/// failed in whether or not the road names a reason — a program that exited before it reported left by
-/// no way out, and the step is then all the line says of where.
+/// The words are the running tab's (`run_state`). The band says nothing of where: the name's line
+/// names the step already. A failure at a way out calling for a person is said by that way out, as
+/// the picture draws it; every other failure by its reason. A run going or held is one whose pane
+/// cannot be taken away, and the control that would do it is read for that.
 fn pane_state(state: Option<&str>, reason: Option<&str>) -> Result<String, String> {
     let Some(state) = state else {
         return match reason {
@@ -6993,16 +6994,22 @@ fn pane_state(state: Option<&str>, reason: Option<&str>) -> Result<String, Strin
         other => run_state(other)?,
     };
     Ok(match (state, reason) {
+        ("failed", Some("halted")) => format!(
+            ". Confirm too that the end of the name's line says the run is {word}, and that a band under the header says it stopped at a way out, drawn as that way out's chip, with a press beside it that acknowledges the failure"
+        ),
         ("failed", Some(reason)) => format!(
-            ". Confirm too that the end of the name's line says the run is {word}, and that a line under the header says {} and names the step it failed in",
+            ". Confirm too that the end of the name's line says the run is {word}, and that a band under the header says {}, with a press beside it that acknowledges the failure",
             run_ending(reason)?
         ),
         ("failed", None) => format!(
-            ". Confirm too that the end of the name's line says the run is {word}, and that a line under the header names the step it failed in"
+            ". Confirm too that the end of the name's line says the run is {word}, and that a band under the header says it failed, with a press beside it that acknowledges the failure"
         ),
         (_, Some(_)) => return Err(format!("`reason` goes with `state: failed`, not `{state}`")),
+        ("running" | "paused", None) => format!(
+            ". Confirm too that the end of the name's line says the run is {word}, that no band under the header says it failed, and that the control that takes the pane away cannot be pressed"
+        ),
         (_, None) => format!(
-            ". Confirm too that the end of the name's line says the run is {word}, and that no line under the header says it failed"
+            ". Confirm too that the end of the name's line says the run is {word}, and that no band under the header says it failed"
         ),
     })
 }

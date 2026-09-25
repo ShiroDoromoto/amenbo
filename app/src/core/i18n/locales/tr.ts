@@ -596,7 +596,8 @@ export const tr: Translation = {
     "face.runStep": "{n}. adım",
     "face.runNo": "Çalıştırma {n}",
     "face.runTask": "{n}. görev",
-    "face.dropRunConfirm": "Bu bölme kaldırılsın mı? Çalıştırma durdurulur, üzerinde çalıştığı görev Yapılacak durumuna döner ve o görevde bir satır bunu söyler.",
+    "face.dropRunLive": "Çalıştırma bitene kadar kaldırılamaz",
+    "face.runStoppedAt": "{exit} çıkışında durdu",
     "quit.confirm": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, içlerinde çalışanlar gelmez.",
     "quit.confirmNotAll": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, {names} çalıştıran bölmeler hariç. İçlerinde çalışanlar da geri gelmez.",
 
@@ -604,7 +605,6 @@ export const tr: Translation = {
     "face.builtinDoing": "Amenbo bunu yürütüyor",
     "face.builtinDone": "Amenbo bunu yürüttü",
     "face.builtinExit": "Çıkış: {exit}",
-    "face.runFailedAt": "{step} · çıkış: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI için bir kimlik doğrulama yöntemi ayarlanmamış. Belirtilen yol yalnızca bu bölmeye aittir ve onunla birlikte silinir — ayarlamanız gereken kendi ~/.gemini/settings.json dosyanızdır.",
     "face.noWayBack": "Bu konuşma artık açılamıyor.",

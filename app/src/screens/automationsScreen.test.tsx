@@ -619,6 +619,7 @@ describe("an automation a run is going on (AMB-D-961)", () => {
     waiting: false,
     stepsDone: 2,
     reportWithheld: [],
+    acknowledged: false,
   };
   async function openHeld(heldBy: AutomationRunCardDto[] = [run]) {
     hoisted.automations = [card()];

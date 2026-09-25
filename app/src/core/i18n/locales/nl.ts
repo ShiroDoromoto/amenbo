@@ -596,7 +596,8 @@ export const nl: Translation = {
     "face.runStep": "Stap {n}",
     "face.runNo": "Uitvoering {n}",
     "face.runTask": "Taak {n}",
-    "face.dropRunConfirm": "Dit deelvenster verwijderen? De uitvoering wordt gestopt, de taak waaraan die werkte gaat terug naar Te doen, en een regel op die taak zegt dat.",
+    "face.dropRunLive": "Kan pas worden verwijderd als de uitvoering klaar is",
+    "face.runStoppedAt": "Gestopt bij {exit}",
     "quit.confirm": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, wat erin liep niet.",
     "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",
 
@@ -604,7 +605,6 @@ export const nl: Translation = {
     "face.builtinDoing": "Amenbo voert dit nu uit",
     "face.builtinDone": "Amenbo heeft dit uitgevoerd",
     "face.builtinExit": "Uitgang: {exit}",
-    "face.runFailedAt": "{step} · uitgang: {exit}",
 
     "face.endedGeminiUnset": "Voor Gemini CLI is geen authenticatiemethode ingesteld. Het genoemde pad hoort alleen bij dit deelvenster en verdwijnt ermee — in te stellen in uw eigen ~/.gemini/settings.json.",
     "face.noWayBack": "Dit gesprek kan niet meer worden geopend.",

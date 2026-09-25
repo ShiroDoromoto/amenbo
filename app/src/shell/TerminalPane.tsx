@@ -17,7 +17,7 @@ import {
 } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row, Say } from "../talk/nameplate";
-import { pauseRun, resumeRun, stopRun } from "../core/automations";
+import { acknowledgeRun, pauseRun, resumeRun, stopRun } from "../core/automations";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
@@ -294,22 +294,6 @@ export function TerminalPane({
   const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onFocus, onRow, onWrite });
   on.current = { onOpened, onSaid, onPath, onClosed, onName, onFocus, onRow, onWrite };
 
-  /** Take the place away, once the person has said so. The terminal in it is ended first: a session
-   *  whose pane has gone is one nobody can get back to.
-   *
-   *  **The one question is the plain one, whatever the session was doing** (`AMB-D-858`). What tied a
-   *  pane to a task went through a key the world could rewrite behind the pane, so a question naming
-   *  what was about to be lost named as often work somebody had already finished elsewhere.
-   *  `face.dropConfirm` says what the loss is: the place, and with it the handle the talk in it is
-   *  resumed from — so this press is what closes the way back into that conversation for good
-   *  (`AMB-D-869`). It is the heavier of the app's two questions now, the way out of the app being
-   *  the lighter one.
-   *
-   *  **On a run's pane it is the other question, because it is the other act** (`AMB-T-5252`). There
-   *  is no way back into a step's conversation to lose — every step opens one of its own — and what
-   *  goes instead is the run: the one under way is stopped, the task it reserved goes back to `todo`,
-   *  and a line on that task says so. A run left going with its pane gone would be one nobody could
-   *  see, reach or stop. */
   /** One of the run's moves at a time (`AMB-T-5507`), as on the "running" tab: a second press landing
    *  while the first is still opening a terminal would be answered off a run that has already moved.
    *  A refusal is said on the toast — the run may have ended a moment before the press. */
@@ -325,14 +309,33 @@ export function TerminalPane({
     }
   };
 
+  /** **The run this pane draws is still going or held** — the two states the run's own moves are
+   *  drawn for, and the two the pane cannot be taken away in (`AMB-T-5529`). Stopping is its own press
+   *  beside the state, so taking the pane away never has to stop a run on the way: a run left going
+   *  with its pane gone would be one nobody could see, reach or stop. A run not read yet is not held
+   *  to this — a pane whose run has gone from under its id would otherwise stand there for good. */
+  const runLive = run?.state?.status === "running" || run?.state?.status === "paused";
+
+  /** Take the place away, once the person has said so. The terminal in it is ended first: a session
+   *  whose pane has gone is one nobody can get back to.
+   *
+   *  **The one question is the plain one, whatever the session was doing** (`AMB-D-858`). What tied a
+   *  pane to a task went through a key the world could rewrite behind the pane, so a question naming
+   *  what was about to be lost named as often work somebody had already finished elsewhere.
+   *  `face.dropConfirm` says what the loss is: the place, and with it the handle the talk in it is
+   *  resumed from — so this press is what closes the way back into that conversation for good
+   *  (`AMB-D-869`). It is the heavier of the app's two questions now, the way out of the app being
+   *  the lighter one.
+   *
+   *  **A run's pane is not taken away while its run is going or held** ({@link runLive}): the press is
+   *  drawn and cannot be pressed. A pane press that stopped a run would be one a reader made meaning
+   *  only to tidy the page; stopping is its own press beside the run's state. Once the run is over the
+   *  pane goes without a question. */
   const drop = async () => {
-    if (!await confirmDialog(t(run === null ? "face.dropConfirm" : "face.dropRunConfirm"))) return;
-    // **Stopping comes before the terminal ends.** What the run is holding is handed back by core —
-    // the lane, the task, and the line left on that task (`amenbo_core::ops::automation_stop`) — and
-    // a step whose terminal had already gone would have reported nothing either way. A refusal is
-    // swallowed for the same reason the pane goes whatever happens: the press was to be rid of the
-    // pane, and a run that had finished a moment earlier is not something the person did wrong.
-    if (run !== null) await stopRun(run.run).catch(() => {});
+    if (runLive) return;
+    // A run's pane is not asked about: there is no way back into a step's conversation to lose —
+    // every step opens one of its own — and the run it drew is over.
+    if (run === null && !await confirmDialog(t("face.dropConfirm"))) return;
     if (live !== null) await endTerminal(live).catch(() => {});
     onDrop(frame);
   };
@@ -671,7 +674,7 @@ export function TerminalPane({
   const stood = run?.state ?? null;
   useEffect(() => {
     plateRef.current?.stated(stood);
-  }, [stood?.status, stood?.word, stood?.why, stood?.where]);
+  }, [stood?.status, stood?.word]);
 
   // The name as it stands, ready to be typed over. A box opened on a pane already called something is
   // opened to change that name, and a reader who has to clear it first is being asked to type the old
@@ -848,39 +851,46 @@ export function TerminalPane({
           {/* The size, beside the menu rather than in it: it is about the place and not the terminal,
               so it is there whether or not anything is running — the way the corner is. */}
           {/* **The run's own moves, on the pane it is drawn in** (`AMB-T-5507`): held, picked up again,
-              or stopped, the same three the "running" tab's row carries and in its words
-              (`../screens/RunningTab`). A reader watching a run is in its pane, and had to go to the
-              tab to act on what they were watching. They are drawn while the run is going or held,
-              and gone once it is over — the row above says how it ended. Stopping here keeps the
-              pane, which is what sets it apart from the control at the end of the row. */}
-          {run?.state != null && (run.state.status === "running" || run.state.status === "paused") && (
+              or stopped, the same three the "running" tab's row carries (`../screens/RunningTab`). A
+              reader watching a run is in its pane, and had to go to the tab to act on what they were
+              watching. They are drawn while the run is going or held, and gone once it is over — the
+              row says how it ended. **They are marks and not words** (`AMB-T-5529`), standing straight
+              after the state they act on, so the row's words are left to the automation's name; each
+              is named for a reader who cannot see it. Stopping keeps the pane. */}
+          {runLive && run !== null && (
             <span className="slot__runacts">
-              {run.state.status === "paused" ? (
+              {run.state?.status === "paused" ? (
                 <button
                   type="button"
                   className="slot__runact"
                   disabled={pressing}
+                  title={t("auto.run.resume")}
+                  aria-label={t("auto.run.resume")}
                   onClick={() => void press(() => resumeRun(run.run))}
                 >
-                  {t("auto.run.resume")}
+                  <Icon name="play" />
                 </button>
               ) : (
                 <button
                   type="button"
                   className="slot__runact"
-                  disabled={pressing || run.state.pauseRequested}
+                  disabled={pressing || run.state?.pauseRequested}
+                  title={t("auto.run.pause")}
+                  aria-label={t("auto.run.pause")}
                   onClick={() => void press(() => pauseRun(run.run))}
                 >
-                  {t("auto.run.pause")}
+                  <Icon name="pause" />
                 </button>
               )}
               <button
                 type="button"
-                className="slot__runact"
+                className="slot__runact slot__runact--stop"
                 disabled={pressing}
+                title={t("auto.run.stop")}
+                aria-label={t("auto.run.stop")}
                 onClick={() => void press(() => stopRun(run.run))}
               >
-                {t("auto.run.stop")}
+                <Icon name="stop" />
               </button>
             </span>
           )}
@@ -898,13 +908,39 @@ export function TerminalPane({
           )}
           <button
             className="slot__end"
-            title={t("face.drop")}
-            aria-label={t("face.drop")}
+            title={t(runLive ? "face.dropRunLive" : "face.drop")}
+            aria-label={t(runLive ? "face.dropRunLive" : "face.drop")}
+            disabled={runLive}
             onClick={() => { void drop(); }}
           >
             <Icon name="close" />
           </button>
         </div>
+        {/* **What a failed run is waiting for** (`AMB-T-5529`), on a band of its own under the row. The
+            row already says which step, so the band says only why — by the way out it stopped at where
+            it stopped at one calling for a person, and in a short phrase otherwise — and holds the
+            press that answers it. "Acknowledge" is the "running" tab's, in the pane the reader is
+            already watching; once pressed the band stays to say why, with nothing left to press. */}
+        {run?.state?.status === "failed" && (
+          <div className="slot__band slot__band--fail" role="status">
+            <Icon name="warning" />
+            <span className="slot__band-why">
+              {run.state.exit !== null
+                ? stoppedAt(run.state.exit, run.state.errorExit)
+                : run.state.why ?? run.state.word}
+            </span>
+            {!run.state.acknowledged && (
+              <button
+                type="button"
+                className="slot__bandact"
+                disabled={pressing}
+                onClick={() => void press(() => acknowledgeRun(run.run))}
+              >
+                {t("auto.run.acknowledge")}
+              </button>
+            )}
+          </div>
+        )}
         {menuAt !== null && live !== null && (
           <Menu at={menuAt} onClose={() => setMenuAt(null)}>
             {/* The other way in, for a reader whose file is not somewhere they can drag it from. It
@@ -934,16 +970,20 @@ export function TerminalPane({
                 something, and this is about the place the terminal is drawn in. The row is where a
                 person names a pane, because the row is the one thing on the face that belongs to the
                 frame rather than to the session in it (`AMB-D-838`). */}
-            <MenuItem
-              apart
-              onClick={() => {
-                setMenuAt(null);
-                setNaming(true);
-              }}
-            >
-              <Icon name="pencil" />
-              {t("face.rename")}
-            </MenuItem>
+            {/* Not on a run's pane: its row is headed with the automation's name and never the place's
+                (`../talk/plate`), so a name given here would be kept and never drawn. */}
+            {run === null && (
+              <MenuItem
+                apart
+                onClick={() => {
+                  setMenuAt(null);
+                  setNaming(true);
+                }}
+              >
+                <Icon name="pencil" />
+                {t("face.rename")}
+              </MenuItem>
+            )}
           </Menu>
         )}
         {/* The receiving surface, drawn over the pane while something hangs on it and never otherwise —
@@ -974,7 +1014,9 @@ export function TerminalPane({
         {builtin !== null ? <BuiltinCard builtin={builtin} /> : running
           ? (
             <>
-              {ended && (
+              {/* Not on a run's pane: a step's program ending is the run moving on, and the row
+                  already says where it stands. */}
+              {ended && run === null && (
                 <span className="workspace__note">
                   {t("face.ended")}
                   {stopped !== null && ` ${t(stopped)}`}
@@ -1079,3 +1121,22 @@ export function TerminalPane({
     </div>
   );
 }
+
+/**
+ * "Stopped at" a way out, with the way out drawn as the picture's chip for it. The sentence is the
+ * language's to order (`face.runStoppedAt`), so the chip is found in it by a mark rather than by where
+ * it falls in one language.
+ */
+function stoppedAt(exit: string, error: boolean) {
+  const [before, after] = tf("face.runStoppedAt", { exit: EXIT }).split(EXIT);
+  return (
+    <>
+      {before}
+      <span className={`slot__exit${error ? " slot__exit--error" : ""}`}>{exit}</span>
+      {after}
+    </>
+  );
+}
+
+/** Where the way out goes in {@link stoppedAt}'s sentence, until it is drawn in. */
+const EXIT = "\u0000";

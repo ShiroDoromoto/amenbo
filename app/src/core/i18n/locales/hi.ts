@@ -596,7 +596,8 @@ export const hi: Translation = {
     "face.runStep": "चरण {n}",
     "face.runNo": "रन {n}",
     "face.runTask": "कार्य {n}",
-    "face.dropRunConfirm": "इस पैन को हटाएँ? रन रुक जाएगा, जिस काम पर वह था वह वापस करना है पर चला जाएगा, और उस काम पर एक पंक्ति यह बता देगी।",
+    "face.dropRunLive": "रन खत्म होने तक हटाया नहीं जा सकता",
+    "face.runStoppedAt": "{exit} पर रुका",
     "quit.confirm": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे। बातचीत अगली बार वापस आ जाएगी, पर उनमें जो चल रहा था वह नहीं।",
     "quit.confirmNotAll": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे। बातचीत अगली बार वापस आ जाएगी, पर {names} वाले पैन वापस नहीं आएँगे। उनमें जो चल रहा था वह भी वापस नहीं आएगा।",
 
@@ -604,7 +605,6 @@ export const hi: Translation = {
     "face.builtinDoing": "Amenbo इसे चला रहा है",
     "face.builtinDone": "Amenbo ने इसे चला दिया",
     "face.builtinExit": "निकास: {exit}",
-    "face.runFailedAt": "{step} · निकास: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI के लिए कोई प्रमाणीकरण विधि सेट नहीं है। जो पथ दिखाया गया है वह केवल इसी पैन का है और इसके साथ हट जाता है — सेट करनी है आपकी अपनी ~/.gemini/settings.json में।",
     "face.noWayBack": "यह बातचीत अब नहीं खोली जा सकती।",

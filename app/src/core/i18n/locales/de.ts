@@ -600,7 +600,8 @@ export const de: Translation = {
     "face.runStep": "Schritt {n}",
     "face.runNo": "Lauf {n}",
     "face.runTask": "Aufgabe {n}",
-    "face.dropRunConfirm": "Diesen Bereich entfernen? Der Lauf wird gestoppt, die Aufgabe, an der er war, geht zurück auf Offen, und eine Zeile auf dieser Aufgabe sagt das.",
+    "face.dropRunLive": "Kann erst entfernt werden, wenn der Lauf zu Ende ist",
+    "face.runStoppedAt": "Angehalten bei {exit}",
     "quit.confirm": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, das, was in ihnen lief, nicht.",
     "quit.confirmNotAll": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, außer in den Bereichen mit {names}. Was in ihnen lief, kommt ebenfalls nicht zurück.",
 
@@ -608,7 +609,6 @@ export const de: Translation = {
     "face.builtinDoing": "Amenbo führt das gerade aus",
     "face.builtinDone": "Amenbo hat das ausgeführt",
     "face.builtinExit": "Ausgang: {exit}",
-    "face.runFailedAt": "{step} · Ausgang: {exit}",
 
     "face.endedGeminiUnset": "Für Gemini CLI ist keine Authentifizierungsmethode festgelegt. Der genannte Pfad gehört nur zu diesem Bereich und verschwindet mit ihm — festzulegen ist sie in deiner eigenen ~/.gemini/settings.json.",
     "face.noWayBack": "Dieses Gespräch lässt sich nicht mehr öffnen.",

@@ -57,7 +57,7 @@ export type Plate = {
  * `run` is where the run this pane is drawing has got to, and null on every ordinary pane
  * (`./nameplate`). **It is taken at mount, and only its task and its state change afterwards**: a
  * run's pane is built again at every step, the terminal in it being a new one each time
- * (`../shell/WorkspaceFace`), so the step, the run and the count are said by that. The task and the
+ * (`../shell/WorkspaceFace`), so the step and the run are said by that. The task and the
  * state are what move while a step stands — a step that takes its task opens with none and takes it
  * partway (`took`), and the run ends, or is paused, with its last step's pane still up (`stated`).
  */

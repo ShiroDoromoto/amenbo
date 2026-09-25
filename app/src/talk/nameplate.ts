@@ -14,29 +14,33 @@
 //
 // **A run's pane is drawn as its own kind of pane** (`AMB-T-5252`). It is headed with the automation
 // the run was launched from rather than with the place's name (`./plate`), and the header is the
-// run's, in the run's colour (`AMB-T-5428`): the first line says the run — a mark saying nobody is
-// typing in this one, the automation, which run it is, which step is running and how many moves in
-// that is, and how many tasks in the run it is — and the line under it says the task the run is
-// working, by reference and by title. Every one of those is a value
+// run's, in the run's colour (`AMB-T-5428`). It is two lines, each about one thing (`AMB-T-5529`):
+// the first says which automation and which step — a mark saying nobody is typing in this one, the
+// automation, which run it is, and the step running — and the line under it says which task, by
+// reference and by title, with how many tasks into the run it is. Every one of those is a value
 // Amenbo holds — the execution rows and the ledger — so none of it is the agent's word about itself,
 // which is the whole of what this row stopped saying (`AMB-D-858`). **What the step printed is not
 // here**: that is in the terminal under the row, where a reader can scroll it.
 //
-// **Which step says the action it is inside as well as its own name** (`AMB-D-949`). A launch opens
-// one spot of the picture into a column of steps, so a step's name on its own no longer says which
-// spot of the automation a reader is watching — two spots standing on the same action run steps of
-// the same names. The two are one value and not two, because a language orders them its own way
-// (`auto.run.inAction`), and because the row gives values up whole as a pane narrows: half of "which
-// step" would be a name pointing at nothing. The step's own name is the one drawn heavier, because it
-// is the part that changes from one step to the next — the action and the count only move with it.
+// **The first line holds as little as it can**, because a pane is often a quarter of a window and
+// every value on the line is one more thing the automation's name is cut short by. So the task count
+// is on the task's line, which is what it counts, and a run's number is written the short way (`#12`).
+//
+// **Which step says the action it is inside where that says something** (`AMB-D-949`). A launch opens
+// one spot of the picture into a column of steps, so a step's name on its own does not always say
+// which spot of the automation a reader is watching — two spots standing on the same action run
+// steps of the same names. An action of one step is most often named after that step, though, and
+// the same word twice is a line spent saying nothing: the action is drawn only where its name is not
+// the step's. The step's own name is the one drawn heavier, because it is the part that changes from
+// one step to the next.
 //
 // **The run's state is on the row too** (`AMB-D-955`): running, paused, completed, failed or canceled,
-// said in the words the "running" and "history" tabs say it in (`../core/runWords`). A pane outlives
-// the step it was opened for, so without it a run that had finished and one that had stopped partway
-// looked the same — the row went on naming the last step either way. **Running is drawn moving**,
-// because it is the one state that is about now: the other four are over or held, and hold still. A
-// failure says why and where under it — the step it failed in, and the way out that step left by —
-// so the reader does not have to read what the step printed to learn that it failed.
+// said in the words the "running" and "history" tabs say it in (`../core/runWords`), on a chip in the
+// state's own colour. A pane outlives the step it was opened for, so without it a run that had
+// finished and one that had stopped partway looked the same — the row went on naming the last step
+// either way. **Running is drawn moving**, because it is the one state that is about now: the other
+// four are over or held, and hold still. What a failure is waiting for is not the row's to say: it
+// is the band under the header, which has the press that answers it (`../shell/TerminalPane`).
 //
 // **A name too long for the row is elided, and given back in full by a panel of the row's own**
 // (`../styles/global.css`). A name is what the agent typed, so it is the one thing here worth a way
@@ -97,15 +101,14 @@ export type Say = {
   readonly automation: string;
   /** Which run it is — the handle a person has on it from anywhere else. */
   readonly run: number;
-  /** How many moves in this one is, counted from 1. A run may walk the same step several times, so
-   *  the count and not the step's name is what says how far in a reader is. */
-  readonly seq: number;
   /** The step running now, by the name it was built under. */
   readonly step: string;
   /** The action the spot this step was opened from stands on, or null where that spot has been taken
-   *  off the picture since — and then the row says the step alone. */
+   *  off the picture since — and then the row says the step alone, as it does where the action is
+   *  named after the step. */
   readonly action: string | null;
-  /** The task the run is working, or null where it is on none yet. */
+  /** The task the run is working, or null where it is on none — yet, or while a built-in waits for
+   *  the next one (`../shell/WorkspaceFace`). */
   readonly task: Worked | null;
   /** Where the run stands, or null until the first answer about it lands — and then the row says
    *  nothing about the state rather than guessing it from the step. */
@@ -126,11 +129,16 @@ export type RunState = {
   /** A pause has been asked for and the step under way has not finished yet — the run is still
    *  `running`, and a second press on pause would be asking for what is already coming. */
   readonly pauseRequested: boolean;
-  /** Why it failed, or null on anything but a failure and on one core gave no reason for. */
+  /** Why it failed, in a short phrase — or null on anything but a failure, on one core gave no
+   *  reason for, and on one said by its way out instead ({@link exit}). */
   readonly why: string | null;
-  /** Where it failed — the step, and the way out that step left by where it left by one — or null
-   *  on anything but a failure. */
-  readonly where: string | null;
+  /** The way out a failed step stopped at to call for a person, as the picture names it — or null on
+   *  anything else. */
+  readonly exit: string | null;
+  /** That way out is the error one, which the picture draws apart from the rest. */
+  readonly errorExit: boolean;
+  /** Somebody has said they saw the failure (`amenbo_core::ops::automation_stop::acknowledge`). */
+  readonly acknowledged: boolean;
 };
 
 /** The whole row. */
@@ -172,30 +180,23 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   const auto = part("auto");
   auto.textContent = t("face.auto");
   const name = part("name");
-  // Where the run has got to, on the name's own line. They follow the name rather than taking a line
-  // of their own because they are what the name is doing now, and the line under it is the task's.
+  // Which run, and which step it is on, on the name's own line. They follow the name rather than
+  // taking a line of their own because they are what the name is doing now, and the line under it is
+  // the task's.
   const runNo = part("no");
+  const into = part("into");
+  into.textContent = "›";
+  into.setAttribute("aria-hidden", "true");
   const step = part("step");
-  const nth = part("nth");
-  // The run's state, last on the line: it is what the rest of the line is doing, and a mark that
-  // reads "failed" at the end of it reads as the outcome of the step before it.
+  // The run's state, last on the line: it is what the rest of the line is doing, and the pane's own
+  // controls for it stand straight after it (`../shell/TerminalPane`).
   const state = part("state");
   host.append(row);
-
-  // Why and where a run failed, on a line of its own under the name. It is not squeezed onto the
-  // first line for the reason the task is not: that line is one line by construction.
-  const failRow = document.createElement("div");
-  failRow.className = "plate-fail";
-  failRow.setAttribute("role", "status");
-  const failWhy = document.createElement("span");
-  failWhy.className = "plate-fail__why";
-  const failWhere = document.createElement("span");
-  failWhere.className = "plate-fail__where";
-  failRow.append(failWhy, failWhere);
 
   // The task the run is working, on a line of its own under the name. It is a second row and not more
   // of the first one because the first is one line by construction, and a title elided into what
   // the run's values leave of a pane's width would be a word and a half (`../styles/global.css`).
+  // It carries no label: the reference says it is a task.
   const runRow = document.createElement("div");
   runRow.className = "plate-run";
   const runPart = (kind: string) => {
@@ -204,12 +205,11 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     runRow.append(el);
     return el;
   };
-  const taskLabel = runPart("label");
-  taskLabel.textContent = t("auto.step.task");
   const taskRef = runPart("task");
   const taskTitle = runPart("title");
+  // Which task of the run it is. It counts tasks, so it stands with the task.
+  const nth = runPart("nth");
   host.append(runRow);
-  host.append(failRow);
 
   // The panel the name is read in full in. It is a sibling of the row rather than a child of it,
   // because the row is one line by construction (`../styles/global.css`) and a box that dropped out
@@ -234,7 +234,6 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     // A run on no task yet has nothing for the second line to say, and an empty band under the first
     // would read as a task that is there and has no name.
     runRow.hidden = plate === null || plate.run?.task == null;
-    failRow.hidden = plate === null || plate.run?.state?.status !== "failed";
     if (plate === null) {
       // The panel comes down with the row it belongs to. It is said here as well as below because the
       // row being taken away is the one path that never reaches the name, and a panel left up is an
@@ -252,27 +251,21 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     peekName.textContent = plate.name ?? "";
     // A run's pane is drawn as its own kind of pane, and an ordinary one is left exactly as it was:
     // the mark is away, the second row is down, and the panel says only the name.
-    auto.hidden = runNo.hidden = step.hidden = nth.hidden = plate.run === null;
+    auto.hidden = runNo.hidden = into.hidden = step.hidden = plate.run === null;
     state.hidden = plate.run?.state == null;
     row.classList.toggle("plate--run", plate.run !== null);
     if (plate.run !== null) {
-      runNo.textContent = tf("face.runNo", { n: plate.run.run });
-      const which = plate.run.action === null
-        ? STEP
-        : tf("auto.run.inAction", { action: plate.run.action, step: STEP });
-      step.replaceChildren(...stepWords(tf("auto.run.step", { n: plate.run.seq, step: which }), plate.run.step));
+      // The run's number is the same in every language, and written the way a reader would type it
+      // into the tabs' search.
+      runNo.textContent = `#${plate.run.run}`;
+      step.replaceChildren(...stepWords(plate.run.action, plate.run.step));
       nth.textContent = plate.run.task === null ? "" : tf("face.runTask", { n: plate.run.task.seq });
-      nth.hidden = plate.run.task === null;
       taskRef.textContent = plate.run.task?.ref ?? "";
       taskTitle.textContent = plate.run.task?.title ?? "";
       const now = plate.run.state;
       state.textContent = now?.word ?? "";
       if (now === null) delete state.dataset.state;
       else state.dataset.state = now.status;
-      failWhy.textContent = now?.why ?? "";
-      failWhy.hidden = !now?.why;
-      failWhere.textContent = now?.where ?? "";
-      failWhere.hidden = !now?.where;
     }
     peekTask.textContent = plate.run?.task
       ? `${plate.run.task.ref} ${plate.run.task.title}`
@@ -281,21 +274,17 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   };
 }
 
-/** Where the step's own name goes in the sentence that says which step, until it is drawn in. The
- *  sentence is put together by the language (`auto.run.step`, `auto.run.inAction`), so the name is
- *  found in it by this rather than by where it happens to fall in one language's order. */
-const STEP = "\u0000";
-
-/** The sentence that says which step, with the step's own name drawn heavier than the rest. */
-function stepWords(sentence: string, stepName: string): Node[] {
-  const out: Node[] = [];
-  sentence.split(STEP).forEach((text, i) => {
-    if (i > 0) {
-      const b = document.createElement("b");
-      b.textContent = stepName;
-      out.push(b);
-    }
-    if (text !== "") out.push(document.createTextNode(text));
-  });
-  return out;
+/**
+ * Which step, with the step's own name drawn heavier than the rest: the action and the step, or the
+ * step alone where there is no action to say or the action is named after it.
+ */
+function stepWords(action: string | null, stepName: string): Node[] {
+  const b = document.createElement("b");
+  b.textContent = stepName;
+  if (action === null || action === stepName) return [b];
+  const into = document.createElement("span");
+  into.className = "plate__into";
+  into.textContent = "›";
+  into.setAttribute("aria-hidden", "true");
+  return [document.createTextNode(action), into, b];
 }

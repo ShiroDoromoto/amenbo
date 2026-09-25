@@ -598,7 +598,8 @@ export const vi: Translation = {
     "face.runStep": "Bước {n}",
     "face.runNo": "Lần chạy {n}",
     "face.runTask": "Nhiệm vụ {n}",
-    "face.dropRunConfirm": "Bỏ khung này? Lần chạy sẽ dừng, việc mà nó đang làm quay lại Cần làm, và một dòng trên việc đó sẽ ghi lại điều này.",
+    "face.dropRunLive": "Không thể xóa cho đến khi lần chạy kết thúc",
+    "face.runStoppedAt": "Dừng ở {exit}",
     "quit.confirm": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, còn những gì đang chạy trong đó thì không.",
     "quit.confirmNotAll": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, trừ các khung đang chạy {names}. Những gì đang chạy trong đó cũng không trở lại.",
 
@@ -606,7 +607,6 @@ export const vi: Translation = {
     "face.builtinDoing": "Amenbo đang thực hiện",
     "face.builtinDone": "Amenbo đã thực hiện xong",
     "face.builtinExit": "Lối ra: {exit}",
-    "face.runFailedAt": "{step} · lối ra: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI chưa được đặt phương thức xác thực. Đường dẫn được nêu chỉ thuộc về khung này và sẽ mất theo nó — tệp cần đặt là ~/.gemini/settings.json của riêng bạn.",
     "face.noWayBack": "Không thể mở lại cuộc trò chuyện này.",

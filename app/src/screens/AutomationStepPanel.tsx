@@ -49,11 +49,11 @@ import {
   useAutomationAction,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
-import { errText, isStatus, statusLabel, t, tf } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
-import { ExitMark, ReachChip, usedCount } from "./automationParts";
+import { ExitMark, filterValueLabel, ReachChip, usedCount } from "./automationParts";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
 import { exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import {
@@ -79,17 +79,6 @@ import type {
   AutomationPortDto,
   WakeCandidateDto,
 } from "../bindings/bindings";
-
-/** What one value of a task filter row is called. */
-function rowValueLabel(key: string, value: string): string {
-  if (key === "status") return isStatus(value) ? statusLabel(value) : value;
-  if (key === "assignee") {
-    if (value === "none") return t("filter.opt.assignee.none");
-    if (value === "me") return t("filter.opt.assignee.me");
-    return t("filter.opt.assignee.meAi");
-  }
-  return value === "yes" ? t("auto.step.readyYes") : t("auto.step.readyNo");
-}
 
 /** What one task filter row is called. */
 function rowLabel(key: string): string {
@@ -202,7 +191,7 @@ function CfgRow({ placementId, builtin, cfg, run }: {
                   aria-pressed={(filter[row.key] ?? []).includes(value)}
                   onClick={() => answer(writeFilter(pressed(filter, row.key, value, row.single), sort))}
                 >
-                  {rowValueLabel(row.key, value)}
+                  {filterValueLabel(row.key, value)}
                 </button>
               ))}
             </div>

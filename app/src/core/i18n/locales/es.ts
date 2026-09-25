@@ -613,9 +613,6 @@ export const es: Translation = {
     "quit.confirmNotAll": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque, salvo en los paneles con {names}. Lo que estaban ejecutando tampoco vuelve.",
 
     "face.ended": "El programa de esta terminal ha terminado.",
-    "face.builtinDoing": "Amenbo lo está ejecutando",
-    "face.builtinDone": "Amenbo lo ejecutó",
-    "face.builtinExit": "Salida: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI no tiene definido ningún método de autenticación. La ruta que indica pertenece solo a este panel y desaparece con él: la que debe editar es su propio ~/.gemini/settings.json.",
     "face.noWayBack": "Esta conversación ya no se puede abrir.",
@@ -1154,7 +1151,6 @@ export const es: Translation = {
     "auto.run.step": "Paso {n} · {step}",
     "auto.run.inAction": "{step} en {action}",
     "auto.run.reportWithheld": "Informe no dejado en la tarea porque estaba cerrada: {steps}",
-    "auto.run.waitingForTask": "Esperando una tarea que pueda tomar",
     "auto.run.taskWait": "Esperando tarea",
 
     "mcp.title": "Conectar por MCP",

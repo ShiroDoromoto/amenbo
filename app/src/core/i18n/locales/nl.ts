@@ -602,9 +602,6 @@ export const nl: Translation = {
     "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",
 
     "face.ended": "Het programma in deze terminal is gestopt.",
-    "face.builtinDoing": "Amenbo voert dit nu uit",
-    "face.builtinDone": "Amenbo heeft dit uitgevoerd",
-    "face.builtinExit": "Uitgang: {exit}",
 
     "face.endedGeminiUnset": "Voor Gemini CLI is geen authenticatiemethode ingesteld. Het genoemde pad hoort alleen bij dit deelvenster en verdwijnt ermee — in te stellen in uw eigen ~/.gemini/settings.json.",
     "face.noWayBack": "Dit gesprek kan niet meer worden geopend.",
@@ -1142,7 +1139,6 @@ export const nl: Translation = {
     "auto.run.step": "Stap {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
     "auto.run.reportWithheld": "Verslag niet bij de taak achtergelaten, want die was gesloten: {steps}",
-    "auto.run.waitingForTask": "Wacht op een taak die opgepakt kan worden",
     "auto.run.taskWait": "Wacht op taak",
 
     "mcp.title": "Verbinden via MCP",

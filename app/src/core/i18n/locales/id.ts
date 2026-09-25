@@ -604,9 +604,6 @@ export const id: Translation = {
     "quit.confirmNotAll": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",
 
     "face.ended": "Program di terminal ini telah berhenti.",
-    "face.builtinDoing": "Amenbo sedang menjalankannya",
-    "face.builtinDone": "Amenbo telah menjalankannya",
-    "face.builtinExit": "Jalan keluar: {exit}",
 
     "face.endedGeminiUnset": "Gemini CLI belum memiliki metode autentikasi. Jalur yang disebutkan hanya milik panel ini dan ikut terhapus — yang perlu diatur adalah ~/.gemini/settings.json milik Anda sendiri.",
     "face.noWayBack": "Percakapan ini tidak bisa dibuka lagi.",
@@ -1143,7 +1140,6 @@ export const id: Translation = {
     "auto.run.step": "Langkah {n} · {step}",
     "auto.run.inAction": "{step} di {action}",
     "auto.run.reportWithheld": "Laporan tidak ditinggalkan di tugas karena tugas sudah ditutup: {steps}",
-    "auto.run.waitingForTask": "Menunggu tugas yang bisa diambil",
     "auto.run.taskWait": "Menunggu tugas",
 
     "mcp.title": "Hubungkan lewat MCP",

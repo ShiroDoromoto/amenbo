@@ -332,10 +332,10 @@ input[type="color"] {
    the two are read together the way they are on the row above the pane itself (`.plate`). */
 .paneorder__head-row { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .paneorder__name { font-weight: var(--fw-medium); color: var(--c-text); flex: 0 1 auto; }
-.paneorder__folder, .paneorder__from, .paneorder__ended {
+.paneorder__folder, .paneorder__from, .paneorder__ended, .paneorder__state {
   color: var(--c-text-muted); font-size: var(--fs-xs);
 }
-.paneorder__name, .paneorder__folder, .paneorder__from, .paneorder__ended {
+.paneorder__name, .paneorder__folder, .paneorder__from, .paneorder__ended, .paneorder__state {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -845,23 +845,24 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 
 /* What Amenbo is doing on a run's pane while it carries a built-in out (`../shell/BuiltinCard`). It
    stands where the terminal would and takes the same room, so the pane does not change size between a
-   step and a built-in. One thing is said, in the middle: which built-in, and the task under it. */
+   step and a built-in. It says where the built-in has got to by a mark in the middle — turning while
+   Amenbo is at it or waiting, a tick once it is done — with what it waits for or the way out it left by
+   under it. */
 .slot__builtin {
   flex: 1; min-height: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: var(--s-2); padding: var(--s-4);
+  gap: var(--s-3); padding: var(--s-4);
   text-align: center;
 }
-.slot__builtin-state { color: var(--c-text-muted); font-size: var(--fs-xs); }
-.slot__builtin-name { font-size: var(--fs-xl); font-weight: 600; }
-.slot__builtin-task {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2);
-  max-width: 100%; color: var(--c-text-muted); font-size: var(--fs-md);
+.slot__builtin-spin {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--c-edge); border-top-color: var(--c-accent);
+  animation: builtin-spin 1s linear infinite;
 }
-.slot__builtin-ref { font-variant-numeric: tabular-nums; }
-.slot__builtin-title { overflow-wrap: anywhere; }
-.slot__builtin-filter { max-width: 100%; color: var(--c-text-muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
-.slot__builtin-exit { color: var(--c-text-muted); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+@keyframes builtin-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .slot__builtin-spin { animation: none; } }
+.slot__builtin-done { color: var(--c-done); font-size: var(--fs-xl); font-weight: 700; line-height: 1; }
+.filterchips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-1); max-width: 100%; }
 
 /* The question and the row under it, kept together: the words are what say the pills are an offer, so
    they sit closer to the row than the row sits to the press that acts on it. */

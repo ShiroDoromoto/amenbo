@@ -11,7 +11,11 @@
 // that takes a task draws no row for what it always puts on** (`AMB-T-5459`), and every other spot
 // draws them all.
 import { describe, expect, it } from "vitest";
+import type { DimensionDto } from "../bindings/bindings";
 import {
+  DIM_KEY,
+  dimRows,
+  dimToken,
   FILTER_ROWS,
   filterRows,
   pressed,
@@ -104,5 +108,40 @@ describe("a setting's answer", () => {
     expect(filterRows("take_task").map((one) => one.key)).toEqual(["assignee"]);
     expect(filterRows(undefined)).toBe(FILTER_ROWS);
     expect(filterRows("close_task")).toBe(FILTER_ROWS);
+  });
+
+  // `AMB-T-5552`: a classification row per axis the project files a task under.
+  const axis = (name: string, appliesTo: DimensionDto["appliesTo"], values: string[]): DimensionDto => ({
+    id: 0,
+    name,
+    notes: "",
+    cardinality: "single",
+    role: "none",
+    ordered: false,
+    showOnCard: false,
+    required: false,
+    appliesTo,
+    values: values.map((one, i) => ({ id: i, name: one }) as DimensionDto["values"][number]),
+  });
+
+  it("draws a row per axis a task is filed under, with a value to press", () => {
+    const rows = dimRows([
+      axis("theme", "both", ["main", "side"]),
+      axis("stance", "decision", ["for"]),
+      axis("empty", "task", []),
+      axis("stage", "task", ["second"]),
+    ]);
+    expect(rows).toEqual([
+      { axis: "theme", values: ["main", "side"] },
+      { axis: "stage", values: ["second"] },
+    ]);
+  });
+
+  it("keeps a value pressed on each of two axes as a word apiece, the way --dim takes them", () => {
+    let filter = pressed({}, DIM_KEY, dimToken("theme", "main"), false);
+    filter = pressed(filter, DIM_KEY, dimToken("stage", "second"), false);
+    expect(JSON.parse(writeFilter(filter) ?? "")).toEqual({ dim: ["theme=main", "stage=second"] });
+    expect(readFilter(writeFilter(filter) ?? "")).toEqual(filter);
+    expect(pressed(filter, DIM_KEY, "theme=main", false)).toEqual({ dim: ["stage=second"] });
   });
 });

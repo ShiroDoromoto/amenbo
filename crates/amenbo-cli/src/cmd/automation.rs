@@ -442,15 +442,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_action_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-rm", "automation_action", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted action: {id}"));
         }
-        AutomationCmd::StepAdd { action, builtin: Some(key), .. } => {
-            let s = store.automation_builtin_step_add(action, &key).map_err(CliError::from)?;
-            write_envelope(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Put in the built-in '{key}': {} ({})", s.name, s.id));
-        }
-        AutomationCmd::StepAdd { action, name, prompt, interactive, work_dir, report_to_task, no_history, no_task_context, builtin: None } => {
-            // clap requires both unless `--builtin` is given, and that arm is above.
-            let (Some(name), Some(prompt)) = (name, prompt) else {
-                unreachable!("clap requires --name and --prompt without --builtin")
-            };
+        AutomationCmd::StepAdd { action, name, prompt, interactive, work_dir, report_to_task, no_history, no_task_context } => {
             let prompt = body_arg(prompt)?;
             let new = NewStep {
                 name,

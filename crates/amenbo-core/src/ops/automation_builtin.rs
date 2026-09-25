@@ -14,8 +14,8 @@
 //!
 //! **Its rows are still rows.** The pictures key a way out and a port by the row that declares it
 //! (`AMB-D-961`), and a run copies those ids at launch. So a built-in placed on a picture is written out
-//! as the rows any step has — from the definition, at the moment it is placed ([`step_add`],
-//! [`action`]) — and carries its key so that nothing edits them afterwards
+//! as the rows any step has — from the definition, the first time its action is asked for ([`action`])
+//! — and carries its key so that nothing edits them afterwards
 //! ([`super::automation`]'s `not_built_in`). The library's built-in action is written once per store
 //! and found again by its key.
 //!
@@ -241,42 +241,12 @@ fn known(key: &str) -> Result<&'static Builtin> {
 
 // ───────────────────────── written out as rows ─────────────────────────
 
-/// **Put a built-in in as a step of an action somebody wrote.** It stands beside the agents' steps,
-/// joined to them by whatever lines the author draws.
-///
-/// Its ways out and ports are written from the definition. The settings it reads are declared on the
-/// action, since that is where a step reaches a setting from; a setting the action already declares
-/// under the same name is read as that one when it is the same kind, and refused when it is not.
-pub fn step_add(tx: &WriteTx<'_>, action_id: i64, key: &str) -> Result<crate::model::AutomationStep> {
-    let builtin = known(key)?;
+/// **The one step of a built-in's library action**, written from its definition: its ways out and
+/// ports, and the settings it reads declared on the action it stands in. That action is the only place
+/// a built-in is a step (`AMB-D-969`): nobody puts one inside an action they wrote.
+fn step_of(tx: &WriteTx<'_>, action_id: i64, builtin: &Builtin) -> Result<crate::model::AutomationStep> {
     for setting in builtin.settings {
-        match read::automation_cfg_by_name(
-            tx.conn(),
-            crate::model::AutomationCfgOwner::Action,
-            action_id,
-            setting.name,
-        )? {
-            Some(declared) if declared.kind == setting.kind => {}
-            Some(declared) => {
-                return Err(Error::invalid(format!(
-                    "the built-in '{key}' reads a {} setting called '{}', and this action declares \
-                     one of that name as a {}",
-                    setting.kind.as_str(),
-                    setting.name,
-                    declared.kind.as_str(),
-                )))
-            }
-            None => {
-                automation::cfg_add(
-                    tx,
-                    action_id,
-                    setting.name,
-                    setting.kind,
-                    setting.required,
-                    setting.options,
-                )?;
-            }
-        }
+        automation::cfg_add(tx, action_id, setting.name, setting.kind, setting.required, setting.options)?;
     }
     let step = automation::step_add(tx, action_id, NewStep::new(builtin.name, ""))?;
     unborn_unless_declared(tx, builtin, AutomationOwner::Step, step.id)?;
@@ -331,7 +301,7 @@ pub fn action(tx: &WriteTx<'_>, key: &str) -> Result<AutomationAction> {
     }
     let action = automation::action_add(tx, None, builtin.name, builtin.does)?;
     unborn_unless_declared(tx, builtin, AutomationOwner::Action, action.id)?;
-    let step = step_add(tx, action.id, key)?;
+    let step = step_of(tx, action.id, builtin)?;
     for exit in builtin.exits {
         if let Some(name) = exit.name {
             automation::exit_add(tx, AutomationOwner::Action, action.id, Some(name))?;
@@ -679,47 +649,6 @@ mod tests {
 
             // The placement's own answers are the automation's, not the built-in's.
             automation::cfg_set(tx, p.builtin.id, "stamp", Some("\"seen\"")).expect("answer the setting");
-        });
-    }
-
-    /// **A built-in put in beside an agent's step** stands in that action as its own step: its settings
-    /// are declared on the action, its ways out come from the definition, and the action around it stays
-    /// the author's to edit.
-    #[test]
-    fn a_builtin_step_sits_in_an_action_somebody_wrote() {
-        with_tx(|tx| {
-            let project = mk_project(tx, "amenbo");
-            let mine = automation::action_add(tx, Some(project), "Mine", "").expect("action");
-            let step = step_add(tx, mine.id, "test_stamp").expect("put it in");
-            assert_eq!(step.builtin.as_deref(), Some("test_stamp"));
-            let cfg = read::automation_cfg_by_name(
-                tx.conn(),
-                crate::model::AutomationCfgOwner::Action,
-                mine.id,
-                "stamp",
-            )
-            .expect("read");
-            assert!(cfg.is_some(), "the setting it reads is the action's to declare");
-            let inputs = read::automation_ports_of(
-                tx.conn(),
-                AutomationPortOwner::Step,
-                step.id,
-                AutomationPortDirection::In,
-            )
-            .expect("ports");
-            assert_eq!(inputs.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), vec!["note"]);
-
-            assert!(
-                automation::step_update(tx, step.id, Some("renamed"), None, None, None, None, None, None).is_err(),
-                "the built-in's own row is not edited",
-            );
-            automation::action_update(tx, mine.id, Some("Still mine"), None).expect("the action is");
-            automation::step_delete(tx, step.id).expect("and so is taking it out");
-
-            // A setting of the same name but another kind is a clash the author has to settle.
-            let other = automation::action_add(tx, Some(project), "Other", "").expect("action");
-            automation::cfg_add(tx, other.id, "stamp", AutomationCfgKind::Number, false, None).expect("cfg");
-            assert!(step_add(tx, other.id, "test_stamp").is_err());
         });
     }
 

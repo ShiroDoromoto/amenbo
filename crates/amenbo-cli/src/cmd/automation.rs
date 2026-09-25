@@ -726,8 +726,20 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
         }
 
-        AutomationCmd::Start { id, text, files } => {
+        AutomationCmd::Start { id, text, files, title, notes, dim } => {
             let text = crate::cmd::arg::body_arg_opt(text)?;
+            let notes = crate::cmd::arg::body_arg_opt(notes)?;
+            // Split here and looked up by the launch, which answers for the axes against where the
+            // entry is placed (`amenbo_core::ops::automation_builtin_make`).
+            let classification = dim
+                .iter()
+                .map(|pair| match pair.split_once('=') {
+                    Some((axis, value)) => Ok((axis.trim().to_string(), value.trim().to_string())),
+                    None => Err(CliError::from(amenbo_core::Error::invalid(format!(
+                        "--dim takes <axis>=<value> (e.g. --dim \"Category=bug\"), got `{pair}`"
+                    )))),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             // Every file is read and held to its limit before any is ingested, so a refusal of the last
             // strands none of the ones before it. A launch refused after the ingest leaves its bytes to
             // `doctor --fix`, as an attach refused after it does (`crate::cmd::attach::attach_add`).
@@ -735,7 +747,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .iter()
                 .map(|path| crate::cmd::attach::file_to_ingest(store, path, None))
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut handed = HandedAtLaunch { text, ..Default::default() };
+            let mut handed = HandedAtLaunch { text, title, notes, classification, ..Default::default() };
             for file in &files {
                 let blob = file.ingest(store)?;
                 handed.files.push(HandedFile {

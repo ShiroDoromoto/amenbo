@@ -478,6 +478,18 @@ impl Driver<'_> {
                     self.in_session(file)?; // refuse a path that reaches out of the run's folder
                     args.extend(["--file".into(), file.to_string()]);
                 }
+                // What an entry that files a task is handed: its title, notes and classification.
+                for (key, flag) in [("title", "--title"), ("notes", "--notes")] {
+                    if let Some(value) = with.get(key).and_then(|v| v.as_str()) {
+                        args.extend([flag.into(), value.to_string()]);
+                    }
+                }
+                // One `axis=value` a line, each its own `--dim`.
+                if let Some(pairs) = with.get("dim").and_then(|v| v.as_str()) {
+                    for pair in pairs.lines().map(str::trim).filter(|l| !l.is_empty()) {
+                        args.extend(["--dim".into(), pair.to_string()]);
+                    }
+                }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_run", bind)?;
                 Ok(Outcome::action(format!("started automation {automation} as run {id}")))

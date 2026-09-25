@@ -359,7 +359,7 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # the work itself, a review, how a PR and its CI are handled. A name in <angle brackets> below is a
 # built-in's own, as `builtin-list` prints it.
 # A run comes in by one of three entrances, and each ends up working a task: take_task takes one its
-# filter finds; `start --text/--file` hands the first step what a person gives it; fetch goes to a URL,
+# filter finds; `start --text/--file` hands an agent's first step what a person gives it, and `--title/--notes/--dim` a make_task entry; fetch goes to a URL,
 # a file path or a command set beforehand. What is handed over or fetched is filed through make_task,
 # which can take the task as it files it — the example below takes the first entrance.
 amenbo automation add --name "Work the queue"          # the picture itself; what every step is told first is Amenbo's own
@@ -396,6 +396,7 @@ amenbo automation action-list                          # the library this projec
 amenbo automation action-show 7                        # one action, and the picture inside it
 amenbo automation start 3                              # away it goes
 amenbo automation start 4 --text - --file ./issue.md   # ...or hand the first step a text and files, for it to file as a task
+amenbo automation start 5 --title "Login loses the password field" --dim Category=bug   # ...or hand an entry that files a task its title, notes and classification
 amenbo automation pause 7                              # ...at the end of the step under way
 amenbo automation stop 7                               # ...now, handing the task back to todo
 # Inside a step's own terminal, the agent carrying it out reports through three more:

@@ -2280,7 +2280,9 @@ pub enum AutomationCmd {
 
     /// Start an automation: check it, copy what is placed on it into a run, and start it. The tasks a
     /// step works on and the folder it runs in are the automation's own answers, given while it was
-    /// built; what is handed over here — a text and files — goes to the run's first step
+    /// built; what is handed over here goes to the run's first step, and each entry reads its own:
+    /// an agent's step `--text` and `--file`, the make_task built-in `--title`, `--notes` and
+    /// `--dim`, and take_task or fetch nothing. Handing an entry what it does not read is refused
     Start {
         /// automation id
         id: i64,
@@ -2290,6 +2292,17 @@ pub enum AutomationCmd {
         /// a file for the first step to take in, attached to the run (repeat for several)
         #[arg(long = "file", value_name = "PATH")]
         files: Vec<String>,
+        /// the title of the task an entry that files one (make_task) files — required there
+        #[arg(long, value_name = "TITLE")]
+        title: Option<String>,
+        /// that task's notes, as Markdown. Pass `-` to read them from stdin
+        #[arg(long, value_name = "NOTES")]
+        notes: Option<String>,
+        /// classify that task as `<axis>=<value>`, by name (repeat for several axes). Open to the axes
+        /// the built-in offers the step before it, and to every axis the project requires that its
+        /// placement leaves open — a value on each of those is required
+        #[arg(long = "dim", value_name = "AXIS=VALUE")]
+        dim: Vec<String>,
     },
     /// Ask a run to pause. A step under way finishes first and the run pauses at the end of it,
     /// keeping the task it is working

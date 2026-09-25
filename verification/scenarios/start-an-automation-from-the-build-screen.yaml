@@ -123,3 +123,11 @@ steps_gui:
       step: claim
       action: take
       present: true
+
+  # The press goes where the run went: the run's pane is the one being worked in, rather than the
+  # reader being left on the build screen to go looking for it.
+  - type: assert
+    domain: workspace
+    op: worked-in
+    with:
+      shows: "SCENARIO SEED — nothing missing"

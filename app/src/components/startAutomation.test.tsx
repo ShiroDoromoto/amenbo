@@ -6,7 +6,8 @@
 // **a project with no automations draws no entrance**, since a heading over an empty row would put
 // the subject in front of a reader who has never met it; **an archived one is not offered**, which
 // is what archiving is for; and **what the press comes back with is said where the press was made**,
-// core's refusal in core's words and a queue in the reader's.
+// core's refusal in core's words and a queue in the reader's; and **a run that starts is gone to**
+// (`AMB-T-5530`), while a refused press moves nothing.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,12 +35,15 @@ function card(over: Partial<AutomationCardDto> = {}): AutomationCardDto {
   return { id: 7, name: "Morning round", notes: "", placements: 3, archived: false, ...over };
 }
 
+const goToRun = vi.fn();
+
 async function render(over: { workspaceOpen?: boolean; folders?: string[] } = {}) {
   await act(async () => {
     root.render(createElement(StartAutomation, {
       projectId: 1,
       folders: over.folders ?? ["/w/one"],
       workspaceOpen: over.workspaceOpen ?? true,
+      onGoToRun: goToRun,
     }));
   });
 }
@@ -57,6 +61,7 @@ beforeEach(() => {
   hoisted.automations = [];
   hoisted.launch.mockClear();
   hoisted.launch.mockResolvedValue({ run: 1 });
+  goToRun.mockClear();
 });
 
 afterEach(() => {
@@ -108,6 +113,15 @@ describe("the press", () => {
     await render();
     await act(async () => { button("Morning round").click(); });
     expect(container.textContent).toContain("the workspace is closed");
+    expect(goToRun).not.toHaveBeenCalled();
+  });
+
+  it("goes to the pane of the run it started", async () => {
+    hoisted.launch.mockResolvedValue({ run: 31 });
+    hoisted.automations = [card()];
+    await render();
+    await act(async () => { button("Morning round").click(); });
+    expect(goToRun).toHaveBeenCalledWith(1, 31);
   });
 
   it("clears the last refusal when the next press is made", async () => {

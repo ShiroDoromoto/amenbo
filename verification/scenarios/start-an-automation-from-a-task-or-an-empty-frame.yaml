@@ -94,6 +94,13 @@ steps_gui:
       action: take
       present: true
 
+  # The frame's press goes to the pane it stood, which is the one being worked in now.
+  - type: assert
+    domain: workspace
+    op: worked-in
+    with:
+      shows: "SCENARIO SEED — two ways in"
+
 
   # And both are on the tab that draws every run this device is carrying.
   - type: action

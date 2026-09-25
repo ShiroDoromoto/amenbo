@@ -123,7 +123,7 @@ export function AutomationBuildScreen({
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
   // is where an automation is built, not a third place for a launch to behave differently.
-  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen);
+  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
 
   const pressed =
     showing?.kind === "box"

@@ -14,12 +14,16 @@
 // **The pane takes up the terminal the host started.** A step's terminal is started, and the one
 // before it ended, on the host whether or not the pane is drawn (`crate::pty::open_step`), so what the
 // face does with a step is put its session on the run's place for the pane to draw.
+//
+// **Except where the run was started here.** A press on the empty frame's start is a person asking
+// for that run, so the face goes to its pane — and stands it where the step has not arrived yet, for
+// the step to land in (`AMB-T-5530`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneStart } from "../talk/terminal";
 import type { BuiltinRun, StepOpened, StepRun } from "../talk/automationStep";
-import type { AutomationRunCardDto } from "../bindings/bindings";
+import type { AutomationCardDto, AutomationRunCardDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   /** Every opening the face asked for, in order. */
@@ -40,6 +44,8 @@ const hoisted = vi.hoisted(() => ({
   standing: [] as StepOpened[],
   /** The runs the host answers the face's panes with (`useRunCards`). */
   cards: [] as AutomationRunCardDto[],
+  /** The project's automations, offered on the empty frame. */
+  automations: [] as AutomationCardDto[],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -82,6 +88,8 @@ vi.mock("../talk/frames", async (importOriginal) => ({
 vi.mock("../core/automations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../core/automations")>()),
   useRunCards: () => hoisted.cards,
+  useAutomations: () => hoisted.automations,
+  launchAutomation: () => Promise.resolve({ run: 7 }),
   stopRun: (run: number) => {
     hoisted.stopped.push(run);
     return Promise.resolve(true);
@@ -208,6 +216,7 @@ beforeEach(() => {
   hoisted.says = true;
   hoisted.standing = [];
   hoisted.cards = [];
+  hoisted.automations = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -249,6 +258,22 @@ describe("the pane a run is drawn in", () => {
     await mount();
     await arrive();
     expect(worked()).toBe(null);
+  });
+
+  it("goes to the pane of a run started on the empty frame, and the step lands in it", async () => {
+    hoisted.automations = [{ id: 3, name: "家計簿の開発ループ", notes: "", placements: 2, archived: false }];
+    await mount();
+    const press = q(".autostart__rows button").find((b) => b.textContent === "家計簿の開発ループ")!;
+    await act(async () => {
+      press.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(panes()).toHaveLength(1);
+    expect(worked()).toBe("run-7");
+
+    await arrive();
+    expect(panes()).toHaveLength(1);
+    expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("step-1");
   });
 
   it("keeps one pane at the next step, and draws the next step's terminal in it", async () => {

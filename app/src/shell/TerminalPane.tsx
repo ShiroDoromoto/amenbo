@@ -29,6 +29,7 @@ import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionMadeDto, SessionSaidDto } from "../bindings/bindings";
 import { currentLang, errText, t, tf } from "../core/i18n";
+import { useRefNav } from "../core/refNav";
 import { asTyped, isComposing, isEnterSubmit } from "../core/keys";
 import { hostOs } from "../core/platform";
 import { Icon } from "../components/Icon";
@@ -316,6 +317,12 @@ export function TerminalPane({
    *  with its pane gone would be one nobody could see, reach or stop. A run not read yet is not held
    *  to this — a pane whose run has gone from under its id would otherwise stand there for good. */
   const runLive = run?.state?.status === "running" || run?.state?.status === "paused";
+  // Over, as the row says it — ended one of the three ways a run ends. Not read off `runLive`: a run's
+  // state is null until it is first read, and that is not over.
+  const over =
+    run?.state?.status === "completed" || run?.state?.status === "failed" || run?.state?.status === "canceled";
+  // Where a run's pane sends the reader on the ledger — the shell's in one window, the host's across two.
+  const ledger = useRefNav();
 
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
    *  whose pane has gone is one nobody can get back to.
@@ -904,6 +911,17 @@ export function TerminalPane({
               </button>
             </span>
           )}
+          {/* **Where a finished run is read from now** (`AMB-T-5539`): the history tab, on the ledger.
+              The run's moves are gone once it is over, and this stands where they stood. */}
+          {run !== null && over && ledger.openRunHistory !== undefined && (
+            <button
+              type="button"
+              className="slot__runlink"
+              onClick={() => ledger.openRunHistory?.(project)}
+            >
+              {t("auto.run.seeHistory")}
+            </button>
+          )}
           {size !== undefined && onSize !== undefined && <PaneSize size={size} onSize={onSize} />}
           {live !== null && (
             <button
@@ -939,6 +957,17 @@ export function TerminalPane({
                 ? stoppedAt(run.state.exit, run.state.errorExit)
                 : run.state.why ?? run.state.word}
             </span>
+            {/* The picture it stopped on, with the box it stopped at pressed (`AMB-T-5539`) — on the
+                ledger, which is where a definition is read and changed. */}
+            {ledger.openAutomation !== undefined && (
+              <button
+                type="button"
+                className="slot__bandact slot__bandact--quiet"
+                onClick={() => ledger.openAutomation?.(project, run.automationId, run.placement)}
+              >
+                {t("auto.run.seePicture")}
+              </button>
+            )}
             {!run.state.acknowledged && (
               <button
                 type="button"

@@ -131,6 +131,7 @@ vi.mock("../core/boundFolders", () => ({
 import { WorkspaceFace } from "./WorkspaceFace";
 import { statusLabel, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
+import { RefNavProvider, type RefNav } from "../core/refNav";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -410,6 +411,47 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     await arrive();
     expect(q(".slot__band")).toHaveLength(1);
     expect(q(".slot__bandact")).toHaveLength(0);
+  });
+
+  it("goes to the picture from a failed run's band, and to the history once any run is over (AMB-T-5539)", async () => {
+    const went: unknown[][] = [];
+    const nav: RefNav = {
+      openAutomation: (...args) => went.push(["picture", ...args]),
+      openRunHistory: (...args) => went.push(["history", ...args]),
+    };
+    hoisted.cards = [runCard({ status: "failed", stoppedReason: "halted", exitName: "*" })];
+    await act(async () => {
+      root.render(
+        createElement(RefNavProvider, {
+          value: nav,
+          children: createElement(WorkspaceFace, { onWindow: () => {}, note: null, projectId: 1 }),
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await arrive();
+
+    // The band's quiet press opens the picture with the box the step was opened from pressed.
+    const picture = [...q(".slot__bandact")].find((one) => one.textContent === t("auto.run.seePicture"))!;
+    await act(async () => picture.click());
+    expect(went).toEqual([["picture", 1, 3, 11]]);
+
+    // The row says where the run is read from now.
+    const history = q(".slot__runlink")[0]!;
+    expect(history.textContent).toBe(t("auto.run.seeHistory"));
+    await act(async () => history.click());
+    expect(went[1]).toEqual(["history", 1]);
+  });
+
+  it("offers neither while the run is going, nor where there is no ledger to go to", async () => {
+    await mount();
+    await arrive();
+    expect(q(".slot__runlink")).toHaveLength(0);
+
+    hoisted.cards = [runCard({ status: "failed", stoppedReason: "crashed" })];
+    await arrive();
+    expect([...q(".slot__bandact")].map((one) => one.textContent)).not.toContain(t("auto.run.seePicture"));
+    expect(q(".slot__runlink")).toHaveLength(0);
   });
 
   it("says any other failure by its reason", async () => {

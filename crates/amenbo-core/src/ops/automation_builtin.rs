@@ -44,6 +44,7 @@ use crate::model::{
 use crate::ops::automation::{self, EdgeTarget, NewStep};
 use crate::ops::automation_builtin_close::CLOSE_TASK;
 use crate::ops::automation_builtin_cut::CUT_WORKTREE;
+use crate::ops::automation_builtin_fetch::FETCH;
 use crate::ops::automation_builtin_fold::FOLD_WORKTREE;
 use crate::ops::automation_builtin_make::MAKE_TASK;
 use crate::ops::automation_builtin_take::TAKE_TASK;
@@ -101,6 +102,8 @@ pub struct Outside<'a> {
     pub run: &'a AutomationRun,
     /// The task the stretch under way is about, or `None` before one is taken.
     pub task_id: Option<i64>,
+    /// The answers written where the step was placed.
+    pub cfg: &'a [RunDefCfg],
 }
 
 /// **How a built-in working outside the store finished** — [`Carried`], with what it hands on through
@@ -145,7 +148,8 @@ pub fn work_outside(conn: &Connection, run_id: i64, run_def_id: i64) -> Result<O
     // The stretch under way, as the opening reads it: a built-in working here takes no task, so it
     // joins that one and opens none.
     let task_id = read::automation_run_task_last(conn, run_id)?.and_then(|s| s.task_id);
-    let worked = work(&Outside { conn, run: &run, task_id });
+    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    let worked = work(&Outside { conn, run: &run, task_id, cfg: &cfg });
     Ok(Some(DoneOutside { run_def_id, worked }))
 }
 
@@ -325,14 +329,13 @@ pub struct Carried {
     pub report: String,
 }
 
-/// **Every built-in this build carries.** The four `AMB-D-964` names arrive one by one on top of this
-/// ground, and the one that files a task (`AMB-D-971`) after them; each is its own module, holding its
-/// definition and the work it does.
+/// **Every built-in this build carries.** Each is its own module, holding its definition and the work
+/// it does.
 #[cfg(not(test))]
-const BUILTINS: &[Builtin] = &[TAKE_TASK, MAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK];
+const BUILTINS: &[Builtin] = &[TAKE_TASK, MAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK, FETCH];
 #[cfg(test)]
 const BUILTINS: &[Builtin] =
-    &[TAKE_TASK, MAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK, tests::STAMP, tests::FALLS];
+    &[TAKE_TASK, MAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK, FETCH, tests::STAMP, tests::FALLS];
 
 /// Every built-in, in the order a library lists them.
 pub fn all() -> &'static [Builtin] {

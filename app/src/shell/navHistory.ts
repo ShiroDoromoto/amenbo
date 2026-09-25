@@ -30,8 +30,14 @@ export type NavAction = { type: "push"; loc: Location } | { type: "back" } | { t
 
 // The project a screen arrives holding is part of where you are, so two ways into the same screen that
 // name different projects are two places — otherwise walking in from a creation and then from the
-// sidebar would leave the first one's project still on the screen.
-const sameNav = (a: Nav, b: Nav) => a.type === b.type && a.id === b.id && a.pick === b.pick;
+// sidebar would leave the first one's project still on the screen. What a project arrives with open
+// is part of it for the same reason: a run's pane sending the reader to a picture or to the history
+// on the project already in front of them is a move, and an arrival counted again is another one
+// (`AMB-T-5539`).
+const sameNav = (a: Nav, b: Nav) =>
+  a.type === b.type && a.id === b.id && a.pick === b.pick &&
+  a.automation === b.automation && a.action === b.action &&
+  a.placement === b.placement && a.runs === b.runs && a.nth === b.nth;
 const sameSel = (a: Selection, b: Selection) =>
   a.type === b.type && (a.type === "none" || a.id === (b as { id: string | number }).id);
 const sameLocation = (a: Location | undefined, b: Location) =>

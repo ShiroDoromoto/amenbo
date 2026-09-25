@@ -87,6 +87,8 @@ const TABS: readonly { id: Tab; label: () => string }[] = [
 export function AutomationsScreen({
   projectId,
   opening,
+  openingBox,
+  openingTab,
   openingAction,
   workspaceOpen,
   onGoToRun,
@@ -97,6 +99,10 @@ export function AutomationsScreen({
   projectId: number | null;
   /** The definition to arrive already open on — a press on the sidebar's list that came here. */
   opening?: number;
+  /** The box that definition arrives with pressed on its picture (`./AutomationBuildScreen`). */
+  openingBox?: number;
+  /** The tab to arrive on — "history", for a run's pane once its run is over (`AMB-T-5539`). */
+  openingTab?: "history";
   /** The library action to arrive already open on, on the "actions" tab — a global action a project
    *  sent here to be changed. */
   openingAction?: number;
@@ -110,7 +116,9 @@ export function AutomationsScreen({
   onGoToGlobalAction?: (action: number) => void;
 }) {
   const everywhere = projectId === null;
-  const [tab, setTab] = useState<Tab>(openingAction === undefined ? "automations" : "actions");
+  const [tab, setTab] = useState<Tab>(
+    openingTab ?? (openingAction === undefined ? "automations" : "actions"),
+  );
   // Which definition is open, or nothing while the list is. The build screen replaces the list
   // rather than standing beside it, so this is where the screen is and not a selection within it.
   const [open, setOpen] = useState<number | null>(opening ?? null);
@@ -193,6 +201,8 @@ export function AutomationsScreen({
           id={open}
           projectId={projectId}
           workspaceOpen={workspaceOpen}
+          // Only the definition arrived on: a later one opened from the list starts with nothing pressed.
+          openingBox={open === opening ? openingBox : undefined}
           onBack={() => setOpen(null)}
           onOpenAction={setOpenAction}
           onGoToRun={onGoToRun}

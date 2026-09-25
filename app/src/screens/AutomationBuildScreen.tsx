@@ -99,7 +99,7 @@ type Showing =
   | { kind: "about" };
 
 export function AutomationBuildScreen({
-  id, projectId, workspaceOpen, onBack, onOpenAction, onGoToRun,
+  id, projectId, workspaceOpen, openingBox, onBack, onOpenAction, onGoToRun,
 }: {
   id: number;
   /** Whose project this automation is — what the machine is asked about, and where its folders are. */
@@ -110,6 +110,9 @@ export function AutomationBuildScreen({
    * it — last of its three refusals, so a half-built automation is named before a window is.
    */
   workspaceOpen: boolean;
+  /** The box to arrive with pressed — the one a run stopped at, sent here from its pane
+   *  (`AMB-T-5539`). */
+  openingBox?: number;
   onBack: () => void;
   /** Go to one library action's own build screen — where an action made here is built. */
   onOpenAction: (actionId: number) => void;
@@ -119,8 +122,11 @@ export function AutomationBuildScreen({
   const automation = useAutomation(id);
   const held = (automation?.heldBy.length ?? 0) > 0;
   // Nothing until something is pressed — a definition opens on the picture, and a box picked for the
-  // reader would be one they did not choose.
-  const [showing, setShowing] = useState<Showing | null>(null);
+  // reader would be one they did not choose. The one exception is a box they chose elsewhere: the one
+  // a run stopped at, pressed on its pane's band.
+  const [showing, setShowing] = useState<Showing | null>(
+    openingBox === undefined ? null : { kind: "box", id: openingBox },
+  );
   // Where the dialog that makes an action on the spot is about to put it, while it is open.
   // The dialog's target, and the name the library's search box held when it was pressed.
   const [making, setMaking] = useState<{ target: PlaceTarget; name: string } | null>(null);

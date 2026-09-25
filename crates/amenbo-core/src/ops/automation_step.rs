@@ -240,8 +240,9 @@ fn unquoted(value: &str) -> String {
 ///
 /// The answer is kept as one list per part — `{"status":["todo"],"ready":["yes"]}` — because that is the
 /// shape the build screen presses chips into. The expression is the reading filterGrammar gives it: the
-/// values of one part comma-joined (any-of), and the parts space-joined (both). A part written as one
-/// string rather than a list is read as a list of one.
+/// values of one part comma-joined (any-of), and the parts space-joined (both) — except `dim`, whose
+/// values are each a `dim:<axis>=<value>` token of their own. A part written as one string rather than
+/// a list is read as a list of one.
 ///
 /// The order the tasks are taken in is kept beside the parts, under [`TASKFILTER_SORT_KEY`], and is not
 /// one of them: it says which comes first, not which are in ([`taskfilter_sort`]).
@@ -265,7 +266,15 @@ pub fn taskfilter_expr(value: &str) -> Option<String> {
                 .collect(),
             _ => Vec::new(),
         };
-        if !values.is_empty() {
+        if values.is_empty() {
+            continue;
+        }
+        // A `dim:` value is the user's own text and may hold a comma, so the grammar gives it no
+        // comma-joined any-of: each value is a token of its own, and tokens naming one axis fold into
+        // any-of while tokens naming different axes AND (`AMB-D-655`).
+        if key == "dim" {
+            out.extend(values.iter().map(|one| format!("dim:{one}")));
+        } else {
             out.push(format!("{key}:{}", values.join(",")));
         }
     }
@@ -1073,6 +1082,11 @@ mod tests {
         );
         assert_eq!(taskfilter_expr(r#"{"status":"todo"}"#).as_deref(), Some("status:todo"));
         assert_eq!(taskfilter_expr(r#"{"status":[]}"#), None, "no part left");
+        // `AMB-T-5551`: a `dim:` value may hold a comma, so joining two would read as one value.
+        assert_eq!(
+            taskfilter_expr(r#"{"dim":["テーマ=メイン","フェーズ=運用第2期"],"status":["todo"]}"#).as_deref(),
+            Some("dim:テーマ=メイン dim:フェーズ=運用第2期 status:todo")
+        );
         assert_eq!(taskfilter_expr(r#""todo""#), None, "not an object of parts");
         assert_eq!(taskfilter_expr("status:todo"), None, "not JSON");
     }

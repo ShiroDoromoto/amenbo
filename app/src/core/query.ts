@@ -121,6 +121,10 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       // putting it there would double the feed for a number a person glances at rather than watches.
       case "viewer-state": return touchesScope("viewer");
       case "viewer-pairing": return touchesScope("viewer");
+      // The device's shelf of notification targets, and one project's notification pane. Both are moved
+      // from the CLI (`notify target-add`, `notify on`, `notify use` …), which the feed folds here.
+      case "notify-targets": return touchesScope("notifyTargets");
+      case "project-notify": return touchesScope("projectNotify");
       // The "running" tab's rows. What moves them is a run being launched, moving on to its next step
       // or ending — every one of which is a row of `automation_run`, of the stretch it is spending on
       // a task, or of the steps it has opened (`core/changes`).

@@ -937,7 +937,7 @@ export const id: Translation = {
     "auto.pic.lap": "Satu tugas",
     "auto.pic.insert": "Sisipkan aksi di sini",
     "auto.pic.errorExit": "galat",
-    "auto.pic.endsDone": "tugas ini selesai di sini",
+    "auto.pic.endsDone": "akhiri run",
     "auto.pic.endsHalt": "berhenti dan panggil orang",
     "auto.pic.unfed": "tidak ada yang sampai ke {names}",
     "auto.pic.hands": "menyerahkan {from} ke {to}",

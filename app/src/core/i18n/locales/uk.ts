@@ -953,7 +953,7 @@ export const uk: Translation = {
     "auto.pic.lap": "Одне завдання",
     "auto.pic.insert": "Вставити сюди дію",
     "auto.pic.errorExit": "помилка",
-    "auto.pic.endsDone": "завдання на цьому завершується",
+    "auto.pic.endsDone": "завершити запуск",
     "auto.pic.endsHalt": "зупинитися й покликати людину",
     "auto.pic.unfed": "нічого не доходить до {names}",
     "auto.pic.hands": "передає {from} до {to}",

@@ -61,6 +61,19 @@ describe("foldScopes — folding datasets into invalidation scopes", () => {
     expect([...scopes]).toEqual(["projects"]);
   });
 
+  // The notification tables. The CLI's `notify target-add`, `notify on` and `notify use` arrive only
+  // through here, so each has to name the screen it moves — folded to nothing, the device's shelf and a
+  // project's pane keep what they drew until "refresh" is pressed.
+  it("the notification tables fold to the shelf of targets and to a project's notification pane", () => {
+    expect([...foldScopes([row("notify_target")]).scopes]).toEqual(["notifyTargets"]);
+    expect([...foldScopes([row("project_notify")]).scopes]).toEqual(["projectNotify"]);
+    expect([...foldScopes([row("project_notify_event")]).scopes]).toEqual(["projectNotify"]);
+    // A project choosing or dropping a target moves the count of projects the shelf shows beside it.
+    expect([...foldScopes([row("project_notify_target")]).scopes].sort()).toEqual(["notifyTargets", "projectNotify"]);
+    // A webhook or a password saved alone is written to `secret`, and the shelf says whether one is set.
+    expect([...foldScopes([row("secret")]).scopes].sort()).toEqual(["notifyTargets", "viewer"]);
+  });
+
   it("no changes means no scopes", () => {
     expect(foldScopes([])).toEqual({ scopes: new Set(), unknown: false });
   });

@@ -325,6 +325,76 @@ describe("the picture of an automation", () => {
     expect(laneX("edge-4")).not.toBe(laneX("edge-5"));
   });
 
+  it("keeps lines that go back apart, the longest outermost and each into its own place", () => {
+    const again = (id: number) => [
+      { id, outputs: [] },
+      { id: id + 1, name: "again", outputs: [] },
+      { id: id + 2, name: "*", outputs: [] },
+    ];
+    // Two lines back into the third step and one back to the top — the shape a development loop takes.
+    const one = detail({
+      entryPlacementId: 1,
+      placements: [
+        taker(1, "take"),
+        step({ id: 2, name: "plan" }),
+        step({ id: 3, name: "build" }),
+        step({ id: 4, name: "check", exits: again(100) }),
+        step({ id: 5, name: "review", exits: again(110) }),
+        step({ id: 6, name: "merge" }),
+        step({ id: 7, name: "close", exits: again(120) }),
+      ],
+      edges: [
+        edge({ id: 1, fromId: 1, toId: 2 }),
+        edge({ id: 2, fromId: 2, toId: 3 }),
+        edge({ id: 3, fromId: 3, toId: 4 }),
+        edge({ id: 4, fromId: 4, toId: 5 }),
+        edge({ id: 5, fromId: 5, toId: 6 }),
+        edge({ id: 6, fromId: 6, toId: 7 }),
+        edge({ id: 7, fromId: 4, exitName: "again", toId: 3 }),
+        edge({ id: 8, fromId: 5, exitName: "again", toId: 3 }),
+        edge({ id: 9, fromId: 7, exitName: "again", toId: 1 }),
+      ],
+    });
+    const picture = layOut(one);
+    const line = (key: string) => picture.lines.find((one) => one.key === key)!;
+    const laneX = (key: string) => Math.min(...line(key).points.map((p) => p.x));
+    // The one past every row outside the two that run past fewer, so neither crosses it.
+    expect(laneX("edge-9")).toBeLessThan(laneX("edge-8"));
+    expect(laneX("edge-8")).toBeLessThan(laneX("edge-7"));
+    // Into the third step, three lines: the two back and the one from the row above. Each lands on
+    // a place of its own, and turns down at a height of its own.
+    const last = (key: string) => line(key).points.slice(-2);
+    const into = ["edge-7", "edge-8", "edge-2"].map(last);
+    expect(new Set(into.map(([, foot]) => foot!.x)).size).toBe(3);
+    expect(new Set(into.map(([turn]) => turn!.y)).size).toBe(3);
+    // Nearer the lanes, the one on the inner lane — so the outer one's last leg passes over it.
+    expect(last("edge-7")[1]!.x).toBeLessThan(last("edge-8")[1]!.x);
+    expect(last("edge-8")[0]!.y).toBeLessThan(last("edge-7")[0]!.y);
+  });
+
+  it("gives two lines leaving one box for the margin a leg each", () => {
+    const one = detail({
+      entryPlacementId: 1,
+      placements: [
+        taker(1, "take"),
+        step({ id: 2, name: "work" }),
+        step({ id: 3, name: "check", exits: [{ id: 93, name: "again", outputs: [] }, { id: 94, name: "*", outputs: [] }] }),
+      ],
+      edges: [
+        edge({ id: 1, fromId: 1, toId: 2 }),
+        edge({ id: 2, fromId: 2, toId: 3 }),
+        edge({ id: 3, fromId: 3, exitName: "again", toId: 2 }),
+        edge({ id: 4, fromId: 3, exitName: "*", toId: 1 }),
+      ],
+    });
+    const picture = layOut(one);
+    const leg = (key: string) => picture.lines.find((one) => one.key === key)!.points.slice(0, 3);
+    const [inner, outer] = [leg("edge-3"), leg("edge-4")];
+    // Tied at two places, and the one going further out turns lower and from further right.
+    expect(inner[0]!.x).toBeLessThan(outer[0]!.x);
+    expect(inner[1]!.y).toBeLessThan(outer[1]!.y);
+  });
+
   it("draws the error way out of every box, as the stop it is where nobody said what follows it", () => {
     const steps = [taker(1, "take"), step({ id: 2, name: "work" })];
     const plain = layOut(

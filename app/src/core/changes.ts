@@ -68,18 +68,16 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // set, and for the Viewer that answer *is* the screen — a device with no server and one with a server
   // are two different panes, and the three fields setup writes are what tells them apart. So it folds to
   // the Viewer's scope: the CLI's `viewer setup` is the ordinary way this arrives while the pane is open.
-  // The notification shelf reads a credential the same way and names no scope yet; it is drawn from its
-  // own writes, and a target saved from the CLI is what it does not yet hear.
-  secret: ["viewer"],
-  // The notification tables (`AMB-D-885`): the device's shelf of targets, and the three a project's own
-  // row is written on. Folded to nothing for `secret`'s reason rather than a different one — nothing on
-  // screen draws them yet, so no query goes stale when one moves, and falling to gap would buy a full
-  // re-read for a change nobody can see. The two screens that will draw them — the shelf under the
-  // device's settings, the notification pane under a project's — name their scope here when they arrive.
-  notify_target: [],
-  project_notify: [],
-  project_notify_target: [],
-  project_notify_event: [],
+  // The notification shelf reads a credential the same way — whether a target's webhook or password is
+  // set is what its row says — so a secret saved from the CLI moves that shelf too.
+  secret: ["viewer", "notifyTargets"],
+  // The notification tables (`AMB-D-885`): the device's shelf of targets, drawn under the device's
+  // settings, and the three a project's own row is written on, drawn on a project's notification pane.
+  // A project choosing or dropping a target moves both — the shelf says how many projects use each one.
+  notify_target: ["notifyTargets"],
+  project_notify: ["projectNotify"],
+  project_notify_target: ["projectNotify", "notifyTargets"],
+  project_notify_event: ["projectNotify"],
   // This device's own tables (`AMB-D-856`). None of them travels anywhere, and all three are written by
   // the CLI and drawn here: the folders a project is bound to, and the two answers given for it. They
   // fold to the project they are about, which is the surface each of them is on.

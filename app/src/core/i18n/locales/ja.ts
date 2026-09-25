@@ -942,7 +942,7 @@ export const ja: Translation = {
     "auto.pic.lap": "1件ぶん",
     "auto.pic.insert": "ここへアクションを挟む",
     "auto.pic.errorExit": "エラー",
-    "auto.pic.endsDone": "このタスクを終える",
+    "auto.pic.endsDone": "実行を終える",
     "auto.pic.endsHalt": "止めて人を呼ぶ",
     "auto.pic.unfed": "{names} に何も届かない",
     "auto.pic.hands": "{from} を {to} へ渡す",

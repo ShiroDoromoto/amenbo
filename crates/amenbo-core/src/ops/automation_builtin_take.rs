@@ -411,7 +411,8 @@ mod tests {
     }
 
     /// **Left unanswered, or answered not to wait, it does not** — and then the way out that says
-    /// there was nothing to take is one the launch check asks a line of.
+    /// there was nothing to take is one the launch check asks a line of. The reason carries the
+    /// built-in's key, so a screen can write its words in its own language.
     #[test]
     fn not_set_to_wait_the_way_out_for_nothing_to_take_needs_a_line() {
         with_tx(|tx| {
@@ -422,9 +423,13 @@ mod tests {
             for answer in [None, Some(format!("\"{GO_ON}\""))] {
                 automation::cfg_set(tx, spot, WHEN_NONE, answer.as_deref()).expect("answer");
                 let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked()).expect("check");
+                let open = unmet
+                    .iter()
+                    .find(|u| matches!(u, Unmet::OpenExit { exit: Some(e), .. } if e == NONE_TO_TAKE))
+                    .unwrap_or_else(|| panic!("{answer:?}: {unmet:?}"));
                 assert!(
-                    unmet.iter().any(|u| matches!(u, Unmet::OpenExit { exit: Some(e), .. } if e == NONE_TO_TAKE)),
-                    "{answer:?}: {unmet:?}",
+                    open.msg().fields().iter().any(|field| field == ("builtin", TAKE_TASK.key)),
+                    "{open:?}",
                 );
             }
         });

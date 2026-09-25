@@ -50,6 +50,11 @@ use crate::time::Timestamp;
 ///
 /// They are a type rather than ten sentences because both doors need them: the refusal writes them out
 /// as English, and the build screen draws them as a list beside the step each belongs to.
+///
+/// **`builtin` is the key of the built-in a name came from** (`AMB-D-964`), and `to_builtin` the same
+/// for `to`. A built-in's step, ways out, inputs and settings are named in the store's Japanese, so a
+/// screen drawn in another language turns them into its own — and only a name carrying a key is
+/// turned, since a person's action may use the same word for something of its own.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unmet {
     /// Nothing is placed on the automation at all. Nothing else is worth saying about it.
@@ -62,15 +67,15 @@ pub enum Unmet {
     ActionEmpty { action: String },
     /// The entry declares no `task_take` output, so no step of the run would ever come to hold a task
     /// and every step after it would be about nothing.
-    EntryTakesNoTask { step: String },
+    EntryTakesNoTask { step: String, builtin: Option<String> },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
-    OpenExit { step: String, exit: Option<String> },
+    OpenExit { step: String, exit: Option<String>, builtin: Option<String> },
     /// A required input with nothing reaching it — no wire at all, or none whose far end is both
     /// declared and reachable from the entry.
-    UnwiredInput { step: String, port: String },
+    UnwiredInput { step: String, port: String, builtin: Option<String> },
     /// A required setting nobody answered while building.
-    UnansweredCfg { step: String, cfg: String },
+    UnansweredCfg { step: String, cfg: String, builtin: Option<String> },
     /// A step nobody has been chosen to carry out where its action is placed (`AMB-D-960`). A pane
     /// opened on it would have no agent to start.
     AgentUnchosen { step: String },
@@ -89,7 +94,13 @@ pub enum Unmet {
     ///
     /// `step` and `exit` name the way out the line leaves by. Lines inside one task — a review sending
     /// the work back, say — are not asked about: only the ones leading out of it.
-    LeavesTaskOpen { step: String, exit: Option<String>, to: Option<String> },
+    LeavesTaskOpen {
+        step: String,
+        exit: Option<String>,
+        to: Option<String>,
+        builtin: Option<String>,
+        to_builtin: Option<String>,
+    },
 }
 
 impl Unmet {
@@ -102,16 +113,16 @@ impl Unmet {
             Unmet::ActionEmpty { action } => {
                 format!("the action '{action}' placed on it has no step to start at")
             }
-            Unmet::EntryTakesNoTask { step } => {
+            Unmet::EntryTakesNoTask { step, .. } => {
                 format!("the entry '{step}' takes no task — declare a task_take output on one of its ways out")
             }
-            Unmet::OpenExit { step, exit } => {
+            Unmet::OpenExit { step, exit, .. } => {
                 format!("nothing is set to happen after {} of '{step}'", named(exit.as_deref()))
             }
-            Unmet::UnwiredInput { step, port } => {
+            Unmet::UnwiredInput { step, port, .. } => {
                 format!("the required input '{port}' of '{step}' has nothing reaching it")
             }
-            Unmet::UnansweredCfg { step, cfg } => {
+            Unmet::UnansweredCfg { step, cfg, .. } => {
                 format!("the required setting '{cfg}' of '{step}' is unanswered")
             }
             Unmet::AgentUnchosen { step } => {
@@ -123,7 +134,7 @@ impl Unmet {
             Unmet::ModelMissing { step, agent, model } => {
                 format!("'{step}' asks for the model '{model}', which '{agent}' here does not offer")
             }
-            Unmet::LeavesTaskOpen { step, exit, to } => {
+            Unmet::LeavesTaskOpen { step, exit, to, .. } => {
                 let from = format!("{} of '{step}'", named(exit.as_deref()));
                 match to {
                     Some(to) => format!(
@@ -177,30 +188,50 @@ impl Unmet {
     /// lists came apart (`AMB-T-5287`).
     pub fn msg(&self) -> Msg {
         let msg = Msg::new(self.say()).coded(self.code());
+        let msg = match self.builtin() {
+            Some(key) => msg.with("builtin", key),
+            None => msg,
+        };
         match self {
             Unmet::NoSteps | Unmet::NoEntry => msg,
             Unmet::ActionEmpty { action } => msg.with("action", action),
-            Unmet::EntryTakesNoTask { step } => msg.with("step", step),
-            Unmet::OpenExit { step, exit } => match exit {
+            Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
+            Unmet::OpenExit { step, exit, .. } => match exit {
                 Some(exit) => msg.with("step", step).with("exit", exit),
                 None => msg.with("step", step),
             },
-            Unmet::UnwiredInput { step, port } => msg.with("step", step).with("port", port),
-            Unmet::UnansweredCfg { step, cfg } => msg.with("step", step).with("cfg", cfg),
+            Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
+            Unmet::UnansweredCfg { step, cfg, .. } => msg.with("step", step).with("cfg", cfg),
             Unmet::AgentUnchosen { step } => msg.with("step", step),
             Unmet::AgentMissing { step, agent } => msg.with("step", step).with("agent", agent),
             Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
-            Unmet::LeavesTaskOpen { step, exit, to } => {
+            Unmet::LeavesTaskOpen { step, exit, to, to_builtin, .. } => {
                 let msg = msg.with("step", step);
                 let msg = match exit {
                     Some(exit) => msg.with("exit", exit),
                     None => msg,
                 };
-                match to {
+                let msg = match to {
                     Some(to) => msg.with("to", to),
+                    None => msg,
+                };
+                match to_builtin {
+                    Some(key) => msg.with("to_builtin", key),
                     None => msg,
                 }
             }
+        }
+    }
+
+    /// The key of the built-in `step` came from, or `None` for a person's own action or step.
+    fn builtin(&self) -> Option<&str> {
+        match self {
+            Unmet::EntryTakesNoTask { builtin, .. }
+            | Unmet::OpenExit { builtin, .. }
+            | Unmet::UnwiredInput { builtin, .. }
+            | Unmet::UnansweredCfg { builtin, .. }
+            | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
+            _ => None,
         }
     }
 }
@@ -306,16 +337,20 @@ pub fn check(
     let mut unmet = Vec::new();
     if let Some(entry) = by_id.get(&entry_id) {
         if !takes_a_task(conn, entry.action_id)? {
-            unmet.push(Unmet::EntryTakesNoTask { step: action_name(conn, entry.action_id)? });
+            unmet.push(Unmet::EntryTakesNoTask {
+                step: action_name(conn, entry.action_id)?,
+                builtin: action_builtin(conn, entry.action_id)?,
+            });
         }
     }
     for placement in placements.iter().filter(|p| live.contains(&p.id)) {
         let name = action_name(conn, placement.action_id)?;
+        let builtin = action_builtin(conn, placement.action_id)?;
         let settings = settings_of(conn, placement)?;
         // A built-in set to wait never leaves by the way out it waits instead of (`AMB-D-969`), so
         // nothing has to follow it.
-        let never_taken = match read::automation_action(conn, placement.action_id)?.and_then(|a| a.builtin) {
-            Some(key) => crate::ops::automation_builtin::never_leaves_by(&key, |setting| {
+        let never_taken = match &builtin {
+            Some(key) => crate::ops::automation_builtin::never_leaves_by(key, |setting| {
                 settings.iter().find(|cfg| cfg.name == setting).and_then(|cfg| cfg.value.as_deref())
             }),
             None => None,
@@ -333,7 +368,11 @@ pub fn check(
                 continue;
             }
             if !decided(conn, placement.id, exit.id, &by_id)? {
-                unmet.push(Unmet::OpenExit { step: name.clone(), exit: exit.name.clone() });
+                unmet.push(Unmet::OpenExit {
+                    step: name.clone(),
+                    exit: exit.name.clone(),
+                    builtin: builtin.clone(),
+                });
             }
         }
         for port in read::automation_ports_of(
@@ -343,12 +382,12 @@ pub fn check(
             AutomationPortDirection::In,
         )? {
             if port.required && !fed(conn, placement, port.id, &live, &by_id)? {
-                unmet.push(Unmet::UnwiredInput { step: name.clone(), port: port.name });
+                unmet.push(Unmet::UnwiredInput { step: name.clone(), port: port.name, builtin: builtin.clone() });
             }
         }
         for cfg in settings {
             if cfg.required && cfg.value.is_none() {
-                unmet.push(Unmet::UnansweredCfg { step: name.clone(), cfg: cfg.name });
+                unmet.push(Unmet::UnansweredCfg { step: name.clone(), cfg: cfg.name, builtin: builtin.clone() });
             }
         }
         let steps = steps_opened_by(conn, placement.action_id)?;
@@ -437,6 +476,8 @@ fn leaves_task_open(
                             step: action_name(conn, from.action_id)?,
                             exit: exit.name.clone(),
                             to: None,
+                            builtin: action_builtin(conn, from.action_id)?,
+                            to_builtin: None,
                         }],
                     );
                     continue;
@@ -456,6 +497,8 @@ fn leaves_task_open(
                         step: action_name(conn, from.action_id)?,
                         exit: exit.name.clone(),
                         to: Some(action_name(conn, to.action_id)?),
+                        builtin: action_builtin(conn, from.action_id)?,
+                        to_builtin: action_builtin(conn, to.action_id)?,
                     }],
                 );
                 continue;
@@ -475,8 +518,7 @@ fn leaves_task_open(
 /// Whether a placement of this action closes the task the run holds — the built-in that does
 /// (`AMB-D-964`).
 fn closes_the_task(conn: &Connection, action_id: i64) -> Result<bool> {
-    Ok(read::automation_action(conn, action_id)?.and_then(|a| a.builtin).as_deref()
-        == Some(crate::ops::automation_builtin_close::CLOSE_TASK.key))
+    Ok(action_builtin(conn, action_id)?.as_deref() == Some(crate::ops::automation_builtin_close::CLOSE_TASK.key))
 }
 
 /// The lines inside an action that end the run, each named by the step and the way out it leaves by.
@@ -487,7 +529,13 @@ fn ends_inside(conn: &Connection, action_id: i64) -> Result<Vec<Unmet>> {
             let edge =
                 read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step.id, exit.id)?;
             if edge.is_some_and(|e| e.ends == AutomationEnds::Done) {
-                found.push(Unmet::LeavesTaskOpen { step: step.name.clone(), exit: exit.name, to: None });
+                found.push(Unmet::LeavesTaskOpen {
+                    step: step.name.clone(),
+                    exit: exit.name,
+                    to: None,
+                    builtin: step.builtin.clone(),
+                    to_builtin: None,
+                });
             }
         }
     }
@@ -550,7 +598,11 @@ fn inside(
                 },
             };
             if !decided {
-                unmet.push(Unmet::OpenExit { step: step.name.clone(), exit: exit.name.clone() });
+                unmet.push(Unmet::OpenExit {
+                    step: step.name.clone(),
+                    exit: exit.name.clone(),
+                    builtin: step.builtin.clone(),
+                });
             }
         }
         for port in read::automation_ports_of(
@@ -590,7 +642,11 @@ fn inside(
                 }
             }
             if !reached {
-                unmet.push(Unmet::UnwiredInput { step: step.name.clone(), port: port.name });
+                unmet.push(Unmet::UnwiredInput {
+                    step: step.name.clone(),
+                    port: port.name,
+                    builtin: step.builtin.clone(),
+                });
             }
         }
     }
@@ -605,6 +661,12 @@ fn push_new(unmet: &mut Vec<Unmet>, found: Vec<Unmet>) {
             unmet.push(one);
         }
     }
+}
+
+/// The key of the built-in standing on a placement, or `None` for an action somebody wrote — what lets
+/// a screen turn [`action_name`] into its own language (`AMB-D-964`).
+fn action_builtin(conn: &Connection, action_id: i64) -> Result<Option<String>> {
+    Ok(read::automation_action(conn, action_id)?.and_then(|a| a.builtin))
 }
 
 /// What a placement is called in a refusal: the name of the action standing on it.
@@ -1379,7 +1441,7 @@ mod tests {
             automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::EntryTakesNoTask { step: "取る".into() }],
+                vec![Unmet::EntryTakesNoTask { step: "取る".into(), builtin: None }],
             );
         });
     }
@@ -1410,7 +1472,13 @@ mod tests {
                 .expect("work → end");
             assert_eq!(
                 checked(tx, &automation),
-                vec![Unmet::LeavesTaskOpen { step: "直す".into(), exit: None, to: None }],
+                vec![Unmet::LeavesTaskOpen {
+                    step: "直す".into(),
+                    exit: None,
+                    to: None,
+                    builtin: None,
+                    to_builtin: None,
+                }],
             );
         });
     }
@@ -1431,7 +1499,13 @@ mod tests {
             .expect("work → take again");
             assert_eq!(
                 checked(tx, &automation),
-                vec![Unmet::LeavesTaskOpen { step: "直す".into(), exit: None, to: Some("取る".into()) }],
+                vec![Unmet::LeavesTaskOpen {
+                    step: "直す".into(),
+                    exit: None,
+                    to: Some("取る".into()),
+                    builtin: None,
+                    to_builtin: None,
+                }],
             );
         });
     }
@@ -1489,7 +1563,7 @@ mod tests {
                     .expect("exit");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::OpenExit { step: "取る".into(), exit: exit.name.clone() }],
+                vec![Unmet::OpenExit { step: "取る".into(), exit: exit.name.clone(), builtin: None }],
                 "it saves while building, and is refused at launch",
             );
         });
@@ -1523,7 +1597,7 @@ mod tests {
             .expect("port");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into() }],
+                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into(), builtin: None }],
             );
         });
     }
@@ -1575,7 +1649,7 @@ mod tests {
             .expect("wire");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into() }],
+                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into(), builtin: None }],
                 "and the orphan's own ways out are not checked either — no run reaches them",
             );
         });
@@ -1596,7 +1670,7 @@ mod tests {
             .expect("cfg");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnansweredCfg { step: "取る".into(), cfg: "作業フォルダ".into() }],
+                vec![Unmet::UnansweredCfg { step: "取る".into(), cfg: "作業フォルダ".into(), builtin: None }],
                 "the declaration is the action's and the answer is the placement's",
             );
             automation::cfg_set(tx, placement.id, "作業フォルダ", Some("\"~/work\"")).expect("answer");
@@ -2149,7 +2223,7 @@ mod tests {
             a_second_step(tx, &action, &placement);
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::OpenExit { step: "見直す".into(), exit: None }],
+                vec![Unmet::OpenExit { step: "見直す".into(), exit: None, builtin: None }],
                 "the second step's unnamed way out leads nowhere inside the action",
             );
         });
@@ -2199,7 +2273,7 @@ mod tests {
             let unmet =
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
             assert!(
-                unmet.contains(&Unmet::OpenExit { step: "見直す".into(), exit: None }),
+                unmet.contains(&Unmet::OpenExit { step: "見直す".into(), exit: None, builtin: None }),
                 "the line returning to it went with it: {unmet:?}",
             );
         });
@@ -2224,7 +2298,7 @@ mod tests {
             .expect("in");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnwiredInput { step: "見直す".into(), port: "下書き".into() }],
+                vec![Unmet::UnwiredInput { step: "見直す".into(), port: "下書き".into(), builtin: None }],
             );
 
             // Wired from the first step's way out, which hands on nothing of that name yet.
@@ -2274,7 +2348,7 @@ mod tests {
             automation::port_update(tx, port.id, None, None, Some(true)).expect("required inside");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into() }],
+                vec![Unmet::UnwiredInput { step: "取る".into(), port: "下書き".into(), builtin: None }],
                 "the wire from the action carries nothing while nothing reaches the action",
             );
         });

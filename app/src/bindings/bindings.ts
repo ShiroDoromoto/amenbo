@@ -514,6 +514,10 @@ message_en: string,
  * The values the sentence is built from, under the names its template interpolates them by —
  * `step`, `exit`, `port`, `cfg`, `agent`, `model`. Empty for a reason about the automation as a
  * whole, and for the unnamed way out, which has no name to put in a sentence.
+ *
+ * Beside them, `builtin` is the key of the built-in `step` came from and `to_builtin` the one `to`
+ * came from (`AMB-D-964`): a built-in's names are the store's Japanese, and the front end writes
+ * them in the screen's language from the key (`app/src/core/i18n`'s `errSentence`).
  */
 fields: { [key in string]: string }, };
 

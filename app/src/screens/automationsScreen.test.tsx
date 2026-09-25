@@ -296,20 +296,13 @@ describe("the automations screen opened from the sidebar", () => {
     expect(button(t("auto.start")).disabled).toBe(true);
   });
 
-  it("says over the run tabs that they are this device's whole", async () => {
+  it("puts no heading over the run tabs, from the sidebar or a project", async () => {
     await renderEverywhere();
     const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
     await act(async () => { tabs[2].click(); });
-    expect(container.querySelector(".autotabs__scope")?.textContent).toBe(t("auto.scope.device"));
+    expect(container.querySelector(".autotabs__head")).toBeNull();
     await act(async () => { tabs[3].click(); });
-    expect(container.querySelector(".autotabs__scope")?.textContent).toBe(t("auto.scope.device"));
-  });
-
-  it("says nothing of the scope from a project, whose tabs are narrowed elsewhere", async () => {
-    await render();
-    const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
-    await act(async () => { tabs[2].click(); });
-    expect(container.querySelector(".autotabs__scope")).toBeNull();
+    expect(container.querySelector(".autotabs__head")).toBeNull();
   });
 });
 

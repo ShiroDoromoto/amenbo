@@ -1449,63 +1449,62 @@ button.feed__target:hover { color: var(--c-accent); }
    buttons that move the run stand beside it. They are not inside it because a press inside a press
    is not one — the row would swallow "stop" and go to the pane instead. */
 .autorun { display: flex; align-items: center; gap: var(--s-2); padding-inline-end: var(--s-2); }
-/* The line is read across, one column to each thing it says: the state, what it is, the project, how
-   far in, the task, how long since. Why a failure failed runs under the whole of it. */
+/* The line is the state's dot, then two lines — what it is, and where it has got to — then how long
+   since. */
 .autorun__go {
   flex: 1 1 auto; min-width: 0;
-  display: grid; align-items: center; gap: 2px var(--s-3);
-  grid-template-columns: 7rem minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1.3fr) minmax(0, 1.4fr) 5rem;
+  display: flex; align-items: center; gap: var(--s-3);
   padding: var(--s-2) var(--s-3); text-align: start;
   background: none; border: 0; color: var(--c-text); font: inherit; font-size: var(--fs-md); cursor: pointer;
 }
-/* One project's list has no project column to give the width to. */
-.autorun__go--oneproject { grid-template-columns: 7rem minmax(0, 1.2fr) minmax(0, 1.3fr) minmax(0, 1.4fr) 5rem; }
 .autorun__go:hover { background: var(--c-hover); }
 .autorun__go:disabled { cursor: default; }
 .autorun__go:disabled:hover { background: none; }
-.autorun__state {
-  display: flex; align-items: center; gap: var(--s-1);
-  font-weight: var(--fw-bold); font-size: var(--fs-xs); color: var(--c-plain);
+.autorun__dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dot, var(--c-text-faint)); }
+.autorun__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.autorun__head { min-width: 0; display: flex; align-items: center; gap: var(--s-2); }
+.autorun__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-bold); }
+.autorun__chip {
+  flex: none; display: inline-flex; align-items: center; gap: 4px;
+  padding: 0 var(--s-2); border: var(--border-w) solid currentColor; border-radius: 999px;
+  font-size: var(--fs-xs); color: var(--chip, var(--c-text-muted)); white-space: nowrap;
 }
-/* The state's dot, in the state's colour — the one mark that still says it where the word is muted. */
-.autorun__state::before {
-  content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%;
-  background: var(--dot, var(--c-text-faint));
+/* What it is on, one thing after another with a dot between: the project, the step, the task, why. */
+.autorun__sub {
+  min-width: 0; display: flex; align-items: center; gap: var(--s-1);
+  font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden;
 }
-.autorun__of { min-width: 0; display: flex; flex-direction: column; }
-.autorun__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-bold); }
-.autorun__project,
-.autorun__step,
-.autorun__task { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); color: var(--c-text-muted); }
-.autorun__notask { color: var(--c-text-faint); }
-/* A step's report kept off a closed task: a mark leading the task's cell, in the heed colour. */
-.autorun__withheld { display: inline-flex; vertical-align: middle; margin-inline-end: var(--s-1); color: var(--c-heed); }
-.autorun__when { font-size: var(--fs-xs); color: var(--c-text-faint); text-align: end; font-variant-numeric: tabular-nums; }
-.autorun__why { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--c-stop); }
+.autorun__sub > * + *::before { content: "·"; margin-inline-end: var(--s-1); color: var(--c-text-faint); }
+.autorun__project { flex: none; }
+.autorun__step { flex: none; display: inline-flex; align-items: center; gap: 4px; }
+.autorun__task { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.autorun__task--wait { flex: none; }
+.autorun__why { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--c-stop); }
+.autorun__when { flex: none; font-size: var(--fs-xs); color: var(--c-text-faint); font-variant-numeric: tabular-nums; }
+/* A step's report kept off a closed task: a mark after the task, in the heed colour, that neither
+   shrinks nor takes the dot the other items are parted by. */
+.autorun__withheld { flex: none; display: inline-flex; color: var(--c-heed); }
+.autorun__sub > .autorun__withheld::before { content: none; }
 .autorun__acts { flex: none; display: flex; gap: var(--s-1); }
 .autorun__acts:empty { display: none; }
 /* The colour is the state's own. One under way is the AI at work, so it wears the AI's colour
-   (`--c-ai`). One paused waits on a hand
-   (`--c-heed`). A failure is the one thing here nothing will move again without a hand put to it, so
-   in the running list its whole row takes the stop colour until somebody acknowledges it. What has
-   ended keeps its word muted and says how it ended by the dot alone. */
+   (`--c-ai`). One held, or about to be, waits on a hand (`--c-heed`). A failure is the one thing here
+   nothing will move again without a hand put to it, so in the running list its whole row takes the
+   stop colour until somebody acknowledges it. */
 .autorun--running { --dot: var(--c-ai); }
-.autorun--running .autorun__state { color: var(--c-ai); }
-.autorun--paused { --dot: var(--c-heed); }
-.autorun--paused .autorun__state { color: var(--c-heed); }
+.autorun--pausing,
+.autorun--paused { --dot: var(--c-heed); --chip: var(--c-heed); }
 .autorun--completed { --dot: var(--c-done); }
-.autorun--completed .autorun__state { color: var(--c-text-muted); }
-.autorun--failed { --dot: var(--c-stop); background: color-mix(in srgb, var(--c-stop) 8%, transparent); }
-.autorun--failed .autorun__state { color: var(--c-stop); }
-.autorun--canceled .autorun__state { color: var(--c-text-muted); }
+.autorun--failed { --dot: var(--c-stop); --chip: var(--c-stop); background: color-mix(in srgb, var(--c-stop) 8%, transparent); }
+.autorun--failed .autorun__sub { color: var(--c-stop); }
 /* The history is what was acknowledged already: a failure there is read, not waited on. */
 .autoruns--history .autorun--failed { background: none; }
+.autoruns--history .autorun--failed .autorun__sub { color: var(--c-text-muted); }
 /* A narrow list keeps what says which run this is, and lets the rest go. What is narrow is the list's
    own width and not the window's: the same rows also stand in the build screen (`AutomationHeldBy`),
    and the main column is the window less the sidebar, whose width the window does not say. */
-@container autoruns (max-width: 44rem) {
-  .autorun__go { grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 1.2fr); }
-  .autorun__project, .autorun__task, .autorun__when { display: none; }
+@container autoruns (max-width: 32rem) {
+  .autorun__when { display: none; }
 }
 
 /* The history's narrowing: the four choices as the chips the action tab narrows by (`.actchip`), and
@@ -1546,10 +1545,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .autostep__rows { display: flex; flex-direction: column; gap: var(--s-1); }
 .autostep__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
 .autostep__rowname { flex: none; min-width: 6rem; font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* Who carries one step out at a spot: the step's name on a line of its own, and the agent and the
-   model side by side under it — the panel is too narrow for all three on one line. */
-.autostep__who { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-1); }
-.autostep__who > .autostep__rowname { grid-column: 1 / -1; }
+/* Who carries one step out at a spot, one line per step: its name, the agent, the model. The name
+   column is the one the task filter's row names take, so the two sections line up. */
+.autostep__who { display: grid; grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: var(--s-1); }
+.autostep__who > .autostep__rowname { min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-md); color: var(--c-text); }
 .autostep__who > select { min-width: 0; }
 .autostep__chip {
   background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text);
@@ -1586,6 +1585,22 @@ button.feed__target:hover { color: var(--c-accent); }
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1);
   padding-inline-start: var(--s-3);
 }
+/* "way out → where to": the way out's mark, an arrow, and the pulldown filling what is left. Not
+   indented — the mark leads the row, so there is nothing for it to hang under. */
+.autostep__next--flow { padding-inline-start: 0; flex-wrap: nowrap; }
+.autostep__next--flow > select { flex: 1; min-width: 0; }
+.autostep__arrow { flex: none; color: var(--c-text-faint); }
+/* On a spot's panel the rows share one grid, so every arrow and every pulldown starts at the same
+   place however long the way out's name is. The rows step aside for it (`display: contents`); a limit
+   on a line back goes under the pulldown it caps. */
+.autostep__exits--flow {
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: var(--s-2) var(--s-1);
+}
+.autostep__exits--flow > li, .autostep__exits--flow .autostep__next--flow { display: contents; }
+.autostep__exits--flow .actport { justify-self: start; }
+.autostep__exits--flow .autostep__limit { grid-column: 3; }
+/* A way out nothing is said after yet, picked out by colour in place of a sentence under the list. */
+.autostep__unset { border-color: var(--c-heed); color: var(--c-heed); }
 .autostep__limit { display: flex; align-items: center; gap: var(--s-1); }
 /* The count stands in the row of the select it caps, so it takes that select's height: with the
    form padding of every input it came out nearly twice as tall as the select beside it. */
@@ -1598,6 +1613,34 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autostep__outkind { color: var(--c-text-muted); }
 .autostep__outadd { padding: 0 var(--s-1); font-size: var(--fs-xs); }
+/* One section of the spot's panel: a small title over what it holds. A setting's title is its own
+   name, with the "required" mark beside it. */
+.autostep__sec { display: flex; flex-direction: column; gap: var(--s-2); }
+.autostep__sectitle {
+  display: flex; align-items: center; gap: var(--s-2);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-muted);
+}
+/* The start of a run as a switch row: the words on the left, the switch on the right, and the whole
+   row is the press. */
+.autostep__switch {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
+  padding: var(--s-2) var(--s-3); font-size: var(--fs-md); cursor: pointer;
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+}
+.autostep__switch > input {
+  appearance: none; position: relative; flex: none; margin: 0; cursor: pointer;
+  width: 34px; height: 20px; border-radius: 999px; background: var(--c-edge);
+}
+.autostep__switch > input::after {
+  content: ""; position: absolute; top: 2px; inset-inline-start: 2px;
+  width: 16px; height: 16px; border-radius: 50%; background: #fff;
+}
+.autostep__switch > input:checked { background: var(--c-accent); }
+.autostep__switch > input:checked::after { transform: translateX(14px); }
+.autostep__switch > input:checked:dir(rtl)::after { transform: translateX(-14px); }
+.autostep__switch > input:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+fieldset:disabled .autostep__switch { cursor: default; opacity: .6; }
+fieldset:disabled .autostep__switch > input { cursor: default; }
 
 /* ----- the build screen's two dialogs (`screens/AutomationStepAdd.tsx`, `AutomationOutputAdd.tsx`) -----
    Both wear the plain card, so what tells them from the rest of the application is the question at
@@ -1627,20 +1670,34 @@ button.feed__target:hover { color: var(--c-accent); }
   font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: 0.07em; color: var(--c-text-faint);
 }
 .actlib { display: flex; flex-direction: column; gap: var(--s-2); }
-.actlib__head { display: flex; align-items: center; gap: var(--s-2); }
-.actlib__head .btn { margin-inline-start: auto; }
-.actlib__make {
-  display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--s-2);
-  padding: var(--s-2); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
-  background: var(--c-sunken-pic) var(--c-sunken);
-}
-.actlib__field { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-xs); color: var(--c-text-faint); }
-.actlib__field input { width: 18em; max-width: 100%; }
-.actlib__said { flex-basis: 100%; margin: 0; font-size: var(--fs-xs); color: var(--c-text-faint); }
-.actlib__tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
+/* Search, the narrowing and the press that opens the make form, on one row — the press at the far
+   end. */
+.actlib__tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.actlib__make-open { margin-inline-start: auto; }
 /* The search grows with the row it is on, past the cap a box to fill in has (`--measure-form`): it
    is the width of the list it narrows, not one value. */
 .actlib__search { flex: 1 1 180px; min-width: 0; max-width: none; }
+/* The make form, on one line: a name, a reach, and the press named for where it lands. */
+.actlib__make {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2);
+  padding: var(--s-2); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-sunken-pic) var(--c-sunken);
+}
+.actlib__makename { flex: 1 1 12em; min-width: 0; }
+.actlib__make > .errortext { flex-basis: 100%; }
+/* A square switch — the narrowing, and the reach a new action is made in. Square so it never reads as
+   the round reach chip a row wears, which cannot be pressed. */
+.actseg {
+  display: inline-flex; overflow: hidden;
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
+}
+.actseg__one {
+  font: inherit; font-size: var(--fs-xs); padding: 2px var(--s-2); cursor: pointer;
+  border: 0; background: none; color: var(--c-text-muted);
+}
+.actseg__one + .actseg__one { border-inline-start: var(--border-w) var(--border-style) var(--c-edge); }
+.actseg__one:hover { color: var(--c-text); }
+.actseg__one--on, .actseg__one--on:hover { background: var(--c-accent-weak); color: var(--c-accent); }
 .actchip {
   font: inherit; font-size: var(--fs-xs); padding: 2px var(--s-2); border-radius: 999px; cursor: pointer;
   border: var(--border-w) var(--border-style) var(--c-edge); background: none; color: var(--c-text-muted);
@@ -1675,6 +1732,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .actlib__line > .actlib__row { min-width: 0; }
 .actlib__moveslot { grid-column: 5; display: flex; justify-content: flex-end; padding-inline-end: var(--s-2); }
 .actlib__moveslot > .btn { white-space: nowrap; }
+/* The row's "⋯": the moves and the delete, which the entrance that owns the action is the one to make. */
+.actlib__more {
+  display: inline-flex; align-items: center; padding: 2px var(--s-1);
+  border: 0; border-radius: var(--r-sm); background: none; color: var(--c-text-muted); cursor: pointer;
+}
+.actlib__more:hover { background: var(--c-hover); color: var(--c-text); }
 .actlib__moveplace {
   grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2);
   padding: 0 var(--s-2) var(--s-2);
@@ -1682,6 +1745,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .actlib__rows > li + li { border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
 .actlib__num { text-align: end; font-variant-numeric: tabular-nums; }
 .actlib__zero { font-size: var(--fs-xs); color: var(--c-text-faint); }
+/* An action with no step — what stops a launch, so it wears the colour of something to heed. */
+.actlib__empty { font-size: var(--fs-xs); color: var(--c-heed); }
+/* A built-in's name with its lock beside it. */
+.actlib__title { display: inline-flex; align-items: center; gap: var(--s-1); }
 /* Which reach holds an action. The device's is the accent; a project's wears the project-ish amber. */
 .actscope {
   display: inline-flex; align-items: center; gap: var(--s-1); white-space: nowrap;
@@ -1713,6 +1780,10 @@ button.feed__target:hover { color: var(--c-accent); }
   font-size: var(--fs-md); color: var(--c-text-muted);
 }
 .actdecl__used { font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* A built-in's head ends on how many use it, at the far end (`../screens/AutomationBuiltinScreen`). */
+.actbuild__head > .actdecl__used { margin-inline-start: auto; }
+/* What a built-in does, as the first thing under its head — the sentence is the definition's own. */
+.actdecl__does { margin: 0 0 var(--s-2); font-size: var(--fs-md); }
 .actdecl .btn--on { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-weak); }
 .actdecl__rows {
   display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--s-1) var(--s-3);
@@ -1776,6 +1847,8 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 /* The press that removes what the panel shows, at its foot. */
 .actpanel__foot { display: flex; gap: var(--s-3); font-size: var(--fs-md); }
+/* On a spot's panel the press that takes it off stands apart from the sections above it. */
+.autostep .actpanel__foot { padding-top: var(--s-3); border-top: var(--border-w) var(--border-style) var(--c-rule); }
 /* That what is shown is not changed here (`../screens/automationParts`). The press beside it, when
    there is one, goes to where it is changed. */
 .lockmark { display: inline-flex; align-items: center; color: var(--c-heed); }
@@ -1784,19 +1857,27 @@ button.feed__target:hover { color: var(--c-accent); }
    The action build screen's frame (`.actbuild`), with the launch band where that one has its
    declaration. "Edit" stands at the far end of the head. */
 .actbuild__edit { margin-inline-start: auto; }
-/* Which action stands on the pressed spot, read at the head of its panel: the name and its reach, what
-   it is for, and the press that goes to where it is built. */
+/* Which action stands on the pressed spot, as one card at the head of its panel: a mark, the name with
+   its reach and how many automations use it, and the one press — to where it is built — at the far
+   end. Nothing on it takes a value, which is what says it is not changed here. */
 .autoplace__action {
-  display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-2);
+  display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3);
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
   background: var(--c-sunken-pic) var(--c-sunken);
 }
-.autoplace__actionhead { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.autoplace__icon {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: var(--r-sm); background: var(--c-surface-pic) var(--c-surface); color: var(--c-text-muted);
+}
+.autoplace__actionbody { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .autoplace__actionname { font-size: var(--fs-md); font-weight: var(--fw-bold); overflow-wrap: anywhere; }
-.autoplace__note { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: pre-wrap; }
 .autoplace__empty { font-size: var(--fs-xs); color: var(--c-heed); font-weight: var(--fw-bold); }
 .autoplace__meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); font-size: var(--fs-xs); color: var(--c-text-muted); }
-.autoplace__meta .btn { margin-inline-start: auto; }
+.autoplace__open {
+  flex: none; margin-inline-start: auto; padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: var(--fs-md); color: var(--c-accent-text); white-space: nowrap;
+}
+.autoplace__open:hover { text-decoration: underline; }
 /* An automation's ID, the number the terminal names it by — set in the code face, ahead of the name. */
 .autoid {
   margin-inline-end: var(--s-2); font-family: var(--font-mono); font-size: var(--fs-xs);
@@ -1879,10 +1960,6 @@ button.feed__target:hover { color: var(--c-accent); }
   font-size: var(--fs-xs); color: var(--c-text-muted);
 }
 .autolist__refused { padding: 0 var(--s-3) var(--s-2); font-size: var(--fs-xs); color: var(--c-stop); }
-/* Over the two run tabs from the sidebar: what they are, and that they are this device's whole. */
-.autotabs__head { display: flex; align-items: baseline; gap: var(--s-2); }
-.autotabs__scope { font-size: var(--fs-xs); color: var(--c-text-faint); }
-
 /* The library in the panel (`../screens/AutomationLibraryPanel`): a group per reach, left out while
    nothing in it matches, and the row pressed opens in place with what the action declares and the
    press that places it. */

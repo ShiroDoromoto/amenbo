@@ -3899,6 +3899,13 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) action_name: Option<String>,
+    /// **The spot on the picture that step was opened from**, by the placement's id — what the row
+    /// numbers the step with, the number the picture's box carries. Absent before the first step has
+    /// opened. A spot taken off the picture since still has its id here; it is the picture that no
+    /// longer has a box to number it by.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) placement: Option<i64>,
     /// How many steps it has opened so far, the step it is on included — the "how far in is this"
     /// a reader asks of a run they are not watching.
     #[ts(type = "number")]

@@ -203,6 +203,16 @@ export async function setAutomationActionScope(id: number, projectId: number | n
 }
 
 /**
+ * **Delete a library action** and everything inside it. Core refuses it while a placement stands on
+ * it, saying how many; the refusal reaches the caller as core's own sentence
+ * (`amenbo_core::ops::automation::action_delete`).
+ */
+export async function removeAutomationAction(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_remove", { id });
+}
+
+/**
  * Rename a library action, or rewrite what it is for. The name and the note are all that is the
  * action's own: the prompt and the flags belong to its steps (`editAutomationStep`), and who carries
  * each step out to where the action is placed (`chooseAutomationAgent`).

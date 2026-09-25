@@ -4080,7 +4080,15 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-scope", required: &["target", "reach"], refs: &["target", "project"], strings: &["reach"], binds: false },
     // A step inside an action (`target`): its own prompt. Who carries it out is not the step's — it is
     // chosen where the action is placed (`agent-set`).
+    //
+    // What a step is handed besides its prompt is on unless somebody turns it off: the task the run
+    // is on (`task_context` — its notes, the decisions linked to it and its comments) and the run's
+    // story so far (`history`). A road writes `false` for the one it means to leave out, and names
+    // neither for the step every other road builds.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-add", required: &["target", "name", "prompt"], refs: &["target"], strings: &["name", "prompt", "work_dir_ref"], binds: true },
+    // Turning either of those two back on or off on a step already there (`target`), the rest of it
+    // left alone. A road names at least one of them, since a rewrite naming neither writes nothing.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-update", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The step a placement of this action opens first. An action with none is one the launch check
     // names, the way it names an automation with no entry.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-entry", required: &["target", "step"], refs: &["target", "step"], strings: &[], binds: false },
@@ -4195,6 +4203,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "placement-read", required: &["name"], refs: &["target"], strings: &["name"], binds: false },
     // One step inside an action (`target`), named the way the action names it: the prompt it runs on,
     // and the ways out and the inputs it declares, read whole for the reason a placement's are.
+    // `task_context` and `history` read whether it is handed the task the run is on and the run's
+    // story so far, the two `step-add` writes.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "step-read", required: &["name"], refs: &["target"], strings: &["name", "prompt"], binds: false },
     // Where leaving by one way out takes the run: on to a box (`to`), out by one of the action's own
     // ways out (`exit_to`, inside an action only), or to the end of the run (`ends`). The pair the edge
@@ -4321,8 +4331,12 @@ const REGISTRY: &[OpSpec] = &[
     // The panel beside the picture — what the pressed box holds. `field` is the row it is read on or
     // written in, named the way the panel names it rather than by the column underneath: a road reads
     // a screen.
+    //
+    // **A row that is a box to tick takes `on`, not `value`**: whether it is ticked is a yes or a no,
+    // and no words stand in it to be read. `panel-set` names one of the two and never both;
+    // `panel-shows` names at most one, and naming neither asks only that the row is drawn.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "panel-shows", required: &["field"], refs: &[], strings: &["field", "value"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "panel-set", required: &["field", "value"], refs: &[], strings: &["field", "value"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "panel-set", required: &["field"], refs: &[], strings: &["field", "value"], binds: false },
     // One value pressed on one row of a task filter. The rows are axes and the values are what is on
     // them, which is the whole of how that setting is answered — there is no filter expression to
     // write, and no road here may write one. A setting is answered on a placement, so this is the
@@ -4967,8 +4981,9 @@ impl Scenario {
             // across two rows, `asks` whether the press that opens a pane meets the question of which
             // folder rather than a pane, `first` whether a hit stands at the top of the answer
             // rather than merely somewhere in it, `stops` whether the call a press starts has
-            // something to ask before it can go out, and `in_action` whether a way out, an edge or a
-            // wire is drawn inside an action rather than on an automation.
+            // something to ask before it can go out, `in_action` whether a way out, an edge or a
+            // wire is drawn inside an action rather than on an automation, and `task_context` and
+            // `history` whether a step is handed the task the run is on and the run's story so far.
             // The query, in whichever of its two spellings — one of them, never both and never
             // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
             // step naming a shape for one is a step that means a number and left the record out.
@@ -5037,11 +5052,27 @@ impl Scenario {
                 "first",
                 "stops",
                 "in_action",
+                "task_context",
+                "history",
             ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));
                     }
+                }
+            }
+
+            // A row of the automation panel is read or written by the words in it (`value`) or, where it
+            // is a box to tick, by whether it is ticked (`on`) — never both, and a write names one.
+            if step.domain() == Domain::Automation && matches!(step.op(), "panel-set" | "panel-shows") {
+                let (value, on) = (step.with().get("value"), step.with().get("on"));
+                if on.is_some_and(|v| v.as_bool().is_none()) {
+                    errs.push(at(i, "`on` must be a boolean".to_string()));
+                }
+                match (value.is_some(), on.is_some()) {
+                    (true, true) => errs.push(at(i, "`value` reads the words in a row and `on` a box to tick — name one, not both".to_string())),
+                    (false, false) if step.op() == "panel-set" => errs.push(at(i, "`panel-set` writes a `value` or ticks a box (`on`) — a step naming neither writes nothing".to_string())),
+                    _ => {}
                 }
             }
 
@@ -5653,6 +5684,19 @@ steps_gui:
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.to_string()
             == "steps_gui step 1: `target: seed` does not resolve to an earlier `as:` binding"));
+    }
+
+    /// A row of the automation panel is its words or a box to tick, and a write says which.
+    #[test]
+    fn a_panel_row_is_written_by_its_words_or_its_box_and_never_both() {
+        let road = |with: &str| {
+            format!("id: x\ntitle: y\nsteps_gui:\n  - {{ type: action, domain: automation, op: panel-set, with: {with} }}\n")
+        };
+        let errs = |with: &str| load_str(&road(with)).unwrap().validate().unwrap_err();
+        assert!(load_str(&road("{ field: task_context, on: false }")).unwrap().validate().is_ok());
+        assert!(errs("{ field: history }").iter().any(|e| e.message.contains("naming neither")));
+        assert!(errs("{ field: history, value: x, on: true }").iter().any(|e| e.message.contains("not both")));
+        assert!(errs("{ field: history, on: yes }").iter().any(|e| e.message.contains("`on` must be a boolean")));
     }
 
     #[test]

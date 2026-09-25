@@ -164,14 +164,14 @@ describe("the row above a run's pane", () => {
     const host = document.createElement("div");
     const draw = mountNameplate(host);
 
-    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { status: "running", word: "実行中", why: null, where: null } } });
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { status: "running", word: "実行中", why: null, where: null, pauseRequested: false } } });
     const state = host.querySelector(".plate__state") as HTMLElement;
     expect(state.hidden).toBe(false);
     expect(state.textContent).toBe("実行中");
     expect(state.dataset.state).toBe("running");
     expect((host.querySelector(".plate-fail") as HTMLElement).hidden).toBe(true);
 
-    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { status: "completed", word: "完了", why: null, where: null } } });
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { status: "completed", word: "完了", why: null, where: null, pauseRequested: false } } });
     expect(state.textContent).toBe("完了");
     expect(state.dataset.state).toBe("completed");
     expect((host.querySelector(".plate-fail") as HTMLElement).hidden).toBe(true);
@@ -184,7 +184,7 @@ describe("the row above a run's pane", () => {
     const draw = mountNameplate(host);
 
     draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: {
-      status: "failed", word: "失敗", why: "人を呼ぶ出口で止まった", where: "取る · エラー",
+      status: "failed", word: "失敗", why: "人を呼ぶ出口で止まった", where: "取る · エラー", pauseRequested: false,
     } } });
 
     expect((host.querySelector(".plate-fail") as HTMLElement).hidden).toBe(false);
@@ -193,7 +193,7 @@ describe("the row above a run's pane", () => {
 
     // A failure core gave no reason for says where alone rather than an empty reason.
     draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: {
-      status: "failed", word: "失敗", why: null, where: "取る",
+      status: "failed", word: "失敗", why: null, where: "取る", pauseRequested: false,
     } } });
     expect((host.querySelector(".plate-fail__why") as HTMLElement).hidden).toBe(true);
     expect(host.querySelector(".plate-fail__where")?.textContent).toBe("取る");

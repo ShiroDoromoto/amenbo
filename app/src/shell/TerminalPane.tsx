@@ -17,7 +17,7 @@ import {
 } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row, Say } from "../talk/nameplate";
-import { stopRun } from "../core/automations";
+import { pauseRun, resumeRun, stopRun } from "../core/automations";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
@@ -310,6 +310,21 @@ export function TerminalPane({
    *  goes instead is the run: the one under way is stopped, the task it reserved goes back to `todo`,
    *  and a line on that task says so. A run left going with its pane gone would be one nobody could
    *  see, reach or stop. */
+  /** One of the run's moves at a time (`AMB-T-5507`), as on the "running" tab: a second press landing
+   *  while the first is still opening a terminal would be answered off a run that has already moved.
+   *  A refusal is said on the toast — the run may have ended a moment before the press. */
+  const [pressing, setPressing] = useState(false);
+  const press = async (act: () => Promise<unknown>) => {
+    setPressing(true);
+    try {
+      await act();
+    } catch (e) {
+      pushNotice(errText(e));
+    } finally {
+      setPressing(false);
+    }
+  };
+
   const drop = async () => {
     if (!await confirmDialog(t(run === null ? "face.dropConfirm" : "face.dropRunConfirm"))) return;
     // **Stopping comes before the terminal ends.** What the run is holding is handed back by core —
@@ -832,6 +847,43 @@ export function TerminalPane({
               is a place there is nothing to call. */}
           {/* The size, beside the menu rather than in it: it is about the place and not the terminal,
               so it is there whether or not anything is running — the way the corner is. */}
+          {/* **The run's own moves, on the pane it is drawn in** (`AMB-T-5507`): held, picked up again,
+              or stopped, the same three the "running" tab's row carries and in its words
+              (`../screens/RunningTab`). A reader watching a run is in its pane, and had to go to the
+              tab to act on what they were watching. They are drawn while the run is going or held,
+              and gone once it is over — the row above says how it ended. Stopping here keeps the
+              pane, which is what sets it apart from the control at the end of the row. */}
+          {run?.state != null && (run.state.status === "running" || run.state.status === "paused") && (
+            <span className="slot__runacts">
+              {run.state.status === "paused" ? (
+                <button
+                  type="button"
+                  className="slot__runact"
+                  disabled={pressing}
+                  onClick={() => void press(() => resumeRun(run.run))}
+                >
+                  {t("auto.run.resume")}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="slot__runact"
+                  disabled={pressing || run.state.pauseRequested}
+                  onClick={() => void press(() => pauseRun(run.run))}
+                >
+                  {t("auto.run.pause")}
+                </button>
+              )}
+              <button
+                type="button"
+                className="slot__runact"
+                disabled={pressing}
+                onClick={() => void press(() => stopRun(run.run))}
+              >
+                {t("auto.run.stop")}
+              </button>
+            </span>
+          )}
           {size !== undefined && onSize !== undefined && <PaneSize size={size} onSize={onSize} />}
           {live !== null && (
             <button

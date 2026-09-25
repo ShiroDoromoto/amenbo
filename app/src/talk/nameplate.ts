@@ -123,6 +123,9 @@ export type RunState = {
   readonly status: "running" | "paused" | "completed" | "failed" | "canceled";
   /** The state in one word, a pause asked for and not yet settled included. */
   readonly word: string;
+  /** A pause has been asked for and the step under way has not finished yet — the run is still
+   *  `running`, and a second press on pause would be asking for what is already coming. */
+  readonly pauseRequested: boolean;
   /** Why it failed, or null on anything but a failure and on one core gave no reason for. */
   readonly why: string | null;
   /** Where it failed — the step, and the way out that step left by where it left by one — or null

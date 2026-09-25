@@ -356,7 +356,7 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # the work itself, a review, how a PR and its CI are handled. A name in <angle brackets> below is a
 # built-in's own, as `builtin-list` prints it.
 amenbo automation add --name "Work the queue"          # the picture itself; what every step is told first is Amenbo's own
-amenbo automation builtin-list                         # take_task, cut_worktree, fold_worktree, close_task — with the names of what each reads, hands on and leaves by
+amenbo automation builtin-list                         # take_task, cut_worktree, fold_worktree, close_task, fetch — with the names of what each reads, hands on and leaves by
 amenbo automation place-add 3 --builtin take_task      # 31: reserves the first task its filter finds
 amenbo automation cfg-set 31 --name "<filter>" --assignee me-ai --dim "Area=Core" # which tasks it takes (unanswered: the ones handed to the AI)
 amenbo automation cfg-set 31 --name "<when none>" --choice "<wait>" # or wait for one to turn up, until a person pauses or stops the run

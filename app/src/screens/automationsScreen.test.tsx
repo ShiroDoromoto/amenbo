@@ -84,9 +84,12 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
   };
 }
 
+// Where a press that started a run goes (`AMB-T-5530`).
+const wentToRun = vi.fn();
+
 async function render(workspaceOpen = true) {
   await act(async () => {
-    root.render(createElement(AutomationsScreen, { projectId: 1, workspaceOpen }));
+    root.render(createElement(AutomationsScreen, { projectId: 1, workspaceOpen, onGoToRun: wentToRun }));
   });
 }
 
@@ -108,6 +111,7 @@ beforeEach(() => {
   hoisted.check = null;
   hoisted.launch.mockClear();
   hoisted.launch.mockResolvedValue({ run: 1 });
+  wentToRun.mockClear();
 });
 
 afterEach(() => {
@@ -232,7 +236,9 @@ describe("the automations screen opened from the sidebar", () => {
   }
   async function renderEverywhere() {
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { projectId: null, workspaceOpen: true, onGoToAutomation: goTo }));
+      root.render(createElement(AutomationsScreen, {
+        projectId: null, workspaceOpen: true, onGoToAutomation: goTo, onGoToRun: wentToRun,
+      }));
     });
   }
   beforeEach(() => goTo.mockClear());
@@ -272,6 +278,15 @@ describe("the automations screen opened from the sidebar", () => {
     await act(async () => { button(t("auto.start")).click(); });
     expect(hoisted.launch).toHaveBeenCalledWith(7, 3, [], true);
     expect(goTo).not.toHaveBeenCalled();
+  });
+
+  it("goes to the pane of the run it started, in the row's project", async () => {
+    hoisted.everywhere = [everywhere()];
+    hoisted.check = { ready: true, blocks: [] };
+    hoisted.launch.mockResolvedValue({ run: 31 });
+    await renderEverywhere();
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(wentToRun).toHaveBeenCalledWith(3, 31);
   });
 
   it("holds the start shut while the check has not said it could start", async () => {
@@ -442,10 +457,24 @@ describe("the press that starts a run", () => {
 
   it("says nothing of its own once the launch lands", async () => {
     // What a launch looks like is the pane arriving, which is the workspace's and not this screen's
-    // (`../talk/automationStep`). Nothing here stands in for it.
+    // (`../talk/automationStep`) — the press goes there (below). Nothing here stands in for it.
     await open({ ready: true, blocks: [] });
     await act(async () => { button(t("auto.start")).click(); });
     expect(container.querySelector(".auto__notready")).toBeNull();
+  });
+
+  it("goes to the pane of the run it started", async () => {
+    hoisted.launch.mockResolvedValue({ run: 31 });
+    await open({ ready: true, blocks: [] });
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(wentToRun).toHaveBeenCalledWith(1, 31);
+  });
+
+  it("goes nowhere when the launch is refused", async () => {
+    hoisted.launch.mockRejectedValue({ code: "invalid", message_en: "no" });
+    await open({ ready: true, blocks: [] });
+    await act(async () => { button(t("auto.start")).click(); });
+    expect(wentToRun).not.toHaveBeenCalled();
   });
 
   /** Press start, with the launch rejecting with this. */

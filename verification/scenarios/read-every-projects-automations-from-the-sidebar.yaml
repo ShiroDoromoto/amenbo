@@ -88,6 +88,13 @@ steps_gui:
       action: take
       present: true
 
+  # And the press went there: the run's pane is the one being worked in.
+  - type: assert
+    domain: workspace
+    op: worked-in
+    with:
+      shows: "SCENARIO SEED — started from the list"
+
   - type: action
     domain: workspace
     op: show-face

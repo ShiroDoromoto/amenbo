@@ -172,6 +172,7 @@ function runCard(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     waiting: false,
     stepName: "取る",
     stepsDone: 1,
+    reportWithheld: [],
     ...over,
   };
 }

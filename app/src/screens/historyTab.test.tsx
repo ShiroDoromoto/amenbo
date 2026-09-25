@@ -5,7 +5,9 @@
 // What these guard: **one page is read at a time, and the pager says where in the whole it is** —
 // "21–40 of 45", with the numbers that reach the rest; **narrowing to one ending reads that ending and
 // goes back to the first page**, since the page a reader was on counted rows of another list; and
-// **a long history is still one row of numbers**, the far pages folded behind an ellipsis.
+// **a long history is still one row of numbers**, the far pages folded behind an ellipsis; and **a run
+// with a step whose report was kept off a closed task is marked on its row**, the steps named in the
+// mark's title, while every other row carries no mark (`AMB-D-963`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +19,8 @@ const hoisted = vi.hoisted(() => ({
   total: 45,
   projects: [] as (number | null)[],
   byEnding: { completed: 0, failed: 0, canceled: 0 },
+  /** The steps the newest run kept its report back from. */
+  withheld: [] as string[],
 }));
 
 vi.mock("../core/automations", () => ({
@@ -47,11 +51,12 @@ function run(id: number): AutomationRunCardDto {
     pauseRequested: false,
     waiting: false,
     stepsDone: 3,
+    reportWithheld: id === 1000 ? hoisted.withheld : [],
     endedAt: "2026-09-23T00:00:00Z",
   };
 }
 
-import { formatNumber } from "../core/i18n/format";
+import { formatNumber, listLabel } from "../core/i18n/format";
 import { t, tf } from "../core/i18n";
 import { HistoryTab, pageNumbers } from "./HistoryTab";
 
@@ -87,6 +92,7 @@ beforeEach(() => {
   hoisted.projects = [];
   hoisted.total = 45;
   hoisted.byEnding = { completed: 40, failed: 0, canceled: 5 };
+  hoisted.withheld = [];
 });
 
 afterEach(() => {
@@ -121,6 +127,17 @@ describe("the history tab", () => {
     await act(async () => { button(t("auto.history.next")).click(); });
     await act(async () => { chip(t("auto.run.failed")).click(); });
     expect(hoisted.asked[hoisted.asked.length - 1]).toBe("failed 0");
+  });
+
+  it("marks a run whose step kept its report off a closed task, and names the steps", async () => {
+    hoisted.withheld = ["Review", "Merge"];
+    await render();
+    const marks = container.querySelectorAll(".autorun__withheld");
+    expect(marks).toHaveLength(1);
+    expect(marks[0]!.closest(".autorun")).toBe(container.querySelector(".autorun"));
+    expect(marks[0]!.getAttribute("title")).toBe(
+      tf("auto.run.reportWithheld", { steps: listLabel(["Review", "Merge"]) }),
+    );
   });
 
   // How many each narrowing would show is on its chip, so an ending nothing has come to reads 0

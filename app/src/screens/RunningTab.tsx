@@ -25,12 +25,16 @@
 // launch opens one spot of the picture into a column of steps, so a step's name alone no longer says
 // which spot of the automation this is. Where the spot has been taken off the picture since, it has no
 // box to be numbered by, and the line says the step alone.
+//
+// **A step that could not leave its report on the task is marked on the row** (`AMB-D-963`): a step
+// built to carry its report onto the task leaves none on a closed one, and without the mark nothing
+// on screen would say why the task holds no report.
 import { useMemo, useState, type ReactNode } from "react";
 import { acknowledgeRun, pauseRun, resumeRun, stopRun, useAutomation, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { runReasonWord, runStatusWord } from "../core/runWords";
-import { exactLabel, whenLabel } from "../core/i18n/format";
+import { exactLabel, listLabel, whenLabel } from "../core/i18n/format";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { automationGraph, pictureOrder } from "./automationLayout";
@@ -60,6 +64,20 @@ function stateChip(run: AutomationRunCardDto, ended: boolean): { icon: string; w
   if (run.status === "paused") return { icon: "⏸", word: runStatusWord(run) };
   if (ended) return { icon: "", word: runStatusWord(run) };
   return null;
+}
+
+/**
+ * That a step owed the task its report and left none, the task being closed by then (`AMB-D-963`) —
+ * as a mark after the task rather than a sentence, with the steps it was named in its title. It
+ * does not shrink, so a long title cut short does not take it with it.
+ */
+function WithheldMark({ steps }: { steps: readonly string[] }) {
+  const said = tf("auto.run.reportWithheld", { steps: listLabel([...steps]) });
+  return (
+    <span className="autorun__withheld" title={said}>
+      <Icon name="comment" label={said} />
+    </span>
+  );
 }
 
 /**
@@ -138,6 +156,7 @@ export function RunLine({
             ) : (
               run.task !== undefined && <span className="autorun__task">{`${run.task.ref} ${run.task.title}`}</span>
             )}
+            {run.reportWithheld.length > 0 && <WithheldMark steps={run.reportWithheld} />}
             {reason !== null && <span className="autorun__why">{reason}</span>}
           </span>
         </span>

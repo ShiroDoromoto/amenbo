@@ -37,8 +37,6 @@ steps_gui:
     with:
       name: draft
       prompt: write the draft
-      exits:
-        - drafted
 
   - type: assert
     domain: automation
@@ -68,6 +66,14 @@ steps_gui:
     op: pick-box
     with:
       name: draft
+
+  # The dialog asks a name and a prompt alone, so the way out is declared on the panel.
+  - type: action
+    domain: automation
+    op: declare
+    with:
+      what: exit
+      name: drafted
 
   - type: action
     domain: automation

@@ -238,7 +238,9 @@ describe("the action build screen", () => {
     expect(container.querySelector(".actpanel")).toBeNull();
   });
 
-  it("reads the action in its row, and opens its input and output from the frames of the picture", async () => {
+  // The head carries the name, the reach and the count, and what it is for is read in the panel "Edit"
+  // opens rather than over the picture (`AMB-T-5526`).
+  it("heads the screen with the action, and opens its input and output from the frames of the picture", async () => {
     hoisted.action = action({
       note: "Takes the next task off the queue\nand says which",
       exits: [
@@ -247,7 +249,10 @@ describe("the action build screen", () => {
       ],
     });
     await render();
-    expect(container.querySelector(".actdecl__note")?.textContent).toBe("Takes the next task off the queue");
+    const head = container.querySelector(".actbuild__head")?.textContent ?? "";
+    expect(head).not.toContain("Takes the next task off the queue");
+    expect(container.querySelector(".actbuild__head .actdecl__used")).not.toBeNull();
+    expect(has(t("auto.act.edit"))).toBe(true);
     expect(container.querySelector(".actpanel")).toBeNull();
 
     const frames = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__frame")];
@@ -311,11 +316,6 @@ describe("the action build screen", () => {
     expect(hoisted.editAction).not.toHaveBeenCalled();
   });
 
-  it("says when no step is opened first", async () => {
-    hoisted.action = action({ entryStepId: undefined });
-    await render();
-    expect(container.textContent).toContain(t("auto.act.noEntry"));
-  });
 });
 
 // A global action opened from a project (`AMB-D-954`): read there and changed from the sidebar. The
@@ -347,14 +347,11 @@ describe("a global action opened from a project", () => {
     expect(goTo).toHaveBeenCalledWith(4);
   });
 
-  it("opens what it is for to be read, with the fields shut", async () => {
+  // One press on the head, and it goes to where the action is changed (`AMB-T-5526`).
+  it("offers no Edit, only the press that goes to where it is changed", async () => {
     await renderAt(1);
     expect(has(t("auto.act.edit"))).toBe(false);
-    await act(async () => {
-      buttons().find((one) => one.textContent === t("auto.act.read"))!.click();
-    });
-    expect(noteBox().closest("fieldset")?.disabled).toBe(true);
-    expect(titleBox()?.readOnly).toBe(true);
+    expect(container.querySelectorAll(".actbuild__head button")).toHaveLength(2);
   });
 
   it("opens a step to be read, with the fields shut", async () => {
@@ -426,11 +423,11 @@ describe("an action a run is going on (AMB-D-961)", () => {
     expect(goToRun).toHaveBeenCalledWith(2, 31);
   });
 
+  // "Edit" keeps its word while a run holds it; the panel it opens is what is shut (`AMB-T-5526`).
   it("opens what it is for and its steps to be read, with the fields shut", async () => {
     await renderHeld();
-    expect(has(t("auto.act.edit"))).toBe(false);
     await act(async () => {
-      buttons().find((one) => one.textContent === t("auto.act.read"))!.click();
+      buttons().find((one) => one.textContent === t("auto.act.edit"))!.click();
     });
     expect(noteBox().closest("fieldset")?.disabled).toBe(true);
     await act(async () => { nodes()[0].click(); });
@@ -441,7 +438,7 @@ describe("an action a run is going on (AMB-D-961)", () => {
     await renderHeld();
     expect(has(t("auto.act.stepAdd"))).toBe(false);
     // The held band carries its own lock; the one that says "changed from the sidebar" is the head's.
-    expect(container.querySelector('.actdecl [data-icon="lock"]')).toBeNull();
+    expect(container.querySelector('.actbuild__head [data-icon="lock"]')).toBeNull();
   });
 
   it("says nothing of runs, and holds nothing shut, while none is going", async () => {

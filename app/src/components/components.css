@@ -1646,8 +1646,6 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 /* A row a reader writes and may drop again: the name, what it carries, whether it is required, and
    the way out of it. It wraps rather than shrinks — a name box squeezed to three characters is not
    one. */
-.autodlg__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
-.autodlg__row input { flex: 1 1 8rem; min-width: 0; }
 /* A declaration being written rather than answered: the name it goes under, what it takes, whether
    it has to be answered, and the press that ends it. One line, wrapping where the panel is narrow —
    the name is what everything else on the row is about, so it takes whatever width is left. */
@@ -1709,6 +1707,20 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
   border: 0; background: none; padding: 0 var(--s-1); cursor: pointer;
   font: inherit; font-size: var(--fs-xs); color: var(--c-accent-text);
 }
+/* The row that declares one more output, opened in a way out's card by its "＋"
+   (`../screens/AutomationOutputAdd`): a name, the kind as one of four, and the press. */
+.autoout { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); margin-block-start: var(--s-1); }
+.autoout__name { flex: 1 1 8rem; min-width: 0; }
+.autoout__kinds { display: inline-flex; border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm); overflow: hidden; }
+.autoout__kind {
+  padding: 2px var(--s-2); border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.autoout__kind + .autoout__kind { border-inline-start: var(--border-w) var(--border-style) var(--c-edge); }
+.autoout__kind--on { background: var(--c-accent-weak); color: var(--c-accent-text); }
+.autoout__req { border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm); }
+.autoout__close { border: 0; background: none; padding: 0; cursor: pointer; color: var(--c-text-muted); }
+.autoout__close:hover { color: var(--c-text); }
 /* Where a setting's answer would be — empty and dashed, because it is written where the action is placed. */
 .autodecl__slot {
   font-size: var(--fs-xs); color: var(--c-text-faint); white-space: nowrap;
@@ -1853,14 +1865,10 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
 }
 .actbuild__name { font-size: var(--fs-md); font-weight: var(--fw-bold); }
 .actdecl { padding: var(--s-2) var(--s-3); border-block-end: var(--border-w) var(--border-style) var(--c-rule); }
-.actdecl__head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
-.actdecl__note {
-  flex: 1 1 20em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: var(--fs-md); color: var(--c-text-muted);
-}
 .actdecl__used { font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* A built-in's head ends on how many use it, at the far end (`../screens/AutomationBuiltinScreen`). */
-.actbuild__head > .actdecl__used { margin-inline-start: auto; }
+/* A built-in's head ends on how many use it, at the far end (`../screens/AutomationBuiltinScreen`) —
+   where there is no press after it to stand there instead, as an action's "Edit" does. */
+.actbuild__head > .actdecl__used:last-child { margin-inline-start: auto; }
 /* What a built-in does, as the first thing under its head — the sentence is the definition's own. */
 .actdecl__does { margin: 0 0 var(--s-2); font-size: var(--fs-md); }
 .actdecl .btn--on { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-weak); }
@@ -1892,8 +1900,6 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
    draws. */
 .actbuild__canvashead { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3) 0; }
 .actbuild__canvashead .btn { margin-inline-start: auto; }
-.actbuild__hint { font-size: var(--fs-xs); color: var(--c-text-faint); }
-.actbuild__notready { margin: var(--s-2) var(--s-3) 0; }
 .actbuild__canvas {
   display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
   padding: var(--s-3) var(--s-3) var(--s-5); overflow-x: auto;

@@ -127,21 +127,31 @@ function OutputRow({
 function ExitCard({
   action,
   exit,
+  adding,
   onAddOutput,
+  onAdded,
   run,
 }: {
   action: AutomationActionDetailDto;
   exit: AutomationExitDto;
+  /** Whether the row that declares one more output stands open in this card. */
+  adding: boolean;
   onAddOutput: () => void;
+  onAdded: () => void;
   run: Run;
 }) {
   return (
     <DeclItem
       className="autoexit"
       edit={<ExitEdit owner="action" ownerId={action.id} exit={exit} run={run} />}
-      below={exit.outputs.map((port) => (
-        <OutputRow key={port.name} action={action} exitName={exit.name} port={port} run={run} />
-      ))}
+      below={
+        <>
+          {adding && <AutomationOutputAdd exit={exit} onClose={onAdded} />}
+          {exit.outputs.map((port) => (
+            <OutputRow key={port.name} action={action} exitName={exit.name} port={port} run={run} />
+          ))}
+        </>
+      }
     >
       <ExitMark name={exit.name} />
       <OutputPlus onPress={onAddOutput} />
@@ -225,7 +235,7 @@ export function AutomationActionDeclaresPanel({
   /** The screen's one runner, so a refusal lands where every other one does. */
   run: Run;
 }) {
-  // The way out an output artefact is being declared on, while that dialog is open.
+  // The way out whose card has the row open that declares one more thing it hands on.
   const [adding, setAdding] = useState<number | null>(null);
 
   if (part === "in") {
@@ -307,7 +317,9 @@ export function AutomationActionDeclaresPanel({
               key={one.id}
               action={action}
               exit={one}
+              adding={adding === one.id}
               onAddOutput={() => setAdding(one.id)}
+              onAdded={() => setAdding(null)}
               run={run}
             />
           ))}
@@ -319,12 +331,6 @@ export function AutomationActionDeclaresPanel({
         </DeclItem>
       </DeclSec>
 
-      {adding !== null && (
-        <AutomationOutputAdd
-          exit={action.exits.find((one) => one.id === adding)!}
-          onClose={() => setAdding(null)}
-        />
-      )}
     </div>
   );
 }

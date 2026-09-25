@@ -103,6 +103,14 @@ export type Say = {
   readonly run: number;
   /** The step running now, by the name it was built under. */
   readonly step: string;
+  /** The automation the run was launched from, by its id, and the spot on its picture the step was
+   *  opened from, or null where the run's copy names none. They are what the step is numbered by. */
+  readonly automationId: number;
+  readonly placement: number | null;
+  /** **The number the picture gives that spot's box** (`AMB-T-5538`), the same one the build screen
+   *  draws — never how many steps the run has taken. Null until the picture has been read, and where
+   *  the spot is no longer on it: the row then says the step without one. */
+  readonly box: number | null;
   /** The step is a built-in Amenbo carries out itself (`AMB-D-964`), which the row marks with the chip
    *  every screen marks one with — its name is said here and nowhere else on the pane
    *  (`../shell/BuiltinCard`). */
@@ -270,7 +278,7 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
       // The run's number is the same in every language, and written the way a reader would type it
       // into the tabs' search.
       runNo.textContent = `#${plate.run.run}`;
-      step.replaceChildren(...stepWords(plate.run.action, plate.run.step));
+      step.replaceChildren(...stepWords(plate.run.box, plate.run.action, plate.run.step));
       nth.textContent = plate.run.task === null ? "" : tf("face.runTask", { n: plate.run.task.seq });
       taskRef.textContent = plate.run.task?.ref ?? "";
       taskTitle.textContent = plate.run.task?.title ?? "";
@@ -288,15 +296,23 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
 
 /**
  * Which step, with the step's own name drawn heavier than the rest: the action and the step, or the
- * step alone where there is no action to say or the action is named after it.
+ * step alone where there is no action to say or the action is named after it. In front of either, the
+ * number of the box it was opened from, drawn as the picture draws it (`AMB-T-5538`).
  */
-function stepWords(action: string | null, stepName: string): Node[] {
+function stepWords(box: number | null, action: string | null, stepName: string): Node[] {
   const b = document.createElement("b");
   b.textContent = stepName;
-  if (action === null || action === stepName) return [b];
+  const no: Node[] = [];
+  if (box !== null) {
+    const mark = document.createElement("span");
+    mark.className = "autopic__no plate__box";
+    mark.textContent = String(box);
+    no.push(mark);
+  }
+  if (action === null || action === stepName) return [...no, b];
   const into = document.createElement("span");
   into.className = "plate__into";
   into.textContent = "›";
   into.setAttribute("aria-hidden", "true");
-  return [document.createTextNode(action), into, b];
+  return [...no, document.createTextNode(action), into, b];
 }

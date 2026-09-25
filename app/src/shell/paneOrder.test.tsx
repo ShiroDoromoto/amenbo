@@ -252,7 +252,7 @@ describe("what a card says about its pane", () => {
       reads(card, {
         name: "test",
         dot: { hue: 199, face: "lit" },
-        run: { automation: "test", run: 13, step: "タスクに着手する", builtin: true, action: null, task: null, state },
+        run: { automation: "test", run: 13, step: "タスクに着手する", automationId: 3, placement: null, box: null, builtin: true, action: null, task: null, state },
       }),
     ]));
     expect(cardOf(card).querySelector(".paneorder__ended")).toBeNull();

@@ -1733,6 +1733,11 @@ export function WorkspaceFace({
                       // A built-in's name, and the action standing where it was opened from, are
                       // drawn in the screen's language (`builtinWord`); an agent's step has no key.
                       step: builtinWord(builtin?.key, on.name),
+                      // Which box of the picture the step was opened from, which the pane numbers
+                      // it by once the picture has been read (`./TerminalPane`).
+                      automationId: on.automation,
+                      placement: on.placement ?? null,
+                      box: null,
                       builtin: builtin !== undefined,
                       // Which spot of the picture this step was opened from, said by the action
                       // standing there (`AMB-D-949`). Null where that spot has since been taken off.

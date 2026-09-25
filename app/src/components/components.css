@@ -1995,11 +1995,14 @@ fieldset:disabled .autostep__switch > input { cursor: default; }
   display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none;
   font-size: var(--fs-md); color: var(--c-stop);
 }
-.autolaunch__blocks > li::before { content: "● "; font-size: var(--fs-xs); }
+/* The mark and the line are two items, so a reason too long for one line wraps under itself rather
+   than leaving the mark alone above it — which is what a press, being a box of its own, would do. */
+.autolaunch__blocks > li { display: flex; align-items: baseline; gap: 0.3em; }
+.autolaunch__blocks > li::before { content: "●"; font-size: var(--fs-xs); flex: none; }
 /* A reason about one box: the sentence is the press that opens that box, and says so after it. */
 .autolaunch__go {
-  padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: start;
-  cursor: pointer;
+  flex: 1 1 auto; min-width: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit;
+  text-align: start; cursor: pointer;
 }
 .autolaunch__go::after { content: " → " attr(data-see); color: var(--c-accent-text); }
 .autolaunch__go:hover, .autolaunch__go:focus-visible { text-decoration: underline; }

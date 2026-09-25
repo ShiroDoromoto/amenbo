@@ -1135,6 +1135,7 @@ export const nl: Translation = {
     "auto.run.leftTaskOpen": "hij wilde verder zonder zijn taak te sluiten",
     "auto.run.step": "Stap {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
+    "auto.run.reportWithheld": "Verslag niet bij de taak achtergelaten, want die was gesloten: {steps}",
     "auto.run.waitingForTask": "Wacht op een taak die opgepakt kan worden",
     "auto.run.taskWait": "Wacht op taak",
 

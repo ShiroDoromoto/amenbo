@@ -1137,6 +1137,7 @@ export const zhHans: Translation = {
     "auto.run.leftTaskOpen": "没关闭任务就要继续往下走",
     "auto.run.step": "步骤 {n} · {step}",
     "auto.run.inAction": "{action} 的 {step}",
+    "auto.run.reportWithheld": "任务已关闭，未留下报告：{steps}",
     "auto.run.waitingForTask": "正在等待可领取的任务",
     "auto.run.taskWait": "等待任务",
 

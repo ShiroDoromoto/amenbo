@@ -1139,6 +1139,7 @@ export const de: Translation = {
     "auto.run.leftTaskOpen": "er wollte weitergehen, ohne seine Aufgabe zu schließen",
     "auto.run.step": "Schritt {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
+    "auto.run.reportWithheld": "Bericht nicht an der Aufgabe hinterlassen, da sie geschlossen war: {steps}",
     "auto.run.waitingForTask": "Wartet auf eine Aufgabe, die übernommen werden kann",
     "auto.run.taskWait": "Wartet auf Aufgabe",
 

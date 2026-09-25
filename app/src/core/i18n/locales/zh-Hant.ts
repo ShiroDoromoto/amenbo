@@ -1137,6 +1137,7 @@ export const zhHant: Translation = {
     "auto.run.leftTaskOpen": "沒關閉任務就要繼續往下走",
     "auto.run.step": "步驟 {n} · {step}",
     "auto.run.inAction": "{action} 的 {step}",
+    "auto.run.reportWithheld": "任務已關閉，未留下報告：{steps}",
     "auto.run.waitingForTask": "正在等待可領取的任務",
     "auto.run.taskWait": "等待任務",
 

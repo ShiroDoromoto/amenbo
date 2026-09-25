@@ -1132,6 +1132,7 @@ export const ko: Translation = {
     "auto.run.leftTaskOpen": "태스크를 닫지 않고 다음으로 가려고 했다",
     "auto.run.step": "단계 {n} · {step}",
     "auto.run.inAction": "{action}의 {step}",
+    "auto.run.reportWithheld": "작업이 닫혀 있어 보고를 남기지 않음: {steps}",
     "auto.run.waitingForTask": "가져올 수 있는 작업을 기다리는 중",
     "auto.run.taskWait": "작업 대기",
 

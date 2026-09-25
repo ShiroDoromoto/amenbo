@@ -1147,6 +1147,7 @@ export const it: Translation = {
     "auto.run.leftTaskOpen": "ha tentato di proseguire senza chiudere la sua attività",
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} in {action}",
+    "auto.run.reportWithheld": "Resoconto non lasciato sull’attività, che era chiusa: {steps}",
     "auto.run.waitingForTask": "In attesa di un’attività da prendere",
     "auto.run.taskWait": "In attesa di attività",
 

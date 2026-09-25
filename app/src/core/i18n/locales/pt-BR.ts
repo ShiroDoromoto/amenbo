@@ -1148,6 +1148,7 @@ export const ptBR: Translation = {
     "auto.run.leftTaskOpen": "tentou seguir sem fechar sua tarefa",
     "auto.run.step": "Passo {n} · {step}",
     "auto.run.inAction": "{step} em {action}",
+    "auto.run.reportWithheld": "Relatório não deixado na tarefa, que estava fechada: {steps}",
     "auto.run.waitingForTask": "Aguardando uma tarefa que possa pegar",
     "auto.run.taskWait": "Aguardando tarefa",
 

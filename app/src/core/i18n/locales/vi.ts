@@ -1136,6 +1136,7 @@ export const vi: Translation = {
     "auto.run.leftTaskOpen": "nó định đi tiếp mà không đóng công việc",
     "auto.run.step": "Bước {n} · {step}",
     "auto.run.inAction": "{step} trong {action}",
+    "auto.run.reportWithheld": "Không để lại báo cáo trên việc vì việc đã đóng: {steps}",
     "auto.run.waitingForTask": "Đang chờ việc có thể nhận",
     "auto.run.taskWait": "Chờ việc",
 

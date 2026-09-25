@@ -686,7 +686,13 @@ exitName?: string,
  * ([`amenbo_core::model::AutomationRunTask`]), and this is the one it is in now — the same
  * shape the row over its pane says it in.
  */
-task?: AutomationRunTaskDto, };
+task?: AutomationRunTaskDto, 
+/**
+ * **The steps whose report was kept off the task**, by name, in the order they ran: each was
+ * built to carry its report onto the task, and the task was closed by then (`AMB-D-963`). Empty
+ * where every report went where it was owed.
+ */
+reportWithheld: Array<string>, };
 
 /**
  * **One page of the "history" tab** — the runs that are over and need nobody (`AMB-D-955`).

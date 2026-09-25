@@ -1136,6 +1136,7 @@ export const th: Translation = {
     "auto.run.leftTaskOpen": "พยายามไปต่อโดยไม่ปิดงาน",
     "auto.run.step": "ขั้นตอน {n} · {step}",
     "auto.run.inAction": "{step} ใน {action}",
+    "auto.run.reportWithheld": "ไม่ได้ทิ้งรายงานไว้ที่งาน เพราะงานปิดแล้ว: {steps}",
     "auto.run.waitingForTask": "กำลังรองานที่รับได้",
     "auto.run.taskWait": "รองาน",
 

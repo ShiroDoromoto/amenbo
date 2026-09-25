@@ -1135,6 +1135,7 @@ export const hi: Translation = {
     "auto.run.leftTaskOpen": "इसने अपना काम बंद किए बिना आगे बढ़ने की कोशिश की",
     "auto.run.step": "चरण {n} · {step}",
     "auto.run.inAction": "{action} का {step}",
+    "auto.run.reportWithheld": "कार्य बंद था, इसलिए रिपोर्ट उस पर नहीं छोड़ी गई: {steps}",
     "auto.run.waitingForTask": "लेने योग्य कार्य की प्रतीक्षा में",
     "auto.run.taskWait": "कार्य की प्रतीक्षा",
 

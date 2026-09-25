@@ -1136,6 +1136,7 @@ export const id: Translation = {
     "auto.run.leftTaskOpen": "ia mencoba lanjut tanpa menutup tugasnya",
     "auto.run.step": "Langkah {n} · {step}",
     "auto.run.inAction": "{step} di {action}",
+    "auto.run.reportWithheld": "Laporan tidak ditinggalkan di tugas karena tugas sudah ditutup: {steps}",
     "auto.run.waitingForTask": "Menunggu tugas yang bisa diambil",
     "auto.run.taskWait": "Menunggu tugas",
 

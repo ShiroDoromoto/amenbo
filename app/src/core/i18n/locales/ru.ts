@@ -1152,6 +1152,7 @@ export const ru: Translation = {
     "auto.run.leftTaskOpen": "он попытался идти дальше, не закрыв задачу",
     "auto.run.step": "Шаг {n} · {step}",
     "auto.run.inAction": "{step} в {action}",
+    "auto.run.reportWithheld": "Отчёт не оставлен в задаче, так как она была закрыта: {steps}",
     "auto.run.waitingForTask": "Ждёт задачу, которую можно взять",
     "auto.run.taskWait": "Ждёт задачу",
 

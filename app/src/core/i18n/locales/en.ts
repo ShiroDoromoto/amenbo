@@ -1380,6 +1380,7 @@ const ui = {
   "auto.run.leftTaskOpen": "it tried to go on without closing its task",
   "auto.run.step": "Step {n} · {step}",
   "auto.run.inAction": "{step} in {action}",
+  "auto.run.reportWithheld": "Report kept off the task, which was closed: {steps}",
   "auto.run.waitingForTask": "Waiting for a task it can take",
   "auto.run.taskWait": "Waiting for a task",
 

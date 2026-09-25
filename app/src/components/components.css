@@ -1476,6 +1476,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .autorun__task--wait { flex: none; }
 .autorun__why { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--c-stop); }
 .autorun__when { flex: none; font-size: var(--fs-xs); color: var(--c-text-faint); font-variant-numeric: tabular-nums; }
+/* A step's report kept off a closed task: a mark after the task, in the heed colour, that neither
+   shrinks nor takes the dot the other items are parted by. */
+.autorun__withheld { flex: none; display: inline-flex; color: var(--c-heed); }
+.autorun__sub > .autorun__withheld::before { content: none; }
 .autorun__acts { flex: none; display: flex; gap: var(--s-1); }
 .autorun__acts:empty { display: none; }
 /* The colour is the state's own. One under way is the AI at work, so it wears the AI's colour

@@ -1135,6 +1135,7 @@ export const tr: Translation = {
     "auto.run.leftTaskOpen": "görevini kapatmadan devam etmeye çalıştı",
     "auto.run.step": "Adım {n} · {step}",
     "auto.run.inAction": "{action} içindeki {step}",
+    "auto.run.reportWithheld": "Görev kapalı olduğu için rapor göreve bırakılmadı: {steps}",
     "auto.run.waitingForTask": "Alınabilecek bir görev bekleniyor",
     "auto.run.taskWait": "Görev bekleniyor",
 

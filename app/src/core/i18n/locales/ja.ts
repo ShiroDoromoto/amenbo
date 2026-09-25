@@ -1141,6 +1141,7 @@ export const ja: Translation = {
     "auto.run.leftTaskOpen": "タスクを閉じずに次へ進もうとした",
     "auto.run.step": "ステップ {n} · {step}",
     "auto.run.inAction": "{action} の {step}",
+    "auto.run.reportWithheld": "タスクが閉じていたので、報告を残さなかった：{steps}",
     "auto.run.waitingForTask": "着手できるタスクを待っています",
     "auto.run.taskWait": "タスク待ち",
 

@@ -313,7 +313,12 @@ settings: Array<AutomationCfgDto>,
  * **The runs holding this action** — those going on any automation that places it, whichever
  * project that automation is in (`AMB-D-961`). Read for [`AutomationDetailDto::held_by`]'s reason.
  */
-heldBy: Array<AutomationRunCardDto>, };
+heldBy: Array<AutomationRunCardDto>, 
+/**
+ * **The automations that place it**, each once, in id order — the ones `used_by` counts. Named
+ * rather than counted, so the panel shows where a rewrite here lands and goes to each of them.
+ */
+placedOn: Array<AutomationPlacedOnDto>, };
 
 /**
  * **One built-in, as Amenbo defines it** (`AMB-D-964`) — what the library draws under its own head,
@@ -523,6 +528,10 @@ message_en: string,
  * Beside them, `builtin` is the key of the built-in `step` came from and `to_builtin` the one `to`
  * came from (`AMB-D-964`): a built-in's names are the store's Japanese, and the front end writes
  * them in the screen's language from the key (`app/src/core/i18n`'s `errSentence`).
+ *
+ * `placement` is the id of the placement the reason is about, where it is about one — every reason
+ * but the two about the automation as a whole. A name cannot say which box a reason belongs to when
+ * the same action is placed twice; the id can, so a screen can open that box.
  */
 fields: { [key in string]: string }, };
 
@@ -536,6 +545,12 @@ fields: { [key in string]: string }, };
  * is raised by the launch rather than listed here.
  */
 export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<AutomationLaunchBlockDto>, };
+
+/**
+ * **One automation an action is placed on**, with the project it is in — a global action stands on
+ * automations in more than one, and going to one is going to its project.
+ */
+export type AutomationPlacedOnDto = { id: number, name: string, project: number, };
 
 /**
  * **One spot on the picture**: the library action standing there, with everything it is read under

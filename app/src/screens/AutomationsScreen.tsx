@@ -132,6 +132,17 @@ export function AutomationsScreen({
     setTab(next);
   }
 
+  // An automation an open action is placed on: this project's is opened here, in place of the action;
+  // the sidebar's screen goes to it where its project draws it. A project's screen offers no other
+  // project's (`./AutomationActionBuildScreen`).
+  const goToAutomation =
+    projectId === null
+      ? onGoToAutomation
+      : (_project: number, automation: number) => {
+          setOpenAction(null);
+          setOpen(automation);
+        };
+
   const tabs = (
     <div className="autotabs" role="tablist" aria-label={t("auto.title")}>
       {TABS.map((one) => (
@@ -168,6 +179,7 @@ export function AutomationsScreen({
           onBack={() => setOpenAction(null)}
           onGoToGlobal={onGoToGlobalAction}
           onGoToRun={onGoToRun}
+          onGoToAutomation={goToAutomation}
         />
       </div>
     );

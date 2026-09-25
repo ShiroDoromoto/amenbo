@@ -113,6 +113,7 @@ describe("a built-in, opened", () => {
       inputs: [],
       settings: [],
       heldBy: [],
+      placedOn: [],
     };
     await act(async () => {
       root.render(createElement(AutomationActionBuildScreen, { id: 40, projectId: 1, onBack: back }));

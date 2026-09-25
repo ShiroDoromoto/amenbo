@@ -62,10 +62,11 @@ use crate::dto::{
     AutomationActionCardDto, AutomationActionDetailDto, AutomationBuiltinDto,
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationLaunchBlockDto,
-    AutomationLaunchCheckDto, AutomationPlacementDto, AutomationPlacementStepDto, AutomationPortDto,
-    AutomationRunCardDto, AutomationRunEndingsDto, AutomationRunHistoryDto,
-    AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto, AutomationStepOpenDto,
-    AutomationStepRunDto, AutomationWireDto, EveryAutomationCardDto, WriteAck,
+    AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
+    AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
+    AutomationRunHistoryDto, AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto,
+    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationCardDto,
+    WriteAck,
 };
 use crate::error::CmdError;
 use std::collections::HashMap;
@@ -637,9 +638,15 @@ pub fn automation_action_detail(id: i64) -> Result<Option<AutomationActionDetail
     let Some(view) = automation_view::action_detail(store.read_model().conn(), id)? else {
         return Ok(None);
     };
-    let held_by =
-        run_cards(&store, automation_view::run_ids_holding_action(store.read_model().conn(), id)?)?;
-    Ok(Some(action_detail_dto(view, held_by)))
+    let conn = store.read_model().conn();
+    let held_by = run_cards(&store, automation_view::run_ids_holding_action(conn, id)?)?;
+    let mut placed_on = Vec::new();
+    for automation_id in automation_view::automations_placing(conn, id)? {
+        if let Some(one) = read::automation(conn, automation_id)? {
+            placed_on.push(AutomationPlacedOnDto { id: one.id, name: one.name, project: one.project_id });
+        }
+    }
+    Ok(Some(action_detail_dto(view, held_by, placed_on)))
 }
 
 /// **Take one action off a picture**, with the answers written on it and every line naming it. The
@@ -1992,6 +1999,7 @@ fn detail_dto(
 fn action_detail_dto(
     view: automation_view::ActionView,
     held_by: Vec<AutomationRunCardDto>,
+    placed_on: Vec<AutomationPlacedOnDto>,
 ) -> AutomationActionDetailDto {
     let names = exit_names(view.steps.iter().flat_map(|s| s.exits.iter()).chain(view.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
@@ -2011,6 +2019,7 @@ fn action_detail_dto(
         inputs: view.inputs.into_iter().map(port_dto).collect(),
         settings: view.settings.into_iter().map(cfg_dto).collect(),
         held_by,
+        placed_on,
     }
 }
 

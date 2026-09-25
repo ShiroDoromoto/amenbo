@@ -16,6 +16,7 @@ const SECTIONS: Record<string, string> = {
   cut_worktree: "cutWorktree",
   fold_worktree: "foldWorktree",
   close_task: "closeTask",
+  fetch: "fetch",
 };
 
 /** For each built-in, the store's word → the dictionary key it sits under. */

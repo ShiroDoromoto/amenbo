@@ -1689,9 +1689,14 @@ export function WorkspaceFace({
                     // the terminal: the place is the same one and what is drawn in it is taken down
                     // and built again. Keyed by the place alone, the emulator would be handed a
                     // second session to draw while still holding the first one's screen.
+                    //
+                    // A built-in's card is keyed by its move for the same reason (`AMB-T-5550`): two
+                    // built-ins in a row are two steps, and the row above the card is put up once per
+                    // pane. Its start and its end are one move, so the card is written over, not built
+                    // again, between them.
                     key={step !== undefined
                       ? `${frame.id}:${step.runStep}`
-                      : builtin !== undefined ? `${frame.id}:builtin` : frame.id}
+                      : builtin !== undefined ? `${frame.id}:builtin:${builtin.seq}` : frame.id}
                     frame={frame.id}
                     // Where this pane sits on the page's grid, worked out from the order rather than
                     // held against the pane (`../talk/layout`).

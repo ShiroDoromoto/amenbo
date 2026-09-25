@@ -100,13 +100,18 @@ fn restore_sigpipe() {
 fn restore_sigpipe() {}
 
 fn real_main() -> i32 {
-    let parsed = match retargeted_cli()
+    let (parsed, typed) = match retargeted_cli()
         .try_get_matches_from(std::env::args_os())
-        .and_then(|m| Cli::from_arg_matches(&m))
+        .and_then(|m| Cli::from_arg_matches(&m).map(|c| (c, named(&m))))
     {
         Ok(c) => c,
         Err(e) => return handle_parse_error(e),
     };
+    // Before anything is read or written, so a refusal here has changed nothing.
+    if let Err(err) = in_a_step(&typed, amenbo_core::env::automation_step().is_some()) {
+        let probe = Flags { json: parsed.json, yes: false, quiet: false, no_color: false, actor: None };
+        return render_error(&probe, &err);
+    }
     // facet (actor kind): `--actor` and nothing else (`AMB-D-408`). An operation that uses the facet —
     // stamping who acted, or drawing how far an AI reaches — must declare one, and is refused
     // when it does not. An operation that uses none passes without one and never touches a facet again.
@@ -134,6 +139,48 @@ fn real_main() -> i32 {
     match run(parsed, &flags) {
         Ok(code) => code,
         Err(err) => render_error(&flags, &err),
+    }
+}
+
+/// **The command a line names, as the registry spells it** (`task status`, `notify target-list`) —
+/// the subcommands clap matched, joined. A line naming none is `amenbo` itself.
+fn named(matches: &clap::ArgMatches) -> String {
+    let mut words = Vec::new();
+    let mut at = matches;
+    while let Some((name, under)) = at.subcommand() {
+        words.push(name);
+        at = under;
+    }
+    match words.is_empty() {
+        true => core_agent::Cmd::Amenbo.name().to_string(),
+        false => words.join(" "),
+    }
+}
+
+/// **The commands no hand types, and so no table holds** — each is hidden, and each is launched by
+/// something that runs inside a step's terminal as readily as anywhere: git runs the hooks on every
+/// commit a step makes, Amenbo launches the sender and the carrier after a write, the scheduler runs
+/// the tick, and the window names its pane. Refusing them there would fail a step's commit on its own
+/// hook. The parser test holds every command to being in the table or here.
+const LAUNCHED_NOT_TYPED: &[&str] =
+    &["githook-pre-commit", "githook-commit-msg", "notify-sender", "viewer-carrier", "tick run", "talk name"];
+
+/// **Refuse what the terminal a run opened for a step may not type** (`AMB-D-968`), for every command
+/// alike, from the one table that says ([`core_agent::Cmd::in_a_step`]) — the same table the list a
+/// step is taught is made from, so what it is told and what it is let do cannot drift apart.
+///
+/// **A name the table does not hold is refused.** The table is an allow-list, and a command that
+/// reached here without being written into it is on the side that is refused rather than the one that
+/// quietly lets it through. Outside a step nothing is asked.
+fn in_a_step(typed: &str, inside: bool) -> Result<(), CliError> {
+    use core_agent::{Cmd, InAStep};
+    if !inside || LAUNCHED_NOT_TYPED.contains(&typed) {
+        return Ok(());
+    }
+    match Cmd::ALL.iter().find(|cmd| cmd.name() == typed).map(|cmd| cmd.in_a_step()) {
+        Some(InAStep::HandsBack | InAStep::Reaches) => Ok(()),
+        Some(InAStep::MovesTheTask) => Err(CliError::automation_task_is_the_runs(typed)),
+        Some(InAStep::OutsideARun) | None => Err(CliError::automation_outside_only(typed)),
     }
 }
 
@@ -1295,6 +1342,56 @@ mod tests {
     /// places one just as `bind --dir` does — so it is asked about `--dir`, not about where the command
     /// was typed. A `--dir` naming nothing is left to the command itself to report, which is the shape
     /// that keeps this guard from answering "no hazard" for a path it never looked at.
+    /// **Every command a line can name is one the step table holds, or one no hand types** — so none is
+    /// refused inside a step only for being spelled differently there, and the table and the parser
+    /// cannot drift apart.
+    #[test]
+    fn every_command_the_parser_names_is_in_the_step_table() {
+        fn leaves(cmd: &clap::Command, above: &[&str], out: &mut Vec<String>) {
+            for sub in cmd.get_subcommands().filter(|sub| sub.get_name() != "help") {
+                let mut path = above.to_vec();
+                path.push(sub.get_name());
+                match sub.has_subcommands() {
+                    true => leaves(sub, &path, out),
+                    false => out.push(path.join(" ")),
+                }
+            }
+        }
+        let mut named = Vec::new();
+        leaves(&Cli::command(), &[], &mut named);
+        let missing: Vec<&String> = named
+            .iter()
+            .filter(|name| !core_agent::Cmd::ALL.iter().any(|cmd| cmd.name() == name.as_str()))
+            .filter(|name| !LAUNCHED_NOT_TYPED.contains(&name.as_str()))
+            .collect();
+        assert!(missing.is_empty(), "named by the parser and missing from the table: {missing:?}");
+        for launched in LAUNCHED_NOT_TYPED {
+            assert!(named.iter().any(|name| name == launched), "{launched} is no command the parser names");
+        }
+    }
+
+    /// **Inside a step, the table decides; outside one, nothing is asked** — and what moves the task
+    /// is refused with the sentence that says the run moves it.
+    #[test]
+    fn inside_a_step_the_table_decides_what_is_typed() {
+        for reaches in ["automation step-done", "task show", "comment add", "task add", "amenbo", "githook-pre-commit"] {
+            assert!(in_a_step(reaches, true).is_ok(), "{reaches}");
+        }
+        for (refused, says) in [
+            ("task done", "moves its task's status"),
+            ("task status", "moves its task's status"),
+            ("task assign", "moves its task's status"),
+            ("automation start", "is typed from outside one"),
+            ("decision add", "is typed from outside one"),
+            ("no such command", "is typed from outside one"),
+        ] {
+            let err = in_a_step(refused, true).expect_err(refused);
+            assert_eq!(err.code, "automation_outside_only", "{refused}");
+            assert!(err.message.contains(says), "{refused}: {}", err.message);
+        }
+        assert!(in_a_step("task done", false).is_ok(), "outside a step nothing is asked");
+    }
+
     #[test]
     fn the_nested_guard_judges_the_folder_project_add_would_link() {
         use clap::Parser;

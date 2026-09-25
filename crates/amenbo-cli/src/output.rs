@@ -198,6 +198,9 @@ fn hint_for_a_caller_with_no_terminal(dirs: &str) -> String {
     )
 }
 
+/// What reaches from inside a step, said where something typed there was refused.
+const STEP_REACHES: &str = "From inside a step, what reaches is step-take, step-out and step-done, the commands that read, and a comment on a task or a decision. The rest is typed in a terminal of the person's own.";
+
 impl CliError {
     pub fn confirmation_required(what: &str) -> CliError {
         CliError {
@@ -417,19 +420,39 @@ impl CliError {
     }
 
 
-    /// A verb that builds an automation or drives a run, typed inside the terminal a run opened for a
-    /// step (`AMB-D-948`). The message names the side it is typed on, because the caller is an agent
-    /// that was told what to do and nothing about where it is standing.
-    pub fn automation_outside_only() -> CliError {
+    /// **A command typed inside the terminal a run opened for a step, where it may not be typed**
+    /// (`AMB-D-968`). `command` is the one that was typed, as the registry spells it. The message names
+    /// the side it is typed on, because the caller is an agent that was told what to do and nothing
+    /// about where it is standing.
+    ///
+    /// **One code for both reasons.** Either way the command is one typed outside a run; what differs is
+    /// why, and that is the sentence ([`CliError::automation_task_is_the_runs`]).
+    pub fn automation_outside_only(command: &str) -> CliError {
         CliError {
             code: CliErrorCode::AutomationOutsideOnly.as_str(),
             message: format!(
-                "this terminal is a step of a run, and `{} automation` builds automations and drives runs from outside one. Nothing was done.",
+                "this terminal is a step of a run, and `{} {command}` is typed from outside one. Nothing was done.",
                 Paths::command_name()
             ),
-            hint: Some(
-                "From inside a step, what reaches is step-take, step-out and step-done, with list / show / run-list / run-show to read where you stand. The rest is typed in a terminal of the person's own.".to_string()
+            hint: Some(STEP_REACHES.to_string()),
+            exit: 2,
+        }
+    }
+
+    /// **A command that moves a task's status or who it is assigned to, typed inside a step**
+    /// (`AMB-D-968`). The run takes its task, ends it and hands it to a person; a step that did any of
+    /// them itself would close a task with no commit on it, or hand it to another run that takes it
+    /// straight back. So the sentence says who moves it, and what the step does instead.
+    pub fn automation_task_is_the_runs(command: &str) -> CliError {
+        CliError {
+            code: CliErrorCode::AutomationOutsideOnly.as_str(),
+            message: format!(
+                "this terminal is a step of a run, and the run moves its task's status and who it is assigned to — `{} {command}` is not typed from here. Nothing was done.",
+                Paths::command_name()
             ),
+            hint: Some(format!(
+                "Where a person has to decide, leave by the way out that says so with step-done. {STEP_REACHES}"
+            )),
             exit: 2,
         }
     }

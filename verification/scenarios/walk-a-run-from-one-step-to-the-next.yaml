@@ -15,7 +15,8 @@ description: >
   press did. A way out the step does not declare is tried first and turned away, leaving the first
   step where it was. Then the pane is still the run's, and its header now names the second
   step, with the action it belongs to. The value is handed along the wires out of the first action and into the
-  second, so that the second step has a reason to open at all.
+  second, so that the second step has a reason to open at all. Report the second step as well, and
+  the built-in after it closes the task and ends the run: the pane's header says the run completed.
 given:
   # Claude Code is one of the two agents this machine can start — two being the fewest the premise
   # stands up — so no step is refused for who carries it out. `runs` keeps the stand-in standing and
@@ -199,3 +200,20 @@ steps_gui:
       task: seed
       present: true
 
+  # The second step reports, and what is left is the built-in that closes the task, which ends the
+  # run. The pane stays standing on the last step, so its header is what says the run is over: a
+  # build that only named the step there would leave a finished run looking like one stopped partway.
+  - type: action
+    domain: automation
+    op: done-in-pane
+    with:
+      target: run
+      report: read what was handed on
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      state: completed
+      present: true

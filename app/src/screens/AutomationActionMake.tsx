@@ -1,19 +1,24 @@
 // **Make an action on the spot, from an automation's picture** (`AMB-D-956`) — what the library
 // panel's "make one" press opens (`./AutomationLibraryPanel`).
 //
-// **It asks two things: a name, and which library the action is kept in.** The inside of an action
+// **It asks two things, under a small picture of where the action goes: a name, and which library
+// it is kept in.** No sentence says what the press does: the picture says where, the button says
+// "make and open", and an empty action is named by the launch check and marked on its box. The inside of an action
 // is its steps, and each step carries its own prompt, ways out and outputs — so it is built on the
 // action's own screen. A dialog that asked for part of it here would be a second place to declare
 // the same thing (`AMB-D-954`).
 //
-// **The press puts the empty action where it was asked for and goes to build it.** Where it stands is
+// **The press puts the empty action where it was asked for and opens it to be built.** Where it stands is
 // decided now, by the line pressed or the empty picture, so the reader does not have to remember it
 // while they build the inside; they come back to find it standing there. Until a step is written in
 // it, the launch check names the action as empty.
 //
 // **Which library is asked, not assumed** (`AMB-T-5317`): an action made here is an ordinary action,
-// and where one is kept outlives the picture it was made at. This project's is offered first; with no
-// project there is only the device's.
+// and where one is kept outlives the picture it was made at. The two are the reach chips' words, side
+// by side, with this project's first; with no project there is only the device's, and nothing to ask.
+//
+// **The name starts as what the library was searched with** — the reader looked for it, did not
+// find it, and pressed to make it under that name.
 //
 // **Only its two buttons close it** (`AMB-T-5363`): a stray press on the backdrop or Escape would
 // throw away what was typed.
@@ -23,21 +28,34 @@ import { makeAutomationAction, type ActionShelf } from "../core/automations";
 import { errText, t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
+import { WhereMark, type WhereTo } from "./automationParts";
+
+/** The two libraries an action made here can be kept in, this project's first. */
+const SHELVES: { id: ActionShelf; label: () => string }[] = [
+  { id: "project", label: () => t("auto.actions.reachProject") },
+  { id: "device", label: () => t("auto.actions.reachGlobal") },
+];
 
 export function AutomationActionMake({
   into,
+  name: typed = "",
+  where,
   projectId,
   onMade,
   onClose,
 }: {
   /** Where the new action is placed: on the line pressed, or on a picture with no line yet. */
   into: { edgeId: number } | { automationId: number };
+  /** What the name box starts with. */
+  name?: string;
+  /** Where the new action goes, drawn over the fields. */
+  where: WhereTo;
   projectId: number | null;
   /** The action is placed — go and build it. */
   onMade: (actionId: number) => void;
   onClose: () => void;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(typed);
   const [shelf, setShelf] = useState<ActionShelf>("project");
   const [making, setMaking] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
@@ -60,12 +78,19 @@ export function AutomationActionMake({
 
   return createPortal(
     <div className="modal__overlay">
-      <div className="modal__card" role="dialog" aria-modal="true" aria-labelledby="auto-make-title">
+      <div
+        className="modal__card autodlg__stack"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auto-make-title"
+      >
         <h2 className="autodlg__title" id="auto-make-title">
           {t("auto.lib.make")}
         </h2>
 
         {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
+
+        <WhereMark where={where} />
 
         <label className="autostep__field">
           <span className="autostep__label">{t("auto.actions.name")}</span>
@@ -79,16 +104,20 @@ export function AutomationActionMake({
         </label>
 
         {projectId !== null && (
-          <label className="autostep__field">
-            <span className="autostep__label">{t("auto.actions.reach")}</span>
-            <select value={shelf} onChange={(e) => setShelf(e.target.value as ActionShelf)}>
-              <option value="project">{t("auto.actions.reachProject")}</option>
-              <option value="device">{t("auto.actions.reachGlobal")}</option>
-            </select>
-          </label>
+          <div className="buttonrow" role="group" aria-label={t("auto.actions.reach")}>
+            {SHELVES.map((one) => (
+              <button
+                key={one.id}
+                type="button"
+                className={shelf === one.id ? "actchip actchip--on" : "actchip"}
+                aria-pressed={shelf === one.id}
+                onClick={() => setShelf(one.id)}
+              >
+                {one.label()}
+              </button>
+            ))}
+          </div>
         )}
-
-        <p className="autostep__said">{t("auto.make.said")}</p>
 
         <div className="buttonrow">
           <button type="button" className="btn btn--primary" disabled={!ready} onClick={() => void make()}>

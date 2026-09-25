@@ -6710,7 +6710,7 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
             ("着手できるタスクが無いとき", "the setting saying what it does when there is no task to take"),
             ("着手できるタスクが出るまで待つ", "the choice that waits until there is a task to take"),
             (
-                "待たずに終了条件「着手できるタスクが無い」へ進む",
+                "待たずに出口「着手できるタスクが無い」へ進む",
                 "the choice that does not wait, and leaves by the way out for there being no task to take",
             ),
             ("着手した", "the way out for having taken a task"),

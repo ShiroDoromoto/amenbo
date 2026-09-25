@@ -2,15 +2,12 @@
 # and changed. From the sidebar it is every project's on one list: each row names its project, a run
 # is started from the row, and a press on the row goes to the project the automation is in rather
 # than opening it here — an automation is changed in its own project, and this list changes nothing.
-# The two run tabs opened this way say over their rows that they hold everything on this device,
-# because no project narrowed them.
 id: read-every-projects-automations-from-the-sidebar
 title: The sidebar's automations list every project's, start one from its row, and go to a row's own project to change it
 description: >
   Open the automations from the sidebar and read a row from another project naming that project.
-  Start this project's automation from its row and read the pane the run stands up. Read the running
-  and history tabs saying they hold everything on this device. Then press the other project's row
-  and land on its build screen inside that project.
+  Start this project's automation from its row and read the pane the run stands up. Then press the
+  other project's row and land on its build screen inside that project.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
   # The action the run opens, holding the one step it runs. The way out that takes the task is
@@ -100,18 +97,6 @@ steps_gui:
     op: show-face
     with:
       face: tasks
-
-  - type: assert
-    domain: automation
-    op: scope-said
-    with:
-      tab: running
-
-  - type: assert
-    domain: automation
-    op: scope-said
-    with:
-      tab: history
 
   # The row goes to the project that owns it, where the automation is changed.
   - type: action

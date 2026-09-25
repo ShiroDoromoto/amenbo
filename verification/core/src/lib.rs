@@ -4463,7 +4463,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "history-row", required: &["state"], refs: &["target", "project"], strings: &["state", "reason"], binds: false },
     // What the row's own controls do: open the pane it is drawn in, hold the run, pick it up again, or
     // stop it.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press"], binds: false },
+    //
+    // `on: pane` presses the same three — hold, pick up again, stop — on the line over the pane the
+    // run is drawn in rather than on the tab's row: a reader watching a run is in its pane. Left off,
+    // or `on: row`, it is the row. `open` is the row's alone, the pane being where it leads.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press", "on"], binds: false },
     //
     // The two ways in that are not the build screen: a task's own pane, and an empty frame of the
     // workspace. Neither hands anything over at the press — which task and which folder are the

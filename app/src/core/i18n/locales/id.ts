@@ -1118,6 +1118,8 @@ export const id: Translation = {
     "auto.run.failed": "Gagal",
     "auto.run.canceled": "Dibatalkan",
     "auto.run.acknowledge": "Sudah dilihat",
+    "auto.run.seePicture": "Lihat di gambar",
+    "auto.run.seeHistory": "Lihat di riwayat",
     "auto.run.paused": "Dijeda",
     "auto.run.pausing": "Akan dijeda",
     "auto.run.crashed": "langkah berakhir tanpa melapor",

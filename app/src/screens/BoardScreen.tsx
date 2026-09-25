@@ -97,7 +97,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
-  onStartTerminal, workspaceOpen, onGoToRun, openAutomation, onGoToGlobalAction,
+  onStartTerminal, workspaceOpen, onGoToRun, openAutomation, openPlacement, openRuns, onGoToGlobalAction,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -120,6 +120,10 @@ export function BoardScreen({
   /** The automation to arrive on, open on its build screen — a press on the sidebar's list of every
    *  project's automations (`./AutomationsScreen`). */
   openAutomation?: number;
+  /** The box that build screen arrives with pressed — where a run's pane said its run stopped. */
+  openPlacement?: number;
+  /** The tab the automations arrive on instead, from a run's pane once its run is over. */
+  openRuns?: "history";
   /** Go to a global action on the sidebar's entrance, where it is changed (`./AutomationsScreen`). */
   onGoToGlobalAction?: (action: number) => void;
 }) {
@@ -127,7 +131,7 @@ export function BoardScreen({
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
   // The tasks surface (list/board/…) or the decisions one. Decisions shows only what sits under this project.
   const [tab, setTab] = useState<"tasks" | "decisions" | "automations">(
-    openAutomation === undefined ? "tasks" : "automations",
+    openAutomation === undefined && openRuns === undefined ? "tasks" : "automations",
   );
   const [sel, setSel] = useState<FilterSelection>({});
   // Whether the filters are open. Closed is where a board starts: the values of every axis do not fit on a
@@ -351,6 +355,8 @@ export function BoardScreen({
         <AutomationsScreen
           projectId={projectId}
           opening={openAutomation}
+          openingBox={openPlacement}
+          openingTab={openRuns}
           onGoToGlobalAction={onGoToGlobalAction}
           workspaceOpen={workspaceOpen}
           onGoToRun={onGoToRun}

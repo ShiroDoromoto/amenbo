@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import type { RefTargetDto } from "../bindings/bindings";
+import type { LedgerPlaceDto, RefTargetDto } from "../bindings/bindings";
 import { TopBar } from "./TopBar";
 import { WorkspaceFace } from "./WorkspaceFace";
 import { useNavHistory, NO_SELECTION } from "./navHistory";
@@ -52,6 +52,12 @@ import { Icon } from "../components/Icon";
  *
  * `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the gear in the board toolbar.
  *
+ * `placement` is the box that build screen arrives with pressed, and `runs` the tab a project's
+ * automations arrive on instead — both from a run's pane, which is read in the workspace and followed
+ * here (`AMB-T-5539`). `nth` counts those arrivals, so that a second press on the same button opens
+ * the screen again rather than finding the board already where it was sent and leaving it as the
+ * reader has since moved it.
+ *
  * `pick` is the project a screen should arrive already holding — the one the creation screen just
  * raised, carried into the MCP screen so its rows open on it (`AMB-D-684`). It is part of where you
  * are rather than a message passed alongside, so ＜/＞ land back on the same screen holding the same
@@ -62,6 +68,9 @@ export type Nav = {
   id: string;
   pick?: number;
   automation?: number;
+  placement?: number;
+  runs?: "history";
+  nth?: number;
   action?: number;
 };
 
@@ -618,7 +627,54 @@ export function AppShell() {
   const showDetail = hasDetail && !paneClaimed;
   const showRight = paneClaimed || hasDetail;
 
-  const refNav = useMemo(() => ({ selectTask, selectDecision }), [selectTask, selectDecision]);
+  // A run's pane reads in the workspace and is followed on the ledger, so both moves put the ledger up —
+  // in one window the workspace is the face in front of it (`AMB-T-5539`).
+  const arrivals = useRef(0);
+  const openAutomation = useCallback((project: number, automation: number, placement: number | null) => {
+    arrivals.current += 1;
+    navTo({
+      type: "project",
+      id: String(project),
+      automation,
+      ...(placement === null ? {} : { placement }),
+      nth: arrivals.current,
+    });
+    setFace("tasks");
+  }, [navTo]);
+  const openRunHistory = useCallback((project: number) => {
+    arrivals.current += 1;
+    navTo({ type: "project", id: String(project), runs: "history", nth: arrivals.current });
+    setFace("tasks");
+  }, [navTo]);
+  const refNav = useMemo(
+    () => ({ selectTask, selectDecision, openAutomation, openRunHistory }),
+    [selectTask, selectDecision, openAutomation, openRunHistory],
+  );
+
+  // A run's pane followed from the workspace's own window (`AMB-T-5539`). The host has brought this
+  // window forward (`crate::windows::show_ledger`); which screen that is, is this shell's move, the
+  // same one the pane makes where both are faces of one window.
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<LedgerPlaceDto>("ledger-activated", ({ payload }) => {
+        if (payload.automation !== undefined) {
+          openAutomation(payload.project, payload.automation, payload.placement ?? null);
+        } else {
+          openRunHistory(payload.project);
+        }
+      }))
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [openAutomation, openRunHistory]);
 
   // Only the detail closes on a blank-space click. A build panel sits beside a picture whose every box
   // and line is a press, and it closes with its own ×.
@@ -719,6 +775,8 @@ export function AppShell() {
         <div className="main">
           {nav.type === "project" && (
             <BoardScreen
+              // Built again for each arrival from a run's pane, which is what opens the screen it names.
+              key={nav.nth ?? 0}
               projectId={Number(nav.id)}
               headerSlot={headerSlot}
               selectedTaskId={selectedTaskId}
@@ -731,6 +789,8 @@ export function AppShell() {
               workspaceOpen={workspaceOpen}
               onGoToRun={goToRun}
               openAutomation={nav.automation}
+              openPlacement={nav.placement}
+              openRuns={nav.runs}
               onGoToGlobalAction={(action) => navTo({ type: "view", id: "automations", action })}
             />
           )}

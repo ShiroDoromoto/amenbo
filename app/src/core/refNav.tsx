@@ -10,6 +10,11 @@ import { createContext, useContext, type ReactNode } from "react";
 export interface RefNav {
   selectTask?: (id: number) => void;
   selectDecision?: (id: number | null) => void;
+  /** Open one automation's build screen, with the box a run stopped at already pressed where one is
+   *  named (`AMB-T-5539`) — from a run's pane, which is the workspace's and not the ledger's. */
+  openAutomation?: (project: number, automation: number, placement: number | null) => void;
+  /** Open a project's automations on the "history" tab — from a run's pane, once the run is over. */
+  openRunHistory?: (project: number) => void;
 }
 
 const RefNavContext = createContext<RefNav>({});

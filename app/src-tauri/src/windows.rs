@@ -40,7 +40,7 @@ use std::time::Duration;
 
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
-use crate::dto::{OpenInDto, RefTargetDto};
+use crate::dto::{LedgerPlaceDto, OpenInDto, RefTargetDto};
 use crate::error::CmdError;
 
 /// The window the ledger is read in — the app as it was before the second one existed, which is why
@@ -390,6 +390,26 @@ fn beside_the_board(app: &tauri::AppHandle) -> Option<(f64, f64)> {
 
 /// The event the board navigates on when a record is asked for from outside its own webview.
 const SHOW_REF_EVENT: &str = "ref-activated";
+
+/// The event the board goes to a place on its automations screen on, asked for from a run's pane.
+const SHOW_LEDGER_EVENT: &str = "ledger-activated";
+
+/// Show a place on the board's automations screen, asked for from a run's pane (`AMB-T-5539`).
+///
+/// [`show_ref`]'s seam for a destination that is not a record: the board is brought forward from the
+/// process that owns both windows, and which screen that is stays the front end's routing.
+#[tauri::command]
+pub fn show_ledger(app: tauri::AppHandle, place: LedgerPlaceDto) {
+    if let Some(win) = app.get_webview_window(BOARD) {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+    // Logged rather than returned, for `show_ref`'s reason.
+    if let Err(e) = app.emit(SHOW_LEDGER_EVENT, place) {
+        log::warn!("failed to emit {SHOW_LEDGER_EVENT}: {e}");
+    }
+}
 
 /// Which of the two spaces a ref clicked in a pane names.
 ///

@@ -359,6 +359,43 @@ describe("arriving from the sidebar's list", () => {
   });
 });
 
+describe("arriving from a run's pane (AMB-T-5539)", () => {
+  it("opens on the build screen with the box the run stopped at pressed", async () => {
+    const read: AutomationPlacementDto = {
+      id: 4,
+      name: "Read",
+      actionId: 904,
+      global: false,
+      prompt: "",
+      interactive: false,
+      reportToTask: false,
+      showHistory: true,
+      showNotes: true,
+      showDecisions: true,
+      showComments: true,
+      exits: [],
+      inputs: [],
+      settings: [],
+      steps: [],
+    };
+    hoisted.automations = [card()];
+    hoisted.detail = detail({ placements: [read] });
+    hoisted.check = { ready: true, blocks: [] };
+    await act(async () => {
+      root.render(createElement(AutomationsScreen, { projectId: 1, opening: 7, openingBox: 4, workspaceOpen: true }));
+    });
+    expect(container.querySelector(".actpanel__title")?.textContent).toBe("Read");
+  });
+
+  it("opens on the history tab", async () => {
+    await act(async () => {
+      root.render(createElement(AutomationsScreen, { projectId: 1, openingTab: "history", workspaceOpen: true }));
+    });
+    const lit = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
+    expect(lit?.textContent).toBe(t("auto.tab.history"));
+  });
+});
+
 describe("the panel beside the picture", () => {
   async function open() {
     hoisted.automations = [card()];

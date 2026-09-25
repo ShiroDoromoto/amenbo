@@ -5,7 +5,7 @@
 // The picture, the panel and the add dialog are the same three (`./AutomationPicture`,
 // `./AutomationActionStepPanel`, `./AutomationStepAdd`), handed this picture instead of that one.
 //
-// **There is no launch place.** What is started is an automation, and an action is what one places —
+// **There is no start press.** What is started is an automation, and an action is what one places —
 // so what this screen has in that spot is the action's own name, what it is for, its reach, and what
 // a rewrite here reaches: every automation that places it. What it is for is written the way the
 // automation's notes are (`./AutomationAboutPanel`), and like them it reaches no launch (`AMB-D-952`).
@@ -201,9 +201,10 @@ export function Panel({
   children,
 }: {
   place: string;
-  title: string;
-  /** Write a new name for what the panel shows. Given, the head's title is the box it is typed in —
-   *  the name is what the panel is about, so it is not asked for again as a field under it. */
+  /** What the panel shows — a name, or the field that writes one where the name is changed here. */
+  title: ReactNode;
+  /** Write a new name for what the panel shows. Given, the head's title — which is then the name as
+   *  text — is the box it is typed in, so the name is not asked for again as a field under it. */
   onRename?: (to: string) => void;
   onClose: () => void;
   /** Hold every field and press in the body shut — the head's close stays live. */
@@ -218,7 +219,13 @@ export function Panel({
         {onRename === undefined ? (
           <span className="actpanel__title">{title}</span>
         ) : (
-          <TitleInput key={title} title={title} label={place} readOnly={readOnly} onRename={onRename} />
+          <TitleInput
+            key={String(title)}
+            title={String(title)}
+            label={place}
+            readOnly={readOnly}
+            onRename={onRename}
+          />
         )}
         <button
           type="button"
@@ -324,7 +331,7 @@ export function AutomationActionBuildScreen({
         />
       )}
 
-      {action !== null && <AutomationHeldBy runs={action.heldBy} onGoToRun={onGoToRun} />}
+      {action !== null && <AutomationHeldBy runs={action.heldBy} withAutomation onGoToRun={onGoToRun} />}
 
       <div className="actbuild__canvashead">
         <span className="actbuild__sec">{t("auto.act.stepsPlace")}</span>

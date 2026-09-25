@@ -740,11 +740,10 @@ The two listings — a row per definition, a row per library action — are read
 move into a project names (`scope-refusal-names`): the terminal reads the error it is turned away
 with, a screen the sentence left under the row. The list the sidebar opens is a screen's alone, since
 no terminal lists every project's automations: a row naming its project (`every-listed`), the start
-beside it (`start-from-list`), the row going to its project (`every-open`), and the run tabs saying
-they hold everything on this device (`scope-said`). So is a definition held by a run: on either build
-screen the runs holding it are listed over a picture that takes no write (`held-by`, `present: false`
-once the run is over), and a run's row there goes to its pane (`held-go`) — the terminal's half is the
-refusal itself, `refused: conflict` on the write.
+beside it (`start-from-list`), and the row going to its project (`every-open`). So is a definition
+held by a run: on either build screen a band per run holding it is drawn over a picture that takes no
+write (`held-by`, `present: false` once the run is over), and the band's press goes to the run's pane
+(`held-go`) — the terminal's half is the refusal itself, `refused: conflict` on the write.
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
 about an automation but the one that makes one from the list opens on a definition that is already
 there, so a premise builds all three layers — the action, the steps inside it, and the placement on

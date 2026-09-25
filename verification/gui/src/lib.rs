@@ -1240,7 +1240,7 @@ impl Instructor {
             (Domain::Automation, "panel-shows") => {
                 Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
             }
-            // What the launch place names as being in the way. The reason itself is the interface's
+            // What the build screen lists under its head as being in the way. The reason itself is the interface's
             // sentence, but what it names is the road's: the input, the setting, the agent. So the
             // reading is taken on that name, and a road that named no `at` leaves the whole line to
             // an eye.
@@ -4024,8 +4024,8 @@ impl Instructor {
                     said.push(format!("set the notes to \"{notes}\""));
                 }
                 match with.get("archived").and_then(|v| v.as_bool()) {
-                    Some(true) => said.push("tick the box that archives it".to_string()),
-                    Some(false) => said.push("clear the box that archives it".to_string()),
+                    Some(true) => said.push("turn on the switch that archives it".to_string()),
+                    Some(false) => said.push("turn off the switch that archives it".to_string()),
                     None => {}
                 }
                 if said.is_empty() {
@@ -4384,7 +4384,7 @@ impl Instructor {
             // The press that makes a run. It is the build screen's, and the two other ways in below
             // make the same run without handing anything over either.
             (Domain::Automation, "start") => {
-                "On the build screen's launch place, press the button that starts a run.".to_string()
+                "On the build screen's head, press the button that starts a run.".to_string()
             }
             // Closing the pane a run is drawn in, which is a way of stopping the run — and the
             // question put before it closes says so.
@@ -4525,7 +4525,7 @@ impl Instructor {
             // A row of the runs holding the open build screen's definition. The row is the running
             // tab's own line, so it goes where that line goes: the pane the run is drawn in.
             (Domain::Automation, "held-go") => {
-                "On the build screen, under \"Runs using it\", press the row for this run. Confirm the workspace comes forward on the pane the run is drawn in.".to_string()
+                "On the build screen, in the band over the picture that says this run is using it, press the button that opens its pane. Confirm the workspace comes forward on the pane the run is drawn in.".to_string()
             }
             _ => return Err(unmapped(domain, op)),
         })
@@ -6255,9 +6255,11 @@ impl Instructor {
                         Some(_) => format!(", saying {} actions are placed on it", count(with, "placements")?),
                         None => String::new(),
                     },
+                    // Archived rows are folded at the end of the list, under their count, so a road
+                    // reading one opens that fold first.
                     match with.get("archived").and_then(|v| v.as_bool()) {
-                        Some(true) => ", marked as archived",
-                        Some(false) => ", carrying no archived mark",
+                        Some(true) => ", in the fold of archived ones at the end of the list (open the fold to read it)",
+                        Some(false) => ", among the rows in use rather than in the fold of archived ones",
                         None => "",
                     }
                 ),
@@ -6320,21 +6322,11 @@ impl Instructor {
             // list is gone and the writes are back.
             (Domain::Automation, "held-by") => match present(with) {
                 true => match with.contains_key("target") {
-                    true => "On the build screen, confirm \"Runs using it\" is drawn over the picture with a row for this run. Confirm the definition is only read: no line on the picture offers a box to put in, nothing adds one above it, and every field in the panel a box opens is shut.".to_string(),
+                    true => "On the build screen, confirm a band marked with a lock is drawn over the picture, saying this run is using it, with a press that opens its pane and one that stops it. Confirm the definition is only read: no line on the picture offers a box to put in, nothing adds one above it, and every field in the panel a box opens is shut.".to_string(),
                     false => return Err("`held-by` names the run it lists — give it `target`, or say `present: false`".to_string()),
                 },
-                false => "On the build screen, confirm nothing is drawn under \"Runs using it\", and the definition takes writes again: the lines on the picture offer a box to put in, and the fields in the panel a box opens can be changed.".to_string(),
+                false => "On the build screen, confirm no band over the picture says a run is using it, and the definition takes writes again: the lines on the picture offer a box to put in, and the fields in the panel a box opens can be changed.".to_string(),
             },
-            // The words over the rows are the interface's own, in the language the run is in, so
-            // what the step names is what they say rather than how.
-            (Domain::Automation, "scope-said") => format!(
-                "Stand on the {} tab of the automations the sidebar opened, and confirm beside its heading it says it holds everything on this device.",
-                match req(with, "tab")? {
-                    "running" => "running",
-                    "history" => "history",
-                    other => return Err(format!("`tab` does not know `{other}` — it is running / history")),
-                }
-            ),
             // A built-in opened to be read. What it declares is listed as names on its rows, and the
             // rows are the whole of it: nothing on the screen writes, so the way back is the one press.
             (Domain::Automation, "builtin-read") => {
@@ -6447,13 +6439,14 @@ impl Instructor {
                     step_field(req(with, "field")?)?
                 ),
             },
-            // What the launch place says, which is where a half-built definition is named as such.
+            // What the build screen's head says: the start press, and under it what keeps it from being
+            // pressed — which is where a half-built definition is named as such.
             // A road names core's own code for the reason, so what it walks is the refusal rather
             // than a sentence the interface owns.
             (Domain::Automation, "launch") => match (req_bool(with, "ready")?, arg_str(with, "reason")) {
-                (true, _) => "On the build screen's launch place, confirm it says the automation is ready to be started, and that the button that starts one can be pressed."
+                (true, _) => "On the build screen's head, confirm the button that starts a run can be pressed, and that no reason is listed under the head."
                     .to_string(),
-                (false, None) => "On the build screen's launch place, confirm it says the automation cannot be started yet, and that the button that starts one cannot be pressed."
+                (false, None) => "On the build screen's head, confirm the button that starts a run cannot be pressed, and that the reasons it cannot are listed under the head."
                     .to_string(),
                 // A reason named, either way round. **The absent half is the one a road walks after
                 // fixing something**: the list is read once and drawn from what core answers, so a
@@ -6461,7 +6454,7 @@ impl Instructor {
                 // the way — and a road that only ever asked for a reason to be there could not
                 // catch it.
                 (false, Some(reason)) => format!(
-                    "On the build screen's launch place, confirm it says the automation cannot be started yet, and that {} of the reasons it lists is {}{}{}.",
+                    "On the build screen's head, confirm the button that starts a run cannot be pressed, and that {} of the reasons listed under the head is {}{}{}.",
                     match present(with) {
                         true => "one",
                         false => "none",
@@ -6961,7 +6954,7 @@ fn run_press(press: &str) -> Result<&'static str, String> {
 /// Where a run has got to, said as the row says it.
 /// Why a failed run ended, in the words the row carries under its state. A road names the code core
 /// writes, so what it is reading is the ending and not a sentence the interface owns — the same line
-/// the launch place's reasons are read on.
+/// the reasons under the build screen's head are read on.
 fn run_ending(reason: &str) -> Result<&'static str, String> {
     Ok(match reason {
         "crashed" => "its step ended without reporting",
@@ -8771,10 +8764,6 @@ steps_gui:
     op: start-from-list
     with: { target: auto }
     as: from_list
-  - type: assert
-    domain: automation
-    op: scope-said
-    with: { tab: running }
   - type: action
     domain: automation
     op: every-open
@@ -8824,9 +8813,9 @@ steps_gui:
             "the action made from the list is said with its reach",
         );
         let n = lines.len();
-        assert!(lines[n - 3].contains("\"Runs using it\"") && lines[n - 3].contains("only read"), "{}", lines[n - 3]);
-        assert!(lines[n - 2].contains("press the row for this run") && lines[n - 2].contains("pane"), "{}", lines[n - 2]);
-        assert!(lines[n - 1].contains("nothing is drawn") && lines[n - 1].contains("takes writes again"), "{}", lines[n - 1]);
+        assert!(lines[n - 3].contains("using it") && lines[n - 3].contains("only read"), "{}", lines[n - 3]);
+        assert!(lines[n - 2].contains("opens its pane") && lines[n - 2].contains("pane the run is drawn in"), "{}", lines[n - 2]);
+        assert!(lines[n - 1].contains("no band") && lines[n - 1].contains("takes writes again"), "{}", lines[n - 1]);
     }
 
     /// `held-by` lists a run, so a road reading the hold names which one; only the release names

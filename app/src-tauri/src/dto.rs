@@ -3630,8 +3630,8 @@ pub struct AutomationWireDto {
     pub(crate) to_port_name: String,
 }
 
-/// **Whether this automation can be started, and what is in the way** — what the build screen's
-/// launch place draws before anybody presses.
+/// **Whether this automation can be started, and what is in the way** — whether the build screen's
+/// start press can be pressed, and what it lists under its head while it cannot.
 ///
 /// It is core's own launch check ([`amenbo_core::ops::automation_run::check`]) and not a second
 /// reading of it. A definition that passes here can still be refused at the press, by a machine that

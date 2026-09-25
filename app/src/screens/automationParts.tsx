@@ -47,6 +47,26 @@ export function LockMark() {
 }
 
 /**
+ * A setting that is on or off, as a switch rather than a tick — the shape says it can be turned back.
+ * It is a checkbox underneath, so the label around it and the keyboard work as they do for one; the
+ * track is drawn over it (`.switch`).
+ */
+export function Switch({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <span className="switch">
+      <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <i aria-hidden="true" />
+    </span>
+  );
+}
+
+/**
  * One way out, as a mark — the same one in the picture, a panel and a dialog. The error way out is
  * drawn dashed in the stop colour, so it reads apart from the ones a reader named. `builtin` is the
  * key of the built-in the name belongs to, which puts its words in the screen's language.

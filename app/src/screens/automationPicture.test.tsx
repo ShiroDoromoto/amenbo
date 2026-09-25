@@ -31,6 +31,7 @@ function step(
     interactive: false,
     reportToTask: false,
     showHistory: true,
+    showTask: true,
     exits: [{ id: over.id * 10, outputs: [{ name: "task", kind: "task_take", required: true }] }],
     inputs: [],
     settings: [],

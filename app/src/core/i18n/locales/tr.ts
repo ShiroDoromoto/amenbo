@@ -992,6 +992,7 @@ export const tr: Translation = {
     "auto.step.reportToTask": "Raporu göreve de işlenir",
     "auto.step.reportToTaskNote": "Zaten \"Bitti\" ya da \"Reddedildi\" olan göreve işlenmez. Rapor çalıştırmanın geçmişinde kalır.",
     "auto.step.history": "O ana kadarki çalışmanın seyri kendisine verilir",
+    "auto.step.taskContext": "Çalışmanın üzerinde olduğu görev kendisine verilir — notları, bağlı kararları ve yorumları",
     "auto.step.ready": "Ön koşullar",
     "auto.step.readyYes": "Önünde engel yok",
     "auto.step.readyNo": "Önünde bir engel var",

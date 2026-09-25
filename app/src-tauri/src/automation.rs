@@ -366,7 +366,7 @@ pub fn automation_action_set_scope(id: i64, project_id: Option<i64>) -> Result<W
 
 /// **Change the step one library action opens.** Only what is `Some` is written.
 ///
-/// The fields are the step's, not the placement's: a prompt and the three flags belong to the terminal
+/// The fields are the step's, not the placement's: a prompt and the flags belong to the terminal
 /// that is stood up, and an action holds the steps. Writing one reaches every placement of that action,
 /// which is what the library is for. Who carries the step out is not among them — that is chosen where
 /// the action is placed ([`automation_placement_step_set`], `AMB-D-960`).
@@ -385,6 +385,7 @@ pub fn automation_step_edit(
     clear_work_dir: Option<bool>,
     report_to_task: Option<bool>,
     history: Option<bool>,
+    task_context: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
     let work_dir = match (clear_work_dir, work_dir.as_deref()) {
         (Some(true), _) => Some(None),
@@ -400,7 +401,7 @@ pub fn automation_step_edit(
             work_dir,
             report_to_task,
             history,
-            None,
+            task_context,
         )?;
         Ok(())
     })?;
@@ -1965,6 +1966,7 @@ fn step_dto(view: automation_view::StepView) -> AutomationStepDto {
         work_dir_ref: step.work_dir_ref,
         report_to_task: step.report_to_task,
         show_history: step.show_history,
+        show_task: step.show_task,
         exits: view.exits.into_iter().map(exit_dto).collect(),
         inputs: view.inputs.into_iter().map(port_dto).collect(),
     }
@@ -2038,6 +2040,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         work_dir_ref: opens.as_ref().and_then(|s| s.work_dir_ref.clone()),
         report_to_task: opens.as_ref().is_some_and(|s| s.report_to_task),
         show_history: opens.as_ref().map_or(true, |s| s.show_history),
+        show_task: opens.as_ref().map_or(true, |s| s.show_task),
         exits: view.exits.into_iter().map(exit_dto).collect(),
         inputs: view.inputs.into_iter().map(port_dto).collect(),
         settings: view.settings.into_iter().map(cfg_dto).collect(),

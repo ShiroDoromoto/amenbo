@@ -993,6 +993,7 @@ export const vi: Translation = {
     "auto.step.reportToTask": "Báo cáo của nó cũng nằm trên công việc",
     "auto.step.reportToTaskNote": "Không ghi lên công việc đã \"Xong\" hoặc \"Bị bác\". Báo cáo vẫn nằm trong lịch sử của lần chạy.",
     "auto.step.history": "Nó được trao lại diễn biến của lần chạy đến lúc này",
+    "auto.step.taskContext": "Nó được trao nhiệm vụ của lần chạy — ghi chú, các quyết định đã liên kết và bình luận",
     "auto.step.ready": "Tiền đề",
     "auto.step.readyYes": "Không có gì cản",
     "auto.step.readyNo": "Có gì đó đang cản",

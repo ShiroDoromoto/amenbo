@@ -1004,6 +1004,7 @@ export const it: Translation = {
     "auto.step.reportToTask": "Il suo resoconto resta anche sull'attività",
     "auto.step.reportToTaskNote": "Non su un'attività già «Fatta» o «Scartata». Il resoconto resta nella cronologia dell'esecuzione.",
     "auto.step.history": "Riceve quanto fatto finora dall'esecuzione",
+    "auto.step.taskContext": "Riceve l'attività dell'esecuzione: note, decisioni collegate e commenti",
     "auto.step.ready": "Premesse",
     "auto.step.readyYes": "Niente lo blocca",
     "auto.step.readyNo": "Qualcosa lo blocca",

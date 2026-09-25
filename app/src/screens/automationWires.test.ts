@@ -30,6 +30,7 @@ function step(
     interactive: false,
     reportToTask: false,
     showHistory: true,
+    showTask: true,
     exits: [{ id: id * 10, outputs }],
     inputs,
     settings: [],

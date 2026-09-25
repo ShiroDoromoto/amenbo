@@ -9,7 +9,8 @@
 // action's; **the way out says where the run goes
 // next**, on the action's own picture, and choosing "nothing said" takes that line away;
 // **the error way out is drawn with that pulldown and nothing else**, being carried from birth and
-// neither renamed nor removed; **the entry is named from the step it names**; and **deleting asks
+// neither renamed nor removed; **the task is handed on unless the box is unticked**
+// (`AMB-D-965`); **the entry is named from the step it names**; and **deleting asks
 // first**, taking the panel's selection with it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -74,6 +75,7 @@ function step(over: Partial<AutomationStepDto> = {}): AutomationStepDto {
     interactive: false,
     reportToTask: false,
     showHistory: true,
+    showTask: true,
     // What core writes at birth: the unnamed way out, and the error one nobody can delete.
     exits: [{ id: 10, outputs: [] }, { id: 19, name: "*", outputs: [] }],
     inputs: [],
@@ -186,6 +188,16 @@ describe("the panel of one step", () => {
       .querySelector("input")!;
     const note = document.getElementById(box.getAttribute("aria-describedby")!)!;
     expect(note.textContent).toBe(t("auto.step.reportToTaskNote"));
+  });
+
+  it("hands the step its task unless the reader unticks it, and writes that onto the step (AMB-D-965)", async () => {
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
+    const box = [...container.querySelectorAll<HTMLLabelElement>(".autostep__check")]
+      .find((one) => one.textContent?.includes(t("auto.step.taskContext")))!
+      .querySelector("input")!;
+    expect(box.checked).toBe(true);
+    await act(async () => box.click());
+    expect(hoisted.editStep).toHaveBeenCalledWith(11, { taskContext: false });
   });
 });
 

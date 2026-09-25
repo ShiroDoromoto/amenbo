@@ -1009,6 +1009,7 @@ export const ru: Translation = {
     "auto.step.reportToTask": "Его отчёт остаётся и на задаче",
     "auto.step.reportToTaskNote": "Не на задаче, которая уже «Готово» или «Отклонено». Отчёт остаётся в истории запуска.",
     "auto.step.history": "Ему передаётся ход выполнения до этого момента",
+    "auto.step.taskContext": "Ему передаётся задача выполнения — её заметки, связанные решения и комментарии",
     "auto.step.ready": "Предпосылки",
     "auto.step.readyYes": "Ничто не мешает",
     "auto.step.readyNo": "Что-то мешает",

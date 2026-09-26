@@ -218,7 +218,7 @@ describe("watchStore — when the feed cannot speak, always re-read from the sou
     // targeted again — we do not stay stuck in gap.
     head = 900;
     committed();
-    pages = [feed([row("decision")], 901)];
+    pages = [feed([row("decision_comment")], 901)];
     invalidateAllQueries.mockClear();
 
     await fire();

@@ -2642,6 +2642,21 @@ pub fn decision_add(
     Ok(WriteAck::new(&["decisions"]).decision(id))
 }
 
+/// The ack of a write that moves whether decisions `ids` are settled — written, decided, not
+/// superseded. A task linked to one of them is ready only while all of its decisions are, and its card
+/// draws that from the "tasks" side, so the linked tasks go stale with the decisions. Read after the
+/// write, in the same open store.
+fn linked_tasks_ack(store: &Store, ids: &[i64]) -> Result<WriteAck, CmdError> {
+    let mut ack = WriteAck::new(&["decisions", "tasks"]);
+    for &id in ids {
+        ack = ack.decision(id);
+        for t in store.decision_detail(id)?.linked_tasks {
+            ack = ack.task(t.id);
+        }
+    }
+    Ok(ack)
+}
+
 /// End the writing of a decision (`AMB-D-918`) — the second stage of recording one, and the door the
 /// pane draws while the draft flag is up. decided_by is me. Idempotent on a decision already written.
 #[tauri::command]
@@ -2649,9 +2664,8 @@ pub fn decision_finish_writing(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         let by = ActorKind::Human.as_str().to_string();
         store.finish_writing_decision(id, Some(by), ActorKind::Human)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["decisions"]).decision(id))
+        linked_tasks_ack(store, &[id])
+    })
 }
 
 /// Reject a decision (Proposed → Rejected).
@@ -2659,9 +2673,8 @@ pub fn decision_finish_writing(id: i64) -> Result<WriteAck, CmdError> {
 pub fn decision_reject(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.reject_decision(id, ActorKind::Human)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["decisions"]).decision(id))
+        linked_tasks_ack(store, &[id])
+    })
 }
 
 /// Put a settled decision back in hand — `draft` up again, `decided_*` cleared (`AMB-D-918`). The
@@ -2671,9 +2684,8 @@ pub fn decision_reject(id: i64) -> Result<WriteAck, CmdError> {
 pub fn decision_reopen(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.reopen_decision(id)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["decisions"]).decision(id))
+        linked_tasks_ack(store, &[id])
+    })
 }
 
 /// Edit a decision's title/body in place — still being written or settled alike (`AMB-D-363`); rejected is terminal.
@@ -2691,9 +2703,8 @@ pub fn decision_edit(id: i64, title: Option<String>, body: Option<String>) -> Re
 pub fn decision_supersede(new_id: i64, old_id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.supersede_decision(new_id, old_id)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["decisions"]).decision(new_id).decision(old_id))
+        linked_tasks_ack(store, &[new_id, old_id])
+    })
 }
 
 /// Have decision `new_id` partially revise `old_id` (amends — the target stays current).

@@ -81,7 +81,7 @@ pub enum Unmet {
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
     OpenExit { step: String, exit: String, builtin: Option<String>, placement: i64 },
     /// A required input with nothing reaching it — no wire at all, or none whose far end is both
-    /// declared and reachable from the entry.
+    /// declared and reachable from the entry before this placement is.
     UnwiredInput { step: String, port: String, builtin: Option<String>, placement: i64 },
     /// A required setting nobody answered while building.
     UnansweredCfg { step: String, cfg: String, builtin: Option<String>, placement: i64 },
@@ -887,10 +887,21 @@ fn reachable(
     entry_id: i64,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
 ) -> Result<BTreeSet<i64>> {
+    reachable_without(conn, entry_id, by_id, None)
+}
+
+/// [`reachable`], walked without passing through `avoiding` — **what a run can reach before it first
+/// comes to that placement**. The placement itself is not among them.
+fn reachable_without(
+    conn: &Connection,
+    entry_id: i64,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    avoiding: Option<i64>,
+) -> Result<BTreeSet<i64>> {
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry_id];
     while let Some(id) = todo.pop() {
-        if !by_id.contains_key(&id) || !seen.insert(id) {
+        if Some(id) == avoiding || !by_id.contains_key(&id) || !seen.insert(id) {
             continue;
         }
         let placement = by_id[&id];
@@ -1000,8 +1011,10 @@ fn outs_of(conn: &Connection, exit: &AutomationExit) -> Result<Vec<crate::model:
 
 /// Whether anything actually reaches one input — the action's input port `port_id`, on this placement.
 /// A wire counts only where **both** halves hold: its far end is declared — that placement's way out
-/// really hands on the port it keys — and that placement is reachable from the entry. A wire from a
-/// placement no run reaches would never carry anything, so it feeds no input.
+/// really hands on the port it keys — and that placement is reachable from the entry **without passing
+/// through this one**. A wire from a placement no run reaches would never carry anything, and one from
+/// this placement's own way out, or from a placement only reached after it, carries nothing the first
+/// time a run arrives — either way it feeds no input.
 ///
 /// **An input the entry reads at launch is fed there** (`entry_id`): the built-in that files a task,
 /// placed as the entry, is handed its title, notes and classification by the person launching the run
@@ -1031,6 +1044,7 @@ fn fed(
             return Ok(true);
         }
     }
+    let mut before = None;
     for wire in read::automation_wires_to_port(
         conn,
         AutomationPictureOwner::Automation,
@@ -1038,6 +1052,15 @@ fn fed(
         port_id,
     )? {
         if !live.contains(&wire.from_id) {
+            continue;
+        }
+        // Only a placement a run can come to before this one hands anything on to its first visit
+        // (`AMB-T-5641`): the placement's own way out, or one of a placement only reached through it,
+        // leaves the input empty the first time the run arrives, and the run fails there on no_input.
+        if before.is_none() {
+            before = Some(reachable_without(conn, entry_id, by_id, Some(placement.id))?);
+        }
+        if !before.as_ref().is_some_and(|b| b.contains(&wire.from_id)) {
             continue;
         }
         let Some(from) = by_id.get(&wire.from_id) else { continue };
@@ -2113,6 +2136,59 @@ mod tests {
                     builtin: None,
                     placement: placement.id,
                 }],
+            );
+        });
+    }
+
+    /// **A wire from the placement's own way out does not feed its input** (`AMB-T-5641`): the first
+    /// time a run arrives nothing has left by it yet, so the input is empty and the run fails there on
+    /// no_input. Reached from the entry is not enough — the far end has to be reached before this one.
+    #[test]
+    fn a_wire_from_the_placements_own_way_out_does_not_feed_its_input() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let exit = read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action.id, None)
+                .expect("read")
+                .expect("way out");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                exit.id,
+                AutomationPortDirection::Out,
+                "下書き",
+                AutomationPortKind::Value,
+                false,
+            )
+            .expect("out");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Action,
+                action.id,
+                AutomationPortDirection::In,
+                "下書き",
+                AutomationPortKind::Value,
+                true,
+            )
+            .expect("in");
+            automation::wire_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                placement.id,
+                None,
+                "下書き",
+                placement.id,
+                "下書き",
+            )
+            .expect("wire back into itself");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::UnwiredInput {
+                    step: "直す".into(),
+                    port: "下書き".into(),
+                    builtin: None,
+                    placement: placement.id,
+                }],
+                "the only wire into it comes back from its own way out",
             );
         });
     }

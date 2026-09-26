@@ -42,7 +42,7 @@ vi.mock("../core/automations", () => ({
   useAutomationBuiltins: () => [],
   useAutomationAction: () => null,
   insertAutomationAction: () => Promise.resolve(),
-  placeAutomationAction: () => Promise.resolve(),
+  ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
   launchAutomation: hoisted.launch,
   // An agent's step as the entry: the dialog every start opens asks for a text and files.
   useLaunchAsks: () => ({ reads: "words", axes: [] }),
@@ -426,7 +426,8 @@ describe("the panel beside the picture", () => {
     await act(async () => { button(t("auto.pic.first")).click(); });
     expect(panelPlace()).toBe(t("auto.pic.place"));
     expect(container.querySelector(".wheremark")?.textContent).toBe(t("auto.lib.here"));
-    expect(container.textContent).toContain(t("auto.lib.makeNew"));
+    // The first placement is where a run starts, one of the built-ins (`AMB-D-977`).
+    expect(container.textContent).not.toContain(t("auto.lib.makeNew"));
   });
 
   it("opens the definition's own fields from Edit, and keeps them open on a second press", async () => {

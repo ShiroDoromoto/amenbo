@@ -966,7 +966,7 @@ export const zhHant: Translation = {
     "auto.make.go": "建立並開啟動作",
     "auto.step.none": "按圖中的放置，內容會顯示在這裡",
     "auto.step.name": "名稱",
-    "auto.step.entry": "設為起點",
+    "auto.step.entryReplaceConfirm": "這會更換執行的起點。從目前起點出去的線會被刪除。後面的配置會保留，請在「接下來做什麼」中重新連接。",
     "auto.step.next": "接下來做什麼",
     "auto.step.nextNothing": "還沒有決定",
     "auto.step.nextErrorNothing": "停下來叫人（預設）",

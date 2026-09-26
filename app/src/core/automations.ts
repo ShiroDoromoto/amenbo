@@ -163,8 +163,9 @@ export function useAutomationBuiltins(): AutomationBuiltinDto[] {
 }
 
 /**
- * **Put a built-in on the picture**, standing on its own — `placeAutomationAction` for a built-in,
- * named by its key. Its library action is written the first time any automation places it.
+ * **Put a built-in on the picture**, standing on its own, named by its key. It is how the first
+ * placement comes in, which is one of the `ENTRY_BUILTINS` (`AMB-D-977`). Its library action is
+ * written the first time any automation places it.
  *
  * `axis` is the axis the built-in that splits by one splits by, and `null` for any other: that one has
  * an action per axis (`AMB-D-973`).
@@ -255,27 +256,20 @@ export async function removeAutomationPlacement(id: number): Promise<void> {
 }
 
 /**
- * **Put an action on the picture**, standing on its own with nothing pointing at it yet.
- *
- * It is the road `insertAutomationAction` is not: that one joins a picture already drawn, by the line
- * the `+` was pressed on, and an automation with nothing on it has no line to press. Where a run
- * begins is said separately (`setAutomationEntry`) — putting a box down is not choosing the entry.
+ * **The built-ins a run can start at**, in the order a picture with nothing on it offers them
+ * (`amenbo_core::ops::automation_builtin::ENTRIES`, `AMB-D-977`): the one that takes a task, the one a
+ * person hands one to, and the one that fetches.
  */
-export async function placeAutomationAction(automationId: number, actionId: number): Promise<void> {
-  if (!inTauri()) return;
-  return invokeAck("automation_placement_add", { automationId, actionId });
-}
+export const ENTRY_BUILTINS: readonly string[] = ["take_task", "make_task", "fetch"];
 
 /**
- * **Say which placement a run opens first**, or take the entry away with `null`.
- *
- * Whether the action standing there takes a task — what actually makes it a usable entry — is the
- * launch check's to say. A picture is built in whatever order its author likes, so naming an entry
- * that is not usable yet is allowed and drawn among the reasons a launch is not offered.
+ * **Change what a run starts at** to another of the `ENTRY_BUILTINS` (`AMB-D-977`). The placement
+ * standing first stays where it is and comes to be the other built-in; the lines out of it, the wires
+ * naming it and the answers written on it go with the old one. The placements after it stay.
  */
-export async function setAutomationEntry(id: number, placementId: number | null): Promise<void> {
+export async function replaceAutomationEntry(automationId: number, key: string): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_entry_set", { id, placementId });
+  return invokeAck("automation_entry_replace", { automationId, key });
 }
 
 /** What a way out is said to do: open a placement, close the task, or stop the run. */
@@ -709,27 +703,21 @@ export async function insertAutomationAction(edgeId: number, actionId: number): 
 }
 
 /**
- * **Make an empty action and put it on the picture** — on the line pressed, or on a picture with no
- * line yet — and answer with the action's id, for the screen to go and build it (`AMB-D-956`).
+ * **Make an empty action and put it in on the line pressed**, and answer with the action's id, for
+ * the screen to go and build it (`AMB-D-956`). A picture with nothing on it takes one of the
+ * `ENTRY_BUILTINS` first, so there is no line-less road here.
  *
  * It takes a name and a library and nothing else: the inside of an action is its steps, written on
  * the action's own screen. Until one is, the launch check names the action as empty. `null` outside
  * Tauri, where the browser mock holds no automations.
  */
 export async function makeAutomationAction(
-  into: { edgeId: number } | { automationId: number },
+  edgeId: number,
   name: string,
   shelf: ActionShelf,
 ): Promise<number | null> {
   if (!inTauri()) return null;
-  const ack =
-    "edgeId" in into
-      ? await invokeForAck("automation_placement_insert_new", { edgeId: into.edgeId, name, shelf })
-      : await invokeForAck("automation_placement_add_new", {
-          automationId: into.automationId,
-          name,
-          shelf,
-        });
+  const ack = await invokeForAck("automation_placement_insert_new", { edgeId, name, shelf });
   return ack.actions[0] ?? null;
 }
 

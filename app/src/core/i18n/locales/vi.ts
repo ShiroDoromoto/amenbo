@@ -965,7 +965,7 @@ export const vi: Translation = {
     "auto.make.go": "Tạo rồi mở hành động",
     "auto.step.none": "Nhấn vào một vị trí trong hình, nội dung sẽ hiện ở đây",
     "auto.step.name": "Tên",
-    "auto.step.entry": "Đặt làm điểm bắt đầu",
+    "auto.step.entryReplaceConfirm": "Thao tác này đổi điểm bắt đầu của lần chạy. Các đường đi ra từ điểm bắt đầu hiện tại sẽ bị xóa. Các vị trí phía sau vẫn giữ nguyên; hãy nối lại trong “Sau đó làm gì”.",
     "auto.step.next": "Sau đó làm gì",
     "auto.step.nextNothing": "Chưa định",
     "auto.step.nextErrorNothing": "dừng lại và gọi người (mặc định)",

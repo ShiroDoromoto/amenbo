@@ -970,7 +970,7 @@ export const ja: Translation = {
     "auto.make.go": "作って開く",
     "auto.step.none": "図の配置を押すと、中身がここに出ます",
     "auto.step.name": "名前",
-    "auto.step.entry": "この配置を起点にする",
+    "auto.step.entryReplaceConfirm": "起点を差し替えます。いまの起点から出ている線は消えます。後ろの配置は残るので、「次にすること」でつなぎ直してください",
     "auto.step.next": "次にすること",
     "auto.step.nextNothing": "まだ決めていない",
     "auto.step.nextErrorNothing": "止めて人を呼ぶ（既定）",

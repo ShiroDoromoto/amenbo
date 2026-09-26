@@ -976,7 +976,7 @@ export const fr: Translation = {
     "auto.make.go": "La créer et ouvrir l’action",
     "auto.step.none": "Appuyez sur un placement du schéma et son contenu s’affiche ici",
     "auto.step.name": "Nom",
-    "auto.step.entry": "En faire le départ",
+    "auto.step.entryReplaceConfirm": "Cela change le point de départ d’une exécution. Les lignes qui sortent du départ actuel disparaissent. Les placements suivants restent ; reconnecte-les dans « Ce qui se passe ensuite ».",
     "auto.step.next": "Ce qui se passe ensuite",
     "auto.step.nextNothing": "Rien n'est encore dit",
     "auto.step.nextErrorNothing": "s'arrêter et appeler quelqu'un (par défaut)",

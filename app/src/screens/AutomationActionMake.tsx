@@ -9,7 +9,7 @@
 // the same thing (`AMB-D-954`).
 //
 // **The press puts the empty action where it was asked for and opens it to be built.** Where it stands is
-// decided now, by the line pressed or the empty picture, so the reader does not have to remember it
+// decided now, by the line pressed, so the reader does not have to remember it
 // while they build the inside; they come back to find it standing there. Until a step is written in
 // it, the launch check names the action as empty.
 //
@@ -44,8 +44,11 @@ export function AutomationActionMake({
   onMade,
   onClose,
 }: {
-  /** Where the new action is placed: on the line pressed, or on a picture with no line yet. */
-  into: { edgeId: number } | { automationId: number };
+  /**
+   * Where the new action is placed: on the line pressed. A picture with nothing on it takes one of the
+   * built-ins a run starts at, never an action made here (`AMB-D-977`).
+   */
+  into: { edgeId: number };
   /** What the name box starts with. */
   name?: string;
   /** Where the new action goes, drawn over the fields. */
@@ -67,7 +70,7 @@ export function AutomationActionMake({
     setMaking(true);
     setRefused(null);
     try {
-      const id = await makeAutomationAction(into, name.trim(), shelfPicked);
+      const id = await makeAutomationAction(into.edgeId, name.trim(), shelfPicked);
       onClose();
       if (id !== null) onMade(id);
     } catch (e) {

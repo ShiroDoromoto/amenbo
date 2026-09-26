@@ -131,7 +131,7 @@ describe("putting a step in inside an action", () => {
 describe("making an action on the spot", () => {
   const made = vi.fn();
   async function open(
-    into: { edgeId: number } | { automationId: number } = { edgeId: 9 },
+    into: { edgeId: number } = { edgeId: 9 },
     name?: string,
   ) {
     made.mockClear();
@@ -175,15 +175,8 @@ describe("making an action on the spot", () => {
     await typeInto(boxes()[0]!, "書く");
     await act(async () => button(t("auto.actions.reachGlobal")).click());
     await act(async () => button(t("auto.make.go")).click());
-    expect(hoisted.make).toHaveBeenCalledWith({ edgeId: 9 }, "書く", "device");
+    expect(hoisted.make).toHaveBeenCalledWith(9, "書く", "device");
     expect(made).toHaveBeenCalledWith(21);
-  });
-
-  it("places it on a picture with no line yet", async () => {
-    await open({ automationId: 7 });
-    await typeInto(boxes()[0]!, "取る");
-    await act(async () => button(t("auto.make.go")).click());
-    expect(hoisted.make).toHaveBeenCalledWith({ automationId: 7 }, "取る", "project");
   });
 
   it("draws a refusal and stays where it is", async () => {

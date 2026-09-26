@@ -6565,6 +6565,12 @@ impl Instructor {
                     false => "In the workspace, confirm the press stood no new pane up.".to_string(),
                 },
             },
+            // Read by typing, because the screen alone cannot say it: the last lines stay whether or
+            // not the program is still there. The wait is the watch's look, a few seconds at most.
+            (Domain::Automation, "run-pane-ended") => {
+                "In the pane this run is drawn in, give it up to ten seconds after the run is over, then type `echo still-here` and press Return. Confirm the program in that pane has ended: its last lines are still on the screen, and nothing answers the line — no `still-here` comes back and no new prompt appears."
+                    .to_string()
+            }
             // A row of the running tab. It draws every run this device is carrying, across projects,
             // so the row names the project as well as where the run has got to.
             (Domain::Automation, "run-row") => match present(with) {

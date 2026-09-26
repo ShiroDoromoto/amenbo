@@ -1130,8 +1130,8 @@ mod tests {
         let run = put(
             "INSERT INTO automation_run \
                  (automation_id, project_id, status, pause_requested, started_by_kind, \
-                  started_at, ended_at, handed, created_at, updated_at) \
-             VALUES (?1, ?2, 'completed', 0, 'ai', ?3, ?3, 'この issue を起票して', ?3, ?3)",
+                  started_at, ended_at, created_at, updated_at) \
+             VALUES (?1, ?2, 'completed', 0, 'ai', ?3, ?3, ?3, ?3)",
             rusqlite::params![automation, project, at],
         );
         // What was handed over at launch hangs off the run itself (`AMB-D-970`).

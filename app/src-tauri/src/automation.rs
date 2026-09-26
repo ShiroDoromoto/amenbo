@@ -1267,11 +1267,10 @@ pub fn automation_launch_asks(id: i64) -> Result<AutomationLaunchAsksDto, CmdErr
 /// next one". This press only nudges that thread ([`crate::automation_watch::wake`]), so the pane is
 /// stood at once rather than at the end of its wait.
 ///
-/// **What the person hands over with the press** (`AMB-D-970`): `title`, `notes`, `classification`
-/// (axis and value, by name) and `files` by their paths on this machine, for the built-in that files a
-/// task (`AMB-D-981`); an entry that reads nothing is handed nothing ([`automation_launch_asks`] says
-/// which). No text on its own is taken: no entry reads one, and words for the task go in its notes.
-/// The files are ingested the way an attachment is ([`crate::commands::attachment_add`]):
+/// **What the person hands over with the press** (`AMB-D-981`): `title`, `notes`, `classification`
+/// (axis and value, by name) and `files` by their paths on this machine, all for the built-in that
+/// files a task, the one entry that reads anything ([`automation_launch_asks`] says whether this one
+/// is). The files are ingested the way an attachment is ([`crate::commands::attachment_add`]):
 /// the per-file cap checked, then streamed into the blob store. They go into the store before the
 /// launch, and onto the run in the launch's own transaction ([`automation_run::HandedAtLaunch`]) — a
 /// launch refused afterwards leaves a blob nothing names, which the blob sweep takes like any other.

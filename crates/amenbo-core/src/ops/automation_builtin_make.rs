@@ -1115,7 +1115,6 @@ mod tests {
                 ..with_values("  an issue  ", &[("職能", "実装")])
             };
             let run = launch_with(tx, &automation, &handed).expect("launch");
-            assert_eq!(run.handed, None);
 
             let filed = filed_first(tx, &run, &make);
             assert_eq!(filed.title, "an issue");
@@ -1190,9 +1189,8 @@ mod tests {
         });
     }
 
-    /// **What the entry cannot file from is refused before a run is made**: no title, a text on its own
-    /// (words go in the notes), an axis nobody offered, one fixed where it is placed, a value the axis does not
-    /// have.
+    /// **What the entry cannot file from is refused before a run is made**: no title, an axis nobody
+    /// offered, one fixed where it is placed, a value the axis does not have.
     #[test]
     fn a_launch_it_could_not_file_from_makes_no_run() {
         with_tx(|tx| {
@@ -1206,8 +1204,6 @@ mod tests {
             };
             refused(tx, HandedAtLaunch::default(), "no title");
             refused(tx, titled("  "), "no title");
-            let words = HandedAtLaunch { text: Some("words".into()), ..titled("an issue") };
-            refused(tx, words, "put the words in its notes");
             refused(tx, with_values("an issue", &[("職能", "実装")]), AI_AXES);
             answer(tx, &p, AI_AXES, "職能");
             refused(tx, with_values("an issue", &[("職能", "営業")]), "職能=営業");

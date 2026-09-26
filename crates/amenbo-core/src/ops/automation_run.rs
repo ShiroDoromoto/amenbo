@@ -298,9 +298,6 @@ pub struct Launcher<'a> {
 /// Nothing handed is the default, and a launch that hands nothing starts as it always has.
 #[derive(Clone, Debug, Default)]
 pub struct HandedAtLaunch {
-    /// A text on its own. **No entry reads one**, so a launch handing one is refused — words for the task
-    /// go in its notes. Blank text is the same as none.
-    pub text: Option<String>,
     /// The files, already ingested into the blob store by the caller ([`crate::blob::BlobStore`]), in
     /// the order they were handed over. Each is attached to the run in the launch's own transaction,
     /// and moved from there on to the task the entry files
@@ -315,10 +312,6 @@ pub struct HandedAtLaunch {
 }
 
 impl HandedAtLaunch {
-    fn text(&self) -> Option<&str> {
-        self.text.as_deref().filter(|t| !t.trim().is_empty())
-    }
-
     fn title(&self) -> Option<&str> {
         self.title.as_deref().map(str::trim).filter(|t| !t.is_empty())
     }
@@ -1144,7 +1137,6 @@ fn launch_asking(
         started_at: Some(now),
         ended_at: None,
         acknowledged_at: None,
-        handed: None,
         handed_task,
         created_at: now,
         updated_at: now,
@@ -1175,7 +1167,6 @@ fn launch_asking(
 /// - **Any other entry** reads nothing: a built-in takes a task or fetches from what it was set with,
 ///   and an agent's step, which a new picture can no longer start at (`AMB-D-977`), is handed nothing
 ///   at launch either.
-/// - **A text on its own** is read by none of them: words for the task go in its notes.
 ///
 /// Something handed that the entry does not read is refused: nothing would ever read it, and the
 /// person handing it would believe it went somewhere.
@@ -1196,10 +1187,6 @@ fn entry_reads(
         )))
     };
     match files_a_task {
-        true if handed.text().is_some() => refused(
-            "a text",
-            "files a task and reads its title, notes, classification and files — put the words in its notes",
-        ),
         true => {
             let Some(title) = handed.title() else {
                 return Err(Error::invalid(format!(
@@ -1218,7 +1205,7 @@ fn entry_reads(
                 classification,
             }))
         }
-        false if handed.text().is_some() || handed.for_a_task() => {
+        false if handed.for_a_task() => {
             refused("something", "reads nothing handed over at launch")
         }
         false => Ok(None),
@@ -2306,22 +2293,9 @@ mod tests {
         });
     }
 
-    /// Blank text is no text, and a launch that hands nothing over starts as it always has.
-    #[test]
-    fn blank_text_handed_at_launch_is_none() {
-        with_tx(|tx| {
-            let (automation, _, _) = launchable(tx);
-            let handed = HandedAtLaunch { text: Some("  \n".into()), ..Default::default() };
-            let run = launch_handing(tx, automation.id, &here(&claude()), &handed).expect("launch");
-            assert_eq!(run.handed, None);
-            let bare = launch(tx, automation.id, &here(&claude())).expect("launch");
-            assert_eq!(bare.handed, None);
-        });
-    }
-
     /// **An entry refuses what it does not read** (`AMB-D-981`): only the built-in that files a task
-    /// reads anything, so an agent's step and a built-in that takes a task are handed nothing — a text,
-    /// a file, or the title or classification of a task to file. Refused before any run is made.
+    /// reads anything, so an agent's step and a built-in that takes a task are handed nothing — a file,
+    /// or the title or classification of a task to file. Refused before any run is made.
     #[test]
     fn an_entry_refuses_what_it_does_not_read() {
         with_tx(|tx| {
@@ -2334,7 +2308,6 @@ mod tests {
                 size_bytes: 12,
             };
             for handed in [
-                HandedAtLaunch { text: Some("words".into()), ..Default::default() },
                 HandedAtLaunch { files: vec![file], ..Default::default() },
                 HandedAtLaunch { title: Some("an issue".into()), ..Default::default() },
                 HandedAtLaunch { classification: vec![("職能".into(), "実装".into())], ..Default::default() },
@@ -2352,8 +2325,8 @@ mod tests {
             )
             .expect("place it");
             let take = automation::set_entry(tx, take.id, Some(placed.id)).expect("entry");
-            let words = HandedAtLaunch { text: Some("words".into()), ..Default::default() };
-            let err = entry_reads(tx.conn(), &take, &words).expect_err("reads nothing");
+            let titled = HandedAtLaunch { title: Some("an issue".into()), ..Default::default() };
+            let err = entry_reads(tx.conn(), &take, &titled).expect_err("reads nothing");
             assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
             assert_eq!(entry_reads(tx.conn(), &take, &HandedAtLaunch::default()).expect("nothing"), None);
         });

@@ -2278,16 +2278,13 @@ pub enum AutomationCmd {
 
     /// Start an automation: check it, copy what is placed on it into a run, and start it. The tasks a
     /// step works on and the folder it runs in are the automation's own answers, given while it was
-    /// built; what is handed over here goes to the run's first step, and each entry reads its own:
-    /// an agent's step `--text` and `--file`, the make_task built-in `--title`, `--notes` and
-    /// `--dim`, and take_task or fetch nothing. Handing an entry what it does not read is refused
+    /// built. Only an entry of the make_task built-in reads what is handed over here: the `--title`,
+    /// `--notes` and `--dim` of the task it files, and each `--file`, attached to that task.
+    /// take_task and fetch read nothing, and handing an entry what it does not read is refused
     Start {
         /// automation id
         id: i64,
-        /// a text for the first step to take in, as Markdown. Pass `-` to read it from stdin
-        #[arg(long, value_name = "TEXT")]
-        text: Option<String>,
-        /// a file for the first step to take in, attached to the run (repeat for several)
+        /// a file to attach to the task the make_task entry files (repeat for several)
         #[arg(long = "file", value_name = "PATH")]
         files: Vec<String>,
         /// the title of the task an entry that files one (make_task) files — required there

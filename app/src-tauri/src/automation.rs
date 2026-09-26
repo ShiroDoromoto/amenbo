@@ -1267,9 +1267,10 @@ pub fn automation_launch_asks(id: i64) -> Result<AutomationLaunchAsksDto, CmdErr
 /// next one". This press only nudges that thread ([`crate::automation_watch::wake`]), so the pane is
 /// stood at once rather than at the end of its wait.
 ///
-/// **What the person hands over with the press** (`AMB-D-970`): `text`, and `files` by their paths on
-/// this machine, for an agent's step as the entry; `title`, `notes` and `classification` (axis and
-/// value, by name) for the built-in that files a task ([`automation_launch_asks`] says which). The files are ingested the way an attachment is ([`crate::commands::attachment_add`]):
+/// **What the person hands over with the press** (`AMB-D-981`): `title`, `notes`, `classification`
+/// (axis and value, by name) and `files` by their paths on this machine, all for the built-in that
+/// files a task, the one entry that reads anything ([`automation_launch_asks`] says whether this one
+/// is). The files are ingested the way an attachment is ([`crate::commands::attachment_add`]):
 /// the per-file cap checked, then streamed into the blob store. They go into the store before the
 /// launch, and onto the run in the launch's own transaction ([`automation_run::HandedAtLaunch`]) — a
 /// launch refused afterwards leaves a blob nothing names, which the blob sweep takes like any other.
@@ -1279,7 +1280,6 @@ pub fn automation_launch(
     id: i64,
     agents: Option<Vec<String>>,
     workspace_open: bool,
-    text: Option<String>,
     files: Option<Vec<String>>,
     title: Option<String>,
     notes: Option<String>,
@@ -1298,7 +1298,6 @@ pub fn automation_launch(
     };
     let run = with_store_mut(|store| {
         let mut handed = automation_run::HandedAtLaunch {
-            text,
             title,
             notes,
             classification: classification.unwrap_or_default(),

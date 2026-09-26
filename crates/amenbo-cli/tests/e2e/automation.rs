@@ -656,10 +656,10 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
     assert!(stopped["automation_run"]["stopped_reason"].is_null(), "a cancel carries no reason");
 }
 
-/// **What a person hands over comes in on the launch itself** (`AMB-D-970`): for a run that starts by
-/// filing a task, its title and notes. What that entry does not read — a text or a file for an agent's
-/// step — is refused, and so is a file that cannot be read, before anything is started, so no run is
-/// left holding half of what it was handed.
+/// **What a person hands over comes in on the launch itself** (`AMB-D-981`): for a run that starts by
+/// filing a task, its title, its notes and the files to attach to it. A file that cannot be read is
+/// refused before anything is started, so no run is left holding half of what it was handed, and a
+/// text on its own is not a thing the launch takes at all.
 #[test]
 fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
     let cli = Cli::new();
@@ -677,11 +677,16 @@ fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
     cli.json(&["automation", "edge-add", "--from", &format!("{make}:起票して着手した"), "--to", &close, "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{close}:"), "--done", "--json"]);
 
-    let started = cli.json(&["automation", "start", &a, "--title", "file this", "--notes", "# a draft", "--json"]);
+    let brief = cli.home.join("brief.md");
+    std::fs::write(&brief, "the login page loses the password field\n").expect("write the brief");
+    let started = cli.json(&[
+        "automation", "start", &a, "--title", "file this", "--notes", "# a draft",
+        "--file", brief.to_str().unwrap(), "--json",
+    ]);
     let run = id_of(&started, "automation_run");
 
     let (err, code) = cli.run_err(&["automation", "start", &a, "--title", "again", "--text", "for a step", "--json"]);
-    assert_ne!(code, 0, "a text for an agent's step is not what this entry reads: {err}");
+    assert_ne!(code, 0, "--text is gone: {err}");
     let missing = cli.home.join("not-there.md");
     let (err, code) = cli.run_err(&[
         "automation", "start", &a, "--title", "again", "--file", missing.to_str().unwrap(), "--json",

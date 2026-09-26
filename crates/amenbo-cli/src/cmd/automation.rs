@@ -715,8 +715,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
         }
 
-        AutomationCmd::Start { id, text, files, title, notes, dim } => {
-            let text = crate::cmd::arg::body_arg_opt(text)?;
+        AutomationCmd::Start { id, files, title, notes, dim } => {
             let notes = crate::cmd::arg::body_arg_opt(notes)?;
             // Split here and looked up by the launch, which answers for the axes against where the
             // entry is placed (`amenbo_core::ops::automation_builtin_make`).
@@ -736,7 +735,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .iter()
                 .map(|path| crate::cmd::attach::file_to_ingest(store, path, None))
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut handed = HandedAtLaunch { text, title, notes, classification, ..Default::default() };
+            let mut handed = HandedAtLaunch { title, notes, classification, ..Default::default() };
             for file in &files {
                 let blob = file.ingest(store)?;
                 handed.files.push(HandedFile {

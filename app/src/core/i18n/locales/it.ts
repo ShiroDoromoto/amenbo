@@ -1430,6 +1430,7 @@ export const it: Translation = {
     not_ready_automation_open_exit: "{step}: dopo {exit} non è previsto nulla",
     not_ready_automation_unwired_input: "{step}: nulla raggiunge l’ingresso obbligatorio {port}",
     not_ready_automation_unanswered_cfg: "{step}: l’impostazione obbligatoria {cfg} non ha risposta",
+    not_ready_automation_cfg_not_found: "{step}: l’impostazione {cfg} nomina {line}, che questo progetto non ha",
     not_ready_automation_agent_unchosen: "{step}: nessuno è scelto per eseguirlo",
     not_ready_automation_agent_missing: "{step}: questa macchina non può avviare {agent}",
     not_ready_automation_model_missing: "{step}: il suo agente qui non offre il modello {model}",

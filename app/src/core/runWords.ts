@@ -8,7 +8,7 @@
 import type { AutomationRunCardDto } from "../bindings/bindings";
 import { t } from "./i18n";
 import { builtinWord } from "./builtinWords";
-import type { RunState } from "../talk/nameplate";
+import type { RunState, Say } from "../talk/nameplate";
 
 /** The name core gives the error way out — `../screens/automationLayout`'s `ERROR_EXIT`. */
 const ERROR_EXIT = "*";
@@ -84,4 +84,32 @@ export function runStateOf(run: AutomationRunCardDto | undefined): RunState | nu
 export function waitingState(state: RunState | null): RunState | null {
   if (state === null || state.status !== "running" || state.pauseRequested) return state;
   return { ...state, word: t("auto.run.taskWait") };
+}
+
+/**
+ * **The row over a run's pane, said off the run alone** — for a pane no step has arrived in
+ * (`AMB-T-5635`). A pane kept by the store comes back when the app does, and a run that is held or
+ * failed opens no terminal to be told by: what the row says is the step the run is on, or the last one
+ * it ran, and where it stands.
+ *
+ * It is the run's line of the "running" tab, over the pane. Null until the run has been read, and then
+ * the pane draws no row of the run's rather than one with nothing in it.
+ */
+export function runSayOf(run: AutomationRunCardDto | undefined): Say | null {
+  if (run === undefined) return null;
+  return {
+    automation: run.automationName,
+    run: run.run,
+    step: builtinWord(run.builtin, run.stepName ?? ""),
+    automationId: run.automation,
+    // The spot the step was opened from, which is also the box "see the picture" opens: where a run
+    // failed, it is where it failed — a crash included, which is the step that was under way.
+    placement: run.placement ?? null,
+    box: null,
+    builtin: run.builtin !== undefined,
+    action: run.actionName === undefined ? null : builtinWord(run.builtin, run.actionName),
+    // A run waiting for the next task still carries the one it closed before (`../shell/WorkspaceFace`).
+    task: run.waiting ? null : run.task ?? null,
+    state: run.waiting ? waitingState(runStateOf(run)) : runStateOf(run),
+  };
 }

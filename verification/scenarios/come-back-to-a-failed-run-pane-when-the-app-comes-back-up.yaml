@@ -1,0 +1,109 @@
+# The arrangement is kept as places between runs of the app, and a run's place used to come back
+# without its run: an empty pane offering to open a terminal, with nothing to press for the run. A
+# failure nobody had acknowledged was on the running tab and nowhere on the pane standing for it.
+# Now a run's place is read back as the run's by its id (`app/src/talk/layout.ts`, `restored`), and
+# where no step arrives in it the header is said off the run (`app/src/core/runWords.ts`,
+# `runSayOf`). What the terminal printed does not come back: that died with the process.
+#
+# The app is quit while the run's step is under way. A run that was going when the app ended is
+# failed on the way up, which makes it a failure nobody has acknowledged — one of the runs whose pane
+# comes back (`withoutRuns` leaves behind only the runs that need nobody).
+id: come-back-to-a-failed-run-pane-when-the-app-comes-back-up
+title: A run the app ended under comes back as its own pane, saying it failed and at which step
+description: >
+  Start a run and quit the app while its step is under way. The app comes back up with the run's
+  pane standing for the run: its header names the step it was on and says it failed because the step
+  ended without reporting.
+given:
+  # `runs` keeps the stand-in standing, so the step is still under way when the app is quit.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # The task the built-in the run starts at takes, so the run goes on to the step after it.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run works }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, prompt: do the work and report }, as: do }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one the app ends under" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: do
+      action: work
+      state: running
+      present: true
+
+  # The step's program is still running, so the way out asks first.
+  - type: action
+    domain: store
+    op: quit
+    with:
+      how: menu
+      asks: true
+
+  - type: action
+    domain: store
+    op: answer-quit
+    with:
+      answer: leave
+
+  # The goal. The run's pane is back, standing for the run: its header names the step the run was on
+  # and says it failed because that step ended without reporting.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: do
+      action: work
+      state: failed
+      reason: crashed
+      present: true

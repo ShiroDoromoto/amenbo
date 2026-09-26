@@ -134,7 +134,8 @@ export type SavedLayout = {
     composeOpen?: boolean;
     /** The run this pane is drawing (`Frame.run`). It crosses to the window the workspace is split
      *  out into, the way the draft does, and goes no further: the host keeps the places and not the
-     *  runs (`app/src-tauri/src/frames.rs`). */
+     *  runs (`app/src-tauri/src/frames.rs`), and a run's place is read back as the run's by its id
+     *  (`runOfFrameId`). */
     run?: number;
   }[];
   /** The pane being worked in when the arrangement was last written. It is what the window split out
@@ -247,10 +248,13 @@ export type Frame = {
    * under a reader at every report — which is the one thing the arrangement promises does not
    * happen (`AMB-D-939`). The place stands still and what is running in it is swapped.
    *
-   * **It is not written down** (`laidOut`). A run does not outlive the app: one that was under way
-   * when the app ended is stopped when it comes back up (`AMB-T-5247`), so a place kept for it
-   * would come back holding a run that is over. The place itself is kept, by its id, and comes back
-   * only where somebody still has something to do with the run (`withoutRuns`).
+   * **It is not written down, and it comes back all the same** (`laidOut`, `restored`). The place is
+   * kept by its id, which is worked out from the run (`runFrameId`), so the id is where the run is
+   * read back from. It comes back only where somebody still has something to do with the run
+   * (`withoutRuns`) — a failure nobody has acknowledged, a run held — and it comes back as the run's
+   * pane, with the row and the band a run's pane is drawn with (`AMB-T-5635`). A run that was under
+   * way when the app ended is stopped on the way up (`AMB-T-5247`), which makes it one of those
+   * failures. What does not come back is what the terminal printed: that died with the process.
    */
   readonly run: number | null;
 };
@@ -941,7 +945,7 @@ export function laidOut(layout: Layout): SavedLayout {
       // (`restored`).
       composeOpen: frame.composeOpen,
       // The run this place is drawing, where it is drawing one. It goes to the other window and no
-      // further: a run is over by the time the app comes up again (`Frame.run`).
+      // further: the store keeps the place by its id, and the id says the run (`Frame.run`).
       ...(frame.run === null ? {} : { run: frame.run }),
     })),
     // The pane being worked in, written down for the window the workspace is split out into: the
@@ -992,10 +996,12 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
       // The box as the reader left it (`AMB-D-890`). A row from before this was kept has no answer
       // of its own, so it opens on the machine's habit — which is what every pane did until then.
       composeOpen: frame.composeOpen ?? composeOpen,
-      // A run where the arrangement came from the other window, and none where it came from the
-      // store: what the store keeps is places, and a run that was under way is stopped on the way
-      // up (`Frame.run`, `AMB-T-5247`).
-      run: frame.run ?? null,
+      // The run the other window says, or where the arrangement came from the store, the one the
+      // place's id was worked out from: what the store keeps is places, and a run's place is named
+      // after its run (`Frame.run`, `AMB-T-5635`). Brought back without it, the pane would be an
+      // empty place with nothing to press for the run, and the run's next step would stand a second
+      // pane under the very same id (`stoodForRun`).
+      run: frame.run ?? runOfFrameId(frame.id),
     });
   }
   const first = frames[0];
@@ -1013,8 +1019,8 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
  * The run a pane's id was worked out from (`runFrameId`), or null for a pane a person opened.
  *
  * **It is how a run's pane is known once the store has had it.** What the store keeps is places, so a
- * run's pane comes back with its id and without its run (`Frame.run`); the id is the one thing left
- * to tell it by.
+ * run's pane comes out of it with its id and without its run; the id is the one thing left to tell it
+ * by, and what gives the pane its run back (`restored`).
  */
 export function runOfFrameId(id: string): number | null {
   const found = /^run-(\d+)$/.exec(id);

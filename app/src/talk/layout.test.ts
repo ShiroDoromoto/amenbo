@@ -1027,6 +1027,16 @@ describe("a run's pane kept between runs of the app", () => {
     expect(back.frames.map((one) => one.id)).toEqual(["1", runFrameId(6)]);
   });
 
+  it("comes back as the run's pane, found again by the run's next step", () => {
+    const back = restored({ project: 1, frames: [
+      { id: "1", project: 1 },
+      { id: runFrameId(4), project: 1 },
+    ] }, 1);
+    expect(back.frames.map((one) => one.run)).toEqual([null, 4]);
+    expect(paneOfRun(back, 4)?.id).toBe(runFrameId(4));
+    expect(stoodForRun(back, 1, 4).layout.frames).toHaveLength(2);
+  });
+
   it("stays where the arrangement came from the other window, run and all", () => {
     const saved = { frames: [{ id: runFrameId(4), project: 1, run: 4 }] };
     expect(withoutRuns(saved, new Set([4])).frames).toHaveLength(1);

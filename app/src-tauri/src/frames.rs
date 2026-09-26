@@ -375,9 +375,10 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
                     // whether the last run left a way into what was running in it. The window opens
                     // those without being pressed (`AMB-T-4641`).
                     resumes: pane.resume.is_some(),
-                    // Nothing came back from the store drawing a run: a run that was under way when
-                    // the app ended is stopped on the way up, so what the store keeps is places
-                    // alone (`AMB-T-5247`).
+                    // The store keeps places alone. A run's place is named after its run, and the
+                    // window reads the run back off the id (`app/src/talk/layout.ts`, `AMB-T-5635`):
+                    // left out here, it tells a place that came from the store from one the other
+                    // window is still drawing.
                     run: None,
                 })
                 .collect(),

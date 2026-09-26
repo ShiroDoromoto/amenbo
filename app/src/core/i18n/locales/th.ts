@@ -1006,6 +1006,7 @@ export const th: Translation = {
     "auto.step.required": "จำเป็น",
     "auto.step.noAxes": "ยังไม่มีแกนสำหรับจัดประเภทงาน",
     "auto.step.oneALine": "บรรทัดละหนึ่ง (เช่น AMB-T-12)",
+    "auto.step.oneADecisionALine": "บรรทัดละหนึ่ง (เช่น AMB-D-12)",
     "auto.step.inputs": "อินพุต",
     "auto.step.unwired": "ไม่มีอะไรไปถึง",
     "auto.step.atLaunch": "ส่งให้ตอนเริ่มการรัน",

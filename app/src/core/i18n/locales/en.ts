@@ -1250,6 +1250,7 @@ const ui = {
   "auto.step.required": "required",
   "auto.step.noAxes": "There is no axis to classify a task by yet",
   "auto.step.oneALine": "One a line (e.g. AMB-T-12)",
+  "auto.step.oneADecisionALine": "One a line (e.g. AMB-D-12)",
   "auto.step.inputs": "Inputs",
   "auto.step.unwired": "nothing reaches it",
   "auto.step.atLaunch": "handed over as the run starts",

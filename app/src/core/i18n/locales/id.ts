@@ -1006,6 +1006,7 @@ export const id: Translation = {
     "auto.step.required": "wajib",
     "auto.step.noAxes": "Belum ada sumbu untuk mengklasifikasikan tugas",
     "auto.step.oneALine": "Satu per baris (mis. AMB-T-12)",
+    "auto.step.oneADecisionALine": "Satu per baris (mis. AMB-D-12)",
     "auto.step.inputs": "Masukan",
     "auto.step.unwired": "tidak ada yang sampai",
     "auto.step.atLaunch": "diberikan saat run dimulai",

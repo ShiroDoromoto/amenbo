@@ -71,7 +71,7 @@ pub const TAKE_IT: &str = "進行中にして、出口「起票して着手し�
 /// The setting that says what the task depends on.
 pub const DEPENDS_ON: &str = "依存させる相手";
 /// The choice on [`DEPENDS_ON`] that makes it depend on the task this run works.
-pub const THE_RUNS_TASK: &str = "この run が扱っているタスク";
+pub const THE_RUNS_TASK: &str = "この実行が扱っているタスク";
 /// The setting that classifies it: one `axis=value` a line.
 pub const CLASSIFY: &str = "分類";
 /// The setting that names the axes the step before it chooses a value on: one axis a line. The step
@@ -98,7 +98,7 @@ const LOW: &str = "低";
 pub(super) const MAKE_TASK: Builtin = Builtin {
     key: KEY,
     name: "タスクを起票する",
-    does: "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この run で扱える",
+    does: "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この実行で扱える",
     settings: &[
         BuiltinSetting {
             name: WHAT_THEN,
@@ -110,7 +110,7 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
             name: DEPENDS_ON,
             kind: AutomationCfgKind::Choice,
             required: false,
-            options: Some(r#"["なし","この run が扱っているタスク"]"#),
+            options: Some(r#"["なし","この実行が扱っているタスク"]"#),
         },
         BuiltinSetting { name: DEPENDS_ON_TASKS, kind: AutomationCfgKind::Text, required: false, options: None },
         BuiltinSetting { name: CLASSIFY, kind: AutomationCfgKind::Text, required: false, options: None },

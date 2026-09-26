@@ -192,7 +192,7 @@ describe("a reason naming a built-in", () => {
   };
 
   it("names the built-in's step and way out in the reader's language", () => {
-    expect(errSentence(openExit, "en")).toBe("Take a task: nothing is set to happen after No task to take");
+    expect(errSentence(openExit, "en")).toBe("Take a task: nothing is set to happen after “No task to take”");
   });
 
   it("names the one it goes on to by that one's own key", () => {
@@ -202,7 +202,7 @@ describe("a reason naming a built-in", () => {
       fields: { step: "直す", exit: "できた", to: "タスクに着手する", to_builtin: "take_task" },
     };
     expect(errSentence(leftOpen, "en")).toBe(
-      "直す: できた goes on to Take a task, which takes another task, with this one still open",
+      "直す: “できた” goes on to “Take a task”, which takes another task, with this one still open",
     );
   });
 
@@ -213,11 +213,11 @@ describe("a reason naming a built-in", () => {
       fields: { automation: "流す" },
       parts: [openExit],
     };
-    expect(errLabel(refused, "en")).toContain("Take a task: nothing is set to happen after No task to take");
+    expect(errLabel(refused, "en")).toContain("Take a task: nothing is set to happen after “No task to take”");
   });
 
   it("leaves a person's own names alone", () => {
     const own = { ...openExit, fields: { step: "タスクに着手する", exit: "着手できるタスクが無い" } };
-    expect(errSentence(own, "en")).toBe("タスクに着手する: nothing is set to happen after 着手できるタスクが無い");
+    expect(errSentence(own, "en")).toBe("タスクに着手する: nothing is set to happen after “着手できるタスクが無い”");
   });
 });

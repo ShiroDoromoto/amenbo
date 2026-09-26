@@ -64,3 +64,28 @@ describe("what the row above a pane is headed with", () => {
     expect(heading()).toBe("");
   });
 });
+
+describe("the row above a run's pane", () => {
+  /** A run's step, as the face hands it to the pane it opens the step in (`../shell/WorkspaceFace`). */
+  const run = {
+    automation: "nightly triage",
+    run: 14,
+    step: "triage",
+    automationId: 3,
+    placement: null,
+    box: null,
+    builtin: false,
+    action: null,
+    task: null,
+    state: null,
+  };
+
+  // A step whose terminal the host could not start never says it opened (`AMB-T-5636`), and the row
+  // is still what says which run that pane is.
+  it("is headed with the automation before, or without, a terminal opening in it", async () => {
+    plate.stop();
+    plate = mountPlate(host, FRAME, 199, run);
+    await settled();
+    expect(heading()).toBe("nightly triage");
+  });
+});

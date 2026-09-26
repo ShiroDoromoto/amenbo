@@ -116,9 +116,13 @@ export function mountPlate(
    * person's, and it outlives every session the frame holds (`./frames`). A folder standing in for one
    * is not that — it is what this pane's terminal is working in, so it goes when the pane has never
    * had one.
+   *
+   * **A run's pane has its row from the start** (`AMB-T-5636`). It is a pane a step was started in,
+   * whether or not the step's terminal ever opened: one the host failed to start says so in the pane,
+   * and the row is still what says which run and which step that was.
    */
   function row(): Row | null {
-    if (!(ran || names.has(frame))) return null;
+    if (!(ran || run !== null || names.has(frame))) return null;
     // A run's pane is headed with the automation it is running, not with the place: the place is
     // named by a person for what they do in it, and what is in it now is the run. A folder standing
     // in for a name would say less still.

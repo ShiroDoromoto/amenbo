@@ -5,6 +5,7 @@ import { dueBadges, type DueCounts, type DueStep } from "../core/due";
 import { useArchivedProjects, useDueCounts } from "../core/reads";
 import { useStore } from "../store/store";
 import { t } from "../core/i18n";
+import { useSingleFlight } from "../core/singleFlight";
 import { flowEdges } from "../core/edgeScroll";
 import { draggedFar } from "../core/pointerDrag";
 import { useShrunkImage } from "../core/shrinkImage";
@@ -51,6 +52,9 @@ export function Sidebar({
   onCompact: (compact: boolean) => void;
 }) {
   const store = useStore();
+  // One reorder at a time: a drop is placed against the row it landed beside, and until the last move has
+  // landed the rows are drawn in the order from before it.
+  const { run: runMove } = useSingleFlight();
   const views = dataAdapter.smartViews();
   const projects = dataAdapter.listProjects();
   // The inbox badge counts the real mailbox set. Subscribing here also drives arrival detection (sound / OS notification).
@@ -162,7 +166,7 @@ export function Sidebar({
       ? landing(held.id, { x: e.clientX, y: e.clientY }, "data-project-row", rowId)
       : null;
     stopPress();
-    if (held !== null && to !== null) store.moveProject(held.id, to.side, to.id);
+    if (held !== null && to !== null) runMove(() => store.moveProject(held.id, to.side, to.id));
   };
 
   // A drag the system took away — an incoming call, a screen lock. Nothing is written: what was interrupted is not

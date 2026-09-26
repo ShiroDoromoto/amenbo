@@ -3,6 +3,7 @@ import { useStore } from "../store/store";
 import { DateField } from "../components/atoms";
 import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
+import { useSingleFlight } from "../core/singleFlight";
 
 // Creating a new task in the right pane: enter a title plus notes (Markdown) and create it. Where it is created is
 // chosen by the caller (the plus in a column header). A task only gets placed in a project; classification (assigning
@@ -33,10 +34,15 @@ export function TaskComposePane({
     return () => onDirtyChange?.(false);
   }, [title, notes, due, start, onDirtyChange]);
 
-  const submit = async () => {
+  // The button, Enter and Cmd+Enter all come here, and a second of any of them before the answer is dropped:
+  // each one that got through would file a task of its own.
+  const { busy, run } = useSingleFlight();
+  const submit = () => {
     if (!title.trim()) return;
-    const newId = await store.addTask(projectId, title.trim(), notes.trim() || undefined, due, start);
-    onCreated(newId);
+    run(async () => {
+      const newId = await store.addTask(projectId, title.trim(), notes.trim() || undefined, due, start);
+      onCreated(newId);
+    });
   };
 
   return (
@@ -53,7 +59,7 @@ export function TaskComposePane({
           placeholder={t("compose.titlePh")}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
-            if (isEnterSubmit(e) && !e.shiftKey) { e.preventDefault(); void submit(); }
+            if (isEnterSubmit(e) && !e.shiftKey) { e.preventDefault(); submit(); }
             if (e.key === "Escape") onCancel();
           }}
         />
@@ -68,7 +74,7 @@ export function TaskComposePane({
             placeholder={t("compose.notesPh")}
             onChange={(e) => setNotes(e.target.value)}
             onKeyDown={(e) => {
-              if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submit(); }
+              if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
               if (e.key === "Escape") onCancel();
             }}
           />
@@ -87,7 +93,7 @@ export function TaskComposePane({
           <span className="meta">{t("compose.hint")}</span>
           <span>
             <button className="btn" onClick={onCancel}>{t("compose.cancel")}</button>
-            <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={!title.trim()} onClick={() => void submit()}>{t("compose.create")}</button>
+            <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={busy || !title.trim()} onClick={submit}>{t("compose.create")}</button>
           </span>
         </div>
       </div>

@@ -157,6 +157,9 @@ fn advance(
         amenbo_core::store_engine::read::automation_run_ids_running(store.read_model().conn())?
     };
     resting.retain(|run, _| running.contains(run));
+    if let Err(e) = end_what_is_over(app, &running) {
+        log::warn!("the terminals of runs that are over could not be ended: {}", e.message_en);
+    }
     for run in &running {
         if resting.get(run).is_some_and(|due| Instant::now() < *due) {
             continue;
@@ -215,7 +218,34 @@ fn advance(
         .map_or(WHILE_IDLE, |due| due.saturating_duration_since(Instant::now()).min(WHILE_IDLE)))
 }
 
-/// **End a run that cannot go on**, with the reason that says so
+/// **End the terminal of a run that is over** — completed, failed or canceled.
+///
+/// A step's terminal is otherwise ended only as the next step opens ([`crate::pty::end_steps_of`]), so
+/// the last one of a run would stand there after it: the agent waiting for input, still allowed the
+/// commands a step may type, over a task the run has handed back. A run ends by many roads, one of
+/// them a `step-done` typed in another process, and this look is the one place all of them pass.
+///
+/// A paused run keeps its terminal: it is not over, and the step it paused after may be asked why.
+/// The store is read only where a terminal stands for a run that is not running, which is none on
+/// most looks.
+fn end_what_is_over(app: &tauri::AppHandle, running: &[i64]) -> Result<(), crate::error::CmdError> {
+    let standing: Vec<i64> =
+        crate::pty::runs_with_steps(app).into_iter().filter(|run| !running.contains(run)).collect();
+    if standing.is_empty() {
+        return Ok(());
+    }
+    let store = crate::commands::open_store_read()?;
+    for run in standing {
+        let paused = amenbo_core::store_engine::read::automation_run(store.read_model().conn(), run)?
+            .is_some_and(|it| it.status == amenbo_core::model::AutomationRunStatus::Paused);
+        if !paused {
+            crate::pty::end_steps_of(app, run);
+        }
+    }
+    Ok(())
+}
+
+/// **End a run that cannot go on**/// **End a run that cannot go on**, with the reason that says so
 /// ([`amenbo_core::model::AutomationStoppedReason::NoWayOn`]).
 fn give_up(run: i64) -> Result<(), crate::error::CmdError> {
     let mut store = crate::commands::open_store()?;

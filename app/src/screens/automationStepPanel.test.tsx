@@ -511,6 +511,29 @@ describe("the panel of one spot", () => {
     expect(hoisted.clearWire).toHaveBeenCalledWith(3);
   });
 
+  it("marks a required input fed only from the spot's own way out, as the picture marks its box (AMB-T-5671)", async () => {
+    const looped = (fromId: number) =>
+      detail({
+        placements: [
+          spot({ id: 1, exits: [{ id: 10, name: "完了", outputs: [{ name: "note", kind: "value", required: true }] }] }),
+          spot({
+            id: 2,
+            name: "work",
+            actionId: 5,
+            stepId: 12,
+            inputs: [{ name: "note", kind: "value", required: true }],
+            exits: [{ id: 20, name: "完了", outputs: [{ name: "note", kind: "value", required: true }] }],
+          }),
+        ],
+        edges: [{ id: 1, fromId: 1, exitName: "完了", ends: "go", toId: 2 }],
+        wires: [{ id: 3, fromId, fromExitName: "完了", fromPortName: "note", toId: 2, toPortName: "note" }],
+      } as Partial<AutomationDetailDto>);
+    await render({ automation: looped(2), placementId: 2 });
+    expect(container.querySelector(".autostep__unfed")).not.toBeNull();
+    await render({ automation: looped(1), placementId: 2 });
+    expect(container.querySelector(".autostep__unfed")).toBeNull();
+  });
+
   /// A family the action declares none of is left off, rather than drawn with a line saying so.
   it("draws no section for inputs or settings the action does not declare", async () => {
     await render({ automation: detail(), placementId: 1 });

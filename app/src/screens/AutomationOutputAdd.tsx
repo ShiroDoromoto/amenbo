@@ -19,7 +19,7 @@ import { addAutomationOutput } from "../core/automations";
 import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { Icon } from "../components/Icon";
-import { PORT_KINDS } from "./automationPortKinds";
+import { OUTPUT_KINDS } from "./automationPortKinds";
 import type { AutomationExitDto } from "../bindings/bindings";
 
 export function AutomationOutputAdd({
@@ -57,7 +57,7 @@ export function AutomationOutputAdd({
         }}
       />
       <span className="autoout__kinds" role="radiogroup" aria-label={t("auto.out.kind")}>
-        {PORT_KINDS.map((one) => (
+        {OUTPUT_KINDS.map((one) => (
           <button
             key={one.id}
             type="button"

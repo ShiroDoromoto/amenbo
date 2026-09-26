@@ -225,6 +225,13 @@ describe("declaring what a way out hands on", () => {
     });
   });
 
+  // Only a built-in takes the task a run works, and core refuses a way out that says it hands it on.
+  it("does not offer the task a run works", async () => {
+    await open([]);
+    const offered = [...document.body.querySelectorAll(".autoout__kinds button")].map((b) => b.textContent);
+    expect(offered).toEqual([t("auto.kind.value"), t("auto.kind.file"), t("auto.kind.taskMake")]);
+  });
+
   // A row in the card rather than a dialog: nothing half written is lost by putting it away.
   it("is put away by Escape or its ×", async () => {
     const onClose = vi.fn();

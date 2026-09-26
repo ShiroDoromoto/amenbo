@@ -750,6 +750,8 @@ fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
     ]);
     assert_ne!(code, 0, "an unreadable file is refused: {err}");
     assert!(err.contains("not_found"), "{err}");
+    assert!(err.contains("pass a readable file path"), "the hint says how to fix it: {err}");
+    assert!(!err.contains("--url"), "and names no flag this command does not have: {err}");
     let runs = cli.json(&["automation", "run-list", "--automation", &a, "--json"]);
     assert_eq!(runs["count"].as_u64(), Some(1), "only the first launch made a run: {runs}");
     assert!(runs.to_string().contains(&run), "{runs}");

@@ -58,11 +58,24 @@ pub(crate) fn attach_add(
         store.attach_url(target_type, target_id, source, name.as_deref(), flags.facet()?)
             .map_err(CliError::from)?
     } else {
-        attach_file(store, flags, target_type, target_id, source, name)?
+        attach_file(store, flags, target_type, target_id, source, name).map_err(or_a_link)?
     };
     let what = if url { "link" } else { "file" };
     write_envelope(flags, "attach.add", "attachment", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Attached {what}: {}", attach_label(&a)));
     Ok(0)
+}
+
+/// The way out of an unreadable file that [`file_to_ingest`] offers every caller.
+const UNREADABLE_HINT: &str = "pass a readable file path";
+
+/// The attach verbs can take a link where the file was, so their refusal of an unreadable file says so
+/// too. The other callers (`automation start --file`, `automation step-out --file`) have no `--url`,
+/// and hear only [`UNREADABLE_HINT`].
+fn or_a_link(mut e: CliError) -> CliError {
+    if e.hint.as_deref() == Some(UNREADABLE_HINT) {
+        e.hint = Some(format!("{UNREADABLE_HINT}, or use --url to attach an external link"));
+    }
+    e
 }
 
 /// Ingest one file and hang it on `target_type`/`target_id`, answering with the row.
@@ -107,7 +120,7 @@ pub(crate) fn file_to_ingest(store: &Store, source: &str, name: Option<String>) 
     let meta = std::fs::metadata(path).map_err(|e| CliError {
         code: "not_found",
         message: format!("cannot read file '{source}': {e}"),
-        hint: Some("pass a readable file path, or use --url to attach an external link".to_string()),
+        hint: Some(UNREADABLE_HINT.to_string()),
         exit: 1,
     })?;
     if !meta.is_file() {

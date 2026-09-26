@@ -1185,7 +1185,7 @@ pub enum AttachmentTarget {
     /// what lets the column's fifth value be read back.
     AutomationRunStep,
     /// Attached to a run as a whole (`automation_run`) — a file a person handed over when launching it,
-    /// read by the first step the run opens ([`AutomationRun::handed`] is the text that came with it).
+    /// held by the run until the built-in that files a task moves it on to the task it files.
     AutomationRun,
 }
 
@@ -1984,11 +1984,6 @@ pub struct AutomationRun {
     /// stays at the top of the runs tab until it is (`AMB-D-955`).
     #[serde(default)]
     pub acknowledged_at: Option<Timestamp>,
-    /// **The text a person handed over when launching it**, from when an agent's step could be the entry
-    /// and was told it (`AMB-D-970`). No entry reads a text any more (`AMB-D-981`), so a launch writes
-    /// `None` and nothing reads what a run launched before that kept.
-    #[serde(default)]
-    pub handed: Option<String>,
     /// **What a person handed over to file the task a run starts by filing** — the title, the notes and
     /// the classification, as JSON ([`crate::ops::automation_run::HandedTask`]). Only a run whose entry is
     /// the built-in that files a task is handed these, and that built-in is what reads them. `None` for

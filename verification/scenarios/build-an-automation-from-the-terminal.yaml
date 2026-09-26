@@ -9,7 +9,7 @@ id: build-an-automation-from-the-terminal
 title: An automation built at the terminal is read back whole at the terminal, one layer at a time
 description: >
   Write two library actions — one of two steps joined inside it, one of a single step — place both
-  on an automation, and read the definition back. The two listings come first: what is there, and how
+  on an automation after the built-in that takes a task, and read the definition back. The two listings come first: what is there, and how
   far a rewrite of an action would carry. Then the automation's layer: each placement with the ways
   out, the inputs and the settings its action declares, the setting this placement answered beside
   the one it left, and where each way out takes the run. Then the action's layer: its steps with
@@ -66,10 +66,6 @@ steps_cli:
     op: exit-add
     with: { action: take, name: got one }
     as: take_got_one
-  - type: action
-    domain: automation
-    op: port-add
-    with: { target: take_got_one, name: task, kind: task_take, required: true }
   - type: action
     domain: automation
     op: port-add
@@ -141,6 +137,13 @@ steps_cli:
     op: listed
     with: { target: auto, placements: 0, present: true }
 
+  # The first placement is what a run starts at, and it is one of the built-ins that can be: here the
+  # one that takes a task, which the action after it works on.
+  - type: action
+    domain: automation
+    op: place-add
+    with: { target: auto, builtin: take_task }
+    as: at_start
   - type: action
     domain: automation
     op: place-add
@@ -163,10 +166,6 @@ steps_cli:
     domain: automation
     op: agent-set
     with: { target: at_review, step: read, agent: claude-code }
-  - type: action
-    domain: automation
-    op: entry
-    with: { target: auto, placement: at_take }
 
   # The one answer written while building. It is the placement's, not the action's: another
   # automation placing the same action answers it again.
@@ -175,6 +174,14 @@ steps_cli:
     op: cfg-set
     with: { target: at_take, name: how many, number: 3 }
 
+  - type: action
+    domain: automation
+    op: edge-add
+    with: { target: at_start, exit: 着手した, to: at_take }
+  - type: action
+    domain: automation
+    op: edge-add
+    with: { target: at_start, exit: 着手できるタスクが無い }
   - type: action
     domain: automation
     op: edge-add
@@ -193,7 +200,7 @@ steps_cli:
   - type: assert
     domain: automation
     op: listed
-    with: { target: auto, placements: 2, present: true }
+    with: { target: auto, placements: 3, present: true }
 
   # The library row, and the number a rewrite of the action would carry to. It is counted in
   # automations and not in placements, and this project's shelf is where it was put.

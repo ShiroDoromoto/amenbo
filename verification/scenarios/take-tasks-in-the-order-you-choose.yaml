@@ -10,33 +10,34 @@
 id: take-tasks-in-the-order-you-choose
 title: A task filter is answered with the order its tasks are taken in, and keeps it
 description: >
-  Stand up an automation whose one placement takes a task through a required task filter, and answer
+  Stand up an automation that takes a task and hands it to one placement holding a required task filter, and answer
   that filter with the tasks it takes and the order it takes them in. From a terminal the answer is
   read back whole, order and all; on the screen the order is chosen off the pulldown in the sentence
   under the filter's rows, and the setting stops being named as what is in the way.
 given:
-  # The action that takes the task: one step, one named way out handing the task on, and the filter
-  # it takes it through, required so an unanswered one is in the way of a start.
+  # The action the filter is answered on: one step, one named way out, and the filter it takes its
+  # task through, required so an unanswered one is in the way of a start.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
   - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
-  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
-  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
   - { type: action, domain: automation, op: cfg-add, with: { action: take, name: which, kind: taskfilter, required: true } }
 
-  # The automation, one placement of it, and nothing else in the way of a start but the filter.
+  # The automation, started at the built-in that takes a task, the action after it, and nothing else
+  # in the way of a start but the filter. Every way out of the action closes the task it was handed.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — tasks in an order" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_close } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_cli:
   # The parts, and the order beside them — the soonest due first.

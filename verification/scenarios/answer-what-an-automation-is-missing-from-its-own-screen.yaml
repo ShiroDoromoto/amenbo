@@ -13,17 +13,15 @@ description: >
   read it again would pass the first half of each and fail the second, which is the failure this road
   is written against.
 given:
-  # The action that takes the task. Its named way out hands on a value, which is what the placement
-  # after it is left waiting for. The step inside declares the same, and the lines inside the action
+  # The action the built-in hands the task it takes to. Its named way out hands on a value, which is
+  # what the placement after it is left waiting for. The step inside declares the same, and the lines inside the action
   # carry the one out by the other.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
   - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: note, kind: value, required: true } }
   - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
@@ -41,15 +39,17 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — two holes to close" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_work } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action

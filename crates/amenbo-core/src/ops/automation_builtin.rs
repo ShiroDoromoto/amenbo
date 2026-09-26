@@ -636,6 +636,7 @@ pub(crate) fn carry_out(
 ) -> Result<Next> {
     let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
     let key = def.builtin.as_deref().unwrap_or_default();
+    let say = |what: &str| crate::run_wording::builtin(tx.language(), what, &[("builtin", key)]);
     let carried = known(key).and_then(|builtin| {
         let carry = Carry { tx, run, run_step, task_id, exits, ins, cfg: &cfg };
         match &builtin.work {
@@ -648,28 +649,26 @@ pub(crate) fn carry_out(
                     }
                     Ok((Cow::Borrowed(worked.exit), worked.report))
                 }),
-                None => Err(Error::invalid(format!(
-                    "the built-in '{key}' works outside the store, and that was not done before its step was opened"
-                ))),
+                None => Err(Error::invalid(say("outsideNotDone"))),
             },
-            Work::Holds(_) => Err(Error::invalid(format!(
-                "the built-in '{key}' holds its step open, and is not carried out"
-            ))),
+            Work::Holds(_) => Err(Error::invalid(say("holdsNotCarried"))),
         }
     });
     let (exit, report) = match carried {
         Ok(carried) => carried,
-        Err(e) => (Cow::Borrowed(ERROR_EXIT), e.to_string()),
+        // Worded for the reader: a refusal from another operation is said from the screen's template for
+        // its code, and one of the built-in's own already is (`AMB-D-976`).
+        Err(e) => (Cow::Borrowed(ERROR_EXIT), crate::run_wording::error(tx.language(), &e)),
     };
     let leaves_by = |name: &str| exits.iter().find(|e| e.name == name).map(|e| e.id);
     let Some(exit_id) = leaves_by(&exit) else {
-        return fell_over(tx, run_step, exits, &format!("the built-in '{key}' left by a way out this step does not declare"));
+        return fell_over(tx, run_step, exits, &say("undeclaredExit"));
     };
     match automation_report::done(tx, run_step.id, Some(exit_id), &report) {
         Ok(next) => Ok(next),
         // What the code named would not finish the step — a required output it did not put down, or a
         // report it owed. That is the built-in falling over, and it is said as such.
-        Err(e) if exit != ERROR_EXIT => fell_over(tx, run_step, exits, &e.to_string()),
+        Err(e) if exit != ERROR_EXIT => fell_over(tx, run_step, exits, &crate::run_wording::error(tx.language(), &e)),
         Err(e) => Err(e),
     }
 }
@@ -705,7 +704,10 @@ pub(crate) fn hold(
     match holds_for(def) {
         None => Ok(None),
         Some(Ok(_)) => Ok(Some(Held::Holding)),
-        Some(Err(e)) => Ok(Some(Held::FellOver(fell_over(tx, run_step, exits, &e.to_string())?))),
+        Some(Err(e)) => {
+            let why = crate::run_wording::error(tx.language(), &e);
+            Ok(Some(Held::FellOver(fell_over(tx, run_step, exits, &why)?)))
+        }
     }
 }
 

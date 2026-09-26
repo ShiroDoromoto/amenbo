@@ -410,6 +410,23 @@ pub enum ErrorCode {
     NotReadyAutomationHandsOnTaskTaken,
     // The built-in that splits by an axis, placed on an axis deleted since (`AMB-D-987`).
     NotReadyAutomationSplitAxisGone,
+    // What the built-ins that file a task and that wait are turned away by, said on the task a run
+    // stops on in the reader's language (`AMB-D-976`).
+    InvalidMakeTaskNoRunsTask,
+    InvalidMakeTaskBlockerOpen,
+    InvalidMakeTaskValueClosed,
+    InvalidMakeTaskRequiredEmpty,
+    InvalidMakeTaskTaskNotANumber,
+    InvalidMakeTaskDecisionNotANumber,
+    InvalidMakeTaskTaskNotInProject,
+    InvalidMakeTaskDecisionNotInProject,
+    InvalidMakeTaskFolderUnknown,
+    InvalidMakeTaskClassifyNotAxisValue,
+    InvalidMakeTaskChosenNotAxisValue,
+    InvalidMakeTaskAxisNotOffered,
+    InvalidMakeTaskAxisFixed,
+    InvalidMakeTaskAxisTwice,
+    InvalidWaitNotACount,
 }
 
 impl ErrorCode {
@@ -502,6 +519,21 @@ impl ErrorCode {
             ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd => "not_ready_automation_task_left_open_at_end",
             ErrorCode::NotReadyAutomationHandsOnTaskTaken => "not_ready_automation_hands_on_task_taken",
             ErrorCode::NotReadyAutomationSplitAxisGone => "not_ready_automation_split_axis_gone",
+            ErrorCode::InvalidMakeTaskNoRunsTask => "invalid_make_task_no_runs_task",
+            ErrorCode::InvalidMakeTaskBlockerOpen => "invalid_make_task_blocker_open",
+            ErrorCode::InvalidMakeTaskValueClosed => "invalid_make_task_value_closed",
+            ErrorCode::InvalidMakeTaskRequiredEmpty => "invalid_make_task_required_empty",
+            ErrorCode::InvalidMakeTaskTaskNotANumber => "invalid_make_task_task_not_a_number",
+            ErrorCode::InvalidMakeTaskDecisionNotANumber => "invalid_make_task_decision_not_a_number",
+            ErrorCode::InvalidMakeTaskTaskNotInProject => "invalid_make_task_task_not_in_project",
+            ErrorCode::InvalidMakeTaskDecisionNotInProject => "invalid_make_task_decision_not_in_project",
+            ErrorCode::InvalidMakeTaskFolderUnknown => "invalid_make_task_folder_unknown",
+            ErrorCode::InvalidMakeTaskClassifyNotAxisValue => "invalid_make_task_classify_not_axis_value",
+            ErrorCode::InvalidMakeTaskChosenNotAxisValue => "invalid_make_task_chosen_not_axis_value",
+            ErrorCode::InvalidMakeTaskAxisNotOffered => "invalid_make_task_axis_not_offered",
+            ErrorCode::InvalidMakeTaskAxisFixed => "invalid_make_task_axis_fixed",
+            ErrorCode::InvalidMakeTaskAxisTwice => "invalid_make_task_axis_twice",
+            ErrorCode::InvalidWaitNotACount => "invalid_wait_not_a_count",
         }
     }
 
@@ -591,6 +623,21 @@ impl ErrorCode {
         ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
         ErrorCode::NotReadyAutomationHandsOnTaskTaken,
         ErrorCode::NotReadyAutomationSplitAxisGone,
+        ErrorCode::InvalidMakeTaskNoRunsTask,
+        ErrorCode::InvalidMakeTaskBlockerOpen,
+        ErrorCode::InvalidMakeTaskValueClosed,
+        ErrorCode::InvalidMakeTaskRequiredEmpty,
+        ErrorCode::InvalidMakeTaskTaskNotANumber,
+        ErrorCode::InvalidMakeTaskDecisionNotANumber,
+        ErrorCode::InvalidMakeTaskTaskNotInProject,
+        ErrorCode::InvalidMakeTaskDecisionNotInProject,
+        ErrorCode::InvalidMakeTaskFolderUnknown,
+        ErrorCode::InvalidMakeTaskClassifyNotAxisValue,
+        ErrorCode::InvalidMakeTaskChosenNotAxisValue,
+        ErrorCode::InvalidMakeTaskAxisNotOffered,
+        ErrorCode::InvalidMakeTaskAxisFixed,
+        ErrorCode::InvalidMakeTaskAxisTwice,
+        ErrorCode::InvalidWaitNotACount,
     ];
 }
 
@@ -811,6 +858,21 @@ mod tests {
             "not_ready_automation_task_left_open_at_end",
             "not_ready_automation_hands_on_task_taken",
             "not_ready_automation_split_axis_gone",
+            "invalid_make_task_no_runs_task",
+            "invalid_make_task_blocker_open",
+            "invalid_make_task_value_closed",
+            "invalid_make_task_required_empty",
+            "invalid_make_task_task_not_a_number",
+            "invalid_make_task_decision_not_a_number",
+            "invalid_make_task_task_not_in_project",
+            "invalid_make_task_decision_not_in_project",
+            "invalid_make_task_folder_unknown",
+            "invalid_make_task_classify_not_axis_value",
+            "invalid_make_task_chosen_not_axis_value",
+            "invalid_make_task_axis_not_offered",
+            "invalid_make_task_axis_fixed",
+            "invalid_make_task_axis_twice",
+            "invalid_wait_not_a_count",
         ]
         .into_iter()
         .collect();

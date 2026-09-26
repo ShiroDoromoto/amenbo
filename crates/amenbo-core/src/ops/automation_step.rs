@@ -14,8 +14,9 @@
 //! **A value travels along a wire and along nothing else.** A later step is handed what an earlier one
 //! put on a way out *that a wire joins to this input* — a name matching by accident is not a
 //! connection, and the specification says so rather than letting a rename quietly re-plumb a run.
-//! The one thing that arrives by no wire is what a person handed over at launch: the first step the run
-//! opens is told it, and from there it travels on the wires like anything else (`AMB-D-970`).
+//! The one thing that arrives by no wire is what a person handed over at launch: the built-in that files
+//! a task, placed as the entry, reads it, and from there it travels on the wires like anything else
+//! (`AMB-D-970`, `AMB-D-981`).
 //!
 //! **Where it ends is `Opened`.** A required input with nothing to fill it is not an error to be
 //! reported and forgotten: the run is stopped, in the same transaction, so what the store holds
@@ -25,7 +26,7 @@
 use crate::error::{Error, Result};
 use std::collections::BTreeSet;
 use crate::model::{
-    AttachmentTarget, AutomationCfgKind, AutomationPortDirection, AutomationPortKind, AutomationRun,
+    AutomationCfgKind, AutomationPortDirection, AutomationPortKind, AutomationRun,
     AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
     AutomationStoppedReason, RunDefCfg, RunDefExit, RunDefIn, RunDefPort, ERROR_EXIT,
 };
@@ -162,12 +163,12 @@ pub fn open(
         return Ok(Opened::LeftTaskOpen { run: stopped.run });
     }
 
-    // **The first step the run opens is told what was handed over at launch** (`AMB-D-970`), and no
-    // step after it: it is that step's to hand on along a wire, as anything else it produces. Asked
-    // before its own execution is written, which would otherwise be the one found.
+    // **The first step the run opens reads what was handed over at launch** (`AMB-D-970`), and no step
+    // after it: it is that step's to hand on along a wire, as anything else it produces. Asked before its
+    // own execution is written, which would otherwise be the one found. Only the built-in that files a
+    // task reads anything, and it reads its inputs from the launch rather than along a wire
+    // (`super::automation_builtin_make::read_at_launch`).
     let first = read::automation_run_steps_of(conn, run_id)?.is_empty();
-    // The built-in that files a task, as the entry, reads its inputs from the launch rather than along
-    // a wire (`super::automation_builtin_make::read_at_launch`).
     let launched = match first {
         true => launched_ins(&run, def.builtin.as_deref())?,
         false => Vec::new(),
@@ -221,11 +222,7 @@ pub fn open(
             super::automation_builtin::carry_out(tx, &run, &run_step, &def, &exits, &ins, task_id, outside)?;
         return Ok(Opened::Carried { run_step_id: run_step.id, next });
     }
-    let at_launch = match first {
-        true => handed_at_launch(tx, &run)?,
-        false => None,
-    };
-    let text = compose(tx, &def, &exits, &handed, at_launch.as_deref(), stretch.as_ref())?;
+    let text = compose(tx, &def, &exits, &handed, stretch.as_ref())?;
     let folder = working_folder(&def, &handed)?;
     Ok(Opened::Ready(Box::new(Opening { run_step, run_def: def, text, folder })))
 }
@@ -523,7 +520,6 @@ fn compose(
     def: &AutomationRunDef,
     exits: &[RunDefExit],
     handed: &[Handed],
-    at_launch: Option<&str>,
     stretch: Option<&AutomationRunTask>,
 ) -> Result<String> {
     let mut out = String::new();
@@ -542,9 +538,6 @@ fn compose(
         if let Some(story) = story_so_far(tx, stretch)? {
             push_block(&mut out, &story);
         }
-    }
-    if let Some(at_launch) = at_launch {
-        push_block(&mut out, at_launch);
     }
     if !handed.is_empty() {
         let lines: Vec<String> = handed.iter().map(|h| format!("- {}", one_value(h))).collect();
@@ -607,32 +600,6 @@ fn choices_for(tx: &WriteTx<'_>, def: &AutomationRunDef) -> Result<Vec<Choices>>
         }
     }
     Ok(out)
-}
-
-/// **What the person who launched the run handed over**, as the block the first step is told — the
-/// text as it was typed, then each file on a line of its own, named the way a wired file is
-/// ([`one_value`]). `None` where nothing was handed, so a run launched bare reads as it always has.
-fn handed_at_launch(tx: &WriteTx<'_>, run: &AutomationRun) -> Result<Option<String>> {
-    let files = read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id)?;
-    let text = run.handed.as_deref().map(str::trim).filter(|t| !t.is_empty());
-    if text.is_none() && files.is_empty() {
-        return Ok(None);
-    }
-    let mut out = String::from("## What you were handed at launch");
-    if let Some(text) = text {
-        out.push_str(&format!("\n\n{text}"));
-    }
-    if !files.is_empty() {
-        let lines: Vec<String> = files
-            .iter()
-            .map(|a| match &a.filename {
-                Some(name) => format!("- the file attached as AMB-ATT-{} ({name})", a.id),
-                None => format!("- the file attached as AMB-ATT-{}", a.id),
-            })
-            .collect();
-        out.push_str(&format!("\n\n{}", lines.join("\n")));
-    }
-    Ok(Some(out))
 }
 
 /// **The task this run is on**, the line the preamble ends with (`AMB-T-5413`).
@@ -1055,55 +1022,6 @@ mod tests {
             assert_eq!(stretch.seq, 1);
             assert_eq!(opening.run_step.run_task_id, Some(stretch.id));
             assert_eq!(stretch.task_id, None, "nothing has handed a task over yet");
-        });
-    }
-
-    /// What was handed over at launch is told to the first step the run opens, text and files, and to
-    /// no step after it (`AMB-D-970`) — that one hands it on along a wire, as anything else it makes.
-    #[test]
-    fn the_first_step_is_told_what_was_handed_at_launch_and_the_next_is_not() {
-        with_tx(|tx| {
-            let p = picture(tx, false, true);
-            let run = a_run(tx, &p.automation);
-            let handed = AutomationRun { handed: Some("この issue を起票して".into()), ..run.clone() };
-            crate::ops::emit_update(tx, record::automation_run(&run), record::automation_run(&handed))
-                .expect("hand it text");
-            let file = crate::ops::attachment::add_blob(
-                tx,
-                AttachmentTarget::AutomationRun,
-                run.id,
-                &"f".repeat(64),
-                "issue.md",
-                Some("text/markdown"),
-                12,
-                ActorKind::Human,
-            )
-            .expect("hand it a file");
-
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
-            let expected = format!(
-                "## What you were handed at launch\n\nこの issue を起票して\n\n\
-                 - the file attached as AMB-ATT-{} (issue.md)",
-                file.id
-            );
-            assert!(first.text.contains(&expected), "{}", first.text);
-
-            let task = crate::ops::test_support::mk_task(tx, "直すもの");
-            crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
-            reported(tx, &first.run_step, "found", "Found one thing.", "the note");
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
-            assert!(!second.text.contains("handed at launch"), "{}", second.text);
-        });
-    }
-
-    /// A run launched with nothing handed over tells its first step nothing about it.
-    #[test]
-    fn a_run_launched_bare_says_nothing_of_what_was_handed() {
-        with_tx(|tx| {
-            let p = picture(tx, false, true);
-            let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
-            assert!(!first.text.contains("handed at launch"), "{}", first.text);
         });
     }
 

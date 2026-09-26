@@ -1984,16 +1984,16 @@ pub struct AutomationRun {
     /// stays at the top of the runs tab until it is (`AMB-D-955`).
     #[serde(default)]
     pub acknowledged_at: Option<Timestamp>,
-    /// **The text a person handed over when launching it** — the first step the run opens is told it,
-    /// with the files handed along with it, which hang off the run ([`AttachmentTarget::AutomationRun`]).
-    /// `None` for a launch that handed nothing, and where it did, the run starts as it always has
-    /// (`AMB-D-970`).
+    /// **The text a person handed over when launching it**, from when an agent's step could be the entry
+    /// and was told it (`AMB-D-970`). No entry reads a text any more (`AMB-D-981`), so a launch writes
+    /// `None` and nothing reads what a run launched before that kept.
     #[serde(default)]
     pub handed: Option<String>,
     /// **What a person handed over to file the task a run starts by filing** — the title, the notes and
     /// the classification, as JSON ([`crate::ops::automation_run::HandedTask`]). Only a run whose entry is
     /// the built-in that files a task is handed these, and that built-in is what reads them. `None` for
-    /// every other run (`AMB-D-970`).
+    /// every other run (`AMB-D-970`). The files handed along with them hang off the run
+    /// ([`AttachmentTarget::AutomationRun`]) until that built-in moves them on to the task (`AMB-D-981`).
     #[serde(default)]
     pub handed_task: Option<String>,
     pub created_at: Timestamp,

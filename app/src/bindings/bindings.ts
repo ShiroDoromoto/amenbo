@@ -502,9 +502,10 @@ name: string, outputs: Array<AutomationPortDto>, };
  * ([`amenbo_core::ops::automation_run::LaunchAsks`]), so the dialog every press opens asks for that
  * and nothing else (`AMB-D-970`).
  *
- * `reads` is `"words"` for an agent's step (a text and files), `"task"` for the built-in that files a
- * task (a title, notes and a value on each of `axes`), and `"nothing"` for any other entry. `axes` is
- * empty unless `reads` is `"task"`.
+ * `reads` is `"task"` for the built-in that files a task (a title, notes, a value on each of `axes`
+ * and files), and `"nothing"` for any other entry. `axes` is empty unless `reads` is `"task"`.
+ * `"words"`, once an agent's step as the entry, is no longer answered (`AMB-D-981`); the type keeps it
+ * only while the launch dialog still reads it.
  */
 export type AutomationLaunchAsksDto = { reads: "words" | "task" | "nothing", axes: Array<AutomationLaunchAxisDto>, };
 

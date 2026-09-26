@@ -23,6 +23,8 @@
 //!
 //! **Placed as the entry, it is handed its title, notes and classification at launch** (`AMB-D-970`) —
 //! there is no step before it to hand them on, so the person launching the run does ([`read_at_launch`]).
+//! The files handed along with them hang off the run until it files the task, and are moved on to that
+//! task then (`AMB-D-981`), so what comes after reads them as the task's attachments.
 //! That person chooses on the axes the step before it would have, and also gives a value on every axis
 //! the project requires and [`CLASSIFY`] does not fix: nobody else is there to. The launch checks all of
 //! it before a run is made ([`handed_at_launch`]).
@@ -36,7 +38,7 @@
 //! left empty, a task to depend on that would keep the new one from being taken.
 
 use crate::error::{Error, Result};
-use crate::model::{ActorKind, AutomationCfgKind, AutomationPortKind, Priority};
+use crate::model::{ActorKind, AttachmentTarget, AutomationCfgKind, AutomationPortKind, Priority};
 use crate::ops::automation_builtin::{
     Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Chooses, Work,
 };
@@ -161,9 +163,10 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     let conn = carry.tx.conn();
     let project_id = carry.run.project_id;
     let mut values = fixed(conn, project_id, choice(carry, CLASSIFY)?.as_deref())?;
+    let at_launch = at_launch(carry)?;
     if let Some(written) = carry.input(CHOSEN).filter(|w| !w.trim().is_empty()) {
         let ai_axes = choice(carry, AI_AXES)?;
-        let by = match at_launch(carry)? {
+        let by = match at_launch {
             true => Chooser::Launcher,
             false => Chooser::StepBefore,
         };
@@ -209,6 +212,9 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     for decision in decisions {
         crate::ops::decision::link(tx, decision, filed.id)?;
     }
+    if at_launch {
+        attach_handed(carry, filed.id)?;
+    }
     let filed = task::finish_creating(tx, filed.id)?;
 
     if takes {
@@ -220,6 +226,30 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     }
     carry.put(MADE, TASK, Produced::Task(filed.id))?;
     Ok(Carried { exit: MADE, report: format!("filed AMB-T-{} {}", filed.id, filed.title) })
+}
+
+/// **The files handed over at launch, moved from the run on to the task it filed** (`AMB-D-981`), in the
+/// order they were handed and each still saying who handed it. Moved rather than copied: the run was
+/// only holding them until there was a task, and nothing reads them off the run.
+fn attach_handed(carry: &Carry<'_, '_>, task_id: i64) -> Result<()> {
+    let tx = carry.tx;
+    let held = read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, carry.run.id)?;
+    for row in held {
+        let Some(file) = read::attachment(tx.conn(), row.id)? else { continue };
+        let (Some(hash), Some(who)) = (file.blob_hash.as_deref(), file.created_by_kind) else { continue };
+        crate::ops::attachment::add_blob(
+            tx,
+            AttachmentTarget::Task,
+            task_id,
+            hash,
+            file.filename.as_deref().unwrap_or_default(),
+            file.mime.as_deref(),
+            file.size_bytes.unwrap_or_default(),
+            who,
+        )?;
+        crate::ops::attachment::remove(tx, file.id)?;
+    }
+    Ok(())
 }
 
 /// The choice written for one setting, or `None` where nobody answered it.
@@ -1097,6 +1127,42 @@ mod tests {
         });
     }
 
+    /// **The files handed over at launch are moved on to the task it files** (`AMB-D-981`) — in the order
+    /// they were handed, each still saying who handed it, and none left on the run.
+    #[test]
+    fn as_the_entry_it_attaches_the_files_handed_over_to_the_task_it_files() {
+        use crate::ops::automation_run::HandedFile;
+        with_tx(|tx| {
+            let (automation, make, _) = entry(tx);
+            let file = |name: &str| HandedFile {
+                blob_hash: "a".repeat(64),
+                filename: name.to_string(),
+                mime: Some("text/markdown".to_string()),
+                size_bytes: 12,
+            };
+            let handed = HandedAtLaunch { files: vec![file("issue.md"), file("log.txt")], ..titled("an issue") };
+            // A file has to say who handed it over, so a launcher that says nothing about itself cannot.
+            let claude = ["claude".to_string()];
+            let nobody =
+                Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: Some(true), by: None };
+            assert!(launch_handing(tx, automation.id, &nobody, &handed).is_err());
+            assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
+
+            let run = launch_with(tx, &automation, &handed).expect("launch");
+            let on_the_run = |tx: &WriteTx<'_>| {
+                read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id).expect("files")
+            };
+            assert_eq!(on_the_run(tx).len(), 2, "held on the run until there is a task");
+
+            let filed = filed_first(tx, &run, &make);
+            let files = read::attachments_for_target(tx.conn(), AttachmentTarget::Task, filed.id).expect("files");
+            let names: Vec<_> = files.iter().map(|a| a.filename.clone().unwrap_or_default()).collect();
+            assert_eq!(names, ["issue.md", "log.txt"]);
+            assert!(files.iter().all(|a| a.created_by_kind.as_deref() == Some("human")));
+            assert!(on_the_run(tx).is_empty(), "moved, not copied");
+        });
+    }
+
     /// **The person launching gives a value on every axis the project requires** and where it is placed
     /// leaves open, offered or not — nobody else is there to. Left out, the launch is refused.
     #[test]
@@ -1124,8 +1190,8 @@ mod tests {
         });
     }
 
-    /// **What the entry cannot file from is refused before a run is made**: no title, a text or a file
-    /// it does not read, an axis nobody offered, one fixed where it is placed, a value the axis does not
+    /// **What the entry cannot file from is refused before a run is made**: no title, a text on its own
+    /// (words go in the notes), an axis nobody offered, one fixed where it is placed, a value the axis does not
     /// have.
     #[test]
     fn a_launch_it_could_not_file_from_makes_no_run() {
@@ -1140,7 +1206,8 @@ mod tests {
             };
             refused(tx, HandedAtLaunch::default(), "no title");
             refused(tx, titled("  "), "no title");
-            refused(tx, HandedAtLaunch { text: Some("words".into()), ..titled("an issue") }, "a text or a file");
+            let words = HandedAtLaunch { text: Some("words".into()), ..titled("an issue") };
+            refused(tx, words, "put the words in its notes");
             refused(tx, with_values("an issue", &[("職能", "実装")]), AI_AXES);
             answer(tx, &p, AI_AXES, "職能");
             refused(tx, with_values("an issue", &[("職能", "営業")]), "職能=営業");
@@ -1150,8 +1217,8 @@ mod tests {
     }
 
     /// **A launch asks for the axes it accepts a value on** — those offered to choose on, then those the
-    /// project requires, less those fixed where it is placed — each with its open values; an agent's
-    /// step as the entry asks for words, and a built-in that takes a task asks for nothing.
+    /// project requires, less those fixed where it is placed — each with its open values; any other
+    /// entry, an agent's step or a built-in that takes a task, asks for nothing (`AMB-D-981`).
     #[test]
     fn a_launch_asks_for_the_axes_it_accepts_a_value_on() {
         use crate::ops::automation_run::{launch_asks, LaunchAsks};
@@ -1192,7 +1259,7 @@ mod tests {
             let agent = another(tx, "agent");
             let (_, work) = mk_placed(tx, &agent, "work", "work on it", "claude");
             automation::set_entry(tx, agent.id, Some(work.id)).expect("entry");
-            assert_eq!(launch_asks(tx.conn(), agent.id).expect("asks"), LaunchAsks::Words);
+            assert_eq!(launch_asks(tx.conn(), agent.id).expect("asks"), LaunchAsks::Nothing);
 
             let take = another(tx, "take");
             let placed = automation::placement_add(tx, take.id, action(tx, "take_task").expect("action").id)

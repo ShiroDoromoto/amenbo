@@ -1235,7 +1235,6 @@ pub fn automation_launch_asks(id: i64) -> Result<AutomationLaunchAsksDto, CmdErr
     let _perf = amenbo_core::perf::Timer::start("automation_launch_asks");
     let store = open_store_read()?;
     let (reads, axes) = match automation_run::launch_asks(store.read_model().conn(), id)? {
-        automation_run::LaunchAsks::Words => ("words", Vec::new()),
         automation_run::LaunchAsks::Task { axes } => ("task", axes),
         automation_run::LaunchAsks::Nothing => ("nothing", Vec::new()),
     };

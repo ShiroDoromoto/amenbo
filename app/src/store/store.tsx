@@ -29,8 +29,10 @@ interface Store {
    * Move a task's status. `rejected` is the one value that carries a reason, and it is required — the
    * pull-down collects it and this routes it to the write that keeps it (`AMB-D-397`).
    */
-  // `text` is what the two terminals carry: the reason for `rejected`, the report for `done`.
-  setStatus(id: number, status: Status, text?: string): void;
+  // `text` is what the two terminals carry: the reason for `rejected`, the report for `done`. The answer
+  // says whether the write landed, and settles only once it is over — what a board waits on before it takes
+  // the same card again (`core/singleFlight`).
+  setStatus(id: number, status: Status, text?: string): Promise<boolean>;
   /**
    * End the second stage of a creation (`AMB-D-554`): the task stops being held out of the mailbox and
    * out of a reservation. It runs one way — nothing puts a task back to being created.
@@ -106,7 +108,8 @@ interface Store {
    * Left out, their classification goes with the value, as it does on an ordinary axis.
    */
   removeDimensionValue(valueId: number, reassignTo?: number): void;
-  moveDimensionValue(valueId: number, pos: { before?: number; after?: number }): void;
+  /** Answers once the write is over, so a second move is not worked out from the order before the first. */
+  moveDimensionValue(valueId: number, pos: { before?: number; after?: number }): Promise<boolean>;
   /**
    * Put a task on an axis, or take it off. Both answer whether the write landed, because both can be
    * refused — a required axis will not be emptied (`AMB-D-734`) — and every caller moves the screen
@@ -116,8 +119,9 @@ interface Store {
   setTaskDimensionValue(taskId: number, valueId: number): Promise<boolean>;
   unsetTaskDimensionValue(taskId: number, valueId: number): Promise<boolean>;
   // Reordering projects (sidebar drag & drop). Failures — the reorder command rejecting, say — go through run() like
-  // every other mutator so they reach a toast; called directly they would fail in silence.
-  moveProject(projectId: number, position: "top" | "bottom" | "before" | "after", anchorId?: number): void;
+  // every other mutator so they reach a toast; called directly they would fail in silence. Answers once the write
+  // is over, for the same reason `moveDimensionValue` does.
+  moveProject(projectId: number, position: "top" | "bottom" | "before" | "after", anchorId?: number): Promise<boolean>;
   markSeen(taskId: number): void;
   archiveInbox(taskId: number): void;
   unarchiveInbox(taskId: number): void;
@@ -185,9 +189,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // The fork on the way down: each terminal goes through the write that also keeps its text — the
       // reason for a rejection, the report for a completion — so no surface can reach either one and
       // leave it behind.
-      if (status === "rejected") run(mut.rejectTask(id, text ?? ""));
-      else if (status === "done") run(mut.completeTask(id, text ?? ""));
-      else run(mut.setStatus(id, status));
+      if (status === "rejected") return runOk(mut.rejectTask(id, text ?? ""));
+      if (status === "done") return runOk(mut.completeTask(id, text ?? ""));
+      return runOk(mut.setStatus(id, status));
     },
     finishCreating(id) { run(mut.finishTaskCreation(id)); },
     setPriority(id, priority) { run(mut.setPriority(id, priority)); },
@@ -218,10 +222,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDimensionValuePeriod(valueId, startOn, endOn) { run(mut.setDimensionValuePeriod(valueId, startOn, endOn)); },
     setDimensionValueClosed(valueId, closed) { run(mut.setDimensionValueClosed(valueId, closed)); },
     removeDimensionValue(valueId, reassignTo) { run(mut.removeDimensionValue(valueId, reassignTo ?? null)); },
-    moveDimensionValue(valueId, pos) { run(mut.moveDimensionValue(valueId, pos)); },
+    moveDimensionValue(valueId, pos) { return runOk(mut.moveDimensionValue(valueId, pos)); },
     setTaskDimensionValue(taskId, valueId) { return runOk(mut.setTaskDimensionValue(taskId, valueId)); },
     unsetTaskDimensionValue(taskId, valueId) { return runOk(mut.unsetTaskDimensionValue(taskId, valueId)); },
-    moveProject(projectId, position, anchorId) { run(mut.moveProject(projectId, position, anchorId)); },
+    moveProject(projectId, position, anchorId) { return runOk(mut.moveProject(projectId, position, anchorId)); },
     markSeen(taskId) {
       markTaskSeen(taskId).then(() => { notifyDataChanged(); invalidateQueries((k) => k[0] === "smartView"); }).catch(() => {});
     },

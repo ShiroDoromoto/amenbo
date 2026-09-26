@@ -135,7 +135,7 @@ steps_gui:
       target: auto
     as: run
 
-  # Reserved by the built-in, with nobody typing `step-take`.
+  # Reserved by the built-in, with no step typing anything.
   - type: assert
     domain: task
     op: field

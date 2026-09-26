@@ -790,11 +790,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             write_envelope(flags, "automation.stop", "automation_run", serde_json::to_value(&ended.run).unwrap(), None, false, format!("✓ Run {} canceled", ended.run.id));
         }
 
-        AutomationCmd::StepTake { task } => {
-            let tid = resolve_task(store, &task).map_err(CliError::from)?;
-            let t = store.automation_take(speaking_for()?, tid).map_err(CliError::from)?;
-            write_envelope(flags, "automation.take", "task", serde_json::to_value(&t).unwrap(), None, false, format!("✓ Took {} — {}", task_label(t.id), t.title));
-        }
         AutomationCmd::StepOut { value, file } => {
             let step = speaking_for()?;
             let v = match file {
@@ -848,7 +843,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
 fn speaking_for() -> Result<i64, CliError> {
     amenbo_core::env::automation_step().ok_or_else(|| CliError {
         code: "invalid_value",
-        message: "this is not a step of a run — `take`, `out` and `done` are typed by the agent a step opened, in the terminal the run opened for it.".to_string(),
+        message: "this is not a step of a run — `step-out` and `step-done` are typed by the agent a step opened, in the terminal the run opened for it.".to_string(),
         hint: Some("start a run with `automation start <id>`, and the step's own terminal carries what these commands need".to_string()),
         exit: 2,
     })
@@ -871,22 +866,20 @@ fn startable(store: &Store) -> Option<Vec<String>> {
 /// the answer, and on a `task_make` port it names a task this step raised, which is written as the task
 /// rather than as its spelling ([`amenbo_core::ops::automation_report::out_kind`]).
 ///
-/// **The task the run is about does not come this way and is refused here**, with the command that does
-/// take it. Reserving it and declaring it are one act, because two would leave a task `in_progress`
-/// that nothing can hand back where the agent died in between — so there is no way to say it with
-/// `out`, and being told that by the kind check would not say what to type instead.
+/// **The task the run is about does not come this way and is refused here**, saying whose it is. A
+/// built-in takes it (`AMB-D-964`), reserving and declaring it in one act, and a step has no command
+/// that does — being told so by the kind check would not say why.
 fn hand_on(store: &mut Store, step: i64, one: &str) -> Result<AutomationRunValue, CliError> {
     let (port, text) = parse_produced(one)?;
     match store.automation_out_kind(step, port).map_err(CliError::from)? {
         Some(AutomationPortKind::TaskTake) => Err(CliError {
             code: "invalid_value",
             message: format!(
-                "output {port} is the task this step takes, which is reserved and handed on in one act"
+                "output {port} is the task the run works, which a built-in takes — a step does not hand it on"
             ),
-            hint: Some(format!(
-                "take it with `{} automation step-take <task>`",
-                amenbo_core::config::Paths::command_name()
-            )),
+            hint: Some(
+                "put `take_task` or `make_task` on the picture before this step, and leave this one by a way out that does not declare the task".to_string()
+            ),
             exit: 2,
         }),
         Some(AutomationPortKind::TaskMake) => {

@@ -365,7 +365,7 @@ pub enum Domain {
     /// see what the definition did. Splitting them would put the halves of every road in two
     /// vocabularies and leave each of them unable to say what it was about.
     ///
-    /// **What a step of a run types is not here** (`automation step-take` / `step-out` / `step-done`). Those are
+    /// **What a step of a run types is not here** (`automation step-out` / `step-done`). Those are
     /// typed inside the terminal a run opened, which this driver has none of — and a run started at
     /// the terminal opens no step, there being no window to draw one in. A road for them waits on the
     /// door that opens a step without a screen.

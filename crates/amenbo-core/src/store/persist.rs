@@ -1954,13 +1954,6 @@ impl Store {
         )
     }
 
-    /// **Take the task this stretch of the run is about** — reserve it and declare it in one act.
-    pub fn automation_take(&mut self, run_step_id: i64, task_id: i64) -> Result<crate::model::Task> {
-        self.write_one(&[WriteTarget::Task(task_id)], |tx| {
-            crate::ops::automation_report::take(tx, run_step_id, task_id)
-        })
-    }
-
     /// **Put down one thing a step produced**, on the output its id names.
     pub fn automation_out(
         &mut self,

@@ -69,7 +69,7 @@ pub enum CliErrorCode {
     /// alternative — a quiet success — would leave the caller believing it had spoken.
     TalkOutsideSurface,
     /// A verb that builds an automation, or drives a run, was typed inside the terminal a run opened
-    /// for a step (`AMB-D-948`). It is the other direction of the refusal the three reporting verbs
+    /// for a step (`AMB-D-948`). It is the other direction of the refusal the two reporting verbs
     /// meet outside a step, and a code of its own because what the caller does next is to type it
     /// somewhere else.
     AutomationOutsideOnly,
@@ -199,7 +199,7 @@ fn hint_for_a_caller_with_no_terminal(dirs: &str) -> String {
 }
 
 /// What reaches from inside a step, said where something typed there was refused.
-const STEP_REACHES: &str = "From inside a step, what reaches is step-take, step-out and step-done, the commands that read, and a comment on a task or a decision. The rest is typed in a terminal of the person's own.";
+const STEP_REACHES: &str = "From inside a step, what reaches is step-out and step-done, the commands that read, and a comment on a task or a decision. The rest is typed in a terminal of the person's own.";
 
 impl CliError {
     pub fn confirmation_required(what: &str) -> CliError {

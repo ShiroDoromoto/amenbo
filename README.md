@@ -399,10 +399,10 @@ amenbo automation start 3                              # away it goes
 amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand a make_task entry the task it files: title, notes, classification and attachments
 amenbo automation pause 7                              # ...at the end of the step under way
 amenbo automation stop 7                               # ...now, handing the task back to todo
-# Inside a step's own terminal, the agent carrying it out reports through three more:
-# `automation step-take` (the task the step is about, where no built-in took it), `automation
+# Inside a step's own terminal, the agent carrying it out reports through two more: `automation
 # step-out` (each thing it hands on) and `automation step-done` (the way out taken — by the id the
-# step's text lists for it — and what it did). Those three, with `list` / `show` /
+# step's text lists for it — and what it did). The task the run works is taken by a built-in, never
+# by the step. Those two, with `list` / `show` /
 # `action-list` / `action-show` / `run-list` / `run-show` to read where it stands, are all that
 # terminal reaches — every other verb here is typed outside a run.
 amenbo automation run-list --task AMB-T-<n> --json     # the runs that worked one task

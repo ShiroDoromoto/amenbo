@@ -6,7 +6,7 @@
 //! whole and a road takes as many as its own goal asks for. What each of them answers with is the id
 //! the next one names, which is why nearly all of them bind.
 //!
-//! **What a step of a run types is not here** (`automation step-take` / `step-out` / `step-done`). Those are refused
+//! **What a step of a run types is not here** (`automation step-out` / `step-done`). Those are refused
 //! outside the terminal a run opened for a step, and a run started at the terminal opens none — there
 //! is no window to draw one in. The road for them waits on a door that opens a step without a screen.
 //! The same door is what the other side waits on: the build and drive verbs refuse *inside* a step

@@ -47,7 +47,7 @@ import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { fetchRunCards, useRunCards } from "../core/automations";
-import { runStateOf, waitingState } from "../core/runWords";
+import { runSayOf, runStateOf, waitingState } from "../core/runWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
@@ -1750,7 +1750,11 @@ export function WorkspaceFace({
                     // What the row says under the name, on a run's pane (`../talk/nameplate`). It is
                     // the run the place is standing for and the step it is on — both Amenbo's own
                     // values, neither of them the agent's word about itself (`AMB-D-858`).
-                    run={frame.run === null || on === undefined ? null : {
+                    //
+                    // **Where no step has arrived, the row is said off the run** (`AMB-T-5635`): a
+                    // pane the store kept comes back with the app, and a run held or failed opens no
+                    // terminal to say it by (`runSayOf`).
+                    run={frame.run === null ? null : on === undefined ? runSayOf(runCardOf.get(frame.run)) : {
                       run: frame.run,
                       automation: on.automationName,
                       // A built-in's name, and the action standing where it was opened from, are

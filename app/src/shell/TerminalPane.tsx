@@ -621,13 +621,20 @@ export function TerminalPane({
   // to put it up with, and the row is still what says which run this is and how far in it has got.
   // The card is a pane of its own key, one per spot (`./WorkspaceFace`), so this is put up once and
   // taken down with it — the next built-in in a row is the next pane.
+  //
+  // **And above a run's pane with no terminal in it** (`AMB-T-5635`): one the store kept, come back
+  // with the app for a run held or failed. What its terminal printed died with the process, and the
+  // row is still what says which run this is and where it stopped. A terminal opened here after it
+  // takes the row over, and puts its own up.
   const onBuiltin = builtin !== null;
+  const rowWithout = onBuiltin || (run !== null && !running);
   useEffect(() => {
     const label = labelRef.current;
-    if (!onBuiltin || !label) return;
+    if (!rowWithout || !label) return;
     const plate = mountPlate(label, frame, hue, run);
     // A row is drawn only on a pane something has run in, and a built-in is that: Amenbo is running
-    // it here. There is no folder to head the row with, and a run's row is headed with its automation.
+    // it here — as a run's pane is, whatever ran in it last. There is no folder to head the row with,
+    // and a run's row is headed with its automation.
     plate.opened(null);
     plateRef.current = plate;
     on.current.onRow?.(frame, plate.read);
@@ -636,7 +643,7 @@ export function TerminalPane({
       plateRef.current = null;
       on.current.onRow?.(frame, null);
     };
-  }, [onBuiltin]);
+  }, [rowWithout]);
 
   // The keyboard, at the moment a terminal opens here and at every fold after it. What a person does
   // next in a place they just opened is type, and where that lands is whether the box is open

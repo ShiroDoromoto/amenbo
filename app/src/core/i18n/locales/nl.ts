@@ -1204,6 +1204,7 @@ export const nl: Translation = {
     "auto.run.inAction": "{step} in {action}",
     "auto.run.reportWithheld": "Verslag niet bij de taak achtergelaten, want die was gesloten: {steps}",
     "auto.run.taskWait": "Wacht op taak",
+    "auto.run.heldUntil": "Wacht tot {at}",
 
     "mcp.title": "Verbinden via MCP",
     "mcp.setupTitle": "Je projecten vanuit een AI gebruiken",

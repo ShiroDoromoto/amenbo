@@ -1449,6 +1449,7 @@ const ui = {
   "auto.run.inAction": "{step} in {action}",
   "auto.run.reportWithheld": "Report kept off the task, which was closed: {steps}",
   "auto.run.taskWait": "Waiting for a task",
+  "auto.run.heldUntil": "Waiting until {at}",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,

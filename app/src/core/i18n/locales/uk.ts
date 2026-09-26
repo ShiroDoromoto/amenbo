@@ -1221,6 +1221,7 @@ export const uk: Translation = {
     "auto.run.inAction": "{step} у {action}",
     "auto.run.reportWithheld": "Звіт не залишено в завданні, бо воно було закрите: {steps}",
     "auto.run.taskWait": "Чекає завдання",
+    "auto.run.heldUntil": "Очікування до {at}",
 
     "mcp.title": "Підключення через MCP",
     "mcp.setupTitle": "Працювати зі своїми проєктами із ШІ",

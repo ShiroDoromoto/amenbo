@@ -876,6 +876,7 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 @keyframes builtin-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .slot__builtin-spin { animation: none; } }
 .slot__builtin-done { color: var(--c-done); font-size: var(--fs-xl); font-weight: 700; line-height: 1; }
+.slot__builtin-until { color: var(--c-text-muted); font-variant-numeric: tabular-nums; }
 .filterchips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-1); max-width: 100%; }
 
 /* The question and the row under it, kept together: the words are what say the pills are an offer, so

@@ -1221,6 +1221,7 @@ export const ru: Translation = {
     "auto.run.inAction": "{step} в {action}",
     "auto.run.reportWithheld": "Отчёт не оставлен в задаче, так как она была закрыта: {steps}",
     "auto.run.taskWait": "Ждёт задачу",
+    "auto.run.heldUntil": "Ожидание до {at}",
 
     "mcp.title": "Подключение по MCP",
     "mcp.setupTitle": "Работать со своими проектами из ИИ",

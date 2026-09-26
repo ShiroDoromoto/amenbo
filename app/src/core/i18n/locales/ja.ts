@@ -1210,6 +1210,7 @@ export const ja: Translation = {
     "auto.run.inAction": "{action} の {step}",
     "auto.run.reportWithheld": "タスクが閉じていたので、報告を残さなかった：{steps}",
     "auto.run.taskWait": "タスク待ち",
+    "auto.run.heldUntil": "{at} まで待つ",
 
     "mcp.title": "MCP でつなぐ",
     "mcp.setupTitle": "プロジェクトを AI から使えるようにする",

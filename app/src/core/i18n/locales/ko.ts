@@ -1201,6 +1201,7 @@ export const ko: Translation = {
     "auto.run.inAction": "{action}의 {step}",
     "auto.run.reportWithheld": "작업이 닫혀 있어 보고를 남기지 않음: {steps}",
     "auto.run.taskWait": "작업 대기",
+    "auto.run.heldUntil": "{at}까지 대기",
 
     "mcp.title": "MCP로 연결",
     "mcp.setupTitle": "내 프로젝트를 AI에서 사용하기",

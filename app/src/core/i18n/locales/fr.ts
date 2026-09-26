@@ -1216,6 +1216,7 @@ export const fr: Translation = {
     "auto.run.inAction": "{step} dans {action}",
     "auto.run.reportWithheld": "Rapport non laissé sur la tâche, qui était fermée : {steps}",
     "auto.run.taskWait": "En attente de tâche",
+    "auto.run.heldUntil": "En attente jusqu'à {at}",
 
     "mcp.title": "Se connecter en MCP",
     "mcp.setupTitle": "Utiliser vos projets depuis une IA",

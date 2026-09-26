@@ -129,7 +129,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { WorkspaceFace } from "./WorkspaceFace";
-import { statusLabel, t, tf } from "../core/i18n";
+import { exactLabel, statusLabel, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { RefNavProvider, type RefNav } from "../core/refNav";
 
@@ -659,6 +659,21 @@ describe("a built-in on a run's pane", () => {
     ]);
     // And no task: the one it closed before is not the one it is on.
     expect(q(".plate-run")[0]?.hidden).toBe(true);
+  });
+
+  it("says when its time comes while the built-in that waits holds its step (AMB-D-983)", async () => {
+    await mount();
+    const at = "2026-09-26T12:34:56Z";
+    await arrive({ step: undefined, builtin: builtin({ name: "待つ", key: "wait", heldUntil: at }) });
+
+    expect(q(".slot__builtin-spin")).toHaveLength(1);
+    expect(q(".slot__builtin-until")[0]?.textContent).toBe(tf("auto.run.heldUntil", { at: exactLabel(at) }));
+
+    await arrive({ step: undefined, builtin: builtin({ name: "待つ", key: "wait", finished: true, exitName: "完了" }) });
+
+    // Done waiting, it says so by the tick and the way out, and no longer when.
+    expect(q(".slot__builtin-until")).toHaveLength(0);
+    expect(q(".slot__builtin-done")).toHaveLength(1);
   });
 
   it("names the second built-in in the row above when two come one after the other (AMB-T-5550)", async () => {

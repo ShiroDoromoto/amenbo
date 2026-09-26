@@ -1206,6 +1206,7 @@ export const zhHant: Translation = {
     "auto.run.inAction": "{action} 的 {step}",
     "auto.run.reportWithheld": "任務已關閉，未留下報告：{steps}",
     "auto.run.taskWait": "等待任務",
+    "auto.run.heldUntil": "等待至 {at}",
 
     "mcp.title": "透過 MCP 連線",
     "mcp.setupTitle": "讓 AI 可以使用你的專案",

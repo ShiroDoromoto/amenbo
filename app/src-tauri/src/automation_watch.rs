@@ -12,7 +12,8 @@
 //! have to rebuild.
 //!
 //! **What one look costs.** One read of the runs that are running, and one read per run of what it is
-//! waiting for — two more where a step is under way, for the task it may have taken. Every run is one somebody pressed start on, so a look is a handful of small reads on
+//! waiting for — a few more where a step is under way, for whether it is a wait whose time has come
+//! (`AMB-D-983`) and for the task it may have taken. Every run is one somebody pressed start on, so a look is a handful of small reads on
 //! tables with tens of rows in them, through a connection the thread keeps. A run standing before a
 //! built-in that waits (`AMB-D-969`) has that step opened when it is looked at, which asks one row of
 //! the tasks — whether there is one to take yet — and writes nothing until there is.
@@ -136,8 +137,9 @@ fn sleep(how_long: Duration) -> bool {
 /// due while they all are, and `WHILE_IDLE` at most.
 ///
 /// A run answers one of three things ([`amenbo_core::ops::automation_run::Waiting`]) and each is acted
-/// on here. A step waiting to be opened is opened. A run with a step under way is only checked for a
-/// change to the task that step holds since it opened. A run with nowhere left to go is ended — it would otherwise be read again every second for the rest of
+/// on here. A step waiting to be opened is opened. A run with a step under way is ended where it is a
+/// wait whose time has come, and otherwise only checked for a change to the task that step holds
+/// since it opened. A run with nowhere left to go is ended — it would otherwise be read again every second for the rest of
 /// the session, holding a task nobody is working.
 ///
 /// A run whose step could not be opened is left where it is and looked at again next time. The one
@@ -178,9 +180,17 @@ fn advance(
                     }
                 }
             }
-            // The task a step under way holds may have changed since it was opened — deleted out
-            // from under it, say — and the pane was told before then (`crate::automation::retell_task`).
+            // A step under way that the built-in that waits holds open ends here once its time has
+            // come (`AMB-D-983`) — this look is the only thing that ends it.
+            //
+            // Otherwise the task it holds may have changed since it was opened — deleted out from
+            // under it, say — and the pane was told before then (`crate::automation::retell_task`).
             Waiting::Nothing => {
+                match crate::automation::time_up(app, *run) {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(e) => log::warn!("run {run} could not end the wait it holds: {}", e.message_en),
+                }
                 let store = crate::commands::open_store_read()?;
                 if let Err(e) = crate::automation::retell_task(app, &store, *run) {
                     log::warn!("run {run} could not say which task its step holds: {}", e.message_en);

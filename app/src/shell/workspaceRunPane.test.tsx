@@ -421,7 +421,7 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     const went: unknown[][] = [];
     const nav: RefNav = {
       openAutomation: (...args) => went.push(["picture", ...args]),
-      openRunHistory: (...args) => went.push(["history", ...args]),
+      openRuns: (...args) => went.push(["runs", ...args]),
     };
     hoisted.cards = [runCard({ status: "failed", stoppedReason: "halted", exitName: "*" })];
     await act(async () => {
@@ -440,11 +440,20 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     await act(async () => picture.click());
     expect(went).toEqual([["picture", 1, 3, 11]]);
 
-    // The row says where the run is read from now.
+    // The row says where the run is read from now. A failure nobody has acknowledged is still on the
+    // "running" tab (`AMB-D-955`), so that is where it sends the reader (`AMB-T-5672`).
+    const running = q(".slot__runlink")[0]!;
+    expect(running.textContent).toBe(t("auto.run.seeRunning"));
+    await act(async () => running.click());
+    expect(went[1]).toEqual(["runs", 1, "running"]);
+
+    // Once acknowledged, the run has moved to the history tab, and the press follows it there.
+    hoisted.cards = [runCard({ status: "failed", stoppedReason: "halted", exitName: "*", acknowledged: true })];
+    await arrive();
     const history = q(".slot__runlink")[0]!;
     expect(history.textContent).toBe(t("auto.run.seeHistory"));
     await act(async () => history.click());
-    expect(went[1]).toEqual(["history", 1]);
+    expect(went[2]).toEqual(["runs", 1, "history"]);
   });
 
   it("offers neither while the run is going, nor where there is no ledger to go to", async () => {

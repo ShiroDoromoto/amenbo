@@ -146,8 +146,8 @@ function TalkWindow() {
       const place: LedgerPlaceDto = { project, automation, ...(placement === null ? {} : { placement }) };
       void invoke("show_ledger", { place }).catch(() => {});
     },
-    openRunHistory: (project) => {
-      const place: LedgerPlaceDto = { project };
+    openRuns: (project, runs) => {
+      const place: LedgerPlaceDto = { project, runs };
       void invoke("show_ledger", { place }).catch(() => {});
     },
   }), []);

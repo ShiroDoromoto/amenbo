@@ -1124,8 +1124,8 @@ pub struct RefTargetDto {
 
 /// **A place on the ledger a run's pane sends the reader to** (`AMB-T-5539`): one automation's build
 /// screen, with the box the run stopped at pressed where there is one, or — with no automation named —
-/// the project's automations on the "history" tab. It is asked for from the workspace and followed on
-/// the board, so when the two are separate windows it crosses between them
+/// the project's automations on the tab the run is listed on. It is asked for from the workspace and
+/// followed on the board, so when the two are separate windows it crosses between them
 /// (`crate::windows::show_ledger`), the way a ref does ([`RefTargetDto`]).
 #[derive(Clone, Deserialize, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
@@ -1133,7 +1133,7 @@ pub struct RefTargetDto {
 pub struct LedgerPlaceDto {
     #[ts(type = "number")]
     pub(crate) project: i64,
-    /// The automation whose build screen to open. Absent is the history tab.
+    /// The automation whose build screen to open. Absent is the tab named by `runs`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) automation: Option<i64>,
@@ -1141,6 +1141,12 @@ pub struct LedgerPlaceDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) placement: Option<i64>,
+    /// With no automation named, the tab the run is listed on: "history", or "running" for a failure
+    /// nobody has acknowledged yet (`AMB-D-955`). Absent is "history". Passed through as it came: only
+    /// the ledger that opens the tab reads it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "\"running\" | \"history\"")]
+    pub(crate) runs: Option<String>,
 }
 
 /// A folder to work in and the project it belongs to — the first loop's one press, on its way from

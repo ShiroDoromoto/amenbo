@@ -1179,6 +1179,7 @@ export const tr: Translation = {
     "auto.run.acknowledge": "Görüldü",
     "auto.run.seePicture": "Şemada gör",
     "auto.run.seeHistory": "Geçmişte gör",
+    "auto.run.seeRunning": "Çalışıyor sekmesinde gör",
     "auto.run.paused": "Duraklatıldı",
     "auto.run.pausing": "Duraklatılıyor",
     "auto.run.crashed": "adım rapor vermeden sona erdi",

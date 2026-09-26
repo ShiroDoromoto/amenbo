@@ -1179,6 +1179,7 @@ export const hi: Translation = {
     "auto.run.acknowledge": "देख लिया",
     "auto.run.seePicture": "चित्र में देखें",
     "auto.run.seeHistory": "इतिहास में देखें",
+    "auto.run.seeRunning": "चल रहे में देखें",
     "auto.run.paused": "रुका हुआ",
     "auto.run.pausing": "रुकने वाला",
     "auto.run.crashed": "चरण बिना रिपोर्ट किए समाप्त हो गया",

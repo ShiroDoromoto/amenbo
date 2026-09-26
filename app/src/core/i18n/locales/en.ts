@@ -1426,6 +1426,7 @@ const ui = {
   "auto.run.acknowledge": "Acknowledge",
   "auto.run.seePicture": "See the picture",
   "auto.run.seeHistory": "See the history",
+  "auto.run.seeRunning": "See it under Running",
   "auto.run.paused": "Paused",
   "auto.run.pausing": "Pausing",
   "auto.run.crashed": "its step ended without reporting",

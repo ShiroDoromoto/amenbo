@@ -1191,6 +1191,7 @@ export const es: Translation = {
     "auto.run.acknowledge": "Visto",
     "auto.run.seePicture": "Ver en el diagrama",
     "auto.run.seeHistory": "Ver en el historial",
+    "auto.run.seeRunning": "Ver en «En ejecución»",
     "auto.run.paused": "En pausa",
     "auto.run.pausing": "Pausando",
     "auto.run.crashed": "el paso terminó sin informar",

@@ -51,6 +51,7 @@ use crate::ops::automation_builtin_fold::FOLD_WORKTREE;
 use crate::ops::automation_builtin_make::MAKE_TASK;
 use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
 use crate::ops::automation_builtin_take::TAKE_TASK;
+use crate::ops::automation_builtin_wait::WAIT;
 use crate::ops::automation_report::{self, Next, Produced};
 use crate::ops::emit_update;
 use crate::store_engine::{read, record, WriteTx};
@@ -100,6 +101,11 @@ pub enum Work {
     /// holds ([`Named`]) — the ways out of the built-in that splits by an axis are that axis's values
     /// (`AMB-D-972`), written onto its action from the axis rather than from [`Builtin::exits`].
     Named(fn(&Carry<'_, '_>) -> Result<Named>),
+    /// **Nothing carried out: its step is held open** for as long as the answers where it was placed
+    /// say ([`hold`]), and ended by the watch once that time has passed ([`time_up`]) — the built-in that
+    /// waits (`AMB-D-983`). The step stands under way in the meantime, as an agent's does while it works,
+    /// so a pause or a stop acts on it as on any other.
+    Holds(fn(&[RunDefCfg]) -> Result<chrono::Duration>),
 }
 
 /// **How a built-in leaving by a way out the data names finished** — [`Carried`], with a name that is
@@ -347,7 +353,8 @@ pub struct Carried {
 /// **Every built-in this build carries.** Each is its own module, holding its definition and the work
 /// it does.
 #[cfg(not(test))]
-const BUILTINS: &[Builtin] = &[TAKE_TASK, MAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK, FETCH, SPLIT_BY_DIM];
+const BUILTINS: &[Builtin] =
+    &[TAKE_TASK, MAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK, FETCH, SPLIT_BY_DIM, WAIT];
 #[cfg(test)]
 const BUILTINS: &[Builtin] = &[
     TAKE_TASK,
@@ -357,6 +364,7 @@ const BUILTINS: &[Builtin] = &[
     CLOSE_TASK,
     FETCH,
     SPLIT_BY_DIM,
+    WAIT,
     tests::STAMP,
     tests::FALLS,
 ];
@@ -636,6 +644,9 @@ pub(crate) fn carry_out(
                     "the built-in '{key}' works outside the store, and that was not done before its step was opened"
                 ))),
             },
+            Work::Holds(_) => Err(Error::invalid(format!(
+                "the built-in '{key}' holds its step open, and is not carried out"
+            ))),
         }
     });
     let (exit, report) = match carried {
@@ -653,6 +664,107 @@ pub(crate) fn carry_out(
         Err(e) if exit != ERROR_EXIT => fell_over(tx, run_step, exits, &e.to_string()),
         Err(e) => Err(e),
     }
+}
+
+// ───────────────────────── held open ─────────────────────────
+
+/// **How opening a built-in that holds its step went** ([`Work::Holds`]).
+pub(crate) enum Held {
+    /// The step stands under way until its time has passed.
+    Holding,
+    /// What it was set to could not be waited on, so it left by the error way out, and this is what
+    /// that way out leads to.
+    FellOver(Next),
+}
+
+/// How long this copy of a step is held open, or `None` for one that is not ([`Work::Holds`]).
+fn holds_for(def: &AutomationRunDef) -> Option<Result<chrono::Duration>> {
+    let Work::Holds(how_long) = def.builtin.as_deref().and_then(find)?.work else {
+        return None;
+    };
+    Some(serde_json::from_str::<Vec<RunDefCfg>>(&def.cfg).map_err(Error::from).and_then(|cfg| how_long(&cfg)))
+}
+
+/// **Hold a built-in's step open** where [`carry_out`] would carry it out — `None` for a step that is not
+/// held. Nothing is written: the execution already stands under way, and when it ends is read off it
+/// ([`held_until`]). Answers that say no length of time leave by the error way out at once, saying why.
+pub(crate) fn hold(
+    tx: &WriteTx<'_>,
+    run_step: &AutomationRunStep,
+    def: &AutomationRunDef,
+    exits: &[RunDefExit],
+) -> Result<Option<Held>> {
+    match holds_for(def) {
+        None => Ok(None),
+        Some(Ok(_)) => Ok(Some(Held::Holding)),
+        Some(Err(e)) => Ok(Some(Held::FellOver(fell_over(tx, run_step, exits, &e.to_string())?))),
+    }
+}
+
+/// **When a held step's time comes** — the moment it was opened, plus how long the answers where it
+/// was placed say. Both are written once and never change, so this is read rather than kept. `None` for
+/// a step that is not held.
+pub fn held_until(conn: &Connection, run_step: &AutomationRunStep) -> Result<Option<Timestamp>> {
+    let Some(def) = read::automation_run_def(conn, run_step.run_def_id)? else {
+        return Ok(None);
+    };
+    let Some(how_long) = holds_for(&def) else {
+        return Ok(None);
+    };
+    let started = run_step.started_at.unwrap_or(run_step.created_at);
+    Ok(Some(Timestamp(started.0 + how_long?)))
+}
+
+/// **The held step of this run whose time has come by `now`**, or `None` — asked by the thread that
+/// keeps runs going, on the look it takes at a run with a step under way. Only a run still running is
+/// asked about: a stopped one leaves its last step's row as it was, and a stop is the end of the wait.
+pub fn due(conn: &Connection, run_id: i64, now: Timestamp) -> Result<Option<i64>> {
+    let running = read::automation_run(conn, run_id)?.is_some_and(|run| run.status == AutomationRunStatus::Running);
+    if !running {
+        return Ok(None);
+    }
+    let Some(last) = read::automation_run_steps_of(conn, run_id)?.pop() else {
+        return Ok(None);
+    };
+    if last.status != crate::model::AutomationRunStepStatus::Running {
+        return Ok(None);
+    }
+    Ok(match held_until(conn, &last) {
+        Ok(Some(until)) if until.0 <= now.0 => Some(last.id),
+        _ => None,
+    })
+}
+
+/// **End a held step whose time has come**: it leaves by [`DONE_EXIT`] with how long it waited as its
+/// report, and the run walks on from there as after an agent's report — a pause asked for meanwhile
+/// takes hold here. A step that is not held, or whose time has not come ([`due`]), is refused.
+pub fn time_up(tx: &WriteTx<'_>, run_step_id: i64) -> Result<Next> {
+    time_up_at(tx, run_step_id, Timestamp::now())
+}
+
+pub(crate) fn time_up_at(tx: &WriteTx<'_>, run_step_id: i64, now: Timestamp) -> Result<Next> {
+    let run_step = read::automation_run_step(tx.conn(), run_step_id)?
+        .ok_or_else(|| Error::not_found(format!("step execution '{run_step_id}' not found")))?;
+    if due(tx.conn(), run_step.run_id, now)? != Some(run_step_id) {
+        return Err(Error::invalid(format!(
+            "step execution '{run_step_id}' is not a wait whose time has come"
+        )));
+    }
+    let def = read::automation_run_def(tx.conn(), run_step.run_def_id)?
+        .ok_or_else(|| Error::not_found(format!("step of a run '{}' not found", run_step.run_def_id)))?;
+    let how_long = holds_for(&def).ok_or_else(|| Error::invalid("the step is not held"))??;
+    let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
+    let done = exits
+        .iter()
+        .find(|e| e.name == DONE_EXIT)
+        .ok_or_else(|| Error::invalid("the step carries no done way out"))?;
+    automation_report::done(tx, run_step_id, Some(done.id), &waited(how_long))
+}
+
+/// **The report a held step leaves with** — how long it waited, as it was set.
+fn waited(how_long: chrono::Duration) -> String {
+    let s = how_long.num_seconds();
+    format!("waited {}h {}m {}s", s / 3600, s % 3600 / 60, s % 60)
 }
 
 /// Leave by the error way out, saying why.

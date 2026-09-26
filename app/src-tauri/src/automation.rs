@@ -1745,6 +1745,16 @@ fn open_one(
                 _ => (run.project_id, None, None, Vec::new()),
             }
         }
+        // A built-in that holds its step open — the one that waits (`AMB-D-983`). Nothing was carried
+        // out and no terminal is opened: the step stands under way until its time has come.
+        Opened::Holding { run_step_id } => {
+            log::info!("run {run_id} holds built-in step {run_step_id} open");
+            let run = read::automation_run(store.read_model().conn(), run_id)?
+                .ok_or_else(|| CmdError::from(amenbo_core::error::Error::not_found(
+                    format!("run '{run_id}' not found"),
+                )))?;
+            (run.project_id, None, None, Vec::new())
+        }
         // A built-in has already been carried out and has reported (`AMB-D-964`), so there is no
         // terminal to stand a pane on. The run is now standing between two steps — or has ended — and
         // the watch woken below reads which, the same as after an agent's report. What the pane is

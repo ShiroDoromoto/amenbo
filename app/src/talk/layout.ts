@@ -249,7 +249,8 @@ export type Frame = {
    *
    * **It is not written down** (`laidOut`). A run does not outlive the app: one that was under way
    * when the app ended is stopped when it comes back up (`AMB-T-5247`), so a place kept for it
-   * would come back holding a run that is over.
+   * would come back holding a run that is over. The place itself is kept, by its id, and comes back
+   * only where somebody still has something to do with the run (`withoutRuns`).
    */
   readonly run: number | null;
 };
@@ -1005,5 +1006,66 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
     focus: first?.id ?? null,
     adding: false,
     left: {},
+  };
+}
+
+/**
+ * The run a pane's id was worked out from (`runFrameId`), or null for a pane a person opened.
+ *
+ * **It is how a run's pane is known once the store has had it.** What the store keeps is places, so a
+ * run's pane comes back with its id and without its run (`Frame.run`); the id is the one thing left
+ * to tell it by.
+ */
+export function runOfFrameId(id: string): number | null {
+  const found = /^run-(\d+)$/.exec(id);
+  return found ? Number(found[1]) : null;
+}
+
+/**
+ * The runs whose panes came back out of the store, in the order they were kept.
+ *
+ * A frame carrying its run is not one of them: that arrangement came from the other window, where
+ * the run is still being drawn, and a pane a reader is reading back stays where it is (`withoutRuns`).
+ */
+export function runsKept(saved: SavedLayout): number[] {
+  return saved.frames.flatMap((frame) => {
+    if (frame.run != null) return [];
+    const run = runOfFrameId(frame.id);
+    return run === null ? [] : [run];
+  });
+}
+
+/**
+ * Whether a run is over and needs nobody (`AMB-D-955`): completed, canceled, or a failure somebody has
+ * said they saw. It will not start again (`AMB-D-961`), and what it did is read on the "history" tab.
+ *
+ * A failure nobody has acknowledged is not, and neither is a paused run: the one is waiting to be
+ * seen, and the other to be carried on.
+ */
+export function needsNobody(run: {
+  readonly status: string;
+  readonly acknowledged: boolean;
+}): boolean {
+  return run.status === "completed" || run.status === "canceled"
+    || (run.status === "failed" && run.acknowledged);
+}
+
+/**
+ * The arrangement with the panes of these runs taken out — what the store kept, less the runs that
+ * are over and need nobody (`needsNobody`, `AMB-T-5633`).
+ *
+ * **Only a pane that came out of the store goes** (`runsKept`). Every run opens a pane of its own, so
+ * a pane kept for each would have the pages grow by one with every run and never shrink again. While
+ * the app is up the pane stays, ended or not: what the terminal printed is still there to be read.
+ */
+export function withoutRuns(saved: SavedLayout, runs: ReadonlySet<number>): SavedLayout {
+  if (runs.size === 0) return saved;
+  return {
+    ...saved,
+    frames: saved.frames.filter((frame) => {
+      if (frame.run != null) return true;
+      const run = runOfFrameId(frame.id);
+      return run === null || !runs.has(run);
+    }),
   };
 }

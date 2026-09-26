@@ -1,0 +1,150 @@
+# Every run stands a pane of its own, and the arrangement is kept as places between runs of the app.
+# A pane was kept for every run, so the pages grew by one with every run and never shrank again. Now
+# a run that needs nobody — completed, canceled, or failed and acknowledged — is left behind as the
+# app comes back up, and its pane with it (`app/src/talk/layout.ts`, `withoutRuns`). While the app is
+# up the pane stays, so what the terminal printed is still there to be read.
+#
+# The pane the folder opened is made half the page first, so the run's pane — which takes the size of
+# the pane before it — lands beside it on the same page: the count of panes on that page is what
+# tells a pane left behind from an empty place kept for it.
+id: leave-a-stopped-run-behind-when-the-app-comes-back-up
+title: A run that was stopped is left behind when the app comes back up, and its pane with it
+description: >
+  Start a run and stop it from its pane: the pane stays, saying the run was canceled. Quit the app
+  and read the workspace it comes back up to: the pane the folder opened is back, and the run's pane
+  is not.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
+  # The task the built-in the run starts at takes, so the run goes on to the step after it.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run works }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
+  # The action the run opens once the built-in has taken the task, holding the one step it runs. Its
+  # way out is declared on both layers: the step's is what the step reports, and the action's is what the
+  # automation's picture goes on from — the line inside the action carries the one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: work the task the run took }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to leave behind" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: pick-pane-size
+    with:
+      size: half
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # Stopped from the line over the pane, which keeps the pane: while the app is up, what the step
+  # printed is still there to be read.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: stop
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      state: canceled
+      present: true
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 2
+
+  # The pane the folder opened still has its program running, so the way out asks first.
+  - type: action
+    domain: store
+    op: quit
+    with:
+      how: menu
+      asks: true
+
+  - type: action
+    domain: store
+    op: answer-quit
+    with:
+      answer: leave
+
+  # The goal. The app comes back up with the pane the folder opened, and without the stopped run's:
+  # the run needs nobody, and what it did is read on the history tab.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: assert
+    domain: workspace
+    op: frames
+    with:
+      count: 1
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      present: false

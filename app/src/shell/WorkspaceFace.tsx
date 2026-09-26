@@ -14,9 +14,9 @@ import {
 } from "../talk/frames";
 import {
   addPane, closedFrame, closedIn, EMPTY_LAYOUT, filledPages, focusOn, folding, goPage, goProject,
-  gridAt, landingOn, laidOut, movedTo, movedWithin, openedFrame, openedIn, pageCount, paneIn,
-  panesOf, reordered, resized, restored, runFrameId, slotsOf, stoodForRun, writing,
-  type Layout, type Size,
+  gridAt, landingOn, laidOut, movedTo, movedWithin, needsNobody, openedFrame, openedIn, pageCount,
+  paneIn, panesOf, reordered, resized, restored, runFrameId, runsKept, slotsOf, stoodForRun,
+  withoutRuns, writing, type Layout, type SavedLayout, type Size,
 } from "../talk/layout";
 import { onStep, standingSteps, type BuiltinRun, type StepOpened, type StepRun } from "../talk/automationStep";
 import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
@@ -46,7 +46,7 @@ import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
-import { useRunCards } from "../core/automations";
+import { fetchRunCards, useRunCards } from "../core/automations";
 import { runStateOf, waitingState } from "../core/runWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
@@ -106,6 +106,23 @@ function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
   const left = { ...all };
   for (const key of keys) delete left[key];
   return left;
+}
+
+/**
+ * **The arrangement the store kept, less the panes of runs that need nobody** (`AMB-T-5633`): a run
+ * completed, canceled, or failed and acknowledged is left behind as the app comes up, and its pane
+ * with it (`../talk/layout`'s `withoutRuns`).
+ *
+ * Where the runs cannot be read, every pane comes back: a pane left over is one close away, and a run
+ * waiting to be seen that went missing from the screen is not something a reader would know to look
+ * for.
+ */
+async function settledRunsLeftOut(saved: SavedLayout | null): Promise<SavedLayout | null> {
+  if (saved === null) return null;
+  const runs = runsKept(saved);
+  if (runs.length === 0) return saved;
+  const cards = await fetchRunCards(runs).catch(() => []);
+  return withoutRuns(saved, new Set(cards.filter(needsNobody).map((card) => card.run)));
 }
 
 /**
@@ -486,7 +503,7 @@ export function WorkspaceFace({
     if (restoring.current || (layout.project === null && projects.length > 0)) return;
     restoring.current = true;
     void Promise.all([
-      savedLayout().catch(() => null),
+      savedLayout().then(settledRunsLeftOut).catch(() => null),
       inTauri()
         ? invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[])
         : Promise.resolve([] as PtySessionDto[]),

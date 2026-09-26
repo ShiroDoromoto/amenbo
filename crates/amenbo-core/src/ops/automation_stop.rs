@@ -113,6 +113,8 @@ fn under_way(status: AutomationRunStatus) -> bool {
 
 /// **End a run and hand back the task it was holding.** Every way a run can end comes through here.
 ///
+/// **The step under way ends with it** ([`close_step`]): a run that is over has no step still going.
+///
 /// **The task goes back to `todo` only when the run was cut short** — failed or canceled. A run that
 /// completed left its task wherever its steps put it, which is the outcome somebody asked for; a run
 /// that was cut off left it reserved by nobody, and a task held by a run that is gone is one no session
@@ -139,6 +141,7 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
 
+    close_step(tx, before.id, ending, now)?;
     let stretch = close_stretch(tx, before.id, now)?;
     if ending.cut_short() {
         hand_the_task_back(tx, &after, stretch.as_ref(), ending)?;
@@ -154,6 +157,32 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
 pub fn left_open(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>) -> Result<bool> {
     let Some(task_id) = stretch.and_then(|s| s.task_id) else { return Ok(false) };
     Ok(read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress))
+}
+
+/// **Close the step the run was in the middle of**, so its row does not read as still going under a run
+/// that is over. A step that had reported is closed already and left alone.
+///
+/// A crash is the step falling over, so it is `failed`; every other ending cut the step off from
+/// outside, so it is `stopped`. It keeps no way out: it never left through one.
+fn close_step(tx: &WriteTx<'_>, run_id: i64, ending: Ending, now: Timestamp) -> Result<()> {
+    let Some(before) = read::automation_run_steps_of(tx.conn(), run_id)?.pop() else {
+        return Ok(());
+    };
+    if before.status != AutomationRunStepStatus::Running {
+        return Ok(());
+    }
+    let mut closed = before.clone();
+    closed.status = match ending {
+        Ending::Failed(AutomationStoppedReason::Crashed) => AutomationRunStepStatus::Failed,
+        _ => AutomationRunStepStatus::Stopped,
+    };
+    closed.ended_at = Some(now);
+    closed.updated_at = now;
+    crate::ops::emit_update(
+        tx,
+        record::automation_run_step(&before),
+        record::automation_run_step(&closed),
+    )
 }
 
 /// Close the stretch the run was in, and answer which one it was. A stretch already closed is left
@@ -580,6 +609,11 @@ mod tests {
             .collect()
     }
 
+    /// The step execution as it stands now.
+    fn step_row(tx: &WriteTx<'_>, run_step_id: i64) -> crate::model::AutomationRunStep {
+        read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("the step")
+    }
+
     fn status_of(tx: &WriteTx<'_>, run_id: i64) -> AutomationRunStatus {
         read::automation_run(tx.conn(), run_id).expect("read").expect("the run").status
     }
@@ -713,6 +747,10 @@ mod tests {
             let after = stop(tx, run.id, Ending::Canceled).expect("stop");
             assert_eq!(after.run.status, AutomationRunStatus::Canceled);
             assert_eq!(after.run.stopped_reason, None, "a person who said stop needs no reason");
+            let closed = step_row(tx, step.run_step.id);
+            assert_eq!(closed.status, AutomationRunStepStatus::Stopped, "the step was cut off");
+            assert_eq!(closed.ended_at, after.run.ended_at, "it ended with the run");
+            assert_eq!(closed.exit_id, None, "it never left through a way out");
             assert_eq!(
                 read::task_status(tx.conn(), task).expect("read"),
                 Some(TaskStatus::Todo),
@@ -1014,6 +1052,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false);
             let one = a_run(tx, &p.automation);
+            let under_way = opened(tx, &one, &p.first).run_step.id;
             let another = a_run(tx, &p.automation);
 
             let caught = sweep(tx).expect("sweep");
@@ -1022,6 +1061,9 @@ mod tests {
             assert_eq!(status_of(tx, another.id), AutomationRunStatus::Failed);
             assert!(caught.iter().all(|r| r.stopped_reason
                 == Some(AutomationStoppedReason::Crashed)));
+            let closed = step_row(tx, under_way);
+            assert_eq!(closed.status, AutomationRunStepStatus::Failed, "its step went with the app");
+            assert!(closed.ended_at.is_some(), "a step of a run that is over is not still going");
         });
     }
 
@@ -1036,6 +1078,9 @@ mod tests {
             let ended = step_ended(tx, step.run_step.id).expect("step ended").expect("a run to end");
             assert_eq!(ended.run.status, AutomationRunStatus::Failed);
             assert_eq!(ended.run.stopped_reason, Some(AutomationStoppedReason::Crashed));
+            let closed = step_row(tx, step.run_step.id);
+            assert_eq!(closed.status, AutomationRunStepStatus::Failed, "the step fell over");
+            assert_eq!(closed.ended_at, ended.run.ended_at);
             assert_eq!(
                 read::task_status(tx.conn(), task).expect("read"),
                 Some(TaskStatus::Todo),

@@ -717,7 +717,7 @@ pub fn held_until(conn: &Connection, run_step: &AutomationRunStep) -> Result<Opt
 
 /// **The held step of this run whose time has come by `now`**, or `None` — asked by the thread that
 /// keeps runs going, on the look it takes at a run with a step under way. Only a run still running is
-/// asked about: a stopped one leaves its last step's row as it was, and a stop is the end of the wait.
+/// asked about: a run that is over closed its held step as it ended, and a stop is the end of the wait.
 pub fn due(conn: &Connection, run_id: i64, now: Timestamp) -> Result<Option<i64>> {
     let running = read::automation_run(conn, run_id)?.is_some_and(|run| run.status == AutomationRunStatus::Running);
     if !running {

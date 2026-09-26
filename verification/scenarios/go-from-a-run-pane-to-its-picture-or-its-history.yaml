@@ -27,7 +27,6 @@ given:
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, halt: true } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action

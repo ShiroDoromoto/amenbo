@@ -33,7 +33,6 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_fetch, exit: 見つからない } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_make, exit: 起票して着手した, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_fetch } }
 
   # The same fetch, going straight to an agent's step: that step would be about no task.
   - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
@@ -47,7 +46,6 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: loose_fetch, exit: 取ってきた, to: loose_work } }
   - { type: action, domain: automation, op: edge-add, with: { target: loose_fetch, exit: 見つからない } }
   - { type: action, domain: automation, op: edge-add, with: { target: loose_work } }
-  - { type: action, domain: automation, op: entry, with: { target: loose, placement: loose_fetch } }
 
 steps_cli:
   - { type: action, domain: automation, op: cfg-set, with: { target: at_fetch, name: 形式, choice: コマンド } }

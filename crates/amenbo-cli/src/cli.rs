@@ -2316,6 +2316,12 @@ pub enum AutomationCmd {
         /// run id
         run: i64,
     },
+    /// Say a failed run has been seen, which moves it off the running tab onto the history. Who said
+    /// it — a person or their AI — is kept with it
+    Acknowledge {
+        /// run id
+        run: i64,
+    },
 
     /// **Put down one thing this step produced**, on the output the step's text lists it under. Written
     /// `<id>=<value>`, or `<id> --file <path>` for a file

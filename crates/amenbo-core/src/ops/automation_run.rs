@@ -1188,6 +1188,7 @@ fn launch_asking(
         ended_at: None,
         acknowledged_at: None,
         handed_task,
+        acknowledged_by_kind: None,
         created_at: now,
         updated_at: now,
     };

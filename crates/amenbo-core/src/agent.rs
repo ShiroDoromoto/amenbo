@@ -436,6 +436,7 @@ commands! {
     AutomationPause => "automation pause",
     AutomationResume => "automation resume",
     AutomationStop => "automation stop",
+    AutomationAcknowledge => "automation acknowledge",
     AutomationStepOut => "automation step-out",
     AutomationStepDone => "automation step-done",
     AutomationActionAdd => "automation action-add",
@@ -665,6 +666,7 @@ impl Cmd {
             | Cmd::AutomationPause
             | Cmd::AutomationResume
             | Cmd::AutomationStop
+            | Cmd::AutomationAcknowledge
             | Cmd::AutomationActionAdd
             | Cmd::AutomationActionUpdate
             | Cmd::AutomationActionEntrySet
@@ -1505,8 +1507,8 @@ fn capabilities() -> Value {
             &["automation run-list", "automation run-show"],
         ),
         cap(
-            "Run an automation — start one, pause it, pick it up again, stop it",
-            &["automation start", "automation pause", "automation resume", "automation stop"],
+            "Run an automation — start one, pause it, pick it up again, stop it, and acknowledge a failed one",
+            &["automation start", "automation pause", "automation resume", "automation stop", "automation acknowledge"],
         ),
         cap(
             "Report the step of a run you are carrying out — hand things on, and say you are done",
@@ -2244,6 +2246,10 @@ fn all_commands() -> Value {
             json!([{ "name": "<run>", "help": "run id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation stop 7 --actor ai"])),
+        cmd("automation acknowledge", "Says a failed run has been seen. A failure stays on the running tab until somebody does, because the task it handed back is one nobody is carrying; this moves it onto the history. Who said it — a person or their AI — is kept with it, and `automation run-show` prints both. Only a failed run is acknowledged: any other is refused as invalid. Saying it twice keeps the first time and whoever said it first.",
+            json!([{ "name": "<run>", "help": "run id", "required": true },
+                   { "name": "--json", "help": "machine-readable output" }]),
+            json!(["amenbo automation acknowledge 7 --actor ai"])),
 
         cmd("automation step-out", "Puts down one thing this step produced, on the output its id names — the step's text lists each output with its id, under the way out it belongs to. Written <id>=<value>, or <id> --file <path> for a file, which is attached to this step execution first. WHAT THE OUTPUT WAS DECLARED TO CARRY DECIDES HOW THE WORDS ARE READ: on a value port they are the answer, and on a task_make port they name a task this step raised along the way, which is written as the task. The task the run is about does not come this way and is refused here: a built-in takes it, never a step. An id the step declares no output of is refused, naming the ones it does, and so is a payload of the wrong kind. Putting the same output down twice replaces the first. Two ways out may each declare an output of one name; they are two ids, and only the one on the way out the step leaves by is handed on.",
             json!([{ "name": "<id>=<value>", "help": "what is handed on, or just <id> beside --file", "required": true },

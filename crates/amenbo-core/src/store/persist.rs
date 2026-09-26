@@ -2044,10 +2044,15 @@ impl Store {
     }
 
     /// **Say a failed run has been seen** (one operation = one transaction), so it leaves the top of the
-    /// runs tab for the history under it. The reach is the run's, like stopping it.
-    pub fn automation_acknowledge(&mut self, run_id: i64) -> Result<crate::model::AutomationRun> {
+    /// runs tab for the history under it. The reach is the run's, like stopping it; `by` is kept as
+    /// whose mark it is (`AMB-D-989`).
+    pub fn automation_acknowledge(
+        &mut self,
+        run_id: i64,
+        by: crate::model::ActorKind,
+    ) -> Result<crate::model::AutomationRun> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_stop::acknowledge(tx, run_id)
+            crate::ops::automation_stop::acknowledge(tx, run_id, by)
         })
     }
 

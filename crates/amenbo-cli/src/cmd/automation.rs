@@ -21,7 +21,7 @@ use amenbo_core::model::{
     DEFAULT_MAX_TIMES,
 };
 use amenbo_core::model::{
-    AutomationRun, AutomationRunDef, AutomationRunStep, AutomationRunTask, AutomationRunValue,
+    AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunTask, AutomationRunValue,
 };
 use amenbo_core::model::AttachmentTarget;
 use amenbo_core::ops::automation_stop::Ending;
@@ -789,6 +789,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.stop", "automation_run", serde_json::to_value(&ended.run).unwrap(), None, false, format!("✓ Run {} canceled", ended.run.id));
         }
+        AutomationCmd::Acknowledge { run } => {
+            let r = store
+                .automation_acknowledge(run, flags.facet()?)
+                .map_err(CliError::from)?;
+            let line = format!("✓ Run {} seen — it is on the history now", r.id);
+            write_envelope(flags, "automation.acknowledge", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
+        }
 
         AutomationCmd::StepOut { value, file } => {
             let step = speaking_for()?;
@@ -1249,6 +1256,16 @@ fn render_run(
         flags,
         format!("status: {}{stopped}  {}", run.status.as_str(), span(run.started_at, run.ended_at)),
     );
+    // A failure is waiting on somebody until it is seen, so a failed run says which it is — and a seen
+    // one, by whom (`AMB-D-989`).
+    if run.status == AutomationRunStatus::Failed {
+        let seen = match (run.acknowledged_at, run.acknowledged_by_kind) {
+            (Some(at), Some(by)) => format!("seen by {} at {}", by.as_str(), at.to_rfc3339_z()),
+            (Some(at), None) => format!("seen at {}", at.to_rfc3339_z()),
+            (None, _) => "not seen yet — `automation acknowledge` once it has been".to_string(),
+        };
+        human(flags, format!("acknowledged: {seen}"));
+    }
     for stretch in stretches {
         let about = match stretch.task_id {
             Some(task_id) => task_label(task_id),

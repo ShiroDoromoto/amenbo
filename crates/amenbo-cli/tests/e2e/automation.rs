@@ -677,6 +677,26 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
     assert!(stopped["automation_run"]["stopped_reason"].is_null(), "a cancel carries no reason");
 }
 
+/// **Only a failure is waiting to be seen** (`AMB-D-989`): a run a person stopped needs nobody, so
+/// saying it has been seen is refused, and its account says nothing about being seen. That a failure
+/// takes the mark, with whoever set it, is held by the core's own tests — a terminal has no way to make
+/// a run fail on purpose.
+#[test]
+fn only_a_failed_run_is_acknowledged() {
+    let cli = Cli::new();
+    let (a, _, _) = a_launchable(&cli);
+    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    cli.json(&["automation", "stop", &run, "--json"]);
+
+    let (refused, code) = cli.run_err(&["automation", "acknowledge", &run, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("only a failed run"), "{refused}");
+
+    let (shown, _) = cli.run(&["automation", "run-show", &run]);
+    assert!(shown.contains("status: canceled"), "{shown}");
+    assert!(!shown.contains("acknowledged:"), "a cancel is not waiting on anyone: {shown}");
+}
+
 /// **What a person hands over comes in on the launch itself** (`AMB-D-981`): for a run that starts by
 /// filing a task, its title, its notes and the files to attach to it. A file that cannot be read is
 /// refused before anything is started, so no run is left holding half of what it was handed, and a
@@ -813,6 +833,7 @@ fn inside_a_step_the_building_and_driving_verbs_are_refused() {
         vec!["automation", "add", "--project", &p, "--name", "another", "--json"],
         vec!["automation", "action-add", "--project", &p, "--name", "one", "--json"],
         vec!["automation", "rm", &a, "--yes", "--json"],
+        vec!["automation", "acknowledge", "1", "--json"],
     ] {
         let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
         assert_eq!(code, 2, "{args:?}: {err}");

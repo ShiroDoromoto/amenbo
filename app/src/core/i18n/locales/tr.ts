@@ -555,6 +555,7 @@ export const tr: Translation = {
     "cli.none": "PATH'inizde henüz bir komut yok. Bu önizleme, CLI'sini uygulamanın yanında bir dosya olarak veriyor — onu ~/.local/bin dizinine (ya da PATH'inizdeki herhangi bir yere) kopyalayın, yazacağınız komut o olur.",
     "common.listSeparator": ", ",
     "common.you": "Siz",
+    "dialog.ok": "Tamam", "dialog.cancel": "İptal",
     "act.created": "“{title}” oluşturuldu",
     "act.statusChanged": "“{title}” {status} durumuna geçirildi",
     "act.assigned": "“{title}” birine verildi", "act.assignedAi": "“{title}” yapay zekâya devredildi",

@@ -555,6 +555,7 @@ export const zhHant: Translation = {
     "cli.none": "你的 PATH 中還沒有可用的指令。此預覽把 CLI 以一個檔案放在應用程式旁邊——把它複製到 ~/.local/bin（或 PATH 中的任何位置），它就是你要輸入的指令。",
     "common.listSeparator": "、",
     "common.you": "你",
+    "dialog.ok": "好", "dialog.cancel": "取消",
     "act.created": "建立了「{title}」",
     "act.statusChanged": "把「{title}」改成{status}",
     "act.assigned": "指派了「{title}」", "act.assignedAi": "把「{title}」委派給了 AI",

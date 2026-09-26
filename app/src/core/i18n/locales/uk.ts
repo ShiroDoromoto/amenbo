@@ -570,6 +570,7 @@ export const uk: Translation = {
     "cli.none": "У вашому PATH ще немає команди. Ця попередня збірка кладе свій CLI окремим файлом поруч із застосунком — скопіюйте його до ~/.local/bin (або будь-куди у вашому PATH), і він стане командою, яку ви набираєте.",
     "common.listSeparator": ", ",
     "common.you": "Ви",
+    "dialog.ok": "Гаразд", "dialog.cancel": "Скасувати",
     "act.created": "Створено «{title}»",
     "act.statusChanged": "«{title}» переведено в {status}",
     "act.assigned": "Призначено «{title}»", "act.assignedAi": "«{title}» передано ШІ",

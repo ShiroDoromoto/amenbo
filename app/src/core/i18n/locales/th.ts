@@ -557,6 +557,7 @@ export const th: Translation = {
     "cli.none": "ยังไม่มีคำสั่งอยู่ใน PATH ของคุณ พรีวิวนี้แนบ CLI มาเป็นไฟล์ข้างตัวแอป คัดลอกไปไว้ที่ ~/.local/bin (หรือที่ใดก็ได้ใน PATH ของคุณ) แล้วไฟล์นั้นจะกลายเป็นคำสั่งที่คุณพิมพ์",
     "common.listSeparator": ", ",
     "common.you": "คุณ",
+    "dialog.ok": "ตกลง", "dialog.cancel": "ยกเลิก",
     "act.created": "สร้าง “{title}”",
     "act.statusChanged": "เปลี่ยน “{title}” เป็น {status}",
     "act.assigned": "มอบหมาย “{title}”", "act.assignedAi": "มอบ “{title}” ให้ AI",

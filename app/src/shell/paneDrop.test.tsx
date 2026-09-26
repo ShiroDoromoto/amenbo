@@ -26,6 +26,8 @@ const hoisted = vi.hoisted(() => ({
   agrees: true,
   /** How many times they were asked. */
   asked: 0,
+  /** Where set, the question stays open until this lets it go. */
+  held: null as Promise<void> | null,
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -47,6 +49,7 @@ vi.mock("../talk/terminal", async (actual) => ({
 vi.mock("../core/dialog", () => ({
   confirmDialog: vi.fn(async () => {
     hoisted.asked++;
+    if (hoisted.held !== null) await hoisted.held;
     return hoisted.agrees;
   }),
 }));
@@ -72,6 +75,7 @@ beforeEach(() => {
   hoisted.ended = [];
   hoisted.agrees = true;
   hoisted.asked = 0;
+  hoisted.held = null;
   dropped = [];
   container = document.createElement("div");
   document.body.append(container);
@@ -135,6 +139,23 @@ describe("removing a pane", () => {
     expect(hoisted.asked, "the place was taken away without asking").toBe(1);
     expect(dropped, "a refusal took the place away anyway").toEqual([]);
     expect(hoisted.ended, "a refusal ended the terminal anyway").toEqual([]);
+  });
+
+  it("takes a second press while the first is still being answered as nothing", async () => {
+    await pane();
+    await act(async () => {
+      hoisted.events?.opened("session-7", "/work/here", null);
+    });
+    let answer = () => {};
+    hoisted.held = new Promise((done) => { answer = done; });
+    await press();
+    await press();
+
+    expect(hoisted.asked, "a press that piled up asked a second time").toBe(1);
+    await act(async () => { answer(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(dropped, "the place was taken away twice").toEqual(["1"]);
+    expect(hoisted.ended).toEqual(["session-7"]);
   });
 
   it("ends the terminal that was running, then takes the place away", async () => {

@@ -570,6 +570,7 @@ export const pl: Translation = {
     "cli.none": "W twoim PATH nie ma jeszcze żadnego polecenia. Ta wersja podglądowa dostarcza swoje CLI jako plik obok aplikacji — skopiuj go do ~/.local/bin (lub gdziekolwiek w twoim PATH), a stanie się poleceniem, które wpisujesz.",
     "common.listSeparator": ", ",
     "common.you": "Ty",
+    "dialog.ok": "OK", "dialog.cancel": "Anuluj",
     "act.created": "Utworzono „{title}”",
     "act.statusChanged": "Zmieniono „{title}” na {status}",
     "act.assigned": "Przypisano „{title}”", "act.assignedAi": "Przekazano „{title}” SI",

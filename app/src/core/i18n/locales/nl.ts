@@ -555,6 +555,7 @@ export const nl: Translation = {
     "cli.none": "Er staat nog geen commando in je PATH. Deze preview levert de CLI als bestand naast de app — kopieer het naar ~/.local/bin (of ergens anders in je PATH) en het wordt het commando dat je typt.",
     "common.listSeparator": ", ",
     "common.you": "Jij",
+    "dialog.ok": "OK", "dialog.cancel": "Annuleren",
     "act.created": "“{title}” aangemaakt",
     "act.statusChanged": "“{title}” op {status} gezet",
     "act.assigned": "“{title}” toegewezen", "act.assignedAi": "“{title}” aan de AI overgedragen",

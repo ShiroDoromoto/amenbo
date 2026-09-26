@@ -561,6 +561,7 @@ export const ja: Translation = {
     "common.listSeparator": "・",
     // One activity line per event kind (see eventText in ../index.ts).
     "common.you": "あなた",
+    "dialog.ok": "OK", "dialog.cancel": "キャンセル",
     "act.created": "「{title}」を作成",
     "act.statusChanged": "「{title}」を{status}に変更",
     "act.assigned": "「{title}」を担当に割り当て", "act.assignedAi": "「{title}」を AI に委任",

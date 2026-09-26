@@ -559,6 +559,7 @@ export const de: Translation = {
     "cli.none": "Es liegt noch kein Befehl in deinem PATH. Diese Vorschau liefert ihr CLI als Datei neben der App — kopiere sie nach ~/.local/bin (oder irgendwohin in deinen PATH), dann wird sie zum Befehl, den du eingibst.",
     "common.listSeparator": ", ",
     "common.you": "Du",
+    "dialog.ok": "OK", "dialog.cancel": "Abbrechen",
     "act.created": "Hat „{title}“ erstellt",
     "act.statusChanged": "Hat „{title}“ auf {status} gesetzt",
     "act.assigned": "Hat „{title}“ zugewiesen", "act.assignedAi": "Hat „{title}“ an die KI übergeben",

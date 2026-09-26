@@ -570,6 +570,7 @@ export const ru: Translation = {
     "cli.none": "В вашем PATH пока нет команды. Эта предварительная сборка кладёт свой CLI отдельным файлом рядом с приложением — скопируйте его в ~/.local/bin (или в любое место из вашего PATH), и он станет командой, которую вы набираете.",
     "common.listSeparator": ", ",
     "common.you": "Вы",
+    "dialog.ok": "ОК", "dialog.cancel": "Отмена",
     "act.created": "Создал «{title}»",
     "act.statusChanged": "Перевёл «{title}» в статус {status}",
     "act.assigned": "Назначил ответственного за «{title}»", "act.assignedAi": "Передал «{title}» ИИ",

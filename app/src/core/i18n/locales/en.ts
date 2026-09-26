@@ -592,6 +592,9 @@ const ui = {
   // sentence, so these are the only place a timeline line is worded — under Tauri and in the
   // browser fallback alike (see eventText in ../index.ts).
   "common.you": "You",
+  // The two buttons of the machine's own confirmation dialog (core/dialog.ts), which otherwise
+  // come out in English whatever the app's language is.
+  "dialog.ok": "OK", "dialog.cancel": "Cancel",
   "act.created": "Created “{title}”",
   "act.statusChanged": "Changed “{title}” to {status}",
   "act.assigned": "Assigned “{title}”", "act.assignedAi": "Delegated “{title}” to AI",

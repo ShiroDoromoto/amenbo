@@ -262,19 +262,6 @@ impl Driver<'_> {
                 self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 Ok(Outcome::action(format!("step {step} is carried out by {agent} at placement {placement}")))
             }
-            "entry" => {
-                let automation = self.resolve(with)?;
-                let placement = self.resolve_key(with, "placement")?;
-                self.run_json(&[
-                    "automation",
-                    "entry-set",
-                    &automation.to_string(),
-                    "--placement",
-                    &placement.to_string(),
-                    "--json",
-                ])?;
-                Ok(Outcome::action(format!("automation {automation} starts at placement {placement}")))
-            }
             "exit-add" => {
                 let (flag, owner, what) = self.declarer(with)?;
                 let name = req_str(with, "name")?;

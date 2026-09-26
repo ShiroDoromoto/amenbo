@@ -4441,14 +4441,9 @@ impl Instructor {
             // the step: which step is being answered comes off the environment the window opened that
             // terminal with, so the same words typed in any other pane are refused.
             //
-            // The ref is left as a gap for the same reason `workspace run`'s is — the store issues the
-            // number, so a road can name the task but never the characters the command takes.
-            (Domain::Automation, "take-in-pane") => format!(
-                "In the pane this run is drawn in, type `amenbo automation step-take <ref>` and run it, putting the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — where the command says `<ref>`. Confirm the line comes back saying the task was taken.",
-                self.task_label(with)
-            ),
             // The output is typed as its id, which the step's text lists beside its name — so the id
-            // is left as a gap, the store issuing the number, the way the task's ref is above.
+            // is left as a gap, the store issuing the number, so a road can name the output but never
+            // the characters the command takes.
             (Domain::Automation, "out-in-pane") => format!(
                 "In the pane this run is drawn in, type `amenbo automation step-out \"<id>={}\"` and run it, putting where the command says `<id>` the id the step's text lists in front of the output \"{}\". Confirm the line comes back saying it was handed on.",
                 req(with, "value")?,
@@ -4468,8 +4463,8 @@ impl Instructor {
             // A report is owed whichever way out is taken, and the way out left unsaid is the done one
             // — which is the shape of the command and not a default this writes in. A way out is
             // typed by its id, which the store issues, so the road names the way out
-            // and the step's own text in the pane is where its id is read — the gap `take-in-pane`
-            // leaves for a task's ref, for the same reason.
+            // and the step's own text in the pane is where its id is read — the gap `out-in-pane`
+            // leaves for an output's id, for the same reason.
             (Domain::Automation, "done-in-pane") => {
                 let report = req(with, "report")?;
                 match arg_str(with, "exit") {

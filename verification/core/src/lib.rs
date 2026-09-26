@@ -4112,9 +4112,6 @@ const REGISTRY: &[OpSpec] = &[
     // choice against the ids, and a road writing the command would be told the agent is not installed
     // on a machine that has it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "agent-set", required: &["target", "step", "agent"], refs: &["target", "step"], strings: &["agent", "model"], binds: false },
-    // Where a run starts: the placement it opens first. A definition without one is refused at the
-    // launch check rather than here.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "entry", required: &["target", "placement"], refs: &["target", "placement"], strings: &[], binds: false },
     // A way out, beyond the two each is born with — the done one (`DONE_EXIT`) and the error one. **Both a step
     // and an action declare their own**: a step's are where a line inside the action leaves from, and
     // an action's are what its placements leave by — and a step's way out reaches the action's only
@@ -4440,10 +4437,7 @@ const REGISTRY: &[OpSpec] = &[
     // guessing at the newest run. So these are the screen's, on a run the screen started — a run
     // begun at a terminal opens no pane, and there is nowhere to type them.
     //
-    // `target` is which run's pane, read the way `close-run-pane` reads it. `take`'s `task` is the
-    // task the step goes and reserves, named back to an earlier binding because what the command
-    // takes is its ref and a road has no way to know the number in advance.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "take-in-pane", required: &["task"], refs: &["target", "task"], strings: &[], binds: false },
+    // `target` is which run's pane, read the way `close-run-pane` reads it.
     // One thing the step produced, under the name the port carrying it was declared with.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "out-in-pane", required: &["name", "value"], refs: &["target"], strings: &["name", "value"], binds: false },
     // The step finished: which way out it took — left out, the done one — and the report it owes
@@ -4733,7 +4727,6 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Automation, "action-entry"),
     (Domain::Automation, "place-add"),
     (Domain::Automation, "agent-set"),
-    (Domain::Automation, "entry"),
     (Domain::Automation, "exit-add"),
     (Domain::Automation, "port-add"),
     (Domain::Automation, "edge-add"),

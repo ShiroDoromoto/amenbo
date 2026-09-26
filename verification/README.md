@@ -750,9 +750,9 @@ there, so a premise builds all three layers — the action, the steps inside it,
 the picture. Answering a setting is
 not among them, and neither is declaring one: both are moves a reader makes, on the rows the panel
 takes them on or behind the flags the command does.
-**What a step of a run types is the screen's too** (`take-in-pane` / `out-in-pane` / `done-in-pane`):
+**What a step of a run types is the screen's too** (`out-in-pane` / `done-in-pane`):
 which step is being answered comes off the environment the window opened that terminal with, so the
-three are refused anywhere else — and a run started at the terminal opens no pane to type them in.
+two are refused anywhere else — and a run started at the terminal opens no pane to type them in.
 `done-in-pane` also takes `refused: invalid_value`, for a way out the step does not declare: the
 line then names the declared ones and the step stays running, which the pane is read for after it.
 `command-in-pane` is the other side of the same seam: any other command, typed at that same

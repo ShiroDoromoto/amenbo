@@ -1709,6 +1709,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_task_left_open: "{step}: {exit} goes on to {to}, which takes another task, with this one still open",
   not_ready_automation_task_left_open_at_end: "{step}: {exit} ends the run with the task still open",
   not_ready_automation_hands_on_task_taken: "{step}: {exit} hands on the task the run works, which only a built-in takes — put “Take a task” or “File a task” before it",
+  not_ready_automation_split_axis_gone: "{step} (placement {placement}): the axis it splits by has been deleted — take this placement off and place it again on an axis that is there",
   store_busy: "The store is in use right now. Try again in a moment.",
   // The store itself giving way — a disk that would not answer, a database that could not be read.
   // What the engine said is a line in the diagnostic log, not a sentence for a reader: it names none

@@ -406,6 +406,8 @@ pub enum ErrorCode {
     NotReadyAutomationTaskLeftOpenAtEnd,
     // A person's own action handing on the task a run works, which only a built-in takes (`AMB-D-964`).
     NotReadyAutomationHandsOnTaskTaken,
+    // The built-in that splits by an axis, placed on an axis deleted since (`AMB-D-987`).
+    NotReadyAutomationSplitAxisGone,
 }
 
 impl ErrorCode {
@@ -495,6 +497,7 @@ impl ErrorCode {
             ErrorCode::NotReadyAutomationTaskLeftOpen => "not_ready_automation_task_left_open",
             ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd => "not_ready_automation_task_left_open_at_end",
             ErrorCode::NotReadyAutomationHandsOnTaskTaken => "not_ready_automation_hands_on_task_taken",
+            ErrorCode::NotReadyAutomationSplitAxisGone => "not_ready_automation_split_axis_gone",
         }
     }
 
@@ -581,6 +584,7 @@ impl ErrorCode {
         ErrorCode::NotReadyAutomationTaskLeftOpen,
         ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
         ErrorCode::NotReadyAutomationHandsOnTaskTaken,
+        ErrorCode::NotReadyAutomationSplitAxisGone,
     ];
 }
 
@@ -798,6 +802,7 @@ mod tests {
             "not_ready_automation_task_left_open",
             "not_ready_automation_task_left_open_at_end",
             "not_ready_automation_hands_on_task_taken",
+            "not_ready_automation_split_axis_gone",
         ]
         .into_iter()
         .collect();

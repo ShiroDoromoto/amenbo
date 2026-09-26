@@ -1436,6 +1436,7 @@ export const it: Translation = {
     not_ready_automation_task_left_open: "{step}: dopo {exit} passa a {to}, che prende un’altra attività, con questa ancora aperta",
     not_ready_automation_task_left_open_at_end: "{step}: dopo {exit} l’esecuzione finisce con l’attività ancora aperta",
     not_ready_automation_hands_on_task_taken: "{step}: {exit} passa l’attività dell’esecuzione, che solo un passo integrato può prendere; metti «Prendi un’attività» o «Crea un’attività» prima",
+    not_ready_automation_split_axis_gone: "{step} (posizionamento {placement}): l’asse con cui divide è stato eliminato; togli questo posizionamento e rimettilo su un asse esistente",
     store_busy: "L'archivio è in uso in questo momento. Riprova tra un momento.",
     storage_error: "Non è stato possibile leggere o scrivere l'archivio, e non è stato cambiato nulla. Riavvia Amenbo e riprova; se continua a succedere, invia quello che si trova in Impostazioni > Registri.",
     not_found_task: "Attività {ref} non trovata.",

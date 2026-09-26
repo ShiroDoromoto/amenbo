@@ -150,6 +150,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_task_left_open",
   "not_ready_automation_task_left_open_at_end",
   "not_ready_automation_hands_on_task_taken",
+  "not_ready_automation_split_axis_gone",
 ] as const;
 
 /** Core codes the webview never receives, because the only door they come through is the CLI. None is

@@ -925,7 +925,6 @@ export const id: Translation = {
     "auto.place.modelOf": "Model untuk {step}",
     "auto.start": "Mulai",
     "auto.hand.title": "Mulai {name}",
-    "auto.hand.text": "Teks yang diberikan",
     "auto.hand.files": "Berkas yang diberikan",
     "auto.hand.fileAdd": "＋ Tambah berkas",
     "auto.hand.fileRemove": "Hapus {name}",

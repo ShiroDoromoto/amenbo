@@ -941,7 +941,6 @@ export const uk: Translation = {
     "auto.place.modelOf": "Модель для {step}",
     "auto.start": "Запустити",
     "auto.hand.title": "Запустити {name}",
-    "auto.hand.text": "Текст для передачі",
     "auto.hand.files": "Файли для передачі",
     "auto.hand.fileAdd": "＋ Додати файл",
     "auto.hand.fileRemove": "Прибрати {name}",

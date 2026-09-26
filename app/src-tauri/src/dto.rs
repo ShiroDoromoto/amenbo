@@ -3679,14 +3679,13 @@ pub struct AutomationRunStartedDto {
 /// and nothing else (`AMB-D-970`).
 ///
 /// `reads` is `"task"` for the built-in that files a task (a title, notes, a value on each of `axes`
-/// and files), and `"nothing"` for any other entry. `axes` is empty unless `reads` is `"task"`.
-/// `"words"`, once an agent's step as the entry, is no longer answered (`AMB-D-981`); the type keeps it
-/// only while the launch dialog still reads it.
+/// and files, `AMB-D-981`), and `"nothing"` for any other entry. `axes` is empty unless `reads` is
+/// `"task"`.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationLaunchAsksDto {
-    #[ts(type = "\"words\" | \"task\" | \"nothing\"")]
+    #[ts(type = "\"task\" | \"nothing\"")]
     pub(crate) reads: String,
     pub(crate) axes: Vec<AutomationLaunchAxisDto>,
 }

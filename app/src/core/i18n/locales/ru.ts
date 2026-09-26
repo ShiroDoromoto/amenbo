@@ -941,7 +941,6 @@ export const ru: Translation = {
     "auto.place.modelOf": "Модель для {step}",
     "auto.start": "Запустить",
     "auto.hand.title": "Запустить {name}",
-    "auto.hand.text": "Текст для передачи",
     "auto.hand.files": "Файлы для передачи",
     "auto.hand.fileAdd": "＋ Добавить файл",
     "auto.hand.fileRemove": "Убрать {name}",

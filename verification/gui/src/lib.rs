@@ -6837,31 +6837,24 @@ fn builtin_note(with: &Args, builtin_key: &str) -> &'static str {
     }
 }
 
-/// **What every start asks before it starts**: a dialog for what the entry reads — a text and files for
-/// an agent's step, a title, notes and a value per axis for the built-in that files a task, nothing
-/// for any other. A road that hands nothing answers it empty, which starts the run as a press did
-/// before the dialog was there.
+/// **What every start asks before it starts**: a dialog for what the entry reads — a title, notes, a
+/// value per axis and files for the built-in that files a task, nothing for any other. A road that
+/// hands nothing answers it empty, which starts the run as a press did before the dialog was there.
 const HAND_NOTHING: &str =
     "In the dialog that opens asking what to hand the run, leave anything it asks for empty and press its start button.";
 
-/// **What a start hands the run**, said as what to put in that dialog: the road's `text` typed in,
-/// and its `file` added — the operator's to bring, of which only the name crosses, as with `attach`;
-/// or, for an entry that files a task, its `title` and `notes` typed in and a value chosen on each
-/// axis `dim` names (one `axis=value` a line). A road that names none of them hands nothing
-/// ([`HAND_NOTHING`]).
+/// **What a start hands the run**, said as what to put in that dialog, which asks only for the task the
+/// entry files: its `title` and `notes` typed in, a value chosen on each axis `dim` names (one
+/// `axis=value` a line), and the road's `file` added to attach to it — the operator's to bring, of
+/// which only the name crosses, as with `attach`. There is no text to type: the dialog has no field
+/// for one. A road that names none of them hands nothing ([`HAND_NOTHING`]).
 fn handing(with: &Args) -> String {
-    let (text, file) = (arg_str(with, "text"), arg_str(with, "file"));
+    let file = arg_str(with, "file");
     let (title, notes, dim) = (arg_str(with, "title"), arg_str(with, "notes"), arg_str(with, "dim"));
-    if text.is_none() && file.is_none() && title.is_none() && notes.is_none() && dim.is_none() {
+    if file.is_none() && title.is_none() && notes.is_none() && dim.is_none() {
         return HAND_NOTHING.to_string();
     }
     let mut said = "In the dialog that opens asking what to hand the run,".to_string();
-    if let Some(text) = text {
-        said.push_str(&format!(" type \"{text}\" as the text,"));
-    }
-    if let Some(file) = file {
-        said.push_str(&format!(" add a file named \"{file}\","));
-    }
     if let Some(title) = title {
         said.push_str(&format!(" type \"{title}\" as the title of the task to file,"));
     }
@@ -6875,6 +6868,9 @@ fn handing(with: &Args) -> String {
             }
             None => said.push_str(&format!(" choose \"{line}\",")),
         }
+    }
+    if let Some(file) = file {
+        said.push_str(&format!(" add a file named \"{file}\" to attach to the task,"));
     }
     said.push_str(" and press its start button.");
     said

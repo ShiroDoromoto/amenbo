@@ -7,9 +7,8 @@
 // starts nothing;
 // **a project with no automations draws no entrance**, since a heading over an empty row would put
 // the subject in front of a reader who has never met it; **the dialog asks for what the entry reads
-// and nothing else** — words for an agent's step, a title, notes and a value per axis for the
-// built-in that files a task, nothing for any other — and waits for what a task cannot be filed
-// without; **an archived one is not offered**, which
+// and nothing else** — a title, notes, a value per axis and files for the built-in that files a
+// task, nothing for any other — and waits for what a task cannot be filed without; **an archived one is not offered**, which
 // is what archiving is for; and **what the press comes back with is said where the press was made**,
 // core's refusal in core's words and a queue in the reader's; and **a run that starts is gone to**
 // (`AMB-T-5530`), while a refused press moves nothing.
@@ -20,14 +19,14 @@ import type { AutomationCardDto, AutomationLaunchAsksDto } from "../bindings/bin
 
 const hoisted = vi.hoisted(() => ({
   automations: [] as AutomationCardDto[],
-  asks: { reads: "words", axes: [] } as AutomationLaunchAsksDto | null,
+  asks: { reads: "nothing", axes: [] } as AutomationLaunchAsksDto | null,
   launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
 }));
 
 vi.mock("../core/automations", () => ({
   useAutomations: () => hoisted.automations,
   useLaunchAsks: () => hoisted.asks,
-  NOTHING_HANDED: { text: "", files: [], title: "", notes: "", classification: [] },
+  NOTHING_HANDED: { files: [], title: "", notes: "", classification: [] },
   launchAutomation: hoisted.launch,
 }));
 vi.mock("../core/dialog", () => ({ pickFiles: async () => ["/w/brief.md", "/w/shot.png"] }));
@@ -82,7 +81,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   hoisted.automations = [];
-  hoisted.asks = { reads: "words", axes: [] };
+  hoisted.asks = { reads: "nothing", axes: [] };
   hoisted.launch.mockClear();
   hoisted.launch.mockResolvedValue({ run: 1 });
   goToRun.mockClear();
@@ -127,17 +126,18 @@ describe("the press", () => {
     await render({ folders: ["/w/one", "/w/two"] });
     await act(async () => { button("Morning round").click(); });
     await handOver();
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one", "/w/two"], true, { text: "", files: [], title: "", notes: "", classification: [] });
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one", "/w/two"], true, { files: [], title: "", notes: "", classification: [] });
   });
 
-  it("hands over the text typed and the files picked in the dialog the press opens", async () => {
+  it("hands over the files picked in the dialog the press opens, with the task it files", async () => {
     hoisted.automations = [card()];
+    hoisted.asks = { reads: "task", axes: [] };
     await render({ folders: ["/w/one"] });
     await act(async () => { button("Morning round").click(); });
     expect(hoisted.launch).not.toHaveBeenCalled();
-    const box = document.body.querySelector<HTMLTextAreaElement>(".modal__card textarea")!;
+    const box = document.body.querySelector<HTMLInputElement>(".launchhand__title")!;
     await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, "  fix the login page  ");
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(box, "fix the login page");
       box.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
@@ -153,9 +153,8 @@ describe("the press", () => {
     expect(names()).toEqual(["brief.md"]);
     await handOver();
     expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one"], true, {
-      text: "fix the login page",
       files: ["/w/brief.md"],
-      title: "",
+      title: "fix the login page",
       notes: "",
       classification: [],
     });
@@ -240,14 +239,13 @@ describe("what the dialog asks for", () => {
     };
     await render();
     await act(async () => { button("Morning round").click(); });
-    // Nothing an agent's step reads is asked for.
-    expect(document.body.querySelector(".launchhand__add")).toBeNull();
     const labels = [...document.body.querySelectorAll(".modal__card .autostep__label")].map((one) => one.textContent);
     expect(labels).toEqual([
       t("auto.hand.taskTitle") + t("auto.hand.required"),
       t("auto.hand.taskNotes"),
       "職能",
       "種別" + t("auto.hand.required"),
+      t("auto.hand.files"),
     ]);
 
     // No title, and no value on the axis the project requires: the press waits.
@@ -260,7 +258,6 @@ describe("what the dialog asks for", () => {
 
     await handOver();
     expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one"], true, {
-      text: "",
       files: [],
       title: "the login page loses a field",
       notes: "seen on a phone",
@@ -278,7 +275,6 @@ describe("what the dialog asks for", () => {
     expect(document.body.querySelector(".modal__card")!.textContent).toContain(t("auto.hand.nothing"));
     await handOver();
     expect(hoisted.launch).toHaveBeenCalledWith(7, 1, ["/w/one"], true, {
-      text: "",
       files: [],
       title: "",
       notes: "",

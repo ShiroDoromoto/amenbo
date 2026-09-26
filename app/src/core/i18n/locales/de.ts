@@ -928,7 +928,6 @@ export const de: Translation = {
     "auto.place.modelOf": "Modell für {step}",
     "auto.start": "Starten",
     "auto.hand.title": "{name} starten",
-    "auto.hand.text": "Zu übergebender Text",
     "auto.hand.files": "Zu übergebende Dateien",
     "auto.hand.fileAdd": "＋ Datei hinzufügen",
     "auto.hand.fileRemove": "{name} entfernen",

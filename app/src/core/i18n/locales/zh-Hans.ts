@@ -926,7 +926,6 @@ export const zhHans: Translation = {
     "auto.place.modelOf": "{step} 的模型",
     "auto.start": "启动",
     "auto.hand.title": "启动 {name}",
-    "auto.hand.text": "要交出的文本",
     "auto.hand.files": "要交出的文件",
     "auto.hand.fileAdd": "＋ 添加文件",
     "auto.hand.fileRemove": "移除 {name}",

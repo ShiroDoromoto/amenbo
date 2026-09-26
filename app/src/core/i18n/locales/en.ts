@@ -1161,7 +1161,6 @@ const ui = {
   "auto.place.modelOf": "Model for {step}",
   "auto.start": "Start",
   "auto.hand.title": "Start {name}",
-  "auto.hand.text": "Text to hand over",
   "auto.hand.files": "Files to hand over",
   "auto.hand.fileAdd": "＋ Add a file",
   "auto.hand.fileRemove": "Remove {name}",

@@ -503,11 +503,10 @@ name: string, outputs: Array<AutomationPortDto>, };
  * and nothing else (`AMB-D-970`).
  *
  * `reads` is `"task"` for the built-in that files a task (a title, notes, a value on each of `axes`
- * and files), and `"nothing"` for any other entry. `axes` is empty unless `reads` is `"task"`.
- * `"words"`, once an agent's step as the entry, is no longer answered (`AMB-D-981`); the type keeps it
- * only while the launch dialog still reads it.
+ * and files, `AMB-D-981`), and `"nothing"` for any other entry. `axes` is empty unless `reads` is
+ * `"task"`.
  */
-export type AutomationLaunchAsksDto = { reads: "words" | "task" | "nothing", axes: Array<AutomationLaunchAxisDto>, };
+export type AutomationLaunchAsksDto = { reads: "task" | "nothing", axes: Array<AutomationLaunchAxisDto>, };
 
 /**
  * **An axis a launch asks a value on**, with the values open on it in the axis's own order.

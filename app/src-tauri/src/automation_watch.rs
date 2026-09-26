@@ -14,17 +14,20 @@
 //! **What one look costs.** One read of the runs that are running, and one read per run of what it is
 //! waiting for — two more where a step is under way, for the task it may have taken. Every run is one somebody pressed start on, so a look is a handful of small reads on
 //! tables with tens of rows in them, through a connection the thread keeps. A run standing before a
-//! built-in that waits (`AMB-D-969`) has that step opened on every look, which asks one row of the
-//! tasks — whether there is one to take yet — and writes nothing until there is.
+//! built-in that waits (`AMB-D-969`) has that step opened when it is looked at, which asks one row of
+//! the tasks — whether there is one to take yet — and writes nothing until there is.
 //!
 //! **And how often.** `WHILE_GOING` while anything is running, because a step is a person-scale
 //! thing and a second is under the noticing; `WHILE_IDLE` otherwise, so a machine with no
-//! automations on it is not woken five times a second for nothing. A press inside the app skips the
-//! wait ([`wake`]); a `start` typed in a terminal cannot reach this process, so that one waits out
-//! the idle sleep.
+//! automations on it is not woken five times a second for nothing. A run waiting for a task to take
+//! is left out of the looks until `WHILE_WAITING` has passed since its last one (`AMB-D-983`), so a
+//! machine where every run is waiting pays one read of the running runs per `WHILE_IDLE` and nothing
+//! more. A press inside the app skips the wait ([`wake`]), a waiting run's included; a `start` typed in
+//! a terminal cannot reach this process, so that one waits out the idle sleep.
 
+use std::collections::HashMap;
 use std::sync::{Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use amenbo_core::ops::automation_run::Waiting;
 
@@ -38,13 +41,20 @@ const WHILE_GOING: Duration = Duration::from_secs(1);
 /// without anybody wondering whether it worked.
 const WHILE_IDLE: Duration = Duration::from_secs(5);
 
+/// How long a run waiting for a task to take (`AMB-D-969`) is left before it is looked at again
+/// (`AMB-D-983`). Nobody needs a task taken within a second of its turning up, and every look opens
+/// the store to ask — which, over a night of waiting, is tens of thousands of times for nothing. A run
+/// with a step under way is not held to this: it is still looked at every `WHILE_GOING`.
+const WHILE_WAITING: Duration = Duration::from_secs(30);
+
 /// What the sleeping thread is woken through. It carries no message: the answer to "is there anything
 /// to do" is in the store, and a flag here could only ever be a second, staler copy of it.
 static NUDGE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 
 /// **Look now rather than at the end of the wait.** Called where this process is the one that moved a
 /// run — launching it, or opening a step of it — so what the run is waiting for next is picked up at
-/// once instead of up to `WHILE_IDLE` later.
+/// once instead of up to `WHILE_IDLE` later. A run waiting for a task is looked at too, rather than
+/// at the end of its `WHILE_WAITING`.
 ///
 /// **A `start` typed in a terminal cannot reach here.** The CLI is another process, so a run launched
 /// there is found by the next look rather than announced — which is what `WHILE_IDLE` is sized for.
@@ -65,17 +75,22 @@ pub fn watch(app: tauri::AppHandle) {
     // work because the order matters and this is where it is guaranteed — a look taken first would
     // open a step for a run that is about to be told it crashed.
     sweep();
+    // The runs waiting for a task, and when each is next looked at. Kept here rather than in the store
+    // because it is only a pace: a restart that loses it looks at them once more, which is all.
+    let mut resting = HashMap::new();
     loop {
         // A failure is not fatal and not a reason to stop looking: the store may be mid-swap, or a
         // run may have been deleted between the two reads. The next look is a second away.
-        let going = match advance(&app) {
-            Ok(going) => going,
+        let pause = match advance(&app, &mut resting) {
+            Ok(pause) => pause,
             Err(e) => {
                 log::warn!("the automation watch could not look: {e}");
-                false
+                WHILE_IDLE
             }
         };
-        sleep(if going { WHILE_GOING } else { WHILE_IDLE });
+        if sleep(pause) {
+            resting.clear();
+        }
     }
 }
 
@@ -105,15 +120,20 @@ fn sweep() {
     }
 }
 
-/// Wait out one interval, or until somebody nudges — whichever comes first.
-fn sleep(how_long: Duration) {
-    let Ok(nudged) = NUDGE.0.lock() else { return };
-    let Ok((mut nudged, _)) = NUDGE.1.wait_timeout(nudged, how_long) else { return };
-    *nudged = false;
+/// Wait out one interval, or until somebody nudges — whichever comes first — and answer whether it was
+/// a nudge. One that came while the last look was being taken counts too, rather than being lost to
+/// a wait that had not started yet.
+fn sleep(how_long: Duration) -> bool {
+    let Ok(nudged) = NUDGE.0.lock() else { return false };
+    let Ok((mut nudged, _)) = NUDGE.1.wait_timeout_while(nudged, how_long, |nudged| !*nudged) else {
+        return false;
+    };
+    std::mem::take(&mut *nudged)
 }
 
-/// **One look**: move each running run on as far as it can go, and answer whether anything is running
-/// at all — which is what decides how long to wait before the next one.
+/// **One look**: move each running run on as far as it can go, and answer how long to wait before the
+/// next one — `WHILE_GOING` while any run is not waiting for a task, until the first waiting one is
+/// due while they all are, and `WHILE_IDLE` at most.
 ///
 /// A run answers one of three things ([`amenbo_core::ops::automation_run::Waiting`]) and each is acted
 /// on here. A step waiting to be opened is opened. A run with a step under way is only checked for a
@@ -123,12 +143,23 @@ fn sleep(how_long: Duration) {
 /// A run whose step could not be opened is left where it is and looked at again next time. The one
 /// that stops a run — a required input with nothing in it — stops it inside the op that found it, so
 /// this sees it as a run that is no longer running rather than as a failure to handle.
-fn advance(app: &tauri::AppHandle) -> Result<bool, crate::error::CmdError> {
+///
+/// A run whose built-in answered that it is waiting for a task goes into `resting` and is skipped
+/// until it is due (`AMB-D-983`). A run that is no longer running leaves it.
+fn advance(
+    app: &tauri::AppHandle,
+    resting: &mut HashMap<i64, Instant>,
+) -> Result<Duration, crate::error::CmdError> {
     let running = {
         let store = crate::commands::open_store_read()?;
         amenbo_core::store_engine::read::automation_run_ids_running(store.read_model().conn())?
     };
+    resting.retain(|run, _| running.contains(run));
     for run in &running {
+        if resting.get(run).is_some_and(|due| Instant::now() < *due) {
+            continue;
+        }
+        resting.remove(run);
         // Asked run by run rather than in one sweep, because opening one writes — and the answer for
         // the run after it is read after that write rather than from a list taken before it.
         let waiting = {
@@ -137,10 +168,14 @@ fn advance(app: &tauri::AppHandle) -> Result<bool, crate::error::CmdError> {
         };
         match waiting {
             Waiting::Step(def) => {
-                if let Err(e) =
-                    crate::automation::automation_step_open(app.clone(), *run, Some(def.id))
-                {
-                    log::warn!("run {run} could not open step {}: {}", def.id, e.message_en);
+                match crate::automation::automation_step_open(app.clone(), *run, Some(def.id)) {
+                    Ok(opened) if opened.builtin.as_ref().is_some_and(|b| b.waiting) => {
+                        resting.insert(*run, Instant::now() + WHILE_WAITING);
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::warn!("run {run} could not open step {}: {}", def.id, e.message_en)
+                    }
                 }
             }
             // The task a step under way holds may have changed since it was opened — deleted out
@@ -162,7 +197,12 @@ fn advance(app: &tauri::AppHandle) -> Result<bool, crate::error::CmdError> {
             }
         }
     }
-    Ok(!running.is_empty())
+    if running.iter().any(|run| !resting.contains_key(run)) {
+        return Ok(WHILE_GOING);
+    }
+    let first_due = resting.values().min();
+    Ok(first_due
+        .map_or(WHILE_IDLE, |due| due.saturating_duration_since(Instant::now()).min(WHILE_IDLE)))
 }
 
 /// **End a run that cannot go on**, with the reason that says so

@@ -768,6 +768,9 @@ into the environment by hand — the run's number off its row on the running tab
 `quit-in-pane` is the step's program ending by itself before it reports — `exit` typed at a stand-in
 that carries lines out (`can-start`'s `then: runs`) — which fails the run there as `crashed`. Closing
 the pane is Amenbo ending the terminal, a stop, and not this.
+`run-pane-ended` reads the other side: once the run is over, Amenbo ends the last step's terminal
+too. Its last lines stay on the pane either way, so it is read by typing a line at it and finding
+nothing answer.
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what

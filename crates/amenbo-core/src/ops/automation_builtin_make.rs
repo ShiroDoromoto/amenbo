@@ -43,6 +43,7 @@ use crate::ops::automation_builtin::{
     Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Chooses, Work,
 };
 use crate::ops::automation_report::{self, Produced};
+use crate::run_wording::builtin as say;
 use crate::ops::task::{self, parse_number_ref, parse_typed_ref, NewTask, TypedKind};
 use crate::store_engine::read;
 
@@ -221,11 +222,16 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
         let taken = automation_report::take(tx, carry.run_step.id, filed.id)?;
         return Ok(Carried {
             exit: MADE_AND_TAKEN,
-            report: format!("filed and took AMB-T-{} {}", taken.id, taken.title),
+            report: say(
+                tx.language(),
+                "filedAndTook",
+                &[("task", &format!("AMB-T-{}", taken.id)), ("title", &taken.title)],
+            ),
         });
     }
     carry.put(MADE, TASK, Produced::Task(filed.id))?;
-    Ok(Carried { exit: MADE, report: format!("filed AMB-T-{} {}", filed.id, filed.title) })
+    let task = format!("AMB-T-{}", filed.id);
+    Ok(Carried { exit: MADE, report: say(tx.language(), "filed", &[("task", &task), ("title", &filed.title)]) })
 }
 
 /// **The files handed over at launch, moved from the run on to the task it filed** (`AMB-D-981`), in the

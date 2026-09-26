@@ -24,6 +24,7 @@ use crate::error::{Error, Result};
 use crate::model::{DimensionAppliesTo, DimensionCardinality, ERROR_EXIT};
 use crate::ops::automation;
 use crate::ops::automation_builtin::{write_action, Builtin, BuiltinExit, Carry, Named, Work};
+use crate::run_wording::builtin as say;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -131,9 +132,8 @@ pub(crate) fn refuse_to_widen(tx: &WriteTx<'_>, axis: i64, name: &str) -> Result
 /// Leave by the way out of the task's value on the axis, or by [`UNSORTED`].
 fn split(carry: &Carry<'_, '_>) -> Result<Named> {
     let tx = carry.tx;
-    let task_id = carry
-        .task_id
-        .ok_or_else(|| Error::invalid("there is no task to split — the run has not taken one"))?;
+    let lang = tx.language();
+    let task_id = carry.task_id.ok_or_else(|| Error::invalid(say(lang, "noTaskToSplit", &[])))?;
     let axis = axis_of(carry)?;
     let dimension = read::dimension(tx.conn(), axis)?
         .ok_or_else(|| crate::ops::dimension::NOUN.not_found(axis.to_string()))?;
@@ -145,19 +145,17 @@ fn split(carry: &Carry<'_, '_>) -> Result<Named> {
         None => None,
     };
     let declared = |name: &str| name != ERROR_EXIT && carry.exits.iter().any(|e| e.name == name);
+    let task = format!("AMB-T-{task_id}");
     let (exit, report) = match value {
         Some(value) if declared(&value.name) => {
-            let report = format!("AMB-T-{task_id} is '{}' on '{}'", value.name, dimension.name);
+            let report = say(lang, "split", &[("task", &task), ("value", &value.name), ("axis", &dimension.name)]);
             (value.name, report)
         }
         Some(value) => (
             UNSORTED.to_string(),
-            format!(
-                "AMB-T-{task_id} is '{}' on '{}', which has no way out on this run — it was added after the launch",
-                value.name, dimension.name
-            ),
+            say(lang, "splitLate", &[("task", &task), ("value", &value.name), ("axis", &dimension.name)]),
         ),
-        None => (UNSORTED.to_string(), format!("AMB-T-{task_id} has no value on '{}'", dimension.name)),
+        None => (UNSORTED.to_string(), say(lang, "splitNone", &[("task", &task), ("axis", &dimension.name)])),
     };
     Ok(Named { exit, report })
 }
@@ -176,9 +174,9 @@ fn axis_of(carry: &Carry<'_, '_>) -> Result<i64> {
         Some(step) => read::automation_action(conn, step.action_id)?,
         None => None,
     };
-    action.and_then(|a| a.builtin_dimension_id).ok_or_else(|| {
-        Error::invalid("the axis this splits by is gone — it was deleted after the automation was built")
-    })
+    action
+        .and_then(|a| a.builtin_dimension_id)
+        .ok_or_else(|| Error::invalid(say(carry.tx.language(), "axisGone", &[])))
 }
 
 #[cfg(test)]

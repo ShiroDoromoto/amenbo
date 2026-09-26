@@ -950,6 +950,7 @@ export const id: Translation = {
     "auto.pic.legendBranch": "Bercabang",
     "auto.pic.legendWire": "Serah terima",
     "auto.pic.legendLeaves": "Keluar lewat jalan keluar",
+    "auto.pic.legendError": "galat (tanpa garis: berhenti dan panggil orang)",
     "auto.pic.legendUnfed": "Masukan yang tidak dicapai apa pun",
     "auto.pic.emptyMark": "Kosong",
     "auto.pic.place": "Tempatkan aksi",

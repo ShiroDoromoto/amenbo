@@ -950,6 +950,7 @@ export const vi: Translation = {
     "auto.pic.legendBranch": "Rẽ nhánh",
     "auto.pic.legendWire": "Chuyển giao",
     "auto.pic.legendLeaves": "Ra qua một lối ra",
+    "auto.pic.legendError": "lỗi (không có đường: dừng lại và gọi người)",
     "auto.pic.legendUnfed": "Đầu vào không có gì đến được",
     "auto.pic.emptyMark": "Trống",
     "auto.pic.place": "Đặt một hành động",

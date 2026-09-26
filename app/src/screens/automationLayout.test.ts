@@ -478,7 +478,7 @@ describe("the picture of an automation", () => {
     expect(inner[1]!.y).toBeLessThan(outer[1]!.y);
   });
 
-  it("draws the error way out of every box, as the stop it is where nobody said what follows it", () => {
+  it("draws the error way out only where somebody drew a line from it — the legend says the rest", () => {
     const steps = [taker(1, "take"), step({ id: 2, name: "work" })];
     const plain = layOut(
       detail({
@@ -487,19 +487,7 @@ describe("the picture of an automation", () => {
         edges: [edge({ id: 1, fromId: 1, toId: 2 })],
       }),
     );
-    const unsaid = plain.lines.filter((line) => line.exitName === "*");
-    expect(unsaid.map((line) => line.points[0]!.y)).toEqual([
-      at(plain, 1).y + at(plain, 1).h,
-      at(plain, 2).y + at(plain, 2).h,
-    ]);
-    for (const line of unsaid) {
-      expect(line.ends).toBe("halt");
-      expect(line.tone).toBe("error");
-    }
-    // It hangs right of the line the box does have, and there is no edge under it to put a box in on.
-    const onFirst = unsaid[0]!;
-    const next = plain.lines.find((line) => line.key === "edge-1")!;
-    expect(onFirst.points[0]!.x).toBeGreaterThan(next.points[0]!.x);
+    expect(plain.lines.filter((line) => line.exitName === "*")).toEqual([]);
     expect(plain.inserts.map((one) => one.edgeId)).toEqual([1]);
 
     const changed = layOut(
@@ -512,9 +500,10 @@ describe("the picture of an automation", () => {
         ],
       }),
     );
-    const error = changed.lines.filter((line) => line.exitName === "*" && line.points[0]!.y === at(changed, 1).y + at(changed, 1).h);
+    const error = changed.lines.filter((line) => line.exitName === "*");
     expect(error.map((line) => line.key)).toEqual(["edge-2"]);
     expect(error[0]!.ends).toBe("halt");
+    expect(error[0]!.tone).toBe("error");
   });
 
   it("hangs a way out that names no step below the step it leaves, and marks how it ends", () => {

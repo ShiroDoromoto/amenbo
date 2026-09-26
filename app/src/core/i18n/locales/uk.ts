@@ -966,6 +966,7 @@ export const uk: Translation = {
     "auto.pic.legendBranch": "Розгалужується",
     "auto.pic.legendWire": "Передача",
     "auto.pic.legendLeaves": "Виходить через вихід",
+    "auto.pic.legendError": "помилка (без лінії: зупинитися й покликати людину)",
     "auto.pic.legendUnfed": "Вхід, до якого нічого не доходить",
     "auto.pic.emptyMark": "Порожньо",
     "auto.pic.place": "Розмістити дію",

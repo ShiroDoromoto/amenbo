@@ -949,6 +949,7 @@ export const tr: Translation = {
     "auto.pic.legendBranch": "Dallanır",
     "auto.pic.legendWire": "Aktarım",
     "auto.pic.legendLeaves": "Bir çıkıştan çıkar",
+    "auto.pic.legendError": "hata (çizgi yoksa: dur ve birini çağır)",
     "auto.pic.legendUnfed": "Hiçbir şeyin ulaşmadığı girdi",
     "auto.pic.emptyMark": "Boş",
     "auto.pic.place": "Bir eylem yerleştir",

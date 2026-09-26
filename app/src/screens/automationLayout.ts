@@ -30,11 +30,11 @@
 // takes in or hands out is a wire from the top mark or into a bottom one — the boundary the core names
 // `ACTION_BOUNDARY`. An automation's picture has no such boundary, and draws neither.
 //
-// **The error way out is drawn on every box, changed or not** (`AMB-T-5501`). Every box is born
-// carrying it with nothing said about what follows, which core reads as stopping the run and calling
-// a person (`AMB-D-966`). A box with no edge on it is drawn with a line of its own to that stop, so a
-// reader sees where a run goes when a step fails without having to know the default. That line has no
-// `+`: there is no edge under it to put a box in on.
+// **The error way out is drawn only where somebody drew a line from it.** Every box is born carrying
+// it with nothing said about what follows, which core reads as stopping the run and calling a person
+// (`AMB-D-966`). Drawn on every box, that one line said the same thing seven times over and crowded
+// the picture it was meant to explain, so the legend says it once instead, and the panel beside the
+// picture names it for the box picked.
 import { builtinWord } from "../core/builtinWords";
 import { t } from "../core/i18n";
 import type {
@@ -879,13 +879,7 @@ export function layOut(graph: PicGraph | null): Picture {
     if (toId === undefined) return 2;
     return neighbours(edge.fromId, toId) ? 1 : 0;
   };
-  // The error way out of each box nobody drew a line from, as the line core reads it as: one that
-  // halts the run. Its id is the box's, negated — no edge has one below zero.
-  const unsaid: AutomationEdgeDto[] = graph.boxes
-    .filter((box) => box.exits.some((exit) => exit.name === ERROR_EXIT))
-    .filter((box) => !graph.edges.some((edge) => edge.fromId === box.id && edge.exitName === ERROR_EXIT))
-    .map((box) => ({ id: -box.id, fromId: box.id, exitName: ERROR_EXIT, ends: "halt" }));
-  const edges = [...graph.edges, ...unsaid];
+  const edges = graph.edges;
   const slot = new Map<number, { nth: number; below: number }>();
   // The first of each box's lines that go down to a neighbour — the one with nothing of its box's
   // coming down on its left, where a name beside it can be written.
@@ -917,7 +911,7 @@ export function layOut(graph: PicGraph | null): Picture {
     if (toId === undefined) {
       // The one further left runs further down, so its words pass under the shorter lines to its right.
       const foot = sy + STUB + below * WORD_H;
-      if (edge.id > 0) inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
+      inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
       lines.push({
         key,
         kind: "edge",

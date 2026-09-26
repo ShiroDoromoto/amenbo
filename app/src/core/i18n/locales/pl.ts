@@ -966,6 +966,7 @@ export const pl: Translation = {
     "auto.pic.legendBranch": "Rozgałęzia się",
     "auto.pic.legendWire": "Przekazanie",
     "auto.pic.legendLeaves": "Wychodzi wyjściem",
+    "auto.pic.legendError": "błąd (bez linii: zatrzymaj się i zawołaj człowieka)",
     "auto.pic.legendUnfed": "Wejście, do którego nic nie dociera",
     "auto.pic.emptyMark": "Pusta",
     "auto.pic.place": "Umieść akcję",

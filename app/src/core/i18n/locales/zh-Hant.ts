@@ -951,6 +951,7 @@ export const zhHant: Translation = {
     "auto.pic.legendBranch": "分岔",
     "auto.pic.legendWire": "傳遞",
     "auto.pic.legendLeaves": "經出口離開",
+    "auto.pic.legendError": "出錯（沒有連線時：停下來叫人）",
     "auto.pic.legendUnfed": "沒有東西送到的輸入",
     "auto.pic.emptyMark": "空",
     "auto.pic.place": "放置一個動作",

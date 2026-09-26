@@ -953,6 +953,7 @@ export const de: Translation = {
     "auto.pic.legendBranch": "Verzweigt",
     "auto.pic.legendWire": "Übergabe",
     "auto.pic.legendLeaves": "Verlässt über einen Ausgang",
+    "auto.pic.legendError": "Fehler (ohne Linie: anhalten und eine Person rufen)",
     "auto.pic.legendUnfed": "Eingabe, die nichts erreicht",
     "auto.pic.emptyMark": "Leer",
     "auto.pic.place": "Aktion platzieren",

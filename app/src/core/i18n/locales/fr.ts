@@ -961,6 +961,7 @@ export const fr: Translation = {
     "auto.pic.legendBranch": "Bifurque",
     "auto.pic.legendWire": "Transmission",
     "auto.pic.legendLeaves": "Sort par une sortie",
+    "auto.pic.legendError": "erreur (sans ligne : s'arrêter et appeler quelqu'un)",
     "auto.pic.legendUnfed": "Entrée que rien n'atteint",
     "auto.pic.emptyMark": "Vide",
     "auto.pic.place": "Placer une action",

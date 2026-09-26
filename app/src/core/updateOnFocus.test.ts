@@ -44,8 +44,8 @@ beforeEach(async () => {
   upstream = { appVersion: "1.3.0", updateAvailable: false, newerVersion: null };
   invoke.mockImplementation((cmd: string) => {
     switch (cmd) {
-      case "snapshot": return Promise.resolve(SNAPSHOT);
       // Never moves: a read-only session.
+      case "snapshot": return Promise.resolve({ ...SNAPSHOT, signature: { file: "file-0", config: "config-0", version: "1" } });
       case "store_signature": return Promise.resolve({ file: "file-0", config: "config-0", version: "1" });
       case "version_status": return upstream instanceof Error ? Promise.reject(upstream) : Promise.resolve(upstream);
       default: return Promise.resolve(null);

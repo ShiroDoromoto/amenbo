@@ -2105,6 +2105,7 @@ pub enum AutomationCmd {
     CfgUpdate {
         /// setting id
         id: i64,
+        /// a new name — every placement's answer to it follows
         #[arg(long)]
         name: Option<String>,
         /// what kind of answer it takes: taskfilter | folder | choice | number | text

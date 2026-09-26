@@ -4531,6 +4531,12 @@ impl Instructor {
                     req(with, "report")?
                 )
             }
+            // The mark the press sets, typed. The run's number is read where `done-outside-pane` reads
+            // it, and the line that comes back is what says it took.
+            (Domain::Automation, "acknowledge-in-shell") => {
+                "Read the run's number off its row on the running tab of the automations the sidebar opens. Then, in the plain shell of the pane that is up in the workspace, type `amenbo automation acknowledge <run>`, putting that number where the command says `<run>`, run it, and confirm the line comes back saying the run has been seen."
+                    .to_string()
+            }
             // The program ending itself, in the run's own pane. The stand-in carries out the line it
             // is given, so `exit` ends it the way an agent that gives up ends: by its own doing.
             (Domain::Automation, "quit-in-pane") => {

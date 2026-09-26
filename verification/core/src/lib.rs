@@ -4479,6 +4479,11 @@ const REGISTRY: &[OpSpec] = &[
     // and the pane that also carries it is the one this road does not open. `report` and `exit` are
     // `done-in-pane`'s.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-outside-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
+    // **Saying a failed run has been seen, typed rather than pressed** (`automation acknowledge`): the
+    // same mark the row's and the pane's press sets, from a plain shell in whatever pane is up, which
+    // is where an AI working for the person would say it. `target` is which run,
+    // read off its row on the running tab as `done-outside-pane` reads it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "acknowledge-in-shell", required: &[], refs: &["target"], strings: &[], binds: false },
     // **The program in that terminal ending by itself**, before the step has reported. It is the
     // agent going without a word, which is the one ending a run meets from inside its own step: the
     // host hears the terminal end and fails the run there (`crashed`). The other ways a terminal ends

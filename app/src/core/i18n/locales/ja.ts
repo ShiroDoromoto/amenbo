@@ -1487,6 +1487,7 @@ export const ja: Translation = {
     not_ready_automation_unanswered_cfg: "{step}：必須の設定「{cfg}」に答えが無い",
     not_ready_automation_misanswered_cfg: "{step}：設定「{cfg}」の答えが、その設定の種類に合わない",
     not_ready_automation_cfg_not_found: "{step}：設定「{cfg}」の「{line}」が、このプロジェクトに無い",
+    not_ready_automation_cfg_value_closed: "{step}：設定「{cfg}」の「{line}」は、閉じた値",
     not_ready_automation_agent_unchosen: "{step}：エージェントを選んでいない",
     not_ready_automation_agent_missing: "{step}：「{agent}」は手元に無い",
     not_ready_automation_model_missing: "{step}：ここのエージェントはモデル「{model}」を持っていない",

@@ -640,6 +640,30 @@ pub(crate) fn unfound(
     Ok(found)
 }
 
+/// **The lines of [`CLASSIFY`] that name a value this project has but has closed** (`AMB-D-987`). A task
+/// filed with one is refused when a run reaches it ([`unfilable`]), so the launch check names it first. A
+/// line naming what is not there at all is [`unfound`]'s.
+pub(crate) fn closed_values(
+    conn: &rusqlite::Connection,
+    placement: &crate::model::AutomationPlacement,
+    project_id: i64,
+) -> Result<Vec<String>> {
+    let settings = crate::ops::automation_run::settings_of(conn, placement)?;
+    let Ok(Some(written)) = answered(&settings, CLASSIFY) else { return Ok(Vec::new()) };
+    let mut closed = Vec::new();
+    for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let value_id = match fixed_one(conn, project_id, line) {
+            Ok((_, value_id)) => value_id,
+            Err(Error::NotFound(_) | Error::Invalid(_) | Error::AmbiguousId { .. }) => continue,
+            Err(other) => return Err(other),
+        };
+        if read::dimension_value(conn, value_id)?.is_some_and(|value| value.closed) {
+            closed.push(line.to_string());
+        }
+    }
+    Ok(closed)
+}
+
 /// Whether a lookup came back saying there is nothing there — not found, not written as one, or naming
 /// more than one. Anything else it fails on is the store's own failure and is passed on.
 fn not_there(looked_up: Result<()>) -> Result<bool> {
@@ -1060,6 +1084,53 @@ mod tests {
             .map(|(cfg, line)| (cfg.to_string(), line))
             .to_vec();
             assert_eq!(found, expected);
+        });
+    }
+
+    /// **The launch check names a classification on a value that is closed** (`AMB-T-5689`), apart from
+    /// one this project does not have: the value is there, and the built-in would still file no task
+    /// under it and halt the run.
+    #[test]
+    fn the_launch_check_names_a_classification_on_a_closed_value() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            // `trades`, on an axis whose values can be closed.
+            let axis = crate::ops::dimension::add(
+                tx,
+                p.project,
+                crate::ops::dimension::NewDimension {
+                    name: "職能".into(),
+                    role: crate::model::DimensionRole::Closable,
+                    ..Default::default()
+                },
+            )
+            .expect("axis");
+            let build = crate::ops::dimension::value_add(tx, axis.id, "実装", None).expect("value");
+            crate::ops::dimension::value_add(tx, axis.id, "設計", None).expect("value");
+            crate::ops::dimension::value_set_closed(tx, build.id, true).expect("close it");
+            answer(tx, &p, CLASSIFY, "職能=実装\n職能=設計\n職能=営業");
+            let startable = ["claude".to_string()];
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let closed: Vec<(String, String)> = unmet
+                .iter()
+                .filter_map(|unmet| match unmet {
+                    Unmet::CfgValueClosed { step, cfg, line, builtin, placement } => {
+                        let named = (step.as_str(), builtin.as_deref(), *placement);
+                        assert_eq!(named, ("タスクを起票する", Some(KEY), p.make.id));
+                        Some((cfg.clone(), line.clone()))
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(closed, vec![(CLASSIFY.to_string(), "職能=実装".to_string())]);
+            let missing: Vec<&str> = unmet
+                .iter()
+                .filter_map(|unmet| match unmet {
+                    Unmet::CfgNotFound { line, .. } => Some(line.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(missing, vec!["職能=営業"], "a closed value was also said to be missing");
         });
     }
 

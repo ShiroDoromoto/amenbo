@@ -1473,6 +1473,7 @@ export const zhHant: Translation = {
     not_ready_automation_unanswered_cfg: "{step}：必填設定 {cfg} 還沒有填",
     not_ready_automation_misanswered_cfg: "{step}：設定 {cfg} 的答案與該設定的類型不符",
     not_ready_automation_cfg_not_found: "{step}：設定 {cfg} 寫的 {line}，本專案裡沒有",
+    not_ready_automation_cfg_value_closed: "{step}：設定 {cfg} 寫的 {line} 是已關閉的值",
     not_ready_automation_agent_unchosen: "{step}：未選擇由誰執行",
     not_ready_automation_agent_missing: "{step}：這台機器啟動不了 {agent}",
     not_ready_automation_model_missing: "{step}：這裡的代理不提供 {model} 模型",

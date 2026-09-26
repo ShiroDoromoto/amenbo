@@ -1472,6 +1472,7 @@ export const tr: Translation = {
     not_ready_automation_unanswered_cfg: "{step}: zorunlu ayar {cfg} yanıtsız",
     not_ready_automation_misanswered_cfg: "{step}: {cfg} ayarının yanıtı ayarın türüne uymuyor",
     not_ready_automation_cfg_not_found: "{step}: {cfg} ayarı {line} diyor, bu projede böyle bir şey yok",
+    not_ready_automation_cfg_value_closed: "{step}: {cfg} ayarı {line} diyor, bu kapatılmış bir değer",
     not_ready_automation_agent_unchosen: "{step}: yürütecek kimse seçilmedi",
     not_ready_automation_agent_missing: "{step}: bu makine {agent} başlatamıyor",
     not_ready_automation_model_missing: "{step}: buradaki ajan {model} modelini sunmuyor",

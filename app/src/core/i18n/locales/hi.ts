@@ -1472,6 +1472,7 @@ export const hi: Translation = {
     not_ready_automation_unanswered_cfg: "{step}: ज़रूरी सेटिंग {cfg} का जवाब नहीं दिया गया है।",
     not_ready_automation_misanswered_cfg: "{step}: सेटिंग {cfg} का जवाब उसके प्रकार से मेल नहीं खाता।",
     not_ready_automation_cfg_not_found: "{step}: सेटिंग {cfg} में {line} लिखा है, जो इस प्रोजेक्ट में नहीं है।",
+    not_ready_automation_cfg_value_closed: "{step}: सेटिंग {cfg} में {line} लिखा है, जो बंद किया गया मान है।",
     not_ready_automation_agent_unchosen: "{step}: इसे चलाने के लिए कोई नहीं चुना गया",
     not_ready_automation_agent_missing: "{step}: यह मशीन {agent} को शुरू नहीं कर सकती।",
     not_ready_automation_model_missing: "{step}: यहाँ इसका एजेंट {model} मॉडल नहीं देता।",

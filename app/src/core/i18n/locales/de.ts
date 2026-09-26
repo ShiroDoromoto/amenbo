@@ -1479,6 +1479,7 @@ export const de: Translation = {
     not_ready_automation_unanswered_cfg: "{step}: Die erforderliche Einstellung {cfg} ist unbeantwortet",
     not_ready_automation_misanswered_cfg: "{step}: Die Einstellung {cfg} hat eine Antwort, die nicht zu ihrer Art passt",
     not_ready_automation_cfg_not_found: "{step}: Die Einstellung {cfg} nennt {line}, das es in diesem Projekt nicht gibt",
+    not_ready_automation_cfg_value_closed: "{step}: Die Einstellung {cfg} nennt {line}, einen geschlossenen Wert",
     not_ready_automation_agent_unchosen: "{step}: niemand ist zur Ausführung gewählt",
     not_ready_automation_agent_missing: "{step}: Dieser Rechner kann {agent} nicht starten",
     not_ready_automation_model_missing: "{step}: Der Agent hier bietet das Modell {model} nicht an",

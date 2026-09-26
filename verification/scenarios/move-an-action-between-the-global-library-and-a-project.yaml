@@ -19,7 +19,10 @@ given:
   - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — shared review }, as: shared }
   - { type: action, domain: automation, op: action-scope, with: { target: shared, reach: device } }
   - { type: action, domain: automation, op: create, with: { name: SCENARIO SEED — the other's round, project: another }, as: elsewhere }
-  - { type: action, domain: automation, op: place-add, with: { target: elsewhere, action: shared } }
+  # That picture starts at a built-in a run can start at, and the global action goes on after it.
+  - { type: action, domain: automation, op: place-add, with: { target: elsewhere, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: elsewhere, action: shared }, as: at_shared }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_shared } }
 
 steps_cli:
   - type: action

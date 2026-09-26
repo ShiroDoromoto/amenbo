@@ -17,11 +17,15 @@ given:
   - { type: action, domain: automation, op: step-add, with: { target: library, name: read, prompt: read what was written }, as: read }
   - { type: action, domain: automation, op: action-entry, with: { target: library, step: read } }
 
+  # Each picture starts at a built-in a run can start at, so the action goes on after the one that
+  # takes a task. A built-in is not the library's, so it moves neither the count nor the prompt.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the one that reviews twice" }, as: first }
+  - { type: action, domain: automation, op: place-add, with: { target: first, builtin: take_task } }
   - { type: action, domain: automation, op: place-add, with: { target: first, action: library } }
   - { type: action, domain: automation, op: place-add, with: { target: first, action: library } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the one that reviews once" }, as: second }
+  - { type: action, domain: automation, op: place-add, with: { target: second, builtin: take_task } }
   - { type: action, domain: automation, op: place-add, with: { target: second, action: library } }
 
 steps_gui:

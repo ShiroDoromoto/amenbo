@@ -3811,8 +3811,8 @@ fn write_facet_names(human: Option<&str>, ai: Option<&str>) -> Result<(), CmdErr
 /// blocks are: the language is already saved, and a menu that did not come back is a menu in the old
 /// words rather than a setting that failed.
 ///
-/// **It is posted to the main thread**, where menu items may be made at all on macOS and Linux — a
-/// command runs on a worker.
+/// **It is posted to the main thread**, where menu items may be made at all on macOS and Linux — this
+/// command touches the store, so it runs on the store thread ([`crate::store_worker`]).
 #[tauri::command]
 pub fn config_set_language(app: tauri::AppHandle, language: String) -> Result<WriteAck, CmdError> {
     let paths = amenbo_core::config::Paths::resolve()?;

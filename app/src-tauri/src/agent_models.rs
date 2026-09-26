@@ -56,8 +56,9 @@ static ASKED: OnceLock<Mutex<HashMap<String, Answer>>> = OnceLock::new();
 /// line of their own (`AMB-D-794`), and Amenbo has no idea which program is inside it or how that one
 /// would be asked.
 ///
-/// **Off the main thread.** A command with no `async` on it is run where the webview is drawn, and
-/// what this one does is a login shell, a provider starting up on top of it, and [`ASKING`] behind
+/// **Off the main thread.** A command with no `async` on it is run where the webview is drawn — or,
+/// when it touches the store, on the one store thread, where a slow one holds every store command
+/// behind it ([`crate::store_worker`]) — and what this one does is a login shell, a provider starting up on top of it, and [`ASKING`] behind
 /// that — so the first press on a provider froze the whole window for as long as the answer took
 /// (`AMB-T-4661`). Only the first press ever pays it, which is exactly the press a person meets.
 ///

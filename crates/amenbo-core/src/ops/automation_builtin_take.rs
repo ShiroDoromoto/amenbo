@@ -30,6 +30,7 @@ use crate::ops::automation_builtin::{
     answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Waits, Work,
 };
 use crate::ops::automation_report;
+use crate::run_wording::builtin as say;
 use crate::ops::automation_step::{taskfilter_expr, taskfilter_sort, TASKFILTER_SORT_DEFAULT};
 use crate::query::{self, ListParams};
 use crate::reach::Reach;
@@ -100,7 +101,11 @@ fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
                 Ok(task) => {
                     return Ok(Carried {
                         exit: TAKEN,
-                        report: format!("took AMB-T-{} {}", task.id, task.title),
+                        report: say(
+                            carry.tx.language(),
+                            "took",
+                            &[("task", &format!("AMB-T-{}", task.id)), ("title", &task.title)],
+                        ),
                     })
                 }
                 // Reserved by somebody else since the list was read, or no longer ready: the next one.
@@ -113,7 +118,7 @@ fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
         }
         offset += PAGE;
     }
-    Ok(Carried { exit: NONE_TO_TAKE, report: format!("no task `{expr}` lists could be taken") })
+    Ok(Carried { exit: NONE_TO_TAKE, report: say(carry.tx.language(), "noneToTake", &[("filter", &expr)]) })
 }
 
 /// **Whether there is a task to take now** — the one question asked while it waits. One row is read,

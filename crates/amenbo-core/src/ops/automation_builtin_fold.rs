@@ -22,6 +22,7 @@ use crate::error::{Error, Result};
 use crate::model::DONE_EXIT;
 use crate::ops::automation_builtin::{Builtin, BuiltinExit, Outside, Work, Worked};
 use crate::ops::automation_builtin_cut::{refused, repository};
+use crate::run_wording::builtin as say;
 use crate::store_engine::read;
 use crate::worktree_cut::{self, Refusal};
 
@@ -41,26 +42,25 @@ pub(super) const FOLD_WORKTREE: Builtin = Builtin {
 };
 
 fn fold(outside: &Outside<'_>) -> Result<Worked> {
-    let task_id = outside
-        .task_id
-        .ok_or_else(|| Error::invalid("there is no task whose worktree to fold — the run has not taken one"))?;
+    let lang = outside.language;
+    let task_id = outside.task_id.ok_or_else(|| Error::invalid(say(lang, "noTaskToFold", &[])))?;
     let task = read::task(outside.conn, task_id)?
         .ok_or_else(|| Error::not_found(format!("task AMB-T-{task_id}")))?;
-    let root = repository(outside.conn, outside.run.project_id, task.at_binding_id)?;
+    let root = repository(outside.conn, lang, outside.run.project_id, task.at_binding_id)?;
     let cut = worktree_cut::layout(&root, &task_id.to_string());
-    let base = worktree_cut::origin_default(&root).map_err(refused)?;
+    let base = worktree_cut::origin_default(&root).map_err(|r| refused(lang, r))?;
     match worktree_cut::finish(&cut, Some(&base), false) {
         Ok(_) => Ok(Worked {
             exit: DONE_EXIT,
-            report: format!("folded {} and {}", cut.worktree.display(), cut.branch),
+            report: say(lang, "folded", &[("path", &cut.worktree.display().to_string()), ("branch", &cut.branch)]),
             hands: Vec::new(),
         }),
         Err(Refusal::Unmerged { branch, base }) => Ok(Worked {
             exit: UNMERGED,
-            report: format!("{branch} carries changes {base} does not have, so it was left standing"),
+            report: say(lang, "unmerged", &[("branch", &branch), ("base", &base)]),
             hands: Vec::new(),
         }),
-        Err(other) => Err(refused(other)),
+        Err(other) => Err(refused(lang, other)),
     }
 }
 

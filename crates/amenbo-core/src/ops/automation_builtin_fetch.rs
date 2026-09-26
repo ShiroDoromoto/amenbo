@@ -34,13 +34,12 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-use rusqlite::Connection;
-
 use crate::error::{Error, Result};
 use crate::model::{AutomationCfgKind, AutomationPortKind};
 use crate::ops::automation_builtin::{
     answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Outside, Work, Worked,
 };
+use crate::run_wording::builtin as say;
 
 /// The way out it leaves by with what it brought back.
 pub const FETCHED: &str = "取ってきた";
@@ -101,26 +100,29 @@ fn fetch(outside: &Outside<'_>) -> Result<Worked> {
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty())
     };
-    let form = setting(FORM).ok_or_else(|| Error::invalid(format!("the setting '{FORM}' is unanswered")))?;
-    let target = setting(TARGET).ok_or_else(|| Error::invalid(format!("the setting '{TARGET}' is unanswered")))?;
+    let lang = outside.language;
+    let unanswered = |name: &str| Error::invalid(say(lang, "unanswered", &[("setting", name)]));
+    let form = setting(FORM).ok_or_else(|| unanswered(FORM))?;
+    let target = setting(TARGET).ok_or_else(|| unanswered(TARGET))?;
     let found = match form.as_str() {
-        URL => from_url(&target)?,
-        FILE_PATH => from_file(&folder_for(outside.conn, outside.run.project_id, &target)?, &target)?,
-        COMMAND => from_command(&folder(outside.conn, outside.run.project_id)?, &target)?,
-        other => return Err(Error::invalid(format!("'{other}' is not a form this built-in fetches from"))),
+        URL => from_url(lang, &target)?,
+        FILE_PATH => from_file(lang, &folder_for(outside, &target)?, &target)?,
+        COMMAND => from_command(lang, &folder(outside)?, &target)?,
+        other => return Err(Error::invalid(say(lang, "notAForm", &[("form", other)]))),
     };
+    let from = [("form", form.as_str()), ("target", target.as_str())];
     Ok(match found {
         Found::Text(text) if !text.trim().is_empty() => Worked {
             exit: FETCHED,
-            report: format!("fetched {} bytes from {form} {target}", text.len()),
+            report: say(lang, "fetched", &[("bytes", &text.len().to_string()), from[0], from[1]]),
             hands: vec![(CONTENT, text)],
         },
-        Found::Text(_) => Worked { exit: NOT_FOUND, report: format!("{form} {target} gave back nothing"), hands: vec![] },
+        Found::Text(_) => Worked { exit: NOT_FOUND, report: say(lang, "gaveNothing", &from), hands: vec![] },
         Found::Nothing(why) => Worked { exit: NOT_FOUND, report: why, hands: vec![] },
     })
 }
 
-fn from_url(url: &str) -> Result<Found> {
+fn from_url(lang: &str, url: &str) -> Result<Found> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(TIMEOUT))
         .http_status_as_error(false)
@@ -132,7 +134,7 @@ fn from_url(url: &str) -> Result<Found> {
         .map_err(|e| Error::Io(std::io::Error::other(format!("fetching {url}: {e}"))))?;
     let status = response.status();
     if status == 404 || status == 410 {
-        return Ok(Found::Nothing(format!("{url} answered {status}")));
+        return Ok(Found::Nothing(say(lang, "answered", &[("url", url), ("status", &status.to_string())])));
     }
     if !status.is_success() {
         return Err(Error::Io(std::io::Error::other(format!("{url} answered {status}"))));
@@ -144,15 +146,15 @@ fn from_url(url: &str) -> Result<Found> {
         .take(LIMIT + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| Error::Io(std::io::Error::other(format!("reading {url}: {e}"))))?;
-    text(bytes, url).map(Found::Text)
+    text(lang, bytes, url).map(Found::Text)
 }
 
-fn from_file(base: &Path, path: &str) -> Result<Found> {
+fn from_file(lang: &str, base: &Path, path: &str) -> Result<Found> {
     let at = base.join(path);
     let file = match std::fs::File::open(&at) {
         Ok(file) => file,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Found::Nothing(format!("there is no file at {}", at.display())))
+            return Ok(Found::Nothing(say(lang, "noFile", &[("path", &at.display().to_string())])))
         }
         Err(e) => return Err(Error::Io(std::io::Error::other(format!("opening {}: {e}", at.display())))),
     };
@@ -160,13 +162,13 @@ fn from_file(base: &Path, path: &str) -> Result<Found> {
     file.take(LIMIT + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| Error::Io(std::io::Error::other(format!("reading {}: {e}", at.display()))))?;
-    text(bytes, &at.to_string_lossy()).map(Found::Text)
+    text(lang, bytes, &at.to_string_lossy()).map(Found::Text)
 }
 
 /// **Run the command through the shell**, in `dir`, and take what it prints. Its output is read on
 /// threads of their own while it runs, so a command that prints more than a pipe holds is not stuck
 /// waiting for a reader; one still running at [`TIMEOUT`] is killed.
-fn from_command(dir: &Path, command: &str) -> Result<Found> {
+fn from_command(lang: &str, dir: &Path, command: &str) -> Result<Found> {
     let mut shell = shell(command);
     shell
         .current_dir(dir)
@@ -196,7 +198,8 @@ fn from_command(dir: &Path, command: &str) -> Result<Found> {
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(Error::invalid(format!("`{command}` was still running after {}s", TIMEOUT.as_secs())));
+                let seconds = TIMEOUT.as_secs().to_string();
+                return Err(Error::invalid(say(lang, "stillRunning", &[("command", command), ("seconds", &seconds)])));
             }
             Err(e) => return Err(Error::Io(std::io::Error::other(format!("waiting on `{command}`: {e}")))),
         }
@@ -207,9 +210,10 @@ fn from_command(dir: &Path, command: &str) -> Result<Found> {
         let said = String::from_utf8_lossy(&err);
         let said = said.trim();
         let said: String = said.chars().rev().take(500).collect::<Vec<_>>().into_iter().rev().collect();
-        return Err(Error::invalid(format!("`{command}` exited with {status}: {said}")));
+        let status = status.to_string();
+        return Err(Error::invalid(say(lang, "exited", &[("command", command), ("status", &status), ("said", &said)])));
     }
-    text(out, command).map(Found::Text)
+    text(lang, out, command).map(Found::Text)
 }
 
 #[cfg(not(windows))]
@@ -227,42 +231,38 @@ fn shell(command: &str) -> std::process::Command {
 }
 
 /// What came back, as the text a value holds — refused where it is not text or too much of it.
-fn text(bytes: Vec<u8>, from: &str) -> Result<String> {
+fn text(lang: &str, bytes: Vec<u8>, from: &str) -> Result<String> {
     if bytes.len() as u64 > LIMIT {
-        return Err(Error::invalid(format!("{from} gave back more than {} KiB", LIMIT / 1024)));
+        let kib = (LIMIT / 1024).to_string();
+        return Err(Error::invalid(say(lang, "tooLarge", &[("from", from), ("kib", &kib)])));
     }
-    String::from_utf8(bytes).map_err(|_| Error::invalid(format!("what {from} gave back is not UTF-8 text")))
+    String::from_utf8(bytes).map_err(|_| Error::invalid(say(lang, "notText", &[("from", from)])))
 }
 
 /// Where a file path is read from: nowhere to ask for an absolute one, the project's folder for any
 /// other.
-fn folder_for(conn: &Connection, project_id: i64, path: &str) -> Result<PathBuf> {
+fn folder_for(outside: &Outside<'_>, path: &str) -> Result<PathBuf> {
     match Path::new(path).is_absolute() {
         true => Ok(PathBuf::new()),
-        false => folder(conn, project_id),
+        false => folder(outside),
     }
 }
 
 /// **The project's folder** — where a command runs and a relative path is read from. A project in
 /// several folders of one repository is in that repository's root. Folders in more than one are
 /// refused, since which of them was meant is written nowhere.
-fn folder(conn: &Connection, project_id: i64) -> Result<PathBuf> {
+fn folder(outside: &Outside<'_>) -> Result<PathBuf> {
+    let (conn, project_id, lang) = (outside.conn, outside.run.project_id, outside.language);
     let folders: Vec<PathBuf> = crate::overview::bound_folders(conn)?
         .into_iter()
         .filter(|f| f.project_id == project_id)
         .map(|f| PathBuf::from(f.dir))
         .collect();
     match folders.as_slice() {
-        [] => Err(Error::invalid(
-            "this project has no folder, so there is nowhere to run a command or read a relative path from",
-        )),
+        [] => Err(Error::invalid(say(lang, "noFolder", &[]))),
         [one] => Ok(one.clone()),
-        _ => crate::ops::automation_builtin_cut::repository(conn, project_id, None).map_err(|_| {
-            Error::invalid(
-                "this project is in more than one folder, and they are not in one repository — \
-                 which one to look from is not written anywhere; write an absolute path instead",
-            )
-        }),
+        _ => crate::ops::automation_builtin_cut::repository(conn, lang, project_id, None)
+            .map_err(|_| Error::invalid(say(lang, "manyFolders", &[]))),
     }
 }
 

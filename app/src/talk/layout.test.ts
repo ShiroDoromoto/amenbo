@@ -2,9 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ACROSS, addPane, BOXES, closedFrame, closedIn, DEFAULT_SIZE, DOWN, EMPTY_LAYOUT, focusOn, goPage,
-  goProject, gridAt, laidOut, landingOn, movedTo, movedWithin, openedFrame, openedIn, pageCount,
-  pageOfFrame, paneIn, paneOfRun, panesOf, placing, reordered, resized, restored, roomOnPage,
-  runFrameId, SIZES, slotsOf, stoodForRun, writing, folding, type Layout, type Size,
+  goProject, gridAt, laidOut, landingOn, movedTo, movedWithin, needsNobody, openedFrame, openedIn,
+  pageCount, pageOfFrame, paneIn, paneOfRun, panesOf, placing, reordered, resized, restored,
+  roomOnPage, runFrameId, runOfFrameId, runsKept, SIZES, slotsOf, stoodForRun, withoutRuns, writing,
+  folding, type Layout, type Size,
 } from "./layout";
 
 /** The ids of the panes drawn on one page, in the order they were laid down. */
@@ -988,5 +989,46 @@ describe("a size picked from the row", () => {
     expect(idsOn(whole, 1)).toEqual(["1"]);
     expect(idsOn(whole, 2)).toEqual(["2"]);
     expect(pageOfFrame(whole, "2")).toBe(2);
+  });
+});
+
+describe("a run's pane kept between runs of the app", () => {
+  it("is told by its id once the store has had it", () => {
+    expect(runOfFrameId(runFrameId(12))).toBe(12);
+    expect(runOfFrameId("3f2c9a1e-0000-4000-8000-000000000000")).toBeNull();
+    expect(runOfFrameId("run-")).toBeNull();
+  });
+
+  it("is named only where it came out of the store", () => {
+    const saved = { frames: [
+      { id: "1", project: 1 },
+      { id: runFrameId(4), project: 1 },
+      { id: runFrameId(5), project: 1, run: 5 },
+    ] };
+    expect(runsKept(saved)).toEqual([4]);
+  });
+
+  it("goes where the run needs nobody, and stays where somebody still has something to do", () => {
+    expect(needsNobody({ status: "completed", acknowledged: false })).toBe(true);
+    expect(needsNobody({ status: "canceled", acknowledged: false })).toBe(true);
+    expect(needsNobody({ status: "failed", acknowledged: true })).toBe(true);
+    expect(needsNobody({ status: "failed", acknowledged: false })).toBe(false);
+    expect(needsNobody({ status: "paused", acknowledged: false })).toBe(false);
+    expect(needsNobody({ status: "running", acknowledged: false })).toBe(false);
+  });
+
+  it("is taken out, and the panes a person opened are not", () => {
+    const saved = { project: 1, frames: [
+      { id: "1", project: 1 },
+      { id: runFrameId(4), project: 1 },
+      { id: runFrameId(6), project: 1 },
+    ] };
+    const back = restored(withoutRuns(saved, new Set([4])), 1);
+    expect(back.frames.map((one) => one.id)).toEqual(["1", runFrameId(6)]);
+  });
+
+  it("stays where the arrangement came from the other window, run and all", () => {
+    const saved = { frames: [{ id: runFrameId(4), project: 1, run: 4 }] };
+    expect(withoutRuns(saved, new Set([4])).frames).toHaveLength(1);
   });
 });

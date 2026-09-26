@@ -45,8 +45,11 @@
 //! `decision_project` — the very functions that answer that question — would only be circular.
 //!
 //! Out of reach is **[`crate::error::Error::out_of_reach`], never not_found**: we do not deny that a thing
-//! exists, we say only that it cannot be reached from here. And Amenbo closes only its own surfaces — an AI
-//! with a shell can still read files directly, and we do not pretend otherwise.
+//! exists, we say only that it cannot be reached from here. The converse holds too: an id **nothing
+//! answers** is `not_found`, not `out_of_reach` (`AMB-D-986`) — there is no row whose content could leak,
+//! and saying it sits in another project would send the reader after something that is not there. And
+//! Amenbo closes only its own surfaces — an AI with a shell can still read files directly, and we do not
+//! pretend otherwise.
 
 use crate::error::{Error, Result};
 

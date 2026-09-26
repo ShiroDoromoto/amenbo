@@ -79,9 +79,7 @@ impl Store {
         if self.reach == Reach::All {
             return Ok(());
         }
-        let owner = crate::store_engine::read::task_project(self.engine.conn(), task_id)
-            .map_err(crate::error::engine_on(self.engine.conn()))?;
-        self.reach.check(&crate::idref::task(task_id), owner)
+        super::owner::task(self.engine.conn(), task_id)?.check(self.reach, &crate::idref::task(task_id))
     }
 
     /// Whether this decision is within reach (`out_of_reach` if not).
@@ -89,23 +87,23 @@ impl Store {
         if self.reach == Reach::All {
             return Ok(());
         }
-        let owner = crate::store_engine::read::decision_project(self.engine.conn(), decision_id)
-            .map_err(crate::error::engine_on(self.engine.conn()))?;
-        self.reach.check(&crate::idref::decision(decision_id), owner)
+        super::owner::decision(self.engine.conn(), decision_id)?
+            .check(self.reach, &crate::idref::decision(decision_id))
     }
 
     /// Check a read that names an id without going through a conversational ref. `what` is the display
     /// ref to quote in the error; `owner` looks the owning project up via [`super::owner`]. Under `All`
-    /// the lookup does not even run, so humans, the GUI and library use pay nothing for this.
+    /// the lookup does not even run, so humans, the GUI and library use pay nothing for this. An id
+    /// nothing answers passes, and the read that follows answers `not_found` (`AMB-D-986`).
     fn reachable(
         &self,
         what: &str,
-        owner: impl FnOnce(&rusqlite::Connection) -> Result<Option<i64>>,
+        owner: impl FnOnce(&rusqlite::Connection) -> Result<super::owner::Owner>,
     ) -> Result<()> {
         if self.reach == Reach::All {
             return Ok(());
         }
-        self.reach.check(what, owner(self.engine.conn())?)
+        owner(self.engine.conn())?.check(self.reach, what)
     }
 
     /// Whether this project is within reach — the entry point for reads that take a project id directly
@@ -676,7 +674,7 @@ impl Store {
             _ => {
                 let mut kept = Vec::with_capacity(hits.len());
                 for id in hits {
-                    if self.reach.allows(super::owner::dimension(conn, id)?) {
+                    if self.reach.allows(super::owner::dimension(conn, id)?.project()) {
                         kept.push(id);
                     }
                 }
@@ -687,10 +685,8 @@ impl Store {
                     let anywhere =
                         crate::store_engine::read::resolve_dimension_in(conn, None, reference)?;
                     if let Some(&outside) = anywhere.first() {
-                        self.reach.check(
-                            &format!("dimension '{reference}'"),
-                            super::owner::dimension(conn, outside)?,
-                        )?;
+                        super::owner::dimension(conn, outside)?
+                            .check(self.reach, &format!("dimension '{reference}'"))?;
                     }
                 }
                 kept
@@ -868,7 +864,7 @@ impl Store {
         id: i64,
     ) -> Result<Option<crate::ops::automation_view::ActionView>> {
         let conn = self.engine.conn();
-        if let Some(project_id) = super::owner::automation_action(conn, id)? {
+        if let Some(project_id) = super::owner::automation_action(conn, id)?.project() {
             self.reachable_project(project_id)?;
         }
         crate::ops::automation_view::action_detail(conn, id)

@@ -226,6 +226,8 @@ export function TerminalPane({
   onFold: (frame: string, open: boolean) => void;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
+  /** Whether a press of the close button is still being answered. */
+  const dropping = useRef(false);
   const labelRef = useRef<HTMLDivElement>(null);
   const plateRef = useRef<Plate | null>(null);
   // Once a terminal has been asked for here it stays asked for: a slot whose program exited keeps the
@@ -338,14 +340,22 @@ export function TerminalPane({
    *  **A run's pane is not taken away while its run is going or held** ({@link runLive}): the press is
    *  drawn and cannot be pressed. A pane press that stopped a run would be one a reader made meaning
    *  only to tidy the page; stopping is its own press beside the run's state. Once the run is over the
-   *  pane goes without a question. */
+   *  pane goes without a question.
+   *
+   *  **One press at a time** ({@link dropping}): presses that pile up while the app is busy would
+   *  otherwise each ask again, or take the frame away twice. */
   const drop = async () => {
-    if (runLive) return;
-    // A run's pane is not asked about: there is no way back into a step's conversation to lose —
-    // every step opens one of its own — and the run it drew is over.
-    if (run === null && !await confirmDialog(t("face.dropConfirm"))) return;
-    if (live !== null) await endTerminal(live).catch(() => {});
-    onDrop(frame);
+    if (runLive || dropping.current) return;
+    dropping.current = true;
+    try {
+      // A run's pane is not asked about: there is no way back into a step's conversation to lose —
+      // every step opens one of its own — and the run it drew is over.
+      if (run === null && !await confirmDialog(t("face.dropConfirm"))) return;
+      if (live !== null) await endTerminal(live).catch(() => {});
+      onDrop(frame);
+    } finally {
+      dropping.current = false;
+    }
   };
 
   /**

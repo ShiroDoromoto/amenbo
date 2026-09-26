@@ -557,6 +557,7 @@ export const vi: Translation = {
     "cli.none": "Chưa có lệnh nào trong PATH của bạn. Bản xem trước này kèm CLI dưới dạng một tệp nằm cạnh ứng dụng — hãy chép nó vào ~/.local/bin (hoặc bất kỳ nơi nào trong PATH của bạn) và nó trở thành lệnh bạn gõ.",
     "common.listSeparator": ", ",
     "common.you": "Bạn",
+    "dialog.ok": "OK", "dialog.cancel": "Hủy",
     "act.created": "Đã tạo “{title}”",
     "act.statusChanged": "Đã chuyển “{title}” sang {status}",
     "act.assigned": "Đã giao “{title}”", "act.assignedAi": "Đã giao “{title}” cho AI",

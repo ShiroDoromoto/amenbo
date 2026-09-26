@@ -567,6 +567,7 @@ export const ptBR: Translation = {
     "cli.none": "Ainda não há nenhum comando no seu PATH. Esta prévia traz a CLI dela como um arquivo ao lado do app — copie-o para ~/.local/bin (ou para qualquer lugar do seu PATH) e ele passa a ser o comando que você digita.",
     "common.listSeparator": ", ",
     "common.you": "Você",
+    "dialog.ok": "OK", "dialog.cancel": "Cancelar",
     "act.created": "Criou “{title}”",
     "act.statusChanged": "Mudou “{title}” para {status}",
     "act.assigned": "Definiu o responsável de “{title}”", "act.assignedAi": "Delegou “{title}” à IA",

@@ -566,6 +566,7 @@ export const it: Translation = {
     "cli.none": "Nel tuo PATH non c'è ancora nessun comando. Questa anteprima include la sua CLI come file accanto all'app: copialo in ~/.local/bin (o ovunque nel tuo PATH) e diventa il comando da digitare.",
     "common.listSeparator": ", ",
     "common.you": "Tu",
+    "dialog.ok": "OK", "dialog.cancel": "Annulla",
     "act.created": "Ha creato «{title}»",
     "act.statusChanged": "Ha portato «{title}» a {status}",
     "act.assigned": "Ha assegnato «{title}»", "act.assignedAi": "Ha delegato «{title}» all'IA",

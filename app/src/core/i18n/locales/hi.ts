@@ -555,6 +555,7 @@ export const hi: Translation = {
     "cli.none": "आपके PATH में अभी कोई कमांड नहीं है। यह प्रीव्यू अपना CLI ऐप के बगल में एक फ़ाइल के रूप में देता है — उसे ~/.local/bin (या PATH में कहीं भी) कॉपी करें, और वही टाइप करने वाली कमांड बन जाएगी।",
     "common.listSeparator": ", ",
     "common.you": "आप",
+    "dialog.ok": "ठीक है", "dialog.cancel": "रद्द करें",
     "act.created": "“{title}” बनाया",
     "act.statusChanged": "“{title}” को {status} किया",
     "act.assigned": "“{title}” सौंपा", "act.assignedAi": "“{title}” AI को सौंपा",

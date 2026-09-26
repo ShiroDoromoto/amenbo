@@ -1,14 +1,32 @@
+import { t } from "./i18n";
 import { inTauri } from "./snapshot";
+
+/** Whether a confirmation is on screen now, waiting for its answer. */
+let asking = false;
 
 // In the Tauri v2 webview, window.confirm()/alert()/prompt() are unimplemented no-ops (they behave
 // as if the user always cancelled), so a confirmation guard built on them never runs its action
 // even when the user clicks OK. Delegate to the native confirmation dialog (plugin-dialog's
 // confirm), falling back to window.confirm only when iterating in a plain browser. True on OK,
 // false on cancel.
+//
+// **One at a time.** A second call while one is still open answers false at once, without opening
+// anything. On macOS, rfd (0.16.0) remembers the key window when each dialog is made and brings it
+// back to the front once that dialog is gone; a second sheet made while the first is up remembers
+// the first sheet itself, and once both are answered that sheet comes back as a dialog of its own
+// that neither button closes. Clicks that pile up while the app is busy are what stack them.
+//
+// The buttons are named in the app's language: left to itself the dialog says OK and Cancel.
 export async function confirmDialog(message: string): Promise<boolean> {
   if (!inTauri()) return window.confirm(message);
-  const { confirm } = await import("@tauri-apps/plugin-dialog");
-  return confirm(message);
+  if (asking) return false;
+  asking = true;
+  try {
+    const { confirm } = await import("@tauri-apps/plugin-dialog");
+    return await confirm(message, { okLabel: t("dialog.ok"), cancelLabel: t("dialog.cancel") });
+  } finally {
+    asking = false;
+  }
 }
 
 /**

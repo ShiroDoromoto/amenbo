@@ -554,6 +554,7 @@ export const ko: Translation = {
     "cli.none": "아직 PATH에 실행할 명령이 없습니다. 이 미리보기는 CLI를 앱 옆에 파일로 함께 제공합니다. ~/.local/bin(또는 PATH에 있는 아무 곳)으로 복사하면 그것이 입력할 명령이 됩니다.",
     "common.listSeparator": ", ",
     "common.you": "나",
+    "dialog.ok": "확인", "dialog.cancel": "취소",
     "act.created": "“{title}”을(를) 만들었습니다",
     "act.statusChanged": "“{title}”을(를) {status}(으)로 바꿨습니다",
     "act.assigned": "“{title}”의 담당을 정했습니다", "act.assignedAi": "“{title}”을(를) AI에게 맡겼습니다",

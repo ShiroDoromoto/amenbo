@@ -557,6 +557,7 @@ export const id: Translation = {
     "cli.none": "Belum ada perintah di PATH Anda. Pratinjau ini menyertakan CLI-nya sebagai berkas di samping aplikasi — salin ke ~/.local/bin (atau ke mana pun di PATH Anda) dan berkas itu menjadi perintah yang Anda ketik.",
     "common.listSeparator": ", ",
     "common.you": "Anda",
+    "dialog.ok": "OK", "dialog.cancel": "Batal",
     "act.created": "Membuat “{title}”",
     "act.statusChanged": "Mengubah “{title}” menjadi {status}",
     "act.assigned": "Menugaskan “{title}”", "act.assignedAi": "Menyerahkan “{title}” ke AI",

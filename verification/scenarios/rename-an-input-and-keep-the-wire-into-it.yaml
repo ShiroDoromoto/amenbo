@@ -22,17 +22,15 @@ given:
   # stands up — so nothing on the launch place is ever about who carries a step out.
   - { type: action, domain: workspace, op: can-start, with: { count: 2 } }
 
-  # The action that takes the task. Its named way out is the one being renamed: it carries the task
-  # the run works on, and the value the placement after it is wired to. The step inside it declares
+  # The action the built-in hands the task it takes to. Its named way out is the one being renamed: it
+  # carries the value the placement after it is wired to. The step inside it declares
   # the same way out, and the line inside the action carries the one out by the other.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
   - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: note, kind: value, required: true } }
   - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: port-add, with: { target: got_one, name: note, kind: value, required: true } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
@@ -46,12 +44,15 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — an input to rename" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
   - { type: action, domain: automation, op: wire-add, with: { target: at_take, exit: got one, from_port: note, to: at_work, to_port: note } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
   # Both of `take`'s ways out go on to `work`. The done one is what keeps `work` on the run's road
   # while the named one is being renamed — a placement a run cannot reach is judged for nothing, so the
   # mark this road reads on `work` would go with it.
@@ -59,7 +60,6 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_work } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
 
 steps_gui:
   - type: action

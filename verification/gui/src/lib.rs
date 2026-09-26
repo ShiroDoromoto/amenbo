@@ -6768,6 +6768,16 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
         called: "the built-in that splits the task by its value on one axis",
         words: &[("分類なし", "the way out for a task with no value on that axis")],
     },
+    BuiltinWords {
+        key: "wait",
+        called: "the built-in that waits (it holds the run for the hours, minutes and seconds set on it)",
+        words: &[
+            ("時間", "the setting for how many hours it waits"),
+            ("分", "the setting for how many minutes it waits"),
+            ("秒", "the setting for how many seconds it waits"),
+            ("完了", "the way out for having waited"),
+        ],
+    },
 ];
 
 /// The built-ins a run can start at, in the order the empty picture offers them — the app's

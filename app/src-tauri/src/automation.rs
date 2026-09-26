@@ -1746,14 +1746,12 @@ fn open_one(
             }
         }
         // A built-in that holds its step open — the one that waits (`AMB-D-983`). Nothing was carried
-        // out and no terminal is opened: the step stands under way until its time has come.
+        // out and no terminal is opened: the step stands under way until its time has come, and the
+        // pane stands on its card, saying when that is.
         Opened::Holding { run_step_id } => {
             log::info!("run {run_id} holds built-in step {run_step_id} open");
-            let run = read::automation_run(store.read_model().conn(), run_id)?
-                .ok_or_else(|| CmdError::from(amenbo_core::error::Error::not_found(
-                    format!("run '{run_id}' not found"),
-                )))?;
-            (run.project_id, None, None, Vec::new())
+            let (project, builtin) = builtin_of_step(store, run_id, run_step_id)?;
+            (project, None, Some(builtin), Vec::new())
         }
         // A built-in has already been carried out and has reported (`AMB-D-964`), so there is no
         // terminal to stand a pane on. The run is now standing between two steps — or has ended — and
@@ -1761,35 +1759,8 @@ fn open_one(
         // told is the same card, now carried out, with the task it may have taken.
         Opened::Carried { run_step_id, .. } => {
             log::info!("run {run_id} carried out built-in step {run_step_id}");
-            let conn = store.read_model().conn();
-            let run = read::automation_run(conn, run_id)?
-                .ok_or_else(|| CmdError::from(amenbo_core::error::Error::not_found(
-                    format!("run '{run_id}' not found"),
-                )))?;
-            let run_step = read::automation_run_step(conn, run_step_id)?.ok_or_else(|| {
-                CmdError::from(amenbo_core::error::Error::not_found(format!(
-                    "step '{run_step_id}' of run '{run_id}' not found"
-                )))
-            })?;
-            let def = read::automation_run_def(conn, run_step.run_def_id)?.ok_or_else(|| {
-                CmdError::from(amenbo_core::error::Error::not_found(format!(
-                    "step '{run_step_id}' of run '{run_id}' has no copy to read"
-                )))
-            })?;
-            let builtin = AutomationBuiltinRunDto {
-                automation: run.automation_id,
-                placement: def.placement_id,
-                automation_name: automation_name(store, run.automation_id)?,
-                name: def.name.clone(),
-                key: def.builtin.clone().unwrap_or_default(),
-                action_name: placed_action_name(store, def.placement_id)?,
-                task: worked_task(store, run_step.run_task_id)?,
-                finished: true,
-                waiting: false,
-                looks_for: None,
-                exit_name: left_by(&def, run_step.exit_id),
-            };
-            (run.project_id, None, Some(builtin), Vec::new())
+            let (project, builtin) = builtin_of_step(store, run_id, run_step_id)?;
+            (project, None, Some(builtin), Vec::new())
         }
     };
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
@@ -1864,6 +1835,51 @@ fn builtin_about_to(
         waiting: false,
         looks_for: None,
         exit_name: None,
+        held_until: None,
+    }))
+}
+
+/// **A built-in's step as its card draws it**, read off the execution — carried out, or held open
+/// until its time comes (`AMB-D-983`). A held step is not finished and says when it ends; one that
+/// has ended says the way out it left by.
+fn builtin_of_step(
+    store: &amenbo_core::Store,
+    run_id: i64,
+    run_step_id: i64,
+) -> Result<(i64, AutomationBuiltinRunDto), CmdError> {
+    let conn = store.read_model().conn();
+    let run = read::automation_run(conn, run_id)?
+        .ok_or_else(|| CmdError::from(amenbo_core::error::Error::not_found(
+            format!("run '{run_id}' not found"),
+        )))?;
+    let run_step = read::automation_run_step(conn, run_step_id)?.ok_or_else(|| {
+        CmdError::from(amenbo_core::error::Error::not_found(format!(
+            "step '{run_step_id}' of run '{run_id}' not found"
+        )))
+    })?;
+    let def = read::automation_run_def(conn, run_step.run_def_id)?.ok_or_else(|| {
+        CmdError::from(amenbo_core::error::Error::not_found(format!(
+            "step '{run_step_id}' of run '{run_id}' has no copy to read"
+        )))
+    })?;
+    let held = run_step.status == amenbo_core::model::AutomationRunStepStatus::Running;
+    let held_until = match held {
+        true => automation_builtin::held_until(conn, &run_step)?.map(|at| at.to_rfc3339_z()),
+        false => None,
+    };
+    Ok((run.project_id, AutomationBuiltinRunDto {
+        automation: run.automation_id,
+        placement: def.placement_id,
+        automation_name: automation_name(store, run.automation_id)?,
+        name: def.name.clone(),
+        key: def.builtin.clone().unwrap_or_default(),
+        action_name: placed_action_name(store, def.placement_id)?,
+        task: worked_task(store, run_step.run_task_id)?,
+        finished: !held,
+        waiting: false,
+        looks_for: None,
+        exit_name: left_by(&def, run_step.exit_id),
+        held_until,
     }))
 }
 
@@ -1911,6 +1927,28 @@ pub(crate) fn retell_task(
         log::warn!("failed to emit {STEP_EVENT}: {e}");
     }
     Ok(())
+}
+
+/// **End a held step of this run whose time has come**, and tell its pane (`AMB-D-983`) — answering
+/// whether one did. Nothing else ends it: no timer is started when it opens, and the watch asks on the
+/// look it already takes at a run with a step under way (`crate::automation_watch`).
+///
+/// From the report on it is the road an agent's report takes: the watch opens the next step on its next
+/// look, and a pause asked for while it waited takes hold here. The card is told once more, carried out,
+/// with the way out it left by — as a built-in carried out at once is ([`open_one`]).
+pub(crate) fn time_up(app: &tauri::AppHandle, run_id: i64) -> Result<bool, CmdError> {
+    let due = {
+        let store = crate::commands::open_store_read()?;
+        automation_builtin::due(store.read_model().conn(), run_id, amenbo_core::time::Timestamp::now())?
+    };
+    let Some(run_step_id) = due else { return Ok(false) };
+    let mut store = crate::commands::open_store()?;
+    store.automation_time_up(run_step_id)?;
+    log::info!("run {run_id} waited out built-in step {run_step_id}");
+    let (project, builtin) = builtin_of_step(&store, run_id, run_step_id)?;
+    tell(app, AutomationStepOpenDto { run: run_id, project, step: None, builtin: Some(builtin), missing: Vec::new() });
+    crate::automation_watch::wake();
+    Ok(true)
 }
 
 /// **Where a step that names no folder is carried out**: the folder its project is bound to.

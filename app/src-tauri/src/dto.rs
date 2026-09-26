@@ -3780,6 +3780,11 @@ pub struct AutomationBuiltinRunDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) exit_name: Option<String>,
+    /// **When a built-in that holds its step open stops waiting** — the built-in that waits
+    /// (`AMB-D-983`), as an RFC3339 instant. Absent on every other built-in, and once it has ended.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) held_until: Option<String>,
 }
 
 /// **One step of a run, as its pane draws it.**

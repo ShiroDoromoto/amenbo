@@ -1204,6 +1204,7 @@ export const tr: Translation = {
     "auto.run.inAction": "{action} içindeki {step}",
     "auto.run.reportWithheld": "Görev kapalı olduğu için rapor göreve bırakılmadı: {steps}",
     "auto.run.taskWait": "Görev bekleniyor",
+    "auto.run.heldUntil": "{at} saatine kadar bekliyor",
 
     "mcp.title": "MCP ile bağlan",
     "mcp.setupTitle": "Projelerinizi bir yapay zekâdan kullanın",

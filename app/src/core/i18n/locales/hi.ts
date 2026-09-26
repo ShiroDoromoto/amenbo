@@ -1204,6 +1204,7 @@ export const hi: Translation = {
     "auto.run.inAction": "{action} का {step}",
     "auto.run.reportWithheld": "कार्य बंद था, इसलिए रिपोर्ट उस पर नहीं छोड़ी गई: {steps}",
     "auto.run.taskWait": "कार्य की प्रतीक्षा",
+    "auto.run.heldUntil": "{at} तक प्रतीक्षा",
 
     "mcp.title": "MCP से जोड़ें",
     "mcp.setupTitle": "अपने प्रोजेक्ट AI से इस्तेमाल करें",

@@ -1217,6 +1217,7 @@ export const ptBR: Translation = {
     "auto.run.inAction": "{step} em {action}",
     "auto.run.reportWithheld": "Relatório não deixado na tarefa, que estava fechada: {steps}",
     "auto.run.taskWait": "Aguardando tarefa",
+    "auto.run.heldUntil": "Aguardando até {at}",
 
     "mcp.title": "Conectar por MCP",
     "mcp.setupTitle": "Usar seus projetos a partir de uma IA",

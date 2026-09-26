@@ -411,7 +411,12 @@ looksFor?: string,
  * **The way out it left through**, once it has been carried out — by the name its step declared
  * it under. Absent while Amenbo is still at it.
  */
-exitName?: string, };
+exitName?: string, 
+/**
+ * **When a built-in that holds its step open stops waiting** — the built-in that waits
+ * (`AMB-D-983`), as an RFC3339 instant. Absent on every other built-in, and once it has ended.
+ */
+heldUntil?: string, };
 
 /**
  * **One automation in the list** — what the "automations" tab draws a row from.

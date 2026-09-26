@@ -167,6 +167,12 @@ function DeclChip({ name, kind, required, tone }: { name: string; kind: string; 
   );
 }
 
+/**
+ * The built-in that waits (`amenbo_core::ops::automation_builtin_wait::WAIT`). Its three numbers are a
+ * length of time, which core takes only as a whole number of zero or more (`AMB-D-983`).
+ */
+const WAIT = "wait";
+
 /** One setting: what the action declares, read, and the control its kind takes for this spot's answer. */
 function CfgRow({ placementId, projectId, builtin, cfg, siblings, run }: {
   placementId: number;
@@ -272,6 +278,7 @@ function CfgRow({ placementId, projectId, builtin, cfg, siblings, run }: {
         <input
           type="number"
           aria-label={shown}
+          {...(builtin === WAIT && { min: 0, step: 1 })}
           value={number}
           onChange={(e) => setNumber(e.target.value)}
           onBlur={() => writeNumber(number) !== (cfg.value ?? null) && answer(writeNumber(number))}

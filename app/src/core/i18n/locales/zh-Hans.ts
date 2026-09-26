@@ -1206,6 +1206,7 @@ export const zhHans: Translation = {
     "auto.run.inAction": "{action} 的 {step}",
     "auto.run.reportWithheld": "任务已关闭，未留下报告：{steps}",
     "auto.run.taskWait": "等待任务",
+    "auto.run.heldUntil": "等待至 {at}",
 
     "mcp.title": "通过 MCP 连接",
     "mcp.setupTitle": "让 AI 可以使用你的项目",

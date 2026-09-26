@@ -1205,6 +1205,7 @@ export const id: Translation = {
     "auto.run.inAction": "{step} di {action}",
     "auto.run.reportWithheld": "Laporan tidak ditinggalkan di tugas karena tugas sudah ditutup: {steps}",
     "auto.run.taskWait": "Menunggu tugas",
+    "auto.run.heldUntil": "Menunggu hingga {at}",
 
     "mcp.title": "Hubungkan lewat MCP",
     "mcp.setupTitle": "Gunakan proyek Anda dari AI",

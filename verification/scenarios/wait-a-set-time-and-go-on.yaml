@@ -1,0 +1,129 @@
+# The built-in that waits holds its step open for the time its three settings add up to, and then
+# leaves by its done way out (`wait`). Nothing is started for it: the thread that keeps runs going
+# asks, on the look it already takes at a run with a step under way, whether the time has come — so
+# what a road reads is the run going on by itself once it has.
+#
+# The wait sits between taking a task and closing it, so the one thing that shows it ended is the task
+# gone to done with nobody pressing anything. Five seconds keeps the road short; the watch looks every
+# second while a step is under way, so thirty is room to spare rather than a guess.
+#
+# The road is the screen's alone. A run started at a terminal opens no step (`automation start`), so
+# a built-in is only ever carried out on a run the window started.
+id: wait-a-set-time-and-go-on
+title: The built-in that waits holds the run for the time it is set to, and then goes on by itself
+description: >
+  Place the built-in that takes a task (`take_task`) as an automation's entry, going on to the
+  built-in that waits (`wait`), and from there to the built-in that closes the task. Hand a task to
+  the AI, answer the wait's seconds with 5 on the placement's panel, start the run, and read the
+  task gone to in_progress. Wait up to 30 seconds, and read the task gone to done and the run over
+  on the history tab.
+given:
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run waits over }, as: seed }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that waits and goes on" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: wait }, as: at_wait }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_wait } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_wait, exit: 完了, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  # Handed to the AI, and written through, so it is a task the run can take.
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: seed
+      assignee: me-ai
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # How long it waits, typed into the box under the setting — a number box, written when it is left.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      builtin: wait
+
+  - type: action
+    domain: automation
+    op: answer-text
+    with:
+      builtin: wait
+      setting: 秒
+      value: "5"
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # Taken, and then held: the wait is under way and the task is still being worked.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+
+  # Its time come, the run goes on to the close by itself.
+  - type: action
+    domain: task
+    op: wait-field
+    with:
+      target: seed
+      field: status
+      equals: done
+      seconds: 30
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: history
+
+  - type: assert
+    domain: automation
+    op: history-row
+    with:
+      target: run
+      state: completed

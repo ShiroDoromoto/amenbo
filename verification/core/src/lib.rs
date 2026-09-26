@@ -4371,8 +4371,8 @@ const REGISTRY: &[OpSpec] = &[
     // `builtin` names whose it is by its key, and `setting` and `value` are then the words the store
     // keeps them under.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-choice", required: &["setting", "value"], refs: &[], strings: &["setting", "value", "builtin"], binds: false },
-    // The words a `text` setting is answered with, typed into the box under it. It is written when
-    // the box is left, the way the panel writes one. `builtin` names a built-in's setting as for
+    // The words a `text` setting is answered with — or the digits of a `number` one — typed into the
+    // box under it. It is written when the box is left, the way the panel writes one. `builtin` names a built-in's setting as for
     // `answer-choice`, and `setting` is then the word the store keeps it under.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-text", required: &["setting", "value"], refs: &[], strings: &["setting", "value", "builtin"], binds: false },
     // What fills one of a box's inputs, picked from what fits rather than drawn.

@@ -1205,6 +1205,7 @@ export const th: Translation = {
     "auto.run.inAction": "{step} ใน {action}",
     "auto.run.reportWithheld": "ไม่ได้ทิ้งรายงานไว้ที่งาน เพราะงานปิดแล้ว: {steps}",
     "auto.run.taskWait": "รองาน",
+    "auto.run.heldUntil": "รอจนถึง {at}",
 
     "mcp.title": "เชื่อมต่อผ่าน MCP",
     "mcp.setupTitle": "ใช้โปรเจกต์ของคุณจาก AI",

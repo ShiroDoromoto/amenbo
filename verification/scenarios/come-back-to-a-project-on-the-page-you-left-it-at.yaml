@@ -1,0 +1,149 @@
+# Going back to a project is going back to where the reader was in it: the pane last worked in there,
+# on whichever page that pane is on now. The pane is what is kept rather than the page, because the
+# pages are laid down from the order every time and a page number goes stale when a pane is closed.
+#
+# ── Why the second pane is sent to the second page ───────────────────────────────────────────────
+# A project with one page has nowhere to come back to but its first, so a face that landed on the first
+# page every time reads exactly like one that remembered. Two panes, the second made whole so that it
+# is cut onto a page of its own, give the reading this road is made of: the line on the second page is
+# there on coming back, and the line on the first is not.
+#
+# ── Why the other project needs nothing opened ───────────────────────────────────────────────────
+# What is kept is the pane of the project being left, and leaving is the whole of it. The second
+# project is only somewhere else to be, so the road goes there and straight back.
+#
+# ── What this road does not walk ─────────────────────────────────────────────────────────────────
+# A pane closed while the reader was away sends them to the first page again, and a page number would
+# point past a pane closed before it where a pane does not. Both are the arrangement's arithmetic and
+# are pinned beside it (`app/src/talk/layout.test.ts`); a road would walk the same press to read them.
+#
+# The world raises the two projects and nothing else: a terminal is not a record, and what the panes
+# run is the reader's own shell.
+id: come-back-to-a-project-on-the-page-you-left-it-at
+title: Going back to a project brings up the page of the pane last worked in there, not its first page
+description: >
+  Raise two projects, each with a folder of its own. In the first, open a terminal, cut it to half and
+  open a second beside it, then make the second whole so that it is cut onto a page of its own and the
+  screen follows it. Go to the other project and back: the screen is on the second page, with the
+  second pane's line on it and the first pane's nowhere.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # Which project the face came up on is the run's business, so the road puts itself on one before it
+  # opens anything.
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane on the first page
+
+  # Half, so that the page has room for a second pane beside it.
+  - type: action
+    domain: workspace
+    op: stretch-pane
+    with:
+      size: half
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: workspace
+    op: type-line
+    with:
+      text: SCENARIO the pane on the second page
+
+  # Whole: it no longer fits beside the first, so it is cut onto the next page and the screen follows
+  # the pane that was pressed.
+  - type: action
+    domain: workspace
+    op: stretch-pane
+    with:
+      size: whole
+
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane on the first page
+      present: false
+
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Boathouse
+
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane on the second page
+      present: false
+
+  - type: action
+    domain: workspace
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # Back where the reader was: the pane last worked in, on the page it is on.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane on the second page
+
+  # And not the first page. A face that brought every project up on its first page would draw this
+  # line and not the one above.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO the pane on the first page
+      present: false

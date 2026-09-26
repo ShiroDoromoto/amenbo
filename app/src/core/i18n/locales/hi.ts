@@ -1005,6 +1005,7 @@ export const hi: Translation = {
     "auto.step.required": "अनिवार्य",
     "auto.step.noAxes": "कार्य को वर्गीकृत करने की कोई धुरी अभी नहीं है",
     "auto.step.oneALine": "हर पंक्ति में एक (जैसे AMB-T-12)",
+    "auto.step.oneADecisionALine": "हर पंक्ति में एक (जैसे AMB-D-12)",
     "auto.step.inputs": "इनपुट पैरामीटर",
     "auto.step.unwired": "कुछ नहीं पहुँचता",
     "auto.step.atLaunch": "रन शुरू करते समय दिया जाता है",

@@ -1005,6 +1005,7 @@ export const nl: Translation = {
     "auto.step.required": "verplicht",
     "auto.step.noAxes": "Er is nog geen as om taken mee te classificeren",
     "auto.step.oneALine": "Eén per regel (bijv. AMB-T-12)",
+    "auto.step.oneADecisionALine": "Eén per regel (bijv. AMB-D-12)",
     "auto.step.inputs": "Invoer",
     "auto.step.unwired": "er bereikt hem niets",
     "auto.step.atLaunch": "wordt bij het starten van de run meegegeven",

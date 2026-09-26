@@ -1002,6 +1002,7 @@ export const ko: Translation = {
     "auto.step.required": "필수",
     "auto.step.noAxes": "작업을 분류할 축이 아직 없다",
     "auto.step.oneALine": "한 줄에 하나(예: AMB-T-12)",
+    "auto.step.oneADecisionALine": "한 줄에 하나(예: AMB-D-12)",
     "auto.step.inputs": "입력 파라미터",
     "auto.step.unwired": "아무것도 닿지 않습니다",
     "auto.step.atLaunch": "실행을 시작할 때 넘긴다",

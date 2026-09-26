@@ -1018,6 +1018,7 @@ export const ptBR: Translation = {
     "auto.step.required": "obrigatório",
     "auto.step.noAxes": "Ainda não há eixo para classificar tarefas",
     "auto.step.oneALine": "Uma por linha (ex.: AMB-T-12)",
+    "auto.step.oneADecisionALine": "Uma por linha (ex.: AMB-D-12)",
     "auto.step.inputs": "Entradas",
     "auto.step.unwired": "nada chega",
     "auto.step.atLaunch": "entregue ao iniciar a execução",

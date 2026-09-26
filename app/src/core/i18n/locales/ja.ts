@@ -1011,6 +1011,7 @@ export const ja: Translation = {
     "auto.step.required": "必須",
     "auto.step.noAxes": "タスクを分類する軸がまだ無い",
     "auto.step.oneALine": "1行に1つ（例：AMB-T-12）",
+    "auto.step.oneADecisionALine": "1行に1つ（例：AMB-D-12）",
     "auto.step.inputs": "入力",
     "auto.step.unwired": "何も届かない",
     "auto.step.atLaunch": "起動するときに渡す",

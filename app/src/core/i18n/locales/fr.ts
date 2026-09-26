@@ -1017,6 +1017,7 @@ export const fr: Translation = {
     "auto.step.required": "obligatoire",
     "auto.step.noAxes": "Aucun axe ne classe encore les tâches",
     "auto.step.oneALine": "Une par ligne (p. ex. AMB-T-12)",
+    "auto.step.oneADecisionALine": "Une par ligne (p. ex. AMB-D-12)",
     "auto.step.inputs": "Entrées",
     "auto.step.unwired": "rien ne l'atteint",
     "auto.step.atLaunch": "transmis au démarrage de l’exécution",

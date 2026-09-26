@@ -1009,6 +1009,7 @@ export const de: Translation = {
     "auto.step.required": "erforderlich",
     "auto.step.noAxes": "Es gibt noch keine Achse, nach der Aufgaben klassifiziert werden",
     "auto.step.oneALine": "Eine pro Zeile (z. B. AMB-T-12)",
+    "auto.step.oneADecisionALine": "Eine pro Zeile (z. B. AMB-D-12)",
     "auto.step.inputs": "Eingaben",
     "auto.step.unwired": "nichts erreicht sie",
     "auto.step.atLaunch": "wird beim Start übergeben",

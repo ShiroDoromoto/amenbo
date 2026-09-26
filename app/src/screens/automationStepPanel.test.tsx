@@ -381,6 +381,7 @@ describe("the panel of one spot", () => {
               { name: "分類", kind: "text", required: false, value: classified },
               { name: "AI に選ばせる軸", kind: "text", required: false },
               { name: "依存させる既存のタスク", kind: "text", required: false },
+              { name: "リンクする決定", kind: "text", required: false },
               { name: "作業フォルダ", kind: "folder", required: false },
             ],
           }),
@@ -426,6 +427,15 @@ describe("the panel of one spot", () => {
         chip("ラベル")[0]!.click();
       });
       expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "AI に選ばせる軸", JSON.stringify("ラベル"));
+    });
+
+    it("gives the box for tasks a task's number as its example, and the box for decisions a decision's (AMB-T-5674)", async () => {
+      await render({ automation: makeTask(), placementId: 1 });
+      const boxes = [...container.querySelectorAll<HTMLTextAreaElement>("textarea")];
+      expect(boxes.map((box) => box.placeholder)).toEqual([
+        t("auto.step.oneALine"),
+        t("auto.step.oneADecisionALine"),
+      ]);
     });
 
     it("takes tasks one a line, and picks the folder from the project's own", async () => {

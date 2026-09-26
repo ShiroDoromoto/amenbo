@@ -937,7 +937,6 @@ export const ptBR: Translation = {
     "auto.place.modelOf": "Modelo para {step}",
     "auto.start": "Iniciar",
     "auto.hand.title": "Iniciar {name}",
-    "auto.hand.text": "Texto a entregar",
     "auto.hand.files": "Arquivos a entregar",
     "auto.hand.fileAdd": "＋ Adicionar arquivo",
     "auto.hand.fileRemove": "Remover {name}",

@@ -924,7 +924,6 @@ export const nl: Translation = {
     "auto.place.modelOf": "Model voor {step}",
     "auto.start": "Start",
     "auto.hand.title": "{name} starten",
-    "auto.hand.text": "Tekst om mee te geven",
     "auto.hand.files": "Bestanden om mee te geven",
     "auto.hand.fileAdd": "＋ Bestand toevoegen",
     "auto.hand.fileRemove": "{name} weghalen",

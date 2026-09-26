@@ -936,7 +936,6 @@ export const es: Translation = {
     "auto.place.modelOf": "Modelo para {step}",
     "auto.start": "Iniciar",
     "auto.hand.title": "Iniciar {name}",
-    "auto.hand.text": "Texto que se entrega",
     "auto.hand.files": "Archivos que se entregan",
     "auto.hand.fileAdd": "＋ Añadir un archivo",
     "auto.hand.fileRemove": "Quitar {name}",

@@ -921,7 +921,6 @@ export const ko: Translation = {
     "auto.place.modelOf": "{step}의 모델",
     "auto.start": "시작하기",
     "auto.hand.title": "{name} 시작",
-    "auto.hand.text": "넘겨줄 텍스트",
     "auto.hand.files": "넘겨줄 파일",
     "auto.hand.fileAdd": "＋ 파일 추가",
     "auto.hand.fileRemove": "{name} 빼기",

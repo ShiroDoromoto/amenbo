@@ -930,7 +930,6 @@ export const ja: Translation = {
     "auto.place.modelOf": "{step} のモデル",
     "auto.start": "起動する",
     "auto.hand.title": "{name} を起動する",
-    "auto.hand.text": "渡すテキスト",
     "auto.hand.files": "渡すファイル",
     "auto.hand.fileAdd": "＋ ファイルを足す",
     "auto.hand.fileRemove": "{name} を外す",

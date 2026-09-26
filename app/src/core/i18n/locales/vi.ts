@@ -925,7 +925,6 @@ export const vi: Translation = {
     "auto.place.modelOf": "Mô hình cho {step}",
     "auto.start": "Chạy",
     "auto.hand.title": "Chạy {name}",
-    "auto.hand.text": "Văn bản trao cho",
     "auto.hand.files": "Tệp trao cho",
     "auto.hand.fileAdd": "＋ Thêm tệp",
     "auto.hand.fileRemove": "Bỏ {name}",

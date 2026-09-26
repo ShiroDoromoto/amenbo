@@ -925,7 +925,6 @@ export const th: Translation = {
     "auto.place.modelOf": "โมเดลของ {step}",
     "auto.start": "เริ่ม",
     "auto.hand.title": "เริ่ม {name}",
-    "auto.hand.text": "ข้อความที่ส่งให้",
     "auto.hand.files": "ไฟล์ที่ส่งให้",
     "auto.hand.fileAdd": "＋ เพิ่มไฟล์",
     "auto.hand.fileRemove": "เอา {name} ออก",

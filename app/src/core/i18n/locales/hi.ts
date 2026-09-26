@@ -924,7 +924,6 @@ export const hi: Translation = {
     "auto.place.modelOf": "{step} का मॉडल",
     "auto.start": "शुरू करें",
     "auto.hand.title": "{name} शुरू करें",
-    "auto.hand.text": "सौंपा जाने वाला टेक्स्ट",
     "auto.hand.files": "सौंपी जाने वाली फ़ाइलें",
     "auto.hand.fileAdd": "＋ फ़ाइल जोड़ें",
     "auto.hand.fileRemove": "{name} हटाएँ",

@@ -924,7 +924,6 @@ export const tr: Translation = {
     "auto.place.modelOf": "{step} için model",
     "auto.start": "Başlat",
     "auto.hand.title": "{name} başlat",
-    "auto.hand.text": "Verilecek metin",
     "auto.hand.files": "Verilecek dosyalar",
     "auto.hand.fileAdd": "＋ Dosya ekle",
     "auto.hand.fileRemove": "{name} kaldır",

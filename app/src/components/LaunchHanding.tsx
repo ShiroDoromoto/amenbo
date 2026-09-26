@@ -2,20 +2,21 @@
 // press that starts an automation, before the run exists.
 //
 // **It asks for what the entry reads, and nothing else.** Core answers what that is
-// (`automation_launch_asks`): an agent's step reads a text and files; the built-in that files a task
-// reads the task's title, its notes and a value on each axis offered; any other built-in reads
-// nothing. A launch handing an entry what it does not read is refused, so a field the entry would
-// not read is one the person could only be refused over.
+// (`automation_launch_asks`): the built-in that files a task reads the task's title, its notes, a
+// value on each axis offered and files, which go onto the task it files (`AMB-D-981`); any other
+// entry reads nothing. A launch handing an entry what it does not read is refused, so a field the
+// entry would not read is one the person could only be refused over. There is no field for words on
+// their own: words for the task go in its notes, so there is one place to write them, not two.
 //
 // **Before the launch, not in the run's pane.** What is handed over is written onto the run in the
 // launch's own transaction (`amenbo_core::ops::automation_run::HandedAtLaunch`), so the first step
 // never opens on a run it has not reached yet — and there is no run to draw a pane for until then.
 //
-// **Handing nothing is a start like any other** where the entry reads words: most automations take
-// their task from the list and are handed nothing, so both fields start empty and the press that
-// starts is live from the first. **A task cannot be filed without a title**, nor without a value on
-// an axis the project requires, so for that entry the press waits for both — the same two things the
-// launch would refuse over.
+// **Handing nothing is a start like any other** where the entry reads nothing: most automations take
+// their task from the list and are handed nothing, so the press that starts is live from the first.
+// **A task cannot be filed without a title**, nor without a value on an axis the project requires, so
+// for the entry that files one the press waits for both — the same two things the launch would refuse
+// over.
 //
 // **A file is named by its path**, picked in the machine's own panel, the way an attachment is: the
 // host reads it at the press, checks it against the per-file cap and keeps it (`crate::automation`).
@@ -47,7 +48,6 @@ export function LaunchHanding({
   onClose: () => void;
 }) {
   const asks = useLaunchAsks(id);
-  const [text, setText] = useState("");
   const [files, setFiles] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -62,14 +62,13 @@ export function LaunchHanding({
   // What the press hands over: only what the entry reads.
   const handed = (reads: AutomationLaunchAsksDto["reads"]): Handed => {
     switch (reads) {
-      case "words":
-        return { ...NOTHING_HANDED, text: text.trim(), files };
       case "task":
         return {
           ...NOTHING_HANDED,
           title: title.trim(),
           notes: notes.trim(),
           classification: Object.entries(chosen).filter(([, value]) => value !== ""),
+          files,
         };
       case "nothing":
         return NOTHING_HANDED;
@@ -94,47 +93,6 @@ export function LaunchHanding({
         <h2 className="autodlg__title" id="launch-hand-title">
           {tf("auto.hand.title", { name })}
         </h2>
-
-        {asks?.reads === "words" && (
-          <>
-            <label className="autostep__field">
-              <span className="autostep__label">{t("auto.hand.text")}</span>
-              <textarea
-                {...asTyped}
-                autoFocus
-                className="autostep__prompt"
-                rows={5}
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-              />
-            </label>
-
-            <div className="autostep__field">
-              <span className="autostep__label">{t("auto.hand.files")}</span>
-              {files.length > 0 && (
-                <ul className="launchhand__files">
-                  {files.map((one) => (
-                    <li key={one} className="launchhand__file" title={one}>
-                      <Icon name="paperclip" />
-                      <span className="launchhand__name">{baseName(one)}</span>
-                      <button
-                        type="button"
-                        className="launchhand__drop"
-                        aria-label={tf("auto.hand.fileRemove", { name: baseName(one) })}
-                        onClick={() => setFiles((had) => had.filter((path) => path !== one))}
-                      >
-                        <Icon name="close" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <button type="button" className="btn launchhand__add" onClick={() => void add()}>
-                {t("auto.hand.fileAdd")}
-              </button>
-            </div>
-          </>
-        )}
 
         {asks?.reads === "task" && (
           <>
@@ -186,6 +144,31 @@ export function LaunchHanding({
                 </select>
               </label>
             ))}
+
+            <div className="autostep__field">
+              <span className="autostep__label">{t("auto.hand.files")}</span>
+              {files.length > 0 && (
+                <ul className="launchhand__files">
+                  {files.map((one) => (
+                    <li key={one} className="launchhand__file" title={one}>
+                      <Icon name="paperclip" />
+                      <span className="launchhand__name">{baseName(one)}</span>
+                      <button
+                        type="button"
+                        className="launchhand__drop"
+                        aria-label={tf("auto.hand.fileRemove", { name: baseName(one) })}
+                        onClick={() => setFiles((had) => had.filter((path) => path !== one))}
+                      >
+                        <Icon name="close" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button type="button" className="btn launchhand__add" onClick={() => void add()}>
+                {t("auto.hand.fileAdd")}
+              </button>
+            </div>
           </>
         )}
 

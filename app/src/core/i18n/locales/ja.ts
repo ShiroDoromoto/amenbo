@@ -955,6 +955,7 @@ export const ja: Translation = {
     "auto.pic.legendBranch": "分かれる",
     "auto.pic.legendWire": "受け渡し",
     "auto.pic.legendLeaves": "出口から出る",
+    "auto.pic.legendError": "エラー（線が無ければ止めて人を呼ぶ）",
     "auto.pic.legendUnfed": "届かない入力",
     "auto.pic.emptyMark": "空",
     "auto.pic.place": "アクションを配置する",

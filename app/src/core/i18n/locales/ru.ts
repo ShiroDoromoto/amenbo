@@ -966,6 +966,7 @@ export const ru: Translation = {
     "auto.pic.legendBranch": "Ветвится",
     "auto.pic.legendWire": "Передача",
     "auto.pic.legendLeaves": "Уходит через выход",
+    "auto.pic.legendError": "ошибка (без линии: остановиться и позвать человека)",
     "auto.pic.legendUnfed": "Вход, до которого ничего не доходит",
     "auto.pic.emptyMark": "Пусто",
     "auto.pic.place": "Разместить действие",

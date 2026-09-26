@@ -962,6 +962,7 @@ export const ptBR: Translation = {
     "auto.pic.legendBranch": "Ramifica",
     "auto.pic.legendWire": "Repasse",
     "auto.pic.legendLeaves": "Sai por uma saída",
+    "auto.pic.legendError": "erro (sem linha: parar e chamar uma pessoa)",
     "auto.pic.legendUnfed": "Entrada a que nada chega",
     "auto.pic.emptyMark": "Vazia",
     "auto.pic.place": "Colocar uma ação",

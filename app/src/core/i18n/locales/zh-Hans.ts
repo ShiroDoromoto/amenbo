@@ -951,6 +951,7 @@ export const zhHans: Translation = {
     "auto.pic.legendBranch": "分岔",
     "auto.pic.legendWire": "传递",
     "auto.pic.legendLeaves": "经出口离开",
+    "auto.pic.legendError": "出错（没有连线时：停下来叫人）",
     "auto.pic.legendUnfed": "没有东西送到的输入",
     "auto.pic.emptyMark": "空",
     "auto.pic.place": "放置一个动作",

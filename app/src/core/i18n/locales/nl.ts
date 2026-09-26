@@ -949,6 +949,7 @@ export const nl: Translation = {
     "auto.pic.legendBranch": "Vertakt",
     "auto.pic.legendWire": "Overdracht",
     "auto.pic.legendLeaves": "Via een uitgang eruit",
+    "auto.pic.legendError": "fout (zonder lijn: stoppen en iemand erbij halen)",
     "auto.pic.legendUnfed": "Invoer die niets bereikt",
     "auto.pic.emptyMark": "Leeg",
     "auto.pic.place": "Een actie plaatsen",

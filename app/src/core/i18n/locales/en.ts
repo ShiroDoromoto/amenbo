@@ -1191,6 +1191,7 @@ const ui = {
   "auto.pic.legendBranch": "Branches",
   "auto.pic.legendWire": "Handoff",
   "auto.pic.legendLeaves": "Leaves by an exit",
+  "auto.pic.legendError": "error (no line: stop and call a person)",
   "auto.pic.legendUnfed": "Input nothing reaches",
   "auto.pic.emptyMark": "Empty",
   "auto.pic.place": "Place an action",

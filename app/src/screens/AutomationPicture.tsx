@@ -84,7 +84,8 @@ function headOf(line: PicLine): Head {
  * kind of line, in the colour the line itself is — so the legend is the stylesheet read aloud, and
  * never a second list of colours to keep in step with it — then the marks a box or a stretch wears,
  * drawn with the same classes as on the picture. A line leaving by one of the action's ways out is
- * only ever drawn on an action's picture, so it is listed there alone.
+ * only ever drawn on an action's picture, so it is listed there alone. The error line's word also says
+ * where a box with no such line goes, since the picture does not draw that on every box.
  */
 function Legend({ inAction }: { inAction: boolean }) {
   const one = (kind: string, word: string) => (
@@ -98,7 +99,7 @@ function Legend({ inAction }: { inAction: boolean }) {
       {one("next", t("auto.pic.legendNext"))}
       {one("back", t("auto.pic.legendBack"))}
       {one("branch", t("auto.pic.legendBranch"))}
-      {one("error", t("auto.pic.errorExit"))}
+      {one("error", t("auto.pic.legendError"))}
       {one("wire", t("auto.pic.legendWire"))}
       {inAction && one("leaves", t("auto.pic.legendLeaves"))}
       {one("lap", t("auto.pic.lap"))}

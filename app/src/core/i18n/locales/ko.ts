@@ -946,6 +946,7 @@ export const ko: Translation = {
     "auto.pic.legendBranch": "갈라짐",
     "auto.pic.legendWire": "전달",
     "auto.pic.legendLeaves": "출구로 나감",
+    "auto.pic.legendError": "오류 (선이 없으면 멈추고 사람을 부릅니다)",
     "auto.pic.legendUnfed": "아무것도 닿지 않는 입력",
     "auto.pic.emptyMark": "비어 있음",
     "auto.pic.place": "액션 배치",

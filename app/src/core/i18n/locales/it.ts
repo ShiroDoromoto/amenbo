@@ -961,6 +961,7 @@ export const it: Translation = {
     "auto.pic.legendBranch": "Si dirama",
     "auto.pic.legendWire": "Consegna",
     "auto.pic.legendLeaves": "Esce da un'uscita",
+    "auto.pic.legendError": "errore (senza linea: fermarsi e chiamare una persona)",
     "auto.pic.legendUnfed": "Ingresso a cui non arriva niente",
     "auto.pic.emptyMark": "Vuota",
     "auto.pic.place": "Colloca un'azione",

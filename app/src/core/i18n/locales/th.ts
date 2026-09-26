@@ -950,6 +950,7 @@ export const th: Translation = {
     "auto.pic.legendBranch": "แยกทาง",
     "auto.pic.legendWire": "การส่งต่อ",
     "auto.pic.legendLeaves": "ออกทางทางออก",
+    "auto.pic.legendError": "ข้อผิดพลาด (ถ้าไม่มีเส้น: หยุดแล้วเรียกคน)",
     "auto.pic.legendUnfed": "อินพุตที่ไม่มีอะไรไปถึง",
     "auto.pic.emptyMark": "ว่าง",
     "auto.pic.place": "วางแอ็กชัน",

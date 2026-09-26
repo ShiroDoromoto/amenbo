@@ -949,6 +949,7 @@ export const hi: Translation = {
     "auto.pic.legendBranch": "शाखाएँ बनती हैं",
     "auto.pic.legendWire": "हस्तांतरण",
     "auto.pic.legendLeaves": "निकास से बाहर",
+    "auto.pic.legendError": "त्रुटि (रेखा न हो तो: रुककर किसी व्यक्ति को बुलाएँ)",
     "auto.pic.legendUnfed": "इनपुट जहाँ कुछ नहीं पहुँचता",
     "auto.pic.emptyMark": "खाली",
     "auto.pic.place": "एक ऐक्शन रखें",

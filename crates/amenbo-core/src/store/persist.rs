@@ -1981,6 +1981,16 @@ impl Store {
         )
     }
 
+    /// **End a held step whose time has come** — the built-in that waits (`AMB-D-983`) — by its done
+    /// way out, and answer with what the run does next, as [`Self::automation_done`] does
+    /// ([`crate::ops::automation_builtin::time_up`]).
+    pub fn automation_time_up(&mut self, run_step_id: i64) -> Result<crate::ops::automation_report::Next> {
+        self.write_one(
+            &[WriteTarget::AttachTo(crate::model::AttachmentTarget::AutomationRunStep, run_step_id)],
+            |tx| crate::ops::automation_builtin::time_up(tx, run_step_id),
+        )
+    }
+
     /// **Ask a run to pause.** A step under way finishes first; one that is not pauses now.
     pub fn automation_pause(
         &mut self,

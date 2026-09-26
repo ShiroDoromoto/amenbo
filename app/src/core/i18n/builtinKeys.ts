@@ -19,6 +19,7 @@ const SECTIONS: Record<string, string> = {
   close_task: "closeTask",
   fetch: "fetch",
   split_by_dim: "splitByDim",
+  wait: "wait",
 };
 
 /** For each built-in, the store's word → the dictionary key it sits under. */

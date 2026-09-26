@@ -2560,7 +2560,7 @@ mod tests {
                 crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                     panic!("cannot start {agent}")
                 }
-                crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } => panic!("not a built-in"),
+                crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
                 crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             };
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
@@ -2664,7 +2664,7 @@ mod tests {
             crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                 panic!("cannot start {agent}")
             }
-            crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } => panic!("not a built-in"),
+            crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
         };
         let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));

@@ -512,33 +512,53 @@ export function pictureOrder(graph: PicGraph): PicOrder {
 }
 
 /**
- * Whether anything actually reaches one required input — **core's rule, read off the same three
- * conditions** (`amenbo_core::ops::automation_run::fed`): the wire comes from a box a run
- * reaches, that box still exists, and the way out it leaves by really hands on a port of that name.
+ * Whether anything actually reaches one required input — **core's rule, read off the same conditions**
+ * (`amenbo_core::ops::automation_run::fed`): the wire comes from a box a run can come to **before it
+ * first comes to this one**, that box still exists, and the way out it leaves by really hands on a port
+ * of that name. A wire from the box's own way out, or from a box only reached through it, carries
+ * nothing the first time a run arrives, and the run fails there on no_input (`AMB-T-5641`).
  *
  * It is worked out here because the launch check answers by box *name*, which is no way to find a
  * box. What a box says is a remark; the start press over the picture is what refuses, and it reads
  * core's answer whole (`./AutomationBuildScreen`).
  */
-function fed(
-  graph: PicGraph,
-  boxes: Map<number, PicBox>,
-  live: Set<number>,
-  boxId: number,
-  port: string,
-): boolean {
+export function fed(graph: PicGraph, boxId: number, port: string): boolean {
+  const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
   if (readAtLaunch(graph, boxes.get(boxId)?.builtin, boxId, port)) return true;
+  let before: Set<number> | undefined;
   return graph.wires.some((wire) => {
     if (wire.toId !== boxId || wire.toPortName !== port) return false;
     // What the action itself was handed is there from the start, whatever the walk reached.
     if (wire.fromId === ACTION_BOUNDARY) {
       return graph.boundary?.inputs.some((one) => one.name === wire.fromPortName) ?? false;
     }
-    if (!live.has(wire.fromId)) return false;
+    before ??= reachedBefore(graph, boxes, boxId);
+    if (!before.has(wire.fromId)) return false;
     const from = boxes.get(wire.fromId);
     const exit = from?.exits.find((one) => one.name === wire.fromExitName);
     return exit?.outputs.some((one) => one.name === wire.fromPortName) ?? false;
   });
+}
+
+/**
+ * **What a run can come to before it first comes to `boxId`** — from the entry along the edges that go
+ * on to a box, never passing through that one (`amenbo_core::ops::automation_run::reachable_without`).
+ * The box itself is not among them.
+ */
+function reachedBefore(graph: PicGraph, boxes: Map<number, PicBox>, boxId: number): Set<number> {
+  const seen = new Set<number>();
+  if (graph.entryId === undefined || !boxes.has(graph.entryId)) return seen;
+  const queue = [graph.entryId];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (id === boxId || seen.has(id)) continue;
+    seen.add(id);
+    for (const edge of graph.edges) {
+      if (edge.fromId !== id || edge.ends !== "go" || edge.toId === undefined) continue;
+      if (boxes.has(edge.toId)) queue.push(edge.toId);
+    }
+  }
+  return seen;
 }
 
 /** The built-in that files a task, and the inputs it reads from the start dialog, by the store's word. */
@@ -705,7 +725,7 @@ export function layOut(graph: PicGraph | null): Picture {
           unfed: !live.has(boxId)
             ? []
             : box.inputs
-                .filter((port) => port.required && !fed(graph, boxes, live, boxId, port.name))
+                .filter((port) => port.required && !fed(graph, boxId, port.name))
                 .map((port) => builtinWord(box.builtin, port.name)),
         });
       });

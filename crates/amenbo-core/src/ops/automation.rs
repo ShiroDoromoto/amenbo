@@ -1168,34 +1168,16 @@ impl ActionShelf {
     }
 }
 
-/// **Make an empty action and put it on a picture**, standing on its own with no line reaching it —
-/// the press a build screen makes where the picture has no line to put one in on (`AMB-D-956`). A
-/// picture with nothing on it yet refuses it: what is placed first is where a run starts, one of the
-/// built-ins ([`placement_add`], `AMB-D-977`).
+/// **Make an empty action and put it in on a line.** Where it goes is decided by the press, before
+/// there is anything in it: the reader goes on to build the action and comes back to find it standing
+/// where they meant it to (`AMB-D-956`). A picture with nothing on it has no line to press, and what
+/// goes there first is one of the built-ins ([`placement_add`], `AMB-D-977`).
 ///
 /// **What it takes is a name and a library, and nothing else.** The inside of an action is its steps,
 /// and each step carries its own prompt, ways out and outputs — so it is built on the action's own
 /// screen, and a dialog that took part of it here would be a second place to declare the same thing
 /// (`AMB-D-954`). Until a step is written in it, the launch check refuses the automation on it
 /// ([`crate::ops::automation_run`]'s `ActionEmpty`).
-///
-/// It is one act for [`placement_insert_new`]'s reason: half of it is an action in the library that
-/// nothing stands on.
-pub fn placement_add_new(
-    tx: &WriteTx<'_>,
-    automation_id: i64,
-    shelf: ActionShelf,
-    name: &str,
-) -> Result<AutomationPlacement> {
-    let automation = live_automation(tx, automation_id)?;
-    not_under_a_run(tx, Def::Automation(automation_id))?;
-    let action = action_add(tx, shelf.under(automation.project_id), name, "")?;
-    placement_add(tx, automation_id, action.id)
-}
-
-/// **Make an empty action and put it in on a line** — [`placement_add_new`] for a picture already
-/// drawn. Where it goes is decided by the press, before there is anything in it: the reader goes on
-/// to build the action and comes back to find it standing where they meant it to (`AMB-D-956`).
 ///
 /// It is one act because half of it is a picture nobody asked for: an action in the library that
 /// nothing stands on, or a line running past a spot that was meant to be on it.
@@ -2907,39 +2889,37 @@ mod tests {
     }
 
     #[test]
-    fn an_action_made_at_the_picture_lands_on_the_library_it_was_told_to() {
+    fn an_action_made_on_a_line_lands_on_the_library_it_was_told_to() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            entry_placed(tx, &automation, "take_task");
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            let edge = edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                first.id,
+                None,
+                EdgeTarget::Done,
+                None,
+            )
+            .expect("close the task after it");
 
-            let mine = placement_add_new(tx, automation.id, ActionShelf::Project, "下ごしらえ")
+            let mine = placement_insert_new(tx, edge.id, ActionShelf::Project, "下ごしらえ")
                 .expect("make it on the project's shelf");
-            let shared = placement_add_new(tx, automation.id, ActionShelf::Device, "見直す")
+            let onward = edge_on(tx, AutomationPictureOwner::Automation, mine.id, None)
+                .expect("read edge")
+                .expect("the line the new one goes on along");
+            let shared = placement_insert_new(tx, onward.id, ActionShelf::Device, "見直す")
                 .expect("make it on the device's shelf");
 
             assert_eq!(
-                live_action(tx, live_placement(tx, mine.id).unwrap().action_id)
-                    .unwrap()
-                    .project_id,
+                live_action(tx, mine.action_id).unwrap().project_id,
                 Some(automation.project_id),
                 "the project's shelf is the automation's own project",
             );
             assert_eq!(
-                live_action(tx, live_placement(tx, shared.id).unwrap().action_id)
-                    .unwrap()
-                    .project_id,
+                live_action(tx, shared.action_id).unwrap().project_id,
                 None,
                 "and the device's belongs to no project at all",
-            );
-            assert!(
-                read::automation_edge_ids_naming_box(
-                    tx.conn(),
-                    AutomationPictureOwner::Automation,
-                    mine.id,
-                )
-                .unwrap()
-                .is_empty(),
-                "a box put down this way stands on its own — no line was pressed to put it in on",
             );
         });
     }
@@ -3654,10 +3634,6 @@ mod tests {
             }
             let close = automation_builtin::action(tx, "close_task").expect("built-in");
             assert!(placement_add(tx, automation.id, close.id).is_err(), "a built-in a run does not start at");
-            assert!(
-                placement_add_new(tx, automation.id, ActionShelf::Project, "新しい").is_err(),
-                "an action made at an empty picture is not one a run starts at",
-            );
             assert!(read::automation_placement_ids(tx.conn(), automation.id).unwrap().is_empty());
 
             for key in automation_builtin::entries() {
@@ -4146,7 +4122,6 @@ mod held_by_a_run {
         held("entry", run, entry_replace(tx, p.automation.id, "fetch"));
         held("delete", run, delete(tx, p.automation.id));
         held("place", run, placement_add(tx, p.automation.id, p.second_action.id));
-        held("place new", run, placement_add_new(tx, p.automation.id, ActionShelf::Project, "新しい"));
         held("place on a line", run, placement_insert(tx, p.onward.id, p.second_action.id));
         held(
             "place new on a line",

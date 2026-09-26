@@ -1864,24 +1864,6 @@ impl Store {
         })
     }
 
-    /// Make an empty action and put it on a picture, standing on its own (one operation = one
-    /// transaction) — [`Self::automation_placement_insert_new`] for a picture that has no line to put
-    /// one in on. Refused on a picture with nothing on it: the first placement is the entry, a built-in
-    /// ([`crate::ops::automation::placement_add`]).
-    pub fn automation_placement_add_new(
-        &mut self,
-        automation_id: i64,
-        shelf: crate::ops::automation::ActionShelf,
-        name: &str,
-    ) -> Result<crate::model::AutomationPlacement> {
-        let mut targets =
-            vec![WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)];
-        targets.extend(device_shelf(shelf));
-        self.write_one(&targets, |tx| {
-            crate::ops::automation::placement_add_new(tx, automation_id, shelf, name)
-        })
-    }
-
     /// Reorder a placement within its automation's lists (one operation = one transaction).
     pub fn automation_placement_move(
         &mut self,

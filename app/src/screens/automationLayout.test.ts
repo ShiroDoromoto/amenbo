@@ -608,6 +608,36 @@ describe("the picture of an automation", () => {
     expect(line.points[0]!.x - box.x).toBe(line.points[3]!.x - at(picture, 2).x);
   });
 
+  it("writes the name of a second line down to a neighbour past its right end, off the first one's corner", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", {
+            exits: [
+              { id: 90, name: "完了", outputs: [port("task", "task_take")] },
+              { id: 91, name: "*", outputs: [] },
+              { id: 92, name: "やり直す", outputs: [] },
+            ],
+          }),
+          step({ id: 2, name: "work" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "やり直す", toId: 2 }),
+        ],
+      }),
+    );
+    const first = picture.lines.find((one) => one.key === "edge-1")!;
+    const second = picture.lines.find((one) => one.key === "edge-2")!;
+    // Both turn at one height; the second's leg across is shorter than its name.
+    expect(second.points[1]!.y).toBe(first.points[1]!.y);
+    expect(second.align).toBe("start");
+    const legEnd = Math.max(second.points[1]!.x, second.points[2]!.x);
+    expect(second.at.x).toBeGreaterThan(legEnd);
+    expect(second.at.x).toBeGreaterThan(Math.max(first.points[0]!.x, first.points[3]!.x));
+  });
+
   it("writes the name of a line straight down on its left, and staggers the + of lines side by side in the margin", () => {
     const picture = layOut(
       detail({

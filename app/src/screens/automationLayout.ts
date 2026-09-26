@@ -887,6 +887,9 @@ export function layOut(graph: PicGraph | null): Picture {
     .map((box) => ({ id: -box.id, fromId: box.id, exitName: ERROR_EXIT, ends: "halt" }));
   const edges = [...graph.edges, ...unsaid];
   const slot = new Map<number, { nth: number; below: number }>();
+  // The first of each box's lines that go down to a neighbour — the one with nothing of its box's
+  // coming down on its left, where a name beside it can be written.
+  const firstDown = new Map<number, number>();
   for (const box of graph.boxes) {
     const exitAt = (edge: AutomationEdgeDto) => box.exits.findIndex((exit) => exit.name === edge.exitName);
     const own = edges
@@ -898,6 +901,7 @@ export function layOut(graph: PicGraph | null): Picture {
       // How many lines that go nowhere stand to this one's right: its words go that many rows lower.
       const below = reach(edge) === 2 ? nowhere - 1 - seen++ : 0;
       slot.set(edge.id, { nth, below });
+      if (reach(edge) === 1 && !firstDown.has(box.id)) firstDown.set(box.id, edge.id);
     });
   }
 
@@ -935,9 +939,19 @@ export function layOut(graph: PicGraph | null): Picture {
       const mid = Math.round((sy + ty) / 2);
       const across = Math.round((sx + tx) / 2);
       inserts.push({ edgeId: edge.id, x: across, y: mid });
-      // A line straight down has no leg across to write over: the name goes beside its `+`, on the
-      // left, where the lines that go nowhere do not write theirs.
-      const straight = Math.abs(tx - sx) < BESIDE * 2;
+      // A leg across shorter than the name has no room to write it over: centred there, it runs over
+      // the lines leaving beside it (`AMB-T-5675`). A line straight down has no leg at all. Either
+      // way the name goes level with the leg, on the left where the lines that go nowhere do not write
+      // theirs — but only for the first of its box's lines down to a neighbour. Any other has one of
+      // those turning at the same height on its left, so its name goes past its right end instead.
+      const word = wordW(lineWord({ exitName: edge.exitName, builtin: from.builtin }));
+      const short = Math.abs(tx - sx) < Math.max(BESIDE * 2, word + BESIDE);
+      const left = firstDown.get(edge.fromId) === edge.id && tx <= sx + BESIDE * 2;
+      const at = !short
+        ? { x: across, y: mid - OVER }
+        : left
+          ? { x: Math.min(sx, tx) - BESIDE, y: mid + 4 }
+          : { x: Math.max(sx, tx) + BESIDE, y: mid + 4 };
       lines.push({
         key,
         kind: "edge",
@@ -946,8 +960,8 @@ export function layOut(graph: PicGraph | null): Picture {
         leaves: edge.ends === "exit",
         exitName: edge.exitName,
         builtin: from.builtin,
-        at: straight ? { x: Math.min(sx, tx) - BESIDE, y: mid + 4 } : { x: across, y: mid - OVER },
-        align: straight ? "end" : "middle",
+        at,
+        align: !short ? "middle" : left ? "end" : "start",
       });
       continue;
     }

@@ -42,6 +42,7 @@ use crate::model::{
     AutomationRunStepStatus, AutomationStep, AutomationEdge,
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
 };
+use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
 use crate::ops::{automation, emit_create};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -122,6 +123,11 @@ pub enum Unmet {
     ///
     /// `step` names the action, or the step inside it, whose way out `exit` is.
     HandsOnTaskTaken { step: String, exit: String, placement: i64 },
+    /// The built-in that splits by an axis, placed while its axis was there, whose axis has been deleted
+    /// since (`AMB-D-987`). A run reaching it would have nothing to split by and halt, so the launch is
+    /// refused here instead. `step` is the action's name, which every split shares, so the placement is
+    /// named in the sentence too.
+    SplitAxisGone { step: String, placement: i64 },
 }
 
 impl Unmet {
@@ -184,6 +190,12 @@ impl Unmet {
                     named(exit)
                 )
             }
+            Unmet::SplitAxisGone { step, placement } => {
+                format!(
+                    "'{step}' on placement {placement} splits by an axis that has been deleted — take the \
+                     placement off and place the split again on an axis that is there"
+                )
+            }
         }
     }
 }
@@ -208,6 +220,7 @@ impl Unmet {
             Unmet::LeavesTaskOpen { to: Some(_), .. } => ErrorCode::NotReadyAutomationTaskLeftOpen,
             Unmet::LeavesTaskOpen { to: None, .. } => ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
             Unmet::HandsOnTaskTaken { .. } => ErrorCode::NotReadyAutomationHandsOnTaskTaken,
+            Unmet::SplitAxisGone { .. } => ErrorCode::NotReadyAutomationSplitAxisGone,
         }
     }
 
@@ -252,6 +265,7 @@ impl Unmet {
                 }
             }
             Unmet::HandsOnTaskTaken { step, exit, .. } => msg.with("step", step).with("exit", exit),
+            Unmet::SplitAxisGone { step, .. } => msg.with("step", step),
         }
     }
 
@@ -269,7 +283,8 @@ impl Unmet {
             | Unmet::AgentMissing { placement, .. }
             | Unmet::ModelMissing { placement, .. }
             | Unmet::LeavesTaskOpen { placement, .. }
-            | Unmet::HandsOnTaskTaken { placement, .. } => Some(*placement),
+            | Unmet::HandsOnTaskTaken { placement, .. }
+            | Unmet::SplitAxisGone { placement, .. } => Some(*placement),
         }
     }
 
@@ -282,6 +297,7 @@ impl Unmet {
             | Unmet::UnansweredCfg { builtin, .. }
             | Unmet::CfgNotFound { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
+            Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
             _ => None,
         }
     }
@@ -524,6 +540,9 @@ pub fn check(
                     placement: placement.id,
                 });
             }
+        }
+        if crate::ops::automation_builtin_split::lost_its_axis(conn, placement.action_id)? {
+            unmet.push(Unmet::SplitAxisGone { step: name.clone(), placement: placement.id });
         }
         let steps = steps_opened_by(conn, placement.action_id)?;
         if builtin.is_none() {

@@ -592,6 +592,9 @@ const ui = {
   // sentence, so these are the only place a timeline line is worded — under Tauri and in the
   // browser fallback alike (see eventText in ../index.ts).
   "common.you": "You",
+  // The two buttons of the machine's own confirmation dialog (core/dialog.ts), which otherwise
+  // come out in English whatever the app's language is.
+  "dialog.ok": "OK", "dialog.cancel": "Cancel",
   "act.created": "Created “{title}”",
   "act.statusChanged": "Changed “{title}” to {status}",
   "act.assigned": "Assigned “{title}”", "act.assignedAi": "Delegated “{title}” to AI",
@@ -1710,6 +1713,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_task_left_open: "{step}: {exit} goes on to {to}, which takes another task, with this one still open",
   not_ready_automation_task_left_open_at_end: "{step}: {exit} ends the run with the task still open",
   not_ready_automation_hands_on_task_taken: "{step}: {exit} hands on the task the run works, which only a built-in takes — put “Take a task” or “File a task” before it",
+  not_ready_automation_split_axis_gone: "{step} (placement {placement}): the axis it splits by has been deleted — take this placement off and place it again on an axis that is there",
   store_busy: "The store is in use right now. Try again in a moment.",
   // The store itself giving way — a disk that would not answer, a database that could not be read.
   // What the engine said is a line in the diagnostic log, not a sentence for a reader: it names none

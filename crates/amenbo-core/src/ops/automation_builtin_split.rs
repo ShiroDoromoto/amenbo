@@ -20,6 +20,8 @@
 //! ways out to leave by. An axis split by is not widened to hold several afterwards
 //! ([`refuse_to_widen`]).
 
+use rusqlite::Connection;
+
 use crate::error::{Error, Result};
 use crate::model::{DimensionAppliesTo, DimensionCardinality, ERROR_EXIT};
 use crate::ops::automation;
@@ -103,7 +105,8 @@ pub(crate) fn follow(tx: &WriteTx<'_>, axis: i64, renamed: Option<(&str, &str)>)
 }
 
 /// **An axis that is going leaves the actions that split by it with none**, said as a write so the
-/// change is carried like any other. Carrying one out afterwards falls over rather than guess.
+/// change is carried like any other. The launch check refuses an automation placing one
+/// ([`lost_its_axis`]), and a run launched before the axis went falls over there rather than guess.
 pub(crate) fn forget(tx: &WriteTx<'_>, axis: i64) -> Result<()> {
     for before in read::automation_actions_splitting(tx.conn(), axis)? {
         let after = crate::model::AutomationAction {
@@ -116,6 +119,14 @@ pub(crate) fn forget(tx: &WriteTx<'_>, axis: i64) -> Result<()> {
     Ok(())
 }
 
+/// **Is this the action that splits by an axis, left with none by [`forget`]?** The launch check asks
+/// it of every placement (`AMB-D-987`), so a run is refused before it reaches a split with nothing to
+/// split by rather than halting there.
+pub(crate) fn lost_its_axis(conn: &Connection, action_id: i64) -> Result<bool> {
+    Ok(read::automation_action(conn, action_id)?
+        .is_some_and(|a| a.builtin.as_deref() == Some(SPLIT_BY_DIM.key) && a.builtin_dimension_id.is_none()))
+}
+
 /// **An axis split by stays one a task holds one value of** — widened, a task could carry two values and
 /// have two ways out to leave by.
 pub(crate) fn refuse_to_widen(tx: &WriteTx<'_>, axis: i64, name: &str) -> Result<()> {
@@ -123,7 +134,7 @@ pub(crate) fn refuse_to_widen(tx: &WriteTx<'_>, axis: i64, name: &str) -> Result
         return Ok(());
     }
     Err(Error::invalid(format!(
-        "'{name}' is split by in an automation, so a task has to go on holding one value of it — a task \
+        "an automation splits tasks by '{name}', so a task has to go on holding one value of it — a task \
          holding two would have two ways out to leave by"
     )))
 }
@@ -447,6 +458,25 @@ mod tests {
                 unmet.iter().any(|u| matches!(u, Unmet::OpenExit { exit, placement, .. } if exit == "企画" && *placement == p.split.id)),
                 "the new way out has nowhere to go: {unmet:?}",
             );
+        });
+    }
+
+    /// **An axis deleted from under a placed split refuses the launch** (`AMB-D-987`), naming the
+    /// placement — every split shares one name, so the name alone says nothing of which it is.
+    #[test]
+    fn an_axis_deleted_refuses_the_launch_at_the_split() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            dimension::delete(tx, p.role).expect("delete the axis");
+            let unmet = check(tx.conn(), p.automation.id, None, nothing_asked()).expect("check");
+            let gone = unmet
+                .iter()
+                .find(|u| matches!(u, Unmet::SplitAxisGone { placement, .. } if *placement == p.split.id))
+                .unwrap_or_else(|| panic!("the split has nothing to split by: {unmet:?}"));
+            assert_eq!(gone.code(), crate::ErrorCode::NotReadyAutomationSplitAxisGone);
+            assert!(gone.say().contains(&format!("placement {}", p.split.id)), "{}", gone.say());
+            let by = Launcher { startable: None, models: nothing_asked(), workspace_open: Some(true), by: Some(ActorKind::Ai) };
+            assert!(launch(tx, p.automation.id, &by).is_err(), "the launch is refused");
         });
     }
 }

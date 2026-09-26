@@ -14,7 +14,8 @@
 //! **Paused holds its task.** The work is half done and nobody else should take it. Stopping does the
 //! opposite — hands the task back to `todo` — because a run that was cut off left no one carrying it.
 //! A run that stopped to call a person also gives the task to the human, with the report of the step
-//! that stopped on it (`AMB-D-966`).
+//! that stopped on it (`AMB-D-966`), and so does one a person canceled or one that crashed
+//! (`AMB-D-985`).
 //!
 //! **A crash is told to core, or read at startup.** A step's program that ends before its step has
 //! reported is seen by the app that started it, which says so here ([`step_ended`], `AMB-D-961`). An
@@ -113,6 +114,8 @@ fn under_way(status: AutomationRunStatus) -> bool {
 
 /// **End a run and hand back the task it was holding.** Every way a run can end comes through here.
 ///
+/// **The step under way ends with it** ([`close_step`]): a run that is over has no step still going.
+///
 /// **The task goes back to `todo` only when the run was cut short** — failed or canceled. A run that
 /// completed left its task wherever its steps put it, which is the outcome somebody asked for; a run
 /// that was cut off left it reserved by nobody, and a task held by a run that is gone is one no session
@@ -139,6 +142,7 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
 
+    close_step(tx, before.id, ending, now)?;
     let stretch = close_stretch(tx, before.id, now)?;
     if ending.cut_short() {
         hand_the_task_back(tx, &after, stretch.as_ref(), ending)?;
@@ -154,6 +158,32 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
 pub fn left_open(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>) -> Result<bool> {
     let Some(task_id) = stretch.and_then(|s| s.task_id) else { return Ok(false) };
     Ok(read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress))
+}
+
+/// **Close the step the run was in the middle of**, so its row does not read as still going under a run
+/// that is over. A step that had reported is closed already and left alone.
+///
+/// A crash is the step falling over, so it is `failed`; every other ending cut the step off from
+/// outside, so it is `stopped`. It keeps no way out: it never left through one.
+fn close_step(tx: &WriteTx<'_>, run_id: i64, ending: Ending, now: Timestamp) -> Result<()> {
+    let Some(before) = read::automation_run_steps_of(tx.conn(), run_id)?.pop() else {
+        return Ok(());
+    };
+    if before.status != AutomationRunStepStatus::Running {
+        return Ok(());
+    }
+    let mut closed = before.clone();
+    closed.status = match ending {
+        Ending::Failed(AutomationStoppedReason::Crashed) => AutomationRunStepStatus::Failed,
+        _ => AutomationRunStepStatus::Stopped,
+    };
+    closed.ended_at = Some(now);
+    closed.updated_at = now;
+    crate::ops::emit_update(
+        tx,
+        record::automation_run_step(&before),
+        record::automation_run_step(&closed),
+    )
 }
 
 /// Close the stretch the run was in, and answer which one it was. A stretch already closed is left
@@ -195,10 +225,7 @@ fn close_stretch(
 /// alone, it is a task any run may take, and the next one takes it at once and stops at the same place.
 /// So it is also assigned to the human — the one who launched the run, since a local store knows a
 /// launcher only by facet, and a launch by the AI facet handed back to the AI would be that loop again.
-/// Taking it up means handing it back to the AI. Only [`Ending::Failed`] with
-/// [`AutomationStoppedReason::Halted`] does this: a way out the picture sends to a person — one the
-/// author drew so, or the error one, which goes there unless drawn elsewhere. Every other failure is
-/// the run's own and not a question for anybody.
+/// Taking it up means handing it back to the AI. [`to_a_person`] names the endings that do this.
 ///
 /// What the person reads there is the report of the step that stopped, under the line: that is where
 /// the agent said what it needs, and the line alone says only that it stopped.
@@ -216,7 +243,7 @@ fn hand_the_task_back(
         return Ok(());
     }
     let line = said(tx, run, ending)?;
-    if ending != Ending::Failed(AutomationStoppedReason::Halted) {
+    if !to_a_person(ending) {
         crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
         return Ok(());
     }
@@ -231,6 +258,25 @@ fn hand_the_task_back(
         }
     }
     Ok(())
+}
+
+/// **Whether an ending gives the task to a person** rather than back to the AI.
+///
+/// - [`AutomationStoppedReason::Halted`]: a way out the picture sends to a person — one the author drew
+///   so, or the error one, which goes there unless drawn elsewhere (`AMB-D-966`).
+/// - [`Ending::Canceled`]: a person stopped it, so what happens next is theirs to say (`AMB-D-985`).
+/// - [`AutomationStoppedReason::Crashed`]: Amenbo cannot tell why it went down — something in the task
+///   that brings every run down at the same place, or a worktree left half written. The next run would
+///   take it at once and could fall the same way, with no limit on the turns (`AMB-D-985`).
+///
+/// Every other failure is the run's own — the picture's shape or the machine's — and not a question
+/// about the task.
+fn to_a_person(ending: Ending) -> bool {
+    matches!(
+        ending,
+        Ending::Canceled
+            | Ending::Failed(AutomationStoppedReason::Halted | AutomationStoppedReason::Crashed)
+    )
 }
 
 /// The report of the step the run stopped at, with that execution's id — unless it is empty, or the
@@ -580,6 +626,11 @@ mod tests {
             .collect()
     }
 
+    /// The step execution as it stands now.
+    fn step_row(tx: &WriteTx<'_>, run_step_id: i64) -> crate::model::AutomationRunStep {
+        read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("the step")
+    }
+
     fn status_of(tx: &WriteTx<'_>, run_id: i64) -> AutomationRunStatus {
         read::automation_run(tx.conn(), run_id).expect("read").expect("the run").status
     }
@@ -644,6 +695,13 @@ mod tests {
                 crate::model::TaskStatus::Todo,
             );
             assert!(!comments_on(tx, task).is_empty(), "and it was told what happened");
+            // Amenbo cannot tell why it went down, so the next run does not take it straight back
+            // and fall the same way (`AMB-D-985`).
+            assert_eq!(
+                read::task(tx.conn(), task).expect("read").expect("the task").assignee_kind,
+                Some(ActorKind::Human),
+                "it is the person's turn",
+            );
         });
     }
 
@@ -713,10 +771,19 @@ mod tests {
             let after = stop(tx, run.id, Ending::Canceled).expect("stop");
             assert_eq!(after.run.status, AutomationRunStatus::Canceled);
             assert_eq!(after.run.stopped_reason, None, "a person who said stop needs no reason");
+            let closed = step_row(tx, step.run_step.id);
+            assert_eq!(closed.status, AutomationRunStepStatus::Stopped, "the step was cut off");
+            assert_eq!(closed.ended_at, after.run.ended_at, "it ended with the run");
+            assert_eq!(closed.exit_id, None, "it never left through a way out");
             assert_eq!(
                 read::task_status(tx.conn(), task).expect("read"),
                 Some(TaskStatus::Todo),
                 "a task held by a run that is gone is one nobody picks up",
+            );
+            assert_eq!(
+                read::task(tx.conn(), task).expect("read").expect("the task").assignee_kind,
+                Some(ActorKind::Human),
+                "a person stopped it, so what comes next is theirs (`AMB-D-985`)",
             );
             let said = comments_on(tx, task);
             assert_eq!(said.len(), 1, "one line, saying the run is not coming back");
@@ -1014,6 +1081,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false);
             let one = a_run(tx, &p.automation);
+            let under_way = opened(tx, &one, &p.first).run_step.id;
             let another = a_run(tx, &p.automation);
 
             let caught = sweep(tx).expect("sweep");
@@ -1022,6 +1090,9 @@ mod tests {
             assert_eq!(status_of(tx, another.id), AutomationRunStatus::Failed);
             assert!(caught.iter().all(|r| r.stopped_reason
                 == Some(AutomationStoppedReason::Crashed)));
+            let closed = step_row(tx, under_way);
+            assert_eq!(closed.status, AutomationRunStepStatus::Failed, "its step went with the app");
+            assert!(closed.ended_at.is_some(), "a step of a run that is over is not still going");
         });
     }
 
@@ -1036,6 +1107,9 @@ mod tests {
             let ended = step_ended(tx, step.run_step.id).expect("step ended").expect("a run to end");
             assert_eq!(ended.run.status, AutomationRunStatus::Failed);
             assert_eq!(ended.run.stopped_reason, Some(AutomationStoppedReason::Crashed));
+            let closed = step_row(tx, step.run_step.id);
+            assert_eq!(closed.status, AutomationRunStepStatus::Failed, "the step fell over");
+            assert_eq!(closed.ended_at, ended.run.ended_at);
             assert_eq!(
                 read::task_status(tx.conn(), task).expect("read"),
                 Some(TaskStatus::Todo),

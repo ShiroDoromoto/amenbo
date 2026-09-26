@@ -658,6 +658,12 @@ pub struct Snapshot {
     /// gave: a project already carries its own `view`, and this never repaints one.
     #[ts(type = "\"list\" | \"board\" | \"calendar\" | \"timeline\"")]
     pub(crate) default_view: String,
+    /// The store signature, read **before** anything else in this sheet (`AMB-T-5680`). The GUI keeps it
+    /// as the one its own writes are compared against, so it has to be no newer than the rows it came
+    /// with: read after them, a write from outside landing in between would be taken for our own and
+    /// never reach the screen. Read first, it can only be older, and that costs one re-read too many.
+    /// It rides here rather than in a second call for the same reason — two calls leave a gap.
+    pub(crate) signature: StoreSignatureDto,
 }
 
 /// The startup integrity check, shaped for the GUI: it feeds a read-only warning banner. Empty means

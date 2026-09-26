@@ -2392,7 +2392,7 @@ fn all_commands() -> Value {
                    { "name": "--agent <str>", "help": "who is asked to carry it out (required unless --clear)" },
                    { "name": "--model <str>", "help": "which model; left out, the agent's own default stands" },
                    { "name": "--clear", "help": "leave nobody chosen for it" }]),
-            json!(["amenbo automation agent-set 12 --step 11 --agent claude --model opus",
+            json!(["amenbo automation agent-set 12 --step 11 --agent claude-code --model opus",
                    "amenbo automation agent-set 12 --step 11 --clear"])),
         cmd("automation cfg-rm", "Deletes one setting row — an action's declaration, or one placement's answer to it. Confirms unless --yes.",
             json!([{ "name": "<id>", "help": "setting id", "required": true },

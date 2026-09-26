@@ -2156,7 +2156,7 @@ pub enum AutomationCmd {
         /// the step, inside the action standing on the placement
         #[arg(long, value_name = "ID")]
         step: i64,
-        /// who is asked to carry it out (e.g. claude)
+        /// who is asked to carry it out (e.g. claude-code)
         #[arg(long, required_unless_present = "clear", conflicts_with = "clear")]
         agent: Option<String>,
         /// which model; left out, the agent's own default stands

@@ -25,27 +25,28 @@
 id: see-a-run-end-when-its-agent-is-gone-by-the-next-step
 title: A run whose agent has gone by the next step ends there, and its row says why
 description: >
-  Start a run of two placed actions, one step in each, both carried out by Codex CLI. Work the first
-  step as far as taking the task, then take Codex CLI off the machine and have Amenbo look again —
+  Start a run that takes a task with the built-in and then goes through two placed actions, one step
+  in each, both carried out by Codex CLI. With the first step open, take Codex CLI off the machine and have Amenbo look again —
   the build screen, opened twice, says the automation could not be started now. Report the first
   step, and read what opening the second did: the run is stopped, and the running tab's row says its
   agent could not be started.
 given:
   # Two agents, Claude Code and Codex CLI. `runs` keeps a stand-in in the pane and carries out what is
-  # typed at it, which is what the three commands a step types need.
+  # typed at it, which is what the commands a step types need.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
 
+  # The task the built-in the run starts at takes, handed to the AI so the filter it is left with finds it.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task this run walks }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
 
-  # The first action: one step that takes the task and leaves by "got one". The run starts on it, so
-  # it takes a task, and the way out carries the task on to the action's own way out.
+  # The first action: one step that reads the task the run took and leaves by "got one", which the
+  # line inside the action carries on to the action's own way out.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
-  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task and say what it is about }, as: claim }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: say what the task is about }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
 
@@ -57,6 +58,7 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: read, exit_to: "" } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — an agent gone part way" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: codex-cli } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }
@@ -66,7 +68,8 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_review, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 steps_gui:
   - type: action
@@ -114,13 +117,6 @@ steps_gui:
       step: claim
       action: take
       present: true
-
-  - type: action
-    domain: automation
-    op: take-in-pane
-    with:
-      target: run
-      task: seed
 
   # The agent goes while the first step is still open. Its pane goes on — the program was already
   # running — and nothing on the screen moves.
@@ -182,7 +178,7 @@ steps_gui:
     with:
       target: run
       exit: got one
-      report: took the task and handed it on
+      report: read the task and handed it on
 
   - type: action
     domain: automation

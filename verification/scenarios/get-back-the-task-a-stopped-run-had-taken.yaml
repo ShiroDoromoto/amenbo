@@ -1,4 +1,4 @@
-# A step of a run reserves the task it is about, which is what keeps two runs off the same work. So
+# A run reserves the task it is about, which is what keeps two runs off the same work. So
 # a run that ends without finishing has something to give back: the task goes to `todo`, where
 # anybody can pick it up. Without that, a reader looking at that task would find it held by a run
 # that no longer exists.
@@ -8,36 +8,38 @@
 id: get-back-the-task-a-stopped-run-had-taken
 title: Ending a run hands the task it had taken back, and says on the task what happened
 description: >
-  Start a run, let its first step take a task, then stop the run from the line over its pane. Read the
+  Start a run whose built-in takes a task, then stop the run from the line over its pane. Read the
   three things that leaves behind: the task is `todo` again, its timeline says the run was canceled,
   and the run's row on the history tab says so too. What separates this road from
-  close-the-pane-a-run-is-drawn-in is the task — that one stops a run that never took any, and the
+  close-the-pane-a-run-is-drawn-in is what is read after the stop — that one reads the pane, and the
   giving back is not on it.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
 
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task a run will take and give back }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
 
-  # The action the run opens, holding the one step it runs. The way out that takes the task is
-  # declared on both layers: the step's is what the step reports, and the action's is what the
+  # The action the run opens once the built-in has taken the task, holding the one step it runs. Its
+  # way out is declared on both layers: the step's is what the step reports, and the action's is what the
   # automation's picture goes on from — the line inside the action carries the one out by the other.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
-  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: take the next task }, as: claim }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: work the task the run took }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
   - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: claim_got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
-  - { type: action, domain: automation, op: port-add, with: { target: got_one, name: task, kind: task_take, required: true } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that takes a task" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 steps_gui:
   # The line the run leaves on the task is written in the language the settings name, and a fresh
@@ -85,13 +87,6 @@ steps_gui:
     with:
       target: auto
     as: run
-
-  - type: action
-    domain: automation
-    op: take-in-pane
-    with:
-      target: run
-      task: seed
 
   # The reservation, which is the half of this that has to be undone.
   - type: assert

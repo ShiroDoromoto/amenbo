@@ -11,7 +11,7 @@
 id: see-a-run-fail-when-its-step-ends-without-reporting
 title: A run whose step's program ends before the step reports fails there, and its pane and its row say why
 description: >
-  Start a run of one step, and in the pane it is drawn in end the program carrying the step out
+  Start a run that takes a task with the built-in and then opens one step, and in the pane it is drawn in end the program carrying the step out
   before it reports. The pane's header and the running tab's row both say the run failed because its
   step ended without reporting — at once, not on the next startup.
 given:
@@ -19,6 +19,10 @@ given:
   # stands up. `runs` keeps the stand-in standing and carries out what is typed at it, which is what
   # lets a typed `exit` end the program itself.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # The task the built-in the run starts at takes, so the run goes on to the step after it.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run works }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
   # One action holding one step, which leaves by the done way out and takes nothing in: the only
   # thing that can end this run early is its program going.
   - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
@@ -26,10 +30,12 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one whose step goes silent" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 steps_gui:
   - type: action

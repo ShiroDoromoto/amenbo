@@ -2370,7 +2370,7 @@ fn all_commands() -> Value {
                    { "name": "--options <json>", "help": "the choices, as a JSON array (--kind choice only)" }]),
             json!(["amenbo automation cfg-add --action 7 --name queue --kind taskfilter --required",
                    "amenbo automation cfg-add --action 7 --name depth --kind choice --options '[\"quick\",\"deep\"]'"])),
-        cmd("automation cfg-update", "Changes a setting's declaration — its name, kind, whether it is required, or its choice list. Only the fields given change. The answer is `automation cfg-set`, not this.",
+        cmd("automation cfg-update", "Changes a setting's declaration — its name, kind, whether it is required, or its choice list. Only the fields given change. A new name carries every placement's answer with it, and is refused when a placement already holds a row under that name. The answer is `automation cfg-set`, not this.",
             json!([{ "name": "<id>", "help": "setting id", "required": true },
                    { "name": "--name <str>", "help": "rename it" },
                    { "name": "--kind <taskfilter|folder|choice|number|text>", "help": "what kind of answer it takes" },

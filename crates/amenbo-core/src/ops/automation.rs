@@ -1999,6 +1999,11 @@ fn write_cfg_row(
 
 /// Change a setting's declaration — its name, its kind, whether it is required, its choice list. Only
 /// the `Some` fields are written.
+///
+/// **A new name carries every placement's answer with it** (`AMB-T-5657`). The answer is found by the
+/// declaration's name ([`cfg_set`]), so a rename that left it behind would drop it from view while its
+/// row stayed in the store. A placement that already holds a row under the new name is refused rather
+/// than overwritten, and an answer is not renamed on its own — its name is the declaration's.
 pub fn cfg_update(
     tx: &WriteTx<'_>,
     id: i64,
@@ -2021,6 +2026,20 @@ pub fn cfg_update(
                 )));
             }
         }
+        if name != before.name {
+            match before.owner_kind {
+                AutomationCfgOwner::Placement => {
+                    return Err(Error::invalid(format!(
+                        "an answer is called by the name its action declares — rename setting \
+                         '{}' on the action, and every placement's answer follows",
+                        before.name
+                    )));
+                }
+                AutomationCfgOwner::Action => {
+                    carry_answers_to(tx, before.owner_id, &before.name, &name)?;
+                }
+            }
+        }
         after.name = name;
     }
     if let Some(kind) = kind {
@@ -2036,6 +2055,35 @@ pub fn cfg_update(
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation_cfg(&before), record::automation_cfg(&after))?;
     Ok(after)
+}
+
+/// Rename the answer every placement of `action_id` gives to setting `from`. Every placement is checked
+/// before any row is written, so a refusal leaves no answer half-carried.
+fn carry_answers_to(tx: &WriteTx<'_>, action_id: i64, from: &str, to: &str) -> Result<()> {
+    let mut answers = Vec::new();
+    for placement in read::automation_placement_ids_using_action(tx.conn(), action_id)? {
+        if let Some(held) =
+            read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement, to)?
+        {
+            return Err(Error::invalid(format!(
+                "placement '{placement}' already holds an answer called '{to}' ({}) that no setting \
+                 declares — take it off with `automation cfg-rm {}`, then rename",
+                held.id, held.id
+            )));
+        }
+        if let Some(answer) =
+            read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement, from)?
+        {
+            answers.push(answer);
+        }
+    }
+    for before in answers {
+        let mut after = before.clone();
+        after.name = to.to_string();
+        after.updated_at = Timestamp::now();
+        emit_update(tx, record::automation_cfg(&before), record::automation_cfg(&after))?;
+    }
+    Ok(())
 }
 
 /// **Answer a setting on one placement.** The answer is JSON, and `None` clears it.
@@ -3600,6 +3648,57 @@ mod tests {
             .expect("two axes that are there");
             assert!(cfg_set(tx, placement.id, "受信箱", Some(r#"{"dim":["テーマ=ない"]}"#)).is_err(), "no such value");
             assert!(cfg_set(tx, placement.id, "受信箱", Some(r#"{"dim":["ない=メイン"]}"#)).is_err(), "no such axis");
+        });
+    }
+
+    /// **A renamed setting keeps every placement's answer** (`AMB-T-5657`): the answer is read by the
+    /// declaration's name, so one left under the old name would drop out of view.
+    #[test]
+    fn a_renamed_setting_carries_every_placements_answer() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, here) = mk_placed(tx, &automation, "数える");
+            let there = placement_add(tx, automation.id, action.id).expect("place it again");
+            let declared = cfg_add(tx, action.id, "数", AutomationCfgKind::Text, false, None)
+                .expect("declare it");
+            cfg_set(tx, here.id, "数", Some("\"abc\"")).expect("answer here");
+            cfg_update(tx, declared.id, Some("個数"), None, None, None).expect("rename it");
+            let answer = |placement_id: i64, name: &str| {
+                read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement_id, name)
+                    .expect("read")
+            };
+            assert_eq!(answer(here.id, "個数").and_then(|a| a.value).as_deref(), Some("\"abc\""));
+            assert!(answer(here.id, "数").is_none(), "nothing is left under the old name");
+            assert!(answer(there.id, "個数").is_none(), "an unanswered placement stays unanswered");
+        });
+    }
+
+    /// A rename that would land an answer on a row already there is refused, and changes nothing; an
+    /// answer is not renamed away from the name its action declares.
+    #[test]
+    fn a_rename_that_cannot_carry_the_answer_is_refused() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, placement) = mk_placed(tx, &automation, "数える");
+            let declared = cfg_add(tx, action.id, "数", AutomationCfgKind::Text, false, None)
+                .expect("declare it");
+            let answered = cfg_set(tx, placement.id, "数", Some("\"abc\"")).expect("answer it");
+            assert!(
+                cfg_update(tx, answered.id, Some("個数"), None, None, None).is_err(),
+                "an answer takes its name from the declaration",
+            );
+            let old = cfg_add(tx, action.id, "個数", AutomationCfgKind::Text, false, None)
+                .expect("declare the other");
+            cfg_set(tx, placement.id, "個数", Some("\"def\"")).expect("answer the other");
+            cfg_delete(tx, old.id).expect("its declaration goes, its answer stays");
+            assert!(cfg_update(tx, declared.id, Some("個数"), None, None, None).is_err());
+            let kept = read::automation_cfg(tx.conn(), declared.id).expect("read").expect("the row");
+            assert_eq!(kept.name, "数", "the refused rename wrote nothing");
+            let answer =
+                read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement.id, "数")
+                    .expect("read")
+                    .expect("the answer");
+            assert_eq!(answer.value.as_deref(), Some("\"abc\""));
         });
     }
 

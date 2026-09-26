@@ -125,6 +125,9 @@ pub struct Outside<'a> {
     pub task_id: Option<i64>,
     /// The answers written where the step was placed.
     pub cfg: &'a [RunDefCfg],
+    /// The language the report is written in ([`crate::run_wording::builtin`], `AMB-D-976`) — there is
+    /// no transaction to read it off yet.
+    pub language: &'a str,
 }
 
 /// **How a built-in working outside the store finished** — [`Carried`], with what it hands on through
@@ -154,7 +157,12 @@ pub struct DoneOutside {
 /// **The store may move before the step is opened**, since no transaction holds it. Where the run was
 /// stopped in between, the opening refuses and what the work did stays done without a record — a
 /// worktree cut and not written anywhere, which the next cut for that task is refused on.
-pub fn work_outside(conn: &Connection, run_id: i64, run_def_id: i64) -> Result<Option<DoneOutside>> {
+pub fn work_outside(
+    conn: &Connection,
+    language: &str,
+    run_id: i64,
+    run_def_id: i64,
+) -> Result<Option<DoneOutside>> {
     let Some(def) = read::automation_run_def(conn, run_def_id)? else {
         return Ok(None);
     };
@@ -170,7 +178,7 @@ pub fn work_outside(conn: &Connection, run_id: i64, run_def_id: i64) -> Result<O
     // joins that one and opens none.
     let task_id = read::automation_run_task_last(conn, run_id)?.and_then(|s| s.task_id);
     let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
-    let worked = work(&Outside { conn, run: &run, task_id, cfg: &cfg });
+    let worked = work(&Outside { conn, run: &run, task_id, cfg: &cfg, language });
     Ok(Some(DoneOutside { run_def_id, worked }))
 }
 
@@ -717,7 +725,7 @@ pub fn held_until(conn: &Connection, run_step: &AutomationRunStep) -> Result<Opt
 
 /// **The held step of this run whose time has come by `now`**, or `None` — asked by the thread that
 /// keeps runs going, on the look it takes at a run with a step under way. Only a run still running is
-/// asked about: a stopped one leaves its last step's row as it was, and a stop is the end of the wait.
+/// asked about: a run that is over closed its held step as it ended, and a stop is the end of the wait.
 pub fn due(conn: &Connection, run_id: i64, now: Timestamp) -> Result<Option<i64>> {
     let running = read::automation_run(conn, run_id)?.is_some_and(|run| run.status == AutomationRunStatus::Running);
     if !running {
@@ -758,13 +766,18 @@ pub(crate) fn time_up_at(tx: &WriteTx<'_>, run_step_id: i64, now: Timestamp) -> 
         .iter()
         .find(|e| e.name == DONE_EXIT)
         .ok_or_else(|| Error::invalid("the step carries no done way out"))?;
-    automation_report::done(tx, run_step_id, Some(done.id), &waited(how_long))
+    automation_report::done(tx, run_step_id, Some(done.id), &waited(tx.language(), how_long))
 }
 
 /// **The report a held step leaves with** — how long it waited, as it was set.
-fn waited(how_long: chrono::Duration) -> String {
+fn waited(language: &str, how_long: chrono::Duration) -> String {
     let s = how_long.num_seconds();
-    format!("waited {}h {}m {}s", s / 3600, s % 3600 / 60, s % 60)
+    let [hours, minutes, seconds] = [s / 3600, s % 3600 / 60, s % 60].map(|n| n.to_string());
+    crate::run_wording::builtin(
+        language,
+        "waited",
+        &[("hours", &hours), ("minutes", &minutes), ("seconds", &seconds)],
+    )
 }
 
 /// Leave by the error way out, saying why.

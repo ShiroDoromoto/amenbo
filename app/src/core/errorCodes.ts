@@ -145,12 +145,14 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_unwired_input",
   "not_ready_automation_unanswered_cfg",
   "not_ready_automation_misanswered_cfg",
+  "not_ready_automation_cfg_not_found",
   "not_ready_automation_agent_unchosen",
   "not_ready_automation_agent_missing",
   "not_ready_automation_model_missing",
   "not_ready_automation_task_left_open",
   "not_ready_automation_task_left_open_at_end",
   "not_ready_automation_hands_on_task_taken",
+  "not_ready_automation_split_axis_gone",
 ] as const;
 
 /** Core codes the webview never receives, because the only door they come through is the CLI. None is

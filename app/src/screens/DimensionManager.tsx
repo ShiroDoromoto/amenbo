@@ -1,7 +1,8 @@
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { getSnapshot, subscribe } from "../core/snapshot";
 import { t, tf, tn } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
+import { useSingleFlight } from "../core/singleFlight";
 import { confirmDialog } from "../core/dialog";
 import { fetchProjectDimensionAssignments } from "../core/mutations";
 import { useStore } from "../store/store";
@@ -91,6 +92,9 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
   // page next door. So the page follows the value rather than the value leaving the screen: the press
   // lands where the value is going, which is one place away in `shown`.
   const follow = (to: number) => pager.setPage(Math.floor(to / pager.pageSize));
+  // One move at a time on an axis: the next is anchored on the row beside it on screen, and until the first
+  // has landed that row is where it was before the first — the second would be worked out from an old order.
+  const { run: runMove } = useSingleFlight();
   async function removeDim() {
     if (await confirmDialog(tf("dimmgr.confirmRemoveDim", { name: dim.name }))) store.removeDimension(dim.id);
   }
@@ -229,14 +233,12 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
               // any sibling as the anchor (`ops::place`), so a folded axis reorders the way it reads —
               // the moved value clears the closed ones the fold is hiding in between.
               onMoveUp={at > 0 ? () => {
-                store.moveDimensionValue(v.id, { before: shown[at - 1].id });
-                follow(at - 1);
+                if (runMove(() => store.moveDimensionValue(v.id, { before: shown[at - 1].id }))) follow(at - 1);
               } : undefined}
               onMoveDown={
                 at < shown.length - 1
                   ? () => {
-                      store.moveDimensionValue(v.id, { after: shown[at + 1].id });
-                      follow(at + 1);
+                      if (runMove(() => store.moveDimensionValue(v.id, { after: shown[at + 1].id }))) follow(at + 1);
                     }
                   : undefined
               }
@@ -523,7 +525,16 @@ function AddInline({ buttonLabel, placeholder, onAdd, className }: {
 }) {
   const [adding, setAdding] = useState(false);
   const [text, setText] = useState("");
-  const commit = () => { if (text.trim()) { onAdd(text.trim()); setText(""); } };
+  // Enter and Escape both put the box away, and a box taken away while it has the caret can still be told it
+  // lost it — with the text of the render it was drawn in, from before either key emptied it. So what one
+  // opening of the box sends is decided once: by the first of Enter, Escape or leaving it.
+  const settled = useRef(false);
+  const open = () => { settled.current = false; setAdding(true); };
+  const commit = () => {
+    if (settled.current) return;
+    settled.current = true;
+    if (text.trim()) { onAdd(text.trim()); setText(""); }
+  };
   return adding ? (
     <input
       {...asTyped}
@@ -534,11 +545,11 @@ function AddInline({ buttonLabel, placeholder, onAdd, className }: {
       onChange={(e) => setText(e.target.value)}
       onKeyDown={(e) => {
         if (isEnterSubmit(e)) { commit(); setAdding(false); }
-        if (e.key === "Escape") { setText(""); setAdding(false); }
+        if (e.key === "Escape") { settled.current = true; setText(""); setAdding(false); }
       }}
       onBlur={() => { commit(); setAdding(false); }}
     />
   ) : (
-    <button className={`filterchip ${className ?? ""}`} onClick={() => setAdding(true)}>{buttonLabel}</button>
+    <button className={`filterchip ${className ?? ""}`} onClick={open}>{buttonLabel}</button>
   );
 }

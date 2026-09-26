@@ -379,7 +379,7 @@ amenbo automation edge-add --in-action --from 11: --exit-to # inside an action: 
 amenbo automation edge-add --in-action --from "11:gave up" --exit-to "gave up"
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
 amenbo automation place-add 3 --action 7               # 33: put that action on the picture; its steps start with the default agent
-amenbo automation agent-set 33 --step 11 --agent claude # who carries that step out at this spot, if not the default (--model too)
+amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, if not the default (--model too)
 amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in
 amenbo automation place-add 3 --builtin close_task     # 35: done, with the commit handed to it recorded
 amenbo automation edge-add --from "31:<taken>" --to 32 # what happens after each way out (--max-times caps a way back)
@@ -400,7 +400,7 @@ amenbo automation action-show 7                        # one action, and the pic
 amenbo automation start 3                              # away it goes
 amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand a make_task entry the task it files: title, notes, classification and attachments
 amenbo automation pause 7                              # ...at the end of the step under way (a wait under way included: the run pauses once its time is up)
-amenbo automation stop 7                               # ...now, handing the task back to todo
+amenbo automation stop 7                               # ...now, handing the task back to todo and to the person
 # Inside a step's own terminal, the agent carrying it out reports through two more: `automation
 # step-out` (each thing it hands on) and `automation step-done` (the way out taken — by the id the
 # step's text lists for it — and what it did). The task the run works is taken by a built-in, never

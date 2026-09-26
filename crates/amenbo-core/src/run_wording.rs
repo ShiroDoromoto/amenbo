@@ -1,4 +1,6 @@
-//! **What a stopped run says on its task**, in the language the reader chose (`AMB-D-976`).
+//! **What a stopped run says on its task**, in the language the reader chose (`AMB-D-976`) — and what a
+//! built-in says of how it finished ([`builtin`]), which is the report its step keeps and, where the run
+//! stops there, the line under that one.
 //!
 //! The line is core's own — nobody typed it — and it is kept as text, the way every comment is. So it is
 //! worded when it is written, in the language the settings name then, and left as it was when they
@@ -39,6 +41,16 @@ pub fn stopped(language: &str, why: &str, reached: Reached<'_>, run: i64) -> Str
         .replace("{why}", say(language, why))
         .replace("{reached}", &reached)
         .replace("{run}", &run.to_string())
+}
+
+/// **What a built-in says of how it finished** — the sentence under `auto.say.bi.<key>`, with each
+/// `{slot}` filled from `slots`. The values go in as they are: a task's title or a path is nobody's to
+/// translate.
+pub fn builtin(language: &str, key: &str, slots: &[(&str, &str)]) -> String {
+    let key = format!("bi.{key}");
+    slots.iter().fold(say(language, &key).to_string(), |said, (slot, value)| {
+        said.replace(&format!("{{{slot}}}"), value)
+    })
 }
 
 /// One sentence, in `language` if it has one and in English if not. A key English lacks too is a
@@ -104,6 +116,41 @@ mod tests {
             stopped("en", "canceled", Reached::Nothing, 7),
             "An automation run was canceled. It stopped before opening a step. (run 7)"
         );
+    }
+
+    /// **Every built-in sentence English has, every language has too, with the same slots** — a report
+    /// a language lacks is written in English, and one that lost `{task}` or `{path}` loses what the
+    /// report is about.
+    #[test]
+    fn every_language_says_every_builtin_report_with_englishs_slots() {
+        let slots = |template: &str| -> Vec<String> {
+            let mut found: Vec<String> = template
+                .split('{')
+                .skip(1)
+                .filter_map(|rest| rest.split_once('}'))
+                .map(|(slot, _)| slot.to_string())
+                .collect();
+            found.sort();
+            found.dedup();
+            found
+        };
+        let english = WORDINGS.iter().find(|row| row.language == FALLBACK).expect("English");
+        let builtin: Vec<&(&str, &str)> = english.runs.iter().filter(|(key, _)| key.starts_with("bi.")).collect();
+        assert!(!builtin.is_empty(), "no auto.say.bi.* in English");
+        for code in LANGUAGES {
+            for (key, reference) in &builtin {
+                let said = lookup(code, key).unwrap_or_else(|| panic!("{code} has no auto.say.{key}"));
+                assert_eq!(slots(said), slots(reference), "{code}: auto.say.{key} disagrees with English");
+            }
+        }
+    }
+
+    #[test]
+    fn a_builtin_report_is_filled_in_the_language_asked_for() {
+        let slots = [("task", "AMB-T-7"), ("title", "直す")];
+        assert_eq!(builtin("ja", "took", &slots), "AMB-T-7 直す に着手しました");
+        assert_eq!(builtin("en", "took", &slots), "took AMB-T-7 直す");
+        assert_eq!(builtin("xx", "took", &slots), "took AMB-T-7 直す");
     }
 
     #[test]

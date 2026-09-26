@@ -10,6 +10,7 @@ import { isClosed, STATUS_COLUMNS } from "../core/status";
 import { Pager, usePager } from "../components/Pager";
 import { useTaskPage, useTaskSearchIds } from "../core/reads";
 import { asTyped, isEnterSubmit } from "../core/keys";
+import { useSingleFlightPerKey } from "../core/singleFlight";
 import { FirstLoop } from "../components/FirstLoop";
 import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
 import { LinkFolderNotice } from "./LinkFolderNotice";
@@ -153,10 +154,13 @@ export function BoardScreen({
   // (`AMB-D-963`), so letting a card go there asks for the report first, the way the pull-down does. The
   // card stays in the column it came from until the report is given, and cancelling writes nothing.
   const [finishing, setFinishing] = useState<number | null>(null);
+  // A card stays in the column it came from until its move lands, so it can be taken and let go again before
+  // then — and that is the same write twice. One move per card at a time; other cards move freely.
+  const moveOnce = useSingleFlightPerKey<number>();
   const dropOn = useCallback((column: string, id: number) => {
     if (column === "done") setFinishing(id);
-    else store.setStatus(id, column as Status);
-  }, [store]);
+    else moveOnce(id, () => store.setStatus(id, column as Status));
+  }, [store, moveOnce]);
   // Dragging a card is pointer events now, not HTML5 drag: the OS handler that lets a file be dropped
   // on the window swallows the latter on two of the three operating systems (`./boardDrag`, `AMB-D-775`).
   const drag = useCardDrag(dropOn);
@@ -176,9 +180,11 @@ export function BoardScreen({
   // The status pull-down on a card is a local move we do want to animate (unlike a drag): arm the flourish just
   // before the write, so the card slides to its new column. A stable ref, to keep the cards' memo intact.
   const setStatusAnimated = useCallback((id: number, status: Status, reason?: string) => {
-    armMove();
-    store.setStatus(id, status, reason);
-  }, [armMove, store]);
+    moveOnce(id, () => {
+      armMove();
+      return store.setStatus(id, status, reason);
+    });
+  }, [armMove, store, moveOnce]);
   const project = dataAdapter.getProject(projectId);
   const rawQ = search.trim();
   // This box searches tasks, so a number with no type code on it is a task ref (`AMB-D-833`) — the side
@@ -525,7 +531,7 @@ export function BoardScreen({
           id={finishing}
           status="done"
           onCancel={() => setFinishing(null)}
-          onClose={(report) => { setFinishing(null); store.setStatus(finishing, "done", report); }}
+          onClose={(report) => { setFinishing(null); moveOnce(finishing, () => store.setStatus(finishing, "done", report)); }}
         />
       )}
     </>

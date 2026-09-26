@@ -68,6 +68,7 @@ const EMPTY: Snapshot = {
   tickConsent: null, // nobody has been asked about the hourly tick yet
   tickRemovalLeavesARow: false, // a build fact; the real one arrives with the first snapshot
   defaultView: "board", // what a project created without a view of its own opens in (core's default)
+  signature: { file: "", config: "", version: "" }, // never compared: `lastSignature` is set from a real read only
 };
 
 let cache: Snapshot = EMPTY;
@@ -186,10 +187,11 @@ export function notifyInboxChanged(): void {
   for (const l of listeners) l();
 }
 
-// The store signature this device saw last (what the store_signature command returns), refreshed on
-// every loadSnapshot. When a store-changed arrives and all three legs still match, the file moved
-// because *we* wrote — the result is already on screen — and the refetch is suppressed. This is the
-// watcher's dedup of our own writes. Which leg moved is the other half: see `watchStore`.
+// The store signature this device saw last, refreshed on every loadSnapshot from the one the snapshot
+// itself carries (read by core before the rows, so it is never newer than what is on screen). When a
+// store-changed arrives and all three legs still match, the file moved because *we* wrote — the result
+// is already on screen — and the refetch is suppressed. This is the watcher's dedup of our own writes.
+// Which leg moved is the other half: see `watchStore`.
 let lastSignature: StoreSignatureDto | null = null;
 
 /** Whether two signatures say the same thing. All three legs, since any one of them moving is a change. */
@@ -426,12 +428,6 @@ export function installReconcileTriggers(): () => void {
   };
 }
 
-/** Re-reads the store mtime signature from core and keeps it — this is what dedup compares against. */
-async function refreshSignature(): Promise<void> {
-  if (!inTauri()) return;
-  lastSignature = await readSignature();
-}
-
 /** Granularity of a `loadSnapshot`. By default it counts as inbox-affecting — a wholesale re-read. */
 export interface LoadOptions {
   /**
@@ -442,21 +438,63 @@ export interface LoadOptions {
   inboxAffected?: boolean;
 }
 
+// The read in flight, and the one queued behind it. See `loadSnapshot`.
+let running: Promise<void> | null = null;
+let queued: { inboxAffected: boolean; done: Promise<void> } | null = null;
+
 /**
- * Re-reads from core (or the fixtures), swaps the cache and notifies subscribers. The change feed's
- * position is taken **before** the store is read, not after: a change that slips into the gap would
- * otherwise land behind the cursor and be lost forever. Taking it first can only make a change show
- * up twice, which is the harmless direction. Core returns no tasks/decisions rows, so they are
- * filled with empty arrays to satisfy the non-optional type — the Tauri path reads neither, and the
- * paging hooks fetch a window at a time.
+ * Re-reads from core (or the fixtures), swaps the cache and notifies subscribers.
+ *
+ * **Reads never overlap.** A call made while one is in flight does not start a second: it waits for a
+ * single read queued behind it, which every call arriving in the meantime joins. That read starts only
+ * after each of them was made, so the last caller always sees a store read after it asked. Overlapping
+ * reads would instead each overwrite the cache and `lastSignature` whenever their reply came in — the
+ * last *reply* would win, not the last *call*, and that order is only kept today because core runs
+ * these commands one at a time on the main thread. A queued read is inbox-affecting if any call it
+ * stands for was.
  */
-export async function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
+export function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
+  const inboxAffected = opts.inboxAffected ?? true;
+  if (queued) {
+    queued.inboxAffected ||= inboxAffected;
+    return queued.done;
+  }
+  if (running) {
+    const next = { inboxAffected, done: Promise.resolve() };
+    next.done = running
+      .catch(() => {}) // the one before failing is no reason not to read again.
+      .then(() => {
+        queued = null;
+        return startLoad(next.inboxAffected);
+      });
+    queued = next;
+    return next.done;
+  }
+  return startLoad(inboxAffected);
+}
+
+function startLoad(inboxAffected: boolean): Promise<void> {
+  const read = readSnapshot(inboxAffected).finally(() => {
+    if (running === read) running = null;
+  });
+  running = read;
+  return read;
+}
+
+/**
+ * One read. The change feed's position is taken **before** the store is read, not after: a change that
+ * slips into the gap would otherwise land behind the cursor and be lost forever. Taking it first can
+ * only make a change show up twice, which is the harmless direction. Core returns no tasks/decisions
+ * rows, so they are filled with empty arrays to satisfy the non-optional type — the Tauri path reads
+ * neither, and the paging hooks fetch a window at a time.
+ */
+async function readSnapshot(inboxAffected: boolean): Promise<void> {
   if (inTauri()) {
     await takeChangeCursor();
     const snap = await invoke<Snapshot>("snapshot");
     cache = { ...snap, tasks: snap.tasks ?? [], decisions: snap.decisions ?? [] };
     applyPerfConfig(cache.perfLog);
-    await refreshSignature();
+    lastSignature = snap.signature;
   } else {
     // Browser fallback: build a snapshot of the same shape out of the mock fixtures.
     const fix = await import("../mock/data");
@@ -476,9 +514,10 @@ export async function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
       tickConsent: null, // and no scheduler to hold a timer, so the question is never put
       tickRemovalLeavesARow: false, // …so there is no row for a removal to leave behind either
       defaultView: "board",
+      signature: { file: "", config: "", version: "" }, // no store behind the fixtures, so nothing to compare
     };
   }
   // Real data came back from the source of truth, so the mailbox owes itself a re-derive — unless the caller said this re-read cannot touch membership.
-  if (opts.inboxAffected ?? true) inboxDataGeneration++;
+  if (inboxAffected) inboxDataGeneration++;
   for (const l of listeners) l();
 }

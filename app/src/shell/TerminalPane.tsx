@@ -226,6 +226,8 @@ export function TerminalPane({
   onFold: (frame: string, open: boolean) => void;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
+  /** Whether a press of the close button is still being answered. */
+  const dropping = useRef(false);
   const labelRef = useRef<HTMLDivElement>(null);
   const plateRef = useRef<Plate | null>(null);
   // Once a terminal has been asked for here it stays asked for: a slot whose program exited keeps the
@@ -338,14 +340,22 @@ export function TerminalPane({
    *  **A run's pane is not taken away while its run is going or held** ({@link runLive}): the press is
    *  drawn and cannot be pressed. A pane press that stopped a run would be one a reader made meaning
    *  only to tidy the page; stopping is its own press beside the run's state. Once the run is over the
-   *  pane goes without a question. */
+   *  pane goes without a question.
+   *
+   *  **One press at a time** ({@link dropping}): presses that pile up while the app is busy would
+   *  otherwise each ask again, or take the frame away twice. */
   const drop = async () => {
-    if (runLive) return;
-    // A run's pane is not asked about: there is no way back into a step's conversation to lose —
-    // every step opens one of its own — and the run it drew is over.
-    if (run === null && !await confirmDialog(t("face.dropConfirm"))) return;
-    if (live !== null) await endTerminal(live).catch(() => {});
-    onDrop(frame);
+    if (runLive || dropping.current) return;
+    dropping.current = true;
+    try {
+      // A run's pane is not asked about: there is no way back into a step's conversation to lose —
+      // every step opens one of its own — and the run it drew is over.
+      if (run === null && !await confirmDialog(t("face.dropConfirm"))) return;
+      if (live !== null) await endTerminal(live).catch(() => {});
+      onDrop(frame);
+    } finally {
+      dropping.current = false;
+    }
   };
 
   /**
@@ -624,8 +634,8 @@ export function TerminalPane({
   //
   // **And above a run's pane with no terminal in it** (`AMB-T-5635`): one the store kept, come back
   // with the app for a run held or failed. What its terminal printed died with the process, and the
-  // row is still what says which run this is and where it stopped. A terminal opened here after it
-  // takes the row over, and puts its own up.
+  // row is still what says which run this is and where it stopped. No terminal is opened here by
+  // hand; the run's next step, where it is picked up again, is what brings one.
   const onBuiltin = builtin !== null;
   const rowWithout = onBuiltin || (run !== null && !running);
   useEffect(() => {
@@ -1071,7 +1081,9 @@ export function TerminalPane({
               <div className="workspace__face" ref={paneRef} />
             </>
           )
-          : (
+          // Not on a run's pane (`AMB-T-5667`): a terminal opened there would be an ordinary session
+          // that has nothing to do with the run, under a row that goes on naming the run's step.
+          : run === null && (
             <button className="slot__open" onClick={() => setRunning(true)}>
               {t("face.open")}
             </button>

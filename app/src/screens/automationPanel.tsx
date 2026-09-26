@@ -25,6 +25,7 @@ import { useBoundFolders } from "../core/boundFolders";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
 import { t, tf } from "../core/i18n";
+import { useSingleFlight } from "../core/singleFlight";
 import { builtinWord } from "../core/builtinWords";
 import { ERROR_EXIT, pictureOrder, type PicGraph } from "./automationLayout";
 import type {
@@ -139,11 +140,13 @@ export function DeclareRow({
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState(kinds?.[0]?.id ?? "");
+  // The box keeps the name until the write lands, so a second press before then would declare it twice.
+  const { busy, run } = useSingleFlight();
   const press = () => {
     // Emptied only once it is written: a refusal leaves what was typed where the reader can fix it.
-    void onAdd(name.trim(), kind).then((written) => {
+    run(() => onAdd(name.trim(), kind).then((written) => {
       if (written) setName("");
-    });
+    }));
   };
   return (
     <div className="autostep__declare">
@@ -168,7 +171,7 @@ export function DeclareRow({
           ))}
         </select>
       )}
-      <button type="button" className="btn" disabled={name.trim() === ""} onClick={press}>
+      <button type="button" className="btn" disabled={busy || name.trim() === ""} onClick={press}>
         {t("auto.step.add")}
       </button>
     </div>

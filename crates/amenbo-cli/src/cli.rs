@@ -2105,6 +2105,7 @@ pub enum AutomationCmd {
     CfgUpdate {
         /// setting id
         id: i64,
+        /// a new name — every placement's answer to it follows
         #[arg(long)]
         name: Option<String>,
         /// what kind of answer it takes: taskfilter | folder | choice | number | text
@@ -2156,7 +2157,7 @@ pub enum AutomationCmd {
         /// the step, inside the action standing on the placement
         #[arg(long, value_name = "ID")]
         step: i64,
-        /// who is asked to carry it out (e.g. claude)
+        /// who is asked to carry it out (e.g. claude-code)
         #[arg(long, required_unless_present = "clear", conflicts_with = "clear")]
         agent: Option<String>,
         /// which model; left out, the agent's own default stands
@@ -2310,8 +2311,9 @@ pub enum AutomationCmd {
         /// run id
         run: i64,
     },
-    /// Stop a run, which ends it canceled: hand the task it was working back, and leave a comment on
-    /// the task saying how far it got — unless the task is closed (done or rejected), which gets none
+    /// Stop a run, which ends it canceled: hand the task it was working back to `todo` and to the
+    /// person, and leave a comment on the task saying how far it got — unless the task is closed (done
+    /// or rejected), which gets none
     Stop {
         /// run id
         run: i64,

@@ -1680,11 +1680,11 @@ pub fn any_open_task_is_dated(conn: &Connection) -> Result<bool> {
 }
 
 /// The project a task belongs to — the one column a reach check needs ([`crate::reach::Reach`]).
-/// `None` = the task is unplaced (no project) **or** there is no such row; both are "not inside any
-/// project", which is what the caller asks about. O(1) on the primary key.
-pub fn task_project(conn: &Connection, id: i64) -> Result<Option<i64>> {
+/// The outer `None` is no such row; `Some(None)` is a task in no project. The two are kept apart so a
+/// missing id is answered `not_found` rather than `out_of_reach` (`AMB-D-986`). O(1) on the primary key.
+pub fn task_project(conn: &Connection, id: i64) -> Result<Option<Option<i64>>> {
     const TA: col::task::Cols = col::task::ALL;
-    Ok(scalar_by_id(conn, TA.id, TA.project_id, id)?.flatten())
+    scalar_by_id(conn, TA.id, TA.project_id, id)
 }
 
 /// The project a decision belongs to — the decision twin of [`task_project`].
@@ -7257,15 +7257,10 @@ pub fn automation_run_values_of(
     )
 }
 
-/// The project a step execution is filed under — the reach of an attachment hanging off it. Two hops,
-/// since the execution knows its run and the run knows the project.
-pub fn automation_run_step_project(conn: &Connection, id: i64) -> Result<Option<i64>> {
+/// The run a step execution belongs to — the first hop of its reach, since the run knows the project.
+pub fn automation_run_step_run(conn: &Connection, id: i64) -> Result<Option<i64>> {
     const S: col::automation_run_step::Cols = col::automation_run_step::ALL;
-    const R: col::automation_run::Cols = col::automation_run::ALL;
-    match scalar_by_id(conn, S.id, S.run_id, id)? {
-        Some(run_id) => scalar_by_id(conn, R.id, R.project_id, run_id),
-        None => Ok(None),
-    }
+    scalar_by_id(conn, S.id, S.run_id, id)
 }
 
 

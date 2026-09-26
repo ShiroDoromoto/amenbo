@@ -21,6 +21,7 @@ import { confirmDialog } from "../core/dialog";
 import { invoke } from "../core/ipc";
 import { isClosed } from "../core/status";
 import { asTyped, isEnterSubmit } from "../core/keys";
+import { useSingleFlight } from "../core/singleFlight";
 import { errText, exactLabel, formatNumber, statusLabel, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
 import { ErrorNote } from "../components/ErrorNote";
@@ -93,6 +94,8 @@ export function DecisionDetailPane({
     el.focus();
     el.scrollIntoView?.({ block: "nearest" });
   });
+  // The comment box: a second send before the first has landed is dropped: the box still holds the body, so it would post it again.
+  const { busy: commentBusy, run: runComment } = useSingleFlight();
   if (!d) return <div className="rightpane__empty">{t("dec.notFound")}</div>;
 
   const editable = d.status !== "rejected";
@@ -122,16 +125,18 @@ export function DecisionDetailPane({
 
   // Await the post and only clear the box once it lands: a refused comment used to blank the input, losing the
   // body the user just wrote. On failure the text stays put and the error is shown, so retrying costs nothing.
-  const submitComment = async () => {
+  const submitComment = () => {
     const body = comment.trim();
     if (!body) return;
-    setCommentError(null);
-    try {
-      await addDecisionComment(d.id, body);
-      setComment("");
-    } catch (e) {
-      setCommentError(errText(e));
-    }
+    runComment(async () => {
+      setCommentError(null);
+      try {
+        await addDecisionComment(d.id, body);
+        setComment("");
+      } catch (e) {
+        setCommentError(errText(e));
+      }
+    });
   };
   // Putting a written decision back to being written is a write like any other — surface a refusal
   // instead of dropping it.
@@ -364,13 +369,13 @@ export function DecisionDetailPane({
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => {
-                  if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitComment(); }
+                  if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitComment(); }
                 }}
               />
               {commentError && <ErrorNote>{commentError}</ErrorNote>}
               <div className="writebox__actions">
                 <span className="meta">{t("detail.commentHint")}</span>
-                <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
+                <button className="btn btn--primary" disabled={commentBusy || !comment.trim()} onClick={submitComment}>{t("detail.send")}</button>
               </div>
             </div>
           </div>

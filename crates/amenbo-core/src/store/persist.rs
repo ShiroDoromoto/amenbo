@@ -2069,7 +2069,9 @@ impl Store {
         run_def_id: i64,
         startable: Option<&[String]>,
     ) -> Result<crate::ops::automation_step::Opened> {
-        let outside = crate::ops::automation_builtin::work_outside(self.engine.conn(), run_id, run_def_id)?;
+        let language = self.config.language.as_deref().unwrap_or("en");
+        let outside =
+            crate::ops::automation_builtin::work_outside(self.engine.conn(), language, run_id, run_def_id)?;
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
             crate::ops::automation_step::open(tx, run_id, run_def_id, startable, outside)
         })

@@ -1984,6 +1984,10 @@ pub struct AutomationRun {
     /// stays at the top of the runs tab until it is (`AMB-D-955`).
     #[serde(default)]
     pub acknowledged_at: Option<Timestamp>,
+    /// Who acknowledged it, a person or their AI (`AMB-D-989`). Set with `acknowledged_at`; a mark
+    /// written before a CLI could set one is a person's, since the app's button was the only way.
+    #[serde(default)]
+    pub acknowledged_by_kind: Option<ActorKind>,
     /// **What a person handed over to file the task a run starts by filing** — the title, the notes and
     /// the classification, as JSON ([`crate::ops::automation_run::HandedTask`]). Only a run whose entry is
     /// the built-in that files a task is handed these, and that built-in is what reads them. `None` for

@@ -1065,7 +1065,30 @@ pub const STEPS: &[Step] = &[
         name: "say a run and a task that can be taken in the words the screens use, in the built-ins that file and take a task",
         apply: Apply::Custom(say_run_and_ready_in_the_screens_words),
     },
+    Step {
+        to: 82,
+        name: "say who acknowledged a failed run, a person for every mark already there",
+        apply: Apply::Custom(say_who_acknowledged_a_failure),
+    },
 ];
+
+/// v82: `automation_run.acknowledged_by_kind` — who said they had seen a failed run, a person or their
+/// AI (`AMB-D-989`).
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason. **Every mark already there
+/// is a person's**: until this build the only way to set one was the button in the app, which a person
+/// presses. A run nobody acknowledged is left with nobody.
+fn say_who_acknowledged_a_failure(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run")?.iter().any(|c| c == "acknowledged_by_kind") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run ADD COLUMN acknowledged_by_kind TEXT \
+             CHECK(acknowledged_by_kind IN ('human', 'ai'));
+             UPDATE automation_run SET acknowledged_by_kind = 'human' WHERE acknowledged_at IS NOT NULL;",
+        )?;
+    }
+    Ok(())
+}
 
 /// v81: the built-ins that take and file a task stop saying "run" and "ready" in English in the middle
 /// of their Japanese, and use the Japanese words every other screen says them in (`AMB-D-988`).
@@ -9325,6 +9348,44 @@ mod tests {
                 .execute("UPDATE automation_run SET acknowledged_at = 'yesterday' WHERE id = 1", [])
                 .is_err(),
             "and anything else is refused"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v82: a mark already there is a person's — the app's button was the only way to set one — and
+    /// a run nobody acknowledged arrives with nobody. The column takes the two facets and nothing else.
+    #[test]
+    fn a_mark_already_there_is_a_person_s() {
+        let dir = scratch("run-acknowledged-by");
+        let engine = store_at(&dir, 81);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, stopped_reason, acknowledged_at) VALUES
+                     (1, 1, 1, 'failed', 'crashed', '2026-09-23T00:00:00Z'),
+                     (2, 1, 1, 'failed', 'halted', NULL);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let by = |id: i64| -> Option<String> {
+            engine
+                .conn()
+                .query_row("SELECT acknowledged_by_kind FROM automation_run WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(by(1).as_deref(), Some("human"), "the button was a person's");
+        assert_eq!(by(2), None, "nobody acknowledged this one");
+        assert!(
+            engine
+                .conn()
+                .execute("UPDATE automation_run SET acknowledged_by_kind = 'robot' WHERE id = 2", [])
+                .is_err(),
+            "only the two facets go in"
         );
         std::fs::remove_dir_all(&dir).ok();
     }

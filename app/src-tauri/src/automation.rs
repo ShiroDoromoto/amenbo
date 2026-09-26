@@ -1410,7 +1410,7 @@ pub fn automation_history_page(
 #[tauri::command]
 pub fn automation_run_acknowledge(run_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
-    store.automation_acknowledge(run_id)?;
+    store.automation_acknowledge(run_id, ActorKind::Human)?;
     Ok(())
 }
 

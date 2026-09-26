@@ -449,8 +449,12 @@ pub fn stop(tx: &WriteTx<'_>, run_id: i64, ending: Ending) -> Result<Ended> {
 /// history under it; nothing else about the run changes.
 ///
 /// Only a failure is acknowledged: a completed or canceled run needs nobody, and one still going is
-/// not over. Acknowledging one that already is answers it as it stands rather than moving the time.
-pub fn acknowledge(tx: &WriteTx<'_>, run_id: i64) -> Result<AutomationRun> {
+/// not over. Acknowledging one that already is answers it as it stands rather than moving the time,
+/// or who set it.
+///
+/// A person or their AI may say it, and which one did is kept beside the time (`AMB-D-989`): an AI
+/// acts for the person, and the mark is only worth reading if it says whose it is.
+pub fn acknowledge(tx: &WriteTx<'_>, run_id: i64, by: ActorKind) -> Result<AutomationRun> {
     let before = live_run(tx, run_id)?;
     if before.status != AutomationRunStatus::Failed {
         return Err(Error::invalid(format!(
@@ -464,6 +468,7 @@ pub fn acknowledge(tx: &WriteTx<'_>, run_id: i64) -> Result<AutomationRun> {
     let now = Timestamp::now();
     let mut after = before.clone();
     after.acknowledged_at = Some(now);
+    after.acknowledged_by_kind = Some(by);
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
     Ok(after)
@@ -1207,8 +1212,9 @@ mod tests {
             assert!(live.iter().any(|one| one.id == failed.id), "a failure waits to be seen");
             assert!(live.iter().all(|one| one.id != canceled.id), "a cancel needs nobody");
 
-            let seen = acknowledge(tx, failed.id).expect("acknowledge");
+            let seen = acknowledge(tx, failed.id, ActorKind::Ai).expect("acknowledge");
             assert!(seen.acknowledged_at.is_some());
+            assert_eq!(seen.acknowledged_by_kind, Some(ActorKind::Ai), "whose mark it is is kept");
             let live = read::automation_runs_live(tx.conn()).expect("live");
             assert!(live.iter().all(|one| one.id != failed.id));
             let history: Vec<i64> = read::automation_runs_history(tx.conn(), None, None, 0, 20)
@@ -1219,9 +1225,10 @@ mod tests {
                 .collect();
             assert_eq!(history, vec![canceled.id, failed.id], "newest first");
 
-            let again = acknowledge(tx, failed.id).expect("again");
+            let again = acknowledge(tx, failed.id, ActorKind::Human).expect("again");
             assert_eq!(again.acknowledged_at, seen.acknowledged_at, "the first time is kept");
-            let refused = acknowledge(tx, canceled.id).expect_err("only a failure");
+            assert_eq!(again.acknowledged_by_kind, Some(ActorKind::Ai), "and so is who set it");
+            let refused = acknowledge(tx, canceled.id, ActorKind::Human).expect_err("only a failure");
             assert!(refused.to_string().contains("only a failed run"), "{refused}");
         });
     }
@@ -1244,7 +1251,7 @@ mod tests {
             ended(tx, unseen.clone(), Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
             let seen = a_run(tx, &p.automation);
             ended(tx, seen.clone(), Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
-            acknowledge(tx, seen.id).expect("acknowledge");
+            acknowledge(tx, seen.id, ActorKind::Human).expect("acknowledge");
 
             let ids = |page: &read::RunHistoryPage| page.runs.iter().map(|one| one.id).collect::<Vec<_>>();
 

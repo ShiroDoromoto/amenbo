@@ -1262,6 +1262,9 @@ datasets! {
         // The title, notes and classification of the task a run whose entry files one starts by filing,
         // as JSON — read by that built-in alone (`AMB-D-970`).
         handed_task: col(OPT),
+        // Who said they had seen the failure, a person or their AI (`AMB-D-989`). Set with
+        // `acknowledged_at` and only then.
+        acknowledged_by_kind: actor_kind,
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is

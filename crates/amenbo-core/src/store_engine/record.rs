@@ -720,6 +720,7 @@ pub fn automation_run(r: &AutomationRun) -> Record {
                 ("ended_at", tsov(&r.ended_at)),
                 ("acknowledged_at", tsov(&r.acknowledged_at)),
                 ("handed_task", ov(&r.handed_task)),
+                ("acknowledged_by_kind", kov(&r.acknowledged_by_kind)),
             ],
             &r.created_at,
             &r.updated_at,

@@ -2006,8 +2006,8 @@ fn worked_task(
 /// The cleanup is core's and is the same one every other stop goes through
 /// ([`amenbo_core::ops::automation_stop::stop`]): the task the run was working goes to `todo`, and
 /// a line on that task says the run is not coming back. The terminal
-/// standing in the pane is the pane's own to end — it is a process this side started, and core has
-/// no window to end one from.
+/// standing in the pane is this side's to end — it is a process this side started, and core has
+/// no window to end one from. The look the press wakes ends it (`crate::automation_watch`).
 ///
 /// **A run that is over already is not an error here.** The pane is closed by a person, and between
 /// the last step reporting and the press there is a window in which the run has finished on its own;

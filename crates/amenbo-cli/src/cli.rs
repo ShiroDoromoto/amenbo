@@ -2057,7 +2057,7 @@ pub enum AutomationCmd {
         /// what this port is called
         #[arg(long)]
         name: String,
-        /// what it carries: value | file | task_take | task_make
+        /// what it carries: value | file | task_take (an input only) | task_make
         #[arg(long)]
         kind: String,
         /// refuse to run the step without it
@@ -2071,7 +2071,7 @@ pub enum AutomationCmd {
         id: i64,
         #[arg(long)]
         name: Option<String>,
-        /// what it carries: value | file | task_take | task_make
+        /// what it carries: value | file | task_take (an input only) | task_make
         #[arg(long)]
         kind: Option<String>,
         /// whether the step is refused without it (`--required true|false`)

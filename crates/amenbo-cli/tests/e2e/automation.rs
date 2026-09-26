@@ -354,6 +354,27 @@ fn a_port_takes_its_direction_from_what_it_hangs_off() {
     assert!(refused.contains("--step"), "the refusal names the three: {refused}");
 }
 
+/// **A way out does not hand on the task the run works** — only a built-in takes it, so the refusal
+/// points at the two that do. Reading that task is an input, and that is still declared.
+#[test]
+fn a_way_out_is_refused_the_task_the_run_works() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let (_, step) = an_action(&cli, &p, "one", "do it");
+    let exit = id_of(
+        &cli.json(&["automation", "exit-add", "--step", &step, "--name", "found", "--json"]),
+        "automation_exit",
+    );
+
+    let (refused, code) =
+        cli.run_err(&["automation", "port-add", "--exit", &exit, "--name", "task", "--kind", "task_take", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("take_task") && refused.contains("make_task"), "{refused}");
+
+    let reads = cli.json(&["automation", "port-add", "--step", &step, "--name", "task", "--kind", "task_take", "--json"]);
+    assert_eq!(reads["automation_port"]["direction"].as_str(), Some("in"));
+}
+
 /// Deleting an automation takes every placement, edge and wire with it, so it is confirmed like every
 /// other destructive command — and `--json` has nobody to ask.
 #[test]

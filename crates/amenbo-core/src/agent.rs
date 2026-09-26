@@ -2342,7 +2342,7 @@ fn all_commands() -> Value {
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation exit-rm 21 --yes"])),
 
-        cmd("automation port-add", "Declares a port. The direction is not asked for — it falls out of what the port hangs off: --step and --action declare what is taken in, --exit declares what that way out hands on. Neither is sayable on the other's owner, which is what lets a review step hand on a file only when it left through \"something to fix\". --kind says what it carries: value, file, task_take (the task the run is working) or task_make (a task the step created).",
+        cmd("automation port-add", "Declares a port. The direction is not asked for — it falls out of what the port hangs off: --step and --action declare what is taken in, --exit declares what that way out hands on. Neither is sayable on the other's owner, which is what lets a review step hand on a file only when it left through \"something to fix\". --kind says what it carries: value, file, task_take (the task the run is working) or task_make (a task the step created). task_take is an input only: the run takes its task at the built-in take_task or make_task, and a step reads it through an input wired from there — a way out declaring it is refused.",
             json!([{ "name": "--step <id>", "help": "the step that takes it in" },
                    { "name": "--action <id>", "help": "the library action that takes it in" },
                    { "name": "--exit <id>", "help": "the way out that hands it on" },
@@ -2354,7 +2354,7 @@ fn all_commands() -> Value {
         cmd("automation port-update", "Changes a port's name, what it carries, or whether it is required. Only the fields given change. Renaming parts every wire that named the old name: a wire names the ports at its ends.",
             json!([{ "name": "<id>", "help": "port id", "required": true },
                    { "name": "--name <str>", "help": "rename it" },
-                   { "name": "--kind <value|file|task_take|task_make>", "help": "what it carries" },
+                   { "name": "--kind <value|file|task_take|task_make>", "help": "what it carries — task_take only on an input" },
                    { "name": "--required <true|false>", "help": "whether the step is refused without it" }]),
             json!(["amenbo automation port-update 33 --required false"])),
         cmd("automation port-rm", "Deletes a port. The wires that named it are left where they are, parted. Confirms unless --yes.",

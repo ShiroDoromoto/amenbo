@@ -27,6 +27,12 @@
 // shows while it holds the focus. Each edge is traced by a wider stroke nobody sees, so the pointer
 // does not have to land on a line one and a half pixels wide.
 //
+// **A wire is named only where it touches what is picked** (`AMB-T-5698`). Every wire named at once
+// was a column of words down the right of the picture, most of them about boxes nobody was looking
+// at. With a box picked, the wires in and out of it keep their names and the rest are drawn fainter;
+// with the action's input or output picked, the wires out of or into the action itself do. With
+// nothing picked, no wire is named — where each one goes is still its `<title>`.
+//
 // **It scrolls, and it does nothing else.** No zoom, no folding a stretch away: an automation is
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
 // every time the definition is read again. The one move it makes is to bring a box newly picked into
@@ -34,7 +40,7 @@
 // screen can push it out of view. It stops moving once the reader's own hand has moved the screen,
 // so a reader scrolling away from the box that stays picked is not pulled back.
 import { useEffect, useId, useRef, useState } from "react";
-import { edgeWord, exitWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
+import { ACTION_BOUNDARY, edgeWord, exitWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { Icon } from "../components/Icon";
@@ -207,6 +213,16 @@ export function AutomationPicture({
     return stop;
   }, [selectedBoxId, drawn]);
   if (picture.nodes.length === 0) return null;
+  // Whether a wire touches what is picked — the box, or the action itself where its input (the wires
+  // out of it) or its output (the wires into it) is. None does while nothing is picked.
+  const somethingPicked = selectedBoxId !== undefined || selectedPart !== undefined;
+  const touches = (line: PicLine): boolean => {
+    const [from, ...to] = line.joins ?? [];
+    if (selectedBoxId !== undefined && (line.joins ?? []).includes(selectedBoxId)) return true;
+    if (selectedPart === "in") return from === ACTION_BOUNDARY;
+    if (selectedPart === "out") return to.includes(ACTION_BOUNDARY);
+    return false;
+  };
 
   return (
     <>
@@ -259,6 +275,7 @@ export function AutomationPicture({
                 line.back ? "autopic__line--back" : "",
                 line.leaves ? "autopic__line--leaves" : "",
                 line.tone !== undefined ? `autopic__line--${line.tone}` : "",
+                line.kind === "wire" && somethingPicked && !touches(line) ? "autopic__line--aside" : "",
               ]
                 .filter((one) => one !== "")
                 .join(" ");
@@ -299,7 +316,7 @@ export function AutomationPicture({
                   )}
                   {/* A wire is named by what it hands on, past the trunks: the sentence saying where it
                       goes is the title, since the ends it lands in are drawn. */}
-                  {line.kind === "wire" && line.hands !== undefined && (
+                  {line.kind === "wire" && line.hands !== undefined && touches(line) && (
                     <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
                       {wireWord(line)}
                     </text>

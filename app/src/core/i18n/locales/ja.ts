@@ -1434,6 +1434,7 @@ export const ja: Translation = {
     not_ready_automation_task_left_open: "{step}：出口 {exit} から、タスクを閉じないまま {to} へ進んで次のタスクを取る",
     not_ready_automation_task_left_open_at_end: "{step}：出口 {exit} から、タスクを閉じないまま実行が終わる",
     not_ready_automation_hands_on_task_taken: "{step}：出口 {exit} がタスクを渡すことになっている。タスクを取れるのは組み込みだけなので、前に「タスクに着手する」か「タスクを起票する」を置く",
+    not_ready_automation_split_axis_gone: "{step}（配置 {placement}）：分ける軸が消えている。この配置を外し、今ある軸で置き直す",
     store_busy: "ストアが使用中です。少し待ってからやり直してください。",
     storage_error: "ストアの読み書きに失敗しました。変更は保存されていません。Amenbo を再起動してやり直してください。それでも起きるときは、設定 > ログ の中身を送ってください。",
     not_found_task: "タスク {ref} が見つかりません。",

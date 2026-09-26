@@ -1437,6 +1437,7 @@ export const fr: Translation = {
     not_ready_automation_task_left_open: "{step} : après {exit}, on passe à {to}, qui prend une autre tâche, alors que celle-ci est encore ouverte",
     not_ready_automation_task_left_open_at_end: "{step} : après {exit}, l’exécution se termine alors que la tâche est encore ouverte",
     not_ready_automation_hands_on_task_taken: "{step} : {exit} transmet la tâche de l’exécution, que seule une étape intégrée peut prendre ; placez « Prendre une tâche » ou « Créer une tâche » avant",
+    not_ready_automation_split_axis_gone: "{step} (placement {placement}) : l’axe selon lequel il répartit a été supprimé ; retirez ce placement et replacez-le sur un axe existant",
     store_busy: "Le magasin est en cours d'utilisation. Réessayez dans un instant.",
     storage_error: "Le magasin n'a pas pu être lu ni écrit, et rien n'a été modifié. Redémarrez Amenbo et réessayez ; si cela se reproduit, envoyez ce que contient Réglages > Journaux.",
     not_found_task: "Tâche {ref} introuvable.",

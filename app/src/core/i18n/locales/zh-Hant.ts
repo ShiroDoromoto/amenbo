@@ -1420,6 +1420,7 @@ export const zhHant: Translation = {
     not_ready_automation_task_left_open: "{step}：從 {exit} 出發，任務還沒關閉就進入 {to} 去接下一個任務",
     not_ready_automation_task_left_open_at_end: "{step}：從 {exit} 出發，任務還沒關閉執行就結束了",
     not_ready_automation_hands_on_task_taken: "{step}：{exit} 會傳出執行的任務，但只有內建步驟能領取任務，請在前面放「領取任務」或「建立任務」",
+    not_ready_automation_split_axis_gone: "{step}（配置 {placement}）：用來分流的軸已被刪除，請移除此配置，並在現有的軸上重新放置",
     store_busy: "儲存正在使用中，請稍後再試。",
     storage_error: "無法讀取或寫入儲存，沒有任何變更。請重新啟動 Amenbo 後再試一次；如果仍然發生，請把 設定 > 記錄檔 裡的內容寄來。",
     not_found_task: "找不到任務 {ref}。",

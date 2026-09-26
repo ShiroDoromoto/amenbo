@@ -1419,6 +1419,7 @@ export const nl: Translation = {
     not_ready_automation_task_left_open: "{step}: na {exit} gaat het door naar {to}, dat een volgende taak oppakt terwijl deze nog open is",
     not_ready_automation_task_left_open_at_end: "{step}: na {exit} eindigt de run terwijl de taak nog open is",
     not_ready_automation_hands_on_task_taken: "{step}: {exit} geeft de taak van de run door, die alleen een ingebouwde stap kan oppakken — zet „Taak oppakken” of „Taak aanmaken” ervoor",
+    not_ready_automation_split_axis_gone: "{step} (plaatsing {placement}): de as waarop wordt opgesplitst is verwijderd — haal deze plaatsing weg en plaats de stap opnieuw op een bestaande as",
     store_busy: "De opslag is momenteel in gebruik. Probeer het zo meteen opnieuw.",
     storage_error: "De opslag kon niet worden gelezen of geschreven, en er is niets gewijzigd. Start Amenbo opnieuw en probeer het nog eens — als het blijft gebeuren, stuur dan wat er onder Instellingen > Logboeken staat.",
     not_found_task: "Taak {ref} is niet gevonden.",

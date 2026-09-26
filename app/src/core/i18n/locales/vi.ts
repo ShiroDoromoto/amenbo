@@ -1419,6 +1419,7 @@ export const vi: Translation = {
     not_ready_automation_task_left_open: "{step}: sau {exit} chuyển sang {to} để lấy công việc khác trong khi công việc này vẫn còn mở",
     not_ready_automation_task_left_open_at_end: "{step}: sau {exit} lượt chạy kết thúc trong khi công việc vẫn còn mở",
     not_ready_automation_hands_on_task_taken: "{step}: {exit} chuyển tiếp công việc của lượt chạy, mà chỉ bước dựng sẵn mới nhận được — hãy đặt “Nhận việc” hoặc “Tạo việc” trước nó",
+    not_ready_automation_split_axis_gone: "{step} (vị trí đặt {placement}): trục dùng để chia đã bị xóa — hãy gỡ vị trí đặt này và đặt lại trên một trục đang có",
     store_busy: "Kho dữ liệu đang được sử dụng. Hãy thử lại sau giây lát.",
     storage_error: "Không đọc hoặc ghi được kho dữ liệu, và không có gì bị thay đổi. Hãy khởi động lại Amenbo rồi thử lại — nếu vẫn xảy ra, hãy gửi những gì có trong Cài đặt > Nhật ký.",
     not_found_task: "Không tìm thấy việc {ref}.",

@@ -1437,6 +1437,7 @@ export const es: Translation = {
     not_ready_automation_task_left_open: "{step}: después de {exit} pasa a {to}, que recoge otra tarea, con esta todavía abierta",
     not_ready_automation_task_left_open_at_end: "{step}: después de {exit} la ejecución termina con la tarea todavía abierta",
     not_ready_automation_hands_on_task_taken: "{step}: {exit} pasa la tarea de la ejecución, que solo puede tomar un paso integrado; pon «Tomar una tarea» o «Crear una tarea» antes",
+    not_ready_automation_split_axis_gone: "{step} (colocación {placement}): el eje por el que divide se ha eliminado; quita esta colocación y vuelve a colocarlo en un eje que exista",
     store_busy: "El almacén está en uso ahora mismo. Inténtalo de nuevo en un momento.",
     storage_error: "No se pudo leer ni escribir el almacén, y no se cambió nada. Reinicia Amenbo e inténtalo de nuevo; si sigue ocurriendo, envía lo que haya en Ajustes > Registros.",
     not_found_task: "No se encontró la tarea {ref}.",

@@ -110,6 +110,16 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
     ]);
     // The wire is written by the names a person types and keys the port rows they name (`AMB-D-961`).
     assert_eq!(wire["automation_wire"]["from_port_id"], serde_json::json!(hands_on.parse::<i64>().unwrap()));
+    assert_eq!(wire["noop"], serde_json::json!(false), "{wire}");
+
+    // Drawn again, it is the one wire already there, and the answer says nothing was added (`AMB-T-5660`).
+    let again = cli.json(&[
+        "automation", "wire-add",
+        "--from", &format!("{review}:something to fix"), "--from-port", "report",
+        "--to", &fix, "--to-port", "report", "--json",
+    ]);
+    assert_eq!(again["automation_wire"]["id"], wire["automation_wire"]["id"], "{again}");
+    assert_eq!(again["noop"], serde_json::json!(true), "the same wire drawn again was said to be added: {again}");
 }
 
 /// What every step is told before its own prompt is Amenbo's own and the same on every automation

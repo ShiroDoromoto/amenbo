@@ -2579,6 +2579,21 @@ pub fn wire_add(
     to_id: i64,
     to_port_name: &str,
 ) -> Result<AutomationWire> {
+    draw_wire(tx, owner_kind, from_id, from_exit_name, from_port_name, to_id, to_port_name).map(|(wire, _)| wire)
+}
+
+/// [`wire_add`], saying besides whether the wire was drawn just now: `false` where the same one was
+/// there already, which is answered as it stands and written nothing for. That is what lets a person
+/// who draws it again be told nothing was added rather than that it was.
+pub fn draw_wire(
+    tx: &WriteTx<'_>,
+    owner_kind: AutomationPictureOwner,
+    from_id: i64,
+    from_exit_name: Option<&str>,
+    from_port_name: &str,
+    to_id: i64,
+    to_port_name: &str,
+) -> Result<(AutomationWire, bool)> {
     let owner_id = wire_picture(tx, owner_kind, from_id, to_id)?;
     not_under_a_run(tx, def_of_picture(owner_kind, owner_id))?;
     let mut from_exit_id = None;
@@ -2674,7 +2689,7 @@ pub fn wire_add(
         to_id,
         into.id,
     )? {
-        return Ok(drawn);
+        return Ok((drawn, false));
     }
     let now = Timestamp::now();
     let id = read::next_id(tx.conn(), "automation_wire")?;
@@ -2691,7 +2706,7 @@ pub fn wire_add(
         updated_at: now,
     };
     emit_create(tx, record::automation_wire(&wire))?;
-    Ok(wire)
+    Ok((wire, true))
 }
 
 /// Delete a wire. The box then reads nothing on that input unless another wire lands on it.
@@ -3576,7 +3591,7 @@ mod tests {
             .expect("read")
             .expect("the input");
             port_update(tx, into.id, None, Some(AutomationPortKind::File), None).expect("retype it");
-            let wire = wire_add(
+            let (wire, drawn) = draw_wire(
                 tx,
                 AutomationPictureOwner::Automation,
                 from.id,
@@ -3586,7 +3601,8 @@ mod tests {
                 "差分",
             )
             .expect("draw the wire");
-            let again = wire_add(
+            assert!(drawn, "the first wire was said to be there already");
+            let (again, drawn_again) = draw_wire(
                 tx,
                 AutomationPictureOwner::Automation,
                 from.id,
@@ -3597,6 +3613,7 @@ mod tests {
             )
             .expect("draw it again");
             assert_eq!(wire.id, again.id, "the same wire twice is the one wire");
+            assert!(!drawn_again, "the same wire drawn again was said to be drawn just now");
         });
     }
 
@@ -4638,6 +4655,8 @@ mod held_by_a_run {
             "step_insert",
             // Only through `declare_port`, which asks.
             "port_add",
+            // Only through `draw_wire`, which asks.
+            "wire_add",
             // Reads a picture handed to it and writes nothing.
             "lines_back",
             // Reads an answer handed to it and writes nothing.

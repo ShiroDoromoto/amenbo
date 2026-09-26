@@ -116,9 +116,8 @@ fn sleep(how_long: Duration) {
 /// at all — which is what decides how long to wait before the next one.
 ///
 /// A run answers one of three things ([`amenbo_core::ops::automation_run::Waiting`]) and each is acted
-/// on here. A step waiting to be opened is opened. A run with a step under way is only checked for the
-/// task that step may have taken since it opened. A run
-/// with nowhere left to go is ended — it would otherwise be read again every second for the rest of
+/// on here. A step waiting to be opened is opened. A run with a step under way is only checked for a
+/// change to the task that step holds since it opened. A run with nowhere left to go is ended — it would otherwise be read again every second for the rest of
 /// the session, holding a task nobody is working.
 ///
 /// A run whose step could not be opened is left where it is and looked at again next time. The one
@@ -144,12 +143,12 @@ fn advance(app: &tauri::AppHandle) -> Result<bool, crate::error::CmdError> {
                     log::warn!("run {run} could not open step {}: {}", def.id, e.message_en);
                 }
             }
-            // A step under way may have taken its task since it was opened, and the pane was told
-            // about it before then (`crate::automation::retell_task`).
+            // The task a step under way holds may have changed since it was opened — deleted out
+            // from under it, say — and the pane was told before then (`crate::automation::retell_task`).
             Waiting::Nothing => {
                 let store = crate::commands::open_store_read()?;
                 if let Err(e) = crate::automation::retell_task(app, &store, *run) {
-                    log::warn!("run {run} could not say which task its step took: {}", e.message_en);
+                    log::warn!("run {run} could not say which task its step holds: {}", e.message_en);
                 }
             }
             // Ended here rather than by whatever changed the definition: what a run can still do is

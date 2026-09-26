@@ -204,8 +204,9 @@ fn failed_attach_ingests_nothing() {
     }
 
     // An unreadable file ingests nothing either: metadata and the per-file limit are checked before ingest.
-    let (_, code) = cli.run(&["task", "attach", &tid, "no-such-file.txt"]);
+    let (err, code) = cli.run_err(&["task", "attach", &tid, "no-such-file.txt"]);
     assert_ne!(code, 0, "attaching a missing file should fail");
+    assert!(err.contains("--url"), "an attach can take a link instead, and its hint says so: {err}");
     assert_eq!(blob_count(&cli.home), 0, "a failed attach left a blob (missing file)");
 
     // A successful attach does leave one blob, which proves the zeros above are not a miscount.

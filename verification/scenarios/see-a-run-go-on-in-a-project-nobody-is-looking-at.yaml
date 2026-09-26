@@ -25,8 +25,14 @@ given:
   - { type: action, domain: project, op: create, with: { name: Harbour, dir: harbour }, as: harbour }
   - { type: action, domain: project, op: create, with: { name: Foundry, dir: forge }, as: foundry }
 
-  # Two actions of one step each, placed one after the other. Nothing is handed on between them: what
-  # the road reads is that the second step opened at all.
+  # The task the built-in the run starts at takes, in the project the automation belongs to, so the
+  # run goes on to the first step.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the harbour round's task, project: harbour }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
+
+  # Two actions of one step each, placed one after the other after the built-in. Nothing is handed on
+  # between them: what the road reads is that the second step opened at all.
   - { type: action, domain: automation, op: action-add, with: { name: first, project: harbour }, as: first }
   - { type: action, domain: automation, op: step-add, with: { target: first, name: begin, prompt: begin the round }, as: begin }
   - { type: action, domain: automation, op: action-entry, with: { target: first, step: begin } }
@@ -38,13 +44,15 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: follow, exit_to: "" } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the harbour round", project: harbour }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: first }, as: at_first }
   - { type: action, domain: automation, op: agent-set, with: { target: at_first, step: begin, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: second }, as: at_second }
   - { type: action, domain: automation, op: agent-set, with: { target: at_second, step: follow, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_first, to: at_second } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_second } }
-  - { type: action, domain: automation, op: entry, with: { target: auto, placement: at_first } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_first } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 steps_gui:
   # The other project, on screen, with a plain shell in it — the only pane this road types in.

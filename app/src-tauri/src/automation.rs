@@ -2176,12 +2176,18 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
     let placement = view.placement;
     let action = view.action;
     let opens = view.entry_step;
+    let never_leaves_by = action.as_ref().and_then(|one| one.builtin.as_deref()).and_then(|key| {
+        automation_builtin::never_leaves_by(key, |setting| {
+            view.settings.iter().find(|cfg| cfg.name == setting).and_then(|cfg| cfg.value.as_deref())
+        })
+    });
     AutomationPlacementDto {
         id: placement.id,
         name: action.as_ref().map(|one| one.name.clone()).unwrap_or_default(),
         action_id: placement.action_id,
         global: action.as_ref().is_some_and(|one| one.project_id.is_none()),
         builtin: action.as_ref().and_then(|one| one.builtin.clone()),
+        never_leaves_by: never_leaves_by.map(str::to_string),
         step_id: opens.as_ref().map(|s| s.id),
         prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),
         interactive: opens.as_ref().is_some_and(|s| s.interactive),

@@ -208,7 +208,7 @@ fn check(conn: &Connection, reach: Reach, bound: i64, target: WriteTarget) -> Re
         // A new entity has no id yet, so we check the place it would go. "No project" (the inbox) is
         // outside a narrowed reach — nobody should be able to create an entity they can no longer touch.
         WriteTarget::NewIn(Some(project)) => reach.check(&crate::idref::project(project), Some(project)),
-        WriteTarget::NewIn(None) => Err(cannot_create(bound, "outside any project")),
+        WriteTarget::NewIn(None) => Err(cannot_create(bound, "anything outside a project")),
         // A new project is by definition outside the binding: it could be created but never touched
         // again. We do not leave that asymmetry standing.
         WriteTarget::NewProject => Err(cannot_create(bound, "a new project")),
@@ -221,7 +221,7 @@ fn check(conn: &Connection, reach: Reach, bound: i64, target: WriteTarget) -> Re
 fn cannot_create(bound: i64, en_what: &str) -> Error {
     let bound = crate::idref::project(bound);
     Error::out_of_reach(format!(
-        "Creating {en_what} is outside project {bound}, the project this folder is bound to — an AI \
-         reaches only the project its .amenbo names. Ask a human to run this."
+        "Creating {en_what} is out of reach: this folder is bound to project {bound}, and an AI reaches \
+         only the project its .amenbo names. Ask a human to run this."
     ))
 }

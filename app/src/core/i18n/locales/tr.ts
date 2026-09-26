@@ -1242,6 +1242,7 @@ export const tr: Translation = {
     "auto.say.bi.manyFolders": "bu proje birden fazla klasörde ve bunlar tek bir depoda değil — hangisinden bakılacağı hiçbir yerde yazmıyor; bunun yerine mutlak bir yol yazın",
     "auto.say.bi.split": "{task}, \"{axis}\" üzerinde \"{value}\"",
     "auto.say.bi.splitLate": "{task}, \"{axis}\" üzerinde \"{value}\", bu çalıştırmada bunun bir çıkışı yok — değer başlatmadan sonra eklendi",
+    "auto.say.bi.splitReserved": "{task}, \"{axis}\" üzerinde \"{value}\" — bu, hata çıkışının adı; bu yüzden değerin kendi çıkışı yok ve \"{exit}\" üzerinden çıkar",
     "auto.say.bi.splitNone": "{task} için \"{axis}\" üzerinde değer yok",
     "auto.say.bi.axisGone": "ayırmanın yapıldığı eksen artık yok — otomasyon kurulduktan sonra silindi",
     "auto.say.bi.waited": "{hours} sa {minutes} dk {seconds} sn beklendi",

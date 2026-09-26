@@ -1243,6 +1243,7 @@ export const vi: Translation = {
     "auto.say.bi.manyFolders": "dự án này nằm ở nhiều thư mục, và chúng không cùng một kho — không có chỗ nào ghi nên xem từ thư mục nào; hãy viết đường dẫn tuyệt đối",
     "auto.say.bi.split": "{task} có \"{value}\" trên \"{axis}\"",
     "auto.say.bi.splitLate": "{task} có \"{value}\" trên \"{axis}\", giá trị không có lối ra trong lần chạy này — nó được thêm sau khi khởi chạy",
+    "auto.say.bi.splitReserved": "{task} có \"{value}\" trên \"{axis}\" — đó là tên của lối ra lỗi, nên giá trị không có lối ra riêng và đi ra qua \"{exit}\"",
     "auto.say.bi.splitNone": "{task} không có giá trị trên \"{axis}\"",
     "auto.say.bi.axisGone": "trục dùng để chia không còn nữa — nó đã bị xoá sau khi tự động hoá được tạo",
     "auto.say.bi.waited": "đã chờ {hours} giờ {minutes} phút {seconds} giây",

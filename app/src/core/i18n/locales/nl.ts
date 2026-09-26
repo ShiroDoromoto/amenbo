@@ -1242,6 +1242,7 @@ export const nl: Translation = {
     "auto.say.bi.manyFolders": "dit project staat in meer dan één map, en die staan niet in één repository — vanaf welke gekeken moet worden staat nergens; schrijf in plaats daarvan een absoluut pad",
     "auto.say.bi.split": "{task} is ‘{value}’ op ‘{axis}’",
     "auto.say.bi.splitLate": "{task} is ‘{value}’ op ‘{axis}’, waarvoor deze run geen uitgang heeft — de waarde is na de start toegevoegd",
+    "auto.say.bi.splitReserved": "{task} is ‘{value}’ op ‘{axis}’ — de naam van de foutuitgang, dus de waarde heeft geen eigen uitgang en gaat via ‘{exit}’",
     "auto.say.bi.splitNone": "{task} heeft geen waarde op ‘{axis}’",
     "auto.say.bi.axisGone": "de as waarop gesplitst wordt bestaat niet meer — die is verwijderd nadat de automatisering was gebouwd",
     "auto.say.bi.waited": "{hours} u {minutes} min {seconds} s gewacht",

@@ -1243,6 +1243,7 @@ export const th: Translation = {
     "auto.say.bi.manyFolders": "โปรเจกต์นี้อยู่ในหลายโฟลเดอร์ และไม่ได้อยู่ในรีโพซิทอรีเดียวกัน — ไม่มีที่ใดเขียนไว้ว่าจะดูจากโฟลเดอร์ไหน โปรดเขียนพาธแบบสัมบูรณ์แทน",
     "auto.say.bi.split": "{task} มีค่า \"{value}\" บน \"{axis}\"",
     "auto.say.bi.splitLate": "{task} มีค่า \"{value}\" บน \"{axis}\" ซึ่งไม่มีทางออกในการทำงานนี้ — ค่านี้ถูกเพิ่มหลังการเริ่ม",
+    "auto.say.bi.splitReserved": "{task} มีค่า \"{value}\" บน \"{axis}\" — เป็นชื่อของทางออกข้อผิดพลาด ค่านี้จึงไม่มีทางออกของตัวเอง และออกทาง \"{exit}\"",
     "auto.say.bi.splitNone": "{task} ไม่มีค่าบน \"{axis}\"",
     "auto.say.bi.axisGone": "แกนที่ใช้แยกไม่มีอยู่แล้ว — ถูกลบหลังจากสร้างออโตเมชัน",
     "auto.say.bi.waited": "รอ {hours} ชม. {minutes} นาที {seconds} วินาที",

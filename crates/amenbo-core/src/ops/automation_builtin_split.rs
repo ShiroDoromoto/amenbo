@@ -78,7 +78,8 @@ pub(crate) fn action(tx: &WriteTx<'_>, axis: i64) -> Result<crate::model::Automa
 /// too — a task already filed under a closed value still carries it — and [`UNSORTED`] last.
 ///
 /// A value whose name is already a way out here gives none of its own: two values of one name, or a
-/// value named [`UNSORTED`] or the error way out's name, leave by the one that name already has.
+/// value named [`UNSORTED`], leave by the one that name already has. A value named as the error way out
+/// leaves by [`UNSORTED`] — the error way out is for a step that failed, not for a task's value.
 fn ways_out(tx: &WriteTx<'_>, axis: i64) -> Result<Vec<String>> {
     let mut names: Vec<String> = Vec::new();
     for (value_id, _) in read::dimension_value_siblings(tx.conn(), axis, None)? {
@@ -162,6 +163,16 @@ fn split(carry: &Carry<'_, '_>) -> Result<Named> {
             let report = say(lang, "split", &[("task", &task), ("value", &value.name), ("axis", &dimension.name)]);
             (value.name, report)
         }
+        // Its name is the error way out's, which gives no way out of its own (`ways_out`). It was on
+        // the axis all along, so it is not said to have come after the launch.
+        Some(value) if value.name == ERROR_EXIT => (
+            UNSORTED.to_string(),
+            say(
+                lang,
+                "splitReserved",
+                &[("task", &task), ("value", &value.name), ("axis", &dimension.name), ("exit", UNSORTED)],
+            ),
+        ),
         Some(value) => (
             UNSORTED.to_string(),
             say(lang, "splitLate", &[("task", &task), ("value", &value.name), ("axis", &dimension.name)]),
@@ -443,6 +454,25 @@ mod tests {
             assert_eq!(left.name, UNSORTED);
             assert!(ran.report.contains("企画"), "{}", ran.report);
         });
+    }
+
+    /// **A value named as a way out the split already has is not said to have come after the launch.**
+    /// One named [`UNSORTED`] leaves by that way out as its own; one named as the error way out has none
+    /// and leaves by [`UNSORTED`], and the report says why.
+    #[test]
+    fn a_value_named_as_a_way_out_already_there_is_not_said_to_be_late() {
+        for (name, why) in [(UNSORTED, "is '分類なし' on '職能'"), (ERROR_EXIT, "the error way out")] {
+            with_tx(|tx| {
+                let p = picture(tx);
+                let value = dimension::value_add(tx, p.role, name, None).expect("added before the launch");
+                let task = for_ai(tx, &p);
+                dimension::set(tx, task, value.id).expect("classify");
+                let (left, report) = walked(tx, &p);
+                assert_eq!(left, UNSORTED, "{name}");
+                assert!(!report.contains("after the launch"), "{report}");
+                assert!(report.contains(why), "{report}");
+            });
+        }
     }
 
     /// **A value added gives a way out with no line yet**, and the launch check asks for one.

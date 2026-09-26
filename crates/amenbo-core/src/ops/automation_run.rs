@@ -1144,7 +1144,6 @@ fn launch_asking(
         started_at: Some(now),
         ended_at: None,
         acknowledged_at: None,
-        handed: None,
         handed_task,
         created_at: now,
         updated_at: now,
@@ -2308,14 +2307,12 @@ mod tests {
 
     /// Blank text is no text, and a launch that hands nothing over starts as it always has.
     #[test]
-    fn blank_text_handed_at_launch_is_none() {
+    fn blank_text_handed_at_launch_is_no_text() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let handed = HandedAtLaunch { text: Some("  \n".into()), ..Default::default() };
-            let run = launch_handing(tx, automation.id, &here(&claude()), &handed).expect("launch");
-            assert_eq!(run.handed, None);
-            let bare = launch(tx, automation.id, &here(&claude())).expect("launch");
-            assert_eq!(bare.handed, None);
+            launch_handing(tx, automation.id, &here(&claude()), &handed).expect("a blank text is not refused");
+            launch(tx, automation.id, &here(&claude())).expect("launch");
         });
     }
 

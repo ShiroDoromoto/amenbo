@@ -4,8 +4,8 @@
 //
 // What these guard: **a spot is a button carrying the name of the action standing there**
 // (`AMB-D-949`), which is what the panel beside the picture is opened from (`AMB-T-5256`); **a `+`
-// stands on every edge** and is held shut while nothing is listening for the press, so one never
-// lands on nothing; **where a run opens is marked on the box**; **a spot a required input does not
+// stands on every edge**, shown while its line is pointed at, and is held shut while nothing is
+// listening for the press, so one never lands on nothing; **where a run opens is marked on the box**; **a spot a required input does not
 // reach names that input** rather than only turning red; and **an automation with nothing on it says
 // so in words**.
 import { act, createElement } from "react";
@@ -225,6 +225,33 @@ describe("the picture of the steps", () => {
     expect(onInsert).toHaveBeenCalledWith(1);
   });
 
+  /// One on every line all the time crowded the picture (`AMB-T-5697`): the `+` shows while its line is
+  /// pointed at, and is a button the whole time, so Tab still reaches it.
+  it("shows a line's + while the line is pointed at, and only that line's", async () => {
+    const one = detail({
+      placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] })],
+      edges: [
+        { id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" },
+        { id: 2, fromId: 2, exitName: "完了", ends: "done" },
+      ],
+    });
+    await render({ graph: one, onInsert: vi.fn() });
+    const near = () => plusses().map((plus) => plus.className.includes("autopic__plus--near"));
+    expect(near()).toEqual([false, false]);
+    expect(plusses().every((plus) => plus.tabIndex === 0 && !plus.disabled)).toBe(true);
+
+    const hits = [...container.querySelectorAll(".autopic__hit")];
+    expect(hits).toHaveLength(2);
+    await act(async () => {
+      hits[1]!.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }));
+    });
+    expect(near()).toEqual([false, true]);
+    await act(async () => {
+      hits[1]!.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+    });
+    expect(near()).toEqual([false, false]);
+  });
+
   it("names the action standing at a spot, and the required input nothing reaches", async () => {
     const one = detail({
       placements: [
@@ -337,7 +364,7 @@ describe("what the picture marks, as the mock draws it", () => {
 
   it("colours a line by what it is, ends it in an arrow, and says what the colours mean", async () => {
     await render({ graph: branching() });
-    const drawn = [...container.querySelectorAll<SVGPolylineElement>("polyline")].map((one) => ({
+    const drawn = [...container.querySelectorAll<SVGPolylineElement>("polyline.autopic__line")].map((one) => ({
       cls: one.getAttribute("class") ?? "",
       head: one.getAttribute("marker-end"),
     }));

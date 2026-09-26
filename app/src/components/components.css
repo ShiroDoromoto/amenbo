@@ -1439,6 +1439,12 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autopic__plus:disabled { cursor: default; opacity: 0.5; }
 .autopic__plus:enabled:hover { color: var(--c-text); border-color: var(--c-edge); }
+/* Shown while its line is pointed at, while it is itself, and while it holds the focus — hidden, not
+   removed, so Tab still reaches it (`AutomationPicture.tsx`). */
+.autopic__plus:not(.autopic__plus--near):not(:hover):not(:focus-visible) { opacity: 0; }
+/* The wider stroke an edge is pointed at by. Only its stroke takes the pointer: the lines' drawing
+   takes none, and a fill would catch the pointer across the whole bend of the line. */
+.autopic__hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; }
 
 /* ---------- the "running" and "history" tabs (`app/src/screens/RunningTab.tsx`, `HistoryTab.tsx`) ---------- */
 /* One bordered stack of runs, the shape the list of definitions has (`.autolist`). */

@@ -186,12 +186,63 @@ describe("a pane belongs to a project", () => {
     expect(panesOf(layout, 1).map((one) => one.id)).toEqual(["1", "2"]);
   });
 
-  it("lands on a project's first pane when it is picked", () => {
+  it("lands on a project's first pane when it is picked for the first time", () => {
     let layout = withPanes(2, "half", 1);
     layout = openedFrame(layout, 2, "/work/2").layout;
-    const back = goProject(layout, 1);
+    const there = goProject(layout, 3);
+    expect(there.page).toBe(1);
+    expect(there.focus).toBe(null);
+    // A project whose panes came back with the arrangement, and that nobody has been on this run.
+    const saved = restored({ frames: [
+      { id: "a", project: 1 }, { id: "b", project: 2, size: "whole" }, { id: "c", project: 2 },
+    ] }, null);
+    const back = goProject(saved, 2);
     expect(back.page).toBe(1);
+    expect(back.focus).toBe("b");
+  });
+
+  it("comes back to the pane last worked in on a project, and to the page it is on (`AMB-D-984`)", () => {
+    let layout = focusOn(withPanes(4, "half", 1), "3");
+    expect(layout.page).toBe(2);
+    layout = openedFrame(layout, 2, "/work/2").layout;
+    expect(layout.project).toBe(2);
+    const back = goProject(layout, 1);
+    expect(back.focus).toBe("3");
+    expect(back.page).toBe(2);
+    // And the project gone away from is kept the same way.
+    expect(goProject(back, 2).focus).toBe("5");
+  });
+
+  it("keeps a pane rather than a page, so a page closed up while away does not lose it", () => {
+    let layout = focusOn(withPanes(5, "half", 1), "5");
+    expect(layout.page).toBe(3);
+    layout = openedFrame(layout, 2, "/work/2").layout;
+    layout = closedFrame(layout, "1");
+    const back = goProject(layout, 1);
+    expect(back.focus).toBe("5");
+    expect(back.page).toBe(2);
+  });
+
+  it("lands on the first page again where the pane last worked in has been closed", () => {
+    let layout = focusOn(withPanes(4, "half", 1), "3");
+    layout = openedFrame(layout, 2, "/work/2").layout;
+    layout = closedFrame(layout, "3");
+    const back = goProject(layout, 1);
     expect(back.focus).toBe("1");
+    expect(back.page).toBe(1);
+  });
+
+  it("keeps where a project was left when the screen leaves it by reaching for a pane elsewhere", () => {
+    let layout = withPanes(1, "half", 2);
+    layout = openedFrame(layout, 1, "/work/1").layout;
+    layout = openedFrame(layout, 1, "/work/1").layout;
+    layout = focusOn(resized(layout, "2", "whole"), "3");
+    expect(layout.page).toBe(2);
+    layout = focusOn(layout, "1");
+    expect(layout.project).toBe(2);
+    const back = goProject(layout, 1);
+    expect(back.focus).toBe("3");
+    expect(back.page).toBe(2);
   });
 
   it("takes the screen to another project when a pane there is reached for", () => {

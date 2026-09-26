@@ -271,6 +271,17 @@ export type Layout = {
    * is kept — a page nobody put a terminal on is not part of the arrangement (`laidOut`).
    */
   readonly adding: boolean;
+  /**
+   * The pane last worked in on each project the reader has gone away from (`AMB-D-984`).
+   *
+   * **It is a pane and not a page.** The pages are laid down from the order every time (`AMB-D-939`),
+   * so a pane closed while the reader was away would leave a page number pointing somewhere else;
+   * the pane is found wherever it has ended up, or not at all.
+   *
+   * **It lasts as long as the app is up, and no further.** It is where the reader was a moment ago,
+   * and a window that comes up after a run starts on the project's first pane (`restored`).
+   */
+  readonly left: Readonly<Record<number, string>>;
 };
 
 export const EMPTY_LAYOUT: Layout = {
@@ -279,6 +290,7 @@ export const EMPTY_LAYOUT: Layout = {
   page: 1,
   focus: null,
   adding: false,
+  left: {},
 };
 
 /** Where one box sits: which page, and the cell of that page's grid its top left corner is in,
@@ -565,7 +577,7 @@ export function openedFrame(
     ? places[at]!
     : (places[places.length - 1] ?? layout.frames.length - 1) + 1;
   const next_: Layout = {
-    ...layout,
+    ...leaving(layout, project),
     frames: [...layout.frames.slice(0, into), frame, ...layout.frames.slice(into)],
     project,
     // The page asked for has a pane on it now, so it is a page like any other (`addPane`).
@@ -770,18 +782,29 @@ export function addPane(layout: Layout): Layout {
     : { ...layout, page: last + 1, adding: true };
 }
 
+/** The pane being worked in, kept for the project the screen is about to leave for this one
+ *  (`Layout.left`). */
+function leaving(layout: Layout, project: number): Layout {
+  if (layout.project === null || layout.project === project || layout.focus === null) return layout;
+  return { ...layout, left: { ...layout.left, [layout.project]: layout.focus } };
+}
+
 /**
  * Show a project's panes.
  *
  * The whole screen is that project's from here on: its panes, its pages, and the pane being worked in
- * is one of them. Coming to a project lands on its first page and on the pane it opened first — a
- * project remembered where it was left would be a screen a person cannot predict from the row they
- * pressed.
+ * is one of them. **Coming back to a project lands on the pane last worked in there, and on the page
+ * it is on now** (`AMB-D-984`): the reader going back is going back to where they were, and a first
+ * page they had turned away from is one more press to get there again. A project never left, or one
+ * whose pane has been closed since, lands on its first page and on the pane it opened first.
  */
 export function goProject(layout: Layout, project: number): Layout {
   if (layout.project === project) return layout;
-  const first = panesOf(layout, project)[0] ?? null;
-  return { ...layout, project, page: 1, focus: first?.id ?? null, adding: false };
+  const away = leaving(layout, project);
+  const was = away.left[project];
+  if (away.frames.some((one) => one.id === was && one.project === project)) return focusOn(away, was!);
+  const first = panesOf(away, project)[0] ?? null;
+  return { ...away, project, page: 1, focus: first?.id ?? null, adding: false };
 }
 
 /** Show a page of the project that is up, as far as there are pages to show. A page asked for and not
@@ -796,7 +819,7 @@ export function goPage(layout: Layout, page: number): Layout {
 export function focusOn(layout: Layout, frame: string): Layout {
   const one = layout.frames.find((each) => each.id === frame);
   if (!one) return layout;
-  const shown: Layout = { ...layout, project: one.project, adding: false };
+  const shown: Layout = { ...leaving(layout, one.project), project: one.project, adding: false };
   const page = pageOfFrame(shown, frame);
   return page === null ? layout : { ...shown, page, focus: frame };
 }
@@ -981,5 +1004,6 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
     page: 1,
     focus: first?.id ?? null,
     adding: false,
+    left: {},
   };
 }

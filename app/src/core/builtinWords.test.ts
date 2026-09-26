@@ -39,7 +39,7 @@ describe("a built-in's words", () => {
     const take: AutomationBuiltinDto = {
       key: "take_task",
       name: "タスクに着手する",
-      does: "絞り込みに合う未着手で ready のタスクを並び順どおりに探し、先頭から予約して進行中にする",
+      does: "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする",
       settings: [{ name: "絞り込み", kind: "taskfilter", required: false }],
       inputs: [],
       exits: [

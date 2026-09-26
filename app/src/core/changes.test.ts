@@ -29,13 +29,15 @@ describe("foldScopes — folding datasets into invalidation scopes", () => {
   });
 
   it("decision-side tables fold into decisions", () => {
-    const { scopes } = foldScopes([
-      row("decision"),
-      row("decision_comment"),
-      row("decision_edge"),
-      row("decision_dimension_value"),
-    ]);
+    const { scopes } = foldScopes([row("decision_comment"), row("decision_dimension_value")]);
     expect([...scopes].sort()).toEqual(["decisions"]);
+  });
+
+  // A linked task is ready only while its decision is written, decided and not superseded — the
+  // decision's row and its edges are where those three live — and the card draws the decision's title.
+  it("a decision's row and its edges fold into tasks too (the linked tasks' readiness)", () => {
+    expect([...foldScopes([row("decision")]).scopes].sort()).toEqual(["decisions", "tasks"]);
+    expect([...foldScopes([row("decision_edge")]).scopes].sort()).toEqual(["decisions", "tasks"]);
   });
 
   it("a task ⇄ decision link affects both sides (the task's decision badge, the decision's linked tasks)", () => {
@@ -103,7 +105,7 @@ describe("drainChanges — draining everything past the cursor and folding into 
     expect(await drainChanges()).toEqual({ scopes: new Set(["tasks"]), gap: false });
     expect(invoke).toHaveBeenCalledWith("changes_since", { cursor: 10, limit: null });
 
-    invoke.mockResolvedValueOnce(page([row("decision")], 13));
+    invoke.mockResolvedValueOnce(page([row("decision_comment")], 13));
     expect(await drainChanges()).toEqual({ scopes: new Set(["decisions"]), gap: false });
     expect(invoke).toHaveBeenLastCalledWith("changes_since", { cursor: 12, limit: null });
   });

@@ -52,9 +52,13 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   dimension: ["tasks"],
   dimension_value: ["tasks"],
   task_dimension_value: ["tasks"], // a dimension value is a board column and a list filter
-  decision: ["decisions"],
+  // A decision's own row and its edges fold to "tasks" as well: a task linked to a decision is
+  // ready only once that decision is written, decided and not superseded, and its card draws the
+  // decision's title — so finishing, rejecting, reopening, retitling or superseding one from the CLI
+  // moves the board's cards too.
+  decision: ["decisions", "tasks"],
   decision_comment: ["decisions"],
-  decision_edge: ["decisions"],
+  decision_edge: ["decisions", "tasks"],
   decision_dimension_value: ["decisions"], // what a decision is classified as, on its own pane
   decision_task_link: ["tasks", "decisions"], // shows on both (a task's decision badge, a decision's linked tasks)
   // The session a task or a decision was made in (`AMB-D-897`). It is drawn on the owner's detail

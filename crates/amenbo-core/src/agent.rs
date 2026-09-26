@@ -436,7 +436,6 @@ commands! {
     AutomationPause => "automation pause",
     AutomationResume => "automation resume",
     AutomationStop => "automation stop",
-    AutomationStepTake => "automation step-take",
     AutomationStepOut => "automation step-out",
     AutomationStepDone => "automation step-done",
     AutomationActionAdd => "automation action-add",
@@ -476,7 +475,7 @@ commands! {
 /// through (`AMB-D-968`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum InAStep {
-    /// One of the three that hand the step's work back. The step's entry teaches them in full.
+    /// One of the two that hand the step's work back. The step's entry teaches them in full.
     HandsBack,
     /// Reaches the step, and does not hand anything back: it reads, it writes a comment, or it is
     /// something the prompts a run is carried out on still do for themselves.
@@ -504,9 +503,7 @@ impl Cmd {
     /// this says which side it is on.
     pub const fn in_a_step(self) -> InAStep {
         match self {
-            Cmd::AutomationStepTake
-            | Cmd::AutomationStepOut
-            | Cmd::AutomationStepDone => InAStep::HandsBack,
+            Cmd::AutomationStepOut | Cmd::AutomationStepDone => InAStep::HandsBack,
 
             // To read where the step stands. `attach save` is on this side because it is how an agent
             // reads an attachment; `attach open` is not, since it puts the file in front of the person.
@@ -1512,8 +1509,8 @@ fn capabilities() -> Value {
             &["automation start", "automation pause", "automation resume", "automation stop"],
         ),
         cap(
-            "Report the step of a run you are carrying out — take its task, hand things on, and say you are done",
-            &["automation step-take", "automation step-out", "automation step-done"],
+            "Report the step of a run you are carrying out — hand things on, and say you are done",
+            &["automation step-out", "automation step-done"],
         ),
         cap(
             "Draw the picture a run is walked along — where it starts, the ways out of each step, what happens after each one is taken, and what is handed along",
@@ -2248,11 +2245,7 @@ fn all_commands() -> Value {
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation stop 7 --actor ai"])),
 
-        cmd("automation step-take", "Takes the task this stretch of the run is about, where no built-in took it (`automation place-add --builtin take_task` takes one without a terminal): reserves it and declares it in one act, so no window exists where it is held by nobody the store can name. It succeeds only from todo, and is refused with already_reserved otherwise — the same compare-and-swap every reservation goes through. Typed inside the terminal a run opened for a step, which is where the step it speaks for is read from; outside one it is refused.",
-            json!([{ "name": "<task>", "help": "the task to take (AMB-T-n)", "required": true },
-                   { "name": "--json", "help": "machine-readable output" }]),
-            json!(["amenbo automation step-take AMB-T-812 --actor ai"])),
-        cmd("automation step-out", "Puts down one thing this step produced, on the output its id names — the step's text lists each output with its id, under the way out it belongs to. Written <id>=<value>, or <id> --file <path> for a file, which is attached to this step execution first. WHAT THE OUTPUT WAS DECLARED TO CARRY DECIDES HOW THE WORDS ARE READ: on a value port they are the answer, and on a task_make port they name a task this step raised along the way, which is written as the task. The task the run is about does not come this way and is refused here, naming `automation step-take` — reserving it and declaring it are one act. An id the step declares no output of is refused, naming the ones it does, and so is a payload of the wrong kind. Putting the same output down twice replaces the first. Two ways out may each declare an output of one name; they are two ids, and only the one on the way out the step leaves by is handed on.",
+        cmd("automation step-out", "Puts down one thing this step produced, on the output its id names — the step's text lists each output with its id, under the way out it belongs to. Written <id>=<value>, or <id> --file <path> for a file, which is attached to this step execution first. WHAT THE OUTPUT WAS DECLARED TO CARRY DECIDES HOW THE WORDS ARE READ: on a value port they are the answer, and on a task_make port they name a task this step raised along the way, which is written as the task. The task the run is about does not come this way and is refused here: a built-in takes it, never a step. An id the step declares no output of is refused, naming the ones it does, and so is a payload of the wrong kind. Putting the same output down twice replaces the first. Two ways out may each declare an output of one name; they are two ids, and only the one on the way out the step leaves by is handed on.",
             json!([{ "name": "<id>=<value>", "help": "what is handed on, or just <id> beside --file", "required": true },
                    { "name": "--file <path>", "help": "a file to hand on, instead of a value" },
                    { "name": "--json", "help": "machine-readable output" }]),
@@ -2522,7 +2515,7 @@ fn index(in_a_pane: bool) -> Value {
 /// agent to `agent --json` first. The whole entry is about working a mailbox, none of which applies
 /// in a step, and an agent reads only its head — which never reached the `automation step-*` verbs a
 /// step does need (`AMB-T-5385`). So this says the two things a step needs and nothing else: the text
-/// it was started on is the whole of its work, and these are the commands it reaches, the three that
+/// it was started on is the whole of its work, and these are the commands it reaches, the two that
 /// hand the work back in full. Both lists are read off [`Cmd::in_a_step`] (`AMB-D-968`), so a command
 /// moved to the other side there is taught on the other side here.
 /// `agent --command` and `agent --full` answer as they do anywhere.
@@ -2540,7 +2533,7 @@ pub fn build_step() -> Value {
         "mode": "step",
         "version": VERSION,
         "schemaVersion": SCHEMA_VERSION,
-        "step": format!("This terminal is a step of an automation run. The text it started you on is the whole of this session's work: do it, then hand it back with the commands below — `{cli} automation step-take` for the task the step is about (where it declares one), `step-out` for each thing it hands on, and `step-done` for the way out taken and the report owed whichever one it is. Take nothing from the mailbox and file no other work; opening the step after yours is the run's. Pass --actor ai on every command."),
+        "step": format!("This terminal is a step of an automation run. The text it started you on is the whole of this session's work: do it, then hand it back with the commands below — `{cli} automation step-out` for each thing it hands on, and `step-done` for the way out taken and the report owed whichever one it is. Take nothing from the mailbox and file no other work; opening the step after yours is the run's. Pass --actor ai on every command."),
         "commands": hand_back,
         "reaches": {
             "commands": reaches,
@@ -2738,7 +2731,7 @@ mod tests {
     const MOST_THE_STEP_ENTRY_SAYS: usize = 8_000;
 
     /// Discipline: the entry inside a step stays short, and teaches what the table says a step may
-    /// type — the three that hand the work back in full, the rest by name, and none that moves the
+    /// type — the two that hand the work back in full, the rest by name, and none that moves the
     /// task or does what a built-in does.
     #[test]
     fn the_entry_inside_a_step_is_short_and_names_registered_commands() {
@@ -2762,10 +2755,10 @@ mod tests {
             entry["commands"].as_array().expect("commands").iter().filter_map(|c| c["name"].as_str()).collect();
         assert_eq!(
             handed_back,
-            vec!["automation step-take", "automation step-out", "automation step-done"],
-            "the three that hand the work back come in full",
+            vec!["automation step-out", "automation step-done"],
+            "the two that hand the work back come in full",
         );
-        assert!(entry["commands"][2]["flags"].is_array(), "with their flags");
+        assert!(entry["commands"][1]["flags"].is_array(), "with their flags");
     }
 
     /// Discipline: nothing in the spec says more than its share. The ceilings are deliberately above

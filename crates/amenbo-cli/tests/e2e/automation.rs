@@ -745,19 +745,15 @@ fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
     assert_eq!(code, 2, "an agent or --clear has to be said: {err}");
 }
 
-/// The three verbs a step's own agent types refuse outside a step, and say why.
+/// The two verbs a step's own agent types refuse outside a step, and say why.
 ///
 /// **There is no "the current step" to fall back on.** Several runs go at once, so a command that
 /// guessed would put one step's report on another's record — and the guess would look like it worked.
 #[test]
 fn the_verbs_a_step_types_refuse_outside_a_step() {
     let cli = Cli::new();
-    let p = cli.a_project();
-    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
-    cli.finish_creating(&t);
 
     for args in [
-        vec!["automation", "step-take", &t, "--json"],
         vec!["automation", "step-out", "12=done", "--json"],
         vec!["automation", "step-done", "--report", "did it", "--json"],
     ] {
@@ -800,7 +796,7 @@ fn inside_a_step_the_building_and_driving_verbs_are_refused() {
         let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
         assert_eq!(code, 2, "{args:?}: {err}");
         assert!(err.contains("automation_outside_only"), "{args:?}: {err}");
-        assert!(err.contains("step-take"), "it names what does reach from there: {args:?}: {err}");
+        assert!(err.contains("step-out"), "it names what does reach from there: {args:?}: {err}");
     }
 }
 
@@ -875,7 +871,7 @@ fn inside_a_step_the_reading_verbs_still_answer() {
 
 /// **Inside a step, `agent --json` is the step's own entry** (`AMB-T-5385`): the folder sends every
 /// step's fresh session there first, and the whole entry is about a mailbox a step does not work. The
-/// three verbs that hand the work back come in full; `--full` still answers with everything.
+/// two verbs that hand the work back come in full; `--full` still answers with everything.
 #[test]
 fn inside_a_step_the_entry_is_the_steps_own() {
     let cli = Cli::new();
@@ -886,7 +882,7 @@ fn inside_a_step_the_entry_is_the_steps_own() {
     assert!(entry.get("agentCycle").is_none(), "none of the mailbox comes with it: {out}");
     let names: Vec<&str> =
         entry["commands"].as_array().expect("commands").iter().filter_map(|c| c["name"].as_str()).collect();
-    assert_eq!(names, ["automation step-take", "automation step-out", "automation step-done"]);
+    assert_eq!(names, ["automation step-out", "automation step-done"]);
 
     let (out, code) = cli.run_env(&[("AMENBO_AUTOMATION_STEP", "1")], &["agent", "--json", "--full"]);
     assert_eq!(code, 0, "{out}");

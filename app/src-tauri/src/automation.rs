@@ -1864,9 +1864,9 @@ fn automation_name(store: &amenbo_core::Store, automation_id: i64) -> Result<Str
 
 /// **Tell the window again about a step whose task was taken after it was opened** (`AMB-T-5427`).
 ///
-/// A step that takes its task opens with none — which task it is about is what the step is there to
-/// find out, and it says so with `automation step-take` from inside its terminal. That is the CLI, another
-/// process, so nothing reaches here when it happens. What the watch does see is the run with its step
+/// The task a stretch holds can change after its step was opened — deleted out from under it, say — by
+/// another process, so nothing reaches here when it happens. (A step's own agent takes no task: a
+/// built-in does, without a terminal, `AMB-D-964`.) What the watch does see is the run with its step
 /// under way, once a second (`crate::automation_watch`), and this is where it compares what the window
 /// was told with what the stretch holds now.
 ///

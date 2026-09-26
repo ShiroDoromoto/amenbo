@@ -2317,13 +2317,6 @@ pub enum AutomationCmd {
         run: i64,
     },
 
-    /// **Take the task this stretch of the run is about** — reserve it and declare it in one act.
-    /// Typed by the agent carrying a step out; which step that is comes from the environment the
-    /// window opened its terminal with
-    StepTake {
-        /// the task to take (AMB-T-n)
-        task: String,
-    },
     /// **Put down one thing this step produced**, on the output the step's text lists it under. Written
     /// `<id>=<value>`, or `<id> --file <path>` for a file
     StepOut {

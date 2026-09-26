@@ -789,11 +789,10 @@ fn one_setting(cfg: &RunDefCfg) -> String {
 /// leaving through a way out somebody drew for the case.
 ///
 /// **The command is named per kind, and only for the kinds this step declares.** There is no one verb
-/// that puts every kind down: the task the run is about is reserved and declared in one act by
-/// `automation step-take`, because splitting the two leaves a task `in_progress` that nothing can hand back
-/// when the agent dies between them ([`crate::ops::automation_report::take`]). A text that said "put
-/// each one down with `out`" was therefore wrong on exactly the step every automation has to start
-/// with — and an agent does what the text says (`AMB-T-5279`).
+/// that puts every kind down: the task the run is about is taken by a built-in, which reserves and
+/// declares it in one act ([`crate::ops::automation_report::take`]), and nothing a step types takes it
+/// (`AMB-D-964`). So that kind is said to be none of the step's, rather than left for the agent to find
+/// a command for — an agent does what the text says (`AMB-T-5279`).
 fn handing_back(exits: &[RunDefExit], choices: &[Choices]) -> String {
     let cli = crate::config::Paths::command_name();
     let mut lines = vec![format!("## How to hand your work back\n")];
@@ -847,11 +846,11 @@ fn handing_back(exits: &[RunDefExit], choices: &[Choices]) -> String {
                 AutomationPortKind::File => {
                     format!("- a file — `{cli} automation step-out <id> --file <path>`")
                 }
-                // Reserving and declaring are one command, so this one is not `out` and never can be.
-                AutomationPortKind::TaskTake => format!(
-                    "- the task this step takes — `{cli} automation step-take <task>`, which reserves it \
-                     and hands it on in one act. It is refused for a task somebody else already holds."
-                ),
+                // A built-in takes it (`AMB-D-964`): there is no command for it here, `out` included.
+                AutomationPortKind::TaskTake => "- the task the run works — not yours to put down: a \
+                     built-in takes it, and no command here does. Leave by a way out that does not \
+                     declare it."
+                    .to_string(),
                 AutomationPortKind::TaskMake => format!(
                     "- a task you raised along the way — `{cli} automation step-out <id>=<task>`. It is \
                      not the task this run is working: nothing reserves it, and whoever comes to it \
@@ -1238,10 +1237,10 @@ mod tests {
     ///
     /// A step's agent does what the text says. It said "put each one down with `automation step-out`" for
     /// every kind, and the one kind every automation has to start with — the task the run is about —
-    /// cannot be put down that way at all: reserving and declaring it are one act, so a step following
-    /// the text was refused every time.
+    /// cannot be put down that way at all: a built-in takes it (`AMB-D-964`), so a step following the
+    /// text was refused every time. The text says so, and names no command for it.
     #[test]
-    fn the_text_names_a_command_per_kind_and_not_out_for_the_task_it_takes() {
+    fn the_text_names_a_command_per_kind_and_none_for_the_task_the_run_works() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             mk_out(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
@@ -1250,9 +1249,10 @@ mod tests {
 
             assert!(text.contains("- a value — `amenbo automation step-out <id>=<value>`"), "{text}");
             assert!(
-                text.contains("the task this step takes — `amenbo automation step-take <task>`"),
+                text.contains("the task the run works — not yours to put down: a built-in takes it"),
                 "{text}"
             );
+            assert!(!text.contains("step-take"), "{text}");
             assert!(
                 text.contains("a task you raised along the way — `amenbo automation step-out <id>=<task>`"),
                 "{text}"

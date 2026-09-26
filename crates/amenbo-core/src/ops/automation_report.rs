@@ -8,8 +8,9 @@
 //!
 //! **Three doors, in the order a step walks them.** [`take`] reserves the task the run is about and
 //! declares it in one act, since a task reserved but not declared is one nobody can trace back to the
-//! run. [`out`] puts down each thing the step produced, on the port it was declared as. [`done`] names
-//! the way out, and that way out is the whole condition the next step is chosen by.
+//! run — it is the built-ins' (`AMB-D-964`), and no command an agent types reaches it. [`out`] puts
+//! down each thing the step produced, on the port it was declared as. [`done`] names the way out, and
+//! that way out is the whole condition the next step is chosen by.
 //!
 //! **An output is one way out's, and a value is put down on it.** Two ways out of one step may each
 //! declare an output called `report`, and they are two port rows with two ids (`AMB-D-961`). [`out`]
@@ -102,9 +103,9 @@ fn declared_out(exits: &[RunDefExit], port_id: i64) -> Option<(&RunDefExit, &Run
 /// output of that id.
 ///
 /// It is read **before** a value is put down, because what a port takes decides which command says it:
-/// a value and a file go down with `automation step-out`, the task the run is about is reserved and handed
-/// on in one act by [`take`], and a task the step raised along the way goes down with `out` too, as an
-/// id. A caller that guessed would be refused by [`put`] with a sentence about kinds, which is not the
+/// a value and a file go down with `automation step-out`, the task the run is about is reserved and
+/// handed on in one act by [`take`], which only a built-in calls, and a task the step raised along the
+/// way goes down with `out` too, as an id. A caller that guessed would be refused by [`put`] with a sentence about kinds, which is not the
 /// sentence somebody typing needs.
 pub fn out_kind(
     conn: &Connection,
@@ -120,7 +121,8 @@ pub fn out_kind(
 
 // ───────────────────────── take ─────────────────────────
 
-/// **Take the task this stretch of the run is about**: reserve it and declare it in one act.
+/// **Take the task this stretch of the run is about**: reserve it and declare it in one act. The
+/// built-ins that take a task and file one call it (`AMB-D-964`); a step's agent has no command that does.
 ///
 /// Reserving alone would leave a task held by nobody the store can name; declaring alone would hand a
 /// task on to later steps while another session was working it. So the two are one command, and it

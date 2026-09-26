@@ -765,6 +765,10 @@ not its pane is drawn, and opening the pane to type in it would start one on the
 it is typed at a plain shell in whatever pane is up, with the step the window would have named put
 into the environment by hand — the run's number off its row on the running tab, the step's off
 `run-show`.
+`acknowledge-in-shell` says a failed run has been seen with `automation acknowledge`, typed at a
+plain shell in whatever pane is up rather than pressed on the run's row or its pane — the road a
+person's AI takes when it says so for them. The run's number comes off its row on the running tab, as
+`done-outside-pane`'s does.
 `quit-in-pane` is the step's program ending by itself before it reports — `exit` typed at a stand-in
 that carries lines out (`can-start`'s `then: runs`) — which fails the run there as `crashed`. Closing
 the pane is Amenbo ending the terminal, a stop, and not this.

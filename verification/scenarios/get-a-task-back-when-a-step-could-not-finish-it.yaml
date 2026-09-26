@@ -11,7 +11,9 @@ title: A step that leaves by an error way out nobody drew a line from hands its 
 description: >
   Start a run whose built-in takes a task, then report the step after it done by its error way out, which has no
   line drawn from it. The run fails because a way out called for a person, and the task is `todo`
-  again, assigned to a human, with the step's report on its timeline.
+  again, assigned to a human, with the step's report on its timeline. Then say the failure has been
+  seen from a plain shell, as a person's AI would for them, and it leaves the running tab for the
+  history, still saying why it stopped.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
 
@@ -129,6 +131,50 @@ steps_gui:
   - type: assert
     domain: automation
     op: run-row
+    with:
+      target: run
+      state: failed
+      reason: halted
+
+  # Saying it has been seen, typed rather than pressed, as a person's AI would say it for them. The
+  # failure leaves the running tab for the history, still saying why it stopped.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: workspace
+    op: open-shell
+
+  - type: action
+    domain: automation
+    op: acknowledge-in-shell
+    with:
+      target: run
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: history
+
+  - type: assert
+    domain: automation
+    op: history-row
     with:
       target: run
       state: failed

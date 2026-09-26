@@ -835,6 +835,7 @@ fn inside(
                 continue;
             }
             let mut reached = false;
+            let mut before = None;
             for wire in wires.iter().filter(|w| w.to_id == step.id && w.to_port_id == port.id) {
                 reached = if wire.from_id == ACTION_BOUNDARY {
                     let declared = read::automation_ports_of(
@@ -847,6 +848,15 @@ fn inside(
                     .any(|p| p.id == wire.from_port_id);
                     declared && fed(conn, placement, wire.from_port_id, entry_id, live, by_id)?
                 } else if opened.contains(&wire.from_id) {
+                    // Only a step a run opens before this one hands anything on to its first opening:
+                    // its own way out, or that of a step only reached through it, leaves the input empty
+                    // then (`AMB-T-5641`), as on the automation's picture (`fed`).
+                    if before.is_none() {
+                        before = Some(steps_reached(conn, placement.action_id, steps, Some(step.id))?);
+                    }
+                    if !before.as_ref().is_some_and(|b| b.contains(&wire.from_id)) {
+                        continue;
+                    }
                     let exit = declared_exit(conn, wire.from_exit_id, AutomationOwner::Step, wire.from_id)?;
                     match exit {
                         Some(exit) => {
@@ -909,15 +919,28 @@ fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
 /// pane ever comes up on it, so refusing the launch over the agent it names would hold a run back for
 /// a box still being drawn.
 fn steps_opened_by(conn: &Connection, action_id: i64) -> Result<Vec<crate::model::AutomationStep>> {
-    let Some(entry) = read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id) else {
-        return Ok(Vec::new());
-    };
     let steps = read::automation_action_steps_of(conn, action_id)?;
+    let seen = steps_reached(conn, action_id, &steps, None)?;
+    Ok(steps.into_iter().filter(|step| seen.contains(&step.id)).collect())
+}
+
+/// **The steps of one action walked from its entry**, without passing through `avoiding` — with it,
+/// what a run can open before it first comes to that step, the step itself not among them. The walk
+/// [`reachable_without`] takes over the placements, taken over the picture inside.
+fn steps_reached(
+    conn: &Connection,
+    action_id: i64,
+    steps: &[crate::model::AutomationStep],
+    avoiding: Option<i64>,
+) -> Result<BTreeSet<i64>> {
+    let Some(entry) = read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id) else {
+        return Ok(BTreeSet::new());
+    };
     let ids: BTreeSet<i64> = steps.iter().map(|s| s.id).collect();
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry];
     while let Some(id) = todo.pop() {
-        if !ids.contains(&id) || !seen.insert(id) {
+        if Some(id) == avoiding || !ids.contains(&id) || !seen.insert(id) {
             continue;
         }
         for edge in read::automation_edges_from(conn, AutomationPictureOwner::Action, id)? {
@@ -926,7 +949,7 @@ fn steps_opened_by(conn: &Connection, action_id: i64) -> Result<Vec<crate::model
             }
         }
     }
-    Ok(steps.into_iter().filter(|step| seen.contains(&step.id)).collect())
+    Ok(seen)
 }
 
 /// The placements a run could actually reach, walked from the entry along the edges that go on to
@@ -3106,6 +3129,53 @@ mod tests {
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![],
                 "the first step inside hands it on",
+            );
+        });
+    }
+
+    /// **A wire from a step's own way out inside the action does not feed its input** (`AMB-T-5641`), as
+    /// on the automation's picture: the first time the step opens nothing has left by it yet.
+    #[test]
+    fn a_wire_from_a_steps_own_way_out_inside_does_not_feed_its_input() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let second = a_second_step(tx, &action, &placement);
+            let on = AutomationPictureOwner::Action;
+            automation::edge_add(tx, on, second.id, None, EdgeTarget::Exit(None), None).expect("edge");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Step,
+                second.id,
+                AutomationPortDirection::In,
+                "下書き",
+                AutomationPortKind::Value,
+                true,
+            )
+            .expect("in");
+            let exit = read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, second.id, None)
+                .expect("read")
+                .expect("way out");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                exit.id,
+                AutomationPortDirection::Out,
+                "下書き",
+                AutomationPortKind::Value,
+                false,
+            )
+            .expect("out");
+            automation::wire_add(tx, on, second.id, None, "下書き", second.id, "下書き")
+                .expect("wire back into itself");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::UnwiredInput {
+                    step: "見直す".into(),
+                    port: "下書き".into(),
+                    builtin: None,
+                    placement: placement.id,
+                }],
+                "the only wire into it comes back from its own way out",
             );
         });
     }

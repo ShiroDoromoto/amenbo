@@ -1410,6 +1410,7 @@ export const th: Translation = {
     not_ready_automation_model_missing: "{step}: เอเจนต์ที่นี่ไม่มีโมเดล {model}",
     not_ready_automation_task_left_open: "{step}: หลัง {exit} จะไปที่ {to} ซึ่งรับงานถัดไป ทั้งที่งานนี้ยังไม่ปิด",
     not_ready_automation_task_left_open_at_end: "{step}: หลัง {exit} การรันจะจบทั้งที่งานยังไม่ปิด",
+    not_ready_automation_hands_on_task_taken: "{step}: {exit} ส่งต่องานของการรัน แต่มีแค่ขั้นตอนในตัวเท่านั้นที่รับงานได้ ให้วาง “รับงาน” หรือ “สร้างงาน” ไว้ก่อน",
     store_busy: "ที่เก็บข้อมูลกำลังถูกใช้งานอยู่ ลองใหม่อีกสักครู่",
     storage_error: "อ่านหรือเขียนที่เก็บข้อมูลไม่ได้ และไม่มีอะไรถูกเปลี่ยน เริ่ม Amenbo ใหม่แล้วลองอีกครั้ง ถ้ายังเกิดขึ้นอีก ให้ส่งสิ่งที่อยู่ใน ตั้งค่า > บันทึกระบบ มาให้ด้วย",
     not_found_task: "ไม่พบงาน {ref}",

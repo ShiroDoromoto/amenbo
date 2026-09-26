@@ -1411,6 +1411,7 @@ export const zhHans: Translation = {
     not_ready_automation_model_missing: "{step}：这里的智能体不提供 {model} 模型",
     not_ready_automation_task_left_open: "{step}：从 {exit} 出发，任务还没关闭就进入 {to} 去接下一个任务",
     not_ready_automation_task_left_open_at_end: "{step}：从 {exit} 出发，任务还没关闭运行就结束了",
+    not_ready_automation_hands_on_task_taken: "{step}：{exit} 会传出运行的任务，但只有内置步骤能领取任务，请在前面放“领取任务”或“创建任务”",
     store_busy: "存储正在使用中，请稍后重试。",
     storage_error: "无法读取或写入存储，什么都没有改动。请重启 Amenbo 后重试；如果仍然发生，请把 设置 > 日志 里的内容发过来。",
     not_found_task: "找不到任务 {ref}。",

@@ -880,7 +880,7 @@ mod tests {
         ActorKind, Automation, AutomationAction, AutomationPictureOwner, AutomationPlacement,
     };
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
-    use crate::ops::automation_run::{launch_leaving_the_task_open as launch, Launcher};
+    use crate::ops::automation_run::{launch_past_the_task_checks as launch, Launcher};
     use crate::ops::test_support::{mk_exit, mk_in, mk_out, mk_placed, mk_project, with_tx};
 
     /// The picture every test here starts from: a spot that takes a task and hands a note on through

@@ -476,7 +476,7 @@ mod tests {
     use crate::model::{Automation, AutomationPortKind, ERROR_EXIT};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_report::{done, Next};
-    use crate::ops::automation_run::{launch_leaving_the_task_open as launch, Launcher};
+    use crate::ops::automation_run::{launch_past_the_task_checks as launch, Launcher};
     use crate::ops::automation_step::{Opened, Opening};
     use crate::ops::test_support::open;
     use crate::ops::test_support::{

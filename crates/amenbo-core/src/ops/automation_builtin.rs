@@ -718,7 +718,7 @@ mod tests {
 
     use crate::model::{ActorKind, Automation, AutomationPlacement, AutomationRunStatus, AutomationStep};
     use crate::ops::automation::NewAutomation;
-    use crate::ops::automation_run::{check, launch_leaving_the_task_open as launch, nothing_asked, Launcher, Unmet};
+    use crate::ops::automation_run::{check, launch_past_the_task_checks as launch, nothing_asked, Launcher, Unmet};
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
     use crate::ops::test_support::{mk_out, mk_placed, mk_project, mk_task_in, with_tx};
@@ -899,8 +899,12 @@ mod tests {
             let p = picture(tx, "test_stamp");
             let startable = vec!["claude".to_string()];
             let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
-            // The picture ends with the task open, which is its own reason and not the one asked here.
-            let gaps: Vec<_> = unmet.iter().filter(|u| !matches!(u, Unmet::LeavesTaskOpen { .. })).collect();
+            // The picture ends with the task open, and takes it at a step of its own rather than a
+            // built-in — each its own reason, and neither the one asked here.
+            let gaps: Vec<_> = unmet
+                .iter()
+                .filter(|u| !matches!(u, Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. }))
+                .collect();
             assert!(gaps.is_empty(), "nobody chosen for the built-in is not a gap: {gaps:?}");
 
             automation::cfg_set(tx, p.builtin.id, "stamp", Some("\"seen\"")).expect("answer");

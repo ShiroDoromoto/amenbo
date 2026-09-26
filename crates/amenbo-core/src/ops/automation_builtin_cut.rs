@@ -150,7 +150,7 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::automation_report::Next;
-    use crate::ops::automation_run::{launch_leaving_the_task_open as launch, nothing_asked, Launcher};
+    use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
     use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};

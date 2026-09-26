@@ -1428,6 +1428,7 @@ export const ptBR: Translation = {
     not_ready_automation_model_missing: "{step}: o agente aqui não oferece o modelo {model}",
     not_ready_automation_task_left_open: "{step}: depois de {exit} segue para {to}, que pega outra tarefa, com esta ainda aberta",
     not_ready_automation_task_left_open_at_end: "{step}: depois de {exit} a execução termina com a tarefa ainda aberta",
+    not_ready_automation_hands_on_task_taken: "{step}: {exit} passa adiante a tarefa da execução, que só uma etapa integrada pode pegar; coloque “Pegar uma tarefa” ou “Criar uma tarefa” antes",
     store_busy: "O armazenamento está em uso agora. Tente de novo em instantes.",
     storage_error: "Não foi possível ler nem gravar no armazenamento, e nada foi alterado. Reinicie o Amenbo e tente de novo; se continuar acontecendo, envie o que está em Configurações > Logs.",
     not_found_task: "Tarefa {ref} não encontrada.",

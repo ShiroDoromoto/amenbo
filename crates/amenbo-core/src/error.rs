@@ -404,6 +404,8 @@ pub enum ErrorCode {
     // end.
     NotReadyAutomationTaskLeftOpen,
     NotReadyAutomationTaskLeftOpenAtEnd,
+    // A person's own action handing on the task a run works, which only a built-in takes (`AMB-D-964`).
+    NotReadyAutomationHandsOnTaskTaken,
 }
 
 impl ErrorCode {
@@ -492,6 +494,7 @@ impl ErrorCode {
             ErrorCode::NotReadyAutomationModelMissing => "not_ready_automation_model_missing",
             ErrorCode::NotReadyAutomationTaskLeftOpen => "not_ready_automation_task_left_open",
             ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd => "not_ready_automation_task_left_open_at_end",
+            ErrorCode::NotReadyAutomationHandsOnTaskTaken => "not_ready_automation_hands_on_task_taken",
         }
     }
 
@@ -577,6 +580,7 @@ impl ErrorCode {
         ErrorCode::NotReadyAutomationModelMissing,
         ErrorCode::NotReadyAutomationTaskLeftOpen,
         ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
+        ErrorCode::NotReadyAutomationHandsOnTaskTaken,
     ];
 }
 
@@ -793,6 +797,7 @@ mod tests {
             "not_ready_automation_model_missing",
             "not_ready_automation_task_left_open",
             "not_ready_automation_task_left_open_at_end",
+            "not_ready_automation_hands_on_task_taken",
         ]
         .into_iter()
         .collect();

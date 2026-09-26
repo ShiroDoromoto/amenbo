@@ -629,7 +629,7 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
-        check, launch_handing, launch_leaving_the_task_open as launch, nothing_asked, HandedAtLaunch,
+        check, launch_handing, launch_past_the_task_checks as launch, nothing_asked, HandedAtLaunch,
         Launcher, Unmet,
     };
     use crate::ops::automation_step::Opened;

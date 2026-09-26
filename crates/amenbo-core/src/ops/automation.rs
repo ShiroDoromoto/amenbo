@@ -66,7 +66,8 @@ fn not_found(what: &str, id: i64) -> Error {
 fn checked_name(what: &str, name: &str) -> Result<String> {
     let s = name.trim();
     if s.is_empty() {
-        return Err(Error::invalid(format!("a {what} name cannot be empty")));
+        let article = if what.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+        return Err(Error::invalid(format!("{article} {what} name cannot be empty")));
     }
     Ok(s.to_string())
 }
@@ -1816,7 +1817,7 @@ pub(crate) fn declare_port(
     not_under_a_run(tx, def_of_port_owner(tx, owner_kind, owner_id)?)?;
     if read::automation_port_by_name(tx.conn(), owner_kind, owner_id, direction, &name)?.is_some() {
         return Err(Error::invalid(format!(
-            "a {} called '{name}' is already declared here",
+            "an {} called '{name}' is already declared here",
             match direction {
                 AutomationPortDirection::In => "input",
                 AutomationPortDirection::Out => "output",

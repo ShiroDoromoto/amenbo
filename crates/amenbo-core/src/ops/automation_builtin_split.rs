@@ -134,7 +134,7 @@ pub(crate) fn refuse_to_widen(tx: &WriteTx<'_>, axis: i64, name: &str) -> Result
         return Ok(());
     }
     Err(Error::invalid(format!(
-        "'{name}' is split by in an automation, so a task has to go on holding one value of it — a task \
+        "an automation splits tasks by '{name}', so a task has to go on holding one value of it — a task \
          holding two would have two ways out to leave by"
     )))
 }

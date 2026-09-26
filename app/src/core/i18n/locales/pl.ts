@@ -1257,6 +1257,7 @@ export const pl: Translation = {
     "auto.say.bi.manyFolders": "ten projekt jest w więcej niż jednym folderze, a nie są one w jednym repozytorium — nigdzie nie zapisano, z którego patrzeć; zamiast tego podaj ścieżkę bezwzględną",
     "auto.say.bi.split": "{task} ma „{value}” w „{axis}”",
     "auto.say.bi.splitLate": "{task} ma „{value}” w „{axis}”, dla której to uruchomienie nie ma wyjścia — wartość dodano po starcie",
+    "auto.say.bi.splitReserved": "{task} ma „{value}” w „{axis}” — to nazwa wyjścia błędu, więc wartość nie ma własnego wyjścia i wychodzi przez „{exit}”",
     "auto.say.bi.splitNone": "{task} nie ma wartości w „{axis}”",
     "auto.say.bi.axisGone": "oś, według której następuje podział, już nie istnieje — usunięto ją po zbudowaniu automatyzacji",
     "auto.say.bi.waited": "odczekano {hours} h {minutes} min {seconds} s",

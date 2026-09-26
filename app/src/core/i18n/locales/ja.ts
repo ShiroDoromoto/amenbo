@@ -1246,6 +1246,7 @@ export const ja: Translation = {
     "auto.say.bi.manyFolders": "このプロジェクトのフォルダが複数あり、1つのリポジトリにまとまっていません。どこから見るかが決まらないので、絶対パスで書いてください",
     "auto.say.bi.split": "{task} の「{axis}」は「{value}」です",
     "auto.say.bi.splitLate": "{task} の「{axis}」は「{value}」ですが、この実行にはその値の出口がありません。値は起動のあとで足されました",
+    "auto.say.bi.splitReserved": "{task} の「{axis}」は「{value}」ですが、この名前はエラーの出口が使っています。そのため値の出口は無く、「{exit}」から出ます",
     "auto.say.bi.splitNone": "{task} には「{axis}」の値が付いていません",
     "auto.say.bi.axisGone": "分ける軸がありません。オートメーションを作ったあとで消されました",
     "auto.say.bi.waited": "{hours}時間{minutes}分{seconds}秒待ちました",

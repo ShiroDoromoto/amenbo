@@ -1241,6 +1241,7 @@ export const id: Translation = {
     "auto.say.bi.manyFolders": "proyek ini ada di lebih dari satu folder, dan folder itu tidak berada di satu repositori — dari mana harus melihat tidak tertulis di mana pun; tulis path absolut sebagai gantinya",
     "auto.say.bi.split": "{task} bernilai \"{value}\" pada \"{axis}\"",
     "auto.say.bi.splitLate": "{task} bernilai \"{value}\" pada \"{axis}\", yang tidak punya jalan keluar di eksekusi ini — nilai itu ditambahkan setelah peluncuran",
+    "auto.say.bi.splitReserved": "{task} bernilai \"{value}\" pada \"{axis}\" — itu nama jalan keluar galat, jadi nilai itu tidak punya jalan keluar sendiri dan keluar lewat \"{exit}\"",
     "auto.say.bi.splitNone": "{task} tidak punya nilai pada \"{axis}\"",
     "auto.say.bi.axisGone": "sumbu untuk memisahkan sudah tidak ada — sumbu itu dihapus setelah otomasi dibuat",
     "auto.say.bi.waited": "menunggu {hours} jam {minutes} menit {seconds} detik",

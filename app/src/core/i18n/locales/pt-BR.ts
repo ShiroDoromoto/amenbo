@@ -1253,6 +1253,7 @@ export const ptBR: Translation = {
     "auto.say.bi.manyFolders": "este projeto está em mais de uma pasta, e elas não estão em um mesmo repositório: de qual olhar não está escrito em lugar nenhum; escreva um caminho absoluto",
     "auto.say.bi.split": "{task} tem \"{value}\" em \"{axis}\"",
     "auto.say.bi.splitLate": "{task} tem \"{value}\" em \"{axis}\", que não tem saída nesta execução: o valor foi adicionado depois do início",
+    "auto.say.bi.splitReserved": "{task} tem \"{value}\" em \"{axis}\": é o nome da saída de erro, então o valor não tem saída própria e sai por \"{exit}\"",
     "auto.say.bi.splitNone": "{task} não tem valor em \"{axis}\"",
     "auto.say.bi.axisGone": "o eixo pelo qual se divide não existe mais: ele foi excluído depois que a automação foi criada",
     "auto.say.bi.waited": "esperou {hours} h {minutes} min {seconds} s",

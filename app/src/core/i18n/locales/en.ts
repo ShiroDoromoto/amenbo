@@ -1487,6 +1487,7 @@ const ui = {
   "auto.say.bi.manyFolders": "this project is in more than one folder, and they are not in one repository — which one to look from is not written anywhere; write an absolute path instead",
   "auto.say.bi.split": "{task} is '{value}' on '{axis}'",
   "auto.say.bi.splitLate": "{task} is '{value}' on '{axis}', which has no way out on this run — it was added after the launch",
+  "auto.say.bi.splitReserved": "{task} is '{value}' on '{axis}' — the name the error way out goes by, so the value has no way out of its own and leaves by '{exit}'",
   "auto.say.bi.splitNone": "{task} has no value on '{axis}'",
   "auto.say.bi.axisGone": "the axis this splits by is gone — it was deleted after the automation was built",
   "auto.say.bi.waited": "waited {hours}h {minutes}m {seconds}s",

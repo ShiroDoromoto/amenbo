@@ -1252,6 +1252,7 @@ export const it: Translation = {
     "auto.say.bi.manyFolders": "questo progetto è in più di una cartella, e non sono in un unico repository: da quale guardare non è scritto da nessuna parte; scrivi invece un percorso assoluto",
     "auto.say.bi.split": "{task} ha «{value}» su «{axis}»",
     "auto.say.bi.splitLate": "{task} ha «{value}» su «{axis}», che non ha un'uscita in questa esecuzione: il valore è stato aggiunto dopo l'avvio",
+    "auto.say.bi.splitReserved": "{task} ha «{value}» su «{axis}»: è il nome dell'uscita di errore, quindi il valore non ha un'uscita propria ed esce da «{exit}»",
     "auto.say.bi.splitNone": "{task} non ha un valore su «{axis}»",
     "auto.say.bi.axisGone": "l'asse per cui si suddivide non esiste più: è stato eliminato dopo che l'automazione è stata costruita",
     "auto.say.bi.waited": "attesi {hours} h {minutes} min {seconds} s",

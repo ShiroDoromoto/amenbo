@@ -1237,6 +1237,7 @@ export const ko: Translation = {
     "auto.say.bi.manyFolders": "이 프로젝트의 폴더가 여러 개이고 하나의 저장소에 모여 있지 않습니다. 어디서 볼지 정해져 있지 않으니 절대 경로로 써 주세요",
     "auto.say.bi.split": "{task}의 \"{axis}\"은(는) \"{value}\"입니다",
     "auto.say.bi.splitLate": "{task}의 \"{axis}\"은(는) \"{value}\"이지만, 이 실행에는 그 값의 출구가 없습니다. 값이 시작 후에 추가되었습니다",
+    "auto.say.bi.splitReserved": "{task}의 \"{axis}\"은(는) \"{value}\"이지만, 이 이름은 오류 출구가 쓰고 있습니다. 그래서 값의 출구가 없어 \"{exit}\"(으)로 나갑니다",
     "auto.say.bi.splitNone": "{task}에는 \"{axis}\" 값이 없습니다",
     "auto.say.bi.axisGone": "나누는 기준 축이 없습니다. 오토메이션을 만든 뒤에 삭제되었습니다",
     "auto.say.bi.waited": "{hours}시간 {minutes}분 {seconds}초 기다렸습니다",

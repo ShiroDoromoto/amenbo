@@ -1240,6 +1240,7 @@ export const hi: Translation = {
     "auto.say.bi.manyFolders": "यह प्रोजेक्ट एक से अधिक फ़ोल्डर में है, और वे एक रिपॉज़िटरी में नहीं हैं — किससे देखना है, यह कहीं लिखा नहीं है; इसके बजाय पूरा पथ लिखें",
     "auto.say.bi.split": "{task} का \"{axis}\" पर मान \"{value}\" है",
     "auto.say.bi.splitLate": "{task} का \"{axis}\" पर मान \"{value}\" है, जिसका इस रन में कोई निकास नहीं है — यह मान लॉन्च के बाद जोड़ा गया था",
+    "auto.say.bi.splitReserved": "{task} का \"{axis}\" पर मान \"{value}\" है — यह त्रुटि निकास का नाम है, इसलिए इस मान का अपना कोई निकास नहीं है और यह \"{exit}\" से निकलता है",
     "auto.say.bi.splitNone": "{task} का \"{axis}\" पर कोई मान नहीं है",
     "auto.say.bi.axisGone": "जिस अक्ष से बाँटा जाता है वह अब नहीं है — ऑटोमेशन बनने के बाद उसे हटा दिया गया",
     "auto.say.bi.waited": "{hours} घंटे {minutes} मिनट {seconds} सेकंड प्रतीक्षा की",

@@ -1242,6 +1242,7 @@ export const zhHans: Translation = {
     "auto.say.bi.manyFolders": "此项目在多个文件夹中，且它们不在同一个仓库里——从哪个文件夹查看没有写明；请改写为绝对路径",
     "auto.say.bi.split": "{task} 在“{axis}”上的值是“{value}”",
     "auto.say.bi.splitLate": "{task} 在“{axis}”上的值是“{value}”，但这次执行没有这个值的出口——该值是在启动后添加的",
+    "auto.say.bi.splitReserved": "{task} 在“{axis}”上的值是“{value}”，这是错误出口使用的名字，所以该值没有自己的出口，从“{exit}”离开",
     "auto.say.bi.splitNone": "{task} 在“{axis}”上没有值",
     "auto.say.bi.axisGone": "用于分流的轴已不存在——它在自动化建好之后被删除了",
     "auto.say.bi.waited": "已等待 {hours} 小时 {minutes} 分 {seconds} 秒",

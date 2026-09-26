@@ -1427,6 +1427,7 @@ const ui = {
   "auto.run.failed": "Failed",
   "auto.run.canceled": "Canceled",
   "auto.run.acknowledge": "Acknowledge",
+  "auto.run.seenBy": "Seen by",
   "auto.run.seePicture": "See the picture",
   "auto.run.seeHistory": "See the history",
   "auto.run.seeRunning": "See it under Running",

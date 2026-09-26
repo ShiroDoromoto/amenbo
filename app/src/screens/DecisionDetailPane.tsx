@@ -26,7 +26,7 @@ import { errText, exactLabel, formatNumber, statusLabel, t, tf } from "../core/i
 import { decisionRef } from "../core/idref";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
-import { FacetAvatar } from "../components/atoms";
+import { FacetAvatar, facetActor } from "../components/atoms";
 import { decisionStatusChip } from "../core/decisionStatus";
 
 // The word on the state badge, off the same two facts and in the same order as the fill it sits on
@@ -394,8 +394,7 @@ export function DecisionDetailPane({
 function decider(d: Decision): Actor | null {
   const token = d.decidedBy?.id;
   if (token !== "human" && token !== "ai") return null;
-  return getSnapshot().roster.find((a) => a.kind === token)
-    ?? { name: t(token === "ai" ? "facet.ai" : "facet.human"), kind: token };
+  return facetActor(token);
 }
 
 /**

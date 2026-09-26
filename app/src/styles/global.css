@@ -535,6 +535,12 @@ input[type="color"] {
   display: inline-flex; align-items: center; gap: var(--s-1);
   overflow: hidden; text-overflow: ellipsis;
 }
+/* Who said the failure had been seen, once somebody has: the word and the facet's face and name. */
+.slot__band-seen {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+}
 .slot__bandact {
   flex: 0 0 auto;
   padding: 1px var(--s-2);

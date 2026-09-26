@@ -1494,6 +1494,7 @@ fn run_card(
         task: worked_task(store, stretch)?,
         report_withheld,
         acknowledged: run.acknowledged_at.is_some(),
+        acknowledged_by: run.acknowledged_by_kind.map(|by| by.as_str()),
     })
 }
 

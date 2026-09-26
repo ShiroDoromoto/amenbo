@@ -74,6 +74,7 @@ export function runStateOf(run: AutomationRunCardDto | undefined): RunState | nu
     exit: byExit ? runExitWord(run.builtin, run.exitName!) : null,
     errorExit: byExit && run.exitName === ERROR_EXIT,
     acknowledged: run.acknowledged,
+    ...(run.acknowledgedBy != null ? { acknowledgedBy: run.acknowledgedBy } : {}),
   };
 }
 

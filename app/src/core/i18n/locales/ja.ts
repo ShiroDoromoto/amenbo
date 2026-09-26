@@ -1186,6 +1186,7 @@ export const ja: Translation = {
     "auto.run.failed": "失敗",
     "auto.run.canceled": "中止",
     "auto.run.acknowledge": "確認した",
+    "auto.run.seenBy": "確認済み",
     "auto.run.seePicture": "図で見る",
     "auto.run.seeHistory": "履歴で見る",
     "auto.run.seeRunning": "実行中で見る",

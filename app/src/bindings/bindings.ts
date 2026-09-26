@@ -745,7 +745,12 @@ reportWithheld: Array<string>,
  * "running" tab and onto the "history" one. Only a failure is ever acknowledged, so it is false
  * on every other state.
  */
-acknowledged: boolean, };
+acknowledged: boolean, 
+/**
+ * **Who said it** — `human` or `ai`, since a person's AI may say it for them (`AMB-D-989`).
+ * Absent where nobody has.
+ */
+acknowledgedBy?: "human" | "ai" | null, };
 
 /**
  * How many runs of the history ended each way.

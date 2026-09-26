@@ -1197,6 +1197,7 @@ export const ru: Translation = {
     "auto.run.failed": "Сбой",
     "auto.run.canceled": "Отменён",
     "auto.run.acknowledge": "Просмотрено",
+    "auto.run.seenBy": "Просмотрел(а):",
     "auto.run.seePicture": "Посмотреть на схеме",
     "auto.run.seeHistory": "Посмотреть в истории",
     "auto.run.seeRunning": "Посмотреть в «Выполняются»",

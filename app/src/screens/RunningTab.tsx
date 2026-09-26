@@ -37,6 +37,7 @@ import { runReasonWord, runStatusWord } from "../core/runWords";
 import { exactLabel, listLabel, whenLabel } from "../core/i18n/format";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
+import { FacetAvatar, facetActor } from "../components/atoms";
 import { useBoxNumber } from "./boxNumber";
 import type { AutomationRunCardDto } from "../bindings/bindings";
 
@@ -144,6 +145,13 @@ export function RunLine({
             )}
             {run.reportWithheld.length > 0 && <WithheldMark steps={run.reportWithheld} />}
             {reason !== null && <span className="autorun__why">{reason}</span>}
+            {/* Who said a failure had been seen — a person's AI may say it for them (`AMB-D-989`). */}
+            {run.status === "failed" && run.acknowledgedBy != null && (
+              <span className="autorun__seen">
+                {t("auto.run.seenBy")}
+                <FacetAvatar actor={facetActor(run.acknowledgedBy)} showName />
+              </span>
+            )}
           </span>
         </span>
         <span className="autorun__when" title={at === undefined ? undefined : exactLabel(at)}>

@@ -4047,4 +4047,10 @@ pub struct AutomationRunCardDto {
     /// "running" tab and onto the "history" one. Only a failure is ever acknowledged, so it is false
     /// on every other state.
     pub(crate) acknowledged: bool,
+    /// **Who said it** — `human` or `ai`, since a person's AI may say it for them (`AMB-D-989`).
+    /// Absent where nobody has.
+    #[ts(type = "\"human\" | \"ai\" | null")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) acknowledged_by: Option<&'static str>,
 }

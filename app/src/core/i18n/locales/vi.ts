@@ -1181,6 +1181,7 @@ export const vi: Translation = {
     "auto.run.failed": "Thất bại",
     "auto.run.canceled": "Đã hủy",
     "auto.run.acknowledge": "Đã xem",
+    "auto.run.seenBy": "Đã xem bởi",
     "auto.run.seePicture": "Xem trên sơ đồ",
     "auto.run.seeHistory": "Xem trong lịch sử",
     "auto.run.seeRunning": "Xem trong Đang chạy",

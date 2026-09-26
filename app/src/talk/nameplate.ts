@@ -151,6 +151,8 @@ export type RunState = {
   readonly errorExit: boolean;
   /** Somebody has said they saw the failure (`amenbo_core::ops::automation_stop::acknowledge`). */
   readonly acknowledged: boolean;
+  /** Who said it, a person or their AI (`AMB-D-989`) — absent where nobody has. */
+  readonly acknowledgedBy?: "human" | "ai";
 };
 
 /** The whole row. */

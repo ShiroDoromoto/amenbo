@@ -18,6 +18,7 @@ import {
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row, Say } from "../talk/nameplate";
 import { acknowledgeRun, pauseRun, resumeRun, stopRun } from "../core/automations";
+import { FacetAvatar, facetActor } from "../components/atoms";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
@@ -999,6 +1000,13 @@ export function TerminalPane({
               >
                 {t("auto.run.acknowledge")}
               </button>
+            )}
+            {/* Once it is pressed, who pressed it — a person's AI may say it for them (`AMB-D-989`). */}
+            {run.state.acknowledgedBy !== undefined && (
+              <span className="slot__band-seen">
+                {t("auto.run.seenBy")}
+                <FacetAvatar actor={facetActor(run.state.acknowledgedBy)} showName />
+              </span>
             )}
           </div>
         )}

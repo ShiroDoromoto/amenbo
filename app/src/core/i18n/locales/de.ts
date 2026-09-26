@@ -1011,6 +1011,7 @@ export const de: Translation = {
     "auto.step.oneALine": "Eine pro Zeile (z. B. AMB-T-12)",
     "auto.step.inputs": "Eingaben",
     "auto.step.unwired": "nichts erreicht sie",
+    "auto.step.atLaunch": "wird beim Start übergeben",
     "auto.step.exits": "Ausgänge",
     "auto.step.modelDefault": "die Vorgabe des Agenten selbst",
     "auto.step.notHere": "{agent} – auf diesem Rechner nicht vorhanden",

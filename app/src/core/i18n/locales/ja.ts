@@ -1013,6 +1013,7 @@ export const ja: Translation = {
     "auto.step.oneALine": "1行に1つ（例：AMB-T-12）",
     "auto.step.inputs": "入力パラメータ",
     "auto.step.unwired": "何も届かない",
+    "auto.step.atLaunch": "起動するときに渡す",
     "auto.step.exits": "出口",
     "auto.step.modelDefault": "エージェントの既定",
     "auto.step.notHere": "{agent} — 手元にありません",

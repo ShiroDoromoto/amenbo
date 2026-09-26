@@ -1008,6 +1008,7 @@ export const id: Translation = {
     "auto.step.oneALine": "Satu per baris (mis. AMB-T-12)",
     "auto.step.inputs": "Masukan",
     "auto.step.unwired": "tidak ada yang sampai",
+    "auto.step.atLaunch": "diberikan saat run dimulai",
     "auto.step.exits": "Jalan keluar",
     "auto.step.modelDefault": "bawaan agen itu sendiri",
     "auto.step.notHere": "{agent} — tidak ada di mesin ini",

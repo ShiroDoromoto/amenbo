@@ -1019,6 +1019,7 @@ export const es: Translation = {
     "auto.step.oneALine": "Una por línea (p. ej., AMB-T-12)",
     "auto.step.inputs": "Entradas",
     "auto.step.unwired": "no llega nada",
+    "auto.step.atLaunch": "se entrega al iniciar la ejecución",
     "auto.step.exits": "Salidas",
     "auto.step.modelDefault": "el predeterminado del agente",
     "auto.step.notHere": "{agent}: no está en esta máquina",

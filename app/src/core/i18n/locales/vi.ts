@@ -1008,6 +1008,7 @@ export const vi: Translation = {
     "auto.step.oneALine": "Mỗi dòng một mục (vd. AMB-T-12)",
     "auto.step.inputs": "Đầu vào",
     "auto.step.unwired": "không có gì đến được",
+    "auto.step.atLaunch": "được đưa vào khi bắt đầu lượt chạy",
     "auto.step.exits": "Lối ra",
     "auto.step.modelDefault": "mặc định của chính tác nhân",
     "auto.step.notHere": "{agent} — không có trên máy này",

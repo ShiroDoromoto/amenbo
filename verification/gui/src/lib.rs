@@ -1306,6 +1306,15 @@ impl Instructor {
                 self.target_label(with),
                 req(with, "assignee")?
             ),
+            // Watched rather than read once: the value comes on its own, some seconds after the move
+            // in front of it, and going on before it has would read the task a moment too early.
+            (Domain::Task, "wait-field") => format!(
+                "Keep the task \"{}\" in sight until it shows {} = {}, for up to {} seconds. Go on as soon as it does; if it has not by then, go on anyway — the step after this one reads it.",
+                self.target_label(with),
+                req(with, "field")?,
+                show(with.get("equals").ok_or("action `wait-field` needs `equals`")?),
+                count(with, "seconds")?
+            ),
             (Domain::Task, "comment") => format!(
                 "Open the task \"{}\" and add the comment \"{}\"{}.",
                 self.target_label(with),
@@ -9220,6 +9229,36 @@ steps_gui:
         for op in ["place-action", "replace-entry"] {
             assert!(ins.action(Domain::Automation, op, &with).is_err(), "{op}");
         }
+    }
+
+    /// A value the run writes some seconds after the move is waited for, and the line says how long:
+    /// the road goes on as soon as it is there, and a value that never comes is left to the assert. A
+    /// length written in words is refused rather than read out to the operator as it stands.
+    #[test]
+    fn a_value_the_run_writes_is_waited_for_up_to_the_seconds_given() {
+        let s = load(r#"
+id: x
+title: y
+given:
+  - { type: action, domain: task, op: create, with: { title: the one it takes }, as: seed }
+steps_gui:
+  - type: action
+    domain: task
+    op: wait-field
+    with: { target: seed, field: status, equals: in_progress, seconds: 30 }
+  - type: action
+    domain: task
+    op: wait-field
+    with: { target: seed, field: status, equals: in_progress, seconds: half a minute }
+"#);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+        let line = ins.render(&steps[0]).expect("renders");
+        assert!(line.contains("\"the one it takes\"") && line.contains("status = in_progress"), "{line}");
+        assert!(line.contains("up to 30 seconds") && line.contains("go on anyway"), "{line}");
+        assert!(ins.expectation(&steps[0]).is_none(), "a wait proves nothing");
+        assert!(ins.render(&steps[1]).is_err(), "a length that is not a number of seconds is refused");
     }
 
     /// A limit belongs to a way out going on to a box, so a road writing one on an end is refused

@@ -14,8 +14,9 @@ description: >
   Place the built-in that takes a task (`take_task`) as an automation's entry, answer its setting
   "着手できるタスクが無いとき" with "着手できるタスクが出るまで待つ", and draw nothing after the way
   out that found none. Start it while
-  no task is handed to the AI, and read the run still running. Hand a task to the AI, and read the task
-  gone to in_progress and the agent's step in the run's pane working it.
+  no task is handed to the AI, and read the run still running. Hand a task to the AI, wait up to 30
+  seconds for the run's next look, and read the task gone to in_progress and the agent's step in the
+  run's pane working it.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
 
@@ -130,7 +131,17 @@ steps_gui:
     with:
       target: seed
 
-  # Reserved by the run that was waiting, with nobody starting it again.
+  # Reserved by the run that was waiting, with nobody starting it again. Not at once: a run waiting
+  # for a task looks again every 30 seconds, so the hand-over is taken on the next look.
+  - type: action
+    domain: task
+    op: wait-field
+    with:
+      target: seed
+      field: status
+      equals: in_progress
+      seconds: 30
+
   - type: assert
     domain: task
     op: field

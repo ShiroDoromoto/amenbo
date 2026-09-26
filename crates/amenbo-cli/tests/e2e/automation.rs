@@ -638,6 +638,20 @@ fn an_action_moves_between_libraries_and_is_refused_where_another_project_places
     assert_eq!(back["automation_action"]["project_id"].to_string(), p, "every placement is in this project");
 }
 
+/// `--axis` belongs to the built-in that splits by one. Passed with a library action it is refused
+/// rather than dropped, and nothing is placed.
+#[test]
+fn an_axis_given_with_a_library_action_is_refused() {
+    let cli = Cli::new();
+    let (p, a, action, _) = an_automation(&cli);
+    let before = cli.json(&["automation", "show", &a, "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "place-add", &a, "--action", &action, "--axis", "x", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("--axis"), "{refused}");
+    let after = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(before, after, "nothing was placed in project {p}");
+}
+
 /// An id naming nothing is a refusal, not an empty account — the same road `run show` takes.
 #[test]
 fn a_definition_that_does_not_exist_is_said_to_be_missing() {

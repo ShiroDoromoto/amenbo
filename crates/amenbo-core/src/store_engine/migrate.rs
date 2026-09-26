@@ -1055,7 +1055,25 @@ pub const STEPS: &[Step] = &[
         // `AMB-D-970`. NULL on every row already written: no run before this one was handed a task to file.
         apply: Apply::Custom(let_a_run_be_handed_a_task_to_file),
     },
+    Step {
+        to: 80,
+        name: "take away the text a run kept from its launch, which nothing reads",
+        apply: Apply::Custom(forget_the_text_a_run_was_handed),
+    },
 ];
+
+/// v80: `automation_run.handed`, the text v77 kept on a run for an agent's step to be told at launch,
+/// goes. No entry reads a text any more (`AMB-D-981`): a launch has written `None` since, and the step
+/// that told it is gone, so a text a run launched before that still keeps would never be read.
+///
+/// **Dropped only where it is there**, the guard v77 appended it under, turned round.
+fn forget_the_text_a_run_was_handed(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if column_names(tx, "automation_run")?.iter().any(|c| c == "handed") {
+        tx.execute_batch("ALTER TABLE automation_run DROP COLUMN handed;")?;
+    }
+    Ok(())
+}
 
 /// v79: the task a run whose entry files one starts by filing — its title, notes and classification, as
 /// a person handed them over at launch (`AMB-D-970`).
@@ -7263,7 +7281,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v77: v80 takes the column away again, once nothing read it (`AMB-D-981`).
+        let through_v77 = STEPS.iter().position(|s| s.to == 77).expect("v77 is in the chain") + 1;
+        run(&engine, &dir, &STEPS[..through_v77], &mut crate::progress::ignore).unwrap();
 
         let handed: Option<String> = engine
             .conn()

@@ -1137,7 +1137,6 @@ fn launch_asking(
         started_at: Some(now),
         ended_at: None,
         acknowledged_at: None,
-        handed: None,
         handed_task,
         created_at: now,
         updated_at: now,

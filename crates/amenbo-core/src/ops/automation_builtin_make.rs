@@ -1115,7 +1115,6 @@ mod tests {
                 ..with_values("  an issue  ", &[("職能", "実装")])
             };
             let run = launch_with(tx, &automation, &handed).expect("launch");
-            assert_eq!(run.handed, None);
 
             let filed = filed_first(tx, &run, &make);
             assert_eq!(filed.title, "an issue");

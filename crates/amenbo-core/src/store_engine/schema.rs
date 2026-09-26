@@ -1259,9 +1259,6 @@ datasets! {
         started_at: ts_opt,
         ended_at: ts_opt,
         acknowledged_at: ts_opt,
-        // The text a person handed over at launch, told to the first step the run opens (`AMB-D-970`).
-        // The files handed with it hang off the run as attachments.
-        handed: col(OPT),
         // The title, notes and classification of the task a run whose entry files one starts by filing,
         // as JSON — read by that built-in alone (`AMB-D-970`).
         handed_task: col(OPT),

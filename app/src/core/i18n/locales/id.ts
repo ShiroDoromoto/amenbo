@@ -1411,6 +1411,7 @@ export const id: Translation = {
     not_ready_automation_model_missing: "{step}: agennya di sini tidak menyediakan model {model}",
     not_ready_automation_task_left_open: "{step}: setelah {exit} lanjut ke {to}, yang mengambil tugas lain, padahal tugas ini masih terbuka",
     not_ready_automation_task_left_open_at_end: "{step}: setelah {exit} run berakhir padahal tugasnya masih terbuka",
+    not_ready_automation_hands_on_task_taken: "{step}: {exit} meneruskan tugas run, padahal hanya bawaan yang bisa mengambilnya — taruh “Ambil tugas” atau “Buat tugas” sebelumnya",
     store_busy: "Penyimpanan sedang digunakan. Coba lagi sebentar lagi.",
     storage_error: "Penyimpanan tidak dapat dibaca atau ditulis, dan tidak ada yang berubah. Mulai ulang Amenbo lalu coba lagi — kalau terus terjadi, kirimkan isi Pengaturan > Log.",
     not_found_task: "Tugas {ref} tidak ditemukan.",

@@ -1410,6 +1410,7 @@ export const hi: Translation = {
     not_ready_automation_model_missing: "{step}: यहाँ इसका एजेंट {model} मॉडल नहीं देता।",
     not_ready_automation_task_left_open: "{step}: {exit} के बाद यह काम बंद किए बिना {to} पर जाता है, जो अगला काम लेता है",
     not_ready_automation_task_left_open_at_end: "{step}: {exit} के बाद काम बंद किए बिना रन ख़त्म हो जाता है",
+    not_ready_automation_hands_on_task_taken: "{step}: {exit} रन का कार्य आगे देता है, जिसे सिर्फ़ बिल्ट-इन ले सकता है — इससे पहले “कार्य लें” या “कार्य बनाएँ” रखें",
     store_busy: "स्टोर इस समय उपयोग में है। थोड़ी देर बाद फिर कोशिश करें।",
     storage_error: "स्टोर को पढ़ा या लिखा नहीं जा सका, और कुछ भी नहीं बदला गया। Amenbo को फिर से चालू करके दोबारा कोशिश करें — अगर यह होता रहे, तो सेटिंग > लॉग में जो है वह भेजें।",
     not_found_task: "काम {ref} नहीं मिला।",

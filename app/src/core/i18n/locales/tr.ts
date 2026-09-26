@@ -1410,6 +1410,7 @@ export const tr: Translation = {
     not_ready_automation_model_missing: "{step}: buradaki ajan {model} modelini sunmuyor",
     not_ready_automation_task_left_open: "{step}: {exit} sonrasında bu görev kapanmadan başka bir görev alan {to} adımına geçiliyor",
     not_ready_automation_task_left_open_at_end: "{step}: {exit} sonrasında görev kapanmadan çalıştırma bitiyor",
+    not_ready_automation_hands_on_task_taken: "{step}: {exit} çalıştırmanın görevini aktarıyor, ama görevi yalnızca yerleşik bir adım alabilir — önüne “Görev al” ya da “Görev oluştur” koyun",
     store_busy: "Depo şu anda kullanılıyor. Birazdan yeniden deneyin.",
     storage_error: "Depo okunamadı ya da yazılamadı ve hiçbir şey değişmedi. Amenbo'yu yeniden başlatıp tekrar deneyin — olmaya devam ederse Ayarlar > Günlükler içindekileri gönderin.",
     not_found_task: "{ref} işi bulunamadı.",

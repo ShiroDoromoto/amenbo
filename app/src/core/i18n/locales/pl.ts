@@ -1436,6 +1436,7 @@ export const pl: Translation = {
     not_ready_automation_model_missing: "{step}: tutejszy agent nie oferuje modelu {model}",
     not_ready_automation_task_left_open: "{step}: po {exit} przechodzi do {to}, który bierze kolejne zadanie, choć to jest wciąż otwarte",
     not_ready_automation_task_left_open_at_end: "{step}: po {exit} przebieg się kończy, choć zadanie jest wciąż otwarte",
+    not_ready_automation_hands_on_task_taken: "{step}: {exit} przekazuje zadanie przebiegu, które może pobrać tylko krok wbudowany — wstaw przed nim „Pobierz zadanie” lub „Utwórz zadanie”",
     store_busy: "Magazyn jest właśnie używany. Spróbuj ponownie za chwilę.",
     storage_error: "Nie udało się odczytać ani zapisać magazynu i nic nie zostało zmienione. Uruchom Amenbo ponownie i spróbuj jeszcze raz — jeśli będzie się powtarzać, wyślij to, co jest w Ustawienia > Dzienniki.",
     not_found_task: "Nie znaleziono zadania {ref}.",

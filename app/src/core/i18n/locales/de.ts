@@ -1417,6 +1417,7 @@ export const de: Translation = {
     not_ready_automation_model_missing: "{step}: Der Agent hier bietet das Modell {model} nicht an",
     not_ready_automation_task_left_open: "{step}: Nach {exit} geht es zu {to}, das eine weitere Aufgabe aufnimmt, während diese noch offen ist",
     not_ready_automation_task_left_open_at_end: "{step}: Nach {exit} endet der Lauf, während die Aufgabe noch offen ist",
+    not_ready_automation_hands_on_task_taken: "{step}: {exit} gibt die Aufgabe des Laufs weiter, die nur ein eingebauter Schritt übernehmen kann – stelle „Aufgabe übernehmen“ oder „Aufgabe anlegen“ davor",
     store_busy: "Der Speicher wird gerade verwendet. Versuche es gleich noch einmal.",
     storage_error: "Der Speicher konnte nicht gelesen oder geschrieben werden, und es wurde nichts geändert. Starte Amenbo neu und versuche es noch einmal — wenn es weiter passiert, schick, was unter Einstellungen > Protokolle liegt.",
     not_found_task: "Aufgabe {ref} wurde nicht gefunden.",

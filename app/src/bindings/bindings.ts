@@ -3345,7 +3345,15 @@ tickRemovalLeavesARow: boolean,
  * board). Exposed so the settings screen can show and change it. It is only the answer nobody
  * gave: a project already carries its own `view`, and this never repaints one.
  */
-defaultView: "list" | "board" | "calendar" | "timeline", };
+defaultView: "list" | "board" | "calendar" | "timeline", 
+/**
+ * The store signature, read **before** anything else in this sheet (`AMB-T-5680`). The GUI keeps it
+ * as the one its own writes are compared against, so it has to be no newer than the rows it came
+ * with: read after them, a write from outside landing in between would be taken for our own and
+ * never reach the screen. Read first, it can only be older, and that costs one re-read too many.
+ * It rides here rather than in a second call for the same reason — two calls leave a gap.
+ */
+signature: StoreSignatureDto, };
 
 /**
  * One bound folder whose managed block is out of date. `version` is the version of that folder's

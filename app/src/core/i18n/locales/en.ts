@@ -1745,6 +1745,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_open_exit: "{step}: nothing is set to happen after {exit}",
   not_ready_automation_unwired_input: "{step}: nothing reaches the required input {port}",
   not_ready_automation_unanswered_cfg: "{step}: the required setting {cfg} is unanswered",
+  not_ready_automation_cfg_not_found: "{step}: the setting {cfg} names {line}, which this project does not have",
   not_ready_automation_agent_unchosen: "{step}: nobody is chosen to carry it out",
   not_ready_automation_agent_missing: "{step}: this machine cannot start {agent}",
   // Said of the model rather than of the agent, which the step's own row already names. Only ever

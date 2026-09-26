@@ -1455,6 +1455,7 @@ export const hi: Translation = {
     not_ready_automation_open_exit: "{step}: {exit} के बाद क्या होगा, तय नहीं है।",
     not_ready_automation_unwired_input: "{step}: ज़रूरी इनपुट {port} तक कुछ भी नहीं पहुँचता।",
     not_ready_automation_unanswered_cfg: "{step}: ज़रूरी सेटिंग {cfg} का जवाब नहीं दिया गया है।",
+    not_ready_automation_cfg_not_found: "{step}: सेटिंग {cfg} में {line} लिखा है, जो इस प्रोजेक्ट में नहीं है।",
     not_ready_automation_agent_unchosen: "{step}: इसे चलाने के लिए कोई नहीं चुना गया",
     not_ready_automation_agent_missing: "{step}: यह मशीन {agent} को शुरू नहीं कर सकती।",
     not_ready_automation_model_missing: "{step}: यहाँ इसका एजेंट {model} मॉडल नहीं देता।",

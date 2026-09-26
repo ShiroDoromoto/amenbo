@@ -1481,6 +1481,7 @@ export const ru: Translation = {
     not_ready_automation_open_exit: "{step}: после {exit} ничего не задано",
     not_ready_automation_unwired_input: "{step}: до обязательного входа {port} ничего не доходит",
     not_ready_automation_unanswered_cfg: "{step}: обязательная настройка {cfg} осталась без ответа",
+    not_ready_automation_cfg_not_found: "{step}: настройка {cfg} называет {line}, чего в этом проекте нет",
     not_ready_automation_agent_unchosen: "{step}: не выбран исполнитель",
     not_ready_automation_agent_missing: "{step}: эта машина не может запустить {agent}",
     not_ready_automation_model_missing: "{step}: агент здесь не предлагает модель {model}",

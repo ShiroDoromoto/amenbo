@@ -1481,6 +1481,7 @@ export const uk: Translation = {
     not_ready_automation_open_exit: "{step}: після {exit} нічого не задано",
     not_ready_automation_unwired_input: "{step}: до обов’язкового входу {port} нічого не доходить",
     not_ready_automation_unanswered_cfg: "{step}: обов’язкове налаштування {cfg} лишилося без відповіді",
+    not_ready_automation_cfg_not_found: "{step}: налаштування {cfg} називає {line}, чого в цьому проєкті немає",
     not_ready_automation_agent_unchosen: "{step}: не обрано виконавця",
     not_ready_automation_agent_missing: "{step}: ця машина не може запустити {agent}",
     not_ready_automation_model_missing: "{step}: тутешній агент не пропонує модель {model}",

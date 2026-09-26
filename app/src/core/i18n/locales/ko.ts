@@ -1451,6 +1451,7 @@ export const ko: Translation = {
     not_ready_automation_open_exit: "{step}: {exit} 다음에 할 일이 정해지지 않았습니다",
     not_ready_automation_unwired_input: "{step}: 필수 입력 {port}에 아무것도 닿지 않습니다",
     not_ready_automation_unanswered_cfg: "{step}: 필수 설정 {cfg}에 답이 없습니다",
+    not_ready_automation_cfg_not_found: "{step}: 설정 {cfg}에 적힌 {line}이(가) 이 프로젝트에 없습니다",
     not_ready_automation_agent_unchosen: "{step}: 누구에게 맡길지 고르지 않았습니다",
     not_ready_automation_agent_missing: "{step}: 이 컴퓨터에서 {agent}을 시작할 수 없습니다",
     not_ready_automation_model_missing: "{step}: 여기의 에이전트는 {model} 모델을 제공하지 않습니다",

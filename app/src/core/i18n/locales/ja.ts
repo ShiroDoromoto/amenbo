@@ -1470,6 +1470,7 @@ export const ja: Translation = {
     not_ready_automation_open_exit: "{step}：出口 {exit} の次にすることが決まっていない",
     not_ready_automation_unwired_input: "{step}：必須の入力パラメータ {port} に何も届かない",
     not_ready_automation_unanswered_cfg: "{step}：必須の設定 {cfg} に答えが無い",
+    not_ready_automation_cfg_not_found: "{step}：設定 {cfg} の {line} が、このプロジェクトに無い",
     not_ready_automation_agent_unchosen: "{step}：誰にやらせるか選んでいない",
     not_ready_automation_agent_missing: "{step}：{agent} は手元に無い",
     not_ready_automation_model_missing: "{step}：ここのエージェントはモデル {model} を持っていない",

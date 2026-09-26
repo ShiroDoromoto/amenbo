@@ -47,10 +47,10 @@ use crate::ops::{automation, emit_create};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
-/// **One thing the launch check found missing.** Ten of them, and every one is something a person can
+/// **One thing the launch check found missing.** Every one is something a person can
 /// go and fix in the build screen — which is why each names where it is rather than only what it is.
 ///
-/// They are a type rather than ten sentences because both doors need them: the refusal writes them out
+/// They are a type rather than sentences because both doors need them: the refusal writes them out
 /// as English, and the build screen draws them as a list beside the step each belongs to.
 ///
 /// **`placement` is the placement on the automation's picture the reason is about** — the one standing
@@ -85,6 +85,10 @@ pub enum Unmet {
     UnwiredInput { step: String, port: String, builtin: Option<String>, placement: i64 },
     /// A required setting nobody answered while building.
     UnansweredCfg { step: String, cfg: String, builtin: Option<String>, placement: i64 },
+    /// A setting whose answer names something this automation's project does not have — `line` being
+    /// the line of it that does (`AMB-D-987`): a task or a decision by a number, a folder, an axis or a
+    /// value. The built-in would refuse it when a run reached it and halt the run there.
+    CfgNotFound { step: String, cfg: String, line: String, builtin: Option<String>, placement: i64 },
     /// A step nobody has been chosen to carry out where its action is placed (`AMB-D-960`). A pane
     /// opened on it would have no agent to start.
     AgentUnchosen { step: String, placement: i64 },
@@ -154,6 +158,9 @@ impl Unmet {
             Unmet::UnansweredCfg { step, cfg, .. } => {
                 format!("the required setting '{cfg}' of '{step}' is unanswered")
             }
+            Unmet::CfgNotFound { step, cfg, line, .. } => {
+                format!("the setting '{cfg}' of '{step}' names '{line}', which this project does not have")
+            }
             Unmet::AgentUnchosen { step, .. } => {
                 format!("nobody is chosen to carry out '{step}' where its action is placed")
             }
@@ -206,6 +213,7 @@ impl Unmet {
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
+            Unmet::CfgNotFound { .. } => ErrorCode::NotReadyAutomationCfgNotFound,
             Unmet::AgentUnchosen { .. } => ErrorCode::NotReadyAutomationAgentUnchosen,
             Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
             Unmet::ModelMissing { .. } => ErrorCode::NotReadyAutomationModelMissing,
@@ -239,6 +247,9 @@ impl Unmet {
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
             Unmet::UnansweredCfg { step, cfg, .. } => msg.with("step", step).with("cfg", cfg),
+            Unmet::CfgNotFound { step, cfg, line, .. } => {
+                msg.with("step", step).with("cfg", cfg).with("line", line)
+            }
             Unmet::AgentUnchosen { step, .. } => msg.with("step", step),
             Unmet::AgentMissing { step, agent, .. } => msg.with("step", step).with("agent", agent),
             Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
@@ -267,6 +278,7 @@ impl Unmet {
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. }
             | Unmet::UnansweredCfg { placement, .. }
+            | Unmet::CfgNotFound { placement, .. }
             | Unmet::AgentUnchosen { placement, .. }
             | Unmet::AgentMissing { placement, .. }
             | Unmet::ModelMissing { placement, .. }
@@ -283,6 +295,7 @@ impl Unmet {
             | Unmet::OpenExit { builtin, .. }
             | Unmet::UnwiredInput { builtin, .. }
             | Unmet::UnansweredCfg { builtin, .. }
+            | Unmet::CfgNotFound { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
             Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
             _ => None,
@@ -423,7 +436,7 @@ fn not_found(what: &str, id: i64) -> Error {
 
 /// **Is this automation ready to be launched?** An empty answer is yes.
 ///
-/// The list is walked in display order, so a person reading it walks their own picture. Two of the ten
+/// The list is walked in display order, so a person reading it walks their own picture. Two of them
 /// answer alone: an automation with nothing placed on it has nothing else to say about it, and one with
 /// no entry has nothing reachable to say it about — every other check is asked of the placements a run
 /// would actually walk, and with no entry that is none of them.
@@ -512,6 +525,17 @@ pub fn check(
                 unmet.push(Unmet::UnansweredCfg {
                     step: name.clone(),
                     cfg: cfg.name,
+                    builtin: builtin.clone(),
+                    placement: placement.id,
+                });
+            }
+        }
+        if builtin.as_deref() == Some(crate::ops::automation_builtin_make::KEY) {
+            for (cfg, line) in crate::ops::automation_builtin_make::unfound(conn, placement, automation.project_id)? {
+                unmet.push(Unmet::CfgNotFound {
+                    step: name.clone(),
+                    cfg: cfg.to_string(),
+                    line,
                     builtin: builtin.clone(),
                     placement: placement.id,
                 });
@@ -1152,6 +1176,24 @@ pub(crate) fn launch_past_the_task_checks(
 ) -> Result<AutomationRun> {
     launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), |unmet| {
         !matches!(unmet, Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. })
+    })
+}
+
+/// [`launch_past_the_task_checks`], with a setting that names what the project does not have let through
+/// as well. For a test of what a built-in does when a run reaches such a setting: the check refuses it at
+/// launch, and a run can still meet one, since what was there at launch can be gone by the time the run
+/// gets to it (`AMB-D-987`).
+#[cfg(test)]
+pub(crate) fn launch_past_the_setting_checks(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+) -> Result<AutomationRun> {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), |unmet| {
+        !matches!(
+            unmet,
+            Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. } | Unmet::CfgNotFound { .. }
+        )
     })
 }
 

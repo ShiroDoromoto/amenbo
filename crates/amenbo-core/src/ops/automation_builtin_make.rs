@@ -334,24 +334,36 @@ fn named(carry: &Carry<'_, '_>, setting: &str, kind: TypedKind) -> Result<Vec<i6
     let conn = carry.tx.conn();
     let mut ids = Vec::new();
     for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        let number = match parse_typed_ref(line) {
-            Some((named, n)) if named == kind => Some(n),
-            Some(_) => None,
-            None => parse_number_ref(line),
-        };
-        let id = i64::from(number.ok_or_else(|| {
-            Error::invalid(format!("'{setting}' reads one number a line, and '{line}' is not one"))
-        })?);
-        let project = match kind {
-            TypedKind::Task => read::task(conn, id)?.map(|task| task.project_id),
-            TypedKind::Decision => read::decision(conn, id)?.map(|decision| Some(decision.project_id)),
-        };
-        if project != Some(Some(carry.run.project_id)) {
-            return Err(Error::invalid(format!("'{setting}' names '{line}', which is not in this project")));
-        }
-        ids.push(id);
+        ids.push(named_one(conn, carry.run.project_id, setting, kind, line)?);
     }
     Ok(ids)
+}
+
+/// **The task or the decision one line of a setting names** ([`named`]), refused where it is not one of
+/// `project_id`'s.
+fn named_one(
+    conn: &rusqlite::Connection,
+    project_id: i64,
+    setting: &str,
+    kind: TypedKind,
+    line: &str,
+) -> Result<i64> {
+    let number = match parse_typed_ref(line) {
+        Some((named, n)) if named == kind => Some(n),
+        Some(_) => None,
+        None => parse_number_ref(line),
+    };
+    let id = i64::from(number.ok_or_else(|| {
+        Error::invalid(format!("'{setting}' reads one number a line, and '{line}' is not one"))
+    })?);
+    let project = match kind {
+        TypedKind::Task => read::task(conn, id)?.map(|task| task.project_id),
+        TypedKind::Decision => read::decision(conn, id)?.map(|decision| Some(decision.project_id)),
+    };
+    if project != Some(Some(project_id)) {
+        return Err(Error::invalid(format!("'{setting}' names '{line}', which is not in this project")));
+    }
+    Ok(id)
 }
 
 /// **The folder [`FOLDER`] names**, as one of this run's project's linked folders — by its path as
@@ -361,15 +373,18 @@ fn folder(carry: &Carry<'_, '_>) -> Result<Option<i64>> {
     let Some(written) = choice(carry, FOLDER)? else {
         return Ok(None);
     };
-    let folders: Vec<_> = crate::overview::bound_folders(carry.tx.conn())?
-        .into_iter()
-        .filter(|f| f.project_id == carry.run.project_id)
-        .collect();
-    let canonical = crate::binding::canonical_dir(&written).ok().map(|p| p.to_string_lossy().to_string());
+    folder_named(carry.tx.conn(), carry.run.project_id, &written).map(Some)
+}
+
+/// **The linked folder of `project_id`'s that `written` names** ([`folder`]).
+fn folder_named(conn: &rusqlite::Connection, project_id: i64, written: &str) -> Result<i64> {
+    let folders: Vec<_> =
+        crate::overview::bound_folders(conn)?.into_iter().filter(|f| f.project_id == project_id).collect();
+    let canonical = crate::binding::canonical_dir(written).ok().map(|p| p.to_string_lossy().to_string());
     folders
         .iter()
         .find(|f| f.dir == written || Some(&f.dir) == canonical.as_ref())
-        .map(|f| Some(f.id))
+        .map(|f| f.id)
         .ok_or_else(|| {
             Error::invalid(format!("'{FOLDER}' names '{written}', which is not one of this project's linked folders"))
         })
@@ -385,21 +400,26 @@ fn fixed(conn: &rusqlite::Connection, project_id: i64, written: Option<&str>) ->
     };
     let mut values = Vec::new();
     for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        let Some((axis, value)) = line.split_once('=') else {
-            return Err(Error::invalid(format!("'{CLASSIFY}' reads one `axis=value` a line, and '{line}' is not one")));
-        };
-        let (axis, value) = (axis.trim(), value.trim());
-        let axis_id = crate::ops::pick_id(
-            read::resolve_dimension_in(conn, Some(project_id), axis)?,
-            axis,
-            || crate::ops::dimension::NOUN.not_found(axis),
-        )?;
-        let value_id = crate::ops::pick_id(read::resolve_dimension_value_in(conn, axis_id, value)?, value, || {
-            crate::ops::dimension::VALUE_NOUN.not_found(format!("{axis}={value}"))
-        })?;
-        values.push((axis_id, value_id));
+        values.push(fixed_one(conn, project_id, line)?);
     }
     Ok(values)
+}
+
+/// **The axis and the value one line of [`CLASSIFY`] names** ([`fixed`]).
+fn fixed_one(conn: &rusqlite::Connection, project_id: i64, line: &str) -> Result<(i64, i64)> {
+    let Some((axis, value)) = line.split_once('=') else {
+        return Err(Error::invalid(format!("'{CLASSIFY}' reads one `axis=value` a line, and '{line}' is not one")));
+    };
+    let (axis, value) = (axis.trim(), value.trim());
+    let axis_id = crate::ops::pick_id(
+        read::resolve_dimension_in(conn, Some(project_id), axis)?,
+        axis,
+        || crate::ops::dimension::NOUN.not_found(axis),
+    )?;
+    let value_id = crate::ops::pick_id(read::resolve_dimension_value_in(conn, axis_id, value)?, value, || {
+        crate::ops::dimension::VALUE_NOUN.not_found(format!("{axis}={value}"))
+    })?;
+    Ok((axis_id, value_id))
 }
 
 /// **The axes [`AI_AXES`] names**, each looked up among the project's axes the way [`CLASSIFY`]'s are,
@@ -526,6 +546,57 @@ pub(crate) fn handed_at_launch(
     Ok(written)
 }
 
+/// **The lines of its settings that name what `project_id` does not have**, where it is placed
+/// (`placement`) — as (setting, line), in the order the settings are declared (`AMB-D-987`).
+///
+/// Asked by the launch check ([`crate::ops::automation_run::check`]) of the settings that name something by
+/// its number, its path or its name: a task to depend on, a decision to link, the folder, an axis and a
+/// value to classify with, and an axis the step before it chooses on. Each line is looked up the way the
+/// built-in looks it up when it is carried out, so a line refused here is one the run would halt on. The
+/// built-in asks again when it is carried out: what is found at launch can be gone by then.
+///
+/// A line that is not written as that setting reads it — a word where a number goes, a classification with
+/// no `=` — is one of these too, since nothing can be found from it.
+pub(crate) fn unfound(
+    conn: &rusqlite::Connection,
+    placement: &crate::model::AutomationPlacement,
+    project_id: i64,
+) -> Result<Vec<(&'static str, String)>> {
+    let settings = crate::ops::automation_run::settings_of(conn, placement)?;
+    let mut found = Vec::new();
+    for setting in [DEPENDS_ON_TASKS, DECISIONS, FOLDER, CLASSIFY, AI_AXES] {
+        // An answer that is not the JSON text it is kept as is the settings check's to refuse, not this one's.
+        let Ok(Some(written)) = answered(&settings, setting) else { continue };
+        let lines: Vec<&str> = match setting {
+            FOLDER => vec![written.as_str()],
+            _ => written.lines().map(str::trim).filter(|line| !line.is_empty()).collect(),
+        };
+        for line in lines {
+            let looked_up = match setting {
+                DEPENDS_ON_TASKS => named_one(conn, project_id, setting, TypedKind::Task, line).map(drop),
+                DECISIONS => named_one(conn, project_id, setting, TypedKind::Decision, line).map(drop),
+                FOLDER => folder_named(conn, project_id, line).map(drop),
+                CLASSIFY => fixed_one(conn, project_id, line).map(drop),
+                _ => ai_axes(conn, project_id, line).map(drop),
+            };
+            if not_there(looked_up)? {
+                found.push((setting, line.to_string()));
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// Whether a lookup came back saying there is nothing there — not found, not written as one, or naming
+/// more than one. Anything else it fails on is the store's own failure and is passed on.
+fn not_there(looked_up: Result<()>) -> Result<bool> {
+    match looked_up {
+        Ok(()) => Ok(false),
+        Err(Error::NotFound(_) | Error::Invalid(_) | Error::AmbiguousId { .. }) => Ok(true),
+        Err(other) => Err(other),
+    }
+}
+
 /// **One setting's answer where it is placed** (`settings`), as the text it was answered with.
 fn answered(settings: &[crate::model::AutomationCfg], name: &str) -> Result<Option<String>> {
     settings
@@ -635,7 +706,7 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
-        check, launch_handing, launch_past_the_task_checks as launch, nothing_asked, HandedAtLaunch,
+        check, launch_handing, launch_past_the_setting_checks as launch, nothing_asked, HandedAtLaunch,
         Launcher, Unmet,
     };
     use crate::ops::automation_step::Opened;
@@ -889,6 +960,52 @@ mod tests {
                 assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
             });
         }
+    }
+
+    /// **The launch check names each line of a setting that names what this project does not have**
+    /// (`AMB-D-987`) — a task or a decision by a number, a folder, an axis or a value — and nothing about
+    /// the lines it does have.
+    #[test]
+    fn the_launch_check_names_each_line_a_setting_cannot_find_here() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            let earlier = crate::ops::test_support::mk_task_in(tx, "earlier", Some(p.project));
+            let other = mk_project(tx, "other");
+            let elsewhere = crate::ops::test_support::mk_task_in(tx, "elsewhere", Some(other));
+            trades(tx, &p);
+            let tasks = format!("AMB-T-{earlier}\nAMB-T-99999\nAMB-T-{elsewhere}\nsoon");
+            answer(tx, &p, DEPENDS_ON_TASKS, &tasks);
+            answer(tx, &p, DECISIONS, "D-999");
+            answer(tx, &p, FOLDER, "/nowhere");
+            answer(tx, &p, CLASSIFY, "職能=実装\n職能=営業\nnosuch=x");
+            answer(tx, &p, AI_AXES, "職能\n種別");
+            let startable = ["claude".to_string()];
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let found: Vec<(String, String)> = unmet
+                .into_iter()
+                .filter_map(|unmet| match unmet {
+                    Unmet::CfgNotFound { step, cfg, line, builtin, placement } => {
+                        let named = (step.as_str(), builtin.as_deref(), placement);
+                        assert_eq!(named, ("タスクを起票する", Some(KEY), p.make.id));
+                        Some((cfg, line))
+                    }
+                    _ => None,
+                })
+                .collect();
+            let expected = [
+                (DEPENDS_ON_TASKS, "AMB-T-99999".to_string()),
+                (DEPENDS_ON_TASKS, format!("AMB-T-{elsewhere}")),
+                (DEPENDS_ON_TASKS, "soon".to_string()),
+                (DECISIONS, "D-999".to_string()),
+                (FOLDER, "/nowhere".to_string()),
+                (CLASSIFY, "職能=営業".to_string()),
+                (CLASSIFY, "nosuch=x".to_string()),
+                (AI_AXES, "種別".to_string()),
+            ]
+            .map(|(cfg, line)| (cfg.to_string(), line))
+            .to_vec();
+            assert_eq!(found, expected);
+        });
     }
 
     /// **Taking it and depending on the run's task means the task the stretch before worked.**

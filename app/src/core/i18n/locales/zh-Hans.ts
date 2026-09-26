@@ -1456,6 +1456,7 @@ export const zhHans: Translation = {
     not_ready_automation_open_exit: "{step}：{exit} 之后要做什么还没定",
     not_ready_automation_unwired_input: "{step}：没有东西到达必填输入 {port}",
     not_ready_automation_unanswered_cfg: "{step}：必填设置 {cfg} 还没有填",
+    not_ready_automation_cfg_not_found: "{step}：设置 {cfg} 写的 {line}，本项目里没有",
     not_ready_automation_agent_unchosen: "{step}：未选择由谁执行",
     not_ready_automation_agent_missing: "{step}：这台机器启动不了 {agent}",
     not_ready_automation_model_missing: "{step}：这里的智能体不提供 {model} 模型",

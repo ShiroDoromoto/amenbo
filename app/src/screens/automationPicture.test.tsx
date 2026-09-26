@@ -252,6 +252,39 @@ describe("the picture of the steps", () => {
     expect(near()).toEqual([false, false]);
   });
 
+  /// Every wire named at once was a column of words nobody was reading (`AMB-T-5698`): a wire keeps
+  /// its name where it touches the box picked, and the rest are drawn fainter.
+  it("names a wire only where it touches the box picked, and quiets the rest", async () => {
+    const one = detail({
+      placements: [
+        step({ id: 1, name: "take" }),
+        step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] }),
+        step({ id: 3, name: "close", inputs: [{ name: "task", kind: "task_take", required: true }] }),
+      ],
+      edges: [
+        { id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" },
+        { id: 2, fromId: 2, exitName: "完了", toId: 3, ends: "go" },
+      ],
+      wires: [{ id: 5, fromId: 1, fromExitName: "完了", fromPortName: "task", toId: 3, toPortName: "task" }],
+    });
+    const words = () => [...container.querySelectorAll("text.autopic__word")].map((one) => one.textContent);
+    const quiet = () => container.querySelector("polyline.autopic__line--wire")!.classList.contains("autopic__line--aside");
+
+    await render({ graph: one, onPickBox: vi.fn() });
+    expect(words().some((word) => word?.includes("task"))).toBe(false);
+    expect(quiet()).toBe(false);
+
+    await render({ graph: one, onPickBox: vi.fn(), selectedBoxId: 2 });
+    expect(words().some((word) => word?.includes("task"))).toBe(false);
+    expect(quiet()).toBe(true);
+
+    for (const picked of [1, 3]) {
+      await render({ graph: one, onPickBox: vi.fn(), selectedBoxId: picked });
+      expect(words().some((word) => word?.includes("task"))).toBe(true);
+      expect(quiet()).toBe(false);
+    }
+  });
+
   it("names the action standing at a spot, and the required input nothing reaches", async () => {
     const one = detail({
       placements: [

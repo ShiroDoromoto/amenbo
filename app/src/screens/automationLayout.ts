@@ -232,6 +232,11 @@ export type PicLine = {
   /** What is handed on, for a wire: the way out's output, and every input it lands in. */
   hands?: { from: string; to: readonly string[] };
   /**
+   * The boxes a wire joins: the one it leaves first, then each it lands in — `ACTION_BOUNDARY` where
+   * that end is the action itself. What the picture names a wire by depends on the box picked.
+   */
+  joins?: readonly number[];
+  /**
    * A wire's legs off its trunk, one per input it lands in. `points` is the stem out of the box it
    * leaves, and each branch runs from where the stem meets the trunk, along the trunk, and into
    * one input — so one output fed to three boxes is one line with three ends, not three lines
@@ -1120,6 +1125,9 @@ export function layOut(graph: PicGraph | null): Picture {
         exitName: trunk.exitName,
         builtin: trunk.builtin,
         hands: { from: trunk.port, to: trunk.ends.map((one) => one.input) },
+        // An end into one of the action's own ways out lands on that way out's mark, which is the
+        // action itself as far as picking goes.
+        joins: [trunk.fromId, ...trunk.ends.map((one) => (boxes.has(one.toId) ? one.toId : ACTION_BOUNDARY))],
         // Past the outermost trunk, level with the stem: nothing runs out there, so no trunk crosses
         // the words, and each stem out of a box has a height of its own for them.
         at: { x: wordsX + WIRE_WORD, y: trunk.sy + WIRE_WORD },

@@ -1356,6 +1356,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__line--branch { stroke: var(--c-heed); }
 .autopic__line--error { stroke: var(--c-stop); }
 .autopic__line--wire { stroke: var(--c-text-faint); stroke-width: 1.2; stroke-dasharray: 2 3; }
+/* A wire that touches nothing picked, while something is: still there, quieter than the ones that do. */
+.autopic__line--aside { opacity: 0.35; }
 /* It goes back to a row above the one it left. A step's line doing so is red as well as dashed: in
    grey it looked like one more outline, running down the margin beside the real ones. */
 .autopic__line--back { stroke-dasharray: 5 4; }

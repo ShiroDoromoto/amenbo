@@ -238,7 +238,13 @@ export function AutomationBuildScreen({
       </div>
 
       {automation !== null && showing?.kind === "library" && !held && (
-        <Panel place={t("auto.pic.place")} title="" onClose={close}>
+        <Panel
+          // A panel opened for another line or another box is another panel, and opens at its head.
+          key={"edgeId" in showing.target ? `e${showing.target.edgeId}` : "first"}
+          place={t("auto.pic.place")}
+          title=""
+          onClose={close}
+        >
           <AutomationLibraryPanel
             // A new line pressed is a new pick: what was typed and opened for one line is not
             // carried to another.
@@ -269,7 +275,7 @@ export function AutomationBuildScreen({
       )}
 
       {pressed !== null && (
-        <Panel place={t("auto.build.step")} title={builtinWord(pressed.builtin, pressed.name)} onClose={close}>
+        <Panel key={pressed.id} place={t("auto.build.step")} title={builtinWord(pressed.builtin, pressed.name)} onClose={close}>
           <AutomationStepPanel
             automation={automation}
             placementId={pressed.id}

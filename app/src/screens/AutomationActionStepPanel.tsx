@@ -33,9 +33,10 @@ import {
   setAutomationWire,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
-import { errText, t } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
+import { Icon } from "../components/Icon";
 import { ErrorNote } from "../components/ErrorNote";
-import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT } from "./automationLayout";
+import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT, fed } from "./automationLayout";
 import { DeclEdit, choicesOfKinds, exitLabel, NextRow, useDraft, type Run } from "./automationPanel";
 import { DeclItem, DeclSec, ExitEdit, OutputPlus, PortChip, Sec, Switch } from "./automationDeclParts";
 import { ExitMark } from "./automationParts";
@@ -175,6 +176,12 @@ function InputRow({
           </option>
         ))}
       </select>
+      {input.required && !fed(graph, step.id, input.name) && (
+        <span className="autostep__unfed">
+          <Icon name="warning" />
+          {tf("auto.pic.unfed", { names: input.name })}
+        </span>
+      )}
       <span className="autostep__arrow" aria-hidden="true">→</span>
       <PortChip port={input} />
     </DeclItem>

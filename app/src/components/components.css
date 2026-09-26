@@ -1567,6 +1567,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autostep__wire { display: flex; flex-direction: column; gap: var(--s-1); padding-block: var(--s-1); }
 /* Where the input is handed over in the start dialog instead: said, not chosen. */
 .autostep__atlaunch { color: var(--c-text-muted); font-size: var(--fs-md); }
+/* A required input nothing reaches the first time a run comes — the mark the picture puts on its box. */
+.autostep__unfed { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--c-heed); font-size: var(--fs-md); }
 /* No markers: a way out carries a control beside its name, and a bullet in front of a row with a
    button on it reads as a list of buttons. */
 .autostep__exits { margin: 0; padding: 0; list-style: none; font-size: var(--fs-md); }

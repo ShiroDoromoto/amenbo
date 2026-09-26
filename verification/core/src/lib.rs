@@ -4427,6 +4427,13 @@ const REGISTRY: &[OpSpec] = &[
     // screen is drawn. The pane outlives the step it was opened for, which is why a run that is over
     // is read here at all.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "action", "state", "reason"], binds: false },
+    // **Whether the program in that pane has ended**, once its run is over. The pane outlives the
+    // run, and its last lines stay on the screen either way, so words on it cannot say whether the
+    // terminal is still taking lines — a line typed at it is what does. A run that is over leaves no
+    // terminal standing: Amenbo ends the last step's within seconds (`app/src-tauri/src/automation_watch.rs`).
+    //
+    // `target` is which run's pane, read the way `close-run-pane` reads it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane-ended", required: &[], refs: &["target"], strings: &[], binds: false },
     // Taking that pane away, once its run is over: while the run is going or held the control cannot
     // be pressed, so a road stops the run first (`press-run` with `on: pane`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "close-run-pane", required: &[], refs: &["target"], strings: &[], binds: false },

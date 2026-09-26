@@ -634,8 +634,8 @@ export function TerminalPane({
   //
   // **And above a run's pane with no terminal in it** (`AMB-T-5635`): one the store kept, come back
   // with the app for a run held or failed. What its terminal printed died with the process, and the
-  // row is still what says which run this is and where it stopped. A terminal opened here after it
-  // takes the row over, and puts its own up.
+  // row is still what says which run this is and where it stopped. No terminal is opened here by
+  // hand; the run's next step, where it is picked up again, is what brings one.
   const onBuiltin = builtin !== null;
   const rowWithout = onBuiltin || (run !== null && !running);
   useEffect(() => {
@@ -1081,7 +1081,9 @@ export function TerminalPane({
               <div className="workspace__face" ref={paneRef} />
             </>
           )
-          : (
+          // Not on a run's pane (`AMB-T-5667`): a terminal opened there would be an ordinary session
+          // that has nothing to do with the run, under a row that goes on naming the run's step.
+          : run === null && (
             <button className="slot__open" onClick={() => setRunning(true)}>
               {t("face.open")}
             </button>

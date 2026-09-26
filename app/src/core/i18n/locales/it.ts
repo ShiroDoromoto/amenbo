@@ -976,7 +976,7 @@ export const it: Translation = {
     "auto.make.go": "Creala e apri l’azione",
     "auto.step.none": "Premi una collocazione nel disegno e il suo contenuto appare qui",
     "auto.step.name": "Nome",
-    "auto.step.entry": "Rendilo l'inizio",
+    "auto.step.entryReplaceConfirm": "Così cambi da dove parte un'esecuzione. Le linee che escono dall'inizio attuale vengono tolte. I posizionamenti successivi restano; ricollegali in «Cosa succede dopo».",
     "auto.step.next": "Cosa succede dopo",
     "auto.step.nextNothing": "Non è ancora stato detto nulla",
     "auto.step.nextErrorNothing": "fermarsi e chiamare una persona (predefinito)",

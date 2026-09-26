@@ -492,8 +492,6 @@ pub fn run() {
       automation::automation_builtin_page,
       automation::automation_builtin_place,
       automation::automation_builtin_insert,
-      automation::automation_placement_add,
-      automation::automation_placement_add_new,
       automation::automation_placement_insert_new,
       automation::automation_placement_remove,
       automation::automation_step_edit,

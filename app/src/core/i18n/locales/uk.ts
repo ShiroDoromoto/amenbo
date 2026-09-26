@@ -981,7 +981,7 @@ export const uk: Translation = {
     "auto.make.go": "Створити й відкрити дію",
     "auto.step.none": "Натисніть розміщення на схемі — його вміст з’явиться тут",
     "auto.step.name": "Назва",
-    "auto.step.entry": "Зробити стартом",
+    "auto.step.entryReplaceConfirm": "Це змінює, з чого починається запуск. Лінії з поточного старту зникнуть. Подальші розміщення залишаться; з’єднайте їх знову в «Що далі».",
     "auto.step.next": "Що далі",
     "auto.step.nextNothing": "Ще нічого не задано",
     "auto.step.nextErrorNothing": "зупинитися й покликати людину (типово)",

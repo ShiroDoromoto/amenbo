@@ -15,8 +15,7 @@
 // rather than drawn empty with a line saying so.
 //
 // **What is written here is this spot's alone**: the answer a setting takes, the wire into an input,
-// what happens after each way out, whether a run opens here, and who carries out each step of the
-// action (`AMB-D-960`). One action placed on two pictures answers, is wired, goes on and is run by
+// what happens after each way out, and who carries out each step of the action (`AMB-D-960`). One action placed on two pictures answers, is wired, goes on and is run by
 // different agents on each.
 //
 // **It stands where it stands, whatever the picture does.** A definition of forty boxes draws a
@@ -31,6 +30,12 @@
 // **Taking the spot off is here too**, because this is what a reader has in front of them when they
 // decide against it. It leaves the library action where it is, which the confirmation says.
 //
+// **The spot a run starts at is changed here, not chosen** (`AMB-D-977`). The first thing placed is the
+// start, one of the three built-ins a run can start at, and its panel offers the other two in its
+// place. The lines out of it go with the one replaced, so the change asks first. While anything else
+// stands on the picture the start is not taken off: a picture with the rest and no start could not
+// be run, and would have no way to get one back.
+//
 // **A setting is answered by the control its kind takes** — never by writing a filter expression. The
 // shape each one is kept in is `./automationCfg`'s.
 //
@@ -43,21 +48,23 @@ import {
   answerAutomationCfg,
   chooseAutomationAgent,
   clearAutomationWire,
+  ENTRY_BUILTINS,
   removeAutomationPlacement,
-  setAutomationEntry,
+  replaceAutomationEntry,
   setAutomationWire,
   useAutomationAction,
+  useAutomationBuiltins,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
 import { getSnapshot } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
-import { builtinWord } from "../core/builtinWords";
+import { builtinShown, builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { ExitMark, filterValueLabel, ReachChip, usedCount } from "./automationParts";
 import { automationGraph, ERROR_EXIT } from "./automationLayout";
 import { exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
-import { Sec, Switch } from "./automationDeclParts";
+import { Sec } from "./automationDeclParts";
 import {
   dimRows,
   dimToken,
@@ -429,6 +436,36 @@ function InputRow({
   );
 }
 
+/**
+ * **What a run starts at, and the press that changes it** — drawn on the start's own panel only. The
+ * pulldown holds the built-ins a run can start at, in the order the empty picture offers them; picking
+ * another asks first, since the lines out of this spot go with the one it replaces.
+ */
+function EntryRow({ automationId, current, run }: { automationId: number; current: string; run: Run }) {
+  const builtins = useAutomationBuiltins();
+  const offered = ENTRY_BUILTINS.flatMap((key) => builtins.filter((one) => one.key === key)).map(builtinShown);
+  const replace = async (key: string) => {
+    if (key === current) return;
+    if (!(await confirmDialog(t("auto.step.entryReplaceConfirm")))) return;
+    void run(replaceAutomationEntry(automationId, key));
+  };
+  return (
+    <Sec title={t("auto.pic.entry")}>
+      <select
+        aria-label={t("auto.pic.entry")}
+        value={current}
+        onChange={(e) => void replace(e.target.value)}
+      >
+        {offered.map((one) => (
+          <option key={one.key} value={one.key}>
+            {one.name}
+          </option>
+        ))}
+      </select>
+    </Sec>
+  );
+}
+
 export function AutomationStepPanel({
   automation,
   placementId,
@@ -477,6 +514,9 @@ export function AutomationStepPanel({
   };
   const named = placement.exits.filter((one) => one.name !== ERROR_EXIT);
   const graph = automationGraph(automation)!;
+  const isEntry = automation.entryPlacementId === placement.id;
+  // The start comes off only as the last thing on the picture, which leaves it empty.
+  const removable = !isEntry || automation.placements.length === 1;
 
   return (
     <div className="autostep">
@@ -508,15 +548,9 @@ export function AutomationStepPanel({
       </div>
 
       <fieldset className="autostep__writes" disabled={readOnly}>
-        {/* A switch rather than a tick box: it reads as something to turn on. There is one start per
-            automation, and turning it on here moves it off the spot that had it — which the picture
-            shows as its mark moving. */}
-        <Switch
-          boxed
-          label={t("auto.step.entry")}
-          checked={automation.entryPlacementId === placement.id}
-          onChange={(to) => void run(setAutomationEntry(automation.id, to ? placement.id : null))}
-        />
+        {isEntry && placement.builtin !== undefined && (
+          <EntryRow automationId={automation.id} current={placement.builtin} run={run} />
+        )}
 
         {/* Amenbo carries a built-in out itself, and core refuses anybody chosen for it (`AMB-D-964`). */}
         {placement.steps.length > 0 && placement.builtin === undefined && (
@@ -578,11 +612,13 @@ export function AutomationStepPanel({
           </ul>
         </Sec>
 
-        <div className="actpanel__foot">
-          <button type="button" className="btn btn--danger" onClick={() => void remove()}>
-            {t("auto.step.placementRemove")}
-          </button>
-        </div>
+        {removable && (
+          <div className="actpanel__foot">
+            <button type="button" className="btn btn--danger" onClick={() => void remove()}>
+              {t("auto.step.placementRemove")}
+            </button>
+          </div>
+        )}
       </fieldset>
     </div>
   );

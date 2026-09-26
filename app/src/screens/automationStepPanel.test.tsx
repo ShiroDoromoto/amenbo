@@ -5,18 +5,21 @@
 //
 // What these guard: **nothing pressed says so** rather than drawing an empty form; **only what is
 // this spot's own is written here** (`AMB-D-954`) — the answer to a setting, the wire into an input,
-// what happens after each way out, the entry, and **who carries out each step** (`AMB-D-960`) —
+// what happens after each way out, and **who carries out each step** (`AMB-D-960`) —
 // while **what the action declares and what its steps carry are read, not written**: no box to
 // rename, no prompt, nothing to declare;
 // **the action is named with the press that goes to where it is built**, and an empty one says so;
 // **a setting is answered by the control its kind takes**, a task filter on rows rather than in a
 // filter expression; **an input is filled from a list of what fits**; **the error way out is always
-// the last line of the ways out**; and **a refusal lands on the panel** rather than in the console.
+// the last line of the ways out**; **the start is changed, not chosen** (`AMB-D-977`) — its own
+// panel offers the built-ins a run starts at, and it is not taken off while anything else stands; and
+// **a refusal lands on the panel** rather than in the console.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AutomationActionDetailDto,
+  AutomationBuiltinDto,
   AutomationDetailDto,
   AutomationPlacementDto,
   DimensionDto,
@@ -28,7 +31,8 @@ const hoisted = vi.hoisted(() => ({
   chooseAgent: vi.fn(),
   setWire: vi.fn(),
   clearWire: vi.fn(),
-  setEntry: vi.fn(),
+  replaceEntry: vi.fn(),
+  builtins: [] as AutomationBuiltinDto[],
   addEdge: vi.fn(),
   editEdge: vi.fn(),
   removeEdge: vi.fn(),
@@ -43,7 +47,9 @@ vi.mock("../core/automations", () => ({
   chooseAutomationAgent: hoisted.chooseAgent,
   setAutomationWire: hoisted.setWire,
   clearAutomationWire: hoisted.clearWire,
-  setAutomationEntry: hoisted.setEntry,
+  ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
+  replaceAutomationEntry: hoisted.replaceEntry,
+  useAutomationBuiltins: () => hoisted.builtins,
   addAutomationEdge: hoisted.addEdge,
   editAutomationEdge: hoisted.editEdge,
   removeAutomationEdge: hoisted.removeEdge,
@@ -164,9 +170,11 @@ async function typeInto(box: HTMLInputElement, value: string) {
 }
 const boxes = () => [...container.querySelectorAll<HTMLInputElement>("input")];
 
-/** The switch that makes this spot where a run opens. */
-const entrySwitch = () =>
-  container.querySelector<HTMLInputElement>(".autoswitch input[role=switch]")!;
+/** The pulldown that changes what a run starts at, drawn on the start's own panel. */
+const entryPicker = () =>
+  [...container.querySelectorAll<HTMLSelectElement>("select")].find(
+    (one) => one.getAttribute("aria-label") === t("auto.pic.entry"),
+  );
 
 /** The pulldown that says what happens after one way out, found by the way out it hangs on. */
 const nextFor = (exit: string) =>
@@ -187,7 +195,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   hoisted.action = action();
-  for (const one of [hoisted.answerCfg, hoisted.setWire, hoisted.clearWire, hoisted.setEntry,
+  for (const one of [hoisted.answerCfg, hoisted.setWire, hoisted.clearWire, hoisted.replaceEntry,
     hoisted.addEdge, hoisted.editEdge, hoisted.removeEdge, hoisted.removePlacement]) one.mockReset();
 });
 
@@ -532,19 +540,42 @@ describe("the panel of one spot", () => {
 
 
 
-  /// Where a run opens is the automation's, not the spot's — so the tick box writes on the
-  /// definition, and unticking it leaves the automation with no entry at all rather than refusing.
-  it("names this spot as where a run opens, and gives the entry back", async () => {
-    await render({ automation: detail({ entryPlacementId: undefined }), placementId: 1 });
-    expect(container.querySelector(".autoswitch")?.textContent).toContain(t("auto.step.entry"));
-    const entry = entrySwitch();
-    expect(entry.checked).toBe(false);
-    await act(async () => entry.click());
-    expect(hoisted.setEntry).toHaveBeenCalledWith(7, 1);
+  /// The start is the first thing placed, one of three built-ins, and its panel changes it to another
+  /// of them rather than moving it to some other spot.
+  it("offers the start's own panel the built-ins a run starts at, and changes it to the one picked", async () => {
+    const builtin = (key: string, name: string): AutomationBuiltinDto =>
+      ({ key, name, does: "", settings: [], inputs: [], exits: [], usedBy: 0 });
+    hoisted.builtins = [
+      builtin("fetch", "Fetch"),
+      builtin("close_task", "Close the task"),
+      builtin("make_task", "File a task"),
+      builtin("take_task", "Take a task"),
+    ];
+    await render({ automation: detail({ placements: [spot({ builtin: "take_task" })] }), placementId: 1 });
+    const picker = entryPicker()!;
+    expect([...picker.options].map((o) => o.value)).toEqual(["take_task", "make_task", "fetch"]);
+    expect(picker.value).toBe("take_task");
+    await pick(picker, "fetch");
+    expect(hoisted.replaceEntry).toHaveBeenCalledWith(7, "fetch");
+    hoisted.builtins = [];
+  });
 
-    await render({ automation: detail(), placementId: 1 });
-    await act(async () => entrySwitch().click());
-    expect(hoisted.setEntry).toHaveBeenCalledWith(7, null);
+  it("draws no start to change on a spot a run does not start at", async () => {
+    await render({
+      automation: detail({ placements: [spot({ builtin: "take_task" }), spot({ id: 2, name: "Do it" })] }),
+      placementId: 2,
+    });
+    expect(entryPicker()).toBeUndefined();
+  });
+
+  /// A picture with the rest and no start could not be run, and would have no way to get one back.
+  it("does not take the start off while anything else stands on the picture", async () => {
+    await render({
+      automation: detail({ placements: [spot(), spot({ id: 2, name: "Do it" })] }),
+      placementId: 1,
+    });
+    const labels = [...container.querySelectorAll("button")].map((one) => one.textContent);
+    expect(labels).not.toContain(t("auto.step.placementRemove"));
   });
 
   /// One way out decides one thing, so the row writes the one edge on it: adding where nothing was

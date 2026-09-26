@@ -34,13 +34,17 @@
 // one for a task carrying none.
 //
 // **On a line, the pressed way out comes to point at the new placement** and the new placement goes
-// on to where that way out used to (`insertAutomationAction`). On an empty picture the placement
-// stands on its own (`placeAutomationAction`).
+// on to where that way out used to (`insertAutomationAction`).
+//
+// **On an empty picture only the built-ins a run starts at are offered** (`AMB-D-977`): the first
+// placement is where a run begins, and core refuses anything else there. So the panel holds the three
+// of them in the order core offers them, and nothing else — no actions of one's own, no search, and no
+// row that makes a new action.
 import { useState } from "react";
 import {
+  ENTRY_BUILTINS,
   insertAutomationAction,
   insertAutomationBuiltin,
-  placeAutomationAction,
   placeAutomationBuiltin,
   useAutomationAction,
   useAutomationActions,
@@ -193,15 +197,15 @@ export function AutomationLibraryPanel({
   );
   const splitAxis = axes.find((dim) => dim.id === axis);
 
+  // The first placement is where a run begins, and only an entry built-in can stand there.
+  const first = !("edgeId" in target);
+
   // Core refuses an action another project's library holds, and a line that went away underneath;
   // the sentence it writes is what the panel draws, over the list the reader picked from.
   const place = (actionId: number) => {
+    if (!("edgeId" in target)) return;
     setRefused(null);
-    const write =
-      "edgeId" in target
-        ? insertAutomationAction(target.edgeId, actionId)
-        : placeAutomationAction(target.automationId, actionId);
-    void write.then(onPlaced, (e: unknown) => setRefused(errText(e)));
+    void insertAutomationAction(target.edgeId, actionId).then(onPlaced, (e: unknown) => setRefused(errText(e)));
   };
   const placeBuiltin = (key: string) => {
     setRefused(null);
@@ -220,7 +224,10 @@ export function AutomationLibraryPanel({
         one.global === global && (w === "" || `${one.name} ${one.note}`.toLowerCase().includes(w)),
     );
   // Searched in the words the reader sees, which are the screen's language and not the store's.
-  const shownBuiltins = builtins
+  const offered = first
+    ? ENTRY_BUILTINS.flatMap((key) => builtins.filter((one) => one.key === key))
+    : builtins;
+  const shownBuiltins = offered
     .map(builtinShown)
     .filter((one: AutomationBuiltinDto) => w === "" || `${one.name} ${one.does}`.toLowerCase().includes(w));
 
@@ -285,22 +292,24 @@ export function AutomationLibraryPanel({
       </div>
     ));
 
-  const mine = projectId === null ? [] : own(false);
-  const shared = own(true);
+  const mine = first || projectId === null ? [] : own(false);
+  const shared = first ? [] : own(true);
   const typed = words.trim();
 
   return (
     <>
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
       <WhereMark where={where} />
-      <input
-        {...asTyped}
-        type="search"
-        aria-label={t("auto.actions.search")}
-        placeholder={t("auto.actions.search")}
-        value={words}
-        onChange={(e) => setWords(e.target.value)}
-      />
+      {!first && (
+        <input
+          {...asTyped}
+          type="search"
+          aria-label={t("auto.actions.search")}
+          placeholder={t("auto.actions.search")}
+          value={words}
+          onChange={(e) => setWords(e.target.value)}
+        />
+      )}
       {mine.length > 0 && (
         <div className="autolib__group">
           <div className="autolib__head">
@@ -325,9 +334,11 @@ export function AutomationLibraryPanel({
           {builtinRows()}
         </div>
       )}
-      <button type="button" className="autolib__make" onClick={() => onMake(typed)}>
-        {typed === "" ? t("auto.lib.makeNew") : tf("auto.lib.makeNamed", { name: typed })}
-      </button>
+      {!first && (
+        <button type="button" className="autolib__make" onClick={() => onMake(typed)}>
+          {typed === "" ? t("auto.lib.makeNew") : tf("auto.lib.makeNamed", { name: typed })}
+        </button>
+      )}
     </>
   );
 }

@@ -131,7 +131,7 @@ export function AutomationBuildScreen({
   );
   // Where the dialog that makes an action on the spot is about to put it, while it is open.
   // The dialog's target, and the name the library's search box held when it was pressed.
-  const [making, setMaking] = useState<{ target: PlaceTarget; name: string } | null>(null);
+  const [making, setMaking] = useState<{ target: { edgeId: number }; name: string } | null>(null);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
@@ -247,7 +247,12 @@ export function AutomationBuildScreen({
             projectId={projectId}
             where={whereTo(automation, showing.target)}
             onPlaced={close}
-            onMake={(name) => setMaking({ target: showing.target, name })}
+            onMake={(name) => {
+              // The library offers making one only on a line: a picture with nothing on it takes
+              // one of the built-ins a run starts at (`AMB-D-977`).
+              const target = showing.target;
+              if ("edgeId" in target) setMaking({ target, name });
+            }}
           />
         </Panel>
       )}

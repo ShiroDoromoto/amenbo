@@ -964,7 +964,7 @@ export const nl: Translation = {
     "auto.make.go": "Maken en de actie openen",
     "auto.step.none": "Druk op een plaatsing in de tekening en de inhoud verschijnt hier",
     "auto.step.name": "Naam",
-    "auto.step.entry": "Maak er de start van",
+    "auto.step.entryReplaceConfirm": "Hiermee verander je waar een run begint. De lijnen uit de huidige start verdwijnen. De plaatsingen daarna blijven; verbind ze opnieuw onder ‘Wat daarna gebeurt’.",
     "auto.step.next": "Wat daarna gebeurt",
     "auto.step.nextNothing": "Nog niets gezegd",
     "auto.step.nextErrorNothing": "stoppen en iemand erbij halen (standaard)",

@@ -282,8 +282,9 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
     AutomationPortDto { name: port.name.to_string(), kind: port.kind.as_str(), required: port.required }
 }
 
-/// **Put a built-in on a picture**, standing on its own ([`automation_placement_add`] for a built-in):
-/// its library action is written from the definition the first time any automation places it
+/// **Put a built-in on a picture**, standing on its own — how the first placement comes in, which is
+/// one of the built-ins a run starts at (`AMB-D-977`). Its library action is written from the
+/// definition the first time any automation places it
 /// ([`amenbo_core::ops::automation_builtin::action_on`]). `axis` is the axis the one that splits by an
 /// axis splits by, and nothing for any other (`AMB-D-973`).
 #[tauri::command]
@@ -488,53 +489,11 @@ pub fn automation_step_add(
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
-/// **Put an action on a picture**, standing on its own with no line reaching it
-/// ([`amenbo_core::ops::automation::placement_add`]).
-///
-/// It is the road `automation_step_insert` is not. That one joins a picture already drawn, by the
-/// line the `+` was pressed on — and a picture with nothing on it has no line to press. So this is
-/// what the first box comes in by, and what a reader reaches for when the next one belongs beside the
-/// picture rather than on it.
-///
-/// The library card is re-read as well: how many automations place an action is drawn on its row, and
-/// this press is what changes it.
-#[tauri::command]
-pub fn automation_placement_add(automation_id: i64, action_id: i64) -> Result<WriteAck, CmdError> {
-    with_store_mut(|store| {
-        store.automation_placement_add(automation_id, action_id)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["automations", "automationActions"]))
-}
-
-/// **Make an empty action and put it on a picture**, standing on its own with no line reaching it
-/// ([`amenbo_core::ops::automation::placement_add_new`]) — where the library holds nothing that fits,
-/// and there is no line for [`automation_step_insert`] to take. A picture with nothing on it refuses
-/// it: the first placement is where a run starts, one of the built-ins (`AMB-D-977`).
-///
-/// **It takes a name and a library, and nothing else** (`AMB-D-956`). The inside of an action is its
-/// steps, built on the action's own screen, and the ack names the action it made so the screen that
-/// pressed this can go there next.
-///
-/// `shelf` is which library the new action lands in — `"device"` for the one every project on this
-/// machine reaches, `"project"` for this automation's own. It is asked rather than assumed: an action
-/// made here is an ordinary action, and where one is kept outlives the picture it was made at.
-#[tauri::command]
-pub fn automation_placement_add_new(
-    automation_id: i64,
-    name: String,
-    shelf: String,
-) -> Result<WriteAck, CmdError> {
-    let shelf = action_shelf(&shelf)?;
-    let placement =
-        with_store_mut(|store| Ok(store.automation_placement_add_new(automation_id, shelf, &name)?))?;
-    Ok(WriteAck::new(&["automations", "automationActions"]).action(placement.action_id))
-}
-
 /// **Make an empty action and put it in on a line** ([`amenbo_core::ops::automation::placement_insert_new`])
-/// — [`automation_placement_add_new`] for a picture already drawn. The way out that was pressed
-/// comes to point at the new placement, and the new placement goes on to where that way out used to,
-/// in one transaction; the ack names the action it made, for the screen to go and build it.
+/// — the one road a new action comes onto a picture by, since the first placement is one of the
+/// built-ins a run starts at (`AMB-D-977`). The way out that was pressed comes to point at the new
+/// placement, and the new placement goes on to where that way out used to, in one transaction; the
+/// ack names the action it made, for the screen to go and build it.
 #[tauri::command]
 pub fn automation_placement_insert_new(
     edge_id: i64,

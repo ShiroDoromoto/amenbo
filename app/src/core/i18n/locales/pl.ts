@@ -981,7 +981,7 @@ export const pl: Translation = {
     "auto.make.go": "Utwórz i otwórz akcję",
     "auto.step.none": "Naciśnij umieszczenie na rysunku, a jego zawartość pojawi się tutaj",
     "auto.step.name": "Nazwa",
-    "auto.step.entry": "Ustaw jako start",
+    "auto.step.entryReplaceConfirm": "To zmienia, od czego zaczyna się uruchomienie. Linie wychodzące z obecnego startu znikną. Kolejne umieszczenia zostaną; połącz je ponownie w „Co dzieje się dalej”.",
     "auto.step.next": "Co dzieje się dalej",
     "auto.step.nextNothing": "Nic jeszcze nie ustalono",
     "auto.step.nextErrorNothing": "zatrzymaj się i zawołaj człowieka (domyślnie)",

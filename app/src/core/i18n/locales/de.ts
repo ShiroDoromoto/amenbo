@@ -968,7 +968,7 @@ export const de: Translation = {
     "auto.make.go": "Anlegen und Aktion öffnen",
     "auto.step.none": "Auf eine Platzierung im Bild drücken — ihr Inhalt erscheint hier",
     "auto.step.name": "Name",
-    "auto.step.entry": "Zum Start machen",
+    "auto.step.entryReplaceConfirm": "Damit änderst du, womit ein Lauf beginnt. Die Linien aus dem bisherigen Start fallen weg. Die Platzierungen danach bleiben; verbinde sie unter „Was danach passiert“ neu.",
     "auto.step.next": "Was danach passiert",
     "auto.step.nextNothing": "Noch nichts festgelegt",
     "auto.step.nextErrorNothing": "anhalten und eine Person rufen (Standard)",

@@ -1207,7 +1207,7 @@ const ui = {
   // (`filter.dim.*`, `filter.opt.assignee.*`); only the premises row is this panel's own.
   "auto.step.none": "Press a placement in the picture and what it holds shows here",
   "auto.step.name": "Name",
-  "auto.step.entry": "Make this placement the start",
+  "auto.step.entryReplaceConfirm": "This changes what a run starts at. The lines out of the current start go with it. The placements after it stay; connect them again under “What happens next”.",
   "auto.step.next": "What happens next",
   "auto.step.nextNothing": "Nothing said yet",
   "auto.step.nextErrorNothing": "Stop and call a person (the default)",

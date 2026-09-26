@@ -477,7 +477,8 @@ pub fn acknowledge(tx: &WriteTx<'_>, run_id: i64) -> Result<AutomationRun> {
 ///
 /// - **the step reported first** — an agent that types `step-done` and then exits;
 /// - **the run has moved past it** — the program of a step before the one the run is on;
-/// - **the run is over** — stopped by a person, which is also what ends the program.
+/// - **the run is over** — its step was closed as it ended ([`ended`]), and the app ends the terminal
+///   of a run that is over, so the program ends after it.
 ///
 /// A paused run fails too: pausing waits for the step under way to report, and this one never will.
 pub fn step_ended(tx: &WriteTx<'_>, run_step_id: i64) -> Result<Option<Ended>> {

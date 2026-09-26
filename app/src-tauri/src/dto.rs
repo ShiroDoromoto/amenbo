@@ -3425,6 +3425,13 @@ pub struct AutomationPlacementDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) builtin: Option<String>,
+    /// **The way out this spot never leaves by**, as its settings stand — a built-in that leaves by one
+    /// of two ways out as a setting chooses, or that waits instead of leaving by one
+    /// ([`amenbo_core::ops::automation_builtin::never_leaves_by`]). What it would hand on through that way
+    /// out does not make the spot one that takes a task. Absent where it may leave by any of them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) never_leaves_by: Option<String>,
     /// The step this spot opens first. Absent where the action holds no step yet, which the launch
     /// check names.
     #[serde(skip_serializing_if = "Option::is_none")]

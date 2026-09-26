@@ -1867,16 +1867,6 @@ pub fn pty_attach(
     Ok(terminal.pane.adopt(window.label()))
 }
 
-/// End the program in a terminal, and forget the session.
-///
-/// **It is the only way out.** A pane going away leaves the terminal running — that is a pane moving
-/// between windows or pages, and the session is not the pane (`AMB-D-753`) — so short of this, a
-/// terminal ends when the program in it decides to, which is the one thing a runaway will not do.
-///
-/// The registry entry is dropped here rather than left for the drain to clear, so a second close says
-/// the terminal is gone instead of trying to kill it twice. The drain ends on its own once the program
-/// does, and emits the close the pane listens for: what is on the screen stays as it is, which is what
-/// a terminal ends with.
 /// Whether the terminal of this session is still running.
 pub fn is_open(app: &tauri::AppHandle, session: &str) -> bool {
     app.state::<Terminals>().0.lock().expect("terminals lock").contains_key(session)
@@ -1888,8 +1878,9 @@ pub fn is_open(app: &tauri::AppHandle, session: &str) -> bool {
 const STEP_SIZE: Size = (120, 32);
 
 /// **End the terminal of a run's step before**, where one is still standing — as a step's terminal is
-/// started ([`open_step`]), and as a built-in is carried out in its place (`crate::automation`), which
-/// takes the run's pane over from it just the same.
+/// started ([`open_step`]), as a built-in is carried out in its place (`crate::automation`), which
+/// takes the run's pane over from it just the same, and once the run is over
+/// (`crate::automation_watch`).
 ///
 /// It is taken out of the registry before it is killed, the way [`pty_close`] does, so its ending
 /// reads as one Amenbo made and not as the program stopping by itself.
@@ -1906,6 +1897,18 @@ pub fn end_steps_of(app: &tauri::AppHandle, run: i64) {
             log::warn!("could not end the terminal of run {run}'s step before: {e}");
         }
     }
+}
+
+/// **The runs that have a step's terminal standing right now**, each once — what the watch compares
+/// with the runs still going, to end the terminals of the ones that are over
+/// (`crate::automation_watch`).
+pub fn runs_with_steps(app: &tauri::AppHandle) -> Vec<i64> {
+    let open = app.state::<Terminals>();
+    let open = open.0.lock().expect("terminals lock");
+    let mut runs: Vec<i64> = open.values().filter_map(|one| one.run).collect();
+    runs.sort_unstable();
+    runs.dedup();
+    runs
 }
 
 /// **Start the terminal a step of a run is carried out in** — on the host, whether or not any pane is
@@ -1954,6 +1957,16 @@ pub fn open_step(
     Ok(opened.session)
 }
 
+/// End the program in a terminal, and forget the session.
+///
+/// **It is the only way out.** A pane going away leaves the terminal running — that is a pane moving
+/// between windows or pages, and the session is not the pane (`AMB-D-753`) — so short of this, a
+/// terminal ends when the program in it decides to, which is the one thing a runaway will not do.
+///
+/// The registry entry is dropped here rather than left for the drain to clear, so a second close says
+/// the terminal is gone instead of trying to kill it twice. The drain ends on its own once the program
+/// does, and emits the close the pane listens for: what is on the screen stays as it is, which is what
+/// a terminal ends with.
 #[tauri::command]
 pub fn pty_close(terminals: tauri::State<'_, Terminals>, session: String) -> Result<(), CmdError> {
     let mut terminal = terminals

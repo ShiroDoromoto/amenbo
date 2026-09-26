@@ -61,7 +61,7 @@ const PAGE: usize = 20;
 pub(super) const TAKE_TASK: Builtin = Builtin {
     key: "take_task",
     name: "タスクに着手する",
-    does: "絞り込みに合う未着手で ready のタスクを並び順どおりに探し、先頭から予約して進行中にする",
+    does: "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする",
     settings: &[
         BuiltinSetting { name: FILTER, kind: AutomationCfgKind::TaskFilter, required: false, options: None },
         BuiltinSetting {

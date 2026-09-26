@@ -57,6 +57,9 @@ export type PicBox = {
   global?: boolean;
   /** The built-in the action standing on this box is, by its key — said in place of the library. */
   builtin?: string;
+  /** The way out the built-in standing here never leaves by, as its settings stand. Absent where it
+   *  may leave by any of them, and on an action's picture. */
+  neverLeavesBy?: string;
   /** Who carries out each step of the action standing here — one per step it holds. Absent on an
    *  action's picture; on an automation's, none at all is an action with nothing in it yet. */
   steps?: readonly unknown[];
@@ -289,9 +292,14 @@ export type Picture = {
  * It is a `task_take` **output** on one of its ways out: the box goes and finds a task, and what it
  * comes out holding is what the run is about from there on
  * (`amenbo_core::ops::automation_run::takes_a_task`).
+ *
+ * **Not on the way out the box never leaves by** (`AMB-T-5669`): a built-in whose settings choose the
+ * other of its two ways out — "file a task" left to leave the task it filed untaken — hands nothing on
+ * through it, so it takes no task however that way out is drawn. Core decides the same way.
  */
 function takesTask(box: PicBox): boolean {
-  return box.exits.some((exit) => exit.outputs.some((port) => port.kind === "task_take"));
+  return box.exits.some((exit) =>
+    exit.name !== box.neverLeavesBy && exit.outputs.some((port) => port.kind === "task_take"));
 }
 
 /** The boxes one task is worked by, in the rows the walk put them in. */

@@ -217,6 +217,29 @@ describe("the picture of an automation", () => {
     expect(inside(3)).toBe(false);
   });
 
+  it("takes no task at a box whose settings keep it off the way out that hands one on (AMB-T-5669)", () => {
+    // "File a task", answered to leave the task it files untaken: core says it never leaves by the
+    // way out that takes it, so nothing is handed on there however that way out is drawn.
+    const filer = (never: string) => step({
+      id: 1,
+      name: "file one",
+      builtin: "make_task",
+      neverLeavesBy: never,
+      exits: [
+        { id: nextId++, name: "made", outputs: [port("task", "task_make")] },
+        { id: nextId++, name: "made and taken", outputs: [port("task", "task_take")] },
+        { id: nextId++, name: "*", outputs: [] },
+      ],
+    });
+    const untaken = layOut(detail({ entryPlacementId: 1, placements: [filer("made and taken")] }));
+    expect(untaken.laps, "a stretch was drawn for a task nobody takes").toEqual([]);
+    expect(at(untaken, 1).takes, "the box was marked as taking the next task").not.toBe(true);
+
+    const taken = layOut(detail({ entryPlacementId: 1, placements: [filer("made")] }));
+    expect(taken.laps.map((lap) => lap.headBoxId)).toEqual([1]);
+    expect(at(taken, 1).takes).toBe(true);
+  });
+
   it("draws no outline around steps that answer to no task, and still places what nothing reaches", () => {
     const one = detail({
       entryPlacementId: 1,

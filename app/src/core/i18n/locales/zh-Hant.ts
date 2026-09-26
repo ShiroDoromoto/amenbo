@@ -1244,6 +1244,7 @@ export const zhHant: Translation = {
     "auto.say.bi.manyFolders": "此專案在多個資料夾中，且它們不在同一個儲存庫裡——要從哪個資料夾查看沒有寫明；請改寫為絕對路徑",
     "auto.say.bi.split": "{task} 在「{axis}」上的值是「{value}」",
     "auto.say.bi.splitLate": "{task} 在「{axis}」上的值是「{value}」，但這次執行沒有這個值的出口——該值是在啟動後新增的",
+    "auto.say.bi.splitReserved": "{task} 在「{axis}」上的值是「{value}」，這是錯誤出口使用的名字，所以該值沒有自己的出口，從「{exit}」離開",
     "auto.say.bi.splitNone": "{task} 在「{axis}」上沒有值",
     "auto.say.bi.axisGone": "用來分流的軸已不存在——它在自動化建好之後被刪除了",
     "auto.say.bi.waited": "已等待 {hours} 小時 {minutes} 分 {seconds} 秒",

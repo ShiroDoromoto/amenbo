@@ -1,8 +1,9 @@
 // What may fill one of a step's inputs (`AMB-T-5256`).
 //
 // What these guard: **an output of another kind is never offered**, a wire carrying one kind into the
-// same kind; **a step is not offered its own ways out**, which are read after it has run; and **the
-// wire drawn last is the one the control shows**, several being allowed to land on one input.
+// same kind; **a step is not offered its own ways out**, which are read after it has run, save the one
+// already wired into it; and **the wire drawn last is the one the control shows**, several being
+// allowed to land on one input.
 import { describe, expect, it } from "vitest";
 import { automationGraph, type PicGraph } from "./automationLayout";
 import { boundaryChoices, choiceKey, wireChoices, wireInto, wireOutOf } from "./automationWires";
@@ -70,6 +71,18 @@ describe("what can fill an input", () => {
     const choices = wireChoices(one, 2, port("report", "value"));
     expect(choices.every((c) => c.boxId !== 2)).toBe(true);
     expect(choices.map((c) => c.portName)).toEqual(["note"]);
+  });
+
+  it("keeps a wire already drawn from a spot's own way out, and only that one", () => {
+    const looped = detail(
+      [
+        step(1, "take", [port("note", "value")]),
+        step(2, "work", [port("report", "value"), port("again", "value")], [port("note", "value")]),
+      ],
+      [{ id: 1, fromId: 2, fromExitName: "完了", fromPortName: "again", toId: 2, toPortName: "note" }],
+    );
+    const choices = wireChoices(looped, 2, port("note", "value"));
+    expect(choices.map((c) => c.key)).toEqual([choiceKey(1, "完了", "note"), choiceKey(2, "完了", "again")]);
   });
 
   it("names a choice by the spot, the way out and the output together", () => {

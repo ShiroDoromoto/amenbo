@@ -1060,7 +1060,62 @@ pub const STEPS: &[Step] = &[
         name: "take away the text a run kept from its launch, which nothing reads",
         apply: Apply::Custom(forget_the_text_a_run_was_handed),
     },
+    Step {
+        to: 81,
+        name: "say a run and a task that can be taken in the words the screens use, in the built-ins that file and take a task",
+        apply: Apply::Custom(say_run_and_ready_in_the_screens_words),
+    },
 ];
+
+/// v81: the built-ins that take and file a task stop saying "run" and "ready" in English in the middle
+/// of their Japanese, and use the Japanese words every other screen says them in (`AMB-D-988`).
+///
+/// **A built-in's words are rows**, written once when its library action is laid down, and the screen
+/// finds the language to draw one in by looking the stored word up in the Japanese dictionary
+/// (`auto.bi.*`). So each word is rewritten where it was stored: what the action does, in its note; and
+/// the choice that makes the filed task depend on the run's own, in the choices the library action
+/// offers, in the answer a placement gave, and in a run's copy of both.
+///
+/// **Only the built-ins' own rows are touched.** A person may have rewritten the note, and a person's
+/// action may offer a choice spelled the same; those are theirs. The note moves only where it still says
+/// exactly what the build wrote, and the rows are found through the action's `builtin` key.
+///
+/// **The words are frozen text**, like every step's: the constants the build carries move on, these do
+/// not. None of them has a quote or a backslash in it, so the one `REPLACE` reaches it at every depth of
+/// JSON it sits in.
+fn say_run_and_ready_in_the_screens_words(ctx: &Ctx<'_>) -> Result<()> {
+    const TAKE_DOES_WAS: &str = "絞り込みに合う未着手で ready のタスクを並び順どおりに探し、先頭から予約して進行中にする";
+    const TAKE_DOES_NOW: &str = "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする";
+    const MAKE_DOES_WAS: &str =
+        "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この run で扱える";
+    const MAKE_DOES_NOW: &str =
+        "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この実行で扱える";
+    const RUNS_TASK_WAS: &str = "この run が扱っているタスク";
+    const RUNS_TASK_NOW: &str = "この実行が扱っているタスク";
+    let tx = ctx.tx;
+    for (builtin, was, now) in [("take_task", TAKE_DOES_WAS, TAKE_DOES_NOW), ("make_task", MAKE_DOES_WAS, MAKE_DOES_NOW)] {
+        tx.execute(
+            "UPDATE automation_action SET note = ?3 WHERE builtin = ?1 AND note = ?2",
+            rusqlite::params![builtin, was, now],
+        )?;
+    }
+    tx.execute(
+        "UPDATE automation_cfg SET options = REPLACE(options, ?1, ?2), value = REPLACE(value, ?1, ?2)
+         WHERE name = '依存させる相手'
+           AND ((owner_kind = 'action'
+                 AND owner_id IN (SELECT id FROM automation_action WHERE builtin = 'make_task'))
+             OR (owner_kind = 'placement'
+                 AND owner_id IN (SELECT p.id FROM automation_placement p
+                                  JOIN automation_action a ON a.id = p.action_id
+                                  WHERE a.builtin = 'make_task')))",
+        rusqlite::params![RUNS_TASK_WAS, RUNS_TASK_NOW],
+    )?;
+    tx.execute(
+        "UPDATE automation_run_def SET cfg = REPLACE(cfg, ?1, ?2) WHERE builtin = 'make_task'",
+        rusqlite::params![RUNS_TASK_WAS, RUNS_TASK_NOW],
+    )?;
+    Ok(())
+}
 
 /// v80: `automation_run.handed`, the text v77 kept on a run for an agent's step to be told at launch,
 /// goes. No entry reads a text any more (`AMB-D-981`): a launch has written `None` since, and the step
@@ -7297,6 +7352,76 @@ mod tests {
                  VALUES (1, 'automation_run', 1, 'url', 'https://example.com', 'a0');",
             )
             .expect("the widened CHECK admits a file on a run");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v81 in full, on the store shape v80 left behind: the built-ins that take and file a task, placed
+    /// and run, with the old words in the note, the choices, the answer and the run's copy — beside a
+    /// person's action that says the same, and a built-in whose note a person rewrote. The built-ins' rows
+    /// say the new words; the person's words stay theirs.
+    #[test]
+    fn run_and_ready_are_said_in_the_screens_words_on_the_builtins_alone() {
+        const TAKE_WAS: &str = "絞り込みに合う未着手で ready のタスクを並び順どおりに探し、先頭から予約して進行中にする";
+        const TAKE_NOW: &str = "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする";
+        const MAKE_WAS: &str =
+            "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この run で扱える";
+        const MAKE_NOW: &str =
+            "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この実行で扱える";
+        const WAS: &str = "この run が扱っているタスク";
+        const NOW: &str = "この実行が扱っているタスク";
+        let dir = scratch("builtin-run-ready-words");
+        let engine = store_at(&dir, 80);
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, name, note, builtin) VALUES
+                     (1, 'タスクを起票する', '{MAKE_WAS}', 'make_task'),
+                     (2, 'mine', '{MAKE_WAS}', NULL),
+                     (3, 'タスクに着手する', '{TAKE_WAS}', 'take_task'),
+                     (4, 'タスクに着手する', 'my own note', 'take_task');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (1, 1, 1), (2, 1, 2);
+                 INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, options, value) VALUES
+                     (1, 'action', 1, '依存させる相手', 'choice', '["なし","{WAS}"]', NULL),
+                     (2, 'placement', 1, '依存させる相手', 'choice', NULL, '"{WAS}"'),
+                     (3, 'action', 2, '依存させる相手', 'choice', '["{WAS}"]', NULL),
+                     (4, 'placement', 2, '依存させる相手', 'choice', NULL, '"{WAS}"');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'completed');
+                 INSERT INTO automation_run_def (id, run_id, name, prompt, builtin, cfg) VALUES
+                     (1, 1, 'タスクを起票する', NULL, 'make_task',
+                      '[{{"name":"依存させる相手","kind":"choice","required":false,"options":"[\"なし\",\"{WAS}\"]","value":"\"{WAS}\""}}]'),
+                     (2, 1, 'mine', 'p', NULL, '[{{"name":"依存させる相手","value":"\"{WAS}\""}}]');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(81), &mut crate::progress::ignore).unwrap();
+
+        let conn = engine.conn();
+        let note = |id: i64| -> String {
+            conn.query_row("SELECT note FROM automation_action WHERE id = ?1", [id], |r| r.get(0)).unwrap()
+        };
+        let cfg = |id: i64| -> String {
+            conn.query_row(
+                "SELECT COALESCE(options, '') || COALESCE(value, '') FROM automation_cfg WHERE id = ?1",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        let copy = |id: i64| -> String {
+            conn.query_row("SELECT cfg FROM automation_run_def WHERE id = ?1", [id], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(note(1), MAKE_NOW, "the filing built-in's note");
+        assert_eq!(note(3), TAKE_NOW, "the taking built-in's note");
+        assert_eq!(note(2), MAKE_WAS, "a person's action keeps its note");
+        assert_eq!(note(4), "my own note", "a note a person rewrote is theirs");
+        for (what, text) in [("the choices", cfg(1)), ("the answer", cfg(2)), ("the run's copy", copy(1))] {
+            assert!(text.contains(NOW) && !text.contains(WAS), "{what} on the built-in: {text}");
+        }
+        for (what, text) in [("the choices", cfg(3)), ("the answer", cfg(4)), ("the run's copy", copy(2))] {
+            assert!(text.contains(WAS) && !text.contains(NOW), "{what} on a person's action: {text}");
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 

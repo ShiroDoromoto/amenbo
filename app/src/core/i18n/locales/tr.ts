@@ -1005,6 +1005,7 @@ export const tr: Translation = {
     "auto.step.required": "zorunlu",
     "auto.step.noAxes": "Görevleri sınıflandıracak bir eksen henüz yok",
     "auto.step.oneALine": "Satır başına bir tane (ör. AMB-T-12)",
+    "auto.step.oneADecisionALine": "Satır başına bir tane (ör. AMB-D-12)",
     "auto.step.inputs": "Girdiler",
     "auto.step.unwired": "hiçbir şey ulaşmıyor",
     "auto.step.atLaunch": "çalıştırma başlarken verilir",

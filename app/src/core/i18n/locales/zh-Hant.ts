@@ -1007,6 +1007,7 @@ export const zhHant: Translation = {
     "auto.step.required": "必填",
     "auto.step.noAxes": "還沒有用於給任務分類的軸",
     "auto.step.oneALine": "每行一個（例：AMB-T-12）",
+    "auto.step.oneADecisionALine": "每行一個（例：AMB-D-12）",
     "auto.step.inputs": "輸入參數",
     "auto.step.unwired": "沒有東西送到",
     "auto.step.atLaunch": "在啟動時傳入",

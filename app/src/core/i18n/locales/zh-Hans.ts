@@ -1007,6 +1007,7 @@ export const zhHans: Translation = {
     "auto.step.required": "必填",
     "auto.step.noAxes": "还没有用于给任务分类的轴",
     "auto.step.oneALine": "每行一个（例：AMB-T-12）",
+    "auto.step.oneADecisionALine": "每行一个（例：AMB-D-12）",
     "auto.step.inputs": "输入参数",
     "auto.step.unwired": "没有东西送到",
     "auto.step.atLaunch": "在启动时传入",

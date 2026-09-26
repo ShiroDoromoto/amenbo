@@ -1022,6 +1022,7 @@ export const ru: Translation = {
     "auto.step.required": "обязательный",
     "auto.step.noAxes": "Пока нет оси для классификации задач",
     "auto.step.oneALine": "По одной в строке (например, AMB-T-12)",
+    "auto.step.oneADecisionALine": "По одной в строке (например, AMB-D-12)",
     "auto.step.inputs": "Входы",
     "auto.step.unwired": "до него ничего не доходит",
     "auto.step.atLaunch": "передаётся при запуске",

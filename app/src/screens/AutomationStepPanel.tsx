@@ -294,7 +294,7 @@ function CfgRow({ placementId, projectId, builtin, cfg, siblings, run }: {
           onAnswer={answer}
         />
       )}
-      {special === "numbers" && <NumberLines label={shown} value={cfg.value} onAnswer={answer} />}
+      {special === "numbers" && <NumberLines name={cfg.name} label={shown} value={cfg.value} onAnswer={answer} />}
 
       {/* A folder answered with one this project has not got stays offered, so what is written shows. */}
       {cfg.kind === "folder" && folderPaths.length > 0 && (

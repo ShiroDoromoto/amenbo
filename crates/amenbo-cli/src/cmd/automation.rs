@@ -311,6 +311,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     (p, format!("the built-in '{key}'"))
                 }
                 (Some(action), None) => {
+                    // clap cannot hold this one: it skips `requires` for an argument whose counterpart
+                    // conflicts with one that is there, so `--axis` would be dropped without a word.
+                    if axis.is_some() {
+                        return Err(CliError::from(amenbo_core::Error::invalid(
+                            "--axis names the axis the built-in 'split_by_dim' splits by — a library action takes none",
+                        )));
+                    }
                     (store.automation_placement_add(automation, action).map_err(CliError::from)?, format!("action {action}"))
                 }
                 (None, None) => unreachable!("clap requires --action or --builtin"),

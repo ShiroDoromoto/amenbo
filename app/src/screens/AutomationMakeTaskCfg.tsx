@@ -21,7 +21,12 @@ const MAKE_TASK = "make_task";
 /** Its settings that name several things, by the store's word — what core reads each answer by. */
 export const CLASSIFY = "分類";
 const AI_AXES = "AI に選ばせる軸";
-const NUMBERS: readonly string[] = ["依存させる既存のタスク", "リンクする決定"];
+/** Each setting answered a number a line, with the example its box shows: a task's number for the tasks
+ *  it depends on, and a decision's for the decisions it links to. */
+const NUMBERS: Readonly<Record<string, string>> = {
+  "依存させる既存のタスク": "auto.step.oneALine",
+  "リンクする決定": "auto.step.oneADecisionALine",
+};
 
 /** Which of the controls here answers a setting, or `undefined` for one the panel answers itself. */
 export function makeTaskControl(
@@ -31,7 +36,7 @@ export function makeTaskControl(
   if (builtin !== MAKE_TASK) return undefined;
   if (name === CLASSIFY) return "classes";
   if (name === AI_AXES) return "axes";
-  return NUMBERS.includes(name) ? "numbers" : undefined;
+  return name in NUMBERS ? "numbers" : undefined;
 }
 
 /** The axes a task is filed under in this project, with the values it can newly be filed under. */
@@ -107,7 +112,9 @@ export function AxisChips({ projectId, value, classified, onAnswer }: {
 }
 
 /** **A task or a decision by number, one a line** — the box writes what it holds when it is left. */
-export function NumberLines({ label, value, onAnswer }: {
+export function NumberLines({ name, label, value, onAnswer }: {
+  /** The setting it answers, by the store's word — which says whether it holds tasks or decisions. */
+  name: string;
   label: string;
   value: string | undefined;
   onAnswer: (value: string | null) => void;
@@ -118,7 +125,7 @@ export function NumberLines({ label, value, onAnswer }: {
     <textarea
       aria-label={label}
       rows={3}
-      placeholder={t("auto.step.oneALine")}
+      placeholder={t(NUMBERS[name] ?? "auto.step.oneALine")}
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={() => {

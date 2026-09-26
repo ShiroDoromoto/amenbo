@@ -324,6 +324,10 @@ pub(crate) mod test_support {
 
     /// **An output on one way out of a [`mk_placed`] action**, declared on the action's way out and on
     /// the step's of the same name, and wired from the step's into the action's across its edge.
+    ///
+    /// It is declared past the refusal of a `task_take` output ([`crate::ops::automation::port_add`]):
+    /// a store written before that refusal can hold an action of a person's that takes a task, and
+    /// this is how the tests of the run side draw one.
     pub(crate) fn mk_out(
         tx: &WriteTx<'_>,
         action: &crate::model::AutomationAction,
@@ -336,13 +340,13 @@ pub(crate) mod test_support {
             AutomationOwner, AutomationPictureOwner, AutomationPortDirection, AutomationPortOwner,
             ACTION_BOUNDARY,
         };
-        use crate::ops::automation::{port_add, wire_add};
+        use crate::ops::automation::{declare_port, wire_add};
         let step = only_step(tx, action);
         for (owner, id) in [(AutomationOwner::Action, action.id), (AutomationOwner::Step, step.id)] {
             let way_out = crate::store_engine::read::automation_exit_by_name(tx.conn(), owner, id, exit)
                 .expect("read")
                 .expect("the way out");
-            port_add(
+            declare_port(
                 tx,
                 AutomationPortOwner::Exit,
                 way_out.id,

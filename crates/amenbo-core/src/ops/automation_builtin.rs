@@ -428,7 +428,7 @@ fn step_of(tx: &WriteTx<'_>, action_id: i64, builtin: &Builtin) -> Result<crate:
             read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, step.id, Some(exit.name))?
             .ok_or_else(|| Error::invalid("the way out was not written"))?;
         for out in exit.outs {
-            automation::port_add(
+            automation::declare_port(
                 tx,
                 AutomationPortOwner::Exit,
                 owner.id,
@@ -511,7 +511,7 @@ pub(crate) fn write_action(
             read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action.id, Some(exit.name))?
                 .ok_or_else(|| Error::invalid("the way out was not written"))?;
         for out in exit.outs {
-            automation::port_add(
+            automation::declare_port(
                 tx,
                 AutomationPortOwner::Exit,
                 owner.id,

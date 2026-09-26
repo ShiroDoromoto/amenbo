@@ -1754,7 +1754,40 @@ pub fn exit_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 /// The two directions hang on different owners, and neither is sayable on the other's: an input belongs
 /// to the box that reads it, while an output belongs to the way out that produced it, which is what
 /// lets a review step hand on a file only when it left through "something to fix".
+///
+/// **The task a run works is not handed on from here** (`AMB-D-964`): an output carrying it is refused
+/// ([`not_the_task_taken`]). Only a built-in takes that task, and nothing a step can do declares it.
 pub fn port_add(
+    tx: &WriteTx<'_>,
+    owner_kind: AutomationPortOwner,
+    owner_id: i64,
+    direction: AutomationPortDirection,
+    name: &str,
+    kind: AutomationPortKind,
+    required: bool,
+) -> Result<AutomationPort> {
+    not_the_task_taken(direction, kind)?;
+    declare_port(tx, owner_kind, owner_id, direction, name, kind, required)
+}
+
+/// **An output does not carry the task the run works** (`AMB-D-964`). The run takes it at a built-in —
+/// `take_task` or `make_task` — and a step has no command to hand it on, so a step whose way out
+/// required one could never leave by it. An input of that kind stays: it is how a step reads the task
+/// the built-in took.
+fn not_the_task_taken(direction: AutomationPortDirection, kind: AutomationPortKind) -> Result<()> {
+    if direction == AutomationPortDirection::Out && kind == AutomationPortKind::TaskTake {
+        return Err(Error::invalid(
+            "a way out cannot hand on the task the run works (task_take) — only a built-in takes it. \
+             Put the built-in 'take_task' or 'make_task' before this action, and read the task it \
+             hands on with an input",
+        ));
+    }
+    Ok(())
+}
+
+/// [`port_add`] without asking what the output carries — how a built-in's rows are written, since the
+/// ones that take a task declare exactly the output a person's action is refused.
+pub(crate) fn declare_port(
     tx: &WriteTx<'_>,
     owner_kind: AutomationPortOwner,
     owner_id: i64,
@@ -1840,6 +1873,7 @@ pub fn port_update(
         after.name = name;
     }
     if let Some(kind) = kind {
+        not_the_task_taken(before.direction, kind)?;
         after.kind = kind;
     }
     if let Some(required) = required {
@@ -2738,6 +2772,62 @@ mod tests {
             )
             .expect_err("the action declares no such way out");
             assert!(format!("{refused}").contains("書いていない"), "{refused}");
+        });
+    }
+
+    #[test]
+    fn a_way_out_does_not_hand_on_the_task_the_run_works() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &automation, "点検する");
+            let step = only_step(tx, &action);
+            for (owner, owner_id) in
+                [(AutomationOwner::Step, step.id), (AutomationOwner::Action, action.id)]
+            {
+                let exit = read::automation_exit_by_name(tx.conn(), owner, owner_id, None)
+                    .expect("read the way out")
+                    .expect("the done way out");
+                let refused = port_add(
+                    tx,
+                    AutomationPortOwner::Exit,
+                    exit.id,
+                    AutomationPortDirection::Out,
+                    "タスク",
+                    AutomationPortKind::TaskTake,
+                    true,
+                )
+                .expect_err("a way out handing on the task taken is refused");
+                assert!(format!("{refused}").contains("take_task"), "{refused}");
+
+                // Declared as something else, it cannot be turned into it either.
+                let note = port_add(
+                    tx,
+                    AutomationPortOwner::Exit,
+                    exit.id,
+                    AutomationPortDirection::Out,
+                    "メモ",
+                    AutomationPortKind::Value,
+                    true,
+                )
+                .expect("declare a value");
+                port_update(tx, note.id, None, Some(AutomationPortKind::TaskTake), None)
+                    .expect_err("turning an output into the task taken is refused");
+                assert_eq!(live_port(tx, note.id).expect("read").kind, AutomationPortKind::Value);
+            }
+
+            // Reading the task a built-in took is an input, and that stays.
+            let input = port_add(
+                tx,
+                AutomationPortOwner::Step,
+                step.id,
+                AutomationPortDirection::In,
+                "タスク",
+                AutomationPortKind::TaskTake,
+                true,
+            )
+            .expect("an input reads the task taken");
+            port_update(tx, input.id, None, Some(AutomationPortKind::TaskTake), Some(false))
+                .expect("an input may stay the task taken");
         });
     }
 
@@ -4299,6 +4389,8 @@ mod held_by_a_run {
             "placement_steps_default",
             "placement_step_default",
             "step_insert",
+            // Only through `declare_port`, which asks.
+            "port_add",
             // Reads a picture handed to it and writes nothing.
             "lines_back",
         ];

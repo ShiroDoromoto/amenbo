@@ -1183,6 +1183,7 @@ export const de: Translation = {
     "auto.run.acknowledge": "Gesehen",
     "auto.run.seePicture": "Im Bild ansehen",
     "auto.run.seeHistory": "Im Verlauf ansehen",
+    "auto.run.seeRunning": "Unter „Läuft“ ansehen",
     "auto.run.paused": "Pausiert",
     "auto.run.pausing": "Pausiert gleich",
     "auto.run.crashed": "der Schritt endete, ohne sich zu melden",

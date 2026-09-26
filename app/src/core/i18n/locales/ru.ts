@@ -1196,6 +1196,7 @@ export const ru: Translation = {
     "auto.run.acknowledge": "Просмотрено",
     "auto.run.seePicture": "Посмотреть на схеме",
     "auto.run.seeHistory": "Посмотреть в истории",
+    "auto.run.seeRunning": "Посмотреть в «Выполняются»",
     "auto.run.paused": "Приостановлен",
     "auto.run.pausing": "Ждёт паузы",
     "auto.run.crashed": "шаг завершился, не отчитавшись",

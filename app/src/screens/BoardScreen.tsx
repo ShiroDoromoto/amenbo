@@ -25,6 +25,7 @@ import { CalendarView } from "./CalendarView";
 import { TimelineView } from "./TimelineView";
 import { errText, statusLabel, t, tf, viewLabel } from "../core/i18n";
 import type { ComposeTarget } from "../shell/AppShell";
+import type { RunsTab } from "../core/refNav";
 import {
   filterDimensions, parseRefQuery, passesFilters, selectionKey,
   type DimAssignments, type FilterSelection,
@@ -124,7 +125,7 @@ export function BoardScreen({
   /** The box that build screen arrives with pressed — where a run's pane said its run stopped. */
   openPlacement?: number;
   /** The tab the automations arrive on instead, from a run's pane once its run is over. */
-  openRuns?: "history";
+  openRuns?: RunsTab;
   /** Go to a global action on the sidebar's entrance, where it is changed (`./AutomationsScreen`). */
   onGoToGlobalAction?: (action: number) => void;
 }) {

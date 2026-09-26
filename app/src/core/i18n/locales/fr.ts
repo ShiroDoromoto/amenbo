@@ -1191,6 +1191,7 @@ export const fr: Translation = {
     "auto.run.acknowledge": "Vu",
     "auto.run.seePicture": "Voir dans le schéma",
     "auto.run.seeHistory": "Voir dans l'historique",
+    "auto.run.seeRunning": "Voir dans « En cours »",
     "auto.run.paused": "En pause",
     "auto.run.pausing": "Pause imminente",
     "auto.run.crashed": "l'étape s'est terminée sans rendre compte",

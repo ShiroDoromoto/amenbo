@@ -1181,6 +1181,7 @@ export const zhHans: Translation = {
     "auto.run.acknowledge": "已确认",
     "auto.run.seePicture": "在图中查看",
     "auto.run.seeHistory": "在历史中查看",
+    "auto.run.seeRunning": "在运行中查看",
     "auto.run.paused": "已暂停",
     "auto.run.pausing": "等待暂停",
     "auto.run.crashed": "步骤未报告就结束了",

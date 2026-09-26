@@ -29,7 +29,7 @@ import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionMadeDto, SessionSaidDto } from "../bindings/bindings";
 import { currentLang, errText, t, tf } from "../core/i18n";
-import { useRefNav } from "../core/refNav";
+import { useRefNav, type RunsTab } from "../core/refNav";
 import { asTyped, isComposing, isEnterSubmit } from "../core/keys";
 import { hostOs } from "../core/platform";
 import { Icon } from "../components/Icon";
@@ -325,6 +325,9 @@ export function TerminalPane({
     run?.state?.status === "completed" || run?.state?.status === "failed" || run?.state?.status === "canceled";
   // Where a run's pane sends the reader on the ledger — the shell's in one window, the host's across two.
   const ledger = useRefNav();
+  // The tab an over run is listed on: a failure waits on "running" until somebody acknowledges it.
+  const runsTab: RunsTab =
+    run?.state?.status === "failed" && !run.state.acknowledged ? "running" : "history";
 
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
    *  whose pane has gone is one nobody can get back to.
@@ -928,15 +931,17 @@ export function TerminalPane({
               </button>
             </span>
           )}
-          {/* **Where a finished run is read from now** (`AMB-T-5539`): the history tab, on the ledger.
-              The run's moves are gone once it is over, and this stands where they stood. */}
-          {run !== null && over && ledger.openRunHistory !== undefined && (
+          {/* **Where a finished run is read from now** (`AMB-T-5539`), on the ledger. The run's moves
+              are gone once it is over, and this stands where they stood. That is the history tab — but
+              a failure nobody has acknowledged is still on "running" (`AMB-D-955`), and sent to history
+              the reader would not find it there (`AMB-T-5672`). */}
+          {run !== null && over && ledger.openRuns !== undefined && (
             <button
               type="button"
               className="slot__runlink"
-              onClick={() => ledger.openRunHistory?.(project)}
+              onClick={() => ledger.openRuns?.(project, runsTab)}
             >
-              {t("auto.run.seeHistory")}
+              {t(runsTab === "running" ? "auto.run.seeRunning" : "auto.run.seeHistory")}
             </button>
           )}
           {size !== undefined && onSize !== undefined && <PaneSize size={size} onSize={onSize} />}

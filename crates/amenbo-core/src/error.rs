@@ -388,6 +388,9 @@ pub enum ErrorCode {
     // A library action that cannot be deleted or moved for the placements standing on it. The screen
     // shows the refusal under the action's row, so it names itself and carries what it counts and names.
     InvalidActionStillPlaced,
+    // An automation that cannot be deleted for the runs filed under it. Archiving is the way it goes
+    // out of sight instead, and the CLI names that by this code; it carries how many runs there are.
+    InvalidAutomationHasRuns,
     InvalidActionPlacedElsewhere,
     NotReadyAutomation,
     NotReadyAutomationNoSteps,
@@ -484,6 +487,7 @@ impl ErrorCode {
             ErrorCode::InvalidAutomationArchived => "invalid_automation_archived",
             ErrorCode::InvalidAutomationWorkspaceClosed => "invalid_automation_workspace_closed",
             ErrorCode::InvalidActionStillPlaced => "invalid_action_still_placed",
+            ErrorCode::InvalidAutomationHasRuns => "invalid_automation_has_runs",
             ErrorCode::InvalidActionPlacedElsewhere => "invalid_action_placed_elsewhere",
             ErrorCode::NotReadyAutomation => "not_ready_automation",
             ErrorCode::NotReadyAutomationNoSteps => "not_ready_automation_no_steps",
@@ -573,6 +577,7 @@ impl ErrorCode {
         ErrorCode::InvalidAutomationArchived,
         ErrorCode::InvalidAutomationWorkspaceClosed,
         ErrorCode::InvalidActionStillPlaced,
+        ErrorCode::InvalidAutomationHasRuns,
         ErrorCode::InvalidActionPlacedElsewhere,
         ErrorCode::NotReadyAutomation,
         ErrorCode::NotReadyAutomationNoSteps,
@@ -793,6 +798,7 @@ mod tests {
             "invalid_automation_archived",
             "invalid_automation_workspace_closed",
             "invalid_action_still_placed",
+            "invalid_automation_has_runs",
             "invalid_action_placed_elsewhere",
             "not_ready_automation",
             "not_ready_automation_no_steps",

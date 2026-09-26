@@ -2195,7 +2195,7 @@ fn all_commands() -> Value {
                    { "name": "--notes <text>", "help": "what it is for (`-` reads stdin)" },
                    { "name": "--archived <true|false>", "help": "whether it is archived" }]),
             json!(["amenbo automation update 3 --notes \"Runs over the review queue\"", "amenbo automation update 3 --archived true"])),
-        cmd("automation rm", "Deletes an automation with every placement, edge and wire built onto it, and the answers written on each placement. The library actions those placements stood on are left where they are. It rides one transaction, so there is no half-deleted picture. Confirms unless --yes.",
+        cmd("automation rm", "Deletes an automation with every placement, edge and wire built onto it, and the answers written on each placement. The library actions those placements stood on are left where they are. It rides one transaction, so there is no half-deleted picture. An automation any run was launched from cannot be deleted — the runs are filed under it — and is refused as invalid_automation_has_runs, naming how many; archive it instead with `automation update <id> --archived true`. Confirms unless --yes.",
             json!([{ "name": "<id>", "help": "automation id", "required": true },
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation rm 3 --yes"])),

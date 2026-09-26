@@ -135,6 +135,9 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_automation_archived",
   "invalid_automation_workspace_closed",
   "invalid_action_still_placed",
+  // Deleting an automation runs were launched from — refused for the runs filed under it, with how many.
+  // Archiving is the way it goes out of sight instead, and the CLI's hint names it.
+  "invalid_automation_has_runs",
   "invalid_action_placed_elsewhere",
   "not_ready_automation",
   "not_ready_automation_no_steps",

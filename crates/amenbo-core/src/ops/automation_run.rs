@@ -2712,6 +2712,23 @@ mod tests {
         });
     }
 
+    /// **An automation a run was launched from is not deleted, and the refusal says so by its code** — the
+    /// code is what the CLI answers with archiving, which is how such an automation goes out of the way.
+    #[test]
+    fn an_automation_its_runs_are_filed_under_is_refused_as_having_runs() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+            crate::ops::automation_stop::stop(tx, run.id, crate::ops::automation_stop::Ending::Canceled)
+                .expect("stop");
+            let err = automation::delete(tx, automation.id).expect_err("a run is filed under it");
+            let Error::Invalid(msg) = err else { panic!("an automation with runs is invalid to delete") };
+            assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationHasRuns));
+            assert_eq!(msg.fields().iter().collect::<Vec<_>>(), vec![("count", "1")]);
+            automation::update(tx, automation.id, None, None, Some(true)).expect("archiving is the way instead");
+        });
+    }
+
     /// What a run is waiting to have opened, at each of the three moments there is an answer to it.
     ///
     /// **It is derived and not remembered**, which is what this holds: the report writes the way out

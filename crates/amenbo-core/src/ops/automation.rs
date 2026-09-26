@@ -987,19 +987,24 @@ fn not_an_entry(what: &str) -> Error {
 /// answers written on them. The library actions those placements stood on are left where they are:
 /// the library outlives any one picture.
 ///
-/// **Refused while a run stands behind it**, naming how many. A run carries its own copy of the steps
-/// and would go on reading correctly, but it is filed under the automation it was launched from, and
-/// deleting that leaves the record unable to say what was run.
+/// **Refused while a run stands behind it**, naming how many (`invalid_automation_has_runs`). A run
+/// carries its own copy of the steps and would go on reading correctly, but it is filed under the
+/// automation it was launched from, and deleting that leaves the record unable to say what was run.
+/// Archiving is what takes such an automation out of the way.
 pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let automation = live_automation(tx, id)?;
     not_under_a_run(tx, Def::Automation(id))?;
     let runs = read::automation_run_ids(tx.conn(), id)?;
     if !runs.is_empty() {
-        return Err(Error::invalid(format!(
-            "{} run(s) were launched from this automation — it is what they are filed under, so it \
-             cannot be deleted",
-            runs.len()
-        )));
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "{} run(s) were launched from this automation — it is what they are filed under, so it \
+                 cannot be deleted",
+                runs.len()
+            ))
+            .coded(ErrorCode::InvalidAutomationHasRuns)
+            .with("count", runs.len()),
+        ));
     }
     for wire in read::automation_wire_ids(tx.conn(), AutomationPictureOwner::Automation, id)? {
         tx.delete_record("automation_wire", wire)?;

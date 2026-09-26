@@ -146,14 +146,18 @@ fn search(
 
 /// **The filter it searches with**: the parts the setting chose, less `status:` and `ready:`, and the
 /// two it always asks for after them.
+///
+/// **An answer that is not an object of parts is read as no answer**, never as no narrowing. Such an
+/// answer is refused when it is written and at the launch; one that got past both would otherwise have
+/// the run take any task in the project — a person's among them.
 fn expression(answer: Option<&str>) -> String {
-    let chosen = match answer {
+    let parts = answer.and_then(|value| match serde_json::from_str::<serde_json::Value>(value) {
+        Ok(serde_json::Value::Object(parts)) => Some(parts),
+        _ => None,
+    });
+    let chosen = match parts {
         None => Some(UNANSWERED.to_string()),
-        Some(value) => {
-            let mut parts = match serde_json::from_str::<serde_json::Value>(value) {
-                Ok(serde_json::Value::Object(parts)) => parts,
-                _ => serde_json::Map::new(),
-            };
+        Some(mut parts) => {
             parts.remove("status");
             parts.remove("ready");
             taskfilter_expr(&serde_json::Value::Object(parts).to_string())
@@ -453,5 +457,10 @@ mod tests {
             "priority:high status:todo ready:yes",
         );
         assert_eq!(expression(Some(r#"{"sort":"due"}"#)), "status:todo ready:yes");
+        assert_eq!(
+            expression(Some(r#""x""#)),
+            "assignee:me-ai status:todo ready:yes",
+            "an answer that is not its parts narrows as no answer does, never to every task",
+        );
     }
 }

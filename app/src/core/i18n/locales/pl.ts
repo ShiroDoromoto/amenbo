@@ -1438,6 +1438,7 @@ export const pl: Translation = {
     not_ready_automation_open_exit: "{step}: po {exit} nic nie jest ustalone",
     not_ready_automation_unwired_input: "{step}: do wymaganego wejścia {port} nic nie dociera",
     not_ready_automation_unanswered_cfg: "{step}: wymagane ustawienie {cfg} pozostaje bez odpowiedzi",
+    not_ready_automation_misanswered_cfg: "{step}: odpowiedź na ustawienie {cfg} nie pasuje do jego rodzaju",
     not_ready_automation_agent_unchosen: "{step}: nikt nie został wybrany do wykonania",
     not_ready_automation_agent_missing: "{step}: ta maszyna nie może uruchomić {agent}",
     not_ready_automation_model_missing: "{step}: tutejszy agent nie oferuje modelu {model}",

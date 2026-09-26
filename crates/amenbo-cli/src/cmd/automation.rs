@@ -131,7 +131,8 @@ fn edge_target(to: Option<i64>, exit_to: Option<String>, done: bool, halt: bool)
 ///
 /// What the JSON's own type says is which kind answered it: an object for a task filter, a number for a
 /// number, a string for the other three. Nothing here reads the declaration — no command lists one — so
-/// an answer in the wrong shape is caught when the run reads it, not here.
+/// an answer in the wrong shape is caught when it is written (`ops::automation::answer_misfit`), where
+/// the declaration is at hand.
 fn cfg_value(o: &CfgAnswer) -> Result<Option<Value>, CliError> {
     let filter: Vec<(&str, &Vec<String>)> = vec![
         ("status", &o.status),

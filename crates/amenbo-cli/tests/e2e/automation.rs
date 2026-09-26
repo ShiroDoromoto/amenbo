@@ -330,6 +330,42 @@ fn a_setting_takes_one_answer_or_none_at_all() {
     assert_eq!(cleared["automation_cfg"]["value"], Value::Null);
 }
 
+/// **An answer in another kind's shape is refused when it is written** (`AMB-T-5648`): a task filter
+/// answered with a choice was read as no narrowing, and the run took a person's task. So is a choice
+/// that is not listed, a number below zero, and a choice list that is not one.
+#[test]
+fn an_answer_in_another_kinds_shape_is_refused() {
+    let cli = Cli::new();
+    let (_, _, action, placement) = an_automation(&cli);
+    cli.json(&["automation", "cfg-add", "--action", &action, "--name", "queue", "--kind", "taskfilter", "--json"]);
+    cli.json(&["automation", "cfg-add", "--action", &action, "--name", "wait", "--kind", "number", "--json"]);
+    cli.json(&[
+        "automation", "cfg-add", "--action", &action, "--name", "which", "--kind", "choice",
+        "--options", r#"["a","b"]"#, "--json",
+    ]);
+
+    for wrong in [
+        vec!["--name", "queue", "--choice", "x"],
+        vec!["--name", "wait", "--number=-5"],
+        vec!["--name", "which", "--choice", "c"],
+    ] {
+        let mut args = vec!["automation", "cfg-set", placement.as_str()];
+        args.extend(wrong.iter().copied());
+        args.push("--json");
+        let (refused, code) = cli.run_err(&args);
+        assert_ne!(code, 0, "{wrong:?} is refused: {refused}");
+    }
+    cli.json(&["automation", "cfg-set", &placement, "--name", "which", "--choice", "b", "--json"]);
+
+    for broken in ["notjson", "[]", r#"["a","a"]"#] {
+        let (refused, code) = cli.run_err(&[
+            "automation", "cfg-add", "--action", &action, "--name", "other", "--kind", "choice",
+            "--options", broken, "--json",
+        ]);
+        assert_ne!(code, 0, "{broken} is not a list of choices: {refused}");
+    }
+}
+
 /// The direction is never asked for: an input belongs to the step or the action that reads it, an
 /// output to the way out that produced it. Naming none of the three is the one mistake the flags leave
 /// open, and it is refused with the three to pick from.

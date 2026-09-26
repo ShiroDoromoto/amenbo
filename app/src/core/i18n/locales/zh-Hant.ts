@@ -1413,6 +1413,7 @@ export const zhHant: Translation = {
     not_ready_automation_open_exit: "{step}：{exit} 之後要做什麼還沒定",
     not_ready_automation_unwired_input: "{step}：沒有東西到達必填輸入 {port}",
     not_ready_automation_unanswered_cfg: "{step}：必填設定 {cfg} 還沒有填",
+    not_ready_automation_misanswered_cfg: "{step}：設定 {cfg} 的答案與該設定的類型不符",
     not_ready_automation_agent_unchosen: "{step}：未選擇由誰執行",
     not_ready_automation_agent_missing: "{step}：這台機器啟動不了 {agent}",
     not_ready_automation_model_missing: "{step}：這裡的代理不提供 {model} 模型",

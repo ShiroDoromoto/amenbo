@@ -144,6 +144,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_open_exit",
   "not_ready_automation_unwired_input",
   "not_ready_automation_unanswered_cfg",
+  "not_ready_automation_misanswered_cfg",
   "not_ready_automation_agent_unchosen",
   "not_ready_automation_agent_missing",
   "not_ready_automation_model_missing",

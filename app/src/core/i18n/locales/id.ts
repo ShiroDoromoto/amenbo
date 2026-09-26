@@ -1413,6 +1413,7 @@ export const id: Translation = {
     not_ready_automation_open_exit: "{step}: tidak ada yang ditetapkan setelah {exit}",
     not_ready_automation_unwired_input: "{step}: tidak ada yang sampai ke masukan wajib {port}",
     not_ready_automation_unanswered_cfg: "{step}: setelan wajib {cfg} belum dijawab",
+    not_ready_automation_misanswered_cfg: "{step}: jawaban pengaturan {cfg} tidak sesuai dengan jenisnya",
     not_ready_automation_agent_unchosen: "{step}: belum ada yang dipilih untuk menjalankannya",
     not_ready_automation_agent_missing: "{step}: mesin ini tidak bisa menjalankan {agent}",
     not_ready_automation_model_missing: "{step}: agennya di sini tidak menyediakan model {model}",

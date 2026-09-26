@@ -89,7 +89,7 @@ mod tests {
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
     use crate::ops::test_support::{mk_project, mk_task_in, with_tx};
-    use crate::store_engine::{read, WriteTx};
+    use crate::store_engine::{read, record, WriteTx};
     use crate::time::Timestamp;
 
     fn cfg(answers: &[(&str, &str)]) -> Vec<RunDefCfg> {
@@ -223,16 +223,20 @@ mod tests {
         });
     }
 
-    /// **A setting nobody could wait on is not waited on**: the step leaves by the error way out as it
-    /// is opened, saying why.
+    /// **A setting nobody could wait on is not waited on.** It is refused as it is answered; one that got
+    /// onto a run all the same — written before that was checked — leaves by the error way out as the
+    /// step is opened, saying why.
     #[test]
-    fn a_wait_set_wrong_leaves_by_the_error_way_out() {
+    fn a_wait_set_wrong_is_refused_and_leaves_by_the_error_way_out() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let task = mk_task_in(tx, "one", Some(project));
             crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai)).expect("the AI's");
             let (automation, wait) = picture(tx, project);
-            automation::cfg_set(tx, wait, SECONDS, Some("\"soon\"")).expect("answer");
+            for wrong in ["\"soon\"", "-5", "1.5"] {
+                let refused = automation::cfg_set(tx, wait, SECONDS, Some(wrong));
+                assert!(refused.is_err(), "{wrong} is not a number of seconds to wait");
+            }
             let run = launched(tx, &automation);
             let entry = read::automation_run_defs_of(tx.conn(), run.id)
                 .expect("defs")
@@ -243,6 +247,17 @@ mod tests {
             else {
                 panic!("the take goes on to the wait");
             };
+            let mut written = wait_def.clone();
+            written.cfg = serde_json::to_string(&[RunDefCfg {
+                name: SECONDS.to_string(),
+                kind: AutomationCfgKind::Number,
+                required: false,
+                options: None,
+                value: Some("\"soon\"".to_string()),
+            }])
+            .expect("json");
+            crate::ops::emit_update(tx, record::automation_run_def(&wait_def), record::automation_run_def(&written))
+                .expect("an answer past the checks");
             let Opened::Carried { run_step_id, next } = open(tx, run.id, wait_def.id, None).expect("wait") else {
                 panic!("a wait set wrong is not held");
             };

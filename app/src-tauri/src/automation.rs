@@ -914,8 +914,8 @@ pub fn automation_input_remove(
 /// The answer travels as the JSON its kind takes — a string for a folder, a choice and a text, a
 /// number for a number, and an object naming each part of a task filter. The shape is the screen's to
 /// build, because the control that took it is the screen's too
-/// (`app/src/screens/automationCfg.ts`); core keeps the text as it is handed and the run reads it
-/// ([`amenbo_core::ops::automation::cfg_set`]).
+/// (`app/src/screens/automationCfg.ts`); core refuses an answer its kind does not take and keeps the
+/// rest as it is handed ([`amenbo_core::ops::automation::cfg_set`]).
 ///
 /// Each placement answers on a row of its own under the declared name, so one action placed twice is
 /// not answered for both at once. That split is core's, and this door does not have to know which of

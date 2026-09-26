@@ -1954,15 +1954,95 @@ pub fn cfg_add(
 }
 
 /// A choice list belongs to a choice and to nothing else — carried on another kind it would be written,
-/// never read, and never shown.
+/// never read, and never shown. **It is a JSON array of distinct, non-empty strings**, at least one of
+/// them: anything else leaves every answer either refused or unchecked ([`answer_misfit`]).
 fn checked_options(kind: AutomationCfgKind, options: Option<&str>) -> Result<()> {
-    if options.is_some() && kind != AutomationCfgKind::Choice {
+    let Some(options) = options else { return Ok(()) };
+    if kind != AutomationCfgKind::Choice {
         return Err(Error::invalid(format!(
             "a list of choices belongs to a 'choice' setting — this one is '{}'",
             kind.as_str()
         )));
     }
+    let list = choices(options).ok_or_else(|| {
+        Error::invalid(format!(
+            "the choices {options} are not a JSON array of strings, like [\"one\",\"two\"]"
+        ))
+    })?;
+    if list.is_empty() {
+        return Err(Error::invalid("a list of choices needs at least one choice"));
+    }
+    let mut seen = BTreeSet::new();
+    for one in &list {
+        if one.trim().is_empty() {
+            return Err(Error::invalid("a choice cannot be empty"));
+        }
+        if !seen.insert(one.as_str()) {
+            return Err(Error::invalid(format!("the choice '{one}' is listed twice")));
+        }
+    }
     Ok(())
+}
+
+/// A choice list read as the strings it holds, or `None` where it is not a JSON array of strings.
+fn choices(options: &str) -> Option<Vec<String>> {
+    let serde_json::Value::Array(list) = serde_json::from_str(options).ok()? else {
+        return None;
+    };
+    list.into_iter().map(|one| one.as_str().map(str::to_string)).collect()
+}
+
+/// **Why an answer does not fit the setting it answers**, or `None` where it does. Read the same way when
+/// the answer is written ([`cfg_set`]) and when a run is launched on it (`automation_run::check`), so an
+/// answer written before this was checked, or left behind when its declaration changed, is refused at
+/// the launch rather than read as something nobody wrote.
+///
+/// The JSON's own type is what each kind takes: an object of parts for a task filter, a whole number of
+/// zero or more for a number, and a string for the other three — for a choice, one of the declared
+/// choices where there are any. A task filter's parts are read as the filter the run will search with.
+pub fn answer_misfit(kind: AutomationCfgKind, options: Option<&str>, value: &str) -> Option<String> {
+    use serde_json::Value;
+    let Ok(read) = serde_json::from_str::<Value>(value) else {
+        return Some(format!("{value} is not JSON"));
+    };
+    match (kind, &read) {
+        (AutomationCfgKind::TaskFilter, Value::Object(parts)) => taskfilter_misfit(parts, value),
+        (AutomationCfgKind::TaskFilter, _) => {
+            Some(format!("a task filter is answered with its parts, and {value} is not"))
+        }
+        (AutomationCfgKind::Number, Value::Number(n)) if n.as_i64().is_some_and(|n| n >= 0) => None,
+        (AutomationCfgKind::Number, _) => Some(format!("{value} is not a whole number of zero or more")),
+        (AutomationCfgKind::Choice, Value::String(one)) => {
+            let list = options.and_then(choices)?;
+            (!list.contains(one)).then(|| format!("'{one}' is not one of the choices {}", list.join(", ")))
+        }
+        (AutomationCfgKind::Folder | AutomationCfgKind::Text, Value::String(_)) => None,
+        (_, _) => Some(format!("a '{}' setting is answered with a string, and {value} is not one", kind.as_str())),
+    }
+}
+
+/// A task filter's parts: each a string or a list of strings, the order one `task list --sort` takes,
+/// and the whole a filter the grammar reads.
+fn taskfilter_misfit(parts: &serde_json::Map<String, serde_json::Value>, value: &str) -> Option<String> {
+    use crate::ops::automation_step::{taskfilter_expr, TASKFILTER_SORT_KEY};
+    for (key, part) in parts {
+        if key == TASKFILTER_SORT_KEY {
+            match part.as_str() {
+                Some(sort) if read::is_task_sort(sort) => continue,
+                _ => return Some(format!("{part} is not an order `task list --sort` takes")),
+            }
+        }
+        let strings = match part {
+            serde_json::Value::String(_) => true,
+            serde_json::Value::Array(many) => many.iter().all(serde_json::Value::is_string),
+            _ => false,
+        };
+        if !strings {
+            return Some(format!("the part '{key}' of a task filter is {part}, not a string or a list of them"));
+        }
+    }
+    let expr = taskfilter_expr(value).unwrap_or_default();
+    crate::query::Filter::parse(&expr, crate::time::today()).err().map(|e| e.to_string())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2052,20 +2132,31 @@ pub fn cfg_set(
     let placement = live_placement(tx, placement_id)?;
     not_under_a_run(tx, Def::Automation(placement.automation_id))?;
     let name = checked_name("setting", name)?;
-    if let Some(before) =
-        read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement.id, &name)?
-    {
-        filter_names_what_is_there(tx, before.kind, value)?;
+    let declared =
+        read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Action, placement.action_id, &name)?;
+    let answered =
+        read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement.id, &name)?;
+    // The declaration says what fits: the placement's row copied it at birth, and the declaration may
+    // have changed since.
+    let Some(declares) = declared.as_ref().or(answered.as_ref()) else {
+        return Err(Error::not_found(format!("no setting called '{name}' is declared here")));
+    };
+    if let Some(value) = value {
+        if let Some(why) = answer_misfit(declares.kind, declares.options.as_deref(), value) {
+            return Err(Error::invalid(format!("the setting '{name}' cannot take this answer: {why}")));
+        }
+    }
+    filter_names_what_is_there(tx, declares.kind, value)?;
+    if let Some(before) = answered {
         let mut after = before.clone();
         after.value = value.map(str::to_string);
         after.updated_at = Timestamp::now();
         emit_update(tx, record::automation_cfg(&before), record::automation_cfg(&after))?;
         return Ok(after);
     }
-    let declared =
-        read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Action, placement.action_id, &name)?
-            .ok_or_else(|| Error::not_found(format!("no setting called '{name}' is declared here")))?;
-    filter_names_what_is_there(tx, declared.kind, value)?;
+    let Some(declared) = declared else {
+        return Err(Error::not_found(format!("no setting called '{name}' is declared here")));
+    };
     write_cfg_row(
         tx,
         AutomationCfgOwner::Placement,
@@ -3612,6 +3703,62 @@ mod tests {
         });
     }
 
+    /// **An answer is refused when it is not what its kind takes** — the task filter answered with a
+    /// choice, which the take then read as no narrowing and took a person's task with (`AMB-T-5648`), a
+    /// number below zero or not whole, a choice that is not listed, a string that is not one.
+    #[test]
+    fn an_answer_its_kind_does_not_take_is_refused() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, placement) = mk_placed(tx, &automation, "取る");
+            cfg_add(tx, action.id, "受信箱", AutomationCfgKind::TaskFilter, false, None).expect("filter");
+            cfg_add(tx, action.id, "秒", AutomationCfgKind::Number, false, None).expect("number");
+            cfg_add(tx, action.id, "どれ", AutomationCfgKind::Choice, false, Some(r#"["a","b"]"#))
+                .expect("choice");
+            cfg_add(tx, action.id, "観点", AutomationCfgKind::Text, false, None).expect("text");
+            for (name, wrong) in [
+                ("受信箱", r#""x""#),
+                ("受信箱", "[]"),
+                ("受信箱", r#"{"priority":3}"#),
+                ("受信箱", r#"{"sort":"nowhere"}"#),
+                ("受信箱", r#"{"nosuch":["x"]}"#),
+                ("秒", "-5"),
+                ("秒", "1.5"),
+                ("秒", r#""5""#),
+                ("どれ", r#""c""#),
+                ("どれ", "1"),
+                ("観点", "7"),
+                ("観点", "not json"),
+            ] {
+                assert!(cfg_set(tx, placement.id, name, Some(wrong)).is_err(), "{name} took {wrong}");
+            }
+            for (name, right) in [
+                ("受信箱", r#"{"priority":["high"],"sort":"due"}"#),
+                ("秒", "0"),
+                ("どれ", r#""b""#),
+                ("観点", r#""速さ""#),
+            ] {
+                cfg_set(tx, placement.id, name, Some(right)).unwrap_or_else(|e| panic!("{name} {right}: {e}"));
+            }
+        });
+    }
+
+    /// **A choice list is a JSON array of distinct choices, at least one of them.**
+    #[test]
+    fn a_broken_list_of_choices_is_refused() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &automation, "取る");
+            for broken in ["notjson", "[]", r#"["a","a"]"#, r#"["a",""]"#, r#"["a",1]"#, r#""a""#] {
+                let refused = cfg_add(tx, action.id, "どれ", AutomationCfgKind::Choice, false, Some(broken));
+                assert!(refused.is_err(), "{broken}");
+            }
+            let cfg = cfg_add(tx, action.id, "どれ", AutomationCfgKind::Choice, false, Some(r#"["a","b"]"#))
+                .expect("a list that is one");
+            assert!(cfg_update(tx, cfg.id, None, None, None, Some(Some("[]"))).is_err(), "nor by an update");
+        });
+    }
+
     #[test]
     fn a_list_of_choices_belongs_to_a_choice() {
         with_tx(|tx| {
@@ -4167,7 +4314,7 @@ mod held_by_a_run {
         let wire = wire_add(tx, on, first.id, Some("found"), "note", second.id, "note").expect("wire");
         let cfg = cfg_add(tx, first_action.id, "depth", AutomationCfgKind::Text, false, None)
             .expect("setting");
-        cfg_set(tx, first.id, "depth", Some("shallow")).expect("answer");
+        cfg_set(tx, first.id, "depth", Some("\"shallow\"")).expect("answer");
         set_entry(tx, automation.id, Some(first.id)).expect("entry");
         Picture { automation, first_action, first, second_action, onward, wire, cfg }
     }
@@ -4220,7 +4367,7 @@ mod held_by_a_run {
         );
         held("reorder a placement", run, placement_move(tx, p.first.id, Position::Bottom));
         held("take a placement off", run, placement_delete(tx, p.first.id));
-        held("answer a setting", run, cfg_set(tx, p.first.id, "depth", Some("deep")));
+        held("answer a setting", run, cfg_set(tx, p.first.id, "depth", Some("\"deep\"")));
         held("rewrite an answer", run, cfg_update(tx, answer.id, None, None, Some(true), None));
         held("reorder an answer", run, cfg_move(tx, answer.id, Position::Top));
         held("take an answer off", run, cfg_delete(tx, answer.id));
@@ -4393,6 +4540,8 @@ mod held_by_a_run {
             "port_add",
             // Reads a picture handed to it and writes nothing.
             "lines_back",
+            // Reads an answer handed to it and writes nothing.
+            "answer_misfit",
         ];
         let mut forgot = Vec::new();
         for (at, _) in ops.match_indices("\npub fn ") {

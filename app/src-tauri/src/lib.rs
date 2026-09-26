@@ -127,6 +127,9 @@ mod agent_sessions;
 /// The doors the Viewer is worked through from the screen — the server in the reader's own Cloudflare
 /// account, the phone that may read it, and the carrying (`AMB-D-884`).
 mod viewer;
+/// The one thread the synchronous commands that touch the store run on, in the order the page sent
+/// them — so a read or a write no longer holds the screen still (`AMB-T-5682`).
+mod store_worker;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
 /// operating systems.
@@ -476,7 +479,9 @@ pub fn run() {
       }
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![
+    // Every synchronous command that touches the store is queued for one thread of its own, in the
+    // order it arrived; the rest go where they always went (`crate::store_worker`).
+    .invoke_handler(store_worker::route::<tauri::Wry>(tauri::generate_handler![
       commands::snapshot,
       automation::automation_page,
       automation::automation_page_everywhere,
@@ -802,7 +807,7 @@ pub fn run() {
       windows::talk_raise,
       quit::app_quit,
       quit::quit_written,
-    ])
+    ]))
     .build(context)
     .expect("error while building tauri application")
     // Built rather than run, so the loop's own events can be read. The one that is read is the close

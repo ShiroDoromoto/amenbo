@@ -293,21 +293,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.rm", "automation", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted automation: {id}"));
         }
-        AutomationCmd::EntrySet { id, placement, clear } => {
-            if placement.is_none() && !clear {
-                return Err(CliError {
-                    code: "invalid_value",
-                    message: "name the placement a run starts at with --placement, or --clear to leave none.".to_string(),
-                    hint: None,
-                    exit: 2,
-                });
-            }
-            let a = store.automation_set_entry(id, placement).map_err(CliError::from)?;
-            let line = match a.entry_placement_id {
-                Some(p) => format!("✓ Automation {} starts at placement {p}", a.id),
-                None => format!("✓ Automation {} starts nowhere", a.id),
-            };
-            write_envelope(flags, "automation.entry-set", "automation", serde_json::to_value(&a).unwrap(), Some(vec!["entry_placement_id".to_string()]), false, line);
+        AutomationCmd::EntryReplace { id, builtin } => {
+            let p = store.automation_entry_replace(id, &builtin).map_err(CliError::from)?;
+            let line = format!("✓ Automation {id} starts at the built-in '{builtin}' (placement {})", p.id);
+            write_envelope(flags, "automation.entry-replace", "automation_placement", serde_json::to_value(&p).unwrap(), Some(vec!["action_id".to_string()]), false, line);
         }
         AutomationCmd::PlaceAdd { automation, action, builtin, axis } => {
             // clap holds exactly one of the two: `--action` is required unless `--builtin` is given.

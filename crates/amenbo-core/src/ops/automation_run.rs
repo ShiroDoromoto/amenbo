@@ -67,7 +67,8 @@ pub enum Unmet {
     /// Nothing is placed on the automation at all. Nothing else is worth saying about it.
     NoSteps,
     /// No placement is named as the entry, so there is nowhere for a run to start and nothing is
-    /// reachable.
+    /// reachable. The first placement is the entry (`AMB-D-977`), so only a store written before that
+    /// holds one of these, and replacing the entry gives it one.
     NoEntry,
     /// An action standing on the picture has no step to open — none written yet, or none named as its
     /// entry. A run reaching that spot would have no terminal to put up.
@@ -117,14 +118,17 @@ impl Unmet {
     pub fn say(&self) -> String {
         match self {
             Unmet::NoSteps => "no action is placed on it".to_string(),
-            Unmet::NoEntry => "no placement is named as the entry".to_string(),
+            Unmet::NoEntry => {
+                "no placement is named as the entry — choose what a run starts at with `automation entry-replace`"
+                    .to_string()
+            }
             Unmet::ActionEmpty { action, .. } => {
                 format!("the action '{action}' placed on it has no step to start at")
             }
             Unmet::EntryTakesNoTask { step, .. } => {
                 format!(
-                    "the entry '{step}' takes no task — declare a task_take output on one of its ways out, \
-                     or start at a built-in that works before a task and go on from it to a step that takes one"
+                    "the entry '{step}' takes no task — draw every line out of it on to a step that takes one, \
+                     or change what a run starts at with `automation entry-replace`"
                 )
             }
             Unmet::OpenExit { step, exit, .. } => {
@@ -2593,7 +2597,7 @@ mod tests {
     #[test]
     fn a_run_goes_on_by_its_copies_whatever_the_picture_has_become() {
         with_tx(|tx| {
-            let (automation, first, onward) = two_spots(tx);
+            let (automation, _, onward) = two_spots(tx);
             let run = standing_between(tx, &automation);
             let waits_for = |tx: &WriteTx<'_>| match next_def(tx.conn(), run.id).expect("next") {
                 Waiting::Step(def) => def.name,
@@ -2605,15 +2609,14 @@ mod tests {
                 .expect("point it at an ending");
             assert_eq!(waits_for(tx), "読む", "the line it copied still leads on");
 
-            automation::past_the_guard(|| {
-                let (_, late) = mk_placed(tx, &automation, "直す", "fix it", "claude");
-                automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None)
-            })
-            .expect("point it at a new placement");
+            let (_, late) = automation::past_the_guard(|| mk_placed(tx, &automation, "直す", "fix it", "claude"));
+            automation::past_the_guard(|| automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None))
+                .expect("point it at a new placement");
             assert_eq!(waits_for(tx), "読む", "a placement added since is not in its copies");
 
             automation::past_the_guard(|| automation::edge_delete(tx, onward.id)).expect("delete the edge");
-            automation::past_the_guard(|| automation::placement_delete(tx, first.id))
+            // The entry comes off last (`AMB-D-977`), so the spot taken off is the one added since.
+            automation::past_the_guard(|| automation::placement_delete(tx, late.id))
                 .expect("take the placement off");
             assert_eq!(waits_for(tx), "読む", "nor is a line or a spot taken off");
         });

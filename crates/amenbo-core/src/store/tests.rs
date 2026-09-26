@@ -1523,6 +1523,8 @@ fn placing_an_action_writes_the_default_agent_onto_its_steps() {
             .map(|c| c.agent)
     };
 
+    // The first thing placed is the entry, a built-in (`AMB-D-977`); the action goes on after it.
+    s.automation_builtin_place(automation.id, "take_task", None).unwrap();
     let bare = s.automation_placement_add(automation.id, action.id).unwrap();
     assert_eq!(chosen(&s, bare.id), None, "nobody has answered, so nobody is chosen");
 
@@ -1564,6 +1566,9 @@ fn a_step_added_after_placing_is_given_the_default_agent_at_every_placement() {
     let action =
         s.automation_action_from_prompt(None, NewStep::new("調べる", "do it"), &[], &[]).unwrap();
     let first = action.entry_step_id.unwrap();
+    // The first thing placed is the entry, a built-in (`AMB-D-977`); the action goes on after it.
+    s.automation_builtin_place(here.id, "take_task", None).unwrap();
+    s.automation_builtin_place(there.id, "take_task", None).unwrap();
     let at_here = s.automation_placement_add(here.id, action.id).unwrap();
     let at_there = s.automation_placement_add(there.id, action.id).unwrap();
     let chosen = |s: &Store, placement: i64, step: i64| {

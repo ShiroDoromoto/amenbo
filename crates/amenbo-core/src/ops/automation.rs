@@ -46,7 +46,7 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
     AutomationWire, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, DONE_EXIT, ERROR_EXIT,
 };
-use crate::ops::{automation_view, emit_create, emit_update, place, Position};
+use crate::ops::{automation_builtin, automation_view, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -884,19 +884,17 @@ pub fn move_to(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automation> {
     Ok(after)
 }
 
-/// Name the placement a run opens first, or clear it with `None`.
-///
-/// The placement has to be one of this automation's. Whether the action standing there takes a task —
-/// the thing that actually makes it a usable entry — is the launch check's to ask: an automation is
-/// built in whatever order its author likes, and refusing the entry until the port exists would make
-/// the order the tool's to choose.
-pub fn set_entry(
+/// **Name any placement as the entry, for a test.** No op does this any more: the entry is the first
+/// thing put on a picture, one of the built-ins a run can start at, and it is changed by
+/// [`entry_replace`] (`AMB-D-977`). A store written before that can still name any placement — an
+/// action somebody wrote, taking a task itself — and the run side goes on answering for that shape;
+/// this is how its tests draw it.
+#[cfg(test)]
+pub(crate) fn set_entry(
     tx: &WriteTx<'_>,
     automation_id: i64,
     placement_id: Option<i64>,
 ) -> Result<Automation> {
-    let before = live_automation(tx, automation_id)?;
-    not_under_a_run(tx, Def::Automation(automation_id))?;
     if let Some(placement_id) = placement_id {
         let placement = live_placement(tx, placement_id)?;
         if placement.automation_id != automation_id {
@@ -906,11 +904,82 @@ pub fn set_entry(
             )));
         }
     }
+    name_entry(tx, automation_id, placement_id)
+}
+
+/// Write which placement a run opens first, `None` for none. What may be named is the callers' to ask.
+fn name_entry(tx: &WriteTx<'_>, automation_id: i64, placement_id: Option<i64>) -> Result<Automation> {
+    let before = live_automation(tx, automation_id)?;
+    not_under_a_run(tx, Def::Automation(automation_id))?;
     let mut after = before.clone();
     after.entry_placement_id = placement_id;
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     Ok(after)
+}
+
+/// **Change what a run starts at**, to another of the built-ins it can start at (`AMB-D-977`). `key` is
+/// the built-in's key ([`automation_builtin::entries`]).
+///
+/// The entry keeps its spot, and every line drawn to it stays: what changes is the action standing
+/// there. What belonged to the one it replaces goes with it — the lines out of its ways out, the
+/// wires to and from its ports, and the answers written for its settings — because the new one declares
+/// ways out, ports and settings of its own. The placements after it stay on the picture, for the reader
+/// to join up again.
+///
+/// **An automation with placements and no entry** — kept from a store written before the entry was
+/// the first placement — takes the built-in as a new placement, standing alone, and starts at it.
+/// There is no entry to replace, and no other road to one.
+///
+/// Refused on an automation with nothing on it: the first placement is where the entry is chosen
+/// ([`placement_add`]).
+pub fn entry_replace(tx: &WriteTx<'_>, automation_id: i64, key: &str) -> Result<AutomationPlacement> {
+    let automation = live_automation(tx, automation_id)?;
+    not_under_a_run(tx, Def::Automation(automation_id))?;
+    if !automation_builtin::starts_a_run(key) {
+        return Err(not_an_entry(key));
+    }
+    let Some(entry_id) = automation.entry_placement_id else {
+        if read::automation_placement_ids(tx.conn(), automation_id)?.is_empty() {
+            return Err(Error::invalid(
+                "nothing is placed on this automation yet — the first thing placed on it is what a run \
+                 starts at, so place the built-in instead",
+            ));
+        }
+        let action = automation_builtin::action(tx, key)?;
+        let placement = put_placement(tx, &automation, action.id)?;
+        name_entry(tx, automation_id, Some(placement.id))?;
+        return Ok(placement);
+    };
+    let before = live_placement(tx, entry_id)?;
+    let action = automation_builtin::action(tx, key)?;
+    if before.action_id == action.id {
+        return Ok(before);
+    }
+    let on = AutomationPictureOwner::Automation;
+    for wire in read::automation_wire_ids_naming_box(tx.conn(), on, entry_id)? {
+        tx.delete_record("automation_wire", wire)?;
+    }
+    for edge in read::automation_edges_from(tx.conn(), on, entry_id)? {
+        tx.delete_record("automation_edge", edge.id)?;
+    }
+    delete_cfgs(tx, AutomationCfgOwner::Placement, entry_id)?;
+    for chosen in read::automation_placement_step_ids(tx.conn(), entry_id)? {
+        tx.delete_record("automation_placement_step", chosen)?;
+    }
+    let mut after = before.clone();
+    after.action_id = action.id;
+    after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation_placement(&before), record::automation_placement(&after))?;
+    Ok(after)
+}
+
+/// The refusal of a built-in, or an action, that a run cannot start at — naming the ones it can.
+fn not_an_entry(what: &str) -> Error {
+    Error::invalid(format!(
+        "a run cannot start at {what} — it starts at one of the built-ins {}",
+        automation_builtin::entries().iter().map(|k| format!("'{k}'")).collect::<Vec<_>>().join(", ")
+    ))
 }
 
 /// Delete an automation and everything built onto it — wires, edges, and the placements with the
@@ -939,7 +1008,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     }
     // The entry is a reference into the placements that are about to go, so it is dropped before them.
     if automation.entry_placement_id.is_some() {
-        set_entry(tx, id, None)?;
+        name_entry(tx, id, None)?;
     }
     for placement in read::automation_placement_ids(tx.conn(), id)? {
         delete_placement_row(tx, placement)?;
@@ -994,6 +1063,11 @@ pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 /// The action has to be within reach of the automation's project: its own project's library, or the
 /// device's. Another project's is refused — the prompt would be read across a boundary that is there to
 /// keep one project's context out of another's.
+///
+/// **The first thing put on an automation is what a run starts at** (`AMB-D-977`): it has to be one of
+/// the built-ins a run can start at ([`automation_builtin::entries`]), and it is named the entry as it
+/// is put down. Any other is refused there, naming the ones there are — a run could not start at it, and
+/// the picture would only find out at launch.
 pub fn placement_add(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -1002,13 +1076,51 @@ pub fn placement_add(
     let automation = live_automation(tx, automation_id)?;
     not_under_a_run(tx, Def::Automation(automation_id))?;
     checked_action(tx, &automation, action_id)?;
-    let sibs = read::automation_placement_siblings(tx.conn(), automation_id, None)?;
+    if !read::automation_placement_ids(tx.conn(), automation_id)?.is_empty() {
+        return put_placement(tx, &automation, action_id);
+    }
+    let action = live_action(tx, action_id)?;
+    if !action.builtin.as_deref().is_some_and(automation_builtin::starts_a_run) {
+        let what = match &action.builtin {
+            Some(key) => format!("the built-in '{key}'"),
+            None => format!("action '{}'", action.name),
+        };
+        return Err(Error::invalid(format!(
+            "{} — nothing is placed on this automation yet, and what is placed first is where a run \
+             starts",
+            not_an_entry(&what)
+        )));
+    }
+    let placement = put_placement(tx, &automation, action_id)?;
+    name_entry(tx, automation_id, Some(placement.id))?;
+    Ok(placement)
+}
+
+/// **Put an action on an automation, for a test, whatever stands on it already.** [`placement_add`]
+/// refuses anything but a built-in a run can start at as the first placement (`AMB-D-977`); a store
+/// written before that can hold a picture that began with any action, and this is how the tests of
+/// the run side draw one.
+#[cfg(test)]
+pub(crate) fn placement_add_by_hand(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    action_id: i64,
+) -> Result<AutomationPlacement> {
+    let automation = live_automation(tx, automation_id)?;
+    checked_action(tx, &automation, action_id)?;
+    put_placement(tx, &automation, action_id)
+}
+
+/// Write one placement row at the bottom of an automation's list — what [`placement_add`] does once it
+/// has asked what it asks.
+fn put_placement(tx: &WriteTx<'_>, automation: &Automation, action_id: i64) -> Result<AutomationPlacement> {
+    let sibs = read::automation_placement_siblings(tx.conn(), automation.id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
     let now = Timestamp::now();
     let id = read::next_id(tx.conn(), "automation_placement")?;
     let placement = AutomationPlacement {
         id,
-        automation_id,
+        automation_id: automation.id,
         action_id,
         order_key,
         created_at: now,
@@ -1057,8 +1169,9 @@ impl ActionShelf {
 }
 
 /// **Make an empty action and put it on a picture**, standing on its own with no line reaching it —
-/// the press a build screen makes where the picture has no line to put one in on, which is every
-/// picture with nothing on it yet (`AMB-D-956`).
+/// the press a build screen makes where the picture has no line to put one in on (`AMB-D-956`). A
+/// picture with nothing on it yet refuses it: what is placed first is where a run starts, one of the
+/// built-ins ([`placement_add`], `AMB-D-977`).
 ///
 /// **What it takes is a name and a library, and nothing else.** The inside of an action is its steps,
 /// and each step carries its own prompt, ways out and outputs — so it is built on the action's own
@@ -1127,16 +1240,26 @@ pub fn placement_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automa
 /// Take a placement off its automation, with the answers written on it and every edge and wire
 /// naming it at either end. The action it stood on is untouched.
 ///
-/// **Taking the entry off clears it.** An automation under construction has to be able to lose any
-/// placement, and refusing here would strand whichever one was named the entry first.
+/// **The entry comes off last** (`AMB-D-977`). While anything else is on the picture it is refused —
+/// a picture with no entry has nowhere to start, and nothing but a first placement names one — and
+/// [`entry_replace`] is the way to change it. Taken off alone, it leaves the picture empty, and the
+/// next thing placed is the entry again.
 pub fn placement_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let placement = live_placement(tx, id)?;
     not_under_a_run(tx, Def::Automation(placement.automation_id))?;
     let automation = live_automation(tx, placement.automation_id)?;
-    // `entry_placement_id` is `RESTRICT`, and that check bites at the statement rather than at the
-    // commit — so the reference is dropped before the row it names, not after.
     if automation.entry_placement_id == Some(id) {
-        set_entry(tx, automation.id, None)?;
+        let others = read::automation_placement_ids(tx.conn(), automation.id)?.len() - 1;
+        if others > 0 {
+            return Err(Error::invalid(format!(
+                "placement '{id}' is where a run of this automation starts, and {others} other \
+                 placement(s) are still on it — take those off first, or change what it starts at with \
+                 `automation entry-replace`"
+            )));
+        }
+        // `entry_placement_id` is `RESTRICT`, and that check bites at the statement rather than at the
+        // commit — so the reference is dropped before the row it names, not after.
+        name_entry(tx, automation.id, None)?;
     }
     delete_placement_row(tx, id)
 }
@@ -2515,7 +2638,7 @@ mod tests {
             &[],
         )
         .expect("write the action");
-        let placement = placement_add(tx, automation.id, action.id).expect("place it");
+        let placement = placement_add_by_hand(tx, automation.id, action.id).expect("place it");
         (action, placement)
     }
 
@@ -2787,6 +2910,7 @@ mod tests {
     fn an_action_made_at_the_picture_lands_on_the_library_it_was_told_to() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
+            entry_placed(tx, &automation, "take_task");
 
             let mine = placement_add_new(tx, automation.id, ActionShelf::Project, "下ごしらえ")
                 .expect("make it on the project's shelf");
@@ -3500,6 +3624,7 @@ mod tests {
             let shared = action_add(tx, None, "共有", "").expect("add action");
             let other_project = mk_project(tx, "別の企画");
             let theirs = action_add(tx, Some(other_project), "他所", "").expect("add action");
+            entry_placed(tx, &automation, "take_task");
             placement_add(tx, automation.id, mine.id).expect("mine");
             placement_add(tx, automation.id, shared.id).expect("shared");
             assert!(
@@ -3509,32 +3634,134 @@ mod tests {
         });
     }
 
+    /// The built-in of `key`, placed on an automation with nothing on it — which makes it the entry.
+    fn entry_placed(tx: &WriteTx<'_>, automation: &Automation, key: &str) -> AutomationPlacement {
+        let action = automation_builtin::action(tx, key).expect("the built-in's action");
+        placement_add(tx, automation.id, action.id).expect("place the entry")
+    }
+
+    /// **The first placement is the entry, and only a built-in a run can start at is one**
+    /// (`AMB-D-977`). Anything else is refused there, naming the ones there are; once the entry
+    /// stands, any action goes on after it.
     #[test]
-    fn taking_a_placement_off_clears_the_entry_and_takes_the_edges_naming_it() {
+    fn the_first_placement_is_the_entry_and_one_of_the_built_ins_a_run_starts_at() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            let (_, one) = mk_placed(tx, &automation, "取る");
-            let (_, two) = mk_placed(tx, &automation, "実装する");
-            set_entry(tx, automation.id, Some(one.id)).expect("name the entry");
-            edge_add(
+            let written = action_add(tx, Some(automation.project_id), "調べる", "").expect("add action");
+            let refused = placement_add(tx, automation.id, written.id).expect_err("not a start");
+            for key in automation_builtin::entries() {
+                assert!(refused.to_string().contains(key), "{refused}");
+            }
+            let close = automation_builtin::action(tx, "close_task").expect("built-in");
+            assert!(placement_add(tx, automation.id, close.id).is_err(), "a built-in a run does not start at");
+            assert!(
+                placement_add_new(tx, automation.id, ActionShelf::Project, "新しい").is_err(),
+                "an action made at an empty picture is not one a run starts at",
+            );
+            assert!(read::automation_placement_ids(tx.conn(), automation.id).unwrap().is_empty());
+
+            for key in automation_builtin::entries() {
+                let other = add(tx, automation.project_id, NewAutomation { name: (*key).into(), ..Default::default() })
+                    .expect("add automation");
+                let entry = entry_placed(tx, &other, key);
+                assert_eq!(live_automation(tx, other.id).unwrap().entry_placement_id, Some(entry.id));
+            }
+
+            let entry = entry_placed(tx, &automation, "fetch");
+            let after = placement_add(tx, automation.id, written.id).expect("anything goes on after it");
+            let automation = live_automation(tx, automation.id).unwrap();
+            assert_eq!(automation.entry_placement_id, Some(entry.id), "the second is not the entry");
+            assert_ne!(after.id, entry.id);
+        });
+    }
+
+    /// **The entry comes off last** (`AMB-D-977`): refused while anything else is on the picture,
+    /// and taken off alone it leaves the picture empty, the next placement being the entry again.
+    #[test]
+    fn the_entry_comes_off_last() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let one = entry_placed(tx, &automation, "take_task");
+            let written = action_add(tx, Some(automation.project_id), "実装する", "").expect("add action");
+            let two = placement_add(tx, automation.id, written.id).expect("place");
+            edge_add(tx, AutomationPictureOwner::Automation, one.id, Some("着手した"), EdgeTarget::Go(two.id), None)
+                .expect("add edge");
+            let refused = placement_delete(tx, one.id).expect_err("others are on it");
+            assert!(refused.to_string().contains("entry-replace"), "{refused}");
+
+            placement_delete(tx, two.id).expect("take the other off");
+            assert!(read::automation_edge_ids(tx.conn(), AutomationPictureOwner::Automation, automation.id)
+                .unwrap()
+                .is_empty());
+            placement_delete(tx, one.id).expect("the entry alone comes off");
+            assert_eq!(live_automation(tx, automation.id).unwrap().entry_placement_id, None);
+            assert!(read::automation_placement_ids(tx.conn(), automation.id).unwrap().is_empty());
+            let again = entry_placed(tx, &automation, "make_task");
+            assert_eq!(live_automation(tx, automation.id).unwrap().entry_placement_id, Some(again.id));
+        });
+    }
+
+    /// **Replacing the entry keeps its spot and what comes after it** (`AMB-D-977`): the lines out
+    /// of the old one's ways out, its wires and its answers go; the lines to it and the placements
+    /// after it stay.
+    #[test]
+    fn replacing_the_entry_keeps_its_spot_and_drops_what_the_old_one_declared() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let on = AutomationPictureOwner::Automation;
+            let entry = entry_placed(tx, &automation, "fetch");
+            let after_action = action_from_prompt(
                 tx,
-                AutomationPictureOwner::Automation,
-                one.id,
-                None,
-                EdgeTarget::Go(two.id),
-                None,
+                Some(automation.project_id),
+                NewStep::new("読む", "read it"),
+                &[],
+                &[],
             )
-            .expect("add edge");
-            placement_delete(tx, one.id).expect("take it off");
-            let after = live_automation(tx, automation.id).expect("read it back");
-            assert_eq!(after.entry_placement_id, None);
-            assert!(read::automation_edge_ids(
-                tx.conn(),
-                AutomationPictureOwner::Automation,
-                automation.id
-            )
-            .expect("read")
-            .is_empty());
+            .expect("write the action");
+            let after = placement_add(tx, automation.id, after_action.id).expect("place");
+            crate::ops::test_support::mk_in(tx, &after_action, "中身", AutomationPortKind::Value, false);
+            edge_add(tx, on, entry.id, Some("取ってきた"), EdgeTarget::Go(after.id), None).expect("out");
+            wire_add(tx, on, entry.id, Some("取ってきた"), "中身", after.id, "中身").expect("wire");
+            edge_add(tx, on, after.id, None, EdgeTarget::Go(entry.id), None).expect("back to the entry");
+            cfg_set(tx, entry.id, "形式", Some("\"URL\"")).expect("answer");
+
+            let replaced = entry_replace(tx, automation.id, "take_task").expect("replace");
+            assert_eq!(replaced.id, entry.id, "the spot is kept");
+            let take = automation_builtin::action(tx, "take_task").expect("built-in");
+            assert_eq!(live_placement(tx, entry.id).unwrap().action_id, take.id);
+            assert_eq!(live_automation(tx, automation.id).unwrap().entry_placement_id, Some(entry.id));
+            assert!(read::automation_edges_from(tx.conn(), on, entry.id).unwrap().is_empty(), "lines out go");
+            assert!(read::automation_wire_ids_naming_box(tx.conn(), on, entry.id).unwrap().is_empty(), "wires go");
+            assert!(
+                read::automation_cfg_ids(tx.conn(), AutomationCfgOwner::Placement, entry.id).unwrap().is_empty(),
+                "the old one's answers go",
+            );
+            assert_eq!(
+                read::automation_edges_from(tx.conn(), on, after.id).unwrap().len(),
+                1,
+                "the line to the entry stays",
+            );
+            assert!(read::automation_placement(tx.conn(), after.id).unwrap().is_some(), "what comes after stays");
+
+            assert!(entry_replace(tx, automation.id, "close_task").is_err(), "not one a run starts at");
+            assert!(entry_replace(tx, automation.id, "no_such").is_err());
+            let empty = add(tx, automation.project_id, NewAutomation { name: "空".into(), ..Default::default() })
+                .expect("add automation");
+            assert!(entry_replace(tx, empty.id, "take_task").is_err(), "the first placement chooses it");
+        });
+    }
+
+    /// **A picture kept with placements and no entry takes one by replacing** — the built-in is put
+    /// down on its own and named the entry, since nothing else names one any more.
+    #[test]
+    fn a_picture_with_no_entry_takes_one_by_replacing() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, kept) = mk_placed(tx, &automation, "取る");
+            let placed = entry_replace(tx, automation.id, "make_task").expect("replace");
+            assert_ne!(placed.id, kept.id);
+            assert_eq!(live_automation(tx, automation.id).unwrap().entry_placement_id, Some(placed.id));
+            assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).unwrap().len(), 2);
         });
     }
 
@@ -3587,18 +3814,6 @@ mod tests {
             assert_eq!(live_action(tx, action.id).unwrap().entry_step_id, Some(third.id));
             step_delete(tx, second.id).expect("delete a step that is not the entry");
             assert_eq!(live_action(tx, action.id).unwrap().entry_step_id, Some(third.id));
-        });
-    }
-
-    #[test]
-    fn the_entry_is_a_placement_of_this_automation() {
-        with_tx(|tx| {
-            let here = mk_automation(tx);
-            let there =
-                add(tx, here.project_id, NewAutomation { name: "別".into(), ..Default::default() })
-                    .expect("add automation");
-            let (_, elsewhere) = mk_placed(tx, &there, "実装する");
-            assert!(set_entry(tx, here.id, Some(elsewhere.id)).is_err());
         });
     }
 
@@ -3928,7 +4143,7 @@ mod held_by_a_run {
         // The automation's picture.
         held("rename", run, update(tx, p.automation.id, Some("別名"), None, None));
         held("archive", run, update(tx, p.automation.id, None, None, Some(true)));
-        held("entry", run, set_entry(tx, p.automation.id, None));
+        held("entry", run, entry_replace(tx, p.automation.id, "fetch"));
         held("delete", run, delete(tx, p.automation.id));
         held("place", run, placement_add(tx, p.automation.id, p.second_action.id));
         held("place new", run, placement_add_new(tx, p.automation.id, ActionShelf::Project, "新しい"));
@@ -4074,7 +4289,7 @@ mod held_by_a_run {
             let elsewhere = mk_project(tx, "other");
             let theirs = add(tx, elsewhere, NewAutomation { name: "よそ".into(), ..Default::default() })
                 .expect("add");
-            let placed = placement_add(tx, theirs.id, p.second_action.id).expect("placed there too");
+            let placed = placement_add_by_hand(tx, theirs.id, p.second_action.id).expect("placed there too");
             let step = only_step(tx, &p.second_action);
             placement_step_set(tx, placed.id, step.id, "claude", None).expect("chosen there too");
             edge_add(tx, AutomationPictureOwner::Automation, placed.id, None, EdgeTarget::Done, None)

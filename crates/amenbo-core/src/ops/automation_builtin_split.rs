@@ -297,7 +297,7 @@ mod tests {
             let automation =
                 automation::add(tx, project, NewAutomation { name: "split".into(), ..Default::default() })
                     .expect("automation");
-            let placed = automation::placement_add(tx, automation.id, split.id).expect("place");
+            let placed = automation::placement_add_by_hand(tx, automation.id, split.id).expect("place");
             let on = AutomationPictureOwner::Automation;
             let line = automation::edge_add(tx, on, placed.id, Some("技術"), EdgeTarget::Done, None).expect("line");
 

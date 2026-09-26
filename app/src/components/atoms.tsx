@@ -62,6 +62,16 @@ export function identiconSeed(actor: Actor) {
   return actor.kind;
 }
 
+/**
+ * **A facet as a reader knows it** — the roster's name and face for `human` or `ai`, falling back to
+ * the facet's own word before the roster has loaded. For a stamp that says which facet did something
+ * and carries nothing more about who (`AMB-D-788`, `AMB-D-989`).
+ */
+export function facetActor(kind: "human" | "ai"): Actor {
+  return getSnapshot().roster.find((a) => a.kind === kind)
+    ?? { name: t(kind === "ai" ? "facet.ai" : "facet.human"), kind };
+}
+
 // The avatar is the facet's registered image (config human_avatar / ai_avatar) when set,
 // otherwise a deterministic identicon seeded per facet so human and AI read as distinct
 // without any upload, server, or badge. The facet is conveyed by the ring colour

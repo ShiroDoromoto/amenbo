@@ -39,6 +39,13 @@ describe("the row over a run's pane no step has arrived in", () => {
     expect(say.state?.status).toBe("failed");
     expect(say.state?.why).not.toBeNull();
     expect(say.state?.acknowledged).toBe(false);
+    expect(say.state?.acknowledgedBy).toBeUndefined();
+  });
+
+  it("carries who acknowledged a failure, a person or their AI", () => {
+    const say = runSayOf(card({ acknowledged: true, acknowledgedBy: "ai" }))!;
+    expect(say.state?.acknowledged).toBe(true);
+    expect(say.state?.acknowledgedBy).toBe("ai");
   });
 
   it("says a held run as held", () => {

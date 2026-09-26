@@ -1181,6 +1181,7 @@ export const th: Translation = {
     "auto.run.failed": "ล้มเหลว",
     "auto.run.canceled": "ยกเลิก",
     "auto.run.acknowledge": "รับทราบแล้ว",
+    "auto.run.seenBy": "รับทราบโดย",
     "auto.run.seePicture": "ดูในแผนภาพ",
     "auto.run.seeHistory": "ดูในประวัติ",
     "auto.run.seeRunning": "ดูในกำลังทำงาน",

@@ -7,7 +7,8 @@
 // goes back to the first page**, since the page a reader was on counted rows of another list; and
 // **a long history is still one row of numbers**, the far pages folded behind an ellipsis; and **a run
 // with a step whose report was kept off a closed task is marked on its row**, the steps named in the
-// mark's title, while every other row carries no mark (`AMB-D-963`).
+// mark's title, while every other row carries no mark (`AMB-D-963`); and **a failure somebody
+// acknowledged says who** — a person or their AI, since either may (`AMB-D-989`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,6 +22,8 @@ const hoisted = vi.hoisted(() => ({
   byEnding: { completed: 0, failed: 0, canceled: 0 },
   /** The steps the newest run kept its report back from. */
   withheld: [] as string[],
+  /** Who acknowledged the newest run, which fails when anyone did. */
+  seenBy: null as "human" | "ai" | null,
 }));
 
 vi.mock("../core/automations", () => ({
@@ -54,6 +57,9 @@ function run(id: number): AutomationRunCardDto {
     reportWithheld: id === 1000 ? hoisted.withheld : [],
     acknowledged: false,
     endedAt: "2026-09-23T00:00:00Z",
+    ...(id === 1000 && hoisted.seenBy !== null
+      ? { status: "failed", stoppedReason: "halted", acknowledged: true, acknowledgedBy: hoisted.seenBy }
+      : {}),
   };
 }
 
@@ -94,6 +100,7 @@ beforeEach(() => {
   hoisted.total = 45;
   hoisted.byEnding = { completed: 40, failed: 0, canceled: 5 };
   hoisted.withheld = [];
+  hoisted.seenBy = null;
 });
 
 afterEach(() => {
@@ -139,6 +146,16 @@ describe("the history tab", () => {
     expect(marks[0]!.getAttribute("title")).toBe(
       tf("auto.run.reportWithheld", { steps: listLabel(["Review", "Merge"]) }),
     );
+  });
+
+  it("says who acknowledged a failure, and nothing on a run nobody had to", async () => {
+    hoisted.seenBy = "ai";
+    await render();
+    const seen = container.querySelectorAll(".autorun__seen");
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.closest(".autorun")).toBe(container.querySelector(".autorun"));
+    expect(seen[0]!.textContent).toContain(t("auto.run.seenBy"));
+    expect(seen[0]!.textContent).toContain(t("facet.ai"));
   });
 
   // How many each narrowing would show is on its chip, so an ending nothing has come to reads 0

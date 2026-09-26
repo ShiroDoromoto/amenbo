@@ -1192,6 +1192,7 @@ export const it: Translation = {
     "auto.run.failed": "Fallita",
     "auto.run.canceled": "Annullata",
     "auto.run.acknowledge": "Visto",
+    "auto.run.seenBy": "Visto da",
     "auto.run.seePicture": "Vedi nello schema",
     "auto.run.seeHistory": "Vedi nella cronologia",
     "auto.run.seeRunning": "Vedi in «In esecuzione»",

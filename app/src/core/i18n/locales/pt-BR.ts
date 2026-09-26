@@ -1193,6 +1193,7 @@ export const ptBR: Translation = {
     "auto.run.failed": "Falhou",
     "auto.run.canceled": "Cancelada",
     "auto.run.acknowledge": "Visto",
+    "auto.run.seenBy": "Visto por",
     "auto.run.seePicture": "Ver no diagrama",
     "auto.run.seeHistory": "Ver no histórico",
     "auto.run.seeRunning": "Ver em “Em execução”",

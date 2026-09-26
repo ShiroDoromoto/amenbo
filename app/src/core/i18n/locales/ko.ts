@@ -1177,6 +1177,7 @@ export const ko: Translation = {
     "auto.run.failed": "실패",
     "auto.run.canceled": "중지",
     "auto.run.acknowledge": "확인함",
+    "auto.run.seenBy": "확인:",
     "auto.run.seePicture": "그림에서 보기",
     "auto.run.seeHistory": "기록에서 보기",
     "auto.run.seeRunning": "실행 중에서 보기",

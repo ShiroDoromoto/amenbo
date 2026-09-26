@@ -410,11 +410,16 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     });
     expect(hoisted.acknowledged).toEqual([7]);
 
-    // Once seen, the band stays to say why, with nothing left to press.
-    hoisted.cards = [runCard({ status: "failed", stoppedReason: "halted", exitName: "*", acknowledged: true })];
+    // Once seen, the band stays to say why, with nothing left to press — and says who saw it, a
+    // person or their AI (`AMB-D-989`).
+    hoisted.cards = [runCard({
+      status: "failed", stoppedReason: "halted", exitName: "*", acknowledged: true, acknowledgedBy: "human",
+    })];
     await arrive();
     expect(q(".slot__band")).toHaveLength(1);
     expect(q(".slot__bandact")).toHaveLength(0);
+    expect(q(".slot__band-seen")[0]?.textContent).toContain(t("auto.run.seenBy"));
+    expect(q(".slot__band-seen")[0]?.textContent).toContain(t("facet.human"));
   });
 
   it("goes to the picture from a failed run's band, and to the history once any run is over (AMB-T-5539)", async () => {

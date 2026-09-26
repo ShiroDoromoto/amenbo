@@ -1182,6 +1182,7 @@ export const zhHans: Translation = {
     "auto.run.failed": "失败",
     "auto.run.canceled": "已取消",
     "auto.run.acknowledge": "已确认",
+    "auto.run.seenBy": "确认人",
     "auto.run.seePicture": "在图中查看",
     "auto.run.seeHistory": "在历史中查看",
     "auto.run.seeRunning": "在运行中查看",

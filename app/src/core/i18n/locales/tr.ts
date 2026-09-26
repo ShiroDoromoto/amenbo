@@ -1180,6 +1180,7 @@ export const tr: Translation = {
     "auto.run.failed": "Başarısız",
     "auto.run.canceled": "İptal edildi",
     "auto.run.acknowledge": "Görüldü",
+    "auto.run.seenBy": "Gören:",
     "auto.run.seePicture": "Şemada gör",
     "auto.run.seeHistory": "Geçmişte gör",
     "auto.run.seeRunning": "Çalışıyor sekmesinde gör",

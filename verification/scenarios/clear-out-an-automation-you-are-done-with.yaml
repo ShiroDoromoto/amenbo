@@ -7,7 +7,7 @@
 id: clear-out-an-automation-you-are-done-with
 title: An automation can be renamed, put out of the way, and finally deleted with everything built into it
 description: >
-  Build a definition with an action placed on it, correct its name, put it out of the way and read
+  Build a definition with an action placed on it after the built-in it starts at, correct its name, put it out of the way and read
   the row back — still listed, and marked — then delete it and read the list back with nothing in
   it. The archived reading is the half worth walking twice: a build that dropped the row instead of
   marking it would leave a reader unable to tell what they shelved from what they threw away, and
@@ -18,18 +18,22 @@ given:
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the moring sweep" }, as: sweep }
   - { type: action, domain: automation, op: action-add, with: { name: sweep }, as: sweep_action }
   - { type: action, domain: automation, op: step-add, with: { target: sweep_action, name: read, prompt: read what came in overnight }, as: step_read }
-  - { type: action, domain: automation, op: place-add, with: { target: sweep, action: sweep_action } }
+  # A picture starts at a built-in a run can start at, so the action goes on after the one that takes
+  # a task, on the line leaving it by the way out for having taken one.
+  - { type: action, domain: automation, op: place-add, with: { target: sweep, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: sweep, action: sweep_action }, as: at_sweep }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_sweep } }
 
 steps_cli:
   # What the row says before anything is written on it: the name it was built under, misspelling and
-  # all, and the one action placed on it.
+  # all, and the two placed on it.
   - type: assert
     domain: automation
     op: listed
     with:
       target: sweep
       name: "SCENARIO SEED — the moring sweep"
-      placements: 1
+      placements: 2
       archived: false
 
   - type: action
@@ -54,7 +58,7 @@ steps_cli:
     with:
       target: sweep
       name: "SCENARIO SEED — the morning sweep"
-      placements: 1
+      placements: 2
       archived: true
 
   - type: action
@@ -84,7 +88,7 @@ steps_gui:
     op: listed
     with:
       target: sweep
-      placements: 1
+      placements: 2
       archived: false
 
   # The three fields are written on the build screen, which is where the definition is opened to.
@@ -129,7 +133,7 @@ steps_gui:
     op: listed
     with:
       target: sweep
-      placements: 1
+      placements: 2
       archived: true
 
   # The delete is on the build screen rather than on the row, so the road goes back in for it — and

@@ -28,7 +28,12 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
   - { type: action, domain: automation, op: exit-add, with: { action: draft, name: drafted } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one a built-in goes on" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, action: draft } }
+  # The picture starts at a built-in a run can start at, and the library action goes on after it. The
+  # start is the one that files a task, not the one the road reads, so the count read below is the
+  # road's placement alone.
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: make_task }, as: at_make }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: draft }, as: at_draft }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_make, exit: 起票した, to: at_draft } }
 
 steps_gui:
   # Before anything places it: the built-in is on the library's list, and opens to be read.

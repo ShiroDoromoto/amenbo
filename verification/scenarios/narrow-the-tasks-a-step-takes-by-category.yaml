@@ -9,7 +9,7 @@
 id: narrow-the-tasks-a-step-takes-by-category
 title: A task filter is answered with a value on each of two categories, and a value that is not there is refused
 description: >
-  Stand up an automation whose one placement takes a task through a task filter, and two categories
+  Stand up an automation with a placement that takes a task through a task filter, and two categories
   with a value each. From a terminal the filter is answered with one value on each category and read
   back whole. Answering it with a value the category does not hold is refused on the spot, and the
   answer already written stays as it was. On the screen each category is a row under the filter, its
@@ -26,7 +26,12 @@ given:
   - { type: action, domain: automation, op: cfg-add, with: { action: take, name: which, kind: taskfilter, required: true } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — tasks by category" }, as: auto }
+  # A picture starts at a built-in a run can start at, so the action answering the filter goes on
+  # after the one that takes a task. That built-in's own filter needs no answer, so the only setting
+  # the launch check names is the action's.
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
 
 steps_cli:
   # One value on each of two categories.

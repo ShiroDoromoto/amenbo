@@ -444,6 +444,13 @@ const REGISTRY: &[OpSpec] = &[
     // above like every other.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create-in-pane", required: &["title", "shows"], refs: &[], strings: &["title", "shows"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], refs: &["target"], strings: &["assignee"], binds: false },
+    // A value something other than the road writes, waited for. A run waiting for a task looks again
+    // only every so often, so a task handed to the AI is reserved some seconds after the hand-over and
+    // not at it: the `field` assert right after the move would read the task before the run had looked.
+    // `seconds` is how long the road gives it, and the wait ends as soon as the value is there. It is an
+    // action and not an assert, since it proves nothing — a value that never comes is left for the
+    // `field` assert behind it to read.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "wait-field", required: &["target", "field", "equals", "seconds"], refs: &["target"], strings: &["field"], binds: false },
     // Posting binds the comment, since editing, removing and promoting one all name it afterwards.
     // `mentions` names a record whose **number** is written into the text, after the words the step
     // wrote. It is a key rather than something a road spells out because the store issues the number:

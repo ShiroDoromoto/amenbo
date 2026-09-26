@@ -911,12 +911,12 @@ export const hi: Translation = {
     "auto.newFirst": "अपना पहला ऑटोमेशन बनाएँ",
     "auto.archivedFold": "संग्रहीत {count}",
     "auto.archived": "संग्रहित",
-    "auto.stepCount": "{count} रखाव",
+    "auto.stepCount": "{count} प्लेसमेंट",
     "auto.id": "ID {id}",
     "auto.build.back": "सूची पर वापस",
     "auto.build.picture": "बनावट",
     "auto.build.edit": "संपादित करें",
-    "auto.build.step": "रखाव में क्या है",
+    "auto.build.step": "प्लेसमेंट में क्या है",
     "auto.place.open": "ऐक्शन की बिल्ड स्क्रीन खोलें",
     "auto.place.empty": "यह अभी खाली है। बनने तक इसे शुरू नहीं किया जा सकता।",
     "auto.place.agents": "एजेंट",
@@ -962,7 +962,7 @@ export const hi: Translation = {
     "auto.lockMark": "यहाँ नहीं बदला जा सकता",
     "auto.lib.make": "नया बनाकर रखें",
     "auto.make.go": "बनाएँ और ऐक्शन खोलें",
-    "auto.step.none": "चित्र में किसी रखाव को दबाएँ, उसकी सामग्री यहाँ दिखेगी।",
+    "auto.step.none": "चित्र में किसी प्लेसमेंट को दबाएँ, उसकी सामग्री यहाँ दिखेगी।",
     "auto.step.name": "नाम",
     "auto.step.entryReplaceConfirm": "इससे बदलेगा कि रन कहाँ से शुरू होता है। मौजूदा शुरुआत से निकलने वाले “इसके बाद क्या होता है” और हस्तांतरण हट जाएँगे। उसके बाद के प्लेसमेंट बने रहेंगे; उन्हें “इसके बाद क्या होता है” में फिर से जोड़ें।",
     "auto.step.next": "इसके बाद क्या होता है",
@@ -1162,7 +1162,7 @@ export const hi: Translation = {
     "auto.about.notesHint": "सूची में दिखने वाली एक पंक्ति",
     "auto.about.archive": "संग्रहित",
     "auto.about.remove": "यह ऑटोमेशन हटाएँ",
-    "auto.about.removeConfirm": "यह ऑटोमेशन हटाएँ? इसके रखाव, हर एक के बाद क्या होता है, और उनके बीच के हस्तांतरण साथ चले जाएँगे। रखे गए ऐक्शन लाइब्रेरी में बने रहेंगे। इसे वापस नहीं लाया जा सकता।",
+    "auto.about.removeConfirm": "यह ऑटोमेशन हटाएँ? इसके प्लेसमेंट, हर एक के बाद क्या होता है, और उनके बीच के हस्तांतरण साथ चले जाएँगे। रखे गए ऐक्शन लाइब्रेरी में बने रहेंगे। इसे वापस नहीं लाया जा सकता।",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

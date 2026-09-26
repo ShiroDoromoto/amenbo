@@ -1763,6 +1763,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_unanswered_cfg: "{step}: the required setting “{cfg}” is unanswered",
   not_ready_automation_misanswered_cfg: "{step}: the setting “{cfg}” is answered with something it does not take",
   not_ready_automation_cfg_not_found: "{step}: the setting “{cfg}” names “{line}”, which this project does not have",
+  not_ready_automation_cfg_value_closed: "{step}: the setting “{cfg}” names “{line}”, a value that is closed",
   not_ready_automation_agent_unchosen: "{step}: no agent is chosen",
   not_ready_automation_agent_missing: "{step}: this machine cannot start “{agent}”",
   // Said of the model rather than of the agent, which the step's own row already names. Only ever

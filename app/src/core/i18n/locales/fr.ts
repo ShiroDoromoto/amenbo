@@ -1491,6 +1491,7 @@ export const fr: Translation = {
     not_ready_automation_unanswered_cfg: "{step} : le réglage obligatoire « {cfg} » est sans réponse",
     not_ready_automation_misanswered_cfg: "{step} : la réponse au réglage « {cfg} » ne correspond pas à son type",
     not_ready_automation_cfg_not_found: "{step} : le réglage « {cfg} » nomme « {line} », que ce projet n’a pas",
+    not_ready_automation_cfg_value_closed: "{step} : le réglage « {cfg} » nomme « {line} », une valeur fermée",
     not_ready_automation_agent_unchosen: "{step} : aucun agent n’est choisi",
     not_ready_automation_agent_missing: "{step} : cette machine ne peut pas lancer « {agent} »",
     not_ready_automation_model_missing: "{step} : son agent ici ne propose pas le modèle « {model} »",

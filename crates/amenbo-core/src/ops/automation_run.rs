@@ -95,6 +95,10 @@ pub enum Unmet {
     /// the line of it that does (`AMB-D-987`): a task or a decision by a number, a folder, an axis or a
     /// value. The built-in would refuse it when a run reached it and halt the run there.
     CfgNotFound { step: String, cfg: String, line: String, builtin: Option<String>, placement: i64 },
+    /// A setting whose answer names a value this automation's project has but has closed — `line` being
+    /// the line of it that does (`AMB-D-987`). The built-in files no task under a closed value, and would
+    /// halt the run there.
+    CfgValueClosed { step: String, cfg: String, line: String, builtin: Option<String>, placement: i64 },
     /// A step nobody has been chosen to carry out where its action is placed (`AMB-D-960`). A pane
     /// opened on it would have no agent to start.
     AgentUnchosen { step: String, placement: i64 },
@@ -170,6 +174,9 @@ impl Unmet {
             Unmet::CfgNotFound { step, cfg, line, .. } => {
                 format!("the setting '{cfg}' of '{step}' names '{line}', which this project does not have")
             }
+            Unmet::CfgValueClosed { step, cfg, line, .. } => {
+                format!("the setting '{cfg}' of '{step}' names '{line}', a value that is closed")
+            }
             Unmet::AgentUnchosen { step, .. } => {
                 format!("nobody is chosen to carry out '{step}' where its action is placed")
             }
@@ -224,6 +231,7 @@ impl Unmet {
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
             Unmet::MisansweredCfg { .. } => ErrorCode::NotReadyAutomationMisansweredCfg,
             Unmet::CfgNotFound { .. } => ErrorCode::NotReadyAutomationCfgNotFound,
+            Unmet::CfgValueClosed { .. } => ErrorCode::NotReadyAutomationCfgValueClosed,
             Unmet::AgentUnchosen { .. } => ErrorCode::NotReadyAutomationAgentUnchosen,
             Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
             Unmet::ModelMissing { .. } => ErrorCode::NotReadyAutomationModelMissing,
@@ -259,7 +267,7 @@ impl Unmet {
             Unmet::UnansweredCfg { step, cfg, .. } | Unmet::MisansweredCfg { step, cfg, .. } => {
                 msg.with("step", step).with("cfg", cfg)
             }
-            Unmet::CfgNotFound { step, cfg, line, .. } => {
+            Unmet::CfgNotFound { step, cfg, line, .. } | Unmet::CfgValueClosed { step, cfg, line, .. } => {
                 msg.with("step", step).with("cfg", cfg).with("line", line)
             }
             Unmet::AgentUnchosen { step, .. } => msg.with("step", step),
@@ -292,6 +300,7 @@ impl Unmet {
             | Unmet::UnansweredCfg { placement, .. }
             | Unmet::MisansweredCfg { placement, .. }
             | Unmet::CfgNotFound { placement, .. }
+            | Unmet::CfgValueClosed { placement, .. }
             | Unmet::AgentUnchosen { placement, .. }
             | Unmet::AgentMissing { placement, .. }
             | Unmet::ModelMissing { placement, .. }
@@ -310,6 +319,7 @@ impl Unmet {
             | Unmet::UnansweredCfg { builtin, .. }
             | Unmet::MisansweredCfg { builtin, .. }
             | Unmet::CfgNotFound { builtin, .. }
+            | Unmet::CfgValueClosed { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
             Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
             _ => None,
@@ -562,6 +572,16 @@ pub fn check(
                 unmet.push(Unmet::CfgNotFound {
                     step: name.clone(),
                     cfg: cfg.to_string(),
+                    line,
+                    builtin: builtin.clone(),
+                    placement: placement.id,
+                });
+            }
+            let classify = crate::ops::automation_builtin_make::CLASSIFY;
+            for line in crate::ops::automation_builtin_make::closed_values(conn, placement, automation.project_id)? {
+                unmet.push(Unmet::CfgValueClosed {
+                    step: name.clone(),
+                    cfg: classify.to_string(),
                     line,
                     builtin: builtin.clone(),
                     placement: placement.id,
@@ -1265,7 +1285,10 @@ pub(crate) fn launch_past_the_setting_checks(
     launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), |unmet| {
         !matches!(
             unmet,
-            Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. } | Unmet::CfgNotFound { .. }
+            Unmet::LeavesTaskOpen { .. }
+                | Unmet::HandsOnTaskTaken { .. }
+                | Unmet::CfgNotFound { .. }
+                | Unmet::CfgValueClosed { .. }
         )
     })
 }

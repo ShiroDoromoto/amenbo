@@ -1473,6 +1473,7 @@ export const th: Translation = {
     not_ready_automation_unanswered_cfg: "{step}: การตั้งค่าที่จำเป็น “{cfg}” ยังไม่มีคำตอบ",
     not_ready_automation_misanswered_cfg: "{step}: คำตอบของการตั้งค่า “{cfg}” ไม่ตรงกับชนิดของการตั้งค่านั้น",
     not_ready_automation_cfg_not_found: "{step}: การตั้งค่า “{cfg}” ระบุ “{line}” ซึ่งไม่มีในโปรเจกต์นี้",
+    not_ready_automation_cfg_value_closed: "{step}: การตั้งค่า “{cfg}” ระบุ “{line}” ซึ่งเป็นค่าที่ปิดแล้ว",
     not_ready_automation_agent_unchosen: "{step}: ยังไม่ได้เลือกเอเจนต์",
     not_ready_automation_agent_missing: "{step}: เครื่องนี้เริ่ม “{agent}” ไม่ได้",
     not_ready_automation_model_missing: "{step}: เอเจนต์ที่นี่ไม่มีโมเดล “{model}”",

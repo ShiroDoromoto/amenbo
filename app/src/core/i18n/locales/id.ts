@@ -1474,6 +1474,7 @@ export const id: Translation = {
     not_ready_automation_unanswered_cfg: "{step}: setelan wajib “{cfg}” belum dijawab",
     not_ready_automation_misanswered_cfg: "{step}: jawaban setelan “{cfg}” tidak sesuai dengan jenisnya",
     not_ready_automation_cfg_not_found: "{step}: setelan “{cfg}” menyebut “{line}”, yang tidak ada di proyek ini",
+    not_ready_automation_cfg_value_closed: "{step}: setelan “{cfg}” menyebut “{line}”, nilai yang sudah ditutup",
     not_ready_automation_agent_unchosen: "{step}: belum ada agen yang dipilih",
     not_ready_automation_agent_missing: "{step}: mesin ini tidak bisa menjalankan “{agent}”",
     not_ready_automation_model_missing: "{step}: agennya di sini tidak menyediakan model “{model}”",

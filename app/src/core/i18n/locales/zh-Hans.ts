@@ -1474,6 +1474,7 @@ export const zhHans: Translation = {
     not_ready_automation_unanswered_cfg: "{step}：必填设置“{cfg}”还没有填",
     not_ready_automation_misanswered_cfg: "{step}：设置“{cfg}”的答案与该设置的类型不符",
     not_ready_automation_cfg_not_found: "{step}：设置“{cfg}”写的“{line}”，本项目里没有",
+    not_ready_automation_cfg_value_closed: "{step}：设置“{cfg}”写的“{line}”是已关闭的值",
     not_ready_automation_agent_unchosen: "{step}：未选择智能体",
     not_ready_automation_agent_missing: "{step}：这台机器启动不了“{agent}”",
     not_ready_automation_model_missing: "{step}：这里的智能体不提供“{model}”模型",

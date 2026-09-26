@@ -1499,6 +1499,7 @@ export const uk: Translation = {
     not_ready_automation_unanswered_cfg: "{step}: обов’язкове налаштування «{cfg}» лишилося без відповіді",
     not_ready_automation_misanswered_cfg: "{step}: відповідь на налаштування «{cfg}» не відповідає його виду",
     not_ready_automation_cfg_not_found: "{step}: налаштування «{cfg}» називає «{line}», чого в цьому проєкті немає",
+    not_ready_automation_cfg_value_closed: "{step}: налаштування «{cfg}» називає «{line}» — це закрите значення",
     not_ready_automation_agent_unchosen: "{step}: не обрано агента",
     not_ready_automation_agent_missing: "{step}: ця машина не може запустити «{agent}»",
     not_ready_automation_model_missing: "{step}: тутешній агент не пропонує модель «{model}»",

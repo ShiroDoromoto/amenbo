@@ -1469,6 +1469,7 @@ export const ko: Translation = {
     not_ready_automation_unanswered_cfg: "{step}: 필수 설정 “{cfg}”에 답이 없습니다",
     not_ready_automation_misanswered_cfg: "{step}: 설정 “{cfg}”의 답이 그 설정의 종류와 맞지 않습니다",
     not_ready_automation_cfg_not_found: "{step}: 설정 “{cfg}”에 적힌 “{line}”이(가) 이 프로젝트에 없습니다",
+    not_ready_automation_cfg_value_closed: "{step}: 설정 “{cfg}”에 적힌 “{line}”은(는) 닫힌 값입니다",
     not_ready_automation_agent_unchosen: "{step}: 에이전트를 고르지 않았습니다",
     not_ready_automation_agent_missing: "{step}: 이 컴퓨터에서 “{agent}”을(를) 시작할 수 없습니다",
     not_ready_automation_model_missing: "{step}: 여기의 에이전트는 “{model}” 모델을 제공하지 않습니다",

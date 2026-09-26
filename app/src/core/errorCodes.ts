@@ -149,6 +149,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_unanswered_cfg",
   "not_ready_automation_misanswered_cfg",
   "not_ready_automation_cfg_not_found",
+  "not_ready_automation_cfg_value_closed",
   "not_ready_automation_agent_unchosen",
   "not_ready_automation_agent_missing",
   "not_ready_automation_model_missing",

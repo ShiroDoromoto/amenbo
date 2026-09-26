@@ -1470,6 +1470,8 @@ export const uk: Translation = {
     not_ready_draft: "воно ще створюється — спершу завершіть створення",
     invalid_action_still_placed:
       "Ця дія ще стоїть на схемах — усього {count}. Приберіть її звідти, перш ніж видаляти.",
+    invalid_automation_has_runs:
+      "З цієї автоматизації запущено {count} запусків, і вони значаться за нею, тому її не можна видалити. Натомість перенесіть її в архів.",
     invalid_action_placed_elsewhere:
       "Ця дія стоїть в автоматизаціях інших проєктів ({automations}). Приберіть її звідти, перш ніж переносити в «{project}».",
     invalid_automation_archived: "«{automation}» в архіві. Поверніть її, перш ніж запускати.",

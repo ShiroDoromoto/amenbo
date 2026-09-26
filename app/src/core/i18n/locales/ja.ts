@@ -1459,6 +1459,8 @@ export const ja: Translation = {
     not_ready_draft: "まだ作成中です。作成を終えてください",
     invalid_action_still_placed:
       "このアクションは図に置かれています（全部で {count} か所）。図から外してから消してください。",
+    invalid_automation_has_runs:
+      "このオートメーションからは {count} 件の実行が起動されていて、その記録がここに紐づいています。消せないので、代わりにアーカイブしてください。",
     invalid_action_placed_elsewhere:
       "このアクションは、ほかのプロジェクトのオートメーション（{automations}）に置かれています。そこから外してから「{project}」へ移してください。",
     invalid_automation_archived: "「{automation}」はアーカイブ済みです。戻してから起動してください。",

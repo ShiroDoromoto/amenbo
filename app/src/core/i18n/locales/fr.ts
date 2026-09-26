@@ -1462,6 +1462,8 @@ export const fr: Translation = {
     not_ready_draft: "elle est encore en cours de création — terminez d'abord sa création",
     invalid_action_still_placed:
       "Cette action figure encore dans des schémas — {count} au total. Retirez-la avant de la supprimer.",
+    invalid_automation_has_runs:
+      "{count} exécutions ont été lancées depuis cette automatisation et y sont rattachées : elle ne peut donc pas être supprimée. Archivez-la plutôt.",
     invalid_action_placed_elsewhere:
       "Cette action est placée dans des automatisations d’autres projets ({automations}). Retirez-la avant de la déplacer dans « {project} ».",
     invalid_automation_archived: "« {automation} » est archivée. Sortez-la des archives avant de la lancer.",

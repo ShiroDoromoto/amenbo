@@ -1444,6 +1444,8 @@ export const vi: Translation = {
     not_ready_draft: "việc này vẫn đang được tạo — hãy hoàn tất việc tạo trước",
     invalid_action_still_placed:
       "Hành động này vẫn nằm trên sơ đồ — tổng cộng {count}. Gỡ nó ra trước khi xóa.",
+    invalid_automation_has_runs:
+      "Đã có {count} lần chạy được khởi động từ tự động hoá này và chúng được ghi dưới nó, nên không thể xoá. Hãy lưu trữ nó thay vào đó.",
     invalid_action_placed_elsewhere:
       "Hành động này đang được đặt trong tự động hóa của dự án khác ({automations}). Gỡ nó ra trước khi chuyển sang “{project}”.",
     invalid_automation_archived: "“{automation}” đã lưu trữ. Đưa nó trở lại trước khi chạy.",

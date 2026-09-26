@@ -1462,6 +1462,8 @@ export const ptBR: Translation = {
     not_ready_draft: "ela ainda está sendo criada — termine a criação primeiro",
     invalid_action_still_placed:
       "Esta ação ainda está em diagramas — {count} no total. Tire-a deles antes de excluí-la.",
+    invalid_automation_has_runs:
+      "{count} execuções foram iniciadas a partir desta automação e estão registradas nela, então ela não pode ser excluída. Arquive-a em vez disso.",
     invalid_action_placed_elsewhere:
       "Esta ação está colocada em automações de outros projetos ({automations}). Tire-a delas antes de movê-la para “{project}”.",
     invalid_automation_archived: "“{automation}” está arquivada. Recupere-a antes de iniciá-la.",

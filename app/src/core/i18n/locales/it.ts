@@ -1462,6 +1462,8 @@ export const it: Translation = {
     not_ready_draft: "è ancora in fase di creazione: completa prima la creazione",
     invalid_action_still_placed:
       "Questa azione è ancora negli schemi: {count} in tutto. Toglila da lì prima di eliminarla.",
+    invalid_automation_has_runs:
+      "Da questa automazione sono state avviate {count} esecuzioni, registrate sotto di essa, quindi non può essere eliminata. Archiviala invece.",
     invalid_action_placed_elsewhere:
       "Questa azione è posizionata in automazioni di altri progetti ({automations}). Toglila da lì prima di spostarla in «{project}».",
     invalid_automation_archived: "«{automation}» è archiviata. Riportala indietro prima di avviarla.",

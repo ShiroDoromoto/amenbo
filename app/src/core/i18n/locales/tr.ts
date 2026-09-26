@@ -1444,6 +1444,8 @@ export const tr: Translation = {
     not_ready_draft: "hâlâ oluşturuluyor — önce oluşturmayı bitirin",
     invalid_action_still_placed:
       "Bu eylem hâlâ şemalarda duruyor — toplam {count}. Silmeden önce oradan çıkar.",
+    invalid_automation_has_runs:
+      "Bu otomasyondan {count} çalıştırma başlatıldı ve kayıtları ona bağlı, bu yüzden silinemez. Bunun yerine arşivle.",
     invalid_action_placed_elsewhere:
       "Bu eylem başka projelerin otomasyonlarına yerleştirilmiş ({automations}). “{project}” projesine taşımadan önce oradan çıkar.",
     invalid_automation_archived: "“{automation}” arşivlenmiş. Başlatmadan önce geri getir.",

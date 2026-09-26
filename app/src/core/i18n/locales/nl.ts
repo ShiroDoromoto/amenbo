@@ -1444,6 +1444,8 @@ export const nl: Translation = {
     not_ready_draft: "hij wordt nog aangemaakt — rond het aanmaken eerst af",
     invalid_action_still_placed:
       "Deze actie staat nog in schema’s — {count} in totaal. Haal haar daar weg voordat je haar verwijdert.",
+    invalid_automation_has_runs:
+      "Vanuit deze automatisering zijn {count} runs gestart en die staan eronder geregistreerd, dus ze kan niet worden verwijderd. Archiveer haar in plaats daarvan.",
     invalid_action_placed_elsewhere:
       "Deze actie staat in automatiseringen van andere projecten ({automations}). Haal haar daar weg voordat je haar naar “{project}” verplaatst.",
     invalid_automation_archived: "“{automation}” is gearchiveerd. Haal het terug voordat je het start.",

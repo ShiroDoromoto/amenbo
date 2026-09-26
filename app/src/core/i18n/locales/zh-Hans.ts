@@ -1445,6 +1445,8 @@ export const zhHans: Translation = {
     not_ready_draft: "它还在创建中——请先完成创建",
     invalid_action_still_placed:
       "此动作仍放在图中——共 {count} 处。先从图中移除再删除。",
+    invalid_automation_has_runs:
+      "此自动化已启动过 {count} 次执行，这些记录都归在它名下，因此无法删除。请改为归档。",
     invalid_action_placed_elsewhere:
       "此动作放在其他项目的自动化中（{automations}）。先从那里移除，再移到“{project}”。",
     invalid_automation_archived: "“{automation}”已归档。先取回再启动。",

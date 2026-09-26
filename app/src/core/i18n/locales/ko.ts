@@ -1440,6 +1440,8 @@ export const ko: Translation = {
     not_ready_draft: "아직 작성 중입니다 — 먼저 작성을 마치세요",
     invalid_action_still_placed:
       "이 액션은 아직 그림에 놓여 있습니다(모두 {count}곳). 그림에서 뺀 다음 삭제하세요.",
+    invalid_automation_has_runs:
+      "이 오토메이션에서 {count}개의 실행이 시작되었고 그 기록이 여기에 묶여 있어서 삭제할 수 없습니다. 대신 보관하세요.",
     invalid_action_placed_elsewhere:
       "이 액션은 다른 프로젝트의 자동화({automations})에 놓여 있습니다. 거기서 뺀 다음 “{project}”(으)로 옮기세요.",
     invalid_automation_archived: "“{automation}”은(는) 보관됨입니다. 되돌린 뒤에 시작하세요.",

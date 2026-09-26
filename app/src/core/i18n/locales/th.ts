@@ -1444,6 +1444,8 @@ export const th: Translation = {
     not_ready_draft: "งานนี้ยังสร้างไม่เสร็จ — กรุณาสร้างให้เสร็จก่อน",
     invalid_action_still_placed:
       "แอ็กชันนี้ยังวางอยู่ในแผนภาพ — รวม {count} แห่ง นำออกจากแผนภาพก่อนแล้วจึงลบ",
+    invalid_automation_has_runs:
+      "มีการเริ่มการทำงาน {count} ครั้งจากออโตเมชันนี้ และบันทึกไว้ภายใต้ออโตเมชันนี้ จึงลบไม่ได้ ให้เก็บเข้าคลังแทน",
     invalid_action_placed_elsewhere:
       "แอ็กชันนี้วางอยู่ในออโตเมชันของโปรเจกต์อื่น ({automations}) นำออกจากที่นั่นก่อนแล้วจึงย้ายไปที่ “{project}”",
     invalid_automation_archived: "“{automation}” ถูกเก็บเข้าคลังแล้ว นำกลับมาก่อนจึงจะเริ่มได้",

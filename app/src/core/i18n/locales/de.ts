@@ -1451,6 +1451,8 @@ export const de: Translation = {
     not_ready_draft: "sie wird noch erstellt — schließe die Erstellung zuerst ab",
     invalid_action_still_placed:
       "Diese Aktion steht noch in Bildern – insgesamt {count}. Nimm sie dort heraus, bevor du sie löschst.",
+    invalid_automation_has_runs:
+      "Aus dieser Automation wurden {count} Läufe gestartet, und sie sind unter ihr abgelegt – deshalb kann sie nicht gelöscht werden. Archiviere sie stattdessen.",
     invalid_action_placed_elsewhere:
       "Diese Aktion ist in Automationen anderer Projekte platziert ({automations}). Nimm sie dort heraus, bevor du sie nach „{project}“ verschiebst.",
     invalid_automation_archived: "„{automation}“ ist archiviert. Hole sie zurück, bevor du sie startest.",

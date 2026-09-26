@@ -1462,6 +1462,8 @@ export const es: Translation = {
     not_ready_draft: "todavía se está creando: termina de crearla primero",
     invalid_action_still_placed:
       "Esta acción sigue en diagramas: {count} en total. Quítala de ellos antes de eliminarla.",
+    invalid_automation_has_runs:
+      "Desde esta automatización se iniciaron {count} ejecuciones y están archivadas bajo ella, así que no se puede eliminar. Archívala en su lugar.",
     invalid_action_placed_elsewhere:
       "Esta acción está colocada en automatizaciones de otros proyectos ({automations}). Quítala de ellas antes de moverla a “{project}”.",
     invalid_automation_archived: "«{automation}» está archivada. Recupérala antes de iniciarla.",

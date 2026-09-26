@@ -1733,6 +1733,8 @@ const err: Partial<Record<ErrorCode, string>> = {
   // here (`core/i18n`'s `errSentence`).
   invalid_action_still_placed:
     "This action still stands on pictures — {count} in all. Take it off them before deleting it.",
+  invalid_automation_has_runs:
+    "{count} run(s) were launched from this automation, and they are filed under it, so it cannot be deleted. Archive it instead.",
   invalid_action_placed_elsewhere:
     "This action is placed on automations in other projects ({automations}). Take it off them before moving it into “{project}”.",
   invalid_automation_archived: "“{automation}” is archived. Bring it back before starting it.",

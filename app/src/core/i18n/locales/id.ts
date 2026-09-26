@@ -1445,6 +1445,8 @@ export const id: Translation = {
     not_ready_draft: "tugas ini masih dibuat — selesaikan pembuatannya dulu",
     invalid_action_still_placed:
       "Aksi ini masih ada di gambar — total {count}. Keluarkan dulu dari sana sebelum menghapusnya.",
+    invalid_automation_has_runs:
+      "{count} eksekusi dijalankan dari otomasi ini dan tercatat di bawahnya, jadi otomasi ini tidak bisa dihapus. Arsipkan saja.",
     invalid_action_placed_elsewhere:
       "Aksi ini dipasang di otomatisasi proyek lain ({automations}). Keluarkan dulu dari sana sebelum memindahkannya ke “{project}”.",
     invalid_automation_archived: "“{automation}” sudah diarsipkan. Kembalikan dulu sebelum menjalankannya.",

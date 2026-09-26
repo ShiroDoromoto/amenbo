@@ -1470,6 +1470,8 @@ export const pl: Translation = {
     not_ready_draft: "wciąż jest tworzone — najpierw zakończ tworzenie",
     invalid_action_still_placed:
       "Ta akcja nadal stoi na schematach — łącznie {count}. Zdejmij ją z nich, zanim ją usuniesz.",
+    invalid_automation_has_runs:
+      "Z tej automatyzacji uruchomiono {count} przebiegów i są przy niej zapisane, więc nie można jej usunąć. Zamiast tego ją zarchiwizuj.",
     invalid_action_placed_elsewhere:
       "Ta akcja stoi w automatyzacjach innych projektów ({automations}). Zdejmij ją z nich, zanim przeniesiesz ją do „{project}”.",
     invalid_automation_archived: "„{automation}” jest zarchiwizowana. Przywróć ją, zanim uruchomisz.",

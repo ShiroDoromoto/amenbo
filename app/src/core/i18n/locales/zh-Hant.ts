@@ -1445,6 +1445,8 @@ export const zhHant: Translation = {
     not_ready_draft: "它還在建立中——請先完成建立",
     invalid_action_still_placed:
       "此動作仍放在圖中——共 {count} 處。先從圖中移除再刪除。",
+    invalid_automation_has_runs:
+      "此自動化已啟動過 {count} 次執行，這些記錄都歸在它名下，因此無法刪除。請改為封存。",
     invalid_action_placed_elsewhere:
       "此動作放在其他專案的自動化中（{automations}）。先從那裡移除，再移到「{project}」。",
     invalid_automation_archived: "「{automation}」已封存。先取回再啟動。",

@@ -224,7 +224,7 @@ pub(crate) mod test_support {
             &[],
         )
         .expect("write the action");
-        let placement = crate::ops::automation::placement_add(tx, automation.id, action.id)
+        let placement = crate::ops::automation::placement_add_by_hand(tx, automation.id, action.id)
             .expect("place it");
         let step = action.entry_step_id.expect("an entry step");
         crate::ops::automation::placement_step_set(tx, placement.id, step, agent, None)

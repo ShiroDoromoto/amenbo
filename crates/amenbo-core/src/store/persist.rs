@@ -1757,14 +1757,15 @@ impl Store {
         })
     }
 
-    /// Name the placement a run starts at, or clear it (one operation = one transaction).
-    pub fn automation_set_entry(
+    /// Change what a run starts at, to another of the built-ins it can start at (one operation = one
+    /// transaction) — [`crate::ops::automation::entry_replace`].
+    pub fn automation_entry_replace(
         &mut self,
         id: i64,
-        placement_id: Option<i64>,
-    ) -> Result<crate::model::Automation> {
+        key: &str,
+    ) -> Result<crate::model::AutomationPlacement> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
-            crate::ops::automation::set_entry(tx, id, placement_id)
+            crate::ops::automation::entry_replace(tx, id, key)
         })
     }
 
@@ -1865,7 +1866,8 @@ impl Store {
 
     /// Make an empty action and put it on a picture, standing on its own (one operation = one
     /// transaction) — [`Self::automation_placement_insert_new`] for a picture that has no line to put
-    /// one in on.
+    /// one in on. Refused on a picture with nothing on it: the first placement is the entry, a built-in
+    /// ([`crate::ops::automation::placement_add`]).
     pub fn automation_placement_add_new(
         &mut self,
         automation_id: i64,

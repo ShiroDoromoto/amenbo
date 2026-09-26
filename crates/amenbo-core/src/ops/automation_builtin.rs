@@ -377,6 +377,22 @@ pub fn works_before_a_task(key: &str) -> bool {
     BEFORE_A_TASK.contains(&key)
 }
 
+/// **The built-ins a run can start at** (`AMB-D-977`), in the order a picture with nothing on it offers
+/// them: the one that takes a task, the one a person hands one to, and the one that fetches. The first
+/// thing put on a picture has to be one of these, and it is the entry from then on
+/// ([`super::automation::placement_add`]).
+const ENTRIES: &[&str] = &[TAKE_TASK.key, MAKE_TASK.key, FETCH.key];
+
+/// The keys of the built-ins a run can start at ([`ENTRIES`]).
+pub fn entries() -> &'static [&'static str] {
+    ENTRIES
+}
+
+/// Whether a run can start at the built-in of this key ([`ENTRIES`]).
+pub fn starts_a_run(key: &str) -> bool {
+    ENTRIES.contains(&key)
+}
+
 /// The built-in of this key, or `None` where this build carries none.
 pub fn find(key: &str) -> Option<&'static Builtin> {
     BUILTINS.iter().find(|b| b.key == key)

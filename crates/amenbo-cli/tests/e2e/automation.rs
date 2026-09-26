@@ -33,12 +33,23 @@ fn an_action(cli: &Cli, project: &str, name: &str, prompt: &str) -> (String, Str
     (action, step)
 }
 
-/// An automation with one action placed on it — the shape most of these tests start from. Answers the
-/// project it is in, the automation, the action and the placement. The project is named rather than
-/// left to the folder: the harness runs in a home nothing has bound.
+/// Put the built-in of `key` on an automation — the first thing placed is where a run starts, and it
+/// has to be one of the built-ins a run can start at (`AMB-D-977`). Answers the placement.
+fn an_entry(cli: &Cli, automation: &str, key: &str) -> String {
+    id_of(
+        &cli.json(&["automation", "place-add", automation, "--builtin", key, "--json"]),
+        "automation_placement",
+    )
+}
+
+/// An automation with one action placed on it, after the built-in it starts at — the shape most of
+/// these tests start from. Answers the project it is in, the automation, the action and the placement
+/// of the action. The project is named rather than left to the folder: the harness runs in a home
+/// nothing has bound.
 fn an_automation(cli: &Cli) -> (String, String, String, String) {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    an_entry(cli, &a, "take_task");
     let (action, _) = an_action(cli, &p, "one", "do it");
     let placement = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
@@ -60,6 +71,10 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
     let (fix_action, _) = an_action(&cli, &p, "Fix", "fix it");
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--json"]), "automation");
 
+    // The first thing placed is where a run starts (`AMB-D-977`).
+    let take = an_entry(&cli, &a, "take_task");
+    let shown = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(shown["automation"]["entry_placement_id"].to_string(), take);
     let review = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &review_action, "--json"]),
         "automation_placement",
@@ -81,8 +96,7 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
     );
     cli.json(&["automation", "port-add", "--action", &fix_action, "--name", "report", "--kind", "file", "--required", "--json"]);
 
-    cli.json(&["automation", "entry-set", &a, "--placement", &review, "--json"]);
-
+    cli.json(&["automation", "edge-add", "--from", &format!("{take}:着手した"), "--to", &review, "--json"]);
     let onward = cli.json(&["automation", "edge-add", "--from", &format!("{review}:something to fix"), "--to", &fix, "--json"]);
     assert_eq!(onward["automation_edge"]["ends"].as_str(), Some("go"));
     assert_eq!(onward["automation_edge"]["to_id"], serde_json::json!(fix.parse::<i64>().unwrap()));
@@ -159,6 +173,7 @@ fn a_line_is_drawn_on_an_automation_or_inside_an_action() {
     assert_eq!(inside["automation_edge"]["owner_id"], serde_json::json!(action.parse::<i64>().unwrap()));
 
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    an_entry(&cli, &a, "take_task");
     let placement = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
         "automation_placement",
@@ -406,6 +421,7 @@ fn a_definition_is_read_back_whole_with_each_placement_resolved() {
     let (review_action, _) = an_action(&cli, &p, "Review", "review it");
     let (fix_action, _) = an_action(&cli, &p, "Fix", "fix it");
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--json"]), "automation");
+    an_entry(&cli, &a, "take_task");
     let review = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &review_action, "--json"]),
         "automation_placement",
@@ -422,17 +438,16 @@ fn a_definition_is_read_back_whole_with_each_placement_resolved() {
     cli.json(&["automation", "port-add", "--action", &fix_action, "--name", "report", "--kind", "file", "--required", "--json"]);
     cli.json(&["automation", "cfg-add", "--action", &review_action, "--name", "depth", "--kind", "number", "--json"]);
     cli.json(&["automation", "cfg-set", &review, "--name", "depth", "--number", "3", "--json"]);
-    cli.json(&["automation", "entry-set", &a, "--placement", &review, "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{review}:something to fix"), "--to", &fix, "--json"]);
     cli.json(&["automation", "wire-add", "--from", &format!("{review}:something to fix"), "--from-port", "report", "--to", &fix, "--to-port", "report", "--json"]);
 
     let shown = cli.json(&["automation", "show", &a, "--json"]);
     assert_eq!(shown["automation"]["name"].as_str(), Some("Review and fix"));
-    assert_eq!(shown["placements"].as_array().map(|s| s.len()), Some(2));
+    assert_eq!(shown["placements"].as_array().map(|s| s.len()), Some(3), "the entry and the two");
 
     // The ways out a spot can be left by are the action's — resolved here rather than left for the
     // reader to go and look up.
-    let first = &shown["placements"][0];
+    let first = &shown["placements"][1];
     assert_eq!(first["action"]["name"].as_str(), Some("Review"));
     // Every declarer is born carrying the done way out and the error one, so the one built here
     // is found by name rather than by where it sits.
@@ -447,9 +462,9 @@ fn a_definition_is_read_back_whole_with_each_placement_resolved() {
     assert_eq!(first["settings"][0]["name"].as_str(), Some("depth"));
     assert_eq!(first["settings"][0]["value"].as_str(), Some("3"));
 
-    assert_eq!(shown["placements"][1]["inputs"][0]["name"].as_str(), Some("report"));
+    assert_eq!(shown["placements"][2]["inputs"][0]["name"].as_str(), Some("report"));
     assert_eq!(shown["edges"][0]["to_id"], serde_json::json!(fix.parse::<i64>().unwrap()));
-    assert_eq!(shown["wires"][0]["to_port_id"], shown["placements"][1]["inputs"][0]["id"]);
+    assert_eq!(shown["wires"][0]["to_port_id"], shown["placements"][2]["inputs"][0]["id"]);
 
     // And the prompts are inside the action, which is the picture `action show` reads.
     let inside = cli.json(&["automation", "action-show", &review_action, "--json"]);
@@ -466,7 +481,7 @@ fn the_listing_counts_the_placements_and_keeps_an_archived_one() {
 
     let listed = cli.json(&["automation", "list", "--project", &p, "--json"]);
     assert_eq!(listed["count"], serde_json::json!(1));
-    assert_eq!(listed["automations"][0]["placements"], serde_json::json!(1));
+    assert_eq!(listed["automations"][0]["placements"], serde_json::json!(2), "the entry and the action");
     assert_eq!(listed["automations"][0]["automation"]["archived"], serde_json::json!(false));
 
     cli.json(&["automation", "update", &a, "--archived", "true", "--json"]);
@@ -495,11 +510,14 @@ fn the_library_is_one_list_and_global_narrows_it() {
     // One action placed twice on one automation is one automation whose runs change when the prompt
     // is rewritten, which is what the count is about.
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    an_entry(&cli, &a, "take_task");
     for _ in 0..2 {
         cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]);
     }
     let again = cli.json(&["automation", "action-list", "--project", &p, "--json"]);
-    assert_eq!(again["actions"][0]["used_by"], serde_json::json!(1));
+    let id = serde_json::json!(action.parse::<i64>().unwrap());
+    let card = again["actions"].as_array().expect("the actions").iter().find(|card| card["action"]["id"] == id);
+    assert_eq!(card.expect("the action is listed")["used_by"], serde_json::json!(1), "{again}");
 
     let shown = cli.json(&["automation", "action-show", &action, "--json"]);
     assert_eq!(shown["steps"][0]["step"]["prompt"].as_str(), Some("review it"));
@@ -548,7 +566,9 @@ fn an_action_moves_between_libraries_and_is_refused_where_another_project_places
     let out = cli.json(&["automation", "action-scope-set", &action, "--global", "--json"]);
     assert_eq!(out["automation_action"]["project_id"], Value::Null);
     let device = cli.json(&["automation", "action-list", "--global", "--json"]);
-    assert_eq!(device["count"], serde_json::json!(1), "it is on the device's shelf now");
+    let id = serde_json::json!(action.parse::<i64>().unwrap());
+    let on_the_device = device["actions"].as_array().expect("the actions").iter().any(|card| card["action"]["id"] == id);
+    assert!(on_the_device, "it is on the device's shelf now: {device}");
 
     let other = cli.a_project();
     let (refused, code) = cli.run_err(&["automation", "action-scope-set", &action, "--project", &other, "--json"]);
@@ -578,13 +598,19 @@ fn a_definition_that_does_not_exist_is_said_to_be_missing() {
 
 // ───────────────────────────── running one ─────────────────────────────
 
-/// An automation that launches as it stands: one action of one step that takes a task and closes the
-/// run, with every way out of it decided and an agent chosen for the step where it is placed. Answers
-/// the automation's id, the placement's and the step's.
+/// An automation that launches as it stands: the built-in that takes a task, with one there for it to
+/// take, then one action of one step that works on it, then the built-in that closes it — every way
+/// out decided and an agent chosen for the step where it is placed. Answers the automation's id, the
+/// action's placement and the step's.
 fn a_launchable(cli: &Cli) -> (String, String, String) {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--json"]), "automation");
-    let (action, step) = an_action(cli, &p, "take one", "take one");
+    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
+    // The first thing placed is where a run starts (`AMB-D-977`), set to take any task that is ready.
+    let take = an_entry(cli, &a, "take_task");
+    cli.json(&["automation", "cfg-set", &take, "--name", "絞り込み", "--status", "todo", "--json"]);
+    let (action, step) = an_action(cli, &p, "work", "work on it");
     // The step inside leaves the action by its done way out — the launch check asks the picture
     // inside an action the same question it asks the automation's.
     cli.json(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:"), "--exit-to", "--json"]);
@@ -593,22 +619,16 @@ fn a_launchable(cli: &Cli) -> (String, String, String) {
         "automation_placement",
     );
     cli.json(&["automation", "agent-set", &placement, "--step", &step, "--agent", "claude", "--json"]);
-    // The way out the task comes out on, which is what makes this spot usable as an entry.
-    let took = id_of(
-        &cli.json(&["automation", "exit-add", "--action", &action, "--name", "took one", "--json"]),
-        "automation_exit",
-    );
-    cli.json(&["automation", "port-add", "--exit", &took, "--name", "task", "--kind", "task_take", "--required", "--json"]);
-    cli.json(&["automation", "entry-set", &a, "--placement", &placement, "--json"]);
     // Every way out of a reachable spot is answered for, and the task taken is closed before the run
     // ends (`AMB-D-967`) — the two things the launch check asks about the picture.
     let close = id_of(
         &cli.json(&["automation", "place-add", &a, "--builtin", "close_task", "--json"]),
         "automation_placement",
     );
-    cli.json(&["automation", "edge-add", "--from", &format!("{placement}:took one"), "--to", &close, "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{take}:着手した"), "--to", &placement, "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{take}:着手できるタスクが無い"), "--done", "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{placement}:"), "--to", &close, "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{close}:"), "--done", "--json"]);
-    cli.json(&["automation", "edge-add", "--from", &format!("{placement}:"), "--done", "--json"]);
     (a, placement, step)
 }
 
@@ -636,31 +656,41 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
     assert!(stopped["automation_run"]["stopped_reason"].is_null(), "a cancel carries no reason");
 }
 
-/// **What a person hands over comes in on the launch itself** (`AMB-D-970`): a text, from an argument
-/// or from stdin, and files, attached to the run. A file that cannot be read is refused before anything
-/// is started, so no run is left holding half of what it was handed.
+/// **What a person hands over comes in on the launch itself** (`AMB-D-970`): for a run that starts by
+/// filing a task, its title and notes. What that entry does not read — a text or a file for an agent's
+/// step — is refused, and so is a file that cannot be read, before anything is started, so no run is
+/// left holding half of what it was handed.
 #[test]
-fn a_launch_takes_a_text_and_files_for_its_first_step() {
+fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
     let cli = Cli::new();
-    let (a, _, _) = a_launchable(&cli);
-    let note = cli.home.join("draft.md");
-    std::fs::write(&note, "# a draft\n").unwrap();
-
-    let started = cli.json(&[
-        "automation", "start", &a, "--text", "file this", "--file", note.to_str().unwrap(), "--json",
+    let p = cli.a_project();
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "File one", "--json"]), "automation");
+    let make = an_entry(&cli, &a, "make_task");
+    cli.json(&[
+        "automation", "cfg-set", &make, "--name", "起票したタスク",
+        "--choice", "進行中にして、出口「起票して着手した」へ進む", "--json",
     ]);
-    assert_eq!(started["automation_run"]["handed"].as_str(), Some("file this"));
-    let run = id_of(&started, "automation_run");
-    cli.json(&["automation", "stop", &run, "--json"]);
+    let close = id_of(
+        &cli.json(&["automation", "place-add", &a, "--builtin", "close_task", "--json"]),
+        "automation_placement",
+    );
+    cli.json(&["automation", "edge-add", "--from", &format!("{make}:起票して着手した"), "--to", &close, "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{close}:"), "--done", "--json"]);
 
+    let started = cli.json(&["automation", "start", &a, "--title", "file this", "--notes", "# a draft", "--json"]);
+    let run = id_of(&started, "automation_run");
+
+    let (err, code) = cli.run_err(&["automation", "start", &a, "--title", "again", "--text", "for a step", "--json"]);
+    assert_ne!(code, 0, "a text for an agent's step is not what this entry reads: {err}");
     let missing = cli.home.join("not-there.md");
     let (err, code) = cli.run_err(&[
-        "automation", "start", &a, "--file", missing.to_str().unwrap(), "--json",
+        "automation", "start", &a, "--title", "again", "--file", missing.to_str().unwrap(), "--json",
     ]);
     assert_ne!(code, 0, "an unreadable file is refused: {err}");
     assert!(err.contains("not_found"), "{err}");
     let runs = cli.json(&["automation", "run-list", "--automation", &a, "--json"]);
     assert_eq!(runs["count"].as_u64(), Some(1), "only the first launch made a run: {runs}");
+    assert!(runs.to_string().contains(&run), "{runs}");
 }
 
 /// The launch check refuses an unfinished automation and names what is missing. Nothing on the
@@ -671,12 +701,7 @@ fn a_launch_is_refused_while_a_way_out_has_nothing_after_it() {
     let cli = Cli::new();
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Half drawn", "--json"]), "automation");
-    let (action, _) = an_action(&cli, &p, "one", "do it");
-    let placement = id_of(
-        &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
-        "automation_placement",
-    );
-    cli.json(&["automation", "entry-set", &a, "--placement", &placement, "--json"]);
+    an_entry(&cli, &a, "take_task");
 
     let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
     assert_ne!(code, 0, "an unfinished automation does not launch: {err}");

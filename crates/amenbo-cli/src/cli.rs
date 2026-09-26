@@ -1836,16 +1836,14 @@ pub enum AutomationCmd {
         /// automation id
         id: i64,
     },
-    /// Name the placement a run starts at, or clear it
-    EntrySet {
+    /// Change what a run starts at, to another of the built-ins a run can start at. The lines out of
+    /// the old one go; the placements after it stay
+    EntryReplace {
         /// automation id
         id: i64,
-        /// the placement to start at
-        #[arg(long, value_name = "ID", conflicts_with = "clear")]
-        placement: Option<i64>,
-        /// leave the automation with no entry
-        #[arg(long)]
-        clear: bool,
+        /// the built-in to start at: take_task, make_task or fetch
+        #[arg(long, value_name = "KEY")]
+        builtin: String,
     },
     /// Put a library action on an automation. What stands on a picture is a placement of an action,
     /// never a prompt of its own

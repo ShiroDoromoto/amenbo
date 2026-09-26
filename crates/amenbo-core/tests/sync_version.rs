@@ -240,11 +240,9 @@ fn this_devices_own_tables_move_nobodys_version() {
 /// copy of the store that anything had moved.
 #[test]
 fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in() {
-    use amenbo_core::model::{
-        AutomationOwner, AutomationPictureOwner, AutomationPortDirection, AutomationPortKind,
-        AutomationPortOwner,
-    };
-    use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, NewStep};
+    use amenbo_core::model::AutomationPictureOwner;
+    use amenbo_core::ops::automation::{EdgeTarget, NewAutomation};
+    use amenbo_core::ops::automation_builtin_take::{TAKEN, WAIT, WHEN_NONE};
     use amenbo_core::ops::automation_run::Launcher;
 
     let mut store = temp_store();
@@ -252,43 +250,19 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     let other = store.project_add(new_project("隣")).unwrap().id;
     let _ = filed(&mut store, new_task("隣の1件", other));
 
-    // The smallest automation that launches: one action of one step that takes a task, the built-in
-    // that closes it, and the end of the run, with every way out answered for. A run does not end with
-    // the task it took still open (`AMB-D-967`).
+    // The smallest automation that launches and stays running: the built-in that takes a task, set to
+    // wait for one (`AMB-D-969`), the built-in that closes it, and the end of the run. The first thing
+    // placed is the entry (`AMB-D-977`), and a run does not end with the task it took still open
+    // (`AMB-D-967`).
     let automation = store
         .automation_add(mine, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
         .unwrap();
-    let action = store
-        .automation_action_from_prompt(
-            Some(mine),
-            NewStep::new("取る", "take one"),
-            &[],
-            &[],
-        )
-        .unwrap();
-    let placement = store.automation_placement_add(automation.id, action.id).unwrap();
-    store
-        .automation_placement_step_set(placement.id, action.entry_step_id.unwrap(), "claude", None)
-        .unwrap();
-    let took = store
-        .automation_exit_add(AutomationOwner::Action, action.id, Some("取った"))
-        .unwrap();
-    store
-        .automation_port_add(
-            AutomationPortOwner::Exit,
-            took.id,
-            AutomationPortDirection::Out,
-            "タスク",
-            AutomationPortKind::TaskTake,
-            true,
-        )
-        .unwrap();
-    store.automation_set_entry(automation.id, Some(placement.id)).unwrap();
+    let take = store.automation_builtin_place(automation.id, "take_task", None).unwrap();
+    store.automation_cfg_set(take.id, WHEN_NONE, Some(&format!("\"{WAIT}\""))).unwrap();
     let on = AutomationPictureOwner::Automation;
     let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
-    store.automation_edge_add(on, placement.id, Some("取った"), EdgeTarget::Go(close.id), None).unwrap();
+    store.automation_edge_add(on, take.id, Some(TAKEN), EdgeTarget::Go(close.id), None).unwrap();
     store.automation_edge_add(on, close.id, None, EdgeTarget::Done, None).unwrap();
-    store.automation_edge_add(on, placement.id, None, EdgeTarget::Done, None).unwrap();
 
     let startable = ["claude".to_string()];
     let by = Launcher {

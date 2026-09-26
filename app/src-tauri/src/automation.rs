@@ -164,23 +164,19 @@ pub fn automation_edit(
     Ok(WriteAck::new(&["automations"]))
 }
 
-/// **Name the placement a run opens first**, or clear it with `null`
-/// ([`amenbo_core::ops::automation::set_entry`]).
+/// **Change what a run starts at**, to another of the built-ins it can start at
+/// ([`amenbo_core::ops::automation::entry_replace`], `AMB-D-977`). `key` is the built-in's key.
 ///
-/// Placing an action and saying where a run begins are two presses, because they are two thoughts: a
-/// picture is built in whatever order its author likes, and the box put down first is not always the
-/// one a run should open on.
-///
-/// Whether the action standing there takes a task — what actually makes it a usable entry — is the
-/// launch check's to say rather than this door's. Refusing the entry until the port is declared would
-/// make the order of building the tool's to choose.
+/// There is no press that names a placement as the entry: the first thing put on a picture is it, and
+/// this is the one way to change it afterwards. The lines out of the old one go with it, so the build
+/// screen asks before pressing it; the placements after it stay.
 #[tauri::command]
-pub fn automation_entry_set(id: i64, placement_id: Option<i64>) -> Result<WriteAck, CmdError> {
+pub fn automation_entry_replace(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_set_entry(id, placement_id)?;
+        store.automation_entry_replace(automation_id, &key)?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Delete an automation and everything built into it** — its steps with their declarations and
@@ -512,9 +508,9 @@ pub fn automation_placement_add(automation_id: i64, action_id: i64) -> Result<Wr
 }
 
 /// **Make an empty action and put it on a picture**, standing on its own with no line reaching it
-/// ([`amenbo_core::ops::automation::placement_add_new`]) — what a picture with nothing on it is filled
-/// by where the library holds nothing that fits, and there is no line for [`automation_step_insert`]
-/// to take.
+/// ([`amenbo_core::ops::automation::placement_add_new`]) — where the library holds nothing that fits,
+/// and there is no line for [`automation_step_insert`] to take. A picture with nothing on it refuses
+/// it: the first placement is where a run starts, one of the built-ins (`AMB-D-977`).
 ///
 /// **It takes a name and a library, and nothing else** (`AMB-D-956`). The inside of an action is its
 /// steps, built on the action's own screen, and the ack names the action it made so the screen that

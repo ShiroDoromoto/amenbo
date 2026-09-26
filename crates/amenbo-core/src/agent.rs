@@ -429,7 +429,7 @@ commands! {
     AutomationRm => "automation rm",
     AutomationList => "automation list",
     AutomationShow => "automation show",
-    AutomationEntrySet => "automation entry-set",
+    AutomationEntryReplace => "automation entry-replace",
     AutomationPlaceAdd => "automation place-add",
     AutomationPlaceRm => "automation place-rm",
     AutomationStart => "automation start",
@@ -661,7 +661,7 @@ impl Cmd {
             | Cmd::AutomationAdd
             | Cmd::AutomationUpdate
             | Cmd::AutomationRm
-            | Cmd::AutomationEntrySet
+            | Cmd::AutomationEntryReplace
             | Cmd::AutomationPlaceAdd
             | Cmd::AutomationPlaceRm
             | Cmd::AutomationStart
@@ -1518,7 +1518,7 @@ fn capabilities() -> Value {
         cap(
             "Draw the picture a run is walked along — where it starts, the ways out of each step, what happens after each one is taken, and what is handed along",
             &[
-                "automation entry-set",
+                "automation entry-replace",
                 "automation exit-add", "automation exit-rename", "automation exit-rm",
                 "automation port-add", "automation port-update", "automation port-rm",
                 "automation edge-add", "automation edge-update", "automation edge-rm",
@@ -2210,19 +2210,19 @@ fn all_commands() -> Value {
             json!([{ "name": "<id>", "help": "automation id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation show 3", "amenbo automation show 3 --json"])),
-        cmd("automation entry-set", "Names the placement a run starts at, or clears it with --clear. From it the edges are walked, so where every other placement sits in the picture falls out of this one answer. An automation with no entry saves; launching one is refused at the launch check.",
+        cmd("automation entry-replace", "Changes what a run starts at, to another of the built-ins a run can start at: take_task, make_task or fetch. The first thing placed on an automation is where a run starts, and it has to be one of these three; this is how it is changed afterwards. The entry keeps its spot and the lines drawn to it. The lines out of its old ways out, its wires and its answers go, since the new built-in declares its own; the placements after it stay, to be joined up again with edge-add. An automation kept with placements and no entry takes the built-in as a new placement standing alone.",
             json!([{ "name": "<id>", "help": "automation id", "required": true },
-                   { "name": "--placement <id>", "help": "the placement to start at" },
-                   { "name": "--clear", "help": "leave it starting nowhere" }]),
-            json!(["amenbo automation entry-set 3 --placement 11", "amenbo automation entry-set 3 --clear"])),
-        cmd("automation place-add", "Puts a library action on an automation. What stands on a picture is a placement of an action, never a prompt of its own: the same action placed twice gives two spots that share the prompt and answer their settings apart. The action has to be within reach — this project's library or the device's. --builtin places one of Amenbo's built-ins instead: its action is written into the device's library from Amenbo's definition the first time it is placed, and cannot be edited. This is the one way a built-in stands on a picture. Taking a task, closing it, and cutting and folding its worktree are built-ins, so the prompts on a picture are left with what needs an agent's judgement — the work, a review, how a PR and its CI are handled. Prints the id the edge, wire and cfg-set commands take.",
+                   { "name": "--builtin <key>", "help": "the built-in to start at: take_task, make_task or fetch", "required": true },
+                   { "name": "--json", "help": "machine-readable output" }]),
+            json!(["amenbo automation entry-replace 3 --builtin make_task --json"])),
+        cmd("automation place-add", "Puts a library action on an automation. What stands on a picture is a placement of an action, never a prompt of its own: the same action placed twice gives two spots that share the prompt and answer their settings apart. The action has to be within reach — this project's library or the device's. --builtin places one of Amenbo's built-ins instead: its action is written into the device's library from Amenbo's definition the first time it is placed, and cannot be edited. This is the one way a built-in stands on a picture. The first thing placed on an automation is where a run starts, so it has to be take_task, make_task or fetch; anything else placed first is refused, naming the three. Taking a task, closing it, and cutting and folding its worktree are built-ins, so the prompts on a picture are left with what needs an agent's judgement — the work, a review, how a PR and its CI are handled. Prints the id the edge, wire and cfg-set commands take.",
             json!([{ "name": "<automation>", "help": "automation id", "required": true },
                    { "name": "--action <id>", "help": "the library action to place (or --builtin)" },
                    { "name": "--builtin <key>", "help": "place a built-in (`automation builtin-list`)" },
                    { "name": "--axis <axis>", "help": "the axis split_by_dim splits by (name or id) — one a task holds one value of; its ways out are the axis's values and 分類なし" },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation place-add 3 --action 7 --json", "amenbo automation place-add 3 --builtin take_task --json", "amenbo automation place-add 3 --builtin split_by_dim --axis 職能 --json"])),
-        cmd("automation place-rm", "Takes a placement off its automation, with the answers written on it and every edge and wire naming it. The action itself stays in the library. Confirms unless --yes.",
+        cmd("automation place-rm", "Takes a placement off its automation, with the answers written on it and every edge and wire naming it. The action itself stays in the library. The placement a run starts at comes off last: while others are on the picture it is refused, and `automation entry-replace` changes it instead. Confirms unless --yes.",
             json!([{ "name": "<id>", "help": "placement id", "required": true },
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation place-rm 11 --yes"])),

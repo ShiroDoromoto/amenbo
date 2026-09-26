@@ -290,19 +290,21 @@ pub struct Launcher<'a> {
 /// **What a person hands over when launching a run** — the entrance where a person hands something
 /// over (`AMB-D-970`). The first step the run opens is told it ([`crate::ops::automation_step`]).
 ///
-/// **What may be handed depends on the entry**, and a launch handing what its entry does not read is
-/// refused rather than left lying on the run where nothing reads it ([`entry_reads`]): an agent's step
-/// reads the text and the files, the built-in that files a task reads the title, the notes and the
-/// classification, and any other built-in reads nothing.
+/// **Only the built-in that files a task reads anything** (`AMB-D-981`): the title, the notes and the
+/// classification of the task it files, and the files, which it attaches to that task. A launch handing
+/// what its entry does not read is refused rather than left lying on the run where nothing reads it
+/// ([`entry_reads`]).
 ///
 /// Nothing handed is the default, and a launch that hands nothing starts as it always has.
 #[derive(Clone, Debug, Default)]
 pub struct HandedAtLaunch {
-    /// The text, as it was typed. Blank text is the same as none.
+    /// A text on its own. **No entry reads one**, so a launch handing one is refused — words for the task
+    /// go in its notes. Blank text is the same as none.
     pub text: Option<String>,
     /// The files, already ingested into the blob store by the caller ([`crate::blob::BlobStore`]), in
     /// the order they were handed over. Each is attached to the run in the launch's own transaction,
-    /// so the first step never opens on a run the files have not reached yet.
+    /// and moved from there on to the task the entry files
+    /// ([`crate::ops::automation_builtin_make`]).
     pub files: Vec<HandedFile>,
     /// The title of the task an entry that files one files. Blank is the same as none.
     pub title: Option<String>,
@@ -325,14 +327,9 @@ impl HandedAtLaunch {
         self.notes.as_deref().filter(|t| !t.trim().is_empty())
     }
 
-    /// What was handed for an agent's step to read: the text or a file.
-    fn for_a_step(&self) -> bool {
-        self.text().is_some() || !self.files.is_empty()
-    }
-
-    /// What was handed for a task to be filed from: a title, notes or a classification.
+    /// What was handed for a task to be filed from: a title, notes, a classification or a file.
     fn for_a_task(&self) -> bool {
-        self.title().is_some() || self.notes().is_some() || !self.classification.is_empty()
+        self.title().is_some() || self.notes().is_some() || !self.classification.is_empty() || !self.files.is_empty()
     }
 }
 
@@ -1044,8 +1041,8 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
     launch_handing(tx, automation_id, by, &HandedAtLaunch::default())
 }
 
-/// [`launch`], with what a person handed over along with it ([`HandedAtLaunch`]). The text is kept on
-/// the run and the files hang off it, both written before any step is opened.
+/// [`launch`], with what a person handed over along with it ([`HandedAtLaunch`]). The task to file is
+/// kept on the run and the files hang off it, both written before any step is opened.
 ///
 /// **A file needs somebody who handed it over.** An attachment says who put it there, and a launch
 /// whose caller says nothing about itself has no one to name, so it is refused rather than guessed at.
@@ -1147,7 +1144,7 @@ fn launch_asking(
         started_at: Some(now),
         ended_at: None,
         acknowledged_at: None,
-        handed: handed.text().map(str::to_string),
+        handed: None,
         handed_task,
         created_at: now,
         updated_at: now,
@@ -1168,14 +1165,17 @@ fn launch_asking(
 
 /// **Whether the entry reads what was handed over at launch**, and the task to file where it files one.
 ///
-/// Asked after the check, so the entry is there to be asked of. Each entry reads its own things:
+/// Asked after the check, so the entry is there to be asked of (`AMB-D-981`):
 ///
-/// - **An agent's step** reads the text and the files ([`crate::ops::automation_step`]).
 /// - **The built-in that files a task** reads a title — required, since a task cannot be filed without
-///   one — the notes and a classification, and those are checked here the way the built-in checks them
-///   when it files the task ([`crate::ops::automation_builtin_make::handed_at_launch`]). A launch that
-///   would only fall over at its first step is refused before a run is made.
-/// - **Any other built-in** reads nothing: it takes a task or fetches, from what it was set with.
+///   one — the notes, a classification and files. The classification is checked here the way the
+///   built-in checks it when it files the task
+///   ([`crate::ops::automation_builtin_make::handed_at_launch`]), so a launch that would only fall over
+///   at its first step is refused before a run is made.
+/// - **Any other entry** reads nothing: a built-in takes a task or fetches from what it was set with,
+///   and an agent's step, which a new picture can no longer start at (`AMB-D-977`), is handed nothing
+///   at launch either.
+/// - **A text on its own** is read by none of them: words for the task go in its notes.
 ///
 /// Something handed that the entry does not read is refused: nothing would ever read it, and the
 /// person handing it would believe it went somewhere.
@@ -1195,15 +1195,12 @@ fn entry_reads(
             "the entry '{step}' {reads}, and {what} was handed over at launch — it would never be read"
         )))
     };
-    match (builtin.is_some(), files_a_task) {
-        (false, _) if handed.for_a_task() => {
-            refused("a title, notes or a classification", "is an agent's step and reads the text and files")
-        }
-        (false, _) => Ok(None),
-        (true, true) if handed.for_a_step() => {
-            refused("a text or a file", "files a task and reads its title, notes and classification")
-        }
-        (true, true) => {
+    match files_a_task {
+        true if handed.text().is_some() => refused(
+            "a text",
+            "files a task and reads its title, notes, classification and files — put the words in its notes",
+        ),
+        true => {
             let Some(title) = handed.title() else {
                 return Err(Error::invalid(format!(
                     "the entry '{step}' files a task, and no title for it was handed over at launch"
@@ -1221,10 +1218,10 @@ fn entry_reads(
                 classification,
             }))
         }
-        (true, false) if handed.for_a_step() || handed.for_a_task() => {
+        false if handed.text().is_some() || handed.for_a_task() => {
             refused("something", "reads nothing handed over at launch")
         }
-        (true, false) => Ok(None),
+        false => Ok(None),
     }
 }
 
@@ -1241,11 +1238,10 @@ fn entry_of(conn: &Connection, automation: &Automation) -> Result<Option<Automat
 /// reads and nothing else.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LaunchAsks {
-    /// An agent's step: a text and files.
-    Words,
-    /// The built-in that files a task: its title and notes, and a value on each of these axes.
+    /// The built-in that files a task: its title and notes, a value on each of these axes, and files to
+    /// attach to it.
     Task { axes: Vec<crate::ops::automation_builtin_make::LaunchAxis> },
-    /// Any other built-in, or no entry yet: nothing is handed over.
+    /// Any other entry, or no entry yet: nothing is handed over.
     Nothing,
 }
 
@@ -1257,11 +1253,10 @@ pub fn launch_asks(conn: &Connection, automation_id: i64) -> Result<LaunchAsks> 
         return Ok(LaunchAsks::Nothing);
     };
     Ok(match action_builtin(conn, entry.action_id)?.as_deref() {
-        None => LaunchAsks::Words,
         Some(crate::ops::automation_builtin_make::KEY) => LaunchAsks::Task {
             axes: crate::ops::automation_builtin_make::launch_axes(conn, &entry, automation.project_id)?,
         },
-        Some(_) => LaunchAsks::Nothing,
+        _ => LaunchAsks::Nothing,
     })
 }
 
@@ -2311,39 +2306,6 @@ mod tests {
         });
     }
 
-    fn a_file(name: &str) -> HandedFile {
-        HandedFile {
-            blob_hash: "a".repeat(64),
-            filename: name.to_string(),
-            mime: Some("text/markdown".to_string()),
-            size_bytes: 12,
-        }
-    }
-
-    /// What a person hands over at launch is on the run before anything opens: the text on the run,
-    /// the files hanging off it in the order they were handed, each saying who handed it (`AMB-D-970`).
-    #[test]
-    fn a_launch_keeps_what_was_handed_over_on_the_run() {
-        with_tx(|tx| {
-            let (automation, _, _) = launchable(tx);
-            let handed = HandedAtLaunch {
-                text: Some("この issue を起票して".into()),
-                files: vec![a_file("issue.md"), a_file("log.txt")],
-                ..Default::default()
-            };
-            let run = launch_handing(tx, automation.id, &here(&claude()), &handed).expect("launch");
-
-            assert_eq!(run.handed.as_deref(), Some("この issue を起票して"));
-            let stored = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
-            assert_eq!(stored.handed, run.handed);
-            let files = read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id)
-                .expect("files");
-            let names: Vec<_> = files.iter().map(|a| a.filename.clone().unwrap_or_default()).collect();
-            assert_eq!(names, ["issue.md", "log.txt"]);
-            assert!(files.iter().all(|a| a.created_by_kind.as_deref() == Some("ai")));
-        });
-    }
-
     /// Blank text is no text, and a launch that hands nothing over starts as it always has.
     #[test]
     fn blank_text_handed_at_launch_is_none() {
@@ -2357,20 +2319,29 @@ mod tests {
         });
     }
 
-    /// **An entry refuses what it does not read** (`AMB-D-970`): an agent's step reads the text and the
-    /// files, not the title, notes or classification of a task to file, and a built-in that takes a
-    /// task reads nothing handed over at all. Refused before any run is made.
+    /// **An entry refuses what it does not read** (`AMB-D-981`): only the built-in that files a task
+    /// reads anything, so an agent's step and a built-in that takes a task are handed nothing — a text,
+    /// a file, or the title or classification of a task to file. Refused before any run is made.
     #[test]
     fn an_entry_refuses_what_it_does_not_read() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let startable = claude();
-            let titled = HandedAtLaunch { title: Some("an issue".into()), ..Default::default() };
-            let err = launch_handing(tx, automation.id, &here(&startable), &titled).expect_err("not read");
-            assert!(err.to_string().contains("reads the text and files"), "{err}");
-            let classified =
-                HandedAtLaunch { classification: vec![("職能".into(), "実装".into())], ..Default::default() };
-            assert!(launch_handing(tx, automation.id, &here(&startable), &classified).is_err());
+            let file = HandedFile {
+                blob_hash: "a".repeat(64),
+                filename: "issue.md".to_string(),
+                mime: Some("text/markdown".to_string()),
+                size_bytes: 12,
+            };
+            for handed in [
+                HandedAtLaunch { text: Some("words".into()), ..Default::default() },
+                HandedAtLaunch { files: vec![file], ..Default::default() },
+                HandedAtLaunch { title: Some("an issue".into()), ..Default::default() },
+                HandedAtLaunch { classification: vec![("職能".into(), "実装".into())], ..Default::default() },
+            ] {
+                let err = launch_handing(tx, automation.id, &here(&startable), &handed).expect_err("not read");
+                assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
+            }
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
 
             let take = mk_automation(tx, "取るだけ");
@@ -2385,20 +2356,6 @@ mod tests {
             let err = entry_reads(tx.conn(), &take, &words).expect_err("reads nothing");
             assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
             assert_eq!(entry_reads(tx.conn(), &take, &HandedAtLaunch::default()).expect("nothing"), None);
-        });
-    }
-
-    /// A file has to say who handed it over, so a launcher that says nothing about itself cannot hand
-    /// one — refused before any run is made.
-    #[test]
-    fn a_file_handed_by_nobody_is_refused() {
-        with_tx(|tx| {
-            let (automation, _, _) = launchable(tx);
-            let startable = claude();
-            let nobody = Launcher { by: None, ..here(&startable) };
-            let handed = HandedAtLaunch { files: vec![a_file("issue.md")], ..Default::default() };
-            assert!(launch_handing(tx, automation.id, &nobody, &handed).is_err());
-            assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
         });
     }
 

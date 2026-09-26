@@ -26,6 +26,7 @@ use rusqlite::Connection;
 use crate::error::{Error, Result};
 use crate::model::{AutomationPortKind, DONE_EXIT};
 use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Outside, Work, Worked};
+use crate::run_wording::builtin as say;
 use crate::store_engine::read;
 use crate::worktree_cut::{self, Refusal};
 
@@ -48,54 +49,53 @@ pub(super) const CUT_WORKTREE: Builtin = Builtin {
 };
 
 fn cut(outside: &Outside<'_>) -> Result<Worked> {
-    let task_id = outside
-        .task_id
-        .ok_or_else(|| Error::invalid("there is no task to cut a worktree for — the run has not taken one"))?;
+    let lang = outside.language;
+    let task_id = outside.task_id.ok_or_else(|| Error::invalid(say(lang, "noTaskToCut", &[])))?;
     let task = read::task(outside.conn, task_id)?
         .ok_or_else(|| Error::not_found(format!("task AMB-T-{task_id}")))?;
-    let root = repository(outside.conn, outside.run.project_id, task.at_binding_id)?;
+    let root = repository(outside.conn, lang, outside.run.project_id, task.at_binding_id)?;
     let cut = worktree_cut::layout(&root, &task_id.to_string());
-    let from = worktree_cut::start_from_origin(&cut).map_err(refused)?;
+    let from = worktree_cut::start_from_origin(&cut).map_err(|r| refused(lang, r))?;
     let path = cut.worktree.to_string_lossy().into_owned();
-    let report = format!("cut {path} on {} from {from}", cut.branch);
+    let report = say(lang, "cut", &[("path", &path), ("branch", &cut.branch), ("from", &from)]);
     Ok(Worked { exit: DONE_EXIT, report, hands: vec![(WORKTREE, path)] })
 }
 
 /// **The repository the task is worked in**: the one its own folder is in, or else the one every
 /// folder of its project is in.
-pub(super) fn repository(conn: &Connection, project_id: i64, at: Option<i64>) -> Result<PathBuf> {
+pub(super) fn repository(conn: &Connection, lang: &str, project_id: i64, at: Option<i64>) -> Result<PathBuf> {
     let folders: Vec<_> = crate::overview::bound_folders(conn)?
         .into_iter()
         .filter(|f| f.project_id == project_id)
         .collect();
     if let Some(named) = at.and_then(|id| folders.iter().find(|f| f.id == id)) {
-        return worktree_cut::git_root(Path::new(&named.dir)).map_err(refused);
+        return worktree_cut::git_root(Path::new(&named.dir)).map_err(|r| refused(lang, r));
     }
     let roots: BTreeSet<PathBuf> =
         folders.iter().filter_map(|f| worktree_cut::git_root(Path::new(&f.dir)).ok()).collect();
     let mut roots = roots.into_iter();
     match (roots.next(), roots.next()) {
         (Some(root), None) => Ok(root),
-        (None, _) => Err(Error::invalid(
-            "no folder of this project is in a git repository, so there is nothing to cut a worktree from",
-        )),
-        (Some(_), Some(_)) => Err(Error::invalid(
-            "this project's folders are in more than one repository, and the task names none of them — \
-             which one to cut from is not written anywhere",
-        )),
+        (None, _) => Err(Error::invalid(say(lang, "noRepository", &[]))),
+        (Some(_), Some(_)) => Err(Error::invalid(say(lang, "manyRepositories", &[]))),
     }
 }
 
-/// A refusal from the git side, as one sentence.
-pub(super) fn refused(refusal: Refusal) -> Error {
+/// A refusal from the git side, as one sentence a person reads in `lang` — every one of them, so no
+/// `Debug` spelling of a variant reaches the task. What git or the filesystem said is quoted as it is.
+pub(super) fn refused(lang: &str, refusal: Refusal) -> Error {
+    let path = |at: &Path| at.display().to_string();
     Error::invalid(match refusal {
-        Refusal::NoGit => "there is no git on this machine to cut a worktree with".to_string(),
-        Refusal::NotARepository(why) => format!("the task's folder is in no repository: {why}"),
-        Refusal::WorktreeExists(at) => format!("a worktree for this task is standing already at {}", at.display()),
-        Refusal::BranchExists(branch) => format!("the branch {branch} is there already, with no worktree on it"),
+        Refusal::NoGit => say(lang, "noGit", &[]),
+        Refusal::NotARepository(why) => say(lang, "notARepository", &[("why", &why)]),
+        Refusal::WorktreeExists(at) => say(lang, "worktreeExists", &[("path", &path(&at))]),
+        Refusal::BranchExists(branch) => say(lang, "branchExists", &[("branch", &branch)]),
+        Refusal::NoWorktree(at) => say(lang, "noWorktree", &[("path", &path(&at))]),
+        Refusal::Dirty(at) => say(lang, "dirty", &[("path", &path(&at))]),
+        Refusal::Unmerged { branch, base } => say(lang, "unmerged", &[("branch", &branch), ("base", &base)]),
+        Refusal::Unquotable(at) => say(lang, "unquotable", &[("path", &path(&at))]),
         Refusal::Git(said) => said,
         Refusal::Io(said) => said,
-        other => format!("{other:?}"),
     })
 }
 
@@ -286,6 +286,39 @@ mod tests {
         });
     }
 
+    /// **Every refusal from the git side is a sentence**, in the reader's language — none reaches the
+    /// task as the `Debug` spelling of its variant (`Dirty("…")`).
+    #[test]
+    fn a_refusal_is_said_as_a_sentence_and_never_as_its_variant() {
+        let at = PathBuf::from("/work/app-worktrees/7");
+        let every = || {
+            [
+                Refusal::NoGit,
+                Refusal::NotARepository("not a git repository".into()),
+                Refusal::WorktreeExists(at.clone()),
+                Refusal::BranchExists("task/7".into()),
+                Refusal::NoWorktree(at.clone()),
+                Refusal::Dirty(at.clone()),
+                Refusal::Unmerged { branch: "task/7".into(), base: "origin/main".into() },
+                Refusal::Unquotable(at.clone()),
+            ]
+        };
+        for lang in ["en", "ja"] {
+            for refusal in every() {
+                let said = refused(lang, refusal).to_string();
+                let variants = [
+                    "NoGit", "NotARepository", "WorktreeExists", "BranchExists", "NoWorktree", "Dirty(", "Unmerged {",
+                    "Unquotable(",
+                ];
+                assert!(variants.iter().all(|variant| !said.contains(variant)), "{lang}: {said}");
+            }
+        }
+        assert_eq!(
+            refused("ja", Refusal::Dirty(at)).to_string(),
+            "/work/app-worktrees/7 の worktree にコミットしていない変更があるので、畳まずに残しました",
+        );
+    }
+
     /// **Two repositories, and a task that names neither, is refused** rather than guessed at.
     #[test]
     fn a_project_in_two_repositories_is_not_guessed_at() {
@@ -294,7 +327,7 @@ mod tests {
             let (two, _) = repositories("builtin-cut-two");
             let project = mk_project(tx, "amenbo");
             bind(tx, project, &[&one, &two]);
-            let err = repository(tx.conn(), project, None).expect_err("refused");
+            let err = repository(tx.conn(), "en", project, None).expect_err("refused");
             assert!(err.to_string().contains("more than one repository"), "{err}");
         });
     }

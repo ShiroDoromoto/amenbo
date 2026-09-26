@@ -3,7 +3,9 @@
 # failure nobody had acknowledged was on the running tab and nowhere on the pane standing for it.
 # Now a run's place is read back as the run's by its id (`app/src/talk/layout.ts`, `restored`), and
 # where no step arrives in it the header is said off the run (`app/src/core/runWords.ts`,
-# `runSayOf`). What the terminal printed does not come back: that died with the process.
+# `runSayOf`). What the terminal printed does not come back: that died with the process. Nor does the
+# pane offer to open one: a terminal opened by hand there would be an ordinary session with nothing to
+# do with the run, under a row still naming the run's step.
 #
 # The app is quit while the run's step is under way. A run that was going when the app ended is
 # failed on the way up, which makes it a failure nobody has acknowledged — one of the runs whose pane
@@ -13,7 +15,7 @@ title: A run the app ended under comes back as its own pane, saying it failed an
 description: >
   Start a run and quit the app while its step is under way. The app comes back up with the run's
   pane standing for the run: its header names the step it was on and says it failed because the step
-  ended without reporting.
+  ended without reporting. It offers no terminal to open in its place.
 given:
   # `runs` keeps the stand-in standing, so the step is still under way when the app is quit.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }

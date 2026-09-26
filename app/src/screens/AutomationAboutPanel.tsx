@@ -16,8 +16,11 @@
 // that looks made and is not. A refusal is drawn once, at the top, in the words core wrote.
 //
 // **The ID is shown as the line it goes into.** It is what the terminal names the definition by and it
-// never changes, so the panel draws `amenbo automation start <id>` with a press that copies it — what
-// the number is for is read off the command, and no sentence has to say so.
+// never changes, so the panel draws `amenbo automation start <id> --actor human` with a press that
+// copies it — what the number is for is read off the command, and no sentence has to say so. It is the
+// line as typed: the CLI this build installs (`useCliCommandName`), and the facet, which the CLI
+// refuses to go without. The one reading this panel is the person, so it is theirs. A build that
+// installs no CLI a reader can run draws no line.
 //
 // **Archiving is a switch and not an action.** It takes nothing away and stops nothing already
 // running (`amenbo_core::ops::automation::update`) — the row goes to the fold at the end of the list —
@@ -34,6 +37,7 @@ import { confirmDialog } from "../core/dialog";
 import { asTyped } from "../core/keys";
 import { errText, t } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
+import { useCliCommandName } from "../core/cliCommand";
 import type { AutomationDetailDto } from "../bindings/bindings";
 
 /**
@@ -107,7 +111,8 @@ export function AutomationAboutPanel({
   const [notes, setNotes] = useDraft(automation.notes);
   const [refused, setRefused] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const command = `amenbo automation start ${automation.id}`;
+  const cli = useCliCommandName();
+  const command = cli === null ? null : `${cli} automation start ${automation.id} --actor human`;
 
   const run = (write: Promise<void>): Promise<void> => {
     setRefused(null);
@@ -115,6 +120,7 @@ export function AutomationAboutPanel({
   };
 
   const copy = async () => {
+    if (command === null) return;
     try {
       await navigator.clipboard.writeText(command);
       setCopied(true);
@@ -153,14 +159,16 @@ export function AutomationAboutPanel({
         />
       </label>
 
-      <div className="autoabout__cli">
-        <span className="autostep__label">{t("auto.about.cli")}</span>
-        <code className="autoabout__command">{command}</code>
-        <button type="button" className="btn" onClick={() => void copy()}>
-          {t("auto.about.copy")}
-        </button>
-        <span className="autoabout__copied" role="status">{copied ? t("auto.about.copied") : ""}</span>
-      </div>
+      {command !== null && (
+        <div className="autoabout__cli">
+          <span className="autostep__label">{t("auto.about.cli")}</span>
+          <code className="autoabout__command">{command}</code>
+          <button type="button" className="btn" onClick={() => void copy()}>
+            {t("auto.about.copy")}
+          </button>
+          <span className="autoabout__copied" role="status">{copied ? t("auto.about.copied") : ""}</span>
+        </div>
+      )}
 
       <label className="switchrow">
         <span>{t("auto.about.archive")}</span>

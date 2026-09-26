@@ -7,14 +7,19 @@
 // Outside the provider (tests, previews) the default is `{}` and clicking a link is a no-op.
 import { createContext, useContext, type ReactNode } from "react";
 
+/** The two tabs of a project's automations that list runs. */
+export type RunsTab = "running" | "history";
+
 export interface RefNav {
   selectTask?: (id: number) => void;
   selectDecision?: (id: number | null) => void;
   /** Open one automation's build screen, with the box a run stopped at already pressed where one is
    *  named (`AMB-T-5539`) — from a run's pane, which is the workspace's and not the ledger's. */
   openAutomation?: (project: number, automation: number, placement: number | null) => void;
-  /** Open a project's automations on the "history" tab — from a run's pane, once the run is over. */
-  openRunHistory?: (project: number) => void;
+  /** Open a project's automations on the tab a run is listed on — from a run's pane, once the run is
+   *  over. That is "history", except for a failure nobody has acknowledged yet: it stays on "running"
+   *  until somebody does (`AMB-D-955`). */
+  openRuns?: (project: number, tab: RunsTab) => void;
   /** Bring the workspace forward — from a launch refused because it is closed (`AMB-T-5590`). The
    *  press lands wherever the workspace is: this window's face, or the window it was split out into. */
   openWorkspace?: () => void;

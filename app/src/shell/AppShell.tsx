@@ -38,7 +38,7 @@ import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth, SIDEBAR_COMPACT } from "../core/sidebarWidth";
 import { getSidebarCompact, setSidebarCompact } from "../core/sidebarCompact";
-import { RefNavProvider } from "../core/refNav";
+import { RefNavProvider, type RunsTab } from "../core/refNav";
 import { PaneSlotProvider } from "./paneSlot";
 import { writesOn } from "../core/unwritten";
 import { currentLang, errLabel, t, type CmdError } from "../core/i18n";
@@ -69,7 +69,7 @@ export type Nav = {
   pick?: number;
   automation?: number;
   placement?: number;
-  runs?: "history";
+  runs?: RunsTab;
   nth?: number;
   action?: number;
 };
@@ -641,15 +641,15 @@ export function AppShell() {
     });
     setFace("tasks");
   }, [navTo]);
-  const openRunHistory = useCallback((project: number) => {
+  const openRuns = useCallback((project: number, tab: RunsTab) => {
     arrivals.current += 1;
-    navTo({ type: "project", id: String(project), runs: "history", nth: arrivals.current });
+    navTo({ type: "project", id: String(project), runs: tab, nth: arrivals.current });
     setFace("tasks");
   }, [navTo]);
   const openWorkspace = useCallback(() => selectFace("workspace"), [selectFace]);
   const refNav = useMemo(
-    () => ({ selectTask, selectDecision, openAutomation, openRunHistory, openWorkspace }),
-    [selectTask, selectDecision, openAutomation, openRunHistory, openWorkspace],
+    () => ({ selectTask, selectDecision, openAutomation, openRuns, openWorkspace }),
+    [selectTask, selectDecision, openAutomation, openRuns, openWorkspace],
   );
 
   // A run's pane followed from the workspace's own window (`AMB-T-5539`). The host has brought this
@@ -664,7 +664,7 @@ export function AppShell() {
         if (payload.automation !== undefined) {
           openAutomation(payload.project, payload.automation, payload.placement ?? null);
         } else {
-          openRunHistory(payload.project);
+          openRuns(payload.project, payload.runs ?? "history");
         }
       }))
       .then((un) => {
@@ -675,7 +675,7 @@ export function AppShell() {
       disposed = true;
       unlisten?.();
     };
-  }, [openAutomation, openRunHistory]);
+  }, [openAutomation, openRuns]);
 
   // Only the detail closes on a blank-space click. A build panel sits beside a picture whose every box
   // and line is a press, and it closes with its own ×.

@@ -16,6 +16,7 @@ import {
 } from "../components/atoms";
 import { errText, eventText, exactLabel, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
+import { useSingleFlight } from "../core/singleFlight";
 import { invoke } from "../core/ipc";
 import { useRefNav } from "../core/refNav";
 import { axesFor } from "../core/appliesTo";
@@ -153,6 +154,8 @@ export function TaskDetailPane({
     setTab("detail");
   }, [editCommentAt?.nonce]);
   const roster = dataAdapter.listRoster();
+  // The comment box: a second send before the first has landed is dropped: the box still holds the body, so it would post it again.
+  const { busy: commentBusy, run: runComment } = useSingleFlight();
   if (!task) return <div className="rightpane__empty">{t("detail.notFound")}</div>;
 
   const notesProjectId = placementOf(task)?.project.id ?? task.projectId ?? null;
@@ -195,16 +198,18 @@ export function TaskDetailPane({
 
   // Await the post and only clear the box once it lands: a refused comment used to blank the input, losing the
   // body the user just wrote. On failure the text stays put and the error is shown, so retrying costs nothing.
-  const submitComment = async () => {
+  const submitComment = () => {
     const body = comment.trim();
     if (!body) return;
-    setCommentError(null);
-    try {
-      await mutAddComment(taskId, body);
-      setComment("");
-    } catch (e) {
-      setCommentError(errText(e));
-    }
+    runComment(async () => {
+      setCommentError(null);
+      try {
+        await mutAddComment(taskId, body);
+        setComment("");
+      } catch (e) {
+        setCommentError(errText(e));
+      }
+    });
   };
   const editComment = async (commentId: number, text: string) => {
     await mutEditComment(commentId, taskId, text);
@@ -530,13 +535,13 @@ export function TaskDetailPane({
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => {
-                  if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitComment(); }
+                  if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitComment(); }
                 }}
               />
               {commentError && <ErrorNote>{commentError}</ErrorNote>}
               <div className="writebox__actions">
                 <span className="meta">{t("detail.commentHint")}</span>
-                <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
+                <button className="btn btn--primary" disabled={commentBusy || !comment.trim()} onClick={submitComment}>{t("detail.send")}</button>
               </div>
             </div>
           </div>

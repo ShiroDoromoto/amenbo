@@ -62,7 +62,7 @@ import { builtinShown, builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { ExitMark, filterValueLabel, ReachChip, usedCount } from "./automationParts";
-import { automationGraph, ERROR_EXIT } from "./automationLayout";
+import { automationGraph, ERROR_EXIT, fed, readAtLaunch } from "./automationLayout";
 import { exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import { Sec } from "./automationDeclParts";
 import {
@@ -294,7 +294,7 @@ function CfgRow({ placementId, projectId, builtin, cfg, siblings, run }: {
           onAnswer={answer}
         />
       )}
-      {special === "numbers" && <NumberLines label={shown} value={cfg.value} onAnswer={answer} />}
+      {special === "numbers" && <NumberLines name={cfg.name} label={shown} value={cfg.value} onAnswer={answer} />}
 
       {/* A folder answered with one this project has not got stays offered, so what is written shows. */}
       {cfg.kind === "folder" && folderPaths.length > 0 && (
@@ -405,11 +405,31 @@ function InputRow({
   const choices = wireChoices(graph, placement.id, input);
   const picked = now === undefined ? "" : choiceKey(now.fromId, now.fromExitName, now.fromPortName);
   const inputName = builtinWord(placement.builtin, input.name);
+  const chip = (
+    <div>
+      <DeclChip name={inputName} kind={kindLabel(input.kind)} required={input.required} tone={input.kind} />
+    </div>
+  );
+  // The same mark the box carries on the picture, by the same rule (`fed`): a wire from this spot's own
+  // way out, or from a spot only reached through it, leaves the input empty the first time a run comes.
+  const unfed = input.required && !fed(graph, placement.id, input.name) && (
+    <span className="autostep__unfed">
+      <Icon name="warning" />
+      {tf("auto.pic.unfed", { names: inputName })}
+    </span>
+  );
+  // Handed over in the start dialog, not by a wire — so there is nothing to choose here.
+  if (readAtLaunch(graph, placement.builtin, placement.id, input.name)) {
+    return (
+      <div className="autostep__wire">
+        {chip}
+        <span className="autostep__atlaunch">{t("auto.step.atLaunch")}</span>
+      </div>
+    );
+  }
   return (
     <div className="autostep__wire">
-      <div>
-        <DeclChip name={inputName} kind={kindLabel(input.kind)} required={input.required} tone={input.kind} />
-      </div>
+      {chip}
       <select
         aria-label={inputName}
         value={picked}
@@ -439,6 +459,7 @@ function InputRow({
           </option>
         ))}
       </select>
+      {unfed}
     </div>
   );
 }

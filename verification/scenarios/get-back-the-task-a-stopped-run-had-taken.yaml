@@ -1,16 +1,16 @@
 # A run reserves the task it is about, which is what keeps two runs off the same work. So
-# a run that ends without finishing has something to give back: the task goes to `todo`, where
-# anybody can pick it up. Without that, a reader looking at that task would find it held by a run
-# that no longer exists.
+# a run that ends without finishing has something to give back: the task goes to `todo`, and to the
+# person who launched the run, who says what happens next. Without that, a reader looking at that
+# task would find it held by a run that no longer exists.
 #
 # The road it is walked by is the pane, because that is where a person watching a run ends it — the
 # stop on the line over the pane, and the handing back happens behind it.
 id: get-back-the-task-a-stopped-run-had-taken
-title: Ending a run hands the task it had taken back, and says on the task what happened
+title: Ending a run hands the task it had taken back to the person, and says on the task what happened
 description: >
   Start a run whose built-in takes a task, then stop the run from the line over its pane. Read the
-  three things that leaves behind: the task is `todo` again, its timeline says the run was canceled,
-  and the run's row on the history tab says so too. What separates this road from
+  three things that leaves behind: the task is `todo` again and the person's, its timeline says the
+  run was canceled, and the run's row on the history tab says so too. What separates this road from
   close-the-pane-a-run-is-drawn-in is what is read after the stop — that one reads the pane, and the
   giving back is not on it.
 given:
@@ -124,6 +124,16 @@ steps_gui:
       target: seed
       field: status
       equals: todo
+
+  # And to the person who launched it. A person stopped it, so what comes next is theirs to say —
+  # left with the AI, a run waiting for a task to take would take it straight back.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: assignee_kind
+      equals: human
 
   # And the reason, on the task itself. Only the first sentence is named: the rest of the line
   # carries the run's own number, which the store issues and no road can spell in advance.

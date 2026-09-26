@@ -441,6 +441,8 @@ fn store_activity_dtos(store: &Store, limit: usize) -> Result<Vec<ActivityItemDt
 /// snapshot** (we never quietly create a default empty store — the empty state is explicit).
 fn build_snapshot() -> Result<Snapshot, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("build_snapshot");
+    // First, before any row is read: see `Snapshot::signature` for why it may not come later.
+    let signature = store_signature_parts();
     let mut acc = Acc::default();
 
     let paths = amenbo_core::config::Paths::resolve().ok();
@@ -483,6 +485,7 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
         tick_consent: config.tick_consent.map(|c| c.as_str().to_string()),
         tick_removal_leaves_a_row: amenbo_core::tick::removal_leaves_a_row(),
         default_view: config.default_view.as_str().to_string(),
+        signature,
     })
 }
 
@@ -679,9 +682,10 @@ fn store_signature_string() -> String {
     format!("{}:{}:{}", s.file, s.version, s.config)
 }
 
-/// The signature the GUI holds on to: it filters out the `store-changed` events its own writes caused
-/// (all three legs unchanged), and reads which leg moved to decide between re-reading everything and
-/// re-reading one scope (`AMB-D-856`).
+/// The signature as it stands now, which the GUI sets beside the one it holds on to — the one its last
+/// snapshot came with ([`Snapshot::signature`]). It filters out the `store-changed` events its own
+/// writes caused (all three legs unchanged), and reads which leg moved to decide between re-reading
+/// everything and re-reading one scope (`AMB-D-856`).
 #[tauri::command]
 pub fn store_signature() -> StoreSignatureDto {
     store_signature_parts()
@@ -3807,8 +3811,8 @@ fn write_facet_names(human: Option<&str>, ai: Option<&str>) -> Result<(), CmdErr
 /// blocks are: the language is already saved, and a menu that did not come back is a menu in the old
 /// words rather than a setting that failed.
 ///
-/// **It is posted to the main thread**, where menu items may be made at all on macOS and Linux — a
-/// command runs on a worker.
+/// **It is posted to the main thread**, where menu items may be made at all on macOS and Linux — this
+/// command touches the store, so it runs on the store thread ([`crate::store_worker`]).
 #[tauri::command]
 pub fn config_set_language(app: tauri::AppHandle, language: String) -> Result<WriteAck, CmdError> {
     let paths = amenbo_core::config::Paths::resolve()?;

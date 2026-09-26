@@ -66,7 +66,8 @@ fn not_found(what: &str, id: i64) -> Error {
 fn checked_name(what: &str, name: &str) -> Result<String> {
     let s = name.trim();
     if s.is_empty() {
-        return Err(Error::invalid(format!("a {what} name cannot be empty")));
+        let article = if what.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+        return Err(Error::invalid(format!("{article} {what} name cannot be empty")));
     }
     Ok(s.to_string())
 }
@@ -986,19 +987,24 @@ fn not_an_entry(what: &str) -> Error {
 /// answers written on them. The library actions those placements stood on are left where they are:
 /// the library outlives any one picture.
 ///
-/// **Refused while a run stands behind it**, naming how many. A run carries its own copy of the steps
-/// and would go on reading correctly, but it is filed under the automation it was launched from, and
-/// deleting that leaves the record unable to say what was run.
+/// **Refused while a run stands behind it**, naming how many (`invalid_automation_has_runs`). A run
+/// carries its own copy of the steps and would go on reading correctly, but it is filed under the
+/// automation it was launched from, and deleting that leaves the record unable to say what was run.
+/// Archiving is what takes such an automation out of the way.
 pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let automation = live_automation(tx, id)?;
     not_under_a_run(tx, Def::Automation(id))?;
     let runs = read::automation_run_ids(tx.conn(), id)?;
     if !runs.is_empty() {
-        return Err(Error::invalid(format!(
-            "{} run(s) were launched from this automation — it is what they are filed under, so it \
-             cannot be deleted",
-            runs.len()
-        )));
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "{} run(s) were launched from this automation — it is what they are filed under, so it \
+                 cannot be deleted",
+                runs.len()
+            ))
+            .coded(ErrorCode::InvalidAutomationHasRuns)
+            .with("count", runs.len()),
+        ));
     }
     for wire in read::automation_wire_ids(tx.conn(), AutomationPictureOwner::Automation, id)? {
         tx.delete_record("automation_wire", wire)?;
@@ -1816,7 +1822,7 @@ pub(crate) fn declare_port(
     not_under_a_run(tx, def_of_port_owner(tx, owner_kind, owner_id)?)?;
     if read::automation_port_by_name(tx.conn(), owner_kind, owner_id, direction, &name)?.is_some() {
         return Err(Error::invalid(format!(
-            "a {} called '{name}' is already declared here",
+            "an {} called '{name}' is already declared here",
             match direction {
                 AutomationPortDirection::In => "input",
                 AutomationPortDirection::Out => "output",
@@ -1954,15 +1960,95 @@ pub fn cfg_add(
 }
 
 /// A choice list belongs to a choice and to nothing else — carried on another kind it would be written,
-/// never read, and never shown.
+/// never read, and never shown. **It is a JSON array of distinct, non-empty strings**, at least one of
+/// them: anything else leaves every answer either refused or unchecked ([`answer_misfit`]).
 fn checked_options(kind: AutomationCfgKind, options: Option<&str>) -> Result<()> {
-    if options.is_some() && kind != AutomationCfgKind::Choice {
+    let Some(options) = options else { return Ok(()) };
+    if kind != AutomationCfgKind::Choice {
         return Err(Error::invalid(format!(
             "a list of choices belongs to a 'choice' setting — this one is '{}'",
             kind.as_str()
         )));
     }
+    let list = choices(options).ok_or_else(|| {
+        Error::invalid(format!(
+            "the choices {options} are not a JSON array of strings, like [\"one\",\"two\"]"
+        ))
+    })?;
+    if list.is_empty() {
+        return Err(Error::invalid("a list of choices needs at least one choice"));
+    }
+    let mut seen = BTreeSet::new();
+    for one in &list {
+        if one.trim().is_empty() {
+            return Err(Error::invalid("a choice cannot be empty"));
+        }
+        if !seen.insert(one.as_str()) {
+            return Err(Error::invalid(format!("the choice '{one}' is listed twice")));
+        }
+    }
     Ok(())
+}
+
+/// A choice list read as the strings it holds, or `None` where it is not a JSON array of strings.
+fn choices(options: &str) -> Option<Vec<String>> {
+    let serde_json::Value::Array(list) = serde_json::from_str(options).ok()? else {
+        return None;
+    };
+    list.into_iter().map(|one| one.as_str().map(str::to_string)).collect()
+}
+
+/// **Why an answer does not fit the setting it answers**, or `None` where it does. Read the same way when
+/// the answer is written ([`cfg_set`]) and when a run is launched on it (`automation_run::check`), so an
+/// answer written before this was checked, or left behind when its declaration changed, is refused at
+/// the launch rather than read as something nobody wrote.
+///
+/// The JSON's own type is what each kind takes: an object of parts for a task filter, a whole number of
+/// zero or more for a number, and a string for the other three — for a choice, one of the declared
+/// choices where there are any. A task filter's parts are read as the filter the run will search with.
+pub fn answer_misfit(kind: AutomationCfgKind, options: Option<&str>, value: &str) -> Option<String> {
+    use serde_json::Value;
+    let Ok(read) = serde_json::from_str::<Value>(value) else {
+        return Some(format!("{value} is not JSON"));
+    };
+    match (kind, &read) {
+        (AutomationCfgKind::TaskFilter, Value::Object(parts)) => taskfilter_misfit(parts, value),
+        (AutomationCfgKind::TaskFilter, _) => {
+            Some(format!("a task filter is answered with its parts, and {value} is not"))
+        }
+        (AutomationCfgKind::Number, Value::Number(n)) if n.as_i64().is_some_and(|n| n >= 0) => None,
+        (AutomationCfgKind::Number, _) => Some(format!("{value} is not a whole number of zero or more")),
+        (AutomationCfgKind::Choice, Value::String(one)) => {
+            let list = options.and_then(choices)?;
+            (!list.contains(one)).then(|| format!("'{one}' is not one of the choices {}", list.join(", ")))
+        }
+        (AutomationCfgKind::Folder | AutomationCfgKind::Text, Value::String(_)) => None,
+        (_, _) => Some(format!("a '{}' setting is answered with a string, and {value} is not one", kind.as_str())),
+    }
+}
+
+/// A task filter's parts: each a string or a list of strings, the order one `task list --sort` takes,
+/// and the whole a filter the grammar reads.
+fn taskfilter_misfit(parts: &serde_json::Map<String, serde_json::Value>, value: &str) -> Option<String> {
+    use crate::ops::automation_step::{taskfilter_expr, TASKFILTER_SORT_KEY};
+    for (key, part) in parts {
+        if key == TASKFILTER_SORT_KEY {
+            match part.as_str() {
+                Some(sort) if read::is_task_sort(sort) => continue,
+                _ => return Some(format!("{part} is not an order `task list --sort` takes")),
+            }
+        }
+        let strings = match part {
+            serde_json::Value::String(_) => true,
+            serde_json::Value::Array(many) => many.iter().all(serde_json::Value::is_string),
+            _ => false,
+        };
+        if !strings {
+            return Some(format!("the part '{key}' of a task filter is {part}, not a string or a list of them"));
+        }
+    }
+    let expr = taskfilter_expr(value).unwrap_or_default();
+    crate::query::Filter::parse(&expr, crate::time::today()).err().map(|e| e.to_string())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1999,6 +2085,11 @@ fn write_cfg_row(
 
 /// Change a setting's declaration — its name, its kind, whether it is required, its choice list. Only
 /// the `Some` fields are written.
+///
+/// **A new name carries every placement's answer with it** (`AMB-T-5657`). The answer is found by the
+/// declaration's name ([`cfg_set`]), so a rename that left it behind would drop it from view while its
+/// row stayed in the store. A placement that already holds a row under the new name is refused rather
+/// than overwritten, and an answer is not renamed on its own — its name is the declaration's.
 pub fn cfg_update(
     tx: &WriteTx<'_>,
     id: i64,
@@ -2021,6 +2112,20 @@ pub fn cfg_update(
                 )));
             }
         }
+        if name != before.name {
+            match before.owner_kind {
+                AutomationCfgOwner::Placement => {
+                    return Err(Error::invalid(format!(
+                        "an answer is called by the name its action declares — rename setting \
+                         '{}' on the action, and every placement's answer follows",
+                        before.name
+                    )));
+                }
+                AutomationCfgOwner::Action => {
+                    carry_answers_to(tx, before.owner_id, &before.name, &name)?;
+                }
+            }
+        }
         after.name = name;
     }
     if let Some(kind) = kind {
@@ -2038,6 +2143,35 @@ pub fn cfg_update(
     Ok(after)
 }
 
+/// Rename the answer every placement of `action_id` gives to setting `from`. Every placement is checked
+/// before any row is written, so a refusal leaves no answer half-carried.
+fn carry_answers_to(tx: &WriteTx<'_>, action_id: i64, from: &str, to: &str) -> Result<()> {
+    let mut answers = Vec::new();
+    for placement in read::automation_placement_ids_using_action(tx.conn(), action_id)? {
+        if let Some(held) =
+            read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement, to)?
+        {
+            return Err(Error::invalid(format!(
+                "placement '{placement}' already holds an answer called '{to}' ({}) that no setting \
+                 declares — take it off with `automation cfg-rm {}`, then rename",
+                held.id, held.id
+            )));
+        }
+        if let Some(answer) =
+            read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement, from)?
+        {
+            answers.push(answer);
+        }
+    }
+    for before in answers {
+        let mut after = before.clone();
+        after.name = to.to_string();
+        after.updated_at = Timestamp::now();
+        emit_update(tx, record::automation_cfg(&before), record::automation_cfg(&after))?;
+    }
+    Ok(())
+}
+
 /// **Answer a setting on one placement.** The answer is JSON, and `None` clears it.
 ///
 /// The declaration is the action's and carries no answer, so the placement takes a row of its own under
@@ -2052,20 +2186,31 @@ pub fn cfg_set(
     let placement = live_placement(tx, placement_id)?;
     not_under_a_run(tx, Def::Automation(placement.automation_id))?;
     let name = checked_name("setting", name)?;
-    if let Some(before) =
-        read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement.id, &name)?
-    {
-        filter_names_what_is_there(tx, before.kind, value)?;
+    let declared =
+        read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Action, placement.action_id, &name)?;
+    let answered =
+        read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement.id, &name)?;
+    // The declaration says what fits: the placement's row copied it at birth, and the declaration may
+    // have changed since.
+    let Some(declares) = declared.as_ref().or(answered.as_ref()) else {
+        return Err(Error::not_found(format!("no setting called '{name}' is declared here")));
+    };
+    if let Some(value) = value {
+        if let Some(why) = answer_misfit(declares.kind, declares.options.as_deref(), value) {
+            return Err(Error::invalid(format!("the setting '{name}' cannot take this answer: {why}")));
+        }
+    }
+    filter_names_what_is_there(tx, declares.kind, value)?;
+    if let Some(before) = answered {
         let mut after = before.clone();
         after.value = value.map(str::to_string);
         after.updated_at = Timestamp::now();
         emit_update(tx, record::automation_cfg(&before), record::automation_cfg(&after))?;
         return Ok(after);
     }
-    let declared =
-        read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Action, placement.action_id, &name)?
-            .ok_or_else(|| Error::not_found(format!("no setting called '{name}' is declared here")))?;
-    filter_names_what_is_there(tx, declared.kind, value)?;
+    let Some(declared) = declared else {
+        return Err(Error::not_found(format!("no setting called '{name}' is declared here")));
+    };
     write_cfg_row(
         tx,
         AutomationCfgOwner::Placement,
@@ -2439,6 +2584,21 @@ pub fn wire_add(
     to_id: i64,
     to_port_name: &str,
 ) -> Result<AutomationWire> {
+    draw_wire(tx, owner_kind, from_id, from_exit_name, from_port_name, to_id, to_port_name).map(|(wire, _)| wire)
+}
+
+/// [`wire_add`], saying besides whether the wire was drawn just now: `false` where the same one was
+/// there already, which is answered as it stands and written nothing for. That is what lets a person
+/// who draws it again be told nothing was added rather than that it was.
+pub fn draw_wire(
+    tx: &WriteTx<'_>,
+    owner_kind: AutomationPictureOwner,
+    from_id: i64,
+    from_exit_name: Option<&str>,
+    from_port_name: &str,
+    to_id: i64,
+    to_port_name: &str,
+) -> Result<(AutomationWire, bool)> {
     let owner_id = wire_picture(tx, owner_kind, from_id, to_id)?;
     not_under_a_run(tx, def_of_picture(owner_kind, owner_id))?;
     let mut from_exit_id = None;
@@ -2534,7 +2694,7 @@ pub fn wire_add(
         to_id,
         into.id,
     )? {
-        return Ok(drawn);
+        return Ok((drawn, false));
     }
     let now = Timestamp::now();
     let id = read::next_id(tx.conn(), "automation_wire")?;
@@ -2551,7 +2711,7 @@ pub fn wire_add(
         updated_at: now,
     };
     emit_create(tx, record::automation_wire(&wire))?;
-    Ok(wire)
+    Ok((wire, true))
 }
 
 /// Delete a wire. The box then reads nothing on that input unless another wire lands on it.
@@ -3436,7 +3596,7 @@ mod tests {
             .expect("read")
             .expect("the input");
             port_update(tx, into.id, None, Some(AutomationPortKind::File), None).expect("retype it");
-            let wire = wire_add(
+            let (wire, drawn) = draw_wire(
                 tx,
                 AutomationPictureOwner::Automation,
                 from.id,
@@ -3446,7 +3606,8 @@ mod tests {
                 "差分",
             )
             .expect("draw the wire");
-            let again = wire_add(
+            assert!(drawn, "the first wire was said to be there already");
+            let (again, drawn_again) = draw_wire(
                 tx,
                 AutomationPictureOwner::Automation,
                 from.id,
@@ -3457,6 +3618,7 @@ mod tests {
             )
             .expect("draw it again");
             assert_eq!(wire.id, again.id, "the same wire twice is the one wire");
+            assert!(!drawn_again, "the same wire drawn again was said to be drawn just now");
         });
     }
 
@@ -3603,12 +3765,119 @@ mod tests {
         });
     }
 
+    /// **A renamed setting keeps every placement's answer** (`AMB-T-5657`): the answer is read by the
+    /// declaration's name, so one left under the old name would drop out of view.
+    #[test]
+    fn a_renamed_setting_carries_every_placements_answer() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, here) = mk_placed(tx, &automation, "数える");
+            let there = placement_add(tx, automation.id, action.id).expect("place it again");
+            let declared = cfg_add(tx, action.id, "数", AutomationCfgKind::Text, false, None)
+                .expect("declare it");
+            cfg_set(tx, here.id, "数", Some("\"abc\"")).expect("answer here");
+            cfg_update(tx, declared.id, Some("個数"), None, None, None).expect("rename it");
+            let answer = |placement_id: i64, name: &str| {
+                read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement_id, name)
+                    .expect("read")
+            };
+            assert_eq!(answer(here.id, "個数").and_then(|a| a.value).as_deref(), Some("\"abc\""));
+            assert!(answer(here.id, "数").is_none(), "nothing is left under the old name");
+            assert!(answer(there.id, "個数").is_none(), "an unanswered placement stays unanswered");
+        });
+    }
+
+    /// A rename that would land an answer on a row already there is refused, and changes nothing; an
+    /// answer is not renamed away from the name its action declares.
+    #[test]
+    fn a_rename_that_cannot_carry_the_answer_is_refused() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, placement) = mk_placed(tx, &automation, "数える");
+            let declared = cfg_add(tx, action.id, "数", AutomationCfgKind::Text, false, None)
+                .expect("declare it");
+            let answered = cfg_set(tx, placement.id, "数", Some("\"abc\"")).expect("answer it");
+            assert!(
+                cfg_update(tx, answered.id, Some("個数"), None, None, None).is_err(),
+                "an answer takes its name from the declaration",
+            );
+            let old = cfg_add(tx, action.id, "個数", AutomationCfgKind::Text, false, None)
+                .expect("declare the other");
+            cfg_set(tx, placement.id, "個数", Some("\"def\"")).expect("answer the other");
+            cfg_delete(tx, old.id).expect("its declaration goes, its answer stays");
+            assert!(cfg_update(tx, declared.id, Some("個数"), None, None, None).is_err());
+            let kept = read::automation_cfg(tx.conn(), declared.id).expect("read").expect("the row");
+            assert_eq!(kept.name, "数", "the refused rename wrote nothing");
+            let answer =
+                read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement.id, "数")
+                    .expect("read")
+                    .expect("the answer");
+            assert_eq!(answer.value.as_deref(), Some("\"abc\""));
+        });
+    }
+
     #[test]
     fn a_setting_nobody_declared_cannot_be_answered() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let (_, placement) = mk_placed(tx, &automation, "実装する");
             assert!(cfg_set(tx, placement.id, "どのタスクを取るか", Some("{}")).is_err());
+        });
+    }
+
+    /// **An answer is refused when it is not what its kind takes** — the task filter answered with a
+    /// choice, which the take then read as no narrowing and took a person's task with (`AMB-T-5648`), a
+    /// number below zero or not whole, a choice that is not listed, a string that is not one.
+    #[test]
+    fn an_answer_its_kind_does_not_take_is_refused() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, placement) = mk_placed(tx, &automation, "取る");
+            cfg_add(tx, action.id, "受信箱", AutomationCfgKind::TaskFilter, false, None).expect("filter");
+            cfg_add(tx, action.id, "秒", AutomationCfgKind::Number, false, None).expect("number");
+            cfg_add(tx, action.id, "どれ", AutomationCfgKind::Choice, false, Some(r#"["a","b"]"#))
+                .expect("choice");
+            cfg_add(tx, action.id, "観点", AutomationCfgKind::Text, false, None).expect("text");
+            for (name, wrong) in [
+                ("受信箱", r#""x""#),
+                ("受信箱", "[]"),
+                ("受信箱", r#"{"priority":3}"#),
+                ("受信箱", r#"{"sort":"nowhere"}"#),
+                ("受信箱", r#"{"nosuch":["x"]}"#),
+                ("秒", "-5"),
+                ("秒", "1.5"),
+                ("秒", r#""5""#),
+                ("どれ", r#""c""#),
+                ("どれ", "1"),
+                ("観点", "7"),
+                ("観点", "not json"),
+            ] {
+                assert!(cfg_set(tx, placement.id, name, Some(wrong)).is_err(), "{name} took {wrong}");
+            }
+            for (name, right) in [
+                ("受信箱", r#"{"priority":["high"],"sort":"due"}"#),
+                ("秒", "0"),
+                ("どれ", r#""b""#),
+                ("観点", r#""速さ""#),
+            ] {
+                cfg_set(tx, placement.id, name, Some(right)).unwrap_or_else(|e| panic!("{name} {right}: {e}"));
+            }
+        });
+    }
+
+    /// **A choice list is a JSON array of distinct choices, at least one of them.**
+    #[test]
+    fn a_broken_list_of_choices_is_refused() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &automation, "取る");
+            for broken in ["notjson", "[]", r#"["a","a"]"#, r#"["a",""]"#, r#"["a",1]"#, r#""a""#] {
+                let refused = cfg_add(tx, action.id, "どれ", AutomationCfgKind::Choice, false, Some(broken));
+                assert!(refused.is_err(), "{broken}");
+            }
+            let cfg = cfg_add(tx, action.id, "どれ", AutomationCfgKind::Choice, false, Some(r#"["a","b"]"#))
+                .expect("a list that is one");
+            assert!(cfg_update(tx, cfg.id, None, None, None, Some(Some("[]"))).is_err(), "nor by an update");
         });
     }
 
@@ -4167,7 +4436,7 @@ mod held_by_a_run {
         let wire = wire_add(tx, on, first.id, Some("found"), "note", second.id, "note").expect("wire");
         let cfg = cfg_add(tx, first_action.id, "depth", AutomationCfgKind::Text, false, None)
             .expect("setting");
-        cfg_set(tx, first.id, "depth", Some("shallow")).expect("answer");
+        cfg_set(tx, first.id, "depth", Some("\"shallow\"")).expect("answer");
         set_entry(tx, automation.id, Some(first.id)).expect("entry");
         Picture { automation, first_action, first, second_action, onward, wire, cfg }
     }
@@ -4220,7 +4489,7 @@ mod held_by_a_run {
         );
         held("reorder a placement", run, placement_move(tx, p.first.id, Position::Bottom));
         held("take a placement off", run, placement_delete(tx, p.first.id));
-        held("answer a setting", run, cfg_set(tx, p.first.id, "depth", Some("deep")));
+        held("answer a setting", run, cfg_set(tx, p.first.id, "depth", Some("\"deep\"")));
         held("rewrite an answer", run, cfg_update(tx, answer.id, None, None, Some(true), None));
         held("reorder an answer", run, cfg_move(tx, answer.id, Position::Top));
         held("take an answer off", run, cfg_delete(tx, answer.id));
@@ -4391,8 +4660,12 @@ mod held_by_a_run {
             "step_insert",
             // Only through `declare_port`, which asks.
             "port_add",
+            // Only through `draw_wire`, which asks.
+            "wire_add",
             // Reads a picture handed to it and writes nothing.
             "lines_back",
+            // Reads an answer handed to it and writes nothing.
+            "answer_misfit",
         ];
         let mut forgot = Vec::new();
         for (at, _) in ops.match_indices("\npub fn ") {

@@ -110,6 +110,16 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
     ]);
     // The wire is written by the names a person types and keys the port rows they name (`AMB-D-961`).
     assert_eq!(wire["automation_wire"]["from_port_id"], serde_json::json!(hands_on.parse::<i64>().unwrap()));
+    assert_eq!(wire["noop"], serde_json::json!(false), "{wire}");
+
+    // Drawn again, it is the one wire already there, and the answer says nothing was added (`AMB-T-5660`).
+    let again = cli.json(&[
+        "automation", "wire-add",
+        "--from", &format!("{review}:something to fix"), "--from-port", "report",
+        "--to", &fix, "--to-port", "report", "--json",
+    ]);
+    assert_eq!(again["automation_wire"]["id"], wire["automation_wire"]["id"], "{again}");
+    assert_eq!(again["noop"], serde_json::json!(true), "the same wire drawn again was said to be added: {again}");
 }
 
 /// What every step is told before its own prompt is Amenbo's own and the same on every automation
@@ -328,6 +338,42 @@ fn a_setting_takes_one_answer_or_none_at_all() {
     cli.json(&["automation", "cfg-set", &placement, "--name", "depth", "--text", "deep", "--json"]);
     let cleared = cli.json(&["automation", "cfg-set", &placement, "--name", "depth", "--clear", "--json"]);
     assert_eq!(cleared["automation_cfg"]["value"], Value::Null);
+}
+
+/// **An answer in another kind's shape is refused when it is written** (`AMB-T-5648`): a task filter
+/// answered with a choice was read as no narrowing, and the run took a person's task. So is a choice
+/// that is not listed, a number below zero, and a choice list that is not one.
+#[test]
+fn an_answer_in_another_kinds_shape_is_refused() {
+    let cli = Cli::new();
+    let (_, _, action, placement) = an_automation(&cli);
+    cli.json(&["automation", "cfg-add", "--action", &action, "--name", "queue", "--kind", "taskfilter", "--json"]);
+    cli.json(&["automation", "cfg-add", "--action", &action, "--name", "wait", "--kind", "number", "--json"]);
+    cli.json(&[
+        "automation", "cfg-add", "--action", &action, "--name", "which", "--kind", "choice",
+        "--options", r#"["a","b"]"#, "--json",
+    ]);
+
+    for wrong in [
+        vec!["--name", "queue", "--choice", "x"],
+        vec!["--name", "wait", "--number=-5"],
+        vec!["--name", "which", "--choice", "c"],
+    ] {
+        let mut args = vec!["automation", "cfg-set", placement.as_str()];
+        args.extend(wrong.iter().copied());
+        args.push("--json");
+        let (refused, code) = cli.run_err(&args);
+        assert_ne!(code, 0, "{wrong:?} is refused: {refused}");
+    }
+    cli.json(&["automation", "cfg-set", &placement, "--name", "which", "--choice", "b", "--json"]);
+
+    for broken in ["notjson", "[]", r#"["a","a"]"#] {
+        let (refused, code) = cli.run_err(&[
+            "automation", "cfg-add", "--action", &action, "--name", "other", "--kind", "choice",
+            "--options", broken, "--json",
+        ]);
+        assert_ne!(code, 0, "{broken} is not a list of choices: {refused}");
+    }
 }
 
 /// The direction is never asked for: an input belongs to the step or the action that reads it, an
@@ -602,6 +648,20 @@ fn an_action_moves_between_libraries_and_is_refused_where_another_project_places
     assert_eq!(back["automation_action"]["project_id"].to_string(), p, "every placement is in this project");
 }
 
+/// `--axis` belongs to the built-in that splits by one. Passed with a library action it is refused
+/// rather than dropped, and nothing is placed.
+#[test]
+fn an_axis_given_with_a_library_action_is_refused() {
+    let cli = Cli::new();
+    let (p, a, action, _) = an_automation(&cli);
+    let before = cli.json(&["automation", "show", &a, "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "place-add", &a, "--action", &action, "--axis", "x", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("--axis"), "{refused}");
+    let after = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(before, after, "nothing was placed in project {p}");
+}
+
 /// An id naming nothing is a refusal, not an empty account — the same road `run show` takes.
 #[test]
 fn a_definition_that_does_not_exist_is_said_to_be_missing() {
@@ -734,6 +794,8 @@ fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
     ]);
     assert_ne!(code, 0, "an unreadable file is refused: {err}");
     assert!(err.contains("not_found"), "{err}");
+    assert!(err.contains("pass a readable file path"), "the hint says how to fix it: {err}");
+    assert!(!err.contains("--url"), "and names no flag this command does not have: {err}");
     let runs = cli.json(&["automation", "run-list", "--automation", &a, "--json"]);
     assert_eq!(runs["count"].as_u64(), Some(1), "only the first launch made a run: {runs}");
     assert!(runs.to_string().contains(&run), "{runs}");

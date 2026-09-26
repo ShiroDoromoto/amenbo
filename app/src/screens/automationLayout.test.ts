@@ -217,6 +217,29 @@ describe("the picture of an automation", () => {
     expect(inside(3)).toBe(false);
   });
 
+  it("takes no task at a box whose settings keep it off the way out that hands one on (AMB-T-5669)", () => {
+    // "File a task", answered to leave the task it files untaken: core says it never leaves by the
+    // way out that takes it, so nothing is handed on there however that way out is drawn.
+    const filer = (never: string) => step({
+      id: 1,
+      name: "file one",
+      builtin: "make_task",
+      neverLeavesBy: never,
+      exits: [
+        { id: nextId++, name: "made", outputs: [port("task", "task_make")] },
+        { id: nextId++, name: "made and taken", outputs: [port("task", "task_take")] },
+        { id: nextId++, name: "*", outputs: [] },
+      ],
+    });
+    const untaken = layOut(detail({ entryPlacementId: 1, placements: [filer("made and taken")] }));
+    expect(untaken.laps, "a stretch was drawn for a task nobody takes").toEqual([]);
+    expect(at(untaken, 1).takes, "the box was marked as taking the next task").not.toBe(true);
+
+    const taken = layOut(detail({ entryPlacementId: 1, placements: [filer("made")] }));
+    expect(taken.laps.map((lap) => lap.headBoxId)).toEqual([1]);
+    expect(at(taken, 1).takes).toBe(true);
+  });
+
   it("draws no outline around steps that answer to no task, and still places what nothing reaches", () => {
     const one = detail({
       entryPlacementId: 1,
@@ -455,7 +478,7 @@ describe("the picture of an automation", () => {
     expect(inner[1]!.y).toBeLessThan(outer[1]!.y);
   });
 
-  it("draws the error way out of every box, as the stop it is where nobody said what follows it", () => {
+  it("draws the error way out only where somebody drew a line from it — the legend says the rest", () => {
     const steps = [taker(1, "take"), step({ id: 2, name: "work" })];
     const plain = layOut(
       detail({
@@ -464,19 +487,7 @@ describe("the picture of an automation", () => {
         edges: [edge({ id: 1, fromId: 1, toId: 2 })],
       }),
     );
-    const unsaid = plain.lines.filter((line) => line.exitName === "*");
-    expect(unsaid.map((line) => line.points[0]!.y)).toEqual([
-      at(plain, 1).y + at(plain, 1).h,
-      at(plain, 2).y + at(plain, 2).h,
-    ]);
-    for (const line of unsaid) {
-      expect(line.ends).toBe("halt");
-      expect(line.tone).toBe("error");
-    }
-    // It hangs right of the line the box does have, and there is no edge under it to put a box in on.
-    const onFirst = unsaid[0]!;
-    const next = plain.lines.find((line) => line.key === "edge-1")!;
-    expect(onFirst.points[0]!.x).toBeGreaterThan(next.points[0]!.x);
+    expect(plain.lines.filter((line) => line.exitName === "*")).toEqual([]);
     expect(plain.inserts.map((one) => one.edgeId)).toEqual([1]);
 
     const changed = layOut(
@@ -489,9 +500,10 @@ describe("the picture of an automation", () => {
         ],
       }),
     );
-    const error = changed.lines.filter((line) => line.exitName === "*" && line.points[0]!.y === at(changed, 1).y + at(changed, 1).h);
+    const error = changed.lines.filter((line) => line.exitName === "*");
     expect(error.map((line) => line.key)).toEqual(["edge-2"]);
     expect(error[0]!.ends).toBe("halt");
+    expect(error[0]!.tone).toBe("error");
   });
 
   it("hangs a way out that names no step below the step it leaves, and marks how it ends", () => {
@@ -583,6 +595,36 @@ describe("the picture of an automation", () => {
     const box = at(picture, 1);
     // Where the first way out is tied, as the line into the next step is tied to that one.
     expect(line.points[0]!.x - box.x).toBe(line.points[3]!.x - at(picture, 2).x);
+  });
+
+  it("writes the name of a second line down to a neighbour past its right end, off the first one's corner", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", {
+            exits: [
+              { id: 90, name: "完了", outputs: [port("task", "task_take")] },
+              { id: 91, name: "*", outputs: [] },
+              { id: 92, name: "やり直す", outputs: [] },
+            ],
+          }),
+          step({ id: 2, name: "work" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "やり直す", toId: 2 }),
+        ],
+      }),
+    );
+    const first = picture.lines.find((one) => one.key === "edge-1")!;
+    const second = picture.lines.find((one) => one.key === "edge-2")!;
+    // Both turn at one height; the second's leg across is shorter than its name.
+    expect(second.points[1]!.y).toBe(first.points[1]!.y);
+    expect(second.align).toBe("start");
+    const legEnd = Math.max(second.points[1]!.x, second.points[2]!.x);
+    expect(second.at.x).toBeGreaterThan(legEnd);
+    expect(second.at.x).toBeGreaterThan(Math.max(first.points[0]!.x, first.points[3]!.x));
   });
 
   it("writes the name of a line straight down on its left, and staggers the + of lines side by side in the margin", () => {
@@ -709,6 +751,57 @@ describe("the picture of an automation", () => {
     expect(at(picture, 2).unfed).toEqual(["draft"]);
     expect(at(picture, 2).name).toBe("Review");
     expect(at(picture, 1).unfed).toEqual([]);
+  });
+
+  it("counts no wire from a box's own way out, nor from a box only reached through it, as reaching it", () => {
+    // take → work → check → work: "note" into work comes from work itself and from check, which a run
+    // only comes to after work — so the first time a run arrives at work, nothing is there.
+    const out = (id: number, name: string) => ({ id, name: "完了", outputs: [port(name, "value")] });
+    const looped = (wires: ReturnType<typeof wire>[]) =>
+      layOut(
+        detail({
+          entryPlacementId: 1,
+          placements: [
+            taker(1, "take", { exits: [out(91, "seed")] }),
+            step({ id: 2, name: "work", inputs: [port("note", "value")], exits: [out(92, "again")] }),
+            step({ id: 3, name: "check", exits: [out(93, "back")] }),
+          ],
+          edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, toId: 3 }), edge({ id: 3, fromId: 3, toId: 2 })],
+          wires,
+        }),
+      );
+    const fromSelf = wire({ id: 1, fromId: 2, fromExitName: "完了", fromPortName: "again", toId: 2, toPortName: "note" });
+    const fromAfter = wire({ id: 2, fromId: 3, fromExitName: "完了", fromPortName: "back", toId: 2, toPortName: "note" });
+    const fromBefore = wire({ id: 3, fromId: 1, fromExitName: "完了", fromPortName: "seed", toId: 2, toPortName: "note" });
+    expect(at(looped([fromSelf]), 2).unfed).toEqual(["note"]);
+    expect(at(looped([fromSelf, fromAfter]), 2).unfed).toEqual(["note"]);
+    expect(at(looped([fromSelf, fromAfter, fromBefore]), 2).unfed).toEqual([]);
+  });
+});
+
+describe("the inputs the start dialog hands over", () => {
+  /** "File a task" at `at`, with the three inputs it reads at launch and one it does not. */
+  function filing(at: number, entry: number): PicGraph {
+    return detail({
+      entryPlacementId: entry,
+      placements: [
+        taker(1, "take"),
+        taker(2, "タスクを起票する", {
+          builtin: "make_task",
+          inputs: [port("タイトル", "value"), port("本文", "value"), port("選んだ分類", "value"), port("other", "value")],
+        }),
+      ].filter((one) => one.id === at || one.id === entry),
+      edges: at === entry ? [] : [edge({ id: 1, fromId: entry, toId: at })],
+    });
+  }
+
+  it("counts the entry's title, notes and chosen classification as reached, and nothing else", () => {
+    expect(at(layOut(filing(2, 2)), 2).unfed).toEqual(["other"]);
+  });
+
+  it("asks for a wire into the same inputs where the box is not what a run starts at", () => {
+    // Drawn in the screen's words, so only how many are asked for is the store's to say.
+    expect(at(layOut(filing(2, 1)), 2).unfed).toHaveLength(4);
   });
 });
 

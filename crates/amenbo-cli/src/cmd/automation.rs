@@ -131,7 +131,8 @@ fn edge_target(to: Option<i64>, exit_to: Option<String>, done: bool, halt: bool)
 ///
 /// What the JSON's own type says is which kind answered it: an object for a task filter, a number for a
 /// number, a string for the other three. Nothing here reads the declaration — no command lists one — so
-/// an answer in the wrong shape is caught when the run reads it, not here.
+/// an answer in the wrong shape is caught when it is written (`ops::automation::answer_misfit`), where
+/// the declaration is at hand.
 fn cfg_value(o: &CfgAnswer) -> Result<Option<Value>, CliError> {
     let filter: Vec<(&str, &Vec<String>)> = vec![
         ("status", &o.status),
@@ -310,6 +311,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     (p, format!("the built-in '{key}'"))
                 }
                 (Some(action), None) => {
+                    // clap cannot hold this one: it skips `requires` for an argument whose counterpart
+                    // conflicts with one that is there, so `--axis` would be dropped without a word.
+                    if axis.is_some() {
+                        return Err(CliError::from(amenbo_core::Error::invalid(
+                            "--axis names the axis the built-in 'split_by_dim' splits by — a library action takes none",
+                        )));
+                    }
                     (store.automation_placement_add(automation, action).map_err(CliError::from)?, format!("action {action}"))
                 }
                 (None, None) => unreachable!("clap requires --action or --builtin"),
@@ -625,10 +633,15 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         }
         AutomationCmd::WireAdd { in_action, from, from_port, to, to_port } => {
             let (from_id, exit_name) = parse_point(&from)?;
-            let w = store
+            let (w, drawn) = store
                 .automation_wire_add(picture(in_action), from_id, exit_name.as_deref(), &from_port, to, &to_port)
                 .map_err(CliError::from)?;
-            write_envelope(flags, "automation.wire-add", "automation_wire", serde_json::to_value(&w).unwrap(), None, false, format!("✓ Added wire: {from}.{from_port} → {to}.{to_port} ({})", w.id));
+            // The same wire drawn again is answered as it stands, and said to be no change.
+            if drawn {
+                write_envelope(flags, "automation.wire-add", "automation_wire", serde_json::to_value(&w).unwrap(), None, false, format!("✓ Added wire: {from}.{from_port} → {to}.{to_port} ({})", w.id));
+            } else {
+                write_envelope(flags, "automation.wire-add", "automation_wire", serde_json::to_value(&w).unwrap(), Some(vec![]), true, format!("• Wire {from}.{from_port} → {to}.{to_port} ({}) is already drawn — no change.", w.id));
+            }
         }
         AutomationCmd::WireRm { id } => {
             if !confirm(flags, "delete wire")? {

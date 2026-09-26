@@ -1,4 +1,6 @@
-//! **What a stopped run says on its task**, in the language the reader chose (`AMB-D-976`).
+//! **What a stopped run says on its task**, in the language the reader chose (`AMB-D-976`) — and what a
+//! built-in says of how it finished ([`builtin`]), which is the report its step keeps and, where the run
+//! stops there, the line under that one.
 //!
 //! The line is core's own — nobody typed it — and it is kept as text, the way every comment is. So it is
 //! worded when it is written, in the language the settings name then, and left as it was when they
@@ -11,6 +13,7 @@
 //! ([`crate::notify_wording`]). A key a language has not translated is said in English, one key at a
 //! time.
 
+use crate::error::Error;
 use crate::notify_wording_table::{Wording, WORDINGS};
 
 /// The language that is always complete, and the one a key nobody translated is said in.
@@ -39,6 +42,54 @@ pub fn stopped(language: &str, why: &str, reached: Reached<'_>, run: i64) -> Str
         .replace("{why}", say(language, why))
         .replace("{reached}", &reached)
         .replace("{run}", &run.to_string())
+}
+
+/// **What a built-in says of how it finished** — the sentence under `auto.say.bi.<key>`, with each
+/// `{slot}` filled from `slots`. The values go in as they are: a task's title or a path is nobody's to
+/// translate.
+pub fn builtin(language: &str, key: &str, slots: &[(&str, &str)]) -> String {
+    let key = format!("bi.{key}");
+    slots.iter().fold(say(language, &key).to_string(), |said, (slot, value)| {
+        said.replace(&format!("{{{slot}}}"), value)
+    })
+}
+
+/// **A refusal a built-in was turned away by, in the reader's language** — the screen's template for its
+/// code (`err`, the one `errLabel` writes a refusal from) with its fields filled, and its parts, where it
+/// was composed of some, each from its own template and joined with `reasonSep`. A refusal whose code
+/// holds no template is said the way the CLI says it: in English, since nothing finer can be told of it.
+pub fn error(language: &str, error: &Error) -> String {
+    let Some(template) = refusal(language, error.code()) else {
+        return error.to_string();
+    };
+    let said = fill(template, error.fields().map(|f| f.iter()).into_iter().flatten());
+    if error.parts().is_empty() {
+        return said;
+    }
+    let reasons: Vec<String> = error
+        .parts()
+        .iter()
+        .map(|part| match part.code().and_then(|code| refusal(language, code.as_str())) {
+            Some(template) => fill(template, part.fields().iter()),
+            None => part.en().to_string(),
+        })
+        .collect();
+    let sep = refusal(language, "reasonSep").unwrap_or("; ");
+    said.replace("{reasons}", &reasons.join(sep))
+}
+
+/// The screen's template for one refusal's code, in `language` if it has one and in English if not.
+fn refusal(language: &str, code: &str) -> Option<&'static str> {
+    let find = |language: &str| {
+        let row: &Wording = WORDINGS.iter().find(|row| row.language == language)?;
+        row.errs.binary_search_by(|(k, _)| k.cmp(&code)).ok().map(|i| row.errs[i].1)
+    };
+    find(language).or_else(|| find(FALLBACK))
+}
+
+/// A template with each `{field}` it names filled; one nobody sent stays as it is, as on the screen.
+fn fill<'v>(template: &str, fields: impl Iterator<Item = (&'static str, &'v str)>) -> String {
+    fields.fold(template.to_string(), |said, (key, value)| said.replace(&format!("{{{key}}}"), value))
 }
 
 /// One sentence, in `language` if it has one and in English if not. A key English lacks too is a
@@ -94,6 +145,22 @@ mod tests {
         }
     }
 
+    /// **A refusal is said from the screen's template for its code**, in the language asked for, with
+    /// its values filled — and one whose code holds no template is said the way the CLI says it.
+    #[test]
+    fn a_refusal_is_said_from_the_screens_template_for_its_code() {
+        use crate::error::{ErrorCode, Msg};
+        let closed = Error::Invalid(
+            Msg::new("'分類' names the value '済', which is closed")
+                .coded(ErrorCode::InvalidMakeTaskValueClosed)
+                .with("value", "済"),
+        );
+        assert_eq!(error("ja", &closed), "「分類」が指す値「済」は閉じています");
+        assert_eq!(error("en", &closed), "“Classification” names the value “済”, which is closed");
+        let plain = Error::invalid("nothing names this one");
+        assert_eq!(error("ja", &plain), plain.to_string());
+    }
+
     #[test]
     fn the_line_is_written_in_the_language_asked_for() {
         assert_eq!(
@@ -104,6 +171,41 @@ mod tests {
             stopped("en", "canceled", Reached::Nothing, 7),
             "An automation run was canceled. It stopped before opening a step. (run 7)"
         );
+    }
+
+    /// **Every built-in sentence English has, every language has too, with the same slots** — a report
+    /// a language lacks is written in English, and one that lost `{task}` or `{path}` loses what the
+    /// report is about.
+    #[test]
+    fn every_language_says_every_builtin_report_with_englishs_slots() {
+        let slots = |template: &str| -> Vec<String> {
+            let mut found: Vec<String> = template
+                .split('{')
+                .skip(1)
+                .filter_map(|rest| rest.split_once('}'))
+                .map(|(slot, _)| slot.to_string())
+                .collect();
+            found.sort();
+            found.dedup();
+            found
+        };
+        let english = WORDINGS.iter().find(|row| row.language == FALLBACK).expect("English");
+        let builtin: Vec<&(&str, &str)> = english.runs.iter().filter(|(key, _)| key.starts_with("bi.")).collect();
+        assert!(!builtin.is_empty(), "no auto.say.bi.* in English");
+        for code in LANGUAGES {
+            for (key, reference) in &builtin {
+                let said = lookup(code, key).unwrap_or_else(|| panic!("{code} has no auto.say.{key}"));
+                assert_eq!(slots(said), slots(reference), "{code}: auto.say.{key} disagrees with English");
+            }
+        }
+    }
+
+    #[test]
+    fn a_builtin_report_is_filled_in_the_language_asked_for() {
+        let slots = [("task", "AMB-T-7"), ("title", "直す")];
+        assert_eq!(builtin("ja", "took", &slots), "AMB-T-7 直す に着手しました");
+        assert_eq!(builtin("en", "took", &slots), "took AMB-T-7 直す");
+        assert_eq!(builtin("xx", "took", &slots), "took AMB-T-7 直す");
     }
 
     #[test]

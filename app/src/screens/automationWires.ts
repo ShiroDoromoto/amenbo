@@ -36,7 +36,9 @@ export function choiceKey(boxId: number, exitName: string | undefined, portName:
  * Every output that could fill this input, in the order the boxes were added in.
  *
  * A box's own ways out are left off: what it hands on is read after it has run, and by then it is
- * past the point of taking anything in.
+ * past the point of taking anything in. **A wire already drawn from one of them into this input stays
+ * on**, as that one choice alone: the picture draws it, and a list without it would call the input
+ * unwired while the wire is there.
  *
  * **Inside an action, the action's own inputs come first** — what the placement standing on it was
  * handed, passed in from the action itself (`ACTION_BOUNDARY`). `selfName` is what that end is called
@@ -58,11 +60,19 @@ export function wireChoices(
       portName: port.name,
     });
   }
+  const fromSelf = graph.wires.filter(
+    (wire) => wire.toId === boxId && wire.toPortName === input.name && wire.fromId === boxId,
+  );
   for (const box of graph.boxes) {
-    if (box.id === boxId) continue;
     for (const exit of box.exits) {
       for (const port of exit.outputs) {
         if (port.kind !== input.kind) continue;
+        if (
+          box.id === boxId &&
+          !fromSelf.some((wire) => wire.fromExitName === exit.name && wire.fromPortName === port.name)
+        ) {
+          continue;
+        }
         out.push({
           key: choiceKey(box.id, exit.name, port.name),
           boxId: box.id,

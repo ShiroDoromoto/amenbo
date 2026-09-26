@@ -71,6 +71,7 @@ import { useBoundFolders } from "../core/boundFolders";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { errSentence, t, tf } from "../core/i18n";
 import type { AutomationCardDto } from "../bindings/bindings";
+import type { RunsTab } from "../core/refNav";
 
 /** Which of the four tabs the screen is on. */
 type Tab = "automations" | "actions" | "running" | "history";
@@ -101,8 +102,9 @@ export function AutomationsScreen({
   opening?: number;
   /** The box that definition arrives with pressed on its picture (`./AutomationBuildScreen`). */
   openingBox?: number;
-  /** The tab to arrive on — "history", for a run's pane once its run is over (`AMB-T-5539`). */
-  openingTab?: "history";
+  /** The tab to arrive on — the one a run is listed on, for a run's pane once its run is over
+   *  (`AMB-T-5539`): "history", or "running" for a failure nobody has acknowledged yet. */
+  openingTab?: RunsTab;
   /** The library action to arrive already open on, on the "actions" tab — a global action a project
    *  sent here to be changed. */
   openingAction?: number;

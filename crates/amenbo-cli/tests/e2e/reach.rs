@@ -497,6 +497,28 @@ fn an_ai_cannot_read_an_out_of_reach_entity_by_its_raw_id() {
     assert_eq!(cli.json(&["dimension", "list", "--actor", "ai", "--json"])["count"], 1);
 }
 
+/// **An id nothing answers is `not_found`, for the AI as for a human** (`AMB-D-986`). Only a row that
+/// sits in another project is `out_of_reach` — answering that for an id with no row at all would send
+/// the AI to a human or to another folder after something that is not there.
+#[test]
+fn an_ai_naming_an_id_nothing_answers_hears_not_found() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    for args in [
+        vec!["automation", "run-show", "404", "--json"],
+        vec!["automation", "wire-rm", "404", "--yes", "--json"],
+        vec!["automation", "edge-rm", "404", "--yes", "--json"],
+        vec!["automation", "action-show", "404", "--json"],
+        vec!["attach", "show", "404", "--json"],
+    ] {
+        let (err, code) = cli.run_err(&[args.clone(), vec!["--actor", "ai"]].concat());
+        assert_ne!(code, 0, "{args:?} names nothing and must not pass");
+        assert!(err.contains("not_found"), "{args:?} is not_found: {err}");
+        assert!(!err.contains("out_of_reach"), "{args:?} does not say it sits in another project: {err}");
+    }
+}
+
 /// An axis **name a second project also uses** must resolve for the AI, not collapse into `ambiguous`. Names
 /// are per-project, so only one of the two was ever reachable — and the `ambiguous` error names the other's
 /// id, which is exactly the out-of-binding content the reach exists to keep out of the answer. The narrowing

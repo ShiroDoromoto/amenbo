@@ -914,8 +914,8 @@ pub fn automation_input_remove(
 /// The answer travels as the JSON its kind takes — a string for a folder, a choice and a text, a
 /// number for a number, and an object naming each part of a task filter. The shape is the screen's to
 /// build, because the control that took it is the screen's too
-/// (`app/src/screens/automationCfg.ts`); core keeps the text as it is handed and the run reads it
-/// ([`amenbo_core::ops::automation::cfg_set`]).
+/// (`app/src/screens/automationCfg.ts`); core refuses an answer its kind does not take and keeps the
+/// rest as it is handed ([`amenbo_core::ops::automation::cfg_set`]).
 ///
 /// Each placement answers on a row of its own under the declared name, so one action placed twice is
 /// not answered for both at once. That split is core's, and this door does not have to know which of
@@ -2006,8 +2006,8 @@ fn worked_task(
 /// The cleanup is core's and is the same one every other stop goes through
 /// ([`amenbo_core::ops::automation_stop::stop`]): the task the run was working goes to `todo`, and
 /// a line on that task says the run is not coming back. The terminal
-/// standing in the pane is the pane's own to end — it is a process this side started, and core has
-/// no window to end one from.
+/// standing in the pane is this side's to end — it is a process this side started, and core has
+/// no window to end one from. The look the press wakes ends it (`crate::automation_watch`).
 ///
 /// **A run that is over already is not an error here.** The pane is closed by a person, and between
 /// the last step reporting and the press there is a window in which the run has finished on its own;
@@ -2176,12 +2176,18 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
     let placement = view.placement;
     let action = view.action;
     let opens = view.entry_step;
+    let never_leaves_by = action.as_ref().and_then(|one| one.builtin.as_deref()).and_then(|key| {
+        automation_builtin::never_leaves_by(key, |setting| {
+            view.settings.iter().find(|cfg| cfg.name == setting).and_then(|cfg| cfg.value.as_deref())
+        })
+    });
     AutomationPlacementDto {
         id: placement.id,
         name: action.as_ref().map(|one| one.name.clone()).unwrap_or_default(),
         action_id: placement.action_id,
         global: action.as_ref().is_some_and(|one| one.project_id.is_none()),
         builtin: action.as_ref().and_then(|one| one.builtin.clone()),
+        never_leaves_by: never_leaves_by.map(str::to_string),
         step_id: opens.as_ref().map(|s| s.id),
         prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),
         interactive: opens.as_ref().is_some_and(|s| s.interactive),

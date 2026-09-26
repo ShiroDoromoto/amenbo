@@ -29,7 +29,8 @@
 //! and not yet in the store (`app/src/files/MemoPage.tsx`). `exit` takes the process with whatever
 //! that moment was about to do, and no page is unloaded on the way — so the last thing this module
 //! does before ending is ask every window for what it has not written, and wait to be answered.
-//! The wait is a backstop, not a pause: the app ends the moment the last window answers.
+//! The wait is a backstop, not a pause: the app ends the moment the last window answers — and the
+//! store thread has finished what it was handed ([`crate::store_worker`]).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -70,6 +71,26 @@ pub const GOING_EVENT: &str = "quit://going";
 /// so a window with something to write is back long inside this.
 const WRITE_GRACE: Duration = Duration::from_millis(500);
 
+/// How long the store thread is given, once the windows are done, to finish the commands it was
+/// handed before the app ends (`crate::store_worker`). A write the page sent a moment before the quit
+/// is still in that queue, and `exit` would take it with the process; a job that cannot finish must
+/// not hold the quit open either.
+const QUEUE_GRACE: Duration = Duration::from_secs(2);
+
+/// End the app once the store thread has finished what it was handed, or [`QUEUE_GRACE`] is up.
+///
+/// The wait is on a thread of its own and the end is posted back to the main thread: a command on the
+/// store thread may itself be waiting on the main thread, and waiting for it there would wait out the
+/// whole grace for nothing.
+fn exit(app: &tauri::AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        crate::store_worker::drain(QUEUE_GRACE);
+        let ending = app.clone();
+        let _ = app.run_on_main_thread(move || ending.exit(0));
+    });
+}
+
 /// How many windows still owe an answer to [`GOING_EVENT`]. Only ever above zero while ending.
 static OWED: AtomicUsize = AtomicUsize::new(0);
 
@@ -81,7 +102,7 @@ static OWED: AtomicUsize = AtomicUsize::new(0);
 fn ending(app: &tauri::AppHandle) {
     let windows = app.webview_windows().len();
     if windows == 0 {
-        app.exit(0);
+        exit(app);
         return;
     }
     // Counted before the ask goes out, and not after: a window that answers straight away — which is
@@ -89,14 +110,13 @@ fn ending(app: &tauri::AppHandle) {
     // and the quit would sit out the whole backstop for nothing.
     OWED.store(windows, Ordering::SeqCst);
     if app.emit(GOING_EVENT, ()).is_err() {
-        app.exit(0);
+        exit(app);
         return;
     }
     let waited = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(WRITE_GRACE);
-        let ending = waited.clone();
-        let _ = waited.run_on_main_thread(move || ending.exit(0));
+        exit(&waited);
     });
 }
 
@@ -108,7 +128,7 @@ fn ending(app: &tauri::AppHandle) {
 pub fn quit_written(app: tauri::AppHandle) {
     let last = OWED.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |owed| owed.checked_sub(1)) == Ok(1);
     if last {
-        app.exit(0);
+        exit(&app);
     }
 }
 

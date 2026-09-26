@@ -2074,7 +2074,9 @@ impl Store {
         run_def_id: i64,
         startable: Option<&[String]>,
     ) -> Result<crate::ops::automation_step::Opened> {
-        let outside = crate::ops::automation_builtin::work_outside(self.engine.conn(), run_id, run_def_id)?;
+        let language = self.config.language.as_deref().unwrap_or("en");
+        let outside =
+            crate::ops::automation_builtin::work_outside(self.engine.conn(), language, run_id, run_def_id)?;
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
             crate::ops::automation_step::open(tx, run_id, run_def_id, startable, outside)
         })
@@ -2354,6 +2356,9 @@ impl Store {
     /// An end at [`crate::model::ACTION_BOUNDARY`] is the action itself, not a step, so only the other
     /// end is checked for reach — the action is the one that step is inside. A wire with the boundary at
     /// both ends is left for the op to refuse.
+    ///
+    /// The flag is whether the wire was drawn just now: `false` answers the same wire already there
+    /// ([`crate::ops::automation::draw_wire`]).
     pub fn automation_wire_add(
         &mut self,
         owner_kind: crate::model::AutomationPictureOwner,
@@ -2362,7 +2367,7 @@ impl Store {
         from_port_name: &str,
         to_id: i64,
         to_port_name: &str,
-    ) -> Result<crate::model::AutomationWire> {
+    ) -> Result<(crate::model::AutomationWire, bool)> {
         let targets: Vec<WriteTarget> = [from_id, to_id]
             .into_iter()
             .filter(|&id| id != crate::model::ACTION_BOUNDARY)
@@ -2371,7 +2376,7 @@ impl Store {
         self.write_one(
             &targets,
             |tx| {
-                crate::ops::automation::wire_add(
+                crate::ops::automation::draw_wire(
                     tx,
                     owner_kind,
                     from_id,

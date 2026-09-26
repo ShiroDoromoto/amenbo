@@ -37,12 +37,13 @@
 //! cannot find in this run's project, a classification it cannot find or may not use, a required axis
 //! left empty, a task to depend on that would keep the new one from being taken.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{ActorKind, AttachmentTarget, AutomationCfgKind, AutomationPortKind, Priority};
 use crate::ops::automation_builtin::{
     Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Chooses, Work,
 };
 use crate::ops::automation_report::{self, Produced};
+use crate::run_wording::builtin as say;
 use crate::ops::task::{self, parse_number_ref, parse_typed_ref, NewTask, TypedKind};
 use crate::store_engine::read;
 
@@ -70,7 +71,7 @@ pub const TAKE_IT: &str = "進行中にして、出口「起票して着手し�
 /// The setting that says what the task depends on.
 pub const DEPENDS_ON: &str = "依存させる相手";
 /// The choice on [`DEPENDS_ON`] that makes it depend on the task this run works.
-pub const THE_RUNS_TASK: &str = "この run が扱っているタスク";
+pub const THE_RUNS_TASK: &str = "この実行が扱っているタスク";
 /// The setting that classifies it: one `axis=value` a line.
 pub const CLASSIFY: &str = "分類";
 /// The setting that names the axes the step before it chooses a value on: one axis a line. The step
@@ -97,7 +98,7 @@ const LOW: &str = "低";
 pub(super) const MAKE_TASK: Builtin = Builtin {
     key: KEY,
     name: "タスクを起票する",
-    does: "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この run で扱える",
+    does: "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この実行で扱える",
     settings: &[
         BuiltinSetting {
             name: WHAT_THEN,
@@ -109,7 +110,7 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
             name: DEPENDS_ON,
             kind: AutomationCfgKind::Choice,
             required: false,
-            options: Some(r#"["なし","この run が扱っているタスク"]"#),
+            options: Some(r#"["なし","この実行が扱っているタスク"]"#),
         },
         BuiltinSetting { name: DEPENDS_ON_TASKS, kind: AutomationCfgKind::Text, required: false, options: None },
         BuiltinSetting { name: CLASSIFY, kind: AutomationCfgKind::Text, required: false, options: None },
@@ -221,11 +222,16 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
         let taken = automation_report::take(tx, carry.run_step.id, filed.id)?;
         return Ok(Carried {
             exit: MADE_AND_TAKEN,
-            report: format!("filed and took AMB-T-{} {}", taken.id, taken.title),
+            report: say(
+                tx.language(),
+                "filedAndTook",
+                &[("task", &format!("AMB-T-{}", taken.id)), ("title", &taken.title)],
+            ),
         });
     }
     carry.put(MADE, TASK, Produced::Task(filed.id))?;
-    Ok(Carried { exit: MADE, report: format!("filed AMB-T-{} {}", filed.id, filed.title) })
+    let task = format!("AMB-T-{}", filed.id);
+    Ok(Carried { exit: MADE, report: say(tx.language(), "filed", &[("task", &task), ("title", &filed.title)]) })
 }
 
 /// **The files handed over at launch, moved from the run on to the task it filed** (`AMB-D-981`), in the
@@ -270,10 +276,16 @@ fn the_runs_task(carry: &Carry<'_, '_>, takes: bool) -> Result<i64> {
             .find_map(|stretch| stretch.task_id),
     };
     found.ok_or_else(|| {
-        Error::invalid(format!(
-            "'{DEPENDS_ON}' is answered '{THE_RUNS_TASK}', and this run works no task yet"
-        ))
+        refused(
+            ErrorCode::InvalidMakeTaskNoRunsTask,
+            format!("'{DEPENDS_ON}' is answered '{THE_RUNS_TASK}', and this run works no task yet"),
+        )
     })
+}
+
+/// A refusal of this built-in's that names no value: its code, and the English the CLI prints.
+fn refused(code: ErrorCode, en: String) -> Error {
+    Error::Invalid(Msg::new(en).coded(code))
 }
 
 /// **What the writes would refuse, asked before any of them is made** (the module's last paragraph): a
@@ -285,9 +297,14 @@ fn refusal(carry: &Carry<'_, '_>, values: &[(i64, i64)], taken_after: &[i64]) ->
     for &blocker in taken_after {
         let open = read::task(conn, blocker)?.is_some_and(|task| !task.status.is_closed());
         if open {
-            return Err(Error::invalid(format!(
-                "the task to take would depend on AMB-T-{blocker}, which is not closed, and could not be taken"
-            )));
+            let blocked = format!("AMB-T-{blocker}");
+            return Err(Error::Invalid(
+                Msg::new(format!(
+                    "the task to take would depend on {blocked}, which is not closed, and could not be taken"
+                ))
+                .coded(ErrorCode::InvalidMakeTaskBlockerOpen)
+                .with("ref", blocked),
+            ));
         }
     }
     Ok(())
@@ -300,7 +317,11 @@ fn unfilable(conn: &rusqlite::Connection, project_id: i64, values: &[(i64, i64)]
         let value = read::dimension_value(conn, value_id)?
             .ok_or_else(|| crate::ops::dimension::VALUE_NOUN.not_found(value_id.to_string()))?;
         if value.closed {
-            return Err(Error::invalid(format!("'{CLASSIFY}' names the value '{}', which is closed", value.name)));
+            return Err(Error::Invalid(
+                Msg::new(format!("'{CLASSIFY}' names the value '{}', which is closed", value.name))
+                    .coded(ErrorCode::InvalidMakeTaskValueClosed)
+                    .with("value", &value.name),
+            ));
         }
     }
     let empty: Vec<String> =
@@ -310,10 +331,12 @@ fn unfilable(conn: &rusqlite::Connection, project_id: i64, values: &[(i64, i64)]
             .map(|(_, name)| name)
             .collect();
     if !empty.is_empty() {
-        return Err(Error::invalid(format!(
-            "the task would carry no value on {}, which this project requires",
-            empty.join(", ")
-        )));
+        let axes = empty.join(", ");
+        return Err(Error::Invalid(
+            Msg::new(format!("the task would carry no value on {axes}, which this project requires"))
+                .coded(ErrorCode::InvalidMakeTaskRequiredEmpty)
+                .with("axes", axes),
+        ));
     }
     Ok(())
 }
@@ -328,24 +351,43 @@ fn named(carry: &Carry<'_, '_>, setting: &str, kind: TypedKind) -> Result<Vec<i6
     let conn = carry.tx.conn();
     let mut ids = Vec::new();
     for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        let number = match parse_typed_ref(line) {
-            Some((named, n)) if named == kind => Some(n),
-            Some(_) => None,
-            None => parse_number_ref(line),
-        };
-        let id = i64::from(number.ok_or_else(|| {
-            Error::invalid(format!("'{setting}' reads one number a line, and '{line}' is not one"))
-        })?);
-        let project = match kind {
-            TypedKind::Task => read::task(conn, id)?.map(|task| task.project_id),
-            TypedKind::Decision => read::decision(conn, id)?.map(|decision| Some(decision.project_id)),
-        };
-        if project != Some(Some(carry.run.project_id)) {
-            return Err(Error::invalid(format!("'{setting}' names '{line}', which is not in this project")));
-        }
-        ids.push(id);
+        ids.push(named_one(conn, carry.run.project_id, setting, kind, line)?);
     }
     Ok(ids)
+}
+
+/// **The task or the decision one line of a setting names** ([`named`]), refused where it is not one of
+/// `project_id`'s.
+fn named_one(
+    conn: &rusqlite::Connection,
+    project_id: i64,
+    setting: &str,
+    kind: TypedKind,
+    line: &str,
+) -> Result<i64> {
+    let number = match parse_typed_ref(line) {
+        Some((named, n)) if named == kind => Some(n),
+        Some(_) => None,
+        None => parse_number_ref(line),
+    };
+    let (not_a_number, elsewhere) = match kind {
+        TypedKind::Task => (ErrorCode::InvalidMakeTaskTaskNotANumber, ErrorCode::InvalidMakeTaskTaskNotInProject),
+        TypedKind::Decision => {
+            (ErrorCode::InvalidMakeTaskDecisionNotANumber, ErrorCode::InvalidMakeTaskDecisionNotInProject)
+        }
+    };
+    let on_line = |code, en: String| Error::Invalid(Msg::new(en).coded(code).with("line", line));
+    let id = i64::from(number.ok_or_else(|| {
+        on_line(not_a_number, format!("'{setting}' reads one number a line, and '{line}' is not one"))
+    })?);
+    let project = match kind {
+        TypedKind::Task => read::task(conn, id)?.map(|task| task.project_id),
+        TypedKind::Decision => read::decision(conn, id)?.map(|decision| Some(decision.project_id)),
+    };
+    if project != Some(Some(project_id)) {
+        return Err(on_line(elsewhere, format!("'{setting}' names '{line}', which is not in this project")));
+    }
+    Ok(id)
 }
 
 /// **The folder [`FOLDER`] names**, as one of this run's project's linked folders — by its path as
@@ -355,17 +397,24 @@ fn folder(carry: &Carry<'_, '_>) -> Result<Option<i64>> {
     let Some(written) = choice(carry, FOLDER)? else {
         return Ok(None);
     };
-    let folders: Vec<_> = crate::overview::bound_folders(carry.tx.conn())?
-        .into_iter()
-        .filter(|f| f.project_id == carry.run.project_id)
-        .collect();
-    let canonical = crate::binding::canonical_dir(&written).ok().map(|p| p.to_string_lossy().to_string());
+    folder_named(carry.tx.conn(), carry.run.project_id, &written).map(Some)
+}
+
+/// **The linked folder of `project_id`'s that `written` names** ([`folder`]).
+fn folder_named(conn: &rusqlite::Connection, project_id: i64, written: &str) -> Result<i64> {
+    let folders: Vec<_> =
+        crate::overview::bound_folders(conn)?.into_iter().filter(|f| f.project_id == project_id).collect();
+    let canonical = crate::binding::canonical_dir(written).ok().map(|p| p.to_string_lossy().to_string());
     folders
         .iter()
         .find(|f| f.dir == written || Some(&f.dir) == canonical.as_ref())
-        .map(|f| Some(f.id))
+        .map(|f| f.id)
         .ok_or_else(|| {
-            Error::invalid(format!("'{FOLDER}' names '{written}', which is not one of this project's linked folders"))
+            Error::Invalid(
+                Msg::new(format!("'{FOLDER}' names '{written}', which is not one of this project's linked folders"))
+                    .coded(ErrorCode::InvalidMakeTaskFolderUnknown)
+                    .with("folder", written),
+            )
         })
 }
 
@@ -379,21 +428,30 @@ fn fixed(conn: &rusqlite::Connection, project_id: i64, written: Option<&str>) ->
     };
     let mut values = Vec::new();
     for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
-        let Some((axis, value)) = line.split_once('=') else {
-            return Err(Error::invalid(format!("'{CLASSIFY}' reads one `axis=value` a line, and '{line}' is not one")));
-        };
-        let (axis, value) = (axis.trim(), value.trim());
-        let axis_id = crate::ops::pick_id(
-            read::resolve_dimension_in(conn, Some(project_id), axis)?,
-            axis,
-            || crate::ops::dimension::NOUN.not_found(axis),
-        )?;
-        let value_id = crate::ops::pick_id(read::resolve_dimension_value_in(conn, axis_id, value)?, value, || {
-            crate::ops::dimension::VALUE_NOUN.not_found(format!("{axis}={value}"))
-        })?;
-        values.push((axis_id, value_id));
+        values.push(fixed_one(conn, project_id, line)?);
     }
     Ok(values)
+}
+
+/// **The axis and the value one line of [`CLASSIFY`] names** ([`fixed`]).
+fn fixed_one(conn: &rusqlite::Connection, project_id: i64, line: &str) -> Result<(i64, i64)> {
+    let Some((axis, value)) = line.split_once('=') else {
+        return Err(Error::Invalid(
+            Msg::new(format!("'{CLASSIFY}' reads one `axis=value` a line, and '{line}' is not one"))
+                .coded(ErrorCode::InvalidMakeTaskClassifyNotAxisValue)
+                .with("line", line),
+        ));
+    };
+    let (axis, value) = (axis.trim(), value.trim());
+    let axis_id = crate::ops::pick_id(
+        read::resolve_dimension_in(conn, Some(project_id), axis)?,
+        axis,
+        || crate::ops::dimension::NOUN.not_found(axis),
+    )?;
+    let value_id = crate::ops::pick_id(read::resolve_dimension_value_in(conn, axis_id, value)?, value, || {
+        crate::ops::dimension::VALUE_NOUN.not_found(format!("{axis}={value}"))
+    })?;
+    Ok((axis_id, value_id))
 }
 
 /// **The axes [`AI_AXES`] names**, each looked up among the project's axes the way [`CLASSIFY`]'s are,
@@ -455,30 +513,51 @@ fn chosen(
         );
     }
     let what = by.what();
+    // Only the step before it is turned away while a run is under way, where the refusal is left on the
+    // task in the reader's language; the one launching is turned away at the launch, in the CLI's.
+    let said = |code: ErrorCode, en: String, field: (&'static str, &str)| {
+        let msg = Msg::new(en);
+        Error::Invalid(match by {
+            Chooser::StepBefore => msg.coded(code).with(field.0, field.1),
+            Chooser::Launcher => msg,
+        })
+    };
     let mut values: Vec<(i64, i64)> = Vec::new();
     for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
         let Some((axis, value)) = line.split_once('=') else {
-            return Err(Error::invalid(format!("{what} reads one `axis=value` a line, and '{line}' is not one")));
+            return Err(said(
+                ErrorCode::InvalidMakeTaskChosenNotAxisValue,
+                format!("{what} reads one `axis=value` a line, and '{line}' is not one"),
+                ("line", line),
+            ));
         };
         let (axis, value) = (axis.trim(), value.trim());
         let axis_id = read::resolve_dimension_in(conn, Some(project_id), axis)?
             .into_iter()
             .find(|id| offered.contains(id))
             .ok_or_else(|| match by {
-                Chooser::StepBefore => {
-                    Error::invalid(format!("{what} names the axis '{axis}', which '{AI_AXES}' does not offer"))
-                }
+                Chooser::StepBefore => said(
+                    ErrorCode::InvalidMakeTaskAxisNotOffered,
+                    format!("{what} names the axis '{axis}', which '{AI_AXES}' does not offer"),
+                    ("axis", axis),
+                ),
                 Chooser::Launcher => Error::invalid(format!(
                     "{what} names the axis '{axis}', which '{AI_AXES}' does not offer and this project does not require"
                 )),
             })?;
         if fixed.iter().any(|(on, _)| *on == axis_id) {
-            return Err(Error::invalid(format!(
-                "{what} names the axis '{axis}', which '{CLASSIFY}' already fixes where this is placed"
-            )));
+            return Err(said(
+                ErrorCode::InvalidMakeTaskAxisFixed,
+                format!("{what} names the axis '{axis}', which '{CLASSIFY}' already fixes where this is placed"),
+                ("axis", axis),
+            ));
         }
         if values.iter().any(|(on, _)| *on == axis_id) {
-            return Err(Error::invalid(format!("{what} names more than one value on the axis '{axis}'")));
+            return Err(said(
+                ErrorCode::InvalidMakeTaskAxisTwice,
+                format!("{what} names more than one value on the axis '{axis}'"),
+                ("axis", axis),
+            ));
         }
         let value_id = crate::ops::pick_id(read::resolve_dimension_value_in(conn, axis_id, value)?, value, || {
             crate::ops::dimension::VALUE_NOUN.not_found(format!("{axis}={value}"))
@@ -518,6 +597,81 @@ pub(crate) fn handed_at_launch(
     }
     unfilable(conn, project_id, &values)?;
     Ok(written)
+}
+
+/// **The lines of its settings that name what `project_id` does not have**, where it is placed
+/// (`placement`) — as (setting, line), in the order the settings are declared (`AMB-D-987`).
+///
+/// Asked by the launch check ([`crate::ops::automation_run::check`]) of the settings that name something by
+/// its number, its path or its name: a task to depend on, a decision to link, the folder, an axis and a
+/// value to classify with, and an axis the step before it chooses on. Each line is looked up the way the
+/// built-in looks it up when it is carried out, so a line refused here is one the run would halt on. The
+/// built-in asks again when it is carried out: what is found at launch can be gone by then.
+///
+/// A line that is not written as that setting reads it — a word where a number goes, a classification with
+/// no `=` — is one of these too, since nothing can be found from it.
+pub(crate) fn unfound(
+    conn: &rusqlite::Connection,
+    placement: &crate::model::AutomationPlacement,
+    project_id: i64,
+) -> Result<Vec<(&'static str, String)>> {
+    let settings = crate::ops::automation_run::settings_of(conn, placement)?;
+    let mut found = Vec::new();
+    for setting in [DEPENDS_ON_TASKS, DECISIONS, FOLDER, CLASSIFY, AI_AXES] {
+        // An answer that is not the JSON text it is kept as is the settings check's to refuse, not this one's.
+        let Ok(Some(written)) = answered(&settings, setting) else { continue };
+        let lines: Vec<&str> = match setting {
+            FOLDER => vec![written.as_str()],
+            _ => written.lines().map(str::trim).filter(|line| !line.is_empty()).collect(),
+        };
+        for line in lines {
+            let looked_up = match setting {
+                DEPENDS_ON_TASKS => named_one(conn, project_id, setting, TypedKind::Task, line).map(drop),
+                DECISIONS => named_one(conn, project_id, setting, TypedKind::Decision, line).map(drop),
+                FOLDER => folder_named(conn, project_id, line).map(drop),
+                CLASSIFY => fixed_one(conn, project_id, line).map(drop),
+                _ => ai_axes(conn, project_id, line).map(drop),
+            };
+            if not_there(looked_up)? {
+                found.push((setting, line.to_string()));
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// **The lines of [`CLASSIFY`] that name a value this project has but has closed** (`AMB-D-987`). A task
+/// filed with one is refused when a run reaches it ([`unfilable`]), so the launch check names it first. A
+/// line naming what is not there at all is [`unfound`]'s.
+pub(crate) fn closed_values(
+    conn: &rusqlite::Connection,
+    placement: &crate::model::AutomationPlacement,
+    project_id: i64,
+) -> Result<Vec<String>> {
+    let settings = crate::ops::automation_run::settings_of(conn, placement)?;
+    let Ok(Some(written)) = answered(&settings, CLASSIFY) else { return Ok(Vec::new()) };
+    let mut closed = Vec::new();
+    for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let value_id = match fixed_one(conn, project_id, line) {
+            Ok((_, value_id)) => value_id,
+            Err(Error::NotFound(_) | Error::Invalid(_) | Error::AmbiguousId { .. }) => continue,
+            Err(other) => return Err(other),
+        };
+        if read::dimension_value(conn, value_id)?.is_some_and(|value| value.closed) {
+            closed.push(line.to_string());
+        }
+    }
+    Ok(closed)
+}
+
+/// Whether a lookup came back saying there is nothing there — not found, not written as one, or naming
+/// more than one. Anything else it fails on is the store's own failure and is passed on.
+fn not_there(looked_up: Result<()>) -> Result<bool> {
+    match looked_up {
+        Ok(()) => Ok(false),
+        Err(Error::NotFound(_) | Error::Invalid(_) | Error::AmbiguousId { .. }) => Ok(true),
+        Err(other) => Err(other),
+    }
 }
 
 /// **One setting's answer where it is placed** (`settings`), as the text it was answered with.
@@ -629,7 +783,7 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
-        check, launch_handing, launch_past_the_task_checks as launch, nothing_asked, HandedAtLaunch,
+        check, launch_handing, launch_past_the_setting_checks as launch, nothing_asked, HandedAtLaunch,
         Launcher, Unmet,
     };
     use crate::ops::automation_step::Opened;
@@ -879,10 +1033,105 @@ mod tests {
                 let (_, first, run_step_id, next) = carried(tx, &p, false);
                 assert!(matches!(next, Next::Halted(_)), "{setting} {written}: {next:?}");
                 let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
-                assert!(ran.report.contains(setting), "{}", ran.report);
+                // Said in the reader's language, so the setting goes by its translated name; what was
+                // written in it is nobody's to translate.
+                assert!(ran.report.contains(written), "{}", ran.report);
                 assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
             });
         }
+    }
+
+    /// **The launch check names each line of a setting that names what this project does not have**
+    /// (`AMB-D-987`) — a task or a decision by a number, a folder, an axis or a value — and nothing about
+    /// the lines it does have.
+    #[test]
+    fn the_launch_check_names_each_line_a_setting_cannot_find_here() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            let earlier = crate::ops::test_support::mk_task_in(tx, "earlier", Some(p.project));
+            let other = mk_project(tx, "other");
+            let elsewhere = crate::ops::test_support::mk_task_in(tx, "elsewhere", Some(other));
+            trades(tx, &p);
+            let tasks = format!("AMB-T-{earlier}\nAMB-T-99999\nAMB-T-{elsewhere}\nsoon");
+            answer(tx, &p, DEPENDS_ON_TASKS, &tasks);
+            answer(tx, &p, DECISIONS, "D-999");
+            answer(tx, &p, FOLDER, "/nowhere");
+            answer(tx, &p, CLASSIFY, "職能=実装\n職能=営業\nnosuch=x");
+            answer(tx, &p, AI_AXES, "職能\n種別");
+            let startable = ["claude".to_string()];
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let found: Vec<(String, String)> = unmet
+                .into_iter()
+                .filter_map(|unmet| match unmet {
+                    Unmet::CfgNotFound { step, cfg, line, builtin, placement } => {
+                        let named = (step.as_str(), builtin.as_deref(), placement);
+                        assert_eq!(named, ("タスクを起票する", Some(KEY), p.make.id));
+                        Some((cfg, line))
+                    }
+                    _ => None,
+                })
+                .collect();
+            let expected = [
+                (DEPENDS_ON_TASKS, "AMB-T-99999".to_string()),
+                (DEPENDS_ON_TASKS, format!("AMB-T-{elsewhere}")),
+                (DEPENDS_ON_TASKS, "soon".to_string()),
+                (DECISIONS, "D-999".to_string()),
+                (FOLDER, "/nowhere".to_string()),
+                (CLASSIFY, "職能=営業".to_string()),
+                (CLASSIFY, "nosuch=x".to_string()),
+                (AI_AXES, "種別".to_string()),
+            ]
+            .map(|(cfg, line)| (cfg.to_string(), line))
+            .to_vec();
+            assert_eq!(found, expected);
+        });
+    }
+
+    /// **The launch check names a classification on a value that is closed** (`AMB-T-5689`), apart from
+    /// one this project does not have: the value is there, and the built-in would still file no task
+    /// under it and halt the run.
+    #[test]
+    fn the_launch_check_names_a_classification_on_a_closed_value() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            // `trades`, on an axis whose values can be closed.
+            let axis = crate::ops::dimension::add(
+                tx,
+                p.project,
+                crate::ops::dimension::NewDimension {
+                    name: "職能".into(),
+                    role: crate::model::DimensionRole::Closable,
+                    ..Default::default()
+                },
+            )
+            .expect("axis");
+            let build = crate::ops::dimension::value_add(tx, axis.id, "実装", None).expect("value");
+            crate::ops::dimension::value_add(tx, axis.id, "設計", None).expect("value");
+            crate::ops::dimension::value_set_closed(tx, build.id, true).expect("close it");
+            answer(tx, &p, CLASSIFY, "職能=実装\n職能=設計\n職能=営業");
+            let startable = ["claude".to_string()];
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let closed: Vec<(String, String)> = unmet
+                .iter()
+                .filter_map(|unmet| match unmet {
+                    Unmet::CfgValueClosed { step, cfg, line, builtin, placement } => {
+                        let named = (step.as_str(), builtin.as_deref(), *placement);
+                        assert_eq!(named, ("タスクを起票する", Some(KEY), p.make.id));
+                        Some((cfg.clone(), line.clone()))
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(closed, vec![(CLASSIFY.to_string(), "職能=実装".to_string())]);
+            let missing: Vec<&str> = unmet
+                .iter()
+                .filter_map(|unmet| match unmet {
+                    Unmet::CfgNotFound { line, .. } => Some(line.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(missing, vec!["職能=営業"], "a closed value was also said to be missing");
+        });
     }
 
     /// **Taking it and depending on the run's task means the task the stretch before worked.**
@@ -961,7 +1210,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx);
             trades(tx, &p);
-            refused(tx, &p, "職能=実装", AI_AXES);
+            refused(tx, &p, "職能=実装", "“Axes the AI chooses on” does not offer");
         });
         with_tx(|tx| {
             let p = picture(tx);
@@ -980,7 +1229,7 @@ mod tests {
             trades(tx, &p);
             answer(tx, &p, AI_AXES, "職能");
             answer(tx, &p, CLASSIFY, "職能=設計");
-            refused(tx, &p, "職能=実装", CLASSIFY);
+            refused(tx, &p, "職能=実装", "“Classification” already fixes");
         });
     }
 

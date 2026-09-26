@@ -409,6 +409,14 @@ describe("arriving from a run's pane (AMB-T-5539)", () => {
     const lit = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
     expect(lit?.textContent).toBe(t("auto.tab.history"));
   });
+
+  it("opens on the running tab, where a failure nobody has acknowledged is listed (AMB-T-5672)", async () => {
+    await act(async () => {
+      root.render(createElement(AutomationsScreen, { projectId: 1, openingTab: "running", workspaceOpen: true }));
+    });
+    const lit = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
+    expect(lit?.textContent).toBe(t("auto.tab.running"));
+  });
 });
 
 describe("the panel beside the picture", () => {

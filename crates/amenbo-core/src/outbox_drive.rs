@@ -23,7 +23,7 @@
 //! **Two mounts, one walk.** [`walk_persisted`] is what the write seam makes — what just committed goes out
 //! behind it. The other is the one every face makes as it starts, for what a *previous* run left half
 //! carried (`AMB-D-399`): the write seam cannot answer for that, since the write it would ride may never
-//! come. Both go through the same cursor, and the advance is **contention-tolerant** — the cursor is re-read
+//! come. Both go through the same cursor, and the advance is **contention-tolerant** — the cursor is read
 //! under the write lock and only ever moves forward, so a face that loses the race leaves the winner's
 //! position standing and picks up from it next time.
 //!
@@ -223,11 +223,13 @@ pub fn walk(
 /// The walk, the outbox reclaim it authorises and the cursor that records it commit together: either all
 /// three land or none does, so the outbox can never be reclaimed past what was observed, nor observed twice.
 ///
-/// The cursor is re-read **inside** the transaction, whose `BEGIN IMMEDIATE` holds the write lock from the
-/// start: the other face may have walked the same span while this one was assembling, so a cursor that is
-/// not ahead of what is already stored is not written (the walk itself found nothing in that case — it read
-/// past the same trimmed rows). The cursor never goes backwards, which is what keeps an event from being
-/// carried twice (`AMB-D-380`).
+/// The cursor is read **inside** the transaction, whose `BEGIN IMMEDIATE` holds the write lock from the
+/// start, and never before it. The other face may walk while this one waits for the lock; a cursor read
+/// before the wait is the one from before that walk. Walking from it finds the span the other face carried
+/// already reclaimed, reads that as a retention gap, and resyncs to the head — past events that came after
+/// and were never carried by anyone. Read under the lock, the cursor is where the other face left it. A
+/// walk that finds nothing past it does not write it, and it never goes backwards, which is what keeps an
+/// event from being carried twice (`AMB-D-380`).
 ///
 /// `face` is stamped beside the cursor for diagnosis ([`CURSOR_FACE_META`]) and handed to `observe`, which
 /// is where it decides anything. Whatever the caller does with [`Walked::seen`] belongs **after** this
@@ -239,10 +241,11 @@ pub fn walk_persisted(
     face: Face,
     observe: impl FnMut(&WriteTx<'_>, &OutboxRow, &'static str) -> Result<()>,
 ) -> Result<Walked> {
-    let cursor = persisted_cursor(engine)?;
     let tx = engine.write()?;
+    // Under the lock, not before it: see the doc comment.
+    let cursor = persisted_cursor(engine)?;
     let walked = walk(&tx, cursor, log, observe)?;
-    if walked.cursor > persisted_cursor(engine)? {
+    if walked.cursor > cursor {
         tx.set_meta(CURSOR_META, Some(&walked.cursor.to_string()))?;
         tx.set_meta(CURSOR_FACE_META, Some(face.as_str()))?;
     }
@@ -461,5 +464,55 @@ mod tests {
         assert!(outbox_unfinished(&e).unwrap(), "the outbox is holding what was never carried out");
         let _ = drive(&e, Face::Cli);
         assert!(!outbox_unfinished(&e).unwrap(), "and nothing once the walk has reclaimed it");
+    }
+
+    /// Two faces driving one store at once (`AMB-T-5683`). One holds the write lock while it walks, and
+    /// more happens before it lets go; the other is waiting for the lock. The one waiting starts from where
+    /// the first left the cursor, and carries what came after — it does not take the span the first
+    /// reclaimed for a retention gap and resync past events nobody carried.
+    #[test]
+    fn a_face_waiting_for_the_lock_walks_on_from_where_the_other_face_left_the_cursor() {
+        let dir = amenbo_scratch::scratch("outbox-drive-two-faces");
+        let path = dir.join("store.sqlite");
+        let gui = StoreEngine::open(&path).unwrap();
+        for id in 1..=3 {
+            emit(&gui, "task.created", id);
+        }
+
+        // The GUI walks 1–3 under the lock, and 4 and 5 happen before it commits.
+        let tx = gui.write().unwrap();
+        let walked = walk(&tx, 0, None, |_, _, _| Ok(())).unwrap();
+        tx.set_meta(CURSOR_META, Some(&walked.cursor.to_string())).unwrap();
+        for id in 4..=5 {
+            tx.emit_event(&EventRow {
+                event: "task.done",
+                record_id: id,
+                actor: "ai",
+                at: "2026-07-23T09:00:00Z",
+                new_state: None,
+                project: None,
+                record: None,
+                parent: None,
+            })
+            .unwrap();
+        }
+
+        // The CLI drives meanwhile, and has to wait for the lock (`busy_timeout` is 5s).
+        let cli = std::thread::spawn({
+            let path = path.clone();
+            move || {
+                let e = StoreEngine::open(&path).unwrap();
+                drive(&e, Face::Cli)
+            }
+        });
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        tx.commit().unwrap();
+        let walked = cli.join().unwrap();
+
+        assert!(!walked.gapped, "no event was lost, so there is no gap to report");
+        let carried: Vec<i64> = walked.seen.iter().map(|h| h.record_id).collect();
+        assert_eq!(carried, [4, 5], "what came after the GUI's walk is carried, and nothing before it");
+        assert_eq!(persisted_cursor(&gui).unwrap(), walked.cursor);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

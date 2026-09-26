@@ -216,6 +216,14 @@ pub fn allow_unstamped_migrate() -> bool {
         .unwrap_or(false)
 }
 
+/// `AMENBO_DEV_STORE_DELAY_MS` — how long, in milliseconds, the GUI's store thread holds back before
+/// each command it runs, so the screen can be watched staying free while the store is slow
+/// (`app/src-tauri/src/store_worker.rs`). Only a development build acts on it; that is the caller's
+/// to check. A value that is not a whole number reads as `None`.
+pub fn dev_store_delay_ms() -> Option<u64> {
+    var("AMENBO_DEV_STORE_DELAY_MS")?.trim().parse().ok()
+}
+
 /// `AMENBO_TEST_NETWORK_DIR` — a directory on a **genuine network volume**. Only the GUI's
 /// `tests/store_watch.rs` passes it, and only when exercising "can we recognize a network FS from
 /// its filesystem type?" against a real mount — mounting one takes manual work, so the test is

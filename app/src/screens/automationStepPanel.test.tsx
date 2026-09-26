@@ -381,6 +381,7 @@ describe("the panel of one spot", () => {
               { name: "分類", kind: "text", required: false, value: classified },
               { name: "AI に選ばせる軸", kind: "text", required: false },
               { name: "依存させる既存のタスク", kind: "text", required: false },
+              { name: "リンクする決定", kind: "text", required: false },
               { name: "作業フォルダ", kind: "folder", required: false },
             ],
           }),
@@ -426,6 +427,15 @@ describe("the panel of one spot", () => {
         chip("ラベル")[0]!.click();
       });
       expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "AI に選ばせる軸", JSON.stringify("ラベル"));
+    });
+
+    it("gives the box for tasks a task's number as its example, and the box for decisions a decision's (AMB-T-5674)", async () => {
+      await render({ automation: makeTask(), placementId: 1 });
+      const boxes = [...container.querySelectorAll<HTMLTextAreaElement>("textarea")];
+      expect(boxes.map((box) => box.placeholder)).toEqual([
+        t("auto.step.oneALine"),
+        t("auto.step.oneADecisionALine"),
+      ]);
     });
 
     it("takes tasks one a line, and picks the folder from the project's own", async () => {
@@ -499,6 +509,29 @@ describe("the panel of one spot", () => {
       wire.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(hoisted.clearWire).toHaveBeenCalledWith(3);
+  });
+
+  it("marks a required input fed only from the spot's own way out, as the picture marks its box (AMB-T-5671)", async () => {
+    const looped = (fromId: number) =>
+      detail({
+        placements: [
+          spot({ id: 1, exits: [{ id: 10, name: "完了", outputs: [{ name: "note", kind: "value", required: true }] }] }),
+          spot({
+            id: 2,
+            name: "work",
+            actionId: 5,
+            stepId: 12,
+            inputs: [{ name: "note", kind: "value", required: true }],
+            exits: [{ id: 20, name: "完了", outputs: [{ name: "note", kind: "value", required: true }] }],
+          }),
+        ],
+        edges: [{ id: 1, fromId: 1, exitName: "完了", ends: "go", toId: 2 }],
+        wires: [{ id: 3, fromId, fromExitName: "完了", fromPortName: "note", toId: 2, toPortName: "note" }],
+      } as Partial<AutomationDetailDto>);
+    await render({ automation: looped(2), placementId: 2 });
+    expect(container.querySelector(".autostep__unfed")).not.toBeNull();
+    await render({ automation: looped(1), placementId: 2 });
+    expect(container.querySelector(".autostep__unfed")).toBeNull();
   });
 
   /// A family the action declares none of is left off, rather than drawn with a line saying so.

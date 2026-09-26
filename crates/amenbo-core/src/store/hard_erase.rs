@@ -69,11 +69,12 @@ pub struct HardEraseReport {
 /// The project an erase target belongs to — through [`super::owner`], the same walk the reach checks use,
 /// so a target reaches its project one way in this store and not two.
 fn owner_of(conn: &rusqlite::Connection, target: &HardEraseTarget) -> Result<Option<i64>> {
-    match target {
+    let owner = match target {
         HardEraseTarget::TaskComment { id } => super::owner::task_comment(conn, *id),
         HardEraseTarget::DecisionComment { id } => super::owner::decision_comment(conn, *id),
         HardEraseTarget::DecisionBody { id, .. } => super::owner::decision(conn, *id),
-    }
+    }?;
+    Ok(owner.project())
 }
 
 impl Store {

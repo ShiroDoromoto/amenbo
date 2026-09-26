@@ -601,6 +601,13 @@ global: boolean,
  */
 builtin?: string, 
 /**
+ * **The way out this spot never leaves by**, as its settings stand — a built-in that leaves by one
+ * of two ways out as a setting chooses, or that waits instead of leaving by one
+ * ([`amenbo_core::ops::automation_builtin::never_leaves_by`]). What it would hand on through that way
+ * out does not make the spot one that takes a task. Absent where it may leave by any of them.
+ */
+neverLeavesBy?: string, 
+/**
  * The step this spot opens first. Absent where the action holds no step yet, which the launch
  * check names.
  */
@@ -2159,19 +2166,25 @@ cmd: string, };
 /**
  * **A place on the ledger a run's pane sends the reader to** (`AMB-T-5539`): one automation's build
  * screen, with the box the run stopped at pressed where there is one, or — with no automation named —
- * the project's automations on the "history" tab. It is asked for from the workspace and followed on
- * the board, so when the two are separate windows it crosses between them
+ * the project's automations on the tab the run is listed on. It is asked for from the workspace and
+ * followed on the board, so when the two are separate windows it crosses between them
  * (`crate::windows::show_ledger`), the way a ref does ([`RefTargetDto`]).
  */
 export type LedgerPlaceDto = { project: number, 
 /**
- * The automation whose build screen to open. Absent is the history tab.
+ * The automation whose build screen to open. Absent is the tab named by `runs`.
  */
 automation?: number, 
 /**
  * The box to press on that screen — the placement the run stopped at.
  */
-placement?: number, };
+placement?: number, 
+/**
+ * With no automation named, the tab the run is listed on: "history", or "running" for a failure
+ * nobody has acknowledged yet (`AMB-D-955`). Absent is "history". Passed through as it came: only
+ * the ledger that opens the tab reads it.
+ */
+runs?: "running" | "history", };
 
 /**
  * A reference to a task a decision spawned. A [`DecisionRefDto`] plus **status**, so the screen can
@@ -3345,7 +3358,15 @@ tickRemovalLeavesARow: boolean,
  * board). Exposed so the settings screen can show and change it. It is only the answer nobody
  * gave: a project already carries its own `view`, and this never repaints one.
  */
-defaultView: "list" | "board" | "calendar" | "timeline", };
+defaultView: "list" | "board" | "calendar" | "timeline", 
+/**
+ * The store signature, read **before** anything else in this sheet (`AMB-T-5680`). The GUI keeps it
+ * as the one its own writes are compared against, so it has to be no newer than the rows it came
+ * with: read after them, a write from outside landing in between would be taken for our own and
+ * never reach the screen. Read first, it can only be older, and that costs one re-read too many.
+ * It rides here rather than in a second call for the same reason — two calls leave a gap.
+ */
+signature: StoreSignatureDto, };
 
 /**
  * One bound folder whose managed block is out of date. `version` is the version of that folder's

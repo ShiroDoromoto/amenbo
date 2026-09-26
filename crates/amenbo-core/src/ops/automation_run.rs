@@ -42,14 +42,15 @@ use crate::model::{
     AutomationRunStepStatus, AutomationStep, AutomationEdge,
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
 };
+use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
 use crate::ops::{automation, emit_create};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
-/// **One thing the launch check found missing.** Ten of them, and every one is something a person can
+/// **One thing the launch check found missing.** Every one is something a person can
 /// go and fix in the build screen — which is why each names where it is rather than only what it is.
 ///
-/// They are a type rather than ten sentences because both doors need them: the refusal writes them out
+/// They are a type rather than sentences because both doors need them: the refusal writes them out
 /// as English, and the build screen draws them as a list beside the step each belongs to.
 ///
 /// **`placement` is the placement on the automation's picture the reason is about** — the one standing
@@ -80,10 +81,24 @@ pub enum Unmet {
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
     OpenExit { step: String, exit: String, builtin: Option<String>, placement: i64 },
     /// A required input with nothing reaching it — no wire at all, or none whose far end is both
-    /// declared and reachable from the entry.
+    /// declared and reachable from the entry before this placement is.
     UnwiredInput { step: String, port: String, builtin: Option<String>, placement: i64 },
     /// A required setting nobody answered while building.
     UnansweredCfg { step: String, cfg: String, builtin: Option<String>, placement: i64 },
+    /// A setting answered with something its kind does not take — a task filter that is not its parts, a
+    /// number below zero, a choice that is not listed ([`crate::ops::automation::answer_misfit`]). The
+    /// answer is checked when it is written; one written before that, or left behind when the
+    /// declaration changed, would otherwise be read at run time as something nobody wrote. `why` is the
+    /// English reason.
+    MisansweredCfg { step: String, cfg: String, why: String, builtin: Option<String>, placement: i64 },
+    /// A setting whose answer names something this automation's project does not have — `line` being
+    /// the line of it that does (`AMB-D-987`): a task or a decision by a number, a folder, an axis or a
+    /// value. The built-in would refuse it when a run reached it and halt the run there.
+    CfgNotFound { step: String, cfg: String, line: String, builtin: Option<String>, placement: i64 },
+    /// A setting whose answer names a value this automation's project has but has closed — `line` being
+    /// the line of it that does (`AMB-D-987`). The built-in files no task under a closed value, and would
+    /// halt the run there.
+    CfgValueClosed { step: String, cfg: String, line: String, builtin: Option<String>, placement: i64 },
     /// A step nobody has been chosen to carry out where its action is placed (`AMB-D-960`). A pane
     /// opened on it would have no agent to start.
     AgentUnchosen { step: String, placement: i64 },
@@ -118,6 +133,11 @@ pub enum Unmet {
     ///
     /// `step` names the action, or the step inside it, whose way out `exit` is.
     HandsOnTaskTaken { step: String, exit: String, placement: i64 },
+    /// The built-in that splits by an axis, placed while its axis was there, whose axis has been deleted
+    /// since (`AMB-D-987`). A run reaching it would have nothing to split by and halt, so the launch is
+    /// refused here instead. `step` is the action's name, which every split shares, so the placement is
+    /// named in the sentence too.
+    SplitAxisGone { step: String, placement: i64 },
 }
 
 impl Unmet {
@@ -148,6 +168,15 @@ impl Unmet {
             Unmet::UnansweredCfg { step, cfg, .. } => {
                 format!("the required setting '{cfg}' of '{step}' is unanswered")
             }
+            Unmet::MisansweredCfg { step, cfg, why, .. } => {
+                format!("the setting '{cfg}' of '{step}' is answered with something it does not take: {why}")
+            }
+            Unmet::CfgNotFound { step, cfg, line, .. } => {
+                format!("the setting '{cfg}' of '{step}' names '{line}', which this project does not have")
+            }
+            Unmet::CfgValueClosed { step, cfg, line, .. } => {
+                format!("the setting '{cfg}' of '{step}' names '{line}', a value that is closed")
+            }
             Unmet::AgentUnchosen { step, .. } => {
                 format!("nobody is chosen to carry out '{step}' where its action is placed")
             }
@@ -177,6 +206,12 @@ impl Unmet {
                     named(exit)
                 )
             }
+            Unmet::SplitAxisGone { step, placement } => {
+                format!(
+                    "'{step}' on placement {placement} splits by an axis that has been deleted — take the \
+                     placement off and place the split again on an axis that is there"
+                )
+            }
         }
     }
 }
@@ -194,12 +229,16 @@ impl Unmet {
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
+            Unmet::MisansweredCfg { .. } => ErrorCode::NotReadyAutomationMisansweredCfg,
+            Unmet::CfgNotFound { .. } => ErrorCode::NotReadyAutomationCfgNotFound,
+            Unmet::CfgValueClosed { .. } => ErrorCode::NotReadyAutomationCfgValueClosed,
             Unmet::AgentUnchosen { .. } => ErrorCode::NotReadyAutomationAgentUnchosen,
             Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
             Unmet::ModelMissing { .. } => ErrorCode::NotReadyAutomationModelMissing,
             Unmet::LeavesTaskOpen { to: Some(_), .. } => ErrorCode::NotReadyAutomationTaskLeftOpen,
             Unmet::LeavesTaskOpen { to: None, .. } => ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
             Unmet::HandsOnTaskTaken { .. } => ErrorCode::NotReadyAutomationHandsOnTaskTaken,
+            Unmet::SplitAxisGone { .. } => ErrorCode::NotReadyAutomationSplitAxisGone,
         }
     }
 
@@ -225,7 +264,12 @@ impl Unmet {
             Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
-            Unmet::UnansweredCfg { step, cfg, .. } => msg.with("step", step).with("cfg", cfg),
+            Unmet::UnansweredCfg { step, cfg, .. } | Unmet::MisansweredCfg { step, cfg, .. } => {
+                msg.with("step", step).with("cfg", cfg)
+            }
+            Unmet::CfgNotFound { step, cfg, line, .. } | Unmet::CfgValueClosed { step, cfg, line, .. } => {
+                msg.with("step", step).with("cfg", cfg).with("line", line)
+            }
             Unmet::AgentUnchosen { step, .. } => msg.with("step", step),
             Unmet::AgentMissing { step, agent, .. } => msg.with("step", step).with("agent", agent),
             Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
@@ -241,6 +285,7 @@ impl Unmet {
                 }
             }
             Unmet::HandsOnTaskTaken { step, exit, .. } => msg.with("step", step).with("exit", exit),
+            Unmet::SplitAxisGone { step, .. } => msg.with("step", step),
         }
     }
 
@@ -253,11 +298,15 @@ impl Unmet {
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. }
             | Unmet::UnansweredCfg { placement, .. }
+            | Unmet::MisansweredCfg { placement, .. }
+            | Unmet::CfgNotFound { placement, .. }
+            | Unmet::CfgValueClosed { placement, .. }
             | Unmet::AgentUnchosen { placement, .. }
             | Unmet::AgentMissing { placement, .. }
             | Unmet::ModelMissing { placement, .. }
             | Unmet::LeavesTaskOpen { placement, .. }
-            | Unmet::HandsOnTaskTaken { placement, .. } => Some(*placement),
+            | Unmet::HandsOnTaskTaken { placement, .. }
+            | Unmet::SplitAxisGone { placement, .. } => Some(*placement),
         }
     }
 
@@ -268,7 +317,11 @@ impl Unmet {
             | Unmet::OpenExit { builtin, .. }
             | Unmet::UnwiredInput { builtin, .. }
             | Unmet::UnansweredCfg { builtin, .. }
+            | Unmet::MisansweredCfg { builtin, .. }
+            | Unmet::CfgNotFound { builtin, .. }
+            | Unmet::CfgValueClosed { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
+            Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
             _ => None,
         }
     }
@@ -407,7 +460,7 @@ fn not_found(what: &str, id: i64) -> Error {
 
 /// **Is this automation ready to be launched?** An empty answer is yes.
 ///
-/// The list is walked in display order, so a person reading it walks their own picture. Two of the ten
+/// The list is walked in display order, so a person reading it walks their own picture. Two of them
 /// answer alone: an automation with nothing placed on it has nothing else to say about it, and one with
 /// no entry has nothing reachable to say it about — every other check is asked of the placements a run
 /// would actually walk, and with no entry that is none of them.
@@ -492,14 +545,51 @@ pub fn check(
             }
         }
         for cfg in settings {
-            if cfg.required && cfg.value.is_none() {
-                unmet.push(Unmet::UnansweredCfg {
+            match cfg.value.as_deref() {
+                None if cfg.required => unmet.push(Unmet::UnansweredCfg {
                     step: name.clone(),
                     cfg: cfg.name,
                     builtin: builtin.clone(),
                     placement: placement.id,
+                }),
+                None => {}
+                Some(value) => {
+                    let why = crate::ops::automation::answer_misfit(cfg.kind, cfg.options.as_deref(), value);
+                    if let Some(why) = why {
+                        unmet.push(Unmet::MisansweredCfg {
+                            step: name.clone(),
+                            cfg: cfg.name,
+                            why,
+                            builtin: builtin.clone(),
+                            placement: placement.id,
+                        });
+                    }
+                }
+            }
+        }
+        if builtin.as_deref() == Some(crate::ops::automation_builtin_make::KEY) {
+            for (cfg, line) in crate::ops::automation_builtin_make::unfound(conn, placement, automation.project_id)? {
+                unmet.push(Unmet::CfgNotFound {
+                    step: name.clone(),
+                    cfg: cfg.to_string(),
+                    line,
+                    builtin: builtin.clone(),
+                    placement: placement.id,
                 });
             }
+            let classify = crate::ops::automation_builtin_make::CLASSIFY;
+            for line in crate::ops::automation_builtin_make::closed_values(conn, placement, automation.project_id)? {
+                unmet.push(Unmet::CfgValueClosed {
+                    step: name.clone(),
+                    cfg: classify.to_string(),
+                    line,
+                    builtin: builtin.clone(),
+                    placement: placement.id,
+                });
+            }
+        }
+        if crate::ops::automation_builtin_split::lost_its_axis(conn, placement.action_id)? {
+            unmet.push(Unmet::SplitAxisGone { step: name.clone(), placement: placement.id });
         }
         let steps = steps_opened_by(conn, placement.action_id)?;
         if builtin.is_none() {
@@ -765,6 +855,7 @@ fn inside(
                 continue;
             }
             let mut reached = false;
+            let mut before = None;
             for wire in wires.iter().filter(|w| w.to_id == step.id && w.to_port_id == port.id) {
                 reached = if wire.from_id == ACTION_BOUNDARY {
                     let declared = read::automation_ports_of(
@@ -777,6 +868,15 @@ fn inside(
                     .any(|p| p.id == wire.from_port_id);
                     declared && fed(conn, placement, wire.from_port_id, entry_id, live, by_id)?
                 } else if opened.contains(&wire.from_id) {
+                    // Only a step a run opens before this one hands anything on to its first opening:
+                    // its own way out, or that of a step only reached through it, leaves the input empty
+                    // then (`AMB-T-5641`), as on the automation's picture (`fed`).
+                    if before.is_none() {
+                        before = Some(steps_reached(conn, placement.action_id, steps, Some(step.id))?);
+                    }
+                    if !before.as_ref().is_some_and(|b| b.contains(&wire.from_id)) {
+                        continue;
+                    }
                     let exit = declared_exit(conn, wire.from_exit_id, AutomationOwner::Step, wire.from_id)?;
                     match exit {
                         Some(exit) => {
@@ -839,15 +939,28 @@ fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
 /// pane ever comes up on it, so refusing the launch over the agent it names would hold a run back for
 /// a box still being drawn.
 fn steps_opened_by(conn: &Connection, action_id: i64) -> Result<Vec<crate::model::AutomationStep>> {
-    let Some(entry) = read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id) else {
-        return Ok(Vec::new());
-    };
     let steps = read::automation_action_steps_of(conn, action_id)?;
+    let seen = steps_reached(conn, action_id, &steps, None)?;
+    Ok(steps.into_iter().filter(|step| seen.contains(&step.id)).collect())
+}
+
+/// **The steps of one action walked from its entry**, without passing through `avoiding` — with it,
+/// what a run can open before it first comes to that step, the step itself not among them. The walk
+/// [`reachable_without`] takes over the placements, taken over the picture inside.
+fn steps_reached(
+    conn: &Connection,
+    action_id: i64,
+    steps: &[crate::model::AutomationStep],
+    avoiding: Option<i64>,
+) -> Result<BTreeSet<i64>> {
+    let Some(entry) = read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id) else {
+        return Ok(BTreeSet::new());
+    };
     let ids: BTreeSet<i64> = steps.iter().map(|s| s.id).collect();
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry];
     while let Some(id) = todo.pop() {
-        if !ids.contains(&id) || !seen.insert(id) {
+        if Some(id) == avoiding || !ids.contains(&id) || !seen.insert(id) {
             continue;
         }
         for edge in read::automation_edges_from(conn, AutomationPictureOwner::Action, id)? {
@@ -856,7 +969,7 @@ fn steps_opened_by(conn: &Connection, action_id: i64) -> Result<Vec<crate::model
             }
         }
     }
-    Ok(steps.into_iter().filter(|step| seen.contains(&step.id)).collect())
+    Ok(seen)
 }
 
 /// The placements a run could actually reach, walked from the entry along the edges that go on to
@@ -868,10 +981,21 @@ fn reachable(
     entry_id: i64,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
 ) -> Result<BTreeSet<i64>> {
+    reachable_without(conn, entry_id, by_id, None)
+}
+
+/// [`reachable`], walked without passing through `avoiding` — **what a run can reach before it first
+/// comes to that placement**. The placement itself is not among them.
+fn reachable_without(
+    conn: &Connection,
+    entry_id: i64,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    avoiding: Option<i64>,
+) -> Result<BTreeSet<i64>> {
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry_id];
     while let Some(id) = todo.pop() {
-        if !by_id.contains_key(&id) || !seen.insert(id) {
+        if Some(id) == avoiding || !by_id.contains_key(&id) || !seen.insert(id) {
             continue;
         }
         let placement = by_id[&id];
@@ -981,8 +1105,10 @@ fn outs_of(conn: &Connection, exit: &AutomationExit) -> Result<Vec<crate::model:
 
 /// Whether anything actually reaches one input — the action's input port `port_id`, on this placement.
 /// A wire counts only where **both** halves hold: its far end is declared — that placement's way out
-/// really hands on the port it keys — and that placement is reachable from the entry. A wire from a
-/// placement no run reaches would never carry anything, so it feeds no input.
+/// really hands on the port it keys — and that placement is reachable from the entry **without passing
+/// through this one**. A wire from a placement no run reaches would never carry anything, and one from
+/// this placement's own way out, or from a placement only reached after it, carries nothing the first
+/// time a run arrives — either way it feeds no input.
 ///
 /// **An input the entry reads at launch is fed there** (`entry_id`): the built-in that files a task,
 /// placed as the entry, is handed its title, notes and classification by the person launching the run
@@ -1012,6 +1138,7 @@ fn fed(
             return Ok(true);
         }
     }
+    let mut before = None;
     for wire in read::automation_wires_to_port(
         conn,
         AutomationPictureOwner::Automation,
@@ -1019,6 +1146,15 @@ fn fed(
         port_id,
     )? {
         if !live.contains(&wire.from_id) {
+            continue;
+        }
+        // Only a placement a run can come to before this one hands anything on to its first visit
+        // (`AMB-T-5641`): the placement's own way out, or one of a placement only reached through it,
+        // leaves the input empty the first time the run arrives, and the run fails there on no_input.
+        if before.is_none() {
+            before = Some(reachable_without(conn, entry_id, by_id, Some(placement.id))?);
+        }
+        if !before.as_ref().is_some_and(|b| b.contains(&wire.from_id)) {
             continue;
         }
         let Some(from) = by_id.get(&wire.from_id) else { continue };
@@ -1133,6 +1269,27 @@ pub(crate) fn launch_past_the_task_checks(
 ) -> Result<AutomationRun> {
     launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), |unmet| {
         !matches!(unmet, Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. })
+    })
+}
+
+/// [`launch_past_the_task_checks`], with a setting that names what the project does not have let through
+/// as well. For a test of what a built-in does when a run reaches such a setting: the check refuses it at
+/// launch, and a run can still meet one, since what was there at launch can be gone by the time the run
+/// gets to it (`AMB-D-987`).
+#[cfg(test)]
+pub(crate) fn launch_past_the_setting_checks(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+) -> Result<AutomationRun> {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), |unmet| {
+        !matches!(
+            unmet,
+            Unmet::LeavesTaskOpen { .. }
+                | Unmet::HandsOnTaskTaken { .. }
+                | Unmet::CfgNotFound { .. }
+                | Unmet::CfgValueClosed { .. }
+        )
     })
 }
 
@@ -2099,6 +2256,59 @@ mod tests {
         });
     }
 
+    /// **A wire from the placement's own way out does not feed its input** (`AMB-T-5641`): the first
+    /// time a run arrives nothing has left by it yet, so the input is empty and the run fails there on
+    /// no_input. Reached from the entry is not enough — the far end has to be reached before this one.
+    #[test]
+    fn a_wire_from_the_placements_own_way_out_does_not_feed_its_input() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let exit = read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action.id, None)
+                .expect("read")
+                .expect("way out");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                exit.id,
+                AutomationPortDirection::Out,
+                "下書き",
+                AutomationPortKind::Value,
+                false,
+            )
+            .expect("out");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Action,
+                action.id,
+                AutomationPortDirection::In,
+                "下書き",
+                AutomationPortKind::Value,
+                true,
+            )
+            .expect("in");
+            automation::wire_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                placement.id,
+                None,
+                "下書き",
+                placement.id,
+                "下書き",
+            )
+            .expect("wire back into itself");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::UnwiredInput {
+                    step: "直す".into(),
+                    port: "下書き".into(),
+                    builtin: None,
+                    placement: placement.id,
+                }],
+                "the only wire into it comes back from its own way out",
+            );
+        });
+    }
+
     #[test]
     fn a_wire_from_a_placement_no_run_reaches_does_not_feed_an_input() {
         with_tx(|tx| {
@@ -2182,6 +2392,36 @@ mod tests {
             );
             automation::cfg_set(tx, placement.id, "作業フォルダ", Some("\"~/work\"")).expect("answer");
             assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+        });
+    }
+
+    /// **An answer its setting no longer takes is refused at the launch** — here a choice taken off the
+    /// list after it was answered, which the answer's own check could not see coming.
+    #[test]
+    fn an_answer_the_setting_does_not_take_is_refused_at_launch() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let cfg = automation::cfg_add(
+                tx,
+                action.id,
+                "どれ",
+                crate::model::AutomationCfgKind::Choice,
+                false,
+                Some(r#"["a","b"]"#),
+            )
+            .expect("cfg");
+            automation::cfg_set(tx, placement.id, "どれ", Some(r#""b""#)).expect("answer");
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            automation::cfg_update(tx, cfg.id, None, None, None, Some(Some(r#"["a"]"#))).expect("take b off");
+            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+            assert!(
+                matches!(
+                    unmet.as_slice(),
+                    [Unmet::MisansweredCfg { step, cfg, placement: p, .. }]
+                        if step == "直す" && cfg == "どれ" && *p == placement.id
+                ),
+                "{unmet:?}",
+            );
         });
     }
 
@@ -2516,6 +2756,23 @@ mod tests {
             let copy = copy_of_it(tx);
             assert_eq!(copy.name, "直す", "the copy is what the run reads from here on");
             assert_eq!(copy.prompt.as_deref(), Some("fix it"));
+        });
+    }
+
+    /// **An automation a run was launched from is not deleted, and the refusal says so by its code** — the
+    /// code is what the CLI answers with archiving, which is how such an automation goes out of the way.
+    #[test]
+    fn an_automation_its_runs_are_filed_under_is_refused_as_having_runs() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+            crate::ops::automation_stop::stop(tx, run.id, crate::ops::automation_stop::Ending::Canceled)
+                .expect("stop");
+            let err = automation::delete(tx, automation.id).expect_err("a run is filed under it");
+            let Error::Invalid(msg) = err else { panic!("an automation with runs is invalid to delete") };
+            assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationHasRuns));
+            assert_eq!(msg.fields().iter().collect::<Vec<_>>(), vec![("count", "1")]);
+            automation::update(tx, automation.id, None, None, Some(true)).expect("archiving is the way instead");
         });
     }
 
@@ -2896,6 +3153,53 @@ mod tests {
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![],
                 "the first step inside hands it on",
+            );
+        });
+    }
+
+    /// **A wire from a step's own way out inside the action does not feed its input** (`AMB-T-5641`), as
+    /// on the automation's picture: the first time the step opens nothing has left by it yet.
+    #[test]
+    fn a_wire_from_a_steps_own_way_out_inside_does_not_feed_its_input() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let second = a_second_step(tx, &action, &placement);
+            let on = AutomationPictureOwner::Action;
+            automation::edge_add(tx, on, second.id, None, EdgeTarget::Exit(None), None).expect("edge");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Step,
+                second.id,
+                AutomationPortDirection::In,
+                "下書き",
+                AutomationPortKind::Value,
+                true,
+            )
+            .expect("in");
+            let exit = read::automation_exit_by_name(tx.conn(), AutomationOwner::Step, second.id, None)
+                .expect("read")
+                .expect("way out");
+            automation::port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                exit.id,
+                AutomationPortDirection::Out,
+                "下書き",
+                AutomationPortKind::Value,
+                false,
+            )
+            .expect("out");
+            automation::wire_add(tx, on, second.id, None, "下書き", second.id, "下書き")
+                .expect("wire back into itself");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::UnwiredInput {
+                    step: "見直す".into(),
+                    port: "下書き".into(),
+                    builtin: None,
+                    placement: placement.id,
+                }],
+                "the only wire into it comes back from its own way out",
             );
         });
     }

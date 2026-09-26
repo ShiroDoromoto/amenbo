@@ -39,8 +39,8 @@ use crate::reach::Reach;
 use super::owner;
 
 /// What this mutation touches. The owning project is looked up from it — and **an id that does not exist
-/// has no owner**, so a narrowed reach cannot touch it (the same discipline as [`Reach::check`] on the
-/// read side).
+/// passes**, so the write that goes on to look it up answers `not_found` (`AMB-D-986`, the same as
+/// [`owner::Owner::check`] on the read side).
 #[derive(Clone, Copy, Debug)]
 pub(super) enum WriteTarget {
     Task(i64),
@@ -84,7 +84,7 @@ pub(super) enum AutomationPart {
 impl AutomationPart {
     /// The project this row belongs to, walked from the row itself — the one lookup both the guard and
     /// the sync version read.
-    fn project_of(self, conn: &Connection, id: i64) -> Result<Option<i64>> {
+    fn owner_of(self, conn: &Connection, id: i64) -> Result<owner::Owner> {
         match self {
             AutomationPart::Automation => owner::automation(conn, id),
             AutomationPart::Action => owner::automation_action(conn, id),
@@ -160,55 +160,50 @@ pub(super) fn projects_of(
 
 /// The project one target belongs to — the same walk [`check`] narrows on, without the judgement.
 fn project_of(conn: &Connection, target: WriteTarget) -> Result<Option<i64>> {
-    match target {
+    let owner = match target {
         WriteTarget::Task(id) => owner::task(conn, id),
         WriteTarget::Decision(id) => owner::decision(conn, id),
-        WriteTarget::Project(id) => Ok(Some(id)),
+        WriteTarget::Project(id) => return Ok(Some(id)),
         WriteTarget::TaskComment(id) => owner::task_comment(conn, id),
         WriteTarget::DecisionComment(id) => owner::decision_comment(conn, id),
         WriteTarget::Dimension(id) => owner::dimension(conn, id),
         WriteTarget::DimensionValue(id) => owner::dimension_value(conn, id),
         WriteTarget::Attachment(id) => owner::attachment(conn, id),
         WriteTarget::AttachTo(kind, id) => owner::attach_target(conn, kind, id),
-        WriteTarget::AutomationPart(part, id) => part.project_of(conn, id),
-        WriteTarget::NewIn(project) => Ok(project),
+        WriteTarget::AutomationPart(part, id) => part.owner_of(conn, id),
+        WriteTarget::NewIn(project) => return Ok(project),
         // The project does not exist yet, so it has no version to move. Its first version is `0` — the
         // absent row — and the first write that names it carries it forward from there.
-        WriteTarget::NewProject => Ok(None),
-    }
+        WriteTarget::NewProject => return Ok(None),
+    }?;
+    Ok(owner.project())
 }
 
 fn check(conn: &Connection, reach: Reach, bound: i64, target: WriteTarget) -> Result<()> {
     match target {
-        WriteTarget::Task(id) => reach.check(&crate::idref::task(id), owner::task(conn, id)?),
-        WriteTarget::Decision(id) => reach.check(&crate::idref::decision(id), owner::decision(conn, id)?),
+        WriteTarget::Task(id) => owner::task(conn, id)?.check(reach, &crate::idref::task(id)),
+        WriteTarget::Decision(id) => owner::decision(conn, id)?.check(reach, &crate::idref::decision(id)),
         WriteTarget::Project(id) => reach.check(&crate::idref::project(id), Some(id)),
         WriteTarget::TaskComment(id) => {
-            reach.check(&crate::idref::task_comment(id), owner::task_comment(conn, id)?)
+            owner::task_comment(conn, id)?.check(reach, &crate::idref::task_comment(id))
         }
         WriteTarget::DecisionComment(id) => {
-            reach.check(&crate::idref::decision_comment(id), owner::decision_comment(conn, id)?)
+            owner::decision_comment(conn, id)?.check(reach, &crate::idref::decision_comment(id))
         }
-        WriteTarget::Dimension(id) => {
-            reach.check(&crate::idref::render(crate::idref::RefKind::Dimension, id), owner::dimension(conn, id)?)
+        WriteTarget::Dimension(id) => owner::dimension(conn, id)?
+            .check(reach, &crate::idref::render(crate::idref::RefKind::Dimension, id)),
+        WriteTarget::DimensionValue(id) => owner::dimension_value(conn, id)?
+            .check(reach, &crate::idref::render(crate::idref::RefKind::DimensionValue, id)),
+        WriteTarget::Attachment(id) => owner::attachment(conn, id)?
+            .check(reach, &crate::idref::render(crate::idref::RefKind::Attachment, id)),
+        WriteTarget::AttachTo(kind, id) => {
+            owner::attach_target(conn, kind, id)?.check(reach, &owner::attach_target_ref(kind, id))
         }
-        WriteTarget::DimensionValue(id) => {
-            reach.check(&crate::idref::render(crate::idref::RefKind::DimensionValue, id), owner::dimension_value(conn, id)?)
-        }
-        WriteTarget::Attachment(id) => {
-            reach.check(&crate::idref::render(crate::idref::RefKind::Attachment, id), owner::attachment(conn, id)?)
-        }
-        WriteTarget::AttachTo(kind, id) => reach.check(
-            &owner::attach_target_ref(kind, id),
-            owner::attach_target(conn, kind, id)?,
-        ),
-        WriteTarget::AutomationPart(part, id) => {
-            reach.check(&part.what(id), part.project_of(conn, id)?)
-        }
+        WriteTarget::AutomationPart(part, id) => part.owner_of(conn, id)?.check(reach, &part.what(id)),
         // A new entity has no id yet, so we check the place it would go. "No project" (the inbox) is
         // outside a narrowed reach — nobody should be able to create an entity they can no longer touch.
         WriteTarget::NewIn(Some(project)) => reach.check(&crate::idref::project(project), Some(project)),
-        WriteTarget::NewIn(None) => Err(cannot_create(bound, "outside any project")),
+        WriteTarget::NewIn(None) => Err(cannot_create(bound, "anything outside a project")),
         // A new project is by definition outside the binding: it could be created but never touched
         // again. We do not leave that asymmetry standing.
         WriteTarget::NewProject => Err(cannot_create(bound, "a new project")),
@@ -221,7 +216,7 @@ fn check(conn: &Connection, reach: Reach, bound: i64, target: WriteTarget) -> Re
 fn cannot_create(bound: i64, en_what: &str) -> Error {
     let bound = crate::idref::project(bound);
     Error::out_of_reach(format!(
-        "Creating {en_what} is outside project {bound}, the project this folder is bound to — an AI \
-         reaches only the project its .amenbo names. Ask a human to run this."
+        "Creating {en_what} is out of reach: this folder is bound to project {bound}, and an AI reaches \
+         only the project its .amenbo names. Ask a human to run this."
     ))
 }

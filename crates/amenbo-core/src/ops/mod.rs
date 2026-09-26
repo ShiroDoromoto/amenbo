@@ -198,7 +198,7 @@ pub(crate) mod test_support {
         run_def_id: i64,
         startable: Option<&[String]>,
     ) -> crate::error::Result<crate::ops::automation_step::Opened> {
-        let outside = crate::ops::automation_builtin::work_outside(tx.conn(), run_id, run_def_id)?;
+        let outside = crate::ops::automation_builtin::work_outside(tx.conn(), tx.language(), run_id, run_def_id)?;
         crate::ops::automation_step::open(tx, run_id, run_def_id, startable, outside)
     }
 

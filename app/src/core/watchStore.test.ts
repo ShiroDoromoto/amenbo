@@ -96,7 +96,7 @@ beforeEach(() => {
   pages = [];
   invoke.mockImplementation((cmd: string) => {
     switch (cmd) {
-      case "snapshot": return Promise.resolve(SNAPSHOT);
+      case "snapshot": return Promise.resolve({ ...SNAPSHOT, signature }); // core reads it before the rows
       case "store_signature": return Promise.resolve(signature);
       case "change_cursor": return Promise.resolve(head);
       case "changes_since": return Promise.resolve(pages.shift() ?? feed([], 0));
@@ -272,5 +272,32 @@ describe("watchStore — when the feed cannot speak, always re-read from the sou
 
     expect(reloaded()).toBeGreaterThan(0);
     expect(invalidateAllQueries).toHaveBeenCalled();
+  });
+});
+
+describe("watchStore — the signature it compares against comes with the snapshot, not after it", () => {
+  it("a write from outside that lands after the rows were read is not taken for our own", async () => {
+    head = 5;
+    // Core read the signature, then the rows; somebody committed before a separate signature read
+    // could have been made. The snapshot's own signature is the older one.
+    invoke.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case "snapshot": {
+          const before = signature;
+          committed();
+          return Promise.resolve({ ...SNAPSHOT, signature: before });
+        }
+        case "store_signature": return Promise.resolve(signature);
+        case "change_cursor": return Promise.resolve(head);
+        case "changes_since": return Promise.resolve(pages.shift() ?? feed([], 0));
+        default: return Promise.resolve(null);
+      }
+    });
+    const fire = await boot();
+    pages = [feed([row("task")], 6)];
+
+    await fire();
+
+    expect(invalidateScopes).toHaveBeenCalledWith(new Set(["tasks"]));
   });
 });

@@ -21,14 +21,26 @@
 // it is a dashed box marked "empty". Neither takes the second line, which keeps saying where the
 // action comes from. An empty picture draws nothing: the screen puts its "+ first …" in the middle.
 //
+// **A line's `+` shows when the line is pointed at, and not before** (`AMB-T-5697`). One on every line
+// all the time put a ring beside every name on the picture, and what a reader opens it for first is
+// the order, not where a box could go in. It is still a button the whole time: Tab reaches it, and it
+// shows while it holds the focus. Each edge is traced by a wider stroke nobody sees, so the pointer
+// does not have to land on a line one and a half pixels wide.
+//
+// **A wire is named only where it touches what is picked** (`AMB-T-5698`). Every wire named at once
+// was a column of words down the right of the picture, most of them about boxes nobody was looking
+// at. With a box picked, the wires in and out of it keep their names and the rest are drawn fainter;
+// with the action's input or output picked, the wires out of or into the action itself do. With
+// nothing picked, no wire is named — where each one goes is still its `<title>`.
+//
 // **It scrolls, and it does nothing else.** No zoom, no folding a stretch away: an automation is
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
 // every time the definition is read again. The one move it makes is to bring a box newly picked into
 // sight — the box a run stopped at arrives picked from its pane (`AMB-T-5594`), and a band over the
 // screen can push it out of view. It stops moving once the reader's own hand has moved the screen,
 // so a reader scrolling away from the box that stays picked is not pulled back.
-import { useEffect, useId, useRef } from "react";
-import { edgeWord, exitWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
+import { useEffect, useId, useRef, useState } from "react";
+import { ACTION_BOUNDARY, edgeWord, exitWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { Icon } from "../components/Icon";
@@ -84,7 +96,8 @@ function headOf(line: PicLine): Head {
  * kind of line, in the colour the line itself is — so the legend is the stylesheet read aloud, and
  * never a second list of colours to keep in step with it — then the marks a box or a stretch wears,
  * drawn with the same classes as on the picture. A line leaving by one of the action's ways out is
- * only ever drawn on an action's picture, so it is listed there alone.
+ * only ever drawn on an action's picture, so it is listed there alone. The error line's word also says
+ * where a box with no such line goes, since the picture does not draw that on every box.
  */
 function Legend({ inAction }: { inAction: boolean }) {
   const one = (kind: string, word: string) => (
@@ -98,7 +111,7 @@ function Legend({ inAction }: { inAction: boolean }) {
       {one("next", t("auto.pic.legendNext"))}
       {one("back", t("auto.pic.legendBack"))}
       {one("branch", t("auto.pic.legendBranch"))}
-      {one("error", t("auto.pic.errorExit"))}
+      {one("error", t("auto.pic.legendError"))}
       {one("wire", t("auto.pic.legendWire"))}
       {inAction && one("leaves", t("auto.pic.legendLeaves"))}
       {one("lap", t("auto.pic.lap"))}
@@ -150,6 +163,8 @@ export function AutomationPicture({
   const head = (kind: Head) => `url(#${ids}-${kind})`;
   const picture = layOut(graph);
   const pickedRef = useRef<HTMLButtonElement | null>(null);
+  // The edge the pointer is on, whose `+` is shown.
+  const [near, setNear] = useState<number | null>(null);
   // A box picked before the definition has loaded has no element yet, so the move waits for the
   // render that draws it. Whether the box is in sight is asked of an observer rather than read at
   // once, and asked for as long as the screen is still settling: the panel the pick opens and the
@@ -198,6 +213,16 @@ export function AutomationPicture({
     return stop;
   }, [selectedBoxId, drawn]);
   if (picture.nodes.length === 0) return null;
+  // Whether a wire touches what is picked — the box, or the action itself where its input (the wires
+  // out of it) or its output (the wires into it) is. None does while nothing is picked.
+  const somethingPicked = selectedBoxId !== undefined || selectedPart !== undefined;
+  const touches = (line: PicLine): boolean => {
+    const [from, ...to] = line.joins ?? [];
+    if (selectedBoxId !== undefined && (line.joins ?? []).includes(selectedBoxId)) return true;
+    if (selectedPart === "in") return from === ACTION_BOUNDARY;
+    if (selectedPart === "out") return to.includes(ACTION_BOUNDARY);
+    return false;
+  };
 
   return (
     <>
@@ -250,9 +275,11 @@ export function AutomationPicture({
                 line.back ? "autopic__line--back" : "",
                 line.leaves ? "autopic__line--leaves" : "",
                 line.tone !== undefined ? `autopic__line--${line.tone}` : "",
+                line.kind === "wire" && somethingPicked && !touches(line) ? "autopic__line--aside" : "",
               ]
                 .filter((one) => one !== "")
                 .join(" ");
+              const edgeId = line.kind === "edge" ? Number(line.key.slice("edge-".length)) : undefined;
               return (
                 <g key={line.key}>
                   <title>{lineTitle(line)}</title>
@@ -273,6 +300,15 @@ export function AutomationPicture({
                       markerEnd={head("wire")}
                     />
                   ))}
+                  {/* Last in the group, so it lies over the line it traces. */}
+                  {edgeId !== undefined && (
+                    <polyline
+                      className="autopic__hit"
+                      points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                      onMouseEnter={() => setNear(edgeId)}
+                      onMouseLeave={() => setNear((was) => (was === edgeId ? null : was))}
+                    />
+                  )}
                   {line.kind === "edge" && lineTitle(line) !== "" && (
                     <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
                       {lineTitle(line)}
@@ -280,7 +316,7 @@ export function AutomationPicture({
                   )}
                   {/* A wire is named by what it hands on, past the trunks: the sentence saying where it
                       goes is the title, since the ends it lands in are drawn. */}
-                  {line.kind === "wire" && line.hands !== undefined && (
+                  {line.kind === "wire" && line.hands !== undefined && touches(line) && (
                     <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
                       {wireWord(line)}
                     </text>
@@ -433,7 +469,7 @@ export function AutomationPicture({
             <button
               key={insert.edgeId}
               type="button"
-              className="autopic__plus"
+              className={insert.edgeId === near ? "autopic__plus autopic__plus--near" : "autopic__plus"}
               style={{ left: `${insert.x}px`, top: `${insert.y}px` }}
               aria-label={insertLabel ?? t("auto.pic.insert")}
               disabled={onInsert === undefined}

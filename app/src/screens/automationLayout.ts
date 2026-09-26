@@ -30,11 +30,11 @@
 // takes in or hands out is a wire from the top mark or into a bottom one — the boundary the core names
 // `ACTION_BOUNDARY`. An automation's picture has no such boundary, and draws neither.
 //
-// **The error way out is drawn on every box, changed or not** (`AMB-T-5501`). Every box is born
-// carrying it with nothing said about what follows, which core reads as stopping the run and calling
-// a person (`AMB-D-966`). A box with no edge on it is drawn with a line of its own to that stop, so a
-// reader sees where a run goes when a step fails without having to know the default. That line has no
-// `+`: there is no edge under it to put a box in on.
+// **The error way out is drawn only where somebody drew a line from it.** Every box is born carrying
+// it with nothing said about what follows, which core reads as stopping the run and calling a person
+// (`AMB-D-966`). Drawn on every box, that one line said the same thing seven times over and crowded
+// the picture it was meant to explain, so the legend says it once instead, and the panel beside the
+// picture names it for the box picked.
 import { builtinWord } from "../core/builtinWords";
 import { t } from "../core/i18n";
 import type {
@@ -57,6 +57,9 @@ export type PicBox = {
   global?: boolean;
   /** The built-in the action standing on this box is, by its key — said in place of the library. */
   builtin?: string;
+  /** The way out the built-in standing here never leaves by, as its settings stand. Absent where it
+   *  may leave by any of them, and on an action's picture. */
+  neverLeavesBy?: string;
   /** Who carries out each step of the action standing here — one per step it holds. Absent on an
    *  action's picture; on an automation's, none at all is an action with nothing in it yet. */
   steps?: readonly unknown[];
@@ -229,6 +232,11 @@ export type PicLine = {
   /** What is handed on, for a wire: the way out's output, and every input it lands in. */
   hands?: { from: string; to: readonly string[] };
   /**
+   * The boxes a wire joins: the one it leaves first, then each it lands in — `ACTION_BOUNDARY` where
+   * that end is the action itself. What the picture names a wire by depends on the box picked.
+   */
+  joins?: readonly number[];
+  /**
    * A wire's legs off its trunk, one per input it lands in. `points` is the stem out of the box it
    * leaves, and each branch runs from where the stem meets the trunk, along the trunk, and into
    * one input — so one output fed to three boxes is one line with three ends, not three lines
@@ -289,9 +297,14 @@ export type Picture = {
  * It is a `task_take` **output** on one of its ways out: the box goes and finds a task, and what it
  * comes out holding is what the run is about from there on
  * (`amenbo_core::ops::automation_run::takes_a_task`).
+ *
+ * **Not on the way out the box never leaves by** (`AMB-T-5669`): a built-in whose settings choose the
+ * other of its two ways out — "file a task" left to leave the task it filed untaken — hands nothing on
+ * through it, so it takes no task however that way out is drawn. Core decides the same way.
  */
 function takesTask(box: PicBox): boolean {
-  return box.exits.some((exit) => exit.outputs.some((port) => port.kind === "task_take"));
+  return box.exits.some((exit) =>
+    exit.name !== box.neverLeavesBy && exit.outputs.some((port) => port.kind === "task_take"));
 }
 
 /** The boxes one task is worked by, in the rows the walk put them in. */
@@ -504,32 +517,74 @@ export function pictureOrder(graph: PicGraph): PicOrder {
 }
 
 /**
- * Whether anything actually reaches one required input — **core's rule, read off the same three
- * conditions** (`amenbo_core::ops::automation_run::fed`): the wire comes from a box a run
- * reaches, that box still exists, and the way out it leaves by really hands on a port of that name.
+ * Whether anything actually reaches one required input — **core's rule, read off the same conditions**
+ * (`amenbo_core::ops::automation_run::fed`): the wire comes from a box a run can come to **before it
+ * first comes to this one**, that box still exists, and the way out it leaves by really hands on a port
+ * of that name. A wire from the box's own way out, or from a box only reached through it, carries
+ * nothing the first time a run arrives, and the run fails there on no_input (`AMB-T-5641`).
  *
  * It is worked out here because the launch check answers by box *name*, which is no way to find a
  * box. What a box says is a remark; the start press over the picture is what refuses, and it reads
  * core's answer whole (`./AutomationBuildScreen`).
  */
-function fed(
-  graph: PicGraph,
-  boxes: Map<number, PicBox>,
-  live: Set<number>,
-  boxId: number,
-  port: string,
-): boolean {
+export function fed(graph: PicGraph, boxId: number, port: string): boolean {
+  const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
+  if (readAtLaunch(graph, boxes.get(boxId)?.builtin, boxId, port)) return true;
+  let before: Set<number> | undefined;
   return graph.wires.some((wire) => {
     if (wire.toId !== boxId || wire.toPortName !== port) return false;
     // What the action itself was handed is there from the start, whatever the walk reached.
     if (wire.fromId === ACTION_BOUNDARY) {
       return graph.boundary?.inputs.some((one) => one.name === wire.fromPortName) ?? false;
     }
-    if (!live.has(wire.fromId)) return false;
+    before ??= reachedBefore(graph, boxes, boxId);
+    if (!before.has(wire.fromId)) return false;
     const from = boxes.get(wire.fromId);
     const exit = from?.exits.find((one) => one.name === wire.fromExitName);
     return exit?.outputs.some((one) => one.name === wire.fromPortName) ?? false;
   });
+}
+
+/**
+ * **What a run can come to before it first comes to `boxId`** — from the entry along the edges that go
+ * on to a box, never passing through that one (`amenbo_core::ops::automation_run::reachable_without`).
+ * The box itself is not among them.
+ */
+function reachedBefore(graph: PicGraph, boxes: Map<number, PicBox>, boxId: number): Set<number> {
+  const seen = new Set<number>();
+  if (graph.entryId === undefined || !boxes.has(graph.entryId)) return seen;
+  const queue = [graph.entryId];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (id === boxId || seen.has(id)) continue;
+    seen.add(id);
+    for (const edge of graph.edges) {
+      if (edge.fromId !== id || edge.ends !== "go" || edge.toId === undefined) continue;
+      if (boxes.has(edge.toId)) queue.push(edge.toId);
+    }
+  }
+  return seen;
+}
+
+/** The built-in that files a task, and the inputs it reads from the start dialog, by the store's word. */
+const MAKE_TASK = "make_task";
+const READ_AT_LAUNCH: readonly string[] = ["タイトル", "本文", "選んだ分類"];
+
+/**
+ * **An input the entry is handed as a run starts** — the built-in that files a task, placed where the
+ * automation starts, takes its title, notes and chosen classification from the start dialog rather than
+ * a wire (`amenbo_core::ops::automation_builtin_make::read_at_launch`), so nothing has to reach it.
+ * Only on the automation's own picture: inside an action there is no start dialog to hand anything.
+ */
+export function readAtLaunch(
+  graph: PicGraph,
+  builtin: string | undefined,
+  boxId: number,
+  port: string,
+): boolean {
+  return (
+    graph.boundary === undefined && boxId === graph.entryId && builtin === MAKE_TASK && READ_AT_LAUNCH.includes(port)
+  );
 }
 
 /** Where one row's boxes start, so that every row is centred on the same column of the picture. */
@@ -675,7 +730,7 @@ export function layOut(graph: PicGraph | null): Picture {
           unfed: !live.has(boxId)
             ? []
             : box.inputs
-                .filter((port) => port.required && !fed(graph, boxes, live, boxId, port.name))
+                .filter((port) => port.required && !fed(graph, boxId, port.name))
                 .map((port) => builtinWord(box.builtin, port.name)),
         });
       });
@@ -829,14 +884,11 @@ export function layOut(graph: PicGraph | null): Picture {
     if (toId === undefined) return 2;
     return neighbours(edge.fromId, toId) ? 1 : 0;
   };
-  // The error way out of each box nobody drew a line from, as the line core reads it as: one that
-  // halts the run. Its id is the box's, negated — no edge has one below zero.
-  const unsaid: AutomationEdgeDto[] = graph.boxes
-    .filter((box) => box.exits.some((exit) => exit.name === ERROR_EXIT))
-    .filter((box) => !graph.edges.some((edge) => edge.fromId === box.id && edge.exitName === ERROR_EXIT))
-    .map((box) => ({ id: -box.id, fromId: box.id, exitName: ERROR_EXIT, ends: "halt" }));
-  const edges = [...graph.edges, ...unsaid];
+  const edges = graph.edges;
   const slot = new Map<number, { nth: number; below: number }>();
+  // The first of each box's lines that go down to a neighbour — the one with nothing of its box's
+  // coming down on its left, where a name beside it can be written.
+  const firstDown = new Map<number, number>();
   for (const box of graph.boxes) {
     const exitAt = (edge: AutomationEdgeDto) => box.exits.findIndex((exit) => exit.name === edge.exitName);
     const own = edges
@@ -848,6 +900,7 @@ export function layOut(graph: PicGraph | null): Picture {
       // How many lines that go nowhere stand to this one's right: its words go that many rows lower.
       const below = reach(edge) === 2 ? nowhere - 1 - seen++ : 0;
       slot.set(edge.id, { nth, below });
+      if (reach(edge) === 1 && !firstDown.has(box.id)) firstDown.set(box.id, edge.id);
     });
   }
 
@@ -863,7 +916,7 @@ export function layOut(graph: PicGraph | null): Picture {
     if (toId === undefined) {
       // The one further left runs further down, so its words pass under the shorter lines to its right.
       const foot = sy + STUB + below * WORD_H;
-      if (edge.id > 0) inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
+      inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
       lines.push({
         key,
         kind: "edge",
@@ -885,9 +938,19 @@ export function layOut(graph: PicGraph | null): Picture {
       const mid = Math.round((sy + ty) / 2);
       const across = Math.round((sx + tx) / 2);
       inserts.push({ edgeId: edge.id, x: across, y: mid });
-      // A line straight down has no leg across to write over: the name goes beside its `+`, on the
-      // left, where the lines that go nowhere do not write theirs.
-      const straight = Math.abs(tx - sx) < BESIDE * 2;
+      // A leg across shorter than the name has no room to write it over: centred there, it runs over
+      // the lines leaving beside it (`AMB-T-5675`). A line straight down has no leg at all. Either
+      // way the name goes level with the leg, on the left where the lines that go nowhere do not write
+      // theirs — but only for the first of its box's lines down to a neighbour. Any other has one of
+      // those turning at the same height on its left, so its name goes past its right end instead.
+      const word = wordW(lineWord({ exitName: edge.exitName, builtin: from.builtin }));
+      const short = Math.abs(tx - sx) < Math.max(BESIDE * 2, word + BESIDE);
+      const left = firstDown.get(edge.fromId) === edge.id && tx <= sx + BESIDE * 2;
+      const at = !short
+        ? { x: across, y: mid - OVER }
+        : left
+          ? { x: Math.min(sx, tx) - BESIDE, y: mid + 4 }
+          : { x: Math.max(sx, tx) + BESIDE, y: mid + 4 };
       lines.push({
         key,
         kind: "edge",
@@ -896,8 +959,8 @@ export function layOut(graph: PicGraph | null): Picture {
         leaves: edge.ends === "exit",
         exitName: edge.exitName,
         builtin: from.builtin,
-        at: straight ? { x: Math.min(sx, tx) - BESIDE, y: mid + 4 } : { x: across, y: mid - OVER },
-        align: straight ? "end" : "middle",
+        at,
+        align: !short ? "middle" : left ? "end" : "start",
       });
       continue;
     }
@@ -1062,6 +1125,9 @@ export function layOut(graph: PicGraph | null): Picture {
         exitName: trunk.exitName,
         builtin: trunk.builtin,
         hands: { from: trunk.port, to: trunk.ends.map((one) => one.input) },
+        // An end into one of the action's own ways out lands on that way out's mark, which is the
+        // action itself as far as picking goes.
+        joins: [trunk.fromId, ...trunk.ends.map((one) => (boxes.has(one.toId) ? one.toId : ACTION_BOUNDARY))],
         // Past the outermost trunk, level with the stem: nothing runs out there, so no trunk crosses
         // the words, and each stem out of a box has a height of its own for them.
         at: { x: wordsX + WIRE_WORD, y: trunk.sy + WIRE_WORD },

@@ -21,6 +21,7 @@ use crate::model::{
     ActorKind, AutomationPortKind, AutomationRunStep, AutomationRunStepStatus, TaskStatus, DONE_EXIT,
 };
 use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Carried, Carry, Work};
+use crate::run_wording::builtin as say;
 use crate::store_engine::{read, WriteTx};
 
 /// The input the commit's SHA is handed in on.
@@ -40,26 +41,30 @@ pub(crate) const CLOSE_TASK: Builtin = Builtin {
 
 fn close(carry: &Carry<'_, '_>) -> Result<Carried> {
     let tx = carry.tx;
-    let task_id = carry
-        .task_id
-        .ok_or_else(|| Error::invalid("there is no task to close — the run has not taken one"))?;
+    let lang = tx.language();
+    let task_id = carry.task_id.ok_or_else(|| Error::invalid(say(lang, "noTaskToClose", &[])))?;
     let task = read::task(tx.conn(), task_id)?
         .ok_or_else(|| Error::not_found(format!("task AMB-T-{task_id}")))?;
+    let named = format!("AMB-T-{task_id}");
     match task.status {
         TaskStatus::Done => {
-            return Ok(Carried { exit: DONE_EXIT, report: format!("AMB-T-{task_id} was done already") });
+            return Ok(Carried { exit: DONE_EXIT, report: say(lang, "doneAlready", &[("task", &named)]) });
         }
         TaskStatus::Rejected => {
-            return Err(Error::invalid(format!(
-                "AMB-T-{task_id} was decided against, and a task decided against is not closed as done"
-            )));
+            return Err(Error::invalid(say(lang, "rejected", &[("task", &named)])));
         }
         _ => {}
     }
-    let mut said = Vec::new();
+    let mut recorded = None;
     if let Some(sha) = carry.input(COMMIT).map(str::trim).filter(|s| !s.is_empty()) {
-        let (commit, _) = crate::ops::commit::add(tx, task_id, sha, Some(ActorKind::Ai))?;
-        said.push(format!("recorded {}", commit.sha));
+        // The door's refusal is the CLI's sentence; the one the run keeps is the reader's.
+        let (commit, _) = crate::ops::commit::add(tx, task_id, sha, Some(ActorKind::Ai)).map_err(|e| {
+            match e.code() {
+                "invalid_commit_sha" => Error::invalid(say(lang, "badSha", &[("sha", sha)])),
+                _ => e,
+            }
+        })?;
+        recorded = Some(commit.sha);
     }
     if let Some(reported) = last_report(tx, carry.run_step)? {
         if !already_on_the_task(tx, task_id, reported.id)? {
@@ -67,8 +72,11 @@ fn close(carry: &Carry<'_, '_>) -> Result<Carried> {
         }
     }
     crate::ops::task::set_completed(tx, task_id, true)?;
-    said.insert(0, format!("closed AMB-T-{task_id} {}", task.title));
-    Ok(Carried { exit: DONE_EXIT, report: said.join(", ") })
+    let report = match recorded {
+        Some(sha) => say(lang, "closedRecorded", &[("task", &named), ("title", &task.title), ("sha", &sha)]),
+        None => say(lang, "closed", &[("task", &named), ("title", &task.title)]),
+    };
+    Ok(Carried { exit: DONE_EXIT, report })
 }
 
 /// **The last report an agent gave in this stretch**, or `None` where no agent's step has reported

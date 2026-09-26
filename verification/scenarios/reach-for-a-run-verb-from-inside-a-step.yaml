@@ -6,8 +6,8 @@
 # a task's status is the run's to move, and `task done` typed there would close one with no commit
 # on it — so that is turned away too, with a sentence of its own.
 #
-# The refusal is the whole of this road. What reaches from inside a step — `step-take`, `step-out`,
-# `step-done` — is walked by `walk-a-run-from-one-step-to-the-next`, and the six reading verbs that
+# The refusal is the whole of this road. What a step types from inside it — `step-out`, `step-done`
+# — is walked by `walk-a-run-from-one-step-to-the-next`, and the six reading verbs that
 # also reach are held by the CLI's own tests. What no test can stand in for is this: a shipped binary
 # in a terminal a shipped window opened, with the environment that window set on it.
 id: reach-for-a-run-verb-from-inside-a-step

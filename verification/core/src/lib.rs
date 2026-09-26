@@ -4273,7 +4273,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-box", required: &[], refs: &[], strings: &["name", "builtin"], binds: false },
     // The `+` on an automation's picture, and the library it opens in the panel. The box is put in
     // **in front of** the line named: `after` is the box the line leaves and `exit` the way out it
-    // leaves by, which is the pair a line hangs on.
+    // leaves by, which is the pair a line hangs on. A line leaving a built-in's box names that box by
+    // its key (`after_builtin`) and the way out by the word the store keeps it under.
     //
     // What goes in is a placement: an action picked off the library (`action`), or one made on the
     // spot (`name`, and `reach` for which library keeps it — this project's where none is named).
@@ -4284,7 +4285,7 @@ const REGISTRY: &[OpSpec] = &[
     // named by its key, the one word of it that is the same in every language: what its row draws is
     // Amenbo's own, in the machine's language, so the driver says what the built-in is and the
     // operator finds it by that.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &["after"], refs: &["action"], strings: &["after", "exit", "name", "reach", "builtin"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &[], refs: &["action"], strings: &["after", "after_builtin", "exit", "name", "reach", "builtin"], binds: false },
     // The `＋` on a way out's card, and the row it opens inside that card.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
     //
@@ -4301,8 +4302,9 @@ const REGISTRY: &[OpSpec] = &[
     // What leaving by one way out leads to, said on that way out's row of the panel rather than drawn
     // in the picture. `to` is a box to go on to, `ends` the end of the task or the run, and a step
     // naming neither takes what was said away — "nothing said yet", which is a state of its own.
-    // `max_times` is the limit a way out going on to a box carries, and `~` empties it.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "set-next", required: &[], refs: &[], strings: &["exit", "to", "ends", "exit_to"], binds: false },
+    // `max_times` is the limit a way out going on to a box carries, and `~` empties it. On a built-in's
+    // panel, `builtin` is its key and `exit` the word the store keeps that way out under.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "set-next", required: &[], refs: &[], strings: &["exit", "builtin", "to", "ends", "exit_to"], binds: false },
     // The action's own three places on its build screen, opened in the panel: the row for the action
     // itself, the input frame over the picture, the output frame under it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-part", required: &["part"], refs: &[], strings: &["part"], binds: false },
@@ -4312,13 +4314,14 @@ const REGISTRY: &[OpSpec] = &[
     //
     // **The automation build screen's own three.** An automation's picture has no line until two
     // placements are joined either, so the first placement comes from the press in the empty picture,
-    // which opens the library in the panel beside it, where a library action (`action`) is picked and
-    // placed. Every later one goes in on a line (`insert-box`).
-    // The box it draws is named by that action, as every placement's is.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-action", required: &["action"], refs: &["action"], strings: &[], binds: false },
-    // Where a run opens, said on the pressed placement's panel. `on: false` gives the entry back,
-    // which leaves the automation with none — a state the launch check names.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "set-entry", required: &[], refs: &[], strings: &[], binds: false },
+    // which opens the panel beside it on the built-ins a run can start at and nothing else.
+    // The one picked (`builtin`, by its key) is placed there and is where a run starts. Every later one
+    // goes in on a line (`insert-box`).
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-action", required: &["builtin"], refs: &[], strings: &["builtin"], binds: false },
+    // What a run starts at, changed on the start's own panel to another of those built-ins (`builtin`).
+    // The lines out of the start go with the one replaced, so the machine's own question stands between
+    // the pick and the write.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "replace-entry", required: &["builtin"], refs: &[], strings: &["builtin"], binds: false },
     // Taking the pressed placement off. It takes the settings answered on it and every line naming
     // it, and leaves the action in the library — so the machine's own question stands between the
     // press and the write, the way it does for deleting a step.

@@ -18,9 +18,9 @@ id: find-the-agent-you-open-with-already-chosen-on-a-step-you-place
 title: A step of an action placed on an automation comes down carrying the agent the reader last opened a pane with
 description: >
   Stand a machine up with two agents on it, open a pane in the project on one of them by name, and go
-  to the project's automations. Place a library action of one step on an automation that has nothing
-  on it and press its box: the row saying who carries that step out already reads the agent the pane
-  was opened with, rather than nobody chosen.
+  to the project's automations. On an automation that starts at the built-in that takes a task, put a
+  library action of one step in on the line leaving it and press its box: the row saying who carries
+  that step out already reads the agent the pane was opened with, rather than nobody chosen.
 
 given:
   - type: action
@@ -42,6 +42,11 @@ given:
   - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, prompt: write the draft }, as: write }
   - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — placed with an agent on it", project: harbour }, as: auto }
+  # A picture with nothing on it takes only a built-in a run starts at, so the library
+  # action goes in on a line leaving one. The built-in's way out for having taken a task ends the run,
+  # which is the line the `+` stands on.
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した } }
 
 steps_gui:
   # ── The answer, given the way a reader gives it ───────────────────────────────────────────────
@@ -82,8 +87,10 @@ steps_gui:
 
   - type: action
     domain: automation
-    op: place-action
+    op: insert-box
     with:
+      after_builtin: take_task
+      exit: 着手した
       action: draft
 
   - type: action

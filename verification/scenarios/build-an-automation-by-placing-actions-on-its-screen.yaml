@@ -1,21 +1,25 @@
 # An automation's picture is built on its own screen, one layer over an action's: every box on it is
-# a placement of a library action. What a reader does there that no other screen asks of them is
-# five things. A picture with nothing on it has no `+` to press, so the first action is placed from
-# the press in the empty picture, picked off the library the panel opens beside it; every later one
-# goes in on a line, off the same library. Where a run opens is said on a placement, and drawn on its
-# box. What leaving one way out leads to is said on that way out's row, with the limit a line going
-# back to a box before it carries. And a placement is taken off outright, with the action left in the library. A build that
-# lost any of them would leave an automation nobody could finish from the screen.
+# a placement of an action. What a reader does there that no other screen asks of them is five things.
+# A picture with nothing on it has no `+` to press, so the first placement comes from the press in the
+# empty picture — and it is where a run starts, so what that press offers is the three built-ins a run
+# can start at and nothing else. What a run starts at is changed on the start's own
+# panel, to another of the three. Every later placement goes in on a line, off the library. What
+# leaving one way out leads to is said on that way out's row, with the limit a line going back to a
+# box before it carries. And a placement is taken off outright, with the action left in the library.
+# A build that lost any of them would leave an automation nobody could finish from the screen.
 id: build-an-automation-by-placing-actions-on-its-screen
-title: An automation's placements are put down, entered by, joined, let go of and taken off on its own screen
+title: An automation's placements are put down, started at, joined, let go of and taken off on its own screen
 description: >
-  Open an automation with nothing on it, place a library action from the press in the empty picture,
-  and say a run starts there — then read the mark on its box. Say its way out finishes the task, put
-  a second library action in on that line, and read both halves of what that did. Turn the second's
-  way out back to the first, write a limit on that line and empty it again, say instead that leaving it finishes the task, and take
-  that back. Take the second placement off, give the entry back, and find the second action still in
-  the library. Each change is read on the picture, because the panel alone could say a thing the
-  picture never drew.
+  Open an automation with nothing on it, find the press in the empty picture offering the three
+  built-ins a run can start at and nothing else, place the one that takes a task, and read the start's
+  mark on its box. Change the start to the one that files a task, and read the first one gone and the
+  mark on the second. Say its way out finishes the task, put a library action in on that line, say
+  that action's own way out finishes the task, and put a second library action in on that line —
+  reading both halves of what that did. Turn the second library action's way out back to the first, write a limit on
+  that line and empty it again, say instead that leaving it finishes the task, and take that back.
+  Take the second placement off, find the start as it was, and find the second action still in the
+  library. Each change is read on the picture, because the panel alone could say a thing the picture
+  never drew.
 given:
   # Two library actions, each with a step inside it so a placement's panel has a first step to show.
   # The first declares a way out of its own, which is the row the lines are said on.
@@ -43,11 +47,71 @@ steps_gui:
       target: auto
 
   # The first placement, from the press in the empty picture. A picture with no line at all is the
-  # case the `+` on a line cannot reach.
+  # case the `+` on a line cannot reach, and what goes there is where a run starts — so the start's
+  # mark is on its box from the moment it is placed.
   - type: action
     domain: automation
     op: place-action
     with:
+      builtin: take_task
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      builtin: take_task
+      entry: true
+
+  # What a run starts at, changed on the start's own panel. The placement stays where it was and
+  # stands on the other built-in, so the first is gone from the picture and the mark is on the second.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      builtin: take_task
+
+  - type: action
+    domain: automation
+    op: replace-entry
+    with:
+      builtin: make_task
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      builtin: take_task
+      present: false
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      builtin: make_task
+      entry: true
+
+  # A line to put a library action in on: leaving the start by the way out for having filed a task
+  # finishes the task. The start's box is pressed again, since what it stood on changed under the panel.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      builtin: make_task
+
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      builtin: make_task
+      exit: 起票した
+      ends: done
+
+  - type: action
+    domain: automation
+    op: insert-box
+    with:
+      after_builtin: make_task
+      exit: 起票した
       action: draft
 
   - type: assert
@@ -57,24 +121,12 @@ steps_gui:
       name: draft
       present: true
 
-  # Where a run opens. It is said on the panel and read on the box, because two stretches nothing
-  # joins are told apart by that mark alone.
+  # The placing closed the panel, so the new box is pressed to bring its rows up.
   - type: action
     domain: automation
     op: pick-box
     with:
       name: draft
-
-  - type: action
-    domain: automation
-    op: set-entry
-
-  - type: assert
-    domain: automation
-    op: pictured
-    with:
-      name: draft
-      entry: true
 
   # A line to put the second one in on: leaving by the way out finishes the task.
   - type: action
@@ -117,7 +169,7 @@ steps_gui:
       ends: done
 
   # A limit is said only on a line that goes back to a box before it — a line going forward is
-  # walked once per task, so it has nothing to cap. The second box's way out is turned back to the
+  # walked once per task, so it has nothing to cap. The second library action's way out is turned back to the
   # first, and on that row the limit is written and then emptied — the two ends of that box. The
   # placing closed the panel, so the second box is pressed to bring its rows up.
   - type: action
@@ -147,7 +199,7 @@ steps_gui:
       to: draft
       max_times: ~
 
-  # The rest is said on the first box's rows, so it is pressed again to bring them back.
+  # The rest is said on the first library action's rows, so it is pressed again to bring them back.
   - type: action
     domain: automation
     op: pick-box
@@ -185,8 +237,7 @@ steps_gui:
       exit: drafted
       present: false
 
-  # Taking a placement off takes its box off the picture. The first placement is left as it was,
-  # entry mark and all.
+  # Taking a placement off takes its box off the picture. The start is left as it was, mark and all.
   - type: action
     domain: automation
     op: pick-box
@@ -208,28 +259,8 @@ steps_gui:
     domain: automation
     op: pictured
     with:
-      name: draft
+      builtin: make_task
       entry: true
-
-  # And the entry given back: the automation opens nowhere again, and the box stops saying so.
-  - type: action
-    domain: automation
-    op: pick-box
-    with:
-      name: draft
-
-  - type: action
-    domain: automation
-    op: set-entry
-    with:
-      on: false
-
-  - type: assert
-    domain: automation
-    op: pictured
-    with:
-      name: draft
-      entry: false
 
   # What was taken off was the placement and not the action: the library still lists it.
   - type: action

@@ -4072,9 +4072,10 @@ impl Instructor {
             // straight away, and no road walks it yet.
             (Domain::Automation, "insert-box") => {
                 let plus = format!(
-                    "In the build screen's picture, press the `+` on the line leaving the box \"{}\" by {}.",
-                    req(with, "after")?,
-                    way_out(with)
+                    "In the build screen's picture, press the `+` on the line leaving {} by {}.{}",
+                    box_named(with, "after", "after_builtin")?,
+                    way_out_of(with, "after_builtin")?,
+                    builtin_note(with, "after_builtin")
                 );
                 if with.contains_key("prompt") || with.contains_key("exits") || with.contains_key("inputs") {
                     return Err(
@@ -4156,7 +4157,7 @@ impl Instructor {
             // `ends` both left out — a state of its own, and not a way out that ends anything.
             (Domain::Automation, "set-next") => format!(
                 "In the panel showing what the pressed box holds, on the line for {}, open the pulldown of what happens next and {}{}.",
-                way_out(with),
+                way_out_of(with, "builtin")?,
                 match (arg_str(with, "to"), arg_str(with, "ends")) {
                     (Some(to), None) => format!("choose the line that opens \"{to}\""),
                     (None, Some("done")) => "choose the line saying the run ends".to_string(),
@@ -4189,23 +4190,23 @@ impl Instructor {
             // **The one press on the action's step panel that cannot be taken back**, so the machine's
             // own question stands between it and the write, the way it does for deleting an automation.
             (Domain::Automation, "remove-step") => "In the panel showing what the pressed step holds, press the button that deletes this step, and answer the question the machine asks with the answer that goes ahead.".to_string(),
-            // The first action on an automation's picture. A picture with nothing on it has no line to
-            // press a `+` on, so the press in the empty picture opens the library in the panel, and
-            // the action is picked and placed there. There is no press for a second one on its own:
-            // a box nothing points at is never reached, so every later one goes in on a line.
+            // The first action on an automation's picture, which is where a run starts. A picture with
+            // nothing on it has no line to press a `+` on, so the press in the empty picture opens the
+            // panel, which offers the built-ins a run can start at and nothing else —
+            // no library action, no search box and no press that makes one. There is no press for a
+            // second one on its own: a box nothing points at is never reached, so every later one goes
+            // in on a line.
             (Domain::Automation, "place-action") => format!(
-                "On the automation build screen, whose picture has nothing on it, press the button in the picture that places the first action. In the panel that opens beside the picture, press the library action \"{}\", then press the button under it that places it.",
-                self.labels
-                    .get(with.get("action").and_then(|v| v.as_str()).unwrap_or(""))
-                    .cloned()
-                    .unwrap_or_else(|| "<the action>".to_string())
+                "On the automation build screen, whose picture has nothing on it, press the button in the picture that places the first action. Confirm the panel that opens beside the picture lists {} and nothing else — no library action, no search box and no button that makes a new action. Press the row for {} — its name is written in the interface's language. Confirm what it does opens under the row, then press the button under it that places it.",
+                entry_builtins_called(),
+                entry_builtin(req(with, "builtin")?)?.called
             ),
-            // One switch on the pressed placement's panel, turned on for where a run opens and off to
-            // give it back. One automation has one entry, so ticking it here moves it off any other.
-            (Domain::Automation, "set-entry") => match step_mark(with, "on")? {
-                None | Some(true) => "In the panel showing what the pressed placement holds, turn on the switch that makes it the start.".to_string(),
-                Some(false) => "In the panel showing what the pressed placement holds, turn off the switch that makes it the start.".to_string(),
-            },
+            // The start's own panel holds a pulldown of what a run starts at, in place of a switch on
+            // every placement. Picking another asks first, since the lines out of the start go with it.
+            (Domain::Automation, "replace-entry") => format!(
+                "In the panel showing what the pressed placement holds, open the pulldown under \"Start\" — its heading is written in the interface's language — and choose {}, whose name is written in the interface's language too. Answer the question the machine asks, which says the lines out of the current start go with it, with the answer that goes ahead.",
+                entry_builtin(req(with, "builtin")?)?.called
+            ),
             // **The one press on the placement's panel that cannot be taken back**, which is why the
             // road answers the machine's question and does not stop at the press.
             (Domain::Automation, "remove-placement") => "In the panel showing what the pressed placement holds, press the button that takes this placement off, and answer the question the machine asks with the answer that goes ahead.".to_string(),
@@ -6765,6 +6766,28 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
     },
 ];
 
+/// The built-ins a run can start at, in the order the empty picture offers them — the app's
+/// `ENTRY_BUILTINS`.
+const ENTRY_BUILTINS: &[&str] = &["take_task", "make_task", "fetch"];
+
+/// One of the built-ins a run can start at, by its key, or why it is not one.
+fn entry_builtin(key: &str) -> Result<&'static BuiltinWords, String> {
+    match ENTRY_BUILTINS.contains(&key) {
+        true => builtin_words(key),
+        false => Err(format!(
+            "a run starts only at {} — `{key}` is not one of them",
+            ENTRY_BUILTINS.join(" / ")
+        )),
+    }
+}
+
+/// The three a run can start at, said as what each is.
+fn entry_builtins_called() -> String {
+    let called: Vec<String> =
+        ENTRY_BUILTINS.iter().filter_map(|key| builtin_words(key).ok()).map(|one| one.called.to_string()).collect();
+    listed(&called)
+}
+
 /// The built-in a road names by `key`, or why there is none.
 fn builtin_words(key: &str) -> Result<&'static BuiltinWords, String> {
     BUILTIN_WORDS.iter().find(|one| one.key == key).ok_or_else(|| {
@@ -6863,6 +6886,19 @@ fn box_named(with: &Args, name_key: &str, builtin_key: &str) -> Result<String, S
         (None, Some(key)) => Ok(format!("the box of {}", builtin_words(key)?.called)),
         (Some(_), Some(_)) => Err(format!("a box is named by `{name_key}` or by `{builtin_key}`, not both")),
         (None, None) => Err(format!("name the box — `{name_key}`, or `{builtin_key}` for a built-in's key")),
+    }
+}
+
+/// The way out a box leaves by, where the box may be a built-in's (`builtin_key`, its key). A
+/// built-in's way out is drawn in the machine's language, so it is said as what it is, off the word
+/// the store keeps it under (`exit`).
+fn way_out_of(with: &Args, builtin_key: &str) -> Result<String, String> {
+    match arg_str(with, builtin_key) {
+        None => Ok(way_out(with)),
+        Some(key) => match arg_str(with, "exit") {
+            Some(exit) => Ok(builtin_words(key)?.word(exit)?.to_string()),
+            None => Err("a built-in's way out is named — `exit`, by the word the store keeps it under".to_string()),
+        },
     }
 }
 
@@ -9131,9 +9167,11 @@ steps_gui:
         assert!(ins.render(&steps[0]).is_err());
     }
 
-    /// The automation build screen's own: the first action placed from the empty picture, the
-    /// entry ticked and given back, and a placement taken off past the machine's question. The
-    /// entry's mark is the interface's words, so it is read by an eye and not as text.
+    /// The automation build screen's own: the first action placed from the empty picture, which is
+    /// one of the built-ins a run starts at, the start changed to another of them past the machine's
+    /// question, a box put in on a line leaving a built-in, and a placement taken off past the
+    /// machine's question. The entry's mark is the interface's words, so it is read by an eye and not
+    /// as text.
     #[test]
     fn an_automation_is_built_by_placing_actions_on_its_own_screen() {
         let s = load(r#"
@@ -9145,38 +9183,52 @@ steps_gui:
   - type: action
     domain: automation
     op: place-action
-    with: { action: draft }
+    with: { builtin: take_task }
   - type: action
     domain: automation
-    op: set-entry
+    op: replace-entry
+    with: { builtin: make_task }
   - type: action
     domain: automation
-    op: set-entry
-    with: { on: false }
+    op: set-next
+    with: { builtin: make_task, exit: 起票した, ends: done }
+  - type: action
+    domain: automation
+    op: insert-box
+    with: { after_builtin: make_task, exit: 起票した, action: draft }
   - type: action
     domain: automation
     op: remove-placement
   - type: assert
     domain: automation
     op: pictured
-    with: { name: draft, entry: true }
-  - type: assert
-    domain: automation
-    op: pictured
-    with: { name: draft, entry: false }
+    with: { builtin: make_task, entry: true }
 "#);
         let mut ins = Instructor::new();
         ins.learn(&s.given);
         let steps = s.steps(Driver::Gui);
         let lines: Vec<String> =
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
-        assert!(lines[0].contains("places the first action") && lines[0].contains("\"draft\""), "{}", lines[0]);
-        assert!(lines[1].contains("turn on the switch that makes it the start"), "{}", lines[1]);
-        assert!(lines[2].contains("turn off the switch that makes it the start"), "{}", lines[2]);
-        assert!(lines[3].contains("takes this placement off") && lines[3].contains("goes ahead"), "{}", lines[3]);
-        assert!(lines[4].contains("saying it is the start written in it"), "{}", lines[4]);
-        assert!(lines[5].contains("no mark saying it is the start"), "{}", lines[5]);
-        assert!(ins.expectation(&steps[4]).is_none(), "the entry's mark is an eye's");
+        assert!(lines[0].contains("places the first action") && lines[0].contains("that takes a task"), "{}", lines[0]);
+        assert!(lines[0].contains("files a task") && lines[0].contains("goes and fetches") && lines[0].contains("nothing else"), "{}", lines[0]);
+        assert!(lines[1].contains("\"Start\"") && lines[1].contains("files a task") && lines[1].contains("goes ahead"), "{}", lines[1]);
+        assert!(lines[2].contains("the way out for having filed a task") && !lines[2].contains("起票した"), "{}", lines[2]);
+        assert!(lines[3].contains("the box of the built-in that files a task") && lines[3].contains("\"draft\""), "{}", lines[3]);
+        assert!(lines[3].contains("the way out for having filed a task"), "{}", lines[3]);
+        assert!(lines[4].contains("takes this placement off") && lines[4].contains("goes ahead"), "{}", lines[4]);
+        assert!(lines[5].contains("saying it is the start written in it"), "{}", lines[5]);
+        assert!(ins.expectation(&steps[5]).is_none(), "the entry's mark is an eye's");
+    }
+
+    /// A run starts only at one of three built-ins, so a road placing any other first, or changing the
+    /// start to one, is refused rather than told to press a row the panel never draws.
+    #[test]
+    fn a_start_that_is_not_one_of_the_three_is_refused() {
+        let ins = Instructor::new();
+        let with = serde_yaml::from_str::<Args>("{ builtin: close_task }").unwrap();
+        for op in ["place-action", "replace-entry"] {
+            assert!(ins.action(Domain::Automation, op, &with).is_err(), "{op}");
+        }
     }
 
     /// A limit belongs to a way out going on to a box, so a road writing one on an end is refused

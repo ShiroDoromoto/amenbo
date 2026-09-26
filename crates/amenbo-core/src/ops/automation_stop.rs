@@ -14,7 +14,8 @@
 //! **Paused holds its task.** The work is half done and nobody else should take it. Stopping does the
 //! opposite — hands the task back to `todo` — because a run that was cut off left no one carrying it.
 //! A run that stopped to call a person also gives the task to the human, with the report of the step
-//! that stopped on it (`AMB-D-966`).
+//! that stopped on it (`AMB-D-966`), and so does one a person canceled or one that crashed
+//! (`AMB-D-985`).
 //!
 //! **A crash is told to core, or read at startup.** A step's program that ends before its step has
 //! reported is seen by the app that started it, which says so here ([`step_ended`], `AMB-D-961`). An
@@ -195,10 +196,7 @@ fn close_stretch(
 /// alone, it is a task any run may take, and the next one takes it at once and stops at the same place.
 /// So it is also assigned to the human — the one who launched the run, since a local store knows a
 /// launcher only by facet, and a launch by the AI facet handed back to the AI would be that loop again.
-/// Taking it up means handing it back to the AI. Only [`Ending::Failed`] with
-/// [`AutomationStoppedReason::Halted`] does this: a way out the picture sends to a person — one the
-/// author drew so, or the error one, which goes there unless drawn elsewhere. Every other failure is
-/// the run's own and not a question for anybody.
+/// Taking it up means handing it back to the AI. [`to_a_person`] names the endings that do this.
 ///
 /// What the person reads there is the report of the step that stopped, under the line: that is where
 /// the agent said what it needs, and the line alone says only that it stopped.
@@ -216,7 +214,7 @@ fn hand_the_task_back(
         return Ok(());
     }
     let line = said(tx, run, ending)?;
-    if ending != Ending::Failed(AutomationStoppedReason::Halted) {
+    if !to_a_person(ending) {
         crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
         return Ok(());
     }
@@ -231,6 +229,25 @@ fn hand_the_task_back(
         }
     }
     Ok(())
+}
+
+/// **Whether an ending gives the task to a person** rather than back to the AI.
+///
+/// - [`AutomationStoppedReason::Halted`]: a way out the picture sends to a person — one the author drew
+///   so, or the error one, which goes there unless drawn elsewhere (`AMB-D-966`).
+/// - [`Ending::Canceled`]: a person stopped it, so what happens next is theirs to say (`AMB-D-985`).
+/// - [`AutomationStoppedReason::Crashed`]: Amenbo cannot tell why it went down — something in the task
+///   that brings every run down at the same place, or a worktree left half written. The next run would
+///   take it at once and could fall the same way, with no limit on the turns (`AMB-D-985`).
+///
+/// Every other failure is the run's own — the picture's shape or the machine's — and not a question
+/// about the task.
+fn to_a_person(ending: Ending) -> bool {
+    matches!(
+        ending,
+        Ending::Canceled
+            | Ending::Failed(AutomationStoppedReason::Halted | AutomationStoppedReason::Crashed)
+    )
 }
 
 /// The report of the step the run stopped at, with that execution's id — unless it is empty, or the
@@ -644,6 +661,13 @@ mod tests {
                 crate::model::TaskStatus::Todo,
             );
             assert!(!comments_on(tx, task).is_empty(), "and it was told what happened");
+            // Amenbo cannot tell why it went down, so the next run does not take it straight back
+            // and fall the same way (`AMB-D-985`).
+            assert_eq!(
+                read::task(tx.conn(), task).expect("read").expect("the task").assignee_kind,
+                Some(ActorKind::Human),
+                "it is the person's turn",
+            );
         });
     }
 
@@ -717,6 +741,11 @@ mod tests {
                 read::task_status(tx.conn(), task).expect("read"),
                 Some(TaskStatus::Todo),
                 "a task held by a run that is gone is one nobody picks up",
+            );
+            assert_eq!(
+                read::task(tx.conn(), task).expect("read").expect("the task").assignee_kind,
+                Some(ActorKind::Human),
+                "a person stopped it, so what comes next is theirs (`AMB-D-985`)",
             );
             let said = comments_on(tx, task);
             assert_eq!(said.len(), 1, "one line, saying the run is not coming back");

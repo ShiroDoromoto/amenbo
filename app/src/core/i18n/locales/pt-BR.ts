@@ -1020,6 +1020,7 @@ export const ptBR: Translation = {
     "auto.step.oneALine": "Uma por linha (ex.: AMB-T-12)",
     "auto.step.inputs": "Entradas",
     "auto.step.unwired": "nada chega",
+    "auto.step.atLaunch": "entregue ao iniciar a execução",
     "auto.step.exits": "Saídas",
     "auto.step.modelDefault": "o padrão do próprio agente",
     "auto.step.notHere": "{agent} — não está nesta máquina",

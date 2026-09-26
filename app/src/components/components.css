@@ -1565,6 +1565,8 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 /* One input, and what fills it. */
 .autostep__wire { display: flex; flex-direction: column; gap: var(--s-1); padding-block: var(--s-1); }
+/* Where the input is handed over in the start dialog instead: said, not chosen. */
+.autostep__atlaunch { color: var(--c-text-muted); font-size: var(--fs-md); }
 /* No markers: a way out carries a control beside its name, and a bullet in front of a row with a
    button on it reads as a list of buttons. */
 .autostep__exits { margin: 0; padding: 0; list-style: none; font-size: var(--fs-md); }

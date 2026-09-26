@@ -1007,6 +1007,7 @@ export const nl: Translation = {
     "auto.step.oneALine": "Eén per regel (bijv. AMB-T-12)",
     "auto.step.inputs": "Invoer",
     "auto.step.unwired": "er bereikt hem niets",
+    "auto.step.atLaunch": "wordt bij het starten van de run meegegeven",
     "auto.step.exits": "Uitgangen",
     "auto.step.modelDefault": "de eigen standaard van de agent",
     "auto.step.notHere": "{agent} — niet op deze machine",

@@ -519,6 +519,7 @@ function fed(
   boxId: number,
   port: string,
 ): boolean {
+  if (readAtLaunch(graph, boxes.get(boxId)?.builtin, boxId, port)) return true;
   return graph.wires.some((wire) => {
     if (wire.toId !== boxId || wire.toPortName !== port) return false;
     // What the action itself was handed is there from the start, whatever the walk reached.
@@ -530,6 +531,27 @@ function fed(
     const exit = from?.exits.find((one) => one.name === wire.fromExitName);
     return exit?.outputs.some((one) => one.name === wire.fromPortName) ?? false;
   });
+}
+
+/** The built-in that files a task, and the inputs it reads from the start dialog, by the store's word. */
+const MAKE_TASK = "make_task";
+const READ_AT_LAUNCH: readonly string[] = ["タイトル", "本文", "選んだ分類"];
+
+/**
+ * **An input the entry is handed as a run starts** — the built-in that files a task, placed where the
+ * automation starts, takes its title, notes and chosen classification from the start dialog rather than
+ * a wire (`amenbo_core::ops::automation_builtin_make::read_at_launch`), so nothing has to reach it.
+ * Only on the automation's own picture: inside an action there is no start dialog to hand anything.
+ */
+export function readAtLaunch(
+  graph: PicGraph,
+  builtin: string | undefined,
+  boxId: number,
+  port: string,
+): boolean {
+  return (
+    graph.boundary === undefined && boxId === graph.entryId && builtin === MAKE_TASK && READ_AT_LAUNCH.includes(port)
+  );
 }
 
 /** Where one row's boxes start, so that every row is centred on the same column of the picture. */

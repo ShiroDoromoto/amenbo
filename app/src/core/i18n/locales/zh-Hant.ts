@@ -1009,6 +1009,7 @@ export const zhHant: Translation = {
     "auto.step.oneALine": "每行一個（例：AMB-T-12）",
     "auto.step.inputs": "輸入參數",
     "auto.step.unwired": "沒有東西送到",
+    "auto.step.atLaunch": "在啟動時傳入",
     "auto.step.exits": "出口",
     "auto.step.modelDefault": "代理自己的預設值",
     "auto.step.notHere": "{agent}——這台機器上沒有",

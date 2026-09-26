@@ -712,6 +712,32 @@ describe("the picture of an automation", () => {
   });
 });
 
+describe("the inputs the start dialog hands over", () => {
+  /** "File a task" at `at`, with the three inputs it reads at launch and one it does not. */
+  function filing(at: number, entry: number): PicGraph {
+    return detail({
+      entryPlacementId: entry,
+      placements: [
+        taker(1, "take"),
+        taker(2, "タスクを起票する", {
+          builtin: "make_task",
+          inputs: [port("タイトル", "value"), port("本文", "value"), port("選んだ分類", "value"), port("other", "value")],
+        }),
+      ].filter((one) => one.id === at || one.id === entry),
+      edges: at === entry ? [] : [edge({ id: 1, fromId: entry, toId: at })],
+    });
+  }
+
+  it("counts the entry's title, notes and chosen classification as reached, and nothing else", () => {
+    expect(at(layOut(filing(2, 2)), 2).unfed).toEqual(["other"]);
+  });
+
+  it("asks for a wire into the same inputs where the box is not what a run starts at", () => {
+    // Drawn in the screen's words, so only how many are asked for is the store's to say.
+    expect(at(layOut(filing(2, 1)), 2).unfed).toHaveLength(4);
+  });
+});
+
 describe("the picture inside an action", () => {
   /** An action of two steps, the first leaving the action by "done" and the second by the unnamed. */
   function inside(over: Partial<PicGraph> = {}): PicGraph {

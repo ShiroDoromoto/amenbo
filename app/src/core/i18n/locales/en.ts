@@ -1252,6 +1252,7 @@ const ui = {
   "auto.step.oneALine": "One a line (e.g. AMB-T-12)",
   "auto.step.inputs": "Inputs",
   "auto.step.unwired": "nothing reaches it",
+  "auto.step.atLaunch": "handed over as the run starts",
   "auto.step.exits": "Exits",
   "auto.step.modelDefault": "the agent's own default",
   "auto.step.notHere": "{agent} — not on this machine",

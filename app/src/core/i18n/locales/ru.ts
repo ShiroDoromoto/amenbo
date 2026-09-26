@@ -1024,6 +1024,7 @@ export const ru: Translation = {
     "auto.step.oneALine": "По одной в строке (например, AMB-T-12)",
     "auto.step.inputs": "Входы",
     "auto.step.unwired": "до него ничего не доходит",
+    "auto.step.atLaunch": "передаётся при запуске",
     "auto.step.exits": "Выходы",
     "auto.step.modelDefault": "собственное значение агента по умолчанию",
     "auto.step.notHere": "{agent} — нет на этой машине",

@@ -1007,6 +1007,7 @@ export const tr: Translation = {
     "auto.step.oneALine": "Satır başına bir tane (ör. AMB-T-12)",
     "auto.step.inputs": "Girdiler",
     "auto.step.unwired": "hiçbir şey ulaşmıyor",
+    "auto.step.atLaunch": "çalıştırma başlarken verilir",
     "auto.step.exits": "Çıkışlar",
     "auto.step.modelDefault": "aracının kendi varsayılanı",
     "auto.step.notHere": "{agent} — bu makinede yok",

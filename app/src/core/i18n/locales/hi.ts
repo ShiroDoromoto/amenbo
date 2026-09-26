@@ -1007,6 +1007,7 @@ export const hi: Translation = {
     "auto.step.oneALine": "हर पंक्ति में एक (जैसे AMB-T-12)",
     "auto.step.inputs": "इनपुट पैरामीटर",
     "auto.step.unwired": "कुछ नहीं पहुँचता",
+    "auto.step.atLaunch": "रन शुरू करते समय दिया जाता है",
     "auto.step.exits": "निकास",
     "auto.step.modelDefault": "एजेंट का अपना डिफ़ॉल्ट",
     "auto.step.notHere": "{agent} — इस मशीन पर नहीं है",

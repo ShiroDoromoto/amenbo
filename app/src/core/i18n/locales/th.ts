@@ -1008,6 +1008,7 @@ export const th: Translation = {
     "auto.step.oneALine": "บรรทัดละหนึ่ง (เช่น AMB-T-12)",
     "auto.step.inputs": "อินพุต",
     "auto.step.unwired": "ไม่มีอะไรไปถึง",
+    "auto.step.atLaunch": "ส่งให้ตอนเริ่มการรัน",
     "auto.step.exits": "ทางออก",
     "auto.step.modelDefault": "ค่าเริ่มต้นของเอเจนต์เอง",
     "auto.step.notHere": "{agent} — ไม่มีบนเครื่องนี้",

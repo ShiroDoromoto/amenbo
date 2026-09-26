@@ -763,6 +763,31 @@ describe("the picture of an automation", () => {
     expect(at(picture, 2).name).toBe("Review");
     expect(at(picture, 1).unfed).toEqual([]);
   });
+
+  it("counts no wire from a box's own way out, nor from a box only reached through it, as reaching it", () => {
+    // take → work → check → work: "note" into work comes from work itself and from check, which a run
+    // only comes to after work — so the first time a run arrives at work, nothing is there.
+    const out = (id: number, name: string) => ({ id, name: "完了", outputs: [port(name, "value")] });
+    const looped = (wires: ReturnType<typeof wire>[]) =>
+      layOut(
+        detail({
+          entryPlacementId: 1,
+          placements: [
+            taker(1, "take", { exits: [out(91, "seed")] }),
+            step({ id: 2, name: "work", inputs: [port("note", "value")], exits: [out(92, "again")] }),
+            step({ id: 3, name: "check", exits: [out(93, "back")] }),
+          ],
+          edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, toId: 3 }), edge({ id: 3, fromId: 3, toId: 2 })],
+          wires,
+        }),
+      );
+    const fromSelf = wire({ id: 1, fromId: 2, fromExitName: "完了", fromPortName: "again", toId: 2, toPortName: "note" });
+    const fromAfter = wire({ id: 2, fromId: 3, fromExitName: "完了", fromPortName: "back", toId: 2, toPortName: "note" });
+    const fromBefore = wire({ id: 3, fromId: 1, fromExitName: "完了", fromPortName: "seed", toId: 2, toPortName: "note" });
+    expect(at(looped([fromSelf]), 2).unfed).toEqual(["note"]);
+    expect(at(looped([fromSelf, fromAfter]), 2).unfed).toEqual(["note"]);
+    expect(at(looped([fromSelf, fromAfter, fromBefore]), 2).unfed).toEqual([]);
+  });
 });
 
 describe("the inputs the start dialog hands over", () => {

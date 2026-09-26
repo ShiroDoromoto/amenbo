@@ -62,7 +62,7 @@ import { builtinShown, builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { ExitMark, filterValueLabel, ReachChip, usedCount } from "./automationParts";
-import { automationGraph, ERROR_EXIT, readAtLaunch } from "./automationLayout";
+import { automationGraph, ERROR_EXIT, fed, readAtLaunch } from "./automationLayout";
 import { exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import { Sec } from "./automationDeclParts";
 import {
@@ -410,6 +410,14 @@ function InputRow({
       <DeclChip name={inputName} kind={kindLabel(input.kind)} required={input.required} tone={input.kind} />
     </div>
   );
+  // The same mark the box carries on the picture, by the same rule (`fed`): a wire from this spot's own
+  // way out, or from a spot only reached through it, leaves the input empty the first time a run comes.
+  const unfed = input.required && !fed(graph, placement.id, input.name) && (
+    <span className="autostep__unfed">
+      <Icon name="warning" />
+      {tf("auto.pic.unfed", { names: inputName })}
+    </span>
+  );
   // Handed over in the start dialog, not by a wire — so there is nothing to choose here.
   if (readAtLaunch(graph, placement.builtin, placement.id, input.name)) {
     return (
@@ -451,6 +459,7 @@ function InputRow({
           </option>
         ))}
       </select>
+      {unfed}
     </div>
   );
 }

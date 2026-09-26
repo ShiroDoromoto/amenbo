@@ -46,7 +46,7 @@
 // **Which step is pressed is the screen's, not the picture's**, for the automation screen's reason:
 // the picture marks that box and the panel draws that step, so it is held where both can see it. A
 // step that is deleted takes the panel's selection with it.
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AutomationActionDeclaresPanel } from "./AutomationActionDeclaresPanel";
 import { AutomationActionStepPanel } from "./AutomationActionStepPanel";
@@ -166,6 +166,14 @@ export function Panel({
   children: ReactNode;
 }) {
   const pane = usePaneSlot();
+  // **A panel opens at its head** (`AMB-T-5676`). The column it is drawn into is one scroll that
+  // outlives the panel in it, so one opened after another would stand wherever the reader had scrolled
+  // the last one to — past its target and its search, on a long one. Asked again once the column is
+  // there, which is the render after the claim.
+  const slot = pane?.slot ?? null;
+  useLayoutEffect(() => {
+    if (slot !== null) slot.scrollTop = 0;
+  }, [slot]);
   const panel = (
     <aside className="actpanel">
       <div className="actpanel__head">
@@ -338,6 +346,8 @@ export function AutomationActionBuildScreen({
 
       {action !== null && part !== null && (
         <Panel
+          // Each part, and each step below, is its own panel, and opens at its head.
+          key={part}
           place={partPlace[part]}
           title={action.name}
           onRename={
@@ -379,6 +389,7 @@ export function AutomationActionBuildScreen({
 
       {pressed !== null && part === null && (
         <Panel
+          key={pressed.id}
           place={t("auto.act.step")}
           title={pressed.name}
           onRename={(to) => void run(editAutomationStep(pressed.id, { name: to }))}

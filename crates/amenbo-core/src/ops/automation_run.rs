@@ -85,6 +85,12 @@ pub enum Unmet {
     UnwiredInput { step: String, port: String, builtin: Option<String>, placement: i64 },
     /// A required setting nobody answered while building.
     UnansweredCfg { step: String, cfg: String, builtin: Option<String>, placement: i64 },
+    /// A setting answered with something its kind does not take — a task filter that is not its parts, a
+    /// number below zero, a choice that is not listed ([`crate::ops::automation::answer_misfit`]). The
+    /// answer is checked when it is written; one written before that, or left behind when the
+    /// declaration changed, would otherwise be read at run time as something nobody wrote. `why` is the
+    /// English reason.
+    MisansweredCfg { step: String, cfg: String, why: String, builtin: Option<String>, placement: i64 },
     /// A setting whose answer names something this automation's project does not have — `line` being
     /// the line of it that does (`AMB-D-987`): a task or a decision by a number, a folder, an axis or a
     /// value. The built-in would refuse it when a run reached it and halt the run there.
@@ -158,6 +164,9 @@ impl Unmet {
             Unmet::UnansweredCfg { step, cfg, .. } => {
                 format!("the required setting '{cfg}' of '{step}' is unanswered")
             }
+            Unmet::MisansweredCfg { step, cfg, why, .. } => {
+                format!("the setting '{cfg}' of '{step}' is answered with something it does not take: {why}")
+            }
             Unmet::CfgNotFound { step, cfg, line, .. } => {
                 format!("the setting '{cfg}' of '{step}' names '{line}', which this project does not have")
             }
@@ -213,6 +222,7 @@ impl Unmet {
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
+            Unmet::MisansweredCfg { .. } => ErrorCode::NotReadyAutomationMisansweredCfg,
             Unmet::CfgNotFound { .. } => ErrorCode::NotReadyAutomationCfgNotFound,
             Unmet::AgentUnchosen { .. } => ErrorCode::NotReadyAutomationAgentUnchosen,
             Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
@@ -246,7 +256,9 @@ impl Unmet {
             Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
-            Unmet::UnansweredCfg { step, cfg, .. } => msg.with("step", step).with("cfg", cfg),
+            Unmet::UnansweredCfg { step, cfg, .. } | Unmet::MisansweredCfg { step, cfg, .. } => {
+                msg.with("step", step).with("cfg", cfg)
+            }
             Unmet::CfgNotFound { step, cfg, line, .. } => {
                 msg.with("step", step).with("cfg", cfg).with("line", line)
             }
@@ -278,6 +290,7 @@ impl Unmet {
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. }
             | Unmet::UnansweredCfg { placement, .. }
+            | Unmet::MisansweredCfg { placement, .. }
             | Unmet::CfgNotFound { placement, .. }
             | Unmet::AgentUnchosen { placement, .. }
             | Unmet::AgentMissing { placement, .. }
@@ -295,6 +308,7 @@ impl Unmet {
             | Unmet::OpenExit { builtin, .. }
             | Unmet::UnwiredInput { builtin, .. }
             | Unmet::UnansweredCfg { builtin, .. }
+            | Unmet::MisansweredCfg { builtin, .. }
             | Unmet::CfgNotFound { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
             Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
@@ -521,13 +535,26 @@ pub fn check(
             }
         }
         for cfg in settings {
-            if cfg.required && cfg.value.is_none() {
-                unmet.push(Unmet::UnansweredCfg {
+            match cfg.value.as_deref() {
+                None if cfg.required => unmet.push(Unmet::UnansweredCfg {
                     step: name.clone(),
                     cfg: cfg.name,
                     builtin: builtin.clone(),
                     placement: placement.id,
-                });
+                }),
+                None => {}
+                Some(value) => {
+                    let why = crate::ops::automation::answer_misfit(cfg.kind, cfg.options.as_deref(), value);
+                    if let Some(why) = why {
+                        unmet.push(Unmet::MisansweredCfg {
+                            step: name.clone(),
+                            cfg: cfg.name,
+                            why,
+                            builtin: builtin.clone(),
+                            placement: placement.id,
+                        });
+                    }
+                }
             }
         }
         if builtin.as_deref() == Some(crate::ops::automation_builtin_make::KEY) {
@@ -2318,6 +2345,36 @@ mod tests {
             );
             automation::cfg_set(tx, placement.id, "作業フォルダ", Some("\"~/work\"")).expect("answer");
             assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+        });
+    }
+
+    /// **An answer its setting no longer takes is refused at the launch** — here a choice taken off the
+    /// list after it was answered, which the answer's own check could not see coming.
+    #[test]
+    fn an_answer_the_setting_does_not_take_is_refused_at_launch() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let cfg = automation::cfg_add(
+                tx,
+                action.id,
+                "どれ",
+                crate::model::AutomationCfgKind::Choice,
+                false,
+                Some(r#"["a","b"]"#),
+            )
+            .expect("cfg");
+            automation::cfg_set(tx, placement.id, "どれ", Some(r#""b""#)).expect("answer");
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            automation::cfg_update(tx, cfg.id, None, None, None, Some(Some(r#"["a"]"#))).expect("take b off");
+            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+            assert!(
+                matches!(
+                    unmet.as_slice(),
+                    [Unmet::MisansweredCfg { step, cfg, placement: p, .. }]
+                        if step == "直す" && cfg == "どれ" && *p == placement.id
+                ),
+                "{unmet:?}",
+            );
         });
     }
 

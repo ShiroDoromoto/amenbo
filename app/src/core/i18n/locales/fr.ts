@@ -1474,6 +1474,7 @@ export const fr: Translation = {
     not_ready_automation_open_exit: "{step} : rien n’est prévu après {exit}",
     not_ready_automation_unwired_input: "{step} : rien n’atteint l’entrée obligatoire {port}",
     not_ready_automation_unanswered_cfg: "{step} : le réglage obligatoire {cfg} est sans réponse",
+    not_ready_automation_misanswered_cfg: "{step} : la réponse au réglage {cfg} ne correspond pas à son type",
     not_ready_automation_cfg_not_found: "{step} : le réglage {cfg} nomme {line}, que ce projet n’a pas",
     not_ready_automation_agent_unchosen: "{step} : personne n’est choisi pour l’exécuter",
     not_ready_automation_agent_missing: "{step} : cette machine ne peut pas lancer {agent}",

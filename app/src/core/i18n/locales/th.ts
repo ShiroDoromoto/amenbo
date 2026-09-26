@@ -1456,6 +1456,7 @@ export const th: Translation = {
     not_ready_automation_open_exit: "{step}: ยังไม่ได้กำหนดว่าหลัง {exit} จะทำอะไร",
     not_ready_automation_unwired_input: "{step}: ไม่มีอะไรไปถึงอินพุตที่จำเป็น {port}",
     not_ready_automation_unanswered_cfg: "{step}: การตั้งค่าที่จำเป็น {cfg} ยังไม่มีคำตอบ",
+    not_ready_automation_misanswered_cfg: "{step}: คำตอบของการตั้งค่า {cfg} ไม่ตรงกับชนิดของการตั้งค่านั้น",
     not_ready_automation_cfg_not_found: "{step}: การตั้งค่า {cfg} ระบุ {line} ซึ่งไม่มีในโปรเจกต์นี้",
     not_ready_automation_agent_unchosen: "{step}: ยังไม่ได้เลือกผู้ทำ",
     not_ready_automation_agent_missing: "{step}: เครื่องนี้เริ่ม {agent} ไม่ได้",

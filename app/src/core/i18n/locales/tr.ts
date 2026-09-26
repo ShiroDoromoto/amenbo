@@ -1456,6 +1456,7 @@ export const tr: Translation = {
     not_ready_automation_open_exit: "{step}: {exit} sonrasında ne olacağı belli değil",
     not_ready_automation_unwired_input: "{step}: zorunlu girdi {port} öğesine hiçbir şey ulaşmıyor",
     not_ready_automation_unanswered_cfg: "{step}: zorunlu ayar {cfg} yanıtsız",
+    not_ready_automation_misanswered_cfg: "{step}: {cfg} ayarının yanıtı ayarın türüne uymuyor",
     not_ready_automation_cfg_not_found: "{step}: {cfg} ayarı {line} diyor, bu projede böyle bir şey yok",
     not_ready_automation_agent_unchosen: "{step}: yürütecek kimse seçilmedi",
     not_ready_automation_agent_missing: "{step}: bu makine {agent} başlatamıyor",

@@ -131,13 +131,13 @@ fn from_url(lang: &str, url: &str) -> Result<Found> {
     let mut response = agent
         .get(url)
         .call()
-        .map_err(|e| Error::Io(std::io::Error::other(format!("fetching {url}: {e}"))))?;
+        .map_err(|e| Error::invalid(say(lang, "fetchFailed", &[("url", url), ("error", &e.to_string())])))?;
     let status = response.status();
     if status == 404 || status == 410 {
         return Ok(Found::Nothing(say(lang, "answered", &[("url", url), ("status", &status.to_string())])));
     }
     if !status.is_success() {
-        return Err(Error::Io(std::io::Error::other(format!("{url} answered {status}"))));
+        return Err(Error::invalid(say(lang, "answeredFailed", &[("url", url), ("status", &status.to_string())])));
     }
     let mut bytes = Vec::new();
     response
@@ -145,7 +145,7 @@ fn from_url(lang: &str, url: &str) -> Result<Found> {
         .as_reader()
         .take(LIMIT + 1)
         .read_to_end(&mut bytes)
-        .map_err(|e| Error::Io(std::io::Error::other(format!("reading {url}: {e}"))))?;
+        .map_err(|e| Error::invalid(say(lang, "readFailed", &[("from", url), ("error", &e.to_string())])))?;
     text(lang, bytes, url).map(Found::Text)
 }
 
@@ -156,12 +156,18 @@ fn from_file(lang: &str, base: &Path, path: &str) -> Result<Found> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return Ok(Found::Nothing(say(lang, "noFile", &[("path", &at.display().to_string())])))
         }
-        Err(e) => return Err(Error::Io(std::io::Error::other(format!("opening {}: {e}", at.display())))),
+        Err(e) => {
+            let path = at.display().to_string();
+            return Err(Error::invalid(say(lang, "openFailed", &[("path", &path), ("error", &e.to_string())])));
+        }
     };
     let mut bytes = Vec::new();
     file.take(LIMIT + 1)
         .read_to_end(&mut bytes)
-        .map_err(|e| Error::Io(std::io::Error::other(format!("reading {}: {e}", at.display()))))?;
+        .map_err(|e| {
+            let from = at.display().to_string();
+            Error::invalid(say(lang, "readFailed", &[("from", &from), ("error", &e.to_string())]))
+        })?;
     text(lang, bytes, &at.to_string_lossy()).map(Found::Text)
 }
 
@@ -178,7 +184,7 @@ fn from_command(lang: &str, dir: &Path, command: &str) -> Result<Found> {
         .stderr(Stdio::piped());
     let mut child = shell
         .spawn()
-        .map_err(|e| Error::Io(std::io::Error::other(format!("starting `{command}`: {e}"))))?;
+        .map_err(|e| Error::invalid(say(lang, "startFailed", &[("command", command), ("error", &e.to_string())])))?;
     let drain = |pipe: Option<Box<dyn Read + Send>>| {
         std::thread::spawn(move || {
             let mut bytes = Vec::new();
@@ -201,7 +207,9 @@ fn from_command(lang: &str, dir: &Path, command: &str) -> Result<Found> {
                 let seconds = TIMEOUT.as_secs().to_string();
                 return Err(Error::invalid(say(lang, "stillRunning", &[("command", command), ("seconds", &seconds)])));
             }
-            Err(e) => return Err(Error::Io(std::io::Error::other(format!("waiting on `{command}`: {e}")))),
+            Err(e) => {
+                return Err(Error::invalid(say(lang, "waitFailed", &[("command", command), ("error", &e.to_string())])))
+            }
         }
     };
     let out = stdout.join().unwrap_or_default();

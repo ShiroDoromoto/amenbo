@@ -19,7 +19,7 @@
 
 use chrono::Duration;
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{AutomationCfgKind, RunDefCfg, DONE_EXIT};
 use crate::ops::automation_builtin::{answer, Builtin, BuiltinExit, BuiltinSetting, Work};
 
@@ -68,9 +68,13 @@ fn count(name: &str, value: Option<&str>) -> Result<i64> {
     // A year of seconds is far past any wait a run is left for, and keeps the sum from overflowing.
     match read {
         Some(n) if (0..=366 * 24 * 3600).contains(&n) => Ok(n),
-        _ => Err(Error::invalid(format!(
-            "the setting '{name}' says how long to wait, and {value} is not a whole number of zero or more"
-        ))),
+        _ => Err(Error::Invalid(
+            Msg::new(format!(
+                "the setting '{name}' says how long to wait, and {value} is not a whole number of zero or more"
+            ))
+            .coded(ErrorCode::InvalidWaitNotACount)
+            .with("value", value),
+        )),
     }
 }
 

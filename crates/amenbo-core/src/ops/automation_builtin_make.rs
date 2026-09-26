@@ -37,7 +37,7 @@
 //! cannot find in this run's project, a classification it cannot find or may not use, a required axis
 //! left empty, a task to depend on that would keep the new one from being taken.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{ActorKind, AttachmentTarget, AutomationCfgKind, AutomationPortKind, Priority};
 use crate::ops::automation_builtin::{
     Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Chooses, Work,
@@ -276,10 +276,16 @@ fn the_runs_task(carry: &Carry<'_, '_>, takes: bool) -> Result<i64> {
             .find_map(|stretch| stretch.task_id),
     };
     found.ok_or_else(|| {
-        Error::invalid(format!(
-            "'{DEPENDS_ON}' is answered '{THE_RUNS_TASK}', and this run works no task yet"
-        ))
+        refused(
+            ErrorCode::InvalidMakeTaskNoRunsTask,
+            format!("'{DEPENDS_ON}' is answered '{THE_RUNS_TASK}', and this run works no task yet"),
+        )
     })
+}
+
+/// A refusal of this built-in's that names no value: its code, and the English the CLI prints.
+fn refused(code: ErrorCode, en: String) -> Error {
+    Error::Invalid(Msg::new(en).coded(code))
 }
 
 /// **What the writes would refuse, asked before any of them is made** (the module's last paragraph): a
@@ -291,9 +297,14 @@ fn refusal(carry: &Carry<'_, '_>, values: &[(i64, i64)], taken_after: &[i64]) ->
     for &blocker in taken_after {
         let open = read::task(conn, blocker)?.is_some_and(|task| !task.status.is_closed());
         if open {
-            return Err(Error::invalid(format!(
-                "the task to take would depend on AMB-T-{blocker}, which is not closed, and could not be taken"
-            )));
+            let blocked = format!("AMB-T-{blocker}");
+            return Err(Error::Invalid(
+                Msg::new(format!(
+                    "the task to take would depend on {blocked}, which is not closed, and could not be taken"
+                ))
+                .coded(ErrorCode::InvalidMakeTaskBlockerOpen)
+                .with("ref", blocked),
+            ));
         }
     }
     Ok(())
@@ -306,7 +317,11 @@ fn unfilable(conn: &rusqlite::Connection, project_id: i64, values: &[(i64, i64)]
         let value = read::dimension_value(conn, value_id)?
             .ok_or_else(|| crate::ops::dimension::VALUE_NOUN.not_found(value_id.to_string()))?;
         if value.closed {
-            return Err(Error::invalid(format!("'{CLASSIFY}' names the value '{}', which is closed", value.name)));
+            return Err(Error::Invalid(
+                Msg::new(format!("'{CLASSIFY}' names the value '{}', which is closed", value.name))
+                    .coded(ErrorCode::InvalidMakeTaskValueClosed)
+                    .with("value", &value.name),
+            ));
         }
     }
     let empty: Vec<String> =
@@ -316,10 +331,12 @@ fn unfilable(conn: &rusqlite::Connection, project_id: i64, values: &[(i64, i64)]
             .map(|(_, name)| name)
             .collect();
     if !empty.is_empty() {
-        return Err(Error::invalid(format!(
-            "the task would carry no value on {}, which this project requires",
-            empty.join(", ")
-        )));
+        let axes = empty.join(", ");
+        return Err(Error::Invalid(
+            Msg::new(format!("the task would carry no value on {axes}, which this project requires"))
+                .coded(ErrorCode::InvalidMakeTaskRequiredEmpty)
+                .with("axes", axes),
+        ));
     }
     Ok(())
 }
@@ -353,15 +370,22 @@ fn named_one(
         Some(_) => None,
         None => parse_number_ref(line),
     };
+    let (not_a_number, elsewhere) = match kind {
+        TypedKind::Task => (ErrorCode::InvalidMakeTaskTaskNotANumber, ErrorCode::InvalidMakeTaskTaskNotInProject),
+        TypedKind::Decision => {
+            (ErrorCode::InvalidMakeTaskDecisionNotANumber, ErrorCode::InvalidMakeTaskDecisionNotInProject)
+        }
+    };
+    let on_line = |code, en: String| Error::Invalid(Msg::new(en).coded(code).with("line", line));
     let id = i64::from(number.ok_or_else(|| {
-        Error::invalid(format!("'{setting}' reads one number a line, and '{line}' is not one"))
+        on_line(not_a_number, format!("'{setting}' reads one number a line, and '{line}' is not one"))
     })?);
     let project = match kind {
         TypedKind::Task => read::task(conn, id)?.map(|task| task.project_id),
         TypedKind::Decision => read::decision(conn, id)?.map(|decision| Some(decision.project_id)),
     };
     if project != Some(Some(project_id)) {
-        return Err(Error::invalid(format!("'{setting}' names '{line}', which is not in this project")));
+        return Err(on_line(elsewhere, format!("'{setting}' names '{line}', which is not in this project")));
     }
     Ok(id)
 }
@@ -386,7 +410,11 @@ fn folder_named(conn: &rusqlite::Connection, project_id: i64, written: &str) -> 
         .find(|f| f.dir == written || Some(&f.dir) == canonical.as_ref())
         .map(|f| f.id)
         .ok_or_else(|| {
-            Error::invalid(format!("'{FOLDER}' names '{written}', which is not one of this project's linked folders"))
+            Error::Invalid(
+                Msg::new(format!("'{FOLDER}' names '{written}', which is not one of this project's linked folders"))
+                    .coded(ErrorCode::InvalidMakeTaskFolderUnknown)
+                    .with("folder", written),
+            )
         })
 }
 
@@ -408,7 +436,11 @@ fn fixed(conn: &rusqlite::Connection, project_id: i64, written: Option<&str>) ->
 /// **The axis and the value one line of [`CLASSIFY`] names** ([`fixed`]).
 fn fixed_one(conn: &rusqlite::Connection, project_id: i64, line: &str) -> Result<(i64, i64)> {
     let Some((axis, value)) = line.split_once('=') else {
-        return Err(Error::invalid(format!("'{CLASSIFY}' reads one `axis=value` a line, and '{line}' is not one")));
+        return Err(Error::Invalid(
+            Msg::new(format!("'{CLASSIFY}' reads one `axis=value` a line, and '{line}' is not one"))
+                .coded(ErrorCode::InvalidMakeTaskClassifyNotAxisValue)
+                .with("line", line),
+        ));
     };
     let (axis, value) = (axis.trim(), value.trim());
     let axis_id = crate::ops::pick_id(
@@ -481,30 +513,51 @@ fn chosen(
         );
     }
     let what = by.what();
+    // Only the step before it is turned away while a run is under way, where the refusal is left on the
+    // task in the reader's language; the one launching is turned away at the launch, in the CLI's.
+    let said = |code: ErrorCode, en: String, field: (&'static str, &str)| {
+        let msg = Msg::new(en);
+        Error::Invalid(match by {
+            Chooser::StepBefore => msg.coded(code).with(field.0, field.1),
+            Chooser::Launcher => msg,
+        })
+    };
     let mut values: Vec<(i64, i64)> = Vec::new();
     for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
         let Some((axis, value)) = line.split_once('=') else {
-            return Err(Error::invalid(format!("{what} reads one `axis=value` a line, and '{line}' is not one")));
+            return Err(said(
+                ErrorCode::InvalidMakeTaskChosenNotAxisValue,
+                format!("{what} reads one `axis=value` a line, and '{line}' is not one"),
+                ("line", line),
+            ));
         };
         let (axis, value) = (axis.trim(), value.trim());
         let axis_id = read::resolve_dimension_in(conn, Some(project_id), axis)?
             .into_iter()
             .find(|id| offered.contains(id))
             .ok_or_else(|| match by {
-                Chooser::StepBefore => {
-                    Error::invalid(format!("{what} names the axis '{axis}', which '{AI_AXES}' does not offer"))
-                }
+                Chooser::StepBefore => said(
+                    ErrorCode::InvalidMakeTaskAxisNotOffered,
+                    format!("{what} names the axis '{axis}', which '{AI_AXES}' does not offer"),
+                    ("axis", axis),
+                ),
                 Chooser::Launcher => Error::invalid(format!(
                     "{what} names the axis '{axis}', which '{AI_AXES}' does not offer and this project does not require"
                 )),
             })?;
         if fixed.iter().any(|(on, _)| *on == axis_id) {
-            return Err(Error::invalid(format!(
-                "{what} names the axis '{axis}', which '{CLASSIFY}' already fixes where this is placed"
-            )));
+            return Err(said(
+                ErrorCode::InvalidMakeTaskAxisFixed,
+                format!("{what} names the axis '{axis}', which '{CLASSIFY}' already fixes where this is placed"),
+                ("axis", axis),
+            ));
         }
         if values.iter().any(|(on, _)| *on == axis_id) {
-            return Err(Error::invalid(format!("{what} names more than one value on the axis '{axis}'")));
+            return Err(said(
+                ErrorCode::InvalidMakeTaskAxisTwice,
+                format!("{what} names more than one value on the axis '{axis}'"),
+                ("axis", axis),
+            ));
         }
         let value_id = crate::ops::pick_id(read::resolve_dimension_value_in(conn, axis_id, value)?, value, || {
             crate::ops::dimension::VALUE_NOUN.not_found(format!("{axis}={value}"))
@@ -956,7 +1009,9 @@ mod tests {
                 let (_, first, run_step_id, next) = carried(tx, &p, false);
                 assert!(matches!(next, Next::Halted(_)), "{setting} {written}: {next:?}");
                 let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
-                assert!(ran.report.contains(setting), "{}", ran.report);
+                // Said in the reader's language, so the setting goes by its translated name; what was
+                // written in it is nobody's to translate.
+                assert!(ran.report.contains(written), "{}", ran.report);
                 assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
             });
         }
@@ -1084,7 +1139,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx);
             trades(tx, &p);
-            refused(tx, &p, "職能=実装", AI_AXES);
+            refused(tx, &p, "職能=実装", "“Axes the AI chooses on” does not offer");
         });
         with_tx(|tx| {
             let p = picture(tx);
@@ -1103,7 +1158,7 @@ mod tests {
             trades(tx, &p);
             answer(tx, &p, AI_AXES, "職能");
             answer(tx, &p, CLASSIFY, "職能=設計");
-            refused(tx, &p, "職能=実装", CLASSIFY);
+            refused(tx, &p, "職能=実装", "“Classification” already fixes");
         });
     }
 

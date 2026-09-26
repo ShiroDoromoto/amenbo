@@ -24,6 +24,10 @@
 // `auto.say.*` rides along for the same reason a notification does: it is the line a stopped run
 // leaves on its task, which core writes and keeps as text, so the GUI cannot word it
 // again when it is shown.
+//
+// `err` rides along beside it, with `err.reasonSep`: a built-in turned away by another operation — a
+// reservation, a task not found — leaves that refusal on its step, and the task keeps it as text too.
+// It is worded from the same templates the screen writes a refusal from (`errLabel`).
 import { readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,8 +79,12 @@ for (const file of files) {
   const says = family(dictionary.ui, PREFIX);
   const runs = family(dictionary.ui, RUN_PREFIX);
   const statuses = Object.entries(dictionary.status ?? {}).sort(([a], [b]) => (a < b ? -1 : 1));
+  const sep = dictionary.ui?.["err.reasonSep"];
+  const errs = [...Object.entries(dictionary.err ?? {}), ...(sep === undefined ? [] : [["reasonSep", sep]])].sort(
+    ([a], [b]) => (a < b ? -1 : 1),
+  );
   if (says.length === 0) continue;
-  rows.push({ language, says, runs, statuses });
+  rows.push({ language, says, runs, statuses, errs });
 }
 
 const body = rows
@@ -92,6 +100,9 @@ ${pairs(row.runs, "            ")}
         statuses: &[
 ${pairs(row.statuses, "            ")}
         ],
+        errs: &[
+${pairs(row.errs, "            ")}
+        ],
     },`,
   )
   .join("\n");
@@ -104,12 +115,13 @@ writeFileSync(
 //! the nineteen languages are already kept. Editing this file instead of the dictionary puts the two
 //! out of step, and \`guards/check-notify-wording-fresh.sh\` is what notices.
 //!
-//! Run \`make notify-wording\` after moving a \`notify.*\` or \`auto.say.*\` key or a status label, and commit what moves.
+//! Run \`make notify-wording\` after moving a \`notify.*\`, \`auto.say.*\` or \`err\` key or a status label, and commit what moves.
 
 /// One language's side of a notification: a sentence per key, and Amenbo's own word for each state —
-/// and the sentences of the line a stopped run leaves on its task ([\`crate::run_wording\`]).
+/// and the sentences of the line a stopped run leaves on its task ([\`crate::run_wording\`]), with the
+/// refusals a built-in can be turned away by (\`errs\`, the screen's \`err\` and its \`reasonSep\`).
 ///
-/// All three are sorted by key, and a language that has not translated a key simply has no pair for it —
+/// All four are sorted by key, and a language that has not translated a key simply has no pair for it —
 /// [\`crate::notify_wording\`] falls back to English one key at a time, so a half-written dictionary
 /// costs that one sentence rather than the whole language.
 pub(crate) struct Wording {
@@ -117,6 +129,7 @@ pub(crate) struct Wording {
     pub(crate) says: &'static [(&'static str, &'static str)],
     pub(crate) runs: &'static [(&'static str, &'static str)],
     pub(crate) statuses: &'static [(&'static str, &'static str)],
+    pub(crate) errs: &'static [(&'static str, &'static str)],
 }
 
 /// Every language a line can be written in, in the order the dictionaries are named.

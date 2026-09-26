@@ -13,6 +13,7 @@
 //! ([`crate::notify_wording`]). A key a language has not translated is said in English, one key at a
 //! time.
 
+use crate::error::Error;
 use crate::notify_wording_table::{Wording, WORDINGS};
 
 /// The language that is always complete, and the one a key nobody translated is said in.
@@ -51,6 +52,44 @@ pub fn builtin(language: &str, key: &str, slots: &[(&str, &str)]) -> String {
     slots.iter().fold(say(language, &key).to_string(), |said, (slot, value)| {
         said.replace(&format!("{{{slot}}}"), value)
     })
+}
+
+/// **A refusal a built-in was turned away by, in the reader's language** — the screen's template for its
+/// code (`err`, the one `errLabel` writes a refusal from) with its fields filled, and its parts, where it
+/// was composed of some, each from its own template and joined with `reasonSep`. A refusal whose code
+/// holds no template is said the way the CLI says it: in English, since nothing finer can be told of it.
+pub fn error(language: &str, error: &Error) -> String {
+    let Some(template) = refusal(language, error.code()) else {
+        return error.to_string();
+    };
+    let said = fill(template, error.fields().map(|f| f.iter()).into_iter().flatten());
+    if error.parts().is_empty() {
+        return said;
+    }
+    let reasons: Vec<String> = error
+        .parts()
+        .iter()
+        .map(|part| match part.code().and_then(|code| refusal(language, code.as_str())) {
+            Some(template) => fill(template, part.fields().iter()),
+            None => part.en().to_string(),
+        })
+        .collect();
+    let sep = refusal(language, "reasonSep").unwrap_or("; ");
+    said.replace("{reasons}", &reasons.join(sep))
+}
+
+/// The screen's template for one refusal's code, in `language` if it has one and in English if not.
+fn refusal(language: &str, code: &str) -> Option<&'static str> {
+    let find = |language: &str| {
+        let row: &Wording = WORDINGS.iter().find(|row| row.language == language)?;
+        row.errs.binary_search_by(|(k, _)| k.cmp(&code)).ok().map(|i| row.errs[i].1)
+    };
+    find(language).or_else(|| find(FALLBACK))
+}
+
+/// A template with each `{field}` it names filled; one nobody sent stays as it is, as on the screen.
+fn fill<'v>(template: &str, fields: impl Iterator<Item = (&'static str, &'v str)>) -> String {
+    fields.fold(template.to_string(), |said, (key, value)| said.replace(&format!("{{{key}}}"), value))
 }
 
 /// One sentence, in `language` if it has one and in English if not. A key English lacks too is a
@@ -104,6 +143,22 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// **A refusal is said from the screen's template for its code**, in the language asked for, with
+    /// its values filled — and one whose code holds no template is said the way the CLI says it.
+    #[test]
+    fn a_refusal_is_said_from_the_screens_template_for_its_code() {
+        use crate::error::{ErrorCode, Msg};
+        let closed = Error::Invalid(
+            Msg::new("'分類' names the value '済', which is closed")
+                .coded(ErrorCode::InvalidMakeTaskValueClosed)
+                .with("value", "済"),
+        );
+        assert_eq!(error("ja", &closed), "「分類」が指す値「済」は閉じています");
+        assert_eq!(error("en", &closed), "“Classification” names the value “済”, which is closed");
+        let plain = Error::invalid("nothing names this one");
+        assert_eq!(error("ja", &plain), plain.to_string());
     }
 
     #[test]

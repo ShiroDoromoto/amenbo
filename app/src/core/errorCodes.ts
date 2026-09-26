@@ -156,6 +156,21 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_task_left_open_at_end",
   "not_ready_automation_hands_on_task_taken",
   "not_ready_automation_split_axis_gone",
+  "invalid_make_task_no_runs_task",
+  "invalid_make_task_blocker_open",
+  "invalid_make_task_value_closed",
+  "invalid_make_task_required_empty",
+  "invalid_make_task_task_not_a_number",
+  "invalid_make_task_decision_not_a_number",
+  "invalid_make_task_task_not_in_project",
+  "invalid_make_task_decision_not_in_project",
+  "invalid_make_task_folder_unknown",
+  "invalid_make_task_classify_not_axis_value",
+  "invalid_make_task_chosen_not_axis_value",
+  "invalid_make_task_axis_not_offered",
+  "invalid_make_task_axis_fixed",
+  "invalid_make_task_axis_twice",
+  "invalid_wait_not_a_count",
 ] as const;
 
 /** Core codes the webview never receives, because the only door they come through is the CLI. None is

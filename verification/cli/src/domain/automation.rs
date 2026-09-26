@@ -470,15 +470,12 @@ impl Driver<'_> {
             "start" => {
                 let automation = self.resolve(with)?;
                 let mut args = vec!["automation".into(), "start".into(), automation.to_string()];
-                // What is handed over as it starts: the text, and a file the run wrote.
-                if let Some(text) = with.get("text").and_then(|v| v.as_str()) {
-                    args.extend(["--text".into(), text.to_string()]);
-                }
+                // What an entry that files a task is handed: a file the run wrote, to attach to it.
                 if let Some(file) = with.get("file").and_then(|v| v.as_str()) {
                     self.in_session(file)?; // refuse a path that reaches out of the run's folder
                     args.extend(["--file".into(), file.to_string()]);
                 }
-                // What an entry that files a task is handed: its title, notes and classification.
+                // And its title, notes and classification.
                 for (key, flag) in [("title", "--title"), ("notes", "--notes")] {
                     if let Some(value) = with.get(key).and_then(|v| v.as_str()) {
                         args.extend([flag.into(), value.to_string()]);

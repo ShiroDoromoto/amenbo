@@ -4157,7 +4157,7 @@ const REGISTRY: &[OpSpec] = &[
     // What a person hands the run as it starts: `text`, and `file`, a file the run
     // wrote (`repo write-file`) — the way `attach` names one, and on screen the operator's to bring,
     // of which only the name crosses. Handed nothing, the run starts as it always has.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &["text", "file", "title", "notes", "dim"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &["file", "title", "notes", "dim"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "resume", required: &[], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "stop", required: &[], refs: &["target"], strings: &[], binds: false },

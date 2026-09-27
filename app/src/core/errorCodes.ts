@@ -178,13 +178,14 @@ export const CORE_SENTENCE_ERROR_CODES = [
  * also why they owe no template. A code that reaches a screen belongs in the sentence list instead, with
  * its prose. */
 export const CORE_CLI_ONLY_ERROR_CODES = [
-  // The two refusals the setting that makes a task wait for the values before its own raises
-  // (`AMB-D-990`): raising it on an axis it does not fit, and taking away what it stands on while it is
-  // on. Core carries the setting and the classification panel has no control for it yet, so nothing on
+  // The three refusals the setting that makes a task wait for the values before its own raises
+  // (`AMB-D-990`): raising it on an axis it does not fit, taking away what it stands on while it is on,
+  // and closing a value that still has unfinished tasks on it. Core carries the setting and the classification panel has no control for it yet, so nothing on
   // a screen can be refused for these reasons. The door that lands one on a screen moves it into the
   // sentence list above, with the prose it then owes.
   "invalid_dimension_sequential_unfit",
   "invalid_dimension_sequential_held",
+  "invalid_dimension_close_unfinished",
 ] as const;
 
 /** Every code core can emit (`amenbo_core::ErrorCode::ALL`), at every grain. */

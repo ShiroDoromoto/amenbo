@@ -1,30 +1,25 @@
 // @vitest-environment jsdom
-// The way into a launch that is not the build screen: the empty frame (`AMB-T-5260`).
+// The press every entrance to a launch makes (`useAutomationStart`), driven here through a bare row of
+// buttons so that what is guarded is the press and not any one screen's drawing of it.
 //
 // What these guard: **the press carries the automation and what the person hands over, and nothing
-// else** — no task, no folder choice, no narrowing — so it is the same run the automations tab would
-// start; **every press asks what to hand over first** (`AMB-D-970`), and putting that dialog away
-// starts nothing;
-// **a project with no automations draws no entrance**, since a heading over an empty row would put
-// the subject in front of a reader who has never met it; **the dialog asks for what the entry reads
-// and nothing else** — a title, notes, a value per axis and files for the built-in that files a
-// task, nothing for any other — and waits for what a task cannot be filed without; **an archived one is not offered**, which
-// is what archiving is for; and **what the press comes back with is said where the press was made**,
-// core's refusal in core's words and a queue in the reader's; and **a run that starts is gone to**
-// (`AMB-T-5530`), while a refused press moves nothing.
+// else** — no task, no folder choice, no narrowing; **every press asks what to hand over first**
+// (`AMB-D-970`), and putting that dialog away starts nothing; **the dialog asks for what the entry
+// reads and nothing else** — a title, notes, a value per axis and files for the built-in that files a
+// task, nothing for any other — and waits for what a task cannot be filed without; **what the press
+// comes back with is said where the press was made**, core's refusal in core's words; and **a run that
+// starts is gone to** (`AMB-T-5530`), while a refused press moves nothing.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationCardDto, AutomationLaunchAsksDto } from "../bindings/bindings";
+import type { AutomationLaunchAsksDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
-  automations: [] as AutomationCardDto[],
   asks: { reads: "nothing", axes: [] } as AutomationLaunchAsksDto | null,
   launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
 }));
 
 vi.mock("../core/automations", () => ({
-  useAutomations: () => hoisted.automations,
   useLaunchAsks: () => hoisted.asks,
   NOTHING_HANDED: { files: [], title: "", notes: "", classification: [] },
   launchAutomation: hoisted.launch,
@@ -33,15 +28,21 @@ vi.mock("../core/dialog", () => ({ pickFiles: async () => ["/w/brief.md", "/w/sh
 
 import { errText, t } from "../core/i18n";
 import { RefNavProvider } from "../core/refNav";
-import { StartAutomation } from "./StartAutomation";
+import { useAutomationStart } from "./StartAutomation";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let container: HTMLDivElement;
 let root: Root;
 
-function card(over: Partial<AutomationCardDto> = {}): AutomationCardDto {
-  return { id: 7, name: "Morning round", notes: "", placements: 3, archived: false, ...over };
+/** A bare entrance: one automation's button, and what the press comes back with under them. */
+function Presses({ folders, workspaceOpen }: { folders: readonly string[]; workspaceOpen: boolean }) {
+  const { start, refused, starting, handing } = useAutomationStart(1, workspaceOpen, goToRun);
+  return createElement("div", null,
+    createElement("button", { type: "button", disabled: starting, onClick: () => start(7, "Morning round", folders) }, "Morning round"),
+    refused !== null && createElement("p", null, refused),
+    handing,
+  );
 }
 
 const goToRun = vi.fn();
@@ -51,11 +52,9 @@ async function render(over: { workspaceOpen?: boolean; folders?: string[] } = {}
   await act(async () => {
     root.render(createElement(RefNavProvider, {
       value: { openWorkspace },
-      children: createElement(StartAutomation, {
-        projectId: 1,
+      children: createElement(Presses, {
         folders: over.folders ?? ["/w/one"],
         workspaceOpen: over.workspaceOpen ?? true,
-        onGoToRun: goToRun,
       }),
     }));
   });
@@ -80,7 +79,6 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  hoisted.automations = [];
   hoisted.asks = { reads: "nothing", axes: [] };
   hoisted.launch.mockClear();
   hoisted.launch.mockResolvedValue({ run: 1 });
@@ -93,36 +91,8 @@ afterEach(() => {
   container.remove();
 });
 
-describe("the entrance", () => {
-  it("draws nothing where the project has no automations", async () => {
-    await render();
-    expect(container.textContent).toBe("");
-  });
-
-  it("offers each live automation by name, under one heading", async () => {
-    hoisted.automations = [card(), card({ id: 8, name: "Nightly" })];
-    await render();
-    expect(container.textContent).toContain(t("auto.startOne"));
-    expect(button("Morning round")).toBeTruthy();
-    expect(button("Nightly")).toBeTruthy();
-  });
-
-  it("does not offer an archived one", async () => {
-    hoisted.automations = [card(), card({ id: 8, name: "Nightly", archived: true })];
-    await render();
-    expect(container.textContent).not.toContain("Nightly");
-  });
-
-  it("draws nothing where every one of them is archived", async () => {
-    hoisted.automations = [card({ archived: true })];
-    await render();
-    expect(container.textContent).toBe("");
-  });
-});
-
 describe("the press", () => {
   it("carries the automation, the project, the folders and the workspace, and hands over nothing where nothing was given", async () => {
-    hoisted.automations = [card()];
     await render({ folders: ["/w/one", "/w/two"] });
     await act(async () => { button("Morning round").click(); });
     await handOver();
@@ -130,7 +100,6 @@ describe("the press", () => {
   });
 
   it("hands over the files picked in the dialog the press opens, with the task it files", async () => {
-    hoisted.automations = [card()];
     hoisted.asks = { reads: "task", axes: [] };
     await render({ folders: ["/w/one"] });
     await act(async () => { button("Morning round").click(); });
@@ -161,7 +130,6 @@ describe("the press", () => {
   });
 
   it("starts nothing where the dialog is put away", async () => {
-    hoisted.automations = [card()];
     await render();
     await act(async () => { button("Morning round").click(); });
     const cancel = [...document.body.querySelectorAll<HTMLButtonElement>(".modal__card .btn")]
@@ -176,7 +144,6 @@ describe("the press", () => {
       code: "invalid",
       message_en: "the workspace is closed — a run draws its steps in its panes",
     });
-    hoisted.automations = [card()];
     await render();
     await act(async () => { button("Morning round").click(); });
     await handOver();
@@ -186,7 +153,6 @@ describe("the press", () => {
 
   it("goes to the pane of the run it started", async () => {
     hoisted.launch.mockResolvedValue({ run: 31 });
-    hoisted.automations = [card()];
     await render();
     await act(async () => { button("Morning round").click(); });
     await handOver();
@@ -195,7 +161,6 @@ describe("the press", () => {
 
   it("clears the last refusal when the next press is made", async () => {
     hoisted.launch.mockRejectedValue({ code: "invalid", message_en: "the workspace is closed" });
-    hoisted.automations = [card()];
     await render();
     await act(async () => { button("Morning round").click(); });
     await handOver();
@@ -229,7 +194,6 @@ describe("what the dialog asks for", () => {
   const startButton = () => document.body.querySelector<HTMLButtonElement>(".modal__card .btn--primary")!;
 
   it("asks an entry that files a task for its title, notes and a value per axis, and waits for what it needs", async () => {
-    hoisted.automations = [card()];
     hoisted.asks = {
       reads: "task",
       axes: [
@@ -266,7 +230,6 @@ describe("what the dialog asks for", () => {
   });
 
   it("asks an entry that reads nothing for nothing", async () => {
-    hoisted.automations = [card()];
     hoisted.asks = { reads: "nothing", axes: [] };
     await render();
     await act(async () => { button("Morning round").click(); });
@@ -283,7 +246,6 @@ describe("what the dialog asks for", () => {
   });
 
   it("offers no start until what the entry reads is answered", async () => {
-    hoisted.automations = [card()];
     hoisted.asks = null;
     await render();
     await act(async () => { button("Morning round").click(); });
@@ -298,7 +260,6 @@ describe("a press while the workspace is closed", () => {
 
   it("is refused at the press, before the dialog asks anything", async () => {
     expect(closedLine).not.toBe(""); // a blank line would be in every screen
-    hoisted.automations = [card()];
     await render({ workspaceOpen: false });
     await act(async () => { button("Morning round").click(); });
     expect(document.body.querySelector(".modal__card")).toBeNull();
@@ -307,7 +268,6 @@ describe("a press while the workspace is closed", () => {
   });
 
   it("offers the way to the workspace beside the refusal", async () => {
-    hoisted.automations = [card()];
     await render({ workspaceOpen: false });
     await act(async () => { button("Morning round").click(); });
     await act(async () => { button(t("auto.launch.openWorkspace")).click(); });
@@ -315,7 +275,6 @@ describe("a press while the workspace is closed", () => {
   });
 
   it("takes the refusal away once the workspace opens", async () => {
-    hoisted.automations = [card()];
     await render({ workspaceOpen: false });
     await act(async () => { button("Morning round").click(); });
     await render({ workspaceOpen: true });

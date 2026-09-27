@@ -941,7 +941,6 @@ export const id: Translation = {
     "auto.hand.nothing": "Otomatisasi ini tidak menerima apa pun saat dimulai.",
     "auto.launch.see": "Lihat di gambar",
     "auto.launch.openWorkspace": "Buka ruang kerja",
-    "auto.startOne": "Mulai sebuah otomasi",
     "auto.pic.lap": "Satu tugas",
     "auto.pic.insert": "Sisipkan aksi di sini",
     "auto.pic.errorExit": "galat",

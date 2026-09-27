@@ -941,7 +941,6 @@ export const vi: Translation = {
     "auto.hand.nothing": "Tự động hóa này không nhận gì khi bắt đầu.",
     "auto.launch.see": "Xem trên sơ đồ",
     "auto.launch.openWorkspace": "Mở không gian làm việc",
-    "auto.startOne": "Bắt đầu một tự động hoá",
     "auto.pic.lap": "Một công việc",
     "auto.pic.insert": "Chèn một hành động vào đây",
     "auto.pic.errorExit": "lỗi",

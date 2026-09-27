@@ -952,7 +952,6 @@ export const es: Translation = {
     "auto.hand.nothing": "Esta automatización no recibe nada al iniciarse.",
     "auto.launch.see": "Ver en el diagrama",
     "auto.launch.openWorkspace": "Abrir el espacio de trabajo",
-    "auto.startOne": "Iniciar una automatización",
     "auto.pic.lap": "Una tarea",
     "auto.pic.insert": "Insertar una acción aquí",
     "auto.pic.errorExit": "error",

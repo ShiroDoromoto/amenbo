@@ -5,9 +5,9 @@
 //! saves, because building happens in whatever order the author likes. **This is where they are
 //! refused**, which is the moment a person is actually about to be let down by them.
 //!
-//! **There are four entrances and one launch** — the CLI, a workspace's empty frame, a task's own
-//! screen, and the automation tab. Putting the check and the copy in one place is what keeps them
-//! from behaving differently depending on which was pressed.
+//! **There are two entrances and one launch** — the CLI and the automations screen. Putting the check
+//! and the copy in one place is what keeps them from behaving differently depending on which was
+//! pressed.
 //!
 //! **The check ([`check`]) and the refusal ([`launch`]) are separate doors on purpose.** A build screen
 //! draws the list while nobody has pressed anything, so it asks for the list; a launch that cannot go

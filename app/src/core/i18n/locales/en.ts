@@ -1179,7 +1179,6 @@ const ui = {
   "auto.hand.nothing": "This automation takes nothing as it starts.",
   "auto.launch.see": "See in the picture",
   "auto.launch.openWorkspace": "Open the workspace",
-  "auto.startOne": "Start an automation",
   // The picture of the steps on the build screen: what it says about a step, and what it writes
   // beside a line. `auto.pic.lap` names the span of one task, which is what the dashed outline
   // around a group of steps is.

@@ -212,15 +212,22 @@ pub(crate) fn resolve_dim_pairs(
 /// facet's reach is drawn from here: if `--project` could widen it, the binding would decay into decoration
 /// that merely says which store to open.
 pub(crate) fn binding_project(store: &Store) -> Option<i64> {
+    binding_folder(store).map(|(_, pid)| pid)
+}
+
+/// [`binding_project`] together with the folder that holds the `.amenbo` — the bound folder, which is the
+/// CWD only when the command was run at its top. What is read off the project's folder (a harness's
+/// settings, say) is read from here: a subfolder carries none of it.
+pub(crate) fn binding_folder(store: &Store) -> Option<(std::path::PathBuf, i64)> {
     let cwd = std::env::current_dir().ok()?;
-    let (_, binding) = amenbo_core::binding::resolve_upward(store, &cwd)?;
+    let (dir, binding) = amenbo_core::binding::resolve_upward(store, &cwd)?;
     let pid = binding.project_id?;
     store
         .project(pid)
         .ok()
         .flatten()
         .is_some()
-        .then_some(pid)
+        .then_some((dir, pid))
 }
 
 /// The warning for when the slug recorded in `.amenbo` disagrees with the project its `project_id` names.

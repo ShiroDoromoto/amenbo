@@ -36,6 +36,8 @@ steps_cli:
   - { type: assert, domain: attachment, op: field, with: { target: log, field: size_bytes, equals: 18 } }
   - { type: assert, domain: attachment, op: field, with: { target: log, field: target_type, equals: task } }
   - { type: assert, domain: attachment, op: listed, with: { target: log, owner: seed, owner_kind: task, present: true } }
+  # And whoever reads the task sees it there, without having thought to ask `attach ls`.
+  - { type: assert, domain: task, op: field, with: { target: seed, field: attachments.0.filename, equals: the run log.log } }
 
   # Out again, byte for byte — the round trip is the only proof the ingest kept them.
   - { type: assert, domain: attachment, op: saved, with: { target: log, content: "line one\nline two\n" } }

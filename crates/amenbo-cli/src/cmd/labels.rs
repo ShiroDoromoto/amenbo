@@ -90,6 +90,12 @@ pub(crate) fn dimension_value_label(id: i64) -> String {
     spell(RefKind::DimensionValue, id)
 }
 
+/// What an attachment is called (`AMB-ATT-<n>`) — the spelling `attach show` / `open` / `save` / `rm` take,
+/// so a line that lists one hands over the handle the next command wants.
+pub(crate) fn attachment_label(id: i64) -> String {
+    spell(RefKind::Attachment, id)
+}
+
 /// What a project is called (`AMB-P-<n>`), taken from the id as the probe reports it (a decimal string). An
 /// unreadable id is shown as it came, rather than dressed up as a ref it is not.
 pub(crate) fn project_label(id: &str) -> String {

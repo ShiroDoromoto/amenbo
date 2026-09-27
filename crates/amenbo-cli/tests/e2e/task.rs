@@ -1039,9 +1039,43 @@ fn task_show_signposts_empty_categories() {
     let tid = id_str(&t["task"]["id"]);
     let (out, code) = cli.run(&["task", "show", &tid]);
     assert_eq!(code, 0, "{out}");
-    for marker in ["blocked by: (none)", "blocks: (none)", "notes: (none)", "decisions: (none)"] {
+    for marker in ["blocked by: (none)", "blocks: (none)", "notes: (none)", "decisions: (none)", "attachments: (none)"] {
         assert!(out.contains(marker), "missing signpost `{marker}` in:\n{out}");
     }
+}
+
+/// `task show` lists what is attached to the task, so a file handed to the task (`AMB-D-981`) is seen by
+/// whoever reads the task, not only by someone who thought to run `attach ls`. The line is the one
+/// `attach ls` prints, naming the attachment `AMB-ATT-<n>` as `attach open` takes it, and `--json` carries the attachments whole under `attachments`. A comment's
+/// attachment is not the task's, so it stays out.
+#[test]
+fn task_show_lists_the_task_attachments() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let t = cli.json(&["task", "add", "--title", "資料つきタスク", "--project", &pid, "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+
+    let file = cli.home.join("report.md");
+    std::fs::write(&file, "# title\nbody\n").unwrap();
+    let added = cli.json(&["task", "attach", &tid, file.to_str().unwrap(), "--json"]);
+    let att_id = id_str(&added["attachment"]["id"]);
+    let c = cli.json(&["comment", "add", &tid, "--text", "スクショ", "--json"]);
+    let cid = id_str(&c["comment"]["id"]);
+    cli.json(&["comment", "attach", &cid, file.to_str().unwrap(), "--name", "on-comment.md", "--json"]);
+
+    let shown = cli.json(&["task", "show", &tid, "--json"]);
+    let atts = shown["attachments"].as_array().expect("attachments array");
+    assert_eq!(atts.len(), 1, "only the task's own attachment: {atts:?}");
+    assert_eq!(atts[0]["filename"], "report.md");
+    assert_eq!(atts[0]["mime"], "text/markdown");
+
+    let (out, code) = cli.run(&["task", "show", &tid]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("attachments (1):"), "{out}");
+    let line = out.lines().find(|l| l.contains("report.md")).unwrap_or_else(|| panic!("no attachment line in:\n{out}"));
+    assert!(line.contains(&format!("AMB-ATT-{att_id}")) && line.contains("text/markdown"), "{line}");
+    assert!(!out.contains("on-comment.md"), "a comment's attachment is not the task's:\n{out}");
 }
 
 /// `task show` dates the task itself — when it was written, and when it was last written to. Both

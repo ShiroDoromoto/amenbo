@@ -185,8 +185,9 @@ describe("the history tab", () => {
   });
 });
 
-// The two entrances (`AMB-D-954`): from a project the store is asked for that project's runs, and the
-// rows leave the project off; from the sidebar it is asked for every project's, each row naming one.
+// The pulldown's two answers (`AMB-D-992`): with a project picked the store is asked for that project's
+// runs, and the rows leave the project off; with every project it is asked for every project's, each
+// row naming one.
 describe("the history's reach", () => {
   it("asks for one project's runs from that project, and leaves the project off the rows", async () => {
     await render(1);

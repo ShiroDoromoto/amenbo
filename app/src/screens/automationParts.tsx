@@ -15,7 +15,16 @@ import { exitLabel } from "./automationPanel";
  * The reach an action sits in, as a chip — the same chip wherever an action is named. A built-in is
  * kept on the device's shelf, but what it is to a reader is Amenbo's own.
  */
-export function ReachChip({ global, builtin = false }: { global: boolean; builtin?: boolean }) {
+export function ReachChip({
+  global,
+  builtin = false,
+  anyProject = false,
+}: {
+  global: boolean;
+  builtin?: boolean;
+  /** Whether rows of every project are listed, where "this project" would name none of them. */
+  anyProject?: boolean;
+}) {
   const tone = builtin ? "actscope actscope--builtin" : global ? "actscope actscope--global" : "actscope";
   return (
     <span className={tone}>
@@ -24,7 +33,9 @@ export function ReachChip({ global, builtin = false }: { global: boolean; builti
         ? t("auto.actions.reachBuiltin")
         : global
           ? t("auto.actions.reachGlobal")
-          : t("auto.actions.reachProject")}
+          : anyProject
+            ? t("auto.actions.reachAnyProject")
+            : t("auto.actions.reachProject")}
     </span>
   );
 }

@@ -17,21 +17,22 @@
 // **It is searched and narrowed in place** — by what the name and the note say, and by reach — since
 // a library grows past what a reader scans by eye, and the two reaches stay one list either way.
 //
-// **Opened from the sidebar, it is the device's library alone** (`AMB-D-954`), with no project to
-// reach from: a global action is made and changed there and nowhere else, and a project's own are
-// its project's. So the reach narrowing has nothing to narrow, and what is made is global.
+// **With every project picked, it is every project's library** (`AMB-D-992`): the device's own and
+// each project's, with a column naming whose shelf a row is on. With one project picked, it is what
+// that project reaches — its own and the device's.
 //
-// **A reach is moved from the row, on the entrance that owns it now** (`AMB-D-954`): a project's
-// own action goes to the device's library from that project, and a global one goes into a project
-// from the sidebar, which asks which. A move into a project that another project's automation still
-// places is refused by core, naming each — the row keeps the sentence, and nothing is copied.
+// **Whether a row can be changed is its owner's, not the pulldown's** (`AMB-D-992`). A row's "⋯"
+// moves it to the other reach and deletes it wherever it is listed: a project's own goes to the
+// device's library, and a global one goes into a project, asked for under the row. A move into a
+// project that another project's automation still places is refused by core, naming each — the row
+// keeps the sentence, and nothing is copied.
 //
 // **A row opens into the action build screen** (`AMB-T-5315`), where its steps are drawn and its
 // prompts written. Making one here asks for a name and a reach and no prompt: an action is born
 // empty, and the press that makes it is named for the screen it lands on ("make and open"), so no
 // sentence under the form has to say where the words go.
 //
-// **The built-ins are a third reach** (`AMB-D-964`), at both entrances: Amenbo's own actions, listed
+// **The built-ins are a third reach** (`AMB-D-964`), whichever is picked: Amenbo's own actions, listed
 // from the code's definition after the library's rows. Nothing moves one or builds one, so a row
 // carries the lock and no menu, and a press on it opens it to be read (`./AutomationBuiltinScreen`).
 //
@@ -46,6 +47,7 @@ import {
   setAutomationActionScope,
   useAutomationActions,
   useAutomationBuiltins,
+  useEveryAutomationAction,
 } from "../core/automations";
 import { dataAdapter } from "../mock/adapter";
 import { asTyped } from "../core/keys";
@@ -116,20 +118,74 @@ function Segments<T extends string>({
   );
 }
 
+/** One action as a row: the card, and the name of the project whose shelf holds it where every
+ *  project's are listed. */
+type Row = { card: AutomationActionCardDto; projectName?: string };
+
 export function AutomationActionsTab({
   projectId,
   onOpen,
   onOpenBuiltin,
 }: {
-  /** Whose library this is, besides the device's — `null` for the sidebar's, the device's alone. */
+  /** The project picked — what it reaches, its own and the device's — or `null` for every project's. */
   projectId: number | null;
   /** Open the build screen on this action — a press on a row, and on the row a press just made. */
   onOpen: (id: number) => void;
   /** Open a built-in to be read, by its key. */
   onOpenBuiltin: (key: string) => void;
 }) {
+  return projectId === null ? (
+    <EveryLibrary onOpen={onOpen} onOpenBuiltin={onOpenBuiltin} />
+  ) : (
+    <ProjectLibrary projectId={projectId} onOpen={onOpen} onOpenBuiltin={onOpenBuiltin} />
+  );
+}
+
+function ProjectLibrary({
+  projectId,
+  onOpen,
+  onOpenBuiltin,
+}: {
+  projectId: number;
+  onOpen: (id: number) => void;
+  onOpenBuiltin: (key: string) => void;
+}) {
   const actions = useAutomationActions(projectId);
+  const rows = useMemo(
+    () => actions.map((card) => ({ card })),
+    [actions],
+  );
+  return <Library rows={rows} projectId={projectId} onOpen={onOpen} onOpenBuiltin={onOpenBuiltin} />;
+}
+
+function EveryLibrary({
+  onOpen,
+  onOpenBuiltin,
+}: {
+  onOpen: (id: number) => void;
+  onOpenBuiltin: (key: string) => void;
+}) {
+  const actions = useEveryAutomationAction();
+  const rows = useMemo(
+    () => actions.map((one) => ({ card: one.card, projectName: one.projectName ?? "" })),
+    [actions],
+  );
+  return <Library rows={rows} projectId={null} onOpen={onOpen} onOpenBuiltin={onOpenBuiltin} />;
+}
+
+function Library({
+  rows,
+  projectId,
+  onOpen,
+  onOpenBuiltin,
+}: {
+  rows: readonly Row[];
+  projectId: number | null;
+  onOpen: (id: number) => void;
+  onOpenBuiltin: (key: string) => void;
+}) {
   const builtins = useAutomationBuiltins();
+  const every = projectId === null;
   // The ids the library held when Make was pressed, while the row that was made is still on its way.
   // Nothing while none is.
   const [born, setBorn] = useState<ReadonlySet<number> | null>(null);
@@ -137,8 +193,8 @@ export function AutomationActionsTab({
   const [words, setWords] = useState("");
   const [reach, setReach] = useState<Reach>("all");
   const shown = useMemo(
-    () => actions.filter((one) => matches(one, words, reach)),
-    [actions, words, reach],
+    () => rows.filter((one) => matches(one.card, words, reach)),
+    [rows, words, reach],
   );
   const shownBuiltins = useMemo(
     () =>
@@ -154,14 +210,14 @@ export function AutomationActionsTab({
   // (`core/mutations.createProject`).
   useEffect(() => {
     if (born === null) return;
-    const fresh = actions.find((one) => !born.has(one.id));
+    const fresh = rows.find((one) => !born.has(one.card.id));
     if (fresh === undefined) return;
     setBorn(null);
-    onOpen(fresh.id);
-  }, [actions, born, onOpen]);
+    onOpen(fresh.card.id);
+  }, [rows, born, onOpen]);
 
   async function make(name: string, project: number | null) {
-    const before = new Set(actions.map((one) => one.id));
+    const before = new Set(rows.map((one) => one.card.id));
     await addAutomationAction(name, project);
     setMaking(false);
     setBorn(before);
@@ -173,7 +229,7 @@ export function AutomationActionsTab({
 
   // **Nothing to list is one press in the middle**, the way an empty list of automations is: a
   // sentence saying the library is empty would only be telling the reader what they can see.
-  if (actions.length === 0 && builtins.length === 0) {
+  if (rows.length === 0 && builtins.length === 0) {
     return (
       <div className="actlib">
         {form || (
@@ -189,7 +245,7 @@ export function AutomationActionsTab({
 
   const reaches: { id: Reach; label: string }[] = [
     { id: "all", label: t("auto.actions.all") },
-    { id: "project", label: t("auto.actions.reachProject") },
+    { id: "project", label: t(every ? "auto.actions.reachAnyProject" : "auto.actions.reachProject") },
     { id: "global", label: t("auto.actions.reachGlobal") },
     ...(builtins.length > 0
       ? [{ id: "builtin" as const, label: t("auto.actions.reachBuiltin") }]
@@ -207,9 +263,7 @@ export function AutomationActionsTab({
           value={words}
           onChange={(e) => setWords(e.target.value)}
         />
-        {projectId !== null && (
-          <Segments label={t("auto.actions.reach")} options={reaches} value={reach} onPick={setReach} />
-        )}
+        <Segments label={t("auto.actions.reach")} options={reaches} value={reach} onPick={setReach} />
         {!making && (
           <button type="button" className="btn actlib__make-open" onClick={() => setMaking(true)}>
             <Icon name="plus" /> {t("auto.actions.make")}
@@ -220,16 +274,17 @@ export function AutomationActionsTab({
       {shown.length === 0 && shownBuiltins.length === 0 ? (
         <div className="actlib__none">{t("auto.actions.noMatch")}</div>
       ) : (
-        <div className="actlib__table">
+        <div className={every ? "actlib__table actlib__table--every" : "actlib__table"}>
           <div className="actlib__cols" aria-hidden="true">
             <span>{t("auto.actions.name")}</span>
+            {every && <span>{t("auto.actions.colProject")}</span>}
             <span>{t("auto.actions.reach")}</span>
             <span className="actlib__num">{t("auto.actions.colSteps")}</span>
             <span className="actlib__num">{t("auto.actions.colUsed")}</span>
           </div>
           <ul className="actlib__rows">
             {shown.map((one) => (
-              <ActionRow key={one.id} action={one} projectId={projectId} onOpen={onOpen} />
+              <ActionRow key={one.card.id} row={one} every={every} picked={projectId} onOpen={onOpen} />
             ))}
             {shownBuiltins.map((one) => (
               <li key={one.key}>
@@ -242,6 +297,8 @@ export function AutomationActionsTab({
                       </span>
                       <span className="auto__note">{one.does}</span>
                     </span>
+                    {/* A built-in is on no project's shelf. */}
+                    {every && <span />}
                     <span>
                       <ReachChip global builtin />
                     </span>
@@ -267,43 +324,46 @@ export function AutomationActionsTab({
 type Pending = "toGlobal" | "toProject" | "remove";
 
 /**
- * **One action of the library, with its "⋯".** Only the entrance that owns it now moves or deletes it
- * (`AMB-D-954`): a project its own, the sidebar a global one — on any other row the slot stands empty,
- * so the columns stay under their heads.
+ * **One action of the library, with its "⋯".** Every row of the library carries one, wherever it is
+ * listed (`AMB-D-992`): what it offers is read off the row — a project's own goes to the device's
+ * library, a global one into a project.
  *
  * **Every item is picked, then confirmed under the row, the same way**, so a press that looks like
  * another never takes a different number of presses to act: all three wait under the row for a
- * second press, and moving into a project asks there which one.
+ * second press, and moving into a project asks there which one — the one picked already chosen.
  *
  * A refusal is core's sentence and stays under the row until the next press: it names the automations
  * of other projects that place the action, or how many placements stand on one being deleted, which is
  * what a reader needs in front of them to decide again (`amenbo_core::ops::automation`).
  */
 function ActionRow({
-  action,
-  projectId,
+  row,
+  every,
+  picked,
   onOpen,
 }: {
-  action: AutomationActionCardDto;
-  projectId: number | null;
+  row: Row;
+  /** Whether every project's library is listed, and so the row names its project. */
+  every: boolean;
+  /** The project the pulldown is on — the one a global action is offered to first. */
+  picked: number | null;
   onOpen: (id: number) => void;
 }) {
-  const owned = (projectId === null) === action.global;
+  const action = row.card;
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [to, setTo] = useState("");
+  const [to, setTo] = useState(picked === null ? "" : String(picked));
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
 
   const pick = (what: Pending) => {
     setMenuAt(null);
     setRefused(null);
-    setTo("");
+    setTo(picked === null ? "" : String(picked));
     setPending(what);
   };
   const cancel = () => {
     setPending(null);
-    setTo("");
     setRefused(null);
   };
   const confirm = async () => {
@@ -313,7 +373,6 @@ function ActionRow({
       if (pending === "remove") await removeAutomationAction(action.id);
       else await setAutomationActionScope(action.id, pending === "toProject" ? Number(to) : null);
       setPending(null);
-      setTo("");
     } catch (err) {
       setRefused(errText(err));
     } finally {
@@ -337,8 +396,9 @@ function ActionRow({
               <span className="auto__note">{firstLine(action.note)}</span>
             )}
           </span>
+          {every && <span className="actlib__project">{row.projectName ?? ""}</span>}
           <span>
-            <ReachChip global={action.global} />
+            <ReachChip global={action.global} anyProject={every} />
           </span>
           {steps}
           <span className={action.usedBy === 0 ? "actlib__num actlib__zero" : "actlib__num"}>
@@ -346,8 +406,7 @@ function ActionRow({
           </span>
         </button>
         <span className="actlib__moveslot">
-          {owned && (
-            <button
+          <button
               type="button"
               className="actlib__more"
               title={t("auto.actions.more")}
@@ -360,12 +419,11 @@ function ActionRow({
               }}
             >
               <Icon name="more" />
-            </button>
-          )}
+          </button>
         </span>
         {menuAt !== null && (
           <Menu at={menuAt} onClose={() => setMenuAt(null)}>
-            {projectId !== null ? (
+            {!action.global ? (
               <MenuItem onClick={() => pick("toGlobal")}>{t("auto.actions.toGlobal")}</MenuItem>
             ) : (
               <MenuItem onClick={() => pick("toProject")}>{t("auto.actions.toProject")}</MenuItem>
@@ -420,10 +478,10 @@ function ActionRow({
  * is the row, and the press lands in the build screen on it (`./AutomationActionBuildScreen`), which
  * is what its label says.
  *
- * **The reach is asked for with nothing picked** (`AMB-D-954`). Whether an action is general or this
- * project's own is read off what it does, which only the person making it knows — so the switch
- * starts with neither lit and makes nothing until one is, rather than filing it in a reach they did
- * not choose. From the sidebar there is one reach to make in, so there is no switch.
+ * **The reach is asked for with nothing picked.** Whether an action is general or a project's own is
+ * read off what it does, which only the person making it knows — so the switch starts with neither
+ * lit and makes nothing until one is, rather than filing it in a reach they did not choose. With every
+ * project picked, a project's own also asks which project, since the pulldown does not say.
  */
 function ActionAdd({
   projectId,
@@ -435,16 +493,18 @@ function ActionAdd({
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
-  // With no project there is one reach to make in, so it is the one already picked.
-  const [reach, setReach] = useState<"global" | "project" | null>(projectId === null ? "global" : null);
+  const [reach, setReach] = useState<"global" | "project" | null>(null);
+  // Which project a project's own goes into, where the pulldown does not say.
+  const [into, setInto] = useState("");
   const [making, setMaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const project = projectId ?? (into === "" ? null : Number(into));
 
   const make = async () => {
     setError(null);
     setMaking(true);
     try {
-      await onMake(name.trim(), reach === "global" ? null : projectId);
+      await onMake(name.trim(), reach === "global" ? null : project);
     } catch (err) {
       setError(errText(err));
     } finally {
@@ -462,21 +522,30 @@ function ActionAdd({
         value={name}
         onChange={(e) => setName(e.target.value)}
       />
-      {projectId !== null && (
-        <Segments
-          label={t("auto.actions.reach")}
-          options={[
-            { id: "project" as const, label: t("auto.actions.reachProject") },
-            { id: "global" as const, label: t("auto.actions.reachGlobal") },
-          ]}
-          value={reach}
-          onPick={setReach}
-        />
+      <Segments
+        label={t("auto.actions.reach")}
+        options={[
+          {
+            id: "project" as const,
+            label: t(projectId === null ? "auto.actions.reachAnyProject" : "auto.actions.reachProject"),
+          },
+          { id: "global" as const, label: t("auto.actions.reachGlobal") },
+        ]}
+        value={reach}
+        onPick={setReach}
+      />
+      {projectId === null && reach === "project" && (
+        <select aria-label={t("auto.new.which")} value={into} onChange={(e) => setInto(e.target.value)}>
+          <option value="">{t("auto.new.which")}</option>
+          {dataAdapter.listProjects().map((p) => (
+            <option key={p.id} value={String(p.id)}>{p.name}</option>
+          ))}
+        </select>
       )}
       <button
         type="button"
         className="btn btn--primary"
-        disabled={making || name.trim() === "" || reach === null}
+        disabled={making || name.trim() === "" || reach === null || (reach === "project" && project === null)}
         onClick={() => void make()}
       >
         {t("auto.actions.makeOpen")}

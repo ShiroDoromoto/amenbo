@@ -20,12 +20,10 @@ import { useBoundFolders } from "../core/boundFolders";
 import { inTauri } from "../core/snapshot";
 import { axesFor } from "../core/appliesTo";
 import { DecisionsScreen } from "./DecisionsScreen";
-import { AutomationsScreen } from "./AutomationsScreen";
 import { CalendarView } from "./CalendarView";
 import { TimelineView } from "./TimelineView";
 import { errText, statusLabel, t, tf, viewLabel } from "../core/i18n";
 import type { ComposeTarget } from "../shell/AppShell";
-import type { RunsTab } from "../core/refNav";
 import {
   filterDimensions, parseRefQuery, passesFilters, selectionKey,
   type DimAssignments, type FilterSelection,
@@ -99,7 +97,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
-  onStartTerminal, workspaceOpen, onGoToRun, openAutomation, openPlacement, openRuns, onGoToGlobalAction,
+  onStartTerminal, onOpenAutomations,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -114,27 +112,13 @@ export function BoardScreen({
   /** Work in this folder, in this project, in the terminal — the first loop's one move, carried out
    *  by the shell (`../shell/AppShell`). */
   onStartTerminal: (project: number, dir: string) => void;
-  /** Whether the workspace is standing, for the press that starts a run (`./AutomationsScreen`). */
-  workspaceOpen: boolean;
-  /** Go to the pane a run is drawn in — a press on a row of the automations screen's "running" tab,
-   *  carried out by the shell (`../shell/AppShell`). */
-  onGoToRun?: (project: number, run: number) => void;
-  /** The automation to arrive on, open on its build screen — a press on the sidebar's list of every
-   *  project's automations (`./AutomationsScreen`). */
-  openAutomation?: number;
-  /** The box that build screen arrives with pressed — where a run's pane said its run stopped. */
-  openPlacement?: number;
-  /** The tab the automations arrive on instead, from a run's pane once its run is over. */
-  openRuns?: RunsTab;
-  /** Go to a global action on the sidebar's entrance, where it is changed (`./AutomationsScreen`). */
-  onGoToGlobalAction?: (action: number) => void;
+  /** Open the automations screen with this project picked (`./AutomationsScreen`, `AMB-D-992`). */
+  onOpenAutomations: () => void;
 }) {
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
   // The tasks surface (list/board/…) or the decisions one. Decisions shows only what sits under this project.
-  const [tab, setTab] = useState<"tasks" | "decisions" | "automations">(
-    openAutomation === undefined && openRuns === undefined ? "tasks" : "automations",
-  );
+  const [tab, setTab] = useState<"tasks" | "decisions">("tasks");
   const [sel, setSel] = useState<FilterSelection>({});
   // Whether the filters are open. Closed is where a board starts: the values of every axis do not fit on a
   // line, and a reader who is not narrowing anything should be given that room for the tasks (`AMB-D-654`).
@@ -311,14 +295,10 @@ export function BoardScreen({
       >
         <Icon name="gavel" /> {t("nav.decisions")}
       </button>
-      {/* The project's automations, beside its decisions: an automation belongs to a project the way
-          a decision does, so this is where one is made and changed. The sidebar's entrance lists
-          every project's, and a press there comes here (`AMB-D-954`,
-          `app/src/screens/AutomationsScreen.tsx`). */}
-      <button
-        className={`boardtab ${tab === "automations" ? "boardtab--active" : ""}`}
-        onClick={() => { setTab("automations"); onSelectDecision(null); }}
-      >
+      {/* The project's automations, beside its decisions — not a tab of this screen but the way to
+          the sidebar's automations with this project picked, since that one screen is the only one
+          they have (`AMB-D-992`, `app/src/screens/AutomationsScreen.tsx`). */}
+      <button className="boardtab" onClick={onOpenAutomations}>
         <Icon name="rocket" /> {t("auto.title")}
       </button>
       <div className="topbar__spacer" />
@@ -356,17 +336,6 @@ export function BoardScreen({
           projectId={projectId}
           selectedDecisionId={selectedDecisionId}
           onSelectDecision={onSelectDecision}
-        />
-      )}
-      {tab === "automations" && (
-        <AutomationsScreen
-          projectId={projectId}
-          opening={openAutomation}
-          openingBox={openPlacement}
-          openingTab={openRuns}
-          onGoToGlobalAction={onGoToGlobalAction}
-          workspaceOpen={workspaceOpen}
-          onGoToRun={onGoToRun}
         />
       )}
       {/* The loop speaks about a folder, and `linkFolder` standing ahead of it is what guarantees there

@@ -4089,8 +4089,7 @@ const REGISTRY: &[OpSpec] = &[
     // project places it, and otherwise it is refused (`invalid`) with each of those automations
     // named — which `scope-refusal-names` reads. **Nothing is copied**, so a road that moves one and
     // reads the library finds the same row wearing the other reach. On a screen the press is on the
-    // row of the "actions" tab of the entrance that owns the action now: a project's own from that
-    // project, a global one from the sidebar's automations.
+    // row of the "actions" tab, whatever project the pulldown has picked.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-scope", required: &["target", "reach"], refs: &["target", "project"], strings: &["reach"], binds: false },
     // A step inside an action (`target`): its own prompt. Who carries it out is not the step's — it is
     // chosen where the action is placed (`agent-set`).

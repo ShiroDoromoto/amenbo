@@ -63,7 +63,8 @@ export function useAutomations(projectId: number | null): AutomationCardDto[] {
 }
 
 /**
- * **The automations of every project**, each with the project it is in — the sidebar's list.
+ * **The automations of every project**, each with the project it is in — the list with every project
+ * picked (`AMB-D-992`).
  *
  * Its key starts with `automations` like the one project's, so a write that says it moved the
  * automations re-reads both lists.
@@ -133,7 +134,7 @@ export async function deleteAutomation(id: number): Promise<void> {
  * Both reaches come in one answer because both are one list on screen: what a reader is choosing
  * between is every action this automation could place, and which library holds one is a column.
  *
- * `null` is the device's library alone — the sidebar's list, which has no project to reach from.
+ * `null` is the device's library alone.
  */
 export async function fetchAutomationActions(projectId: number | null): Promise<AutomationActionCardDto[]> {
   if (!inTauri()) return [];
@@ -151,7 +152,7 @@ export function useAutomationActions(projectId: number | null): AutomationAction
 
 /**
  * **The library of every project** — the device's own actions first, then each project's own, each
- * row with whose shelf holds it (`null` for the device's). The sidebar's list with "every project"
+ * row with whose shelf holds it (`null` for the device's). The list with "every project"
  * chosen (`AMB-D-992`).
  *
  * Its key starts with `automationActions` like the one project's, so a write that says it moved the

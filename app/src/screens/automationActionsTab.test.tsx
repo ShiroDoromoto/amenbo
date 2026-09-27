@@ -13,19 +13,28 @@
 // to a step; and **the screen opens on the row that was just made**, which is how the two halves are
 // one act to the reader.
 //
-// And on the built-ins (`AMB-D-964`): **they are listed after the library's rows at both entrances,
+// And with every project picked (`AMB-D-992`): **each row names the project whose shelf holds it**,
+// and **a project's own action made there asks which project**.
+//
+// And on the built-ins (`AMB-D-964`): **they are listed after the library's rows whichever is picked,
 // saying they are Amenbo's own** under a lock, narrowed by their own segment and by the box; **a press
 // opens one to be read**, by its key; and **nothing on the row moves one**.
 //
 // And on the row's "⋯" (`AMB-T-5525`): **moving and deleting are each picked, then confirmed under
-// the row**, so nothing is written on the first press whichever it is.
+// the row**, so nothing is written on the first press whichever it is — and **every row carries it,
+// whatever is picked**, since whether a row can be changed is its owner's (`AMB-D-992`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationActionCardDto, AutomationBuiltinDto } from "../bindings/bindings";
+import type {
+  AutomationActionCardDto,
+  AutomationBuiltinDto,
+  EveryAutomationActionCardDto,
+} from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   actions: [] as AutomationActionCardDto[],
+  every: [] as EveryAutomationActionCardDto[],
   builtins: [] as AutomationBuiltinDto[],
   add: vi.fn(async (_name: string, _project: number | null) => {}),
   scope: vi.fn(async (_id: number, _project: number | null) => {}),
@@ -34,6 +43,7 @@ const hoisted = vi.hoisted(() => ({
 
 vi.mock("../core/automations", () => ({
   useAutomationActions: () => hoisted.actions,
+  useEveryAutomationAction: () => hoisted.every,
   useAutomationBuiltins: () => hoisted.builtins,
   addAutomationAction: hoisted.add,
   setAutomationActionScope: hoisted.scope,
@@ -114,9 +124,12 @@ const nameBox = () => container.querySelector<HTMLInputElement>(".actlib__make i
 
 /** Pick a reach in the make form, which starts with none picked. */
 async function pickReach(value: "project" | "global") {
-  const label = t(value === "project" ? "auto.actions.reachProject" : "auto.actions.reachGlobal");
+  // With every project picked the project's reach names no project, so either word is the one.
+  const labels = value === "project"
+    ? [t("auto.actions.reachProject"), t("auto.actions.reachAnyProject")]
+    : [t("auto.actions.reachGlobal")];
   const one = [...container.querySelectorAll<HTMLButtonElement>(".actlib__make .actseg__one")]
-    .find((b) => b.textContent === label)!;
+    .find((b) => labels.includes(b.textContent ?? ""))!;
   await act(async () => { one.click(); });
 }
 
@@ -132,6 +145,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   hoisted.actions = [];
+  hoisted.every = [];
   opened = [];
   hoisted.add.mockReset();
   hoisted.add.mockImplementation(async () => {});
@@ -279,14 +293,16 @@ describe("making one", () => {
     type(nameBox(), "Review");
     await pickReach("project");
     await act(async () => { exact(t("auto.actions.makeOpen")).click(); });
+    // The library's query re-reads on the write, which is what draws the list again.
+    await render();
     expect(opened).toEqual([9]);
   });
 });
 
-// Opened from the sidebar there is no project (`AMB-D-954`): the list is the device's library alone,
-// so there is no reach to narrow to, and what is made is global without asking.
-describe("the library opened from the sidebar", () => {
-  async function renderDevice() {
+// With every project picked (`AMB-D-992`): the device's library and every project's, each row naming
+// the project whose shelf holds it; a project's own action made there asks which project.
+describe("the library with every project picked", () => {
+  async function renderEvery() {
     await act(async () => {
       root.render(
         createElement(AutomationActionsTab, {
@@ -298,25 +314,55 @@ describe("the library opened from the sidebar", () => {
     });
   }
 
-  it("offers no reach to narrow to", async () => {
-    hoisted.actions = [action({ global: true })];
-    await renderDevice();
-    expect(container.querySelector(".actseg")).toBeNull();
+  it("names each row's project, and none on a global one", async () => {
+    hoisted.every = [
+      { projectId: null, projectName: null, card: action({ id: 5, name: "Shared", global: true }) },
+      { projectId: 2, projectName: "site", card: action({ id: 3, name: "Deploy" }) },
+    ];
+    await renderEvery();
+    const names = [...container.querySelectorAll(".actlib__project")].map((one) => one.textContent);
+    expect(names).toEqual(["", "site"]);
+    // "This project" would name none of the projects listed.
+    expect(rows()[1]).toContain(t("auto.actions.reachAnyProject"));
+    expect(container.textContent).not.toContain(t("auto.actions.reachProject"));
   });
 
-  it("makes it in the device's library, the one reach there is, without asking", async () => {
-    hoisted.actions = [action({ global: true })];
-    await renderDevice();
+  it("offers the reaches to narrow to", async () => {
+    hoisted.every = [{ projectId: null, projectName: null, card: action({ global: true }) }];
+    await renderEvery();
+    expect(container.querySelector(".actlib__tools .actseg")).not.toBeNull();
+  });
+
+  it("asks which project a project's own is made in, and makes nothing until one is picked", async () => {
+    hoisted.every = [{ projectId: null, projectName: null, card: action({ global: true }) }];
+    await renderEvery();
     await act(async () => { exact(t("auto.actions.make")).click(); });
-    expect(container.querySelector(".actlib__make .actseg")).toBeNull();
     type(nameBox(), "Review");
+    await pickReach("project");
+    expect(exact(t("auto.actions.makeOpen")).disabled).toBe(true);
+    const into = container.querySelector<HTMLSelectElement>(".actlib__make select")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(into, "2");
+      into.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { exact(t("auto.actions.makeOpen")).click(); });
+    expect(hoisted.add).toHaveBeenCalledWith("Review", 2);
+  });
+
+  it("makes a global one without asking which project", async () => {
+    hoisted.every = [{ projectId: null, projectName: null, card: action({ global: true }) }];
+    await renderEvery();
+    await act(async () => { exact(t("auto.actions.make")).click(); });
+    type(nameBox(), "Review");
+    await pickReach("global");
+    expect(container.querySelector(".actlib__make select")).toBeNull();
     await act(async () => { exact(t("auto.actions.makeOpen")).click(); });
     expect(hoisted.add).toHaveBeenCalledWith("Review", null);
   });
 });
 
-// Moving a reach from the row's "⋯", on the entrance that owns it now (`AMB-D-954`): a project moves
-// its own to the device's library, the sidebar asks which project for a global one, and either waits
+// Moving a reach from the row's "⋯", whatever is picked (`AMB-D-992`): a project's own goes to the
+// device's library, a global one into a project — the one picked, or one asked for — and either waits
 // for a second press under the row; a refusal stays there in core's words.
 describe("moving an action's reach", () => {
   beforeEach(() => {
@@ -336,11 +382,11 @@ describe("moving an action's reach", () => {
     });
   }
 
-  it("moves a project's own action to the device's library from that project", async () => {
+  it("moves a project's own action to the device's library", async () => {
     hoisted.actions = [action({ id: 3, global: false }), action({ id: 5, name: "Shared", global: true })];
     await renderAt(1);
     const moves = [...container.querySelectorAll(".actlib__moveslot button")];
-    expect(moves).toHaveLength(1);
+    expect(moves).toHaveLength(2);
     await fromMenu(t("auto.actions.toGlobal"));
     expect(hoisted.scope).not.toHaveBeenCalled();
     await act(async () => { confirmUnder(t("auto.actions.toGlobal")).click(); });
@@ -348,8 +394,16 @@ describe("moving an action's reach", () => {
     expect(opened).toEqual([]);
   });
 
-  it("asks which project before moving a global action from the sidebar", async () => {
+  it("moves a global action into the project picked, which is already chosen under the row", async () => {
     hoisted.actions = [action({ id: 5, name: "Shared", global: true })];
+    await renderAt(1);
+    await fromMenu(t("auto.actions.toProject"));
+    await act(async () => { confirmUnder(t("auto.actions.move")).click(); });
+    expect(hoisted.scope).toHaveBeenCalledWith(5, 1);
+  });
+
+  it("asks which project before moving a global action with every project picked", async () => {
+    hoisted.every = [{ projectId: null, projectName: null, card: action({ id: 5, name: "Shared", global: true }) }];
     await renderAt(null);
     await fromMenu(t("auto.actions.toProject"));
     const move = () => confirmUnder(t("auto.actions.move"));
@@ -406,10 +460,10 @@ describe("deleting an action", () => {
     expect(container.querySelector(".actlib__moveplace")?.textContent).toContain("placement");
   });
 
-  it("offers no menu on a row this entrance does not own", async () => {
+  it("offers the menu on a global row with a project picked, too", async () => {
     hoisted.actions = [action({ id: 5, global: true })];
     await render();
-    expect(container.querySelector(".actlib__more")).toBeNull();
+    expect(container.querySelector(".actlib__more")).not.toBeNull();
   });
 });
 
@@ -464,8 +518,8 @@ describe("the built-ins", () => {
     expect(opened).toEqual([]);
   });
 
-  it("are listed on the sidebar's entrance too", async () => {
-    hoisted.actions = [];
+  it("are listed with every project picked, too", async () => {
+    hoisted.every = [];
     await act(async () => {
       root.render(
         createElement(AutomationActionsTab, {

@@ -240,8 +240,8 @@ describe("the running tab", () => {
   });
 });
 
-// The two entrances (`AMB-D-954`): from a project, that project's runs alone and no project column;
-// from the sidebar, every project's, each naming its project.
+// The pulldown's two answers (`AMB-D-992`): with a project picked, that project's runs alone and no
+// project column; with every project, every project's, each naming its project.
 describe("the running tab's reach", () => {
   const two = () => [
     run({ run: 4, project: 1, projectName: "amenbo", automationName: "Morning round" }),

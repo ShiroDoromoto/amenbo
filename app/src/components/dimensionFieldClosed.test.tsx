@@ -18,7 +18,7 @@ const value = (id: number, name: string, closed = false): DimensionValueDto => (
 
 const AXIS: DimensionDto = {
   id: 900, name: "リリース", notes: "", cardinality: "single", role: "closable", ordered: true,
-  showOnCard: false, required: false, appliesTo: "both",
+  showOnCard: false, required: false, sequential: false, appliesTo: "both",
   values: [value(901, "v19"), value(902, "v18", true)],
 };
 const MULTI: DimensionDto = { ...AXIS, cardinality: "multi" };

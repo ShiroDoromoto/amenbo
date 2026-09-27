@@ -4248,6 +4248,9 @@ pub struct DimensionRow {
     /// `AMB-D-789`). It passes straight through to the DTO, the way `role` does, because what the
     /// screens do with it is decide which of them offer the axis at all.
     pub applies_to: String,
+    /// Whether a task on the axis waits for the values ordered before its own (`AMB-D-990`). The
+    /// classification panel reads it to draw the switch that raises it.
+    pub sequential: bool,
     pub values: Vec<DimensionValueRow>,
 }
 
@@ -4347,7 +4350,7 @@ fn overview_dimensions(
     let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
     let cardinality = sel.col(D.cardinality);
     let (show_on_card, required, slug) = (sel.col(D.show_on_card), sel.col(D.required), sel.col(D.slug));
-    let applies_to = sel.col(D.applies_to);
+    let (applies_to, sequential) = (sel.col(D.applies_to), sel.col(D.sequential));
     // The project is joined to keep a dimension whose project is gone out of the overview, not for a
     // column of its own — so it is named here and nowhere else.
     let mut sql = Sql::from(&sel, D.table);
@@ -4370,6 +4373,7 @@ fn overview_dimensions(
                     show_on_card: show_on_card.get(r)?,
                     required: required.get(r)?,
                     applies_to: applies_to.get(r)?,
+                    sequential: sequential.get(r)?,
                     values: Vec::new(),
                 },
             ))

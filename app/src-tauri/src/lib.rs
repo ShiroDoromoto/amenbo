@@ -604,6 +604,7 @@ pub fn run() {
       commands::dimension_rename,
       commands::dimension_set_slug,
       commands::dimension_update,
+      commands::dimension_sequential_held,
       commands::dimension_move,
       commands::dimension_rm,
       commands::dimension_value_add,

@@ -86,6 +86,11 @@ interface Store {
    */
   setDimensionRequired(id: number, required: boolean): void;
   /**
+   * Make a task on this axis wait for the values ordered before its own (`AMB-D-990`). It bites at the
+   * reservation alone, so raising it never moves a task already under way.
+   */
+  setDimensionSequential(id: number, sequential: boolean): void;
+  /**
    * Narrow or widen which of the two entities this axis classifies (`AMB-D-789`). It decides where the
    * axis is offered, not what has been answered on it, so narrowing takes no assignment away.
    */
@@ -214,6 +219,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDimensionClosable(id, closable) { run(mut.setDimensionClosable(id, closable)); },
     setDimensionShowOnCard(id, showOnCard) { run(mut.setDimensionShowOnCard(id, showOnCard)); },
     setDimensionRequired(id, required) { run(mut.setDimensionRequired(id, required)); },
+    setDimensionSequential(id, sequential) { run(mut.setDimensionSequential(id, sequential)); },
     setDimensionAppliesTo(id, appliesTo) { run(mut.setDimensionAppliesTo(id, appliesTo)); },
     removeDimension(id) { run(mut.removeDimension(id)); },
     addDimensionValue(dimensionId, name) { run(mut.addDimensionValue(dimensionId, name)); },

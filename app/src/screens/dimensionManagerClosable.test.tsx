@@ -64,7 +64,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
         const axis = {
           id: 900, name: "リリース", slug: "release", notes: "", role: hoisted.role,
           cardinality: "single" as const, ordered: true, showOnCard: false, required: false,
-          appliesTo: "both" as const,
+          sequential: false, appliesTo: "both" as const,
           values: [
             { id: 901, name: "v19", slug: "v19", closed: false },
             { id: 902, name: "v18", slug: "v18", closed: hoisted.closed },

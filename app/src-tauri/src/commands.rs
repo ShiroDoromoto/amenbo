@@ -218,6 +218,11 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         row.draft,
         !row.waiting_on_values.is_empty(),
     );
+    let waiting_on_values: Vec<WaitingOnValueDto> = row
+        .waiting_on_values
+        .into_iter()
+        .map(|w| WaitingOnValueDto { axis: w.axis, value: w.value })
+        .collect();
     let blocked_by: Vec<TaskRefDto> = row
         .blocked_by
         .into_iter()
@@ -263,6 +268,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         blocked_by_decisions,
         not_started_until: not_started_until.map(date_iso),
         draft: row.draft,
+        waiting_on_values,
         premise_change,
         created_at: row.created_at,
         updated_at: row.updated_at,
@@ -390,6 +396,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
                 show_on_card: d.show_on_card,
                 required: d.required,
                 applies_to: d.applies_to.clone(),
+                sequential: d.sequential,
                 values: d
                     .values
                     .iter()
@@ -3464,7 +3471,10 @@ pub fn dimension_set_slug(id: i64, slug: String) -> Result<WriteAck, CmdError> {
 /// device); turning `required` on makes a creation on this project wait until the axis is answered
 /// (`AMB-D-734`), and core refuses it on an axis that offers no values; narrowing `applies_to` takes
 /// the axis out of the side it no longer classifies, leaving the assignments already made there in
-/// place, meaning nothing (`AMB-D-789`).
+/// place, meaning nothing (`AMB-D-789`); turning `sequential` on makes a task on the axis wait for
+/// the values ordered before its own (`AMB-D-990`), and core refuses it on an axis that is not ordered,
+/// closable, single-select and classifying tasks — and, while it is on, a change taking one of those
+/// away.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn dimension_update(
@@ -3477,6 +3487,7 @@ pub fn dimension_update(
     show_on_card: Option<bool>,
     required: Option<bool>,
     applies_to: Option<String>,
+    sequential: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
     // The two nominations are one field, and an axis holds one role, so the panel moves one switch at a
     // time and either arm alone says what the role becomes. Both at once is the screen's defect, not the
@@ -3505,10 +3516,23 @@ pub fn dimension_update(
         None => None,
     };
     with_store_mut(|store| {
-        store.dimension_update(id, None, notes.as_deref(), cardinality, ordered, role, show_on_card, required, applies_to, None, None)?;
+        store.dimension_update(id, None, notes.as_deref(), cardinality, ordered, role, show_on_card, required, applies_to, None, sequential)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
+}
+
+/// How many `todo` tasks raising `sequential` on this axis would hold back (`AMB-D-990`) — read before
+/// the switch moves, so the confirmation the panel puts up carries the number. Counted whether or not the
+/// setting is on, and over the axis as it stands: an axis the setting does not fit is refused at the
+/// switch, not here.
+#[tauri::command]
+pub fn dimension_sequential_held(id: i64) -> Result<usize, CmdError> {
+    let store = open_store_read()?;
+    let read_model = store.read_model();
+    let axis = amenbo_core::store_engine::read::dimension(read_model.conn(), id)?
+        .ok_or_else(|| amenbo_core::Error::invalid(format!("no dimension {id}")))?;
+    Ok(amenbo_core::ops::dimension::held_along_order(read_model.conn(), &axis)?)
 }
 
 /// Reorder a dimension (give the anchor dimension's id to exactly one of `before` / `after` — same
@@ -6007,6 +6031,64 @@ pub(crate) mod tests {
         task_status(blocker, "done".into()).unwrap();
         task_status(dependent, "in_progress".into()).expect("reservation succeeds once the premise clears");
         assert_eq!(card(dependent).status, "in_progress");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The fifth premise (`AMB-D-990`) reaches the card by name, so the chip that says a task waits on
+    /// a value to close can name the value; and the count the panel asks before raising the setting is
+    /// the one raising it then holds.
+    #[test]
+    fn task_card_names_the_values_it_waits_on_and_the_panel_reads_the_count_beforehand() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("waitalong");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let (project_id, axis, v1, v2) = {
+            let mut store = Store::open().unwrap();
+            let p = store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id;
+            let axis = store
+                .dimension_add(
+                    p,
+                    amenbo_core::ops::dimension::NewDimension {
+                        name: "リリース".into(),
+                        ordered: true,
+                        role: DimensionRole::Closable,
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+                .id;
+            let v1 = store.dimension_value_add(axis, "v1", None, None).unwrap().id;
+            let v2 = store.dimension_value_add(axis, "v2", None, None).unwrap().id;
+            (p, axis, v1, v2)
+        };
+        let task = task_add(Some(project_id), "後の段".into(), None, None, None).unwrap().tasks[0];
+        finish_creating(task);
+        task_set_dimension_value(task, v2).unwrap();
+        let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
+
+        assert!(card(task).waiting_on_values.is_empty(), "an axis without the setting holds nobody");
+        assert_eq!(dimension_sequential_held(axis).unwrap(), 1, "but the panel reads who raising it would hold");
+
+        dimension_update(axis, None, None, None, None, None, None, None, None, Some(true)).unwrap();
+        let c = card(task);
+        assert!(!c.ready, "v1 is still open ahead of v2");
+        let named: Vec<(&str, &str)> =
+            c.waiting_on_values.iter().map(|w| (w.axis.as_str(), w.value.as_str())).collect();
+        assert_eq!(named, vec![("リリース", "v1")], "and the card names it");
+
+        dimension_value_set_closed(v1, true).unwrap();
+        let c = card(task);
+        assert!(c.ready && c.waiting_on_values.is_empty(), "closing v1 lets the task be picked up");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

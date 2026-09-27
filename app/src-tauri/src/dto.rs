@@ -103,6 +103,10 @@ pub struct DimensionDto {
     /// pane the decision side — while the manager, which is where it is set, offers every axis.
     #[ts(type = "\"task\" | \"decision\" | \"both\"")]
     pub(crate) applies_to: String,
+    /// Does a task on this axis wait for the values ordered before its own (`AMB-D-990`)? Off where
+    /// every axis starts; the manager draws the switch that raises it, held down on an axis that is not
+    /// ordered, closable, single-select and classifying tasks.
+    pub(crate) sequential: bool,
     pub(crate) values: Vec<DimensionValueDto>,
 }
 
@@ -303,6 +307,15 @@ pub struct DecisionRefDto {
     pub(crate) r#ref: Option<String>,
 }
 
+/// One value a task waits on (`AMB-D-990`): the axis and the value, by name — what a person closes to
+/// let the task be picked up.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+pub struct WaitingOnValueDto {
+    pub(crate) axis: String,
+    pub(crate) value: String,
+}
+
 /// A reference to a premise decision (the far end of builds_on). It is more than a
 /// [`DecisionRefDto`] because it carries **whether the premise is still alive** — surfacing on
 /// screen the decisions that stand on a rotten premise (the whole reason this type exists).
@@ -498,6 +511,10 @@ pub struct TaskCardDto {
     /// is drawn on the board like any other card (`AMB-D-555`), so the card has to carry the reason it
     /// cannot be picked up, the way `not_started_until` does for the third.
     pub(crate) draft: bool,
+    /// The values ordered before the task's own that are not closed yet, on an axis whose tasks wait
+    /// along its order — the fifth reason `ready` is false (`AMB-D-990`). Empty when nothing is waited
+    /// on, so the card names every value a person has to close before the task can be picked up.
+    pub(crate) waiting_on_values: Vec<WaitingOnValueDto>,
     /// Premises pinned on **after this task was reserved** (`AMB-D-366`, the holder-side surface): a
     /// blocker or an unsettled decision added since it went `in_progress`, silently withdrawing readiness
     /// the holder never asked to give up. Present only for an `in_progress` task that actually acquired

@@ -327,15 +327,16 @@ export function DateField({ label, value, onChange }: {
  * tries to start. A barred circle = an unfinished dependency blocker; a warning triangle = a decision not yet
  * settled as grounds; an hourglass = a declared start day that has not come; a pencil = the creation is not
  * finished (`AMB-D-555`: a task still being written is on the board like any other, and what keeps it from
- * being picked up is the premise, not being hidden). The fourth one
+ * being picked up is the premise, not being hidden); a tag = a value ordered before the task's own that nobody
+ * has closed yet, on an axis whose tasks wait along its order (`AMB-D-990`). The pencil
  * carries a word rather than a count — there is nothing to count, and "still being created" is the whole fact.
- * Every `ready === false` has at least one of the four, so the chip row is never empty
+ * Every `ready === false` has at least one of the five, so the chip row is never empty
  * where a reason exists — an unexplained "cannot start" reads as no reason at all. The reason a
  * reservation was refused only ever appears in a toast that vanishes in 4 seconds, so this is the one permanent place
  * it is visible before starting.
  *
- * **The four are not one step.** Two of them nobody can pass without going and doing something else first — an
- * unfinished blocker, a decision nobody has ruled on — and two resolve on their own or where the reader stands: a
+ * **The five are not one step.** Three of them nobody can pass without going and doing something else first — an
+ * unfinished blocker, a decision nobody has ruled on, a value nobody has closed — and two resolve on their own or where the reader stands: a
  * start day comes, and a creation is ended by whoever reads it. Drawn on one step they read as one refusal, and the
  * reader who can act is told the same thing as the reader who can only wait. It stays clear of the step a person
  * declared (`status = blocked`), which is the heed one: a premise nobody can pass is drawn above it, not in it.
@@ -347,9 +348,11 @@ export function DateField({ label, value, onChange }: {
 export function BlockedChips({ task, compact = false }: { task: TaskCard; compact?: boolean }) {
   const deps = task.blockedBy ?? [];
   const decisions = task.blockedByDecisions ?? [];
+  const waiting = task.waitingOnValues ?? [];
   if (task.ready) return null;
   const names = deps.map((b) => `${taskRef(b.id)} ${b.name}`).join(", ");
   const refs = decisions.map((d) => `${d.ref ?? ""} ${d.name}`.trim()).join(", ");
+  const values = waiting.map((w) => `${w.value} (${w.axis})`).join(", ");
   const shape = compact ? "chip--blockglyph" : "chip chip--block";
   const stop = `${shape} step-stop`;
   const heed = `${shape} step-heed`;
@@ -373,6 +376,18 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
           aria-label={tf("block.decisions", { refs })}
         >
           <Icon name="warning" />{compact ? null : ` ${formatNumber(decisions.length)}`}
+        </span>
+      )}
+      {/* The fifth premise (`AMB-D-990`): values ordered before the task's own that nobody has closed
+          yet. Only a person closing them clears it, so it stops like a blocker rather than waiting. */}
+      {waiting.length > 0 && (
+        <span
+          className={stop}
+          role="img"
+          title={tf("block.waitingOnValues", { values })}
+          aria-label={tf("block.waitingOnValues", { values })}
+        >
+          <Icon name="tag" />{compact ? null : ` ${formatNumber(waiting.length)}`}
         </span>
       )}
       {task.notStartedUntil && (

@@ -19,7 +19,7 @@ const dim = (
   ordered: false,
   showOnCard,
   required: false,
-  appliesTo: "both" as const,
+  sequential: false, appliesTo: "both" as const,
   values: values.map(([vid, vname]) => ({ id: vid, name: vname, closed: false })),
 });
 

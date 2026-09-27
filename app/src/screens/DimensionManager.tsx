@@ -1,10 +1,11 @@
 import { useRef, useState, useSyncExternalStore } from "react";
 import { getSnapshot, subscribe } from "../core/snapshot";
-import { t, tf, tn } from "../core/i18n";
+import { errText, formatNumber, isErr, t, tf, tn } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
 import { confirmDialog } from "../core/dialog";
-import { fetchProjectDimensionAssignments } from "../core/mutations";
+import { fetchProjectDimensionAssignments, fetchSequentialHeld, setDimensionValueClosed } from "../core/mutations";
+import { pushNotice } from "../core/notice";
 import { useStore } from "../store/store";
 import { todayStr } from "../core/calendar";
 import { currentTimeAxisValueId, isTimeAxis } from "../core/timeAxis";
@@ -34,7 +35,17 @@ import { Pager, usePager } from "../components/Pager";
 // axis with years of retired values still reads as what it currently offers. The values still on offer are
 // read a page at a time on top of that — the fold bounds what an axis retires, and the page bounds what it
 // offers, neither being a number this panel gets to assume.
-export function DimensionManager({ projectId, onClose }: { projectId: number; onClose: () => void }) {
+// An axis that fits it carries one more switch: the one that makes its tasks wait for the values ordered
+// before their own (`AMB-D-990`). Raising it asks first, naming how many tasks it holds back now; and on
+// such an axis a value still carrying unfinished tasks will not close, which the value's row says in place
+// with the count and a way to the tasks left.
+export function DimensionManager({ projectId, onClose, onShowUnfinished }: {
+  projectId: number;
+  onClose: () => void;
+  /** Show the unfinished tasks on one value — where the panel sends a reader whose closing was refused
+   *  for them. Left out, the refusal is said without the way there. */
+  onShowUnfinished?: (dimensionId: number, valueId: number) => void;
+}) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
   const store = useStore();
   const project = snap.projects.find((p) => p.id === projectId);
@@ -51,7 +62,7 @@ export function DimensionManager({ projectId, onClose }: { projectId: number; on
         ) : (
           <div className="dimmgr__list">
             {dims.map((d) => (
-              <DimensionRow key={d.id} dim={d} projectId={projectId} store={store} />
+              <DimensionRow key={d.id} dim={d} projectId={projectId} store={store} onShowUnfinished={onShowUnfinished} />
             ))}
           </div>
         )}
@@ -66,7 +77,12 @@ export function DimensionManager({ projectId, onClose }: { projectId: number; on
   );
 }
 
-function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId: number; store: ReturnType<typeof useStore> }) {
+function DimensionRow({ dim, projectId, store, onShowUnfinished }: {
+  dim: DimensionDto;
+  projectId: number;
+  store: ReturnType<typeof useStore>;
+  onShowUnfinished?: (dimensionId: number, valueId: number) => void;
+}) {
   const currentId = currentTimeAxisValueId(dim, todayStr());
   // Counted over the values the axis still offers, which is the count core raises `required` against
   // (`ops::dimension`, `AMB-D-829`): a closed value takes no new record, so an axis whose values are
@@ -97,6 +113,27 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
   const { run: runMove } = useSingleFlight();
   async function removeDim() {
     if (await confirmDialog(tf("dimmgr.confirmRemoveDim", { name: dim.name }))) store.removeDimension(dim.id);
+  }
+  // The four things the wait along the order stands on (`AMB-D-990`), read the way core reads them. The
+  // box is held down only while it is off: once on, it can always be turned off, and core then refuses
+  // the change that would take one of the four away.
+  const unfitForSequence =
+    !dim.ordered || !isClosable(dim) || dim.cardinality !== "single" || dim.appliesTo === "decision";
+  async function setSequential(on: boolean) {
+    if (!on) {
+      store.setDimensionSequential(dim.id, false);
+      return;
+    }
+    let held: number;
+    try {
+      held = await fetchSequentialHeld(dim.id);
+    } catch (e) {
+      pushNotice(errText(e));
+      return;
+    }
+    if (await confirmDialog(tf("dimmgr.confirmSequential", { name: dim.name, count: formatNumber(held) }))) {
+      store.setDimensionSequential(dim.id, true);
+    }
   }
   return (
     <div className="dimmgr__dim">
@@ -184,6 +221,20 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
           />
           {t("dimmgr.required")}
         </label>
+        {/* Whether a task on this axis waits for the values ordered before its own (`AMB-D-990`). It sits
+            after the switches it stands on, and is held down, saying which, until they are all set. */}
+        <label
+          className="dimmgr__ordered"
+          title={unfitForSequence && !dim.sequential ? t("dimmgr.sequentialUnfitHint") : t("dimmgr.sequentialHint")}
+        >
+          <input
+            type="checkbox"
+            checked={dim.sequential}
+            disabled={unfitForSequence && !dim.sequential}
+            onChange={(e) => void setSequential(e.target.checked)}
+          />
+          {t("dimmgr.sequential")}
+        </label>
         {/* Which of the two entities this axis classifies (`AMB-D-789`). A select rather than a box,
             because unlike the four beside it this answer has three states and starts on the wide one:
             an axis nobody narrowed classifies tasks and decisions alike. Narrowing it takes the axis
@@ -228,6 +279,7 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
               ordered={dim.ordered}
               timeAxis={isTimeAxis(dim)}
               closable={isClosable(dim)}
+              onShowUnfinished={onShowUnfinished && (() => onShowUnfinished(dim.id, v.id))}
               current={v.id === currentId}
               // The anchor is the row above and the row below **on screen**, not in the axis. Core takes
               // any sibling as the anchor (`ops::place`), so a folded axis reorders the way it reads —
@@ -273,7 +325,7 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
   );
 }
 
-function ValueRow({ value, store, projectId, dimensionId, required, siblings, ordered, timeAxis, closable, current, onMoveUp, onMoveDown }: {
+function ValueRow({ value, store, projectId, dimensionId, required, siblings, ordered, timeAxis, closable, onShowUnfinished, current, onMoveUp, onMoveDown }: {
   value: DimensionValueDto;
   store: ReturnType<typeof useStore>;
   projectId: number;
@@ -284,6 +336,8 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
   timeAxis: boolean;
   /** Does this value's axis carry the closable role? Only there is closing offered (`AMB-D-829`). */
   closable: boolean;
+  /** Show the unfinished tasks on this value, offered beside a closing refused for them. */
+  onShowUnfinished?: () => void;
   current: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -292,6 +346,18 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
   // `null` is not asking; a number is the answer chosen so far, and 0 stands for "asked, nothing
   // chosen yet" so the button that carries it out can stay shut until one is.
   const [moveTo, setMoveTo] = useState<number | null>(null);
+  // The refusal a close met because tasks on the value are unfinished (`AMB-D-990`), said on the row
+  // rather than in a toast: it carries the count, and the way to the tasks has to outlast reading it.
+  const [unfinished, setUnfinished] = useState<string | null>(null);
+  async function toggleClosed() {
+    setUnfinished(null);
+    try {
+      await setDimensionValueClosed(value.id, !value.closed);
+    } catch (e) {
+      if (isErr(e, "invalid_dimension_close_unfinished")) setUnfinished(errText(e));
+      else pushNotice(errText(e));
+    }
+  }
   // The last value a required axis still offers does not go at any price — core keeps it so the demand
   // stays answerable, and lowering the demand is the way out. Said on the button rather than found by
   // pressing it, the way the box that raises the demand says why it is off. Closed values do not count
@@ -388,10 +454,18 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
           className="btn"
           disabled={!value.closed && stuck}
           title={!value.closed && stuck ? t("dimmgr.lastOpenValueHint") : t("dimmgr.closeValueHint")}
-          onClick={() => store.setDimensionValueClosed(value.id, !value.closed)}
+          onClick={() => void toggleClosed()}
         >
           {value.closed ? t("dimmgr.reopenValue") : t("dimmgr.closeValue")}
         </button>
+      )}
+      {unfinished && (
+        <span className="dimmgr__refusal" role="alert">
+          {unfinished}
+          {onShowUnfinished && (
+            <button className="btn" onClick={onShowUnfinished}>{t("dimmgr.showUnfinished")}</button>
+          )}
+        </span>
       )}
       {moveTo === null ? (
         <button

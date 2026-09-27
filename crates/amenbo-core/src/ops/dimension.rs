@@ -605,21 +605,29 @@ pub fn held_by_order(tx: &WriteTx<'_>, axis: &Dimension) -> Result<usize> {
     if !axis.sequential {
         return Ok(0);
     }
+    held_along_order(tx.conn(), axis)
+}
+
+/// How many tasks the setting *would* leave waiting on this axis, whether or not it is on — the count
+/// [`held_by_order`] reports once it is raised, read beforehand. What the classification panel puts in
+/// front of the person before raising it, so the confirmation carries the number (`AMB-D-990`). A read
+/// of its own rather than a flag on [`held_by_order`], because it runs outside a write.
+pub fn held_along_order(conn: &rusqlite::Connection, axis: &Dimension) -> Result<usize> {
     let open: std::collections::HashSet<i64> =
-        read::open_dimension_value_ids(tx.conn(), axis.id)?.into_iter().collect();
+        read::open_dimension_value_ids(conn, axis.id)?.into_iter().collect();
     // Walked in order: every value past the first open one has an open value before it.
     let mut held = std::collections::HashSet::new();
     let mut seen_open = false;
-    for (value, _) in read::dimension_value_siblings(tx.conn(), axis.id, None)? {
+    for (value, _) in read::dimension_value_siblings(conn, axis.id, None)? {
         if seen_open {
             held.insert(value);
         }
         seen_open |= open.contains(&value);
     }
     let mut tasks = std::collections::HashSet::new();
-    for (task, value) in read::project_dimension_assignments(tx.conn(), axis.project_id, axis.id)? {
+    for (task, value) in read::project_dimension_assignments(conn, axis.project_id, axis.id)? {
         if held.contains(&value)
-            && read::task_status(tx.conn(), task)? == Some(crate::model::TaskStatus::Todo)
+            && read::task_status(conn, task)? == Some(crate::model::TaskStatus::Todo)
         {
             tasks.insert(task);
         }
@@ -2548,6 +2556,11 @@ mod tests {
         task_in(tx, "値なし", p);
 
         assert_eq!(held_by_order(tx, &dim(tx, axis.id)).unwrap(), 0, "an axis without it holds nobody");
+        assert_eq!(
+            held_along_order(tx.conn(), &dim(tx, axis.id)).unwrap(),
+            2,
+            "but read beforehand, it says who raising it would hold"
+        );
 
         let raised = sequence(tx, axis.id, true).unwrap();
         assert_eq!(held_by_order(tx, &raised).unwrap(), 2, "v2's and v3's todo tasks wait on v1");

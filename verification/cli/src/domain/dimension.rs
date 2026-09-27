@@ -166,6 +166,32 @@ impl Driver<'_> {
                 };
                 Ok(Outcome::action(note))
             }
+            // Whether the axis's values carry an order a person chose. A flag like the ones above it.
+            "ordered" => {
+                let dimension = req_str(with, "dimension")?;
+                let named = opt_bool(with, "ordered").unwrap_or(true);
+                let flag = if named { "true" } else { "false" };
+                self.run_json(&["dimension", "update", dimension, "--ordered", flag, "--json"])?;
+                let note = match named {
+                    true => format!("gave `{dimension}`'s values an order"),
+                    false => format!("took the order off `{dimension}`'s values"),
+                };
+                Ok(Outcome::action(note))
+            }
+            // Whether a task on the axis waits for every value ordered before its own to close. The
+            // same door as the flags above; raising it on an axis it does not fit is what a road's
+            // `refused:` meets.
+            "sequential" => {
+                let dimension = req_str(with, "dimension")?;
+                let named = opt_bool(with, "sequential").unwrap_or(true);
+                let flag = if named { "true" } else { "false" };
+                self.run_json(&["dimension", "update", dimension, "--sequential", flag, "--json"])?;
+                let note = match named {
+                    true => format!("made a task on `{dimension}` wait for the values before its own"),
+                    false => format!("stopped tasks on `{dimension}` waiting along its order"),
+                };
+                Ok(Outcome::action(note))
+            }
             // Retiring one of the axis's values, and bringing it back. Two commands of their own rather
             // than a flag on `value-update`: closing is a move a reader makes on a value, not a field
             // they fill in, and the terminal spells it that way.

@@ -652,6 +652,13 @@ const REGISTRY: &[OpSpec] = &[
     // that already exists, which is the door the manager has — and `closable: false` gives it up
     // again. One slot means one role, so naming this takes the time axis off the same axis.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "closable", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
+    // Whether the axis's values carry an order a person chose. Written on an axis that already exists,
+    // as the two above are, since that is the door the manager has; `ordered: false` takes it off.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "ordered", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
+    // Whether a task on the axis waits until every value ordered before its own is closed. It stands on
+    // the three above — ordered, closable, and an axis holding one value per record — so a road raises
+    // it after them, and `sequential: false` takes it off again.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "sequential", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
     // Retiring one of that axis's values, and bringing it back. Closing is the payload of the role
     // above the way a period is the time axis's, and it is not `value-rm` in a quieter form: everything
     // already filed under the value keeps it and a filter naming it goes on resolving, while nothing
@@ -4589,6 +4596,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // several values has to open on an axis that admits them — raising the flag is the classification
     // manager's own road, and walking it here would prove that road rather than this one.
     (Domain::Dimension, "cardinality"),
+    // And whether its values carry an order and can be closed — the two an axis has to have before
+    // its tasks can wait along it. A road about that wait opens on an axis already shaped for it:
+    // nominating the role and ordering the values are the manager's own roads.
+    (Domain::Dimension, "ordered"),
+    (Domain::Dimension, "closable"),
     // And which axis is the project's time axis, with the windows its values already cover. A screen
     // road about the era is watching the era arrive on a record nobody was asked about, and that
     // reader set the axis up on some earlier day — designating it is a road of its own, on the manager,

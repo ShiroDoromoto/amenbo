@@ -1,0 +1,235 @@
+# A category's order can mean the stages the whole axis moves through — a release after the one before
+# it — and when a person says it does, a task waits until every value ordered before its own is
+# closed. Order and closing alone do not say it: a client category is ordered and closable, and its
+# values run side by side. So the setting is the person's to raise, and only on a category it can
+# mean something on; the terminal turns it away anywhere else and names what is missing, while the
+# screen holds its switch down with the reason beside it, which is why that refusal is the terminal's
+# road alone.
+#
+# The wait has teeth the way a dependency does: the task is gone from where fresh work is taken, the
+# reserve that would start it early is turned away by name, and it comes back only when a person
+# closes the value before it. Closing is guarded from the other side — a value with unfinished work on
+# it will not close, or that work would be left with nothing open before it and be picked up beside
+# the next stage's.
+id: hold-work-until-the-stage-before-it-closes
+title: A task on a category that waits along its order is held back until the value before its own is closed, and that value does not close while its own work is unfinished
+description: >
+  Try to make a category's tasks wait along its order on a category that has no order, and be
+  refused. Raise it on an ordered, closable category, and read the task on the later value leave the
+  mailbox, show up among those waiting on a value, and be refused when named for a reserve. Try to
+  close the earlier value while its task is open, and be refused. Finish that task, close the value,
+  and the later task is ready to be taken.
+# One ordered, closable category with two values and a task on each, and one plain category beside it.
+# Classifying work and nominating the role are other roads' to prove, so the world carries them:
+# what this road reads starts at the setting.
+given:
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Release
+
+  - type: action
+    domain: dimension
+    op: ordered
+    with:
+      dimension: Release
+
+  - type: action
+    domain: dimension
+    op: closable
+    with:
+      dimension: Release
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Release
+      value: v1
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Release
+      value: v2
+
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Area
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — the work v1 carries
+    as: first
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: first
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: first
+      dimension: Release
+      value: v1
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — the work v2 carries
+    as: later
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: later
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: later
+      dimension: Release
+      value: v2
+
+steps_cli:
+  # A category with no order has no "before", so the wait would mean nothing there.
+  - type: action
+    domain: dimension
+    op: sequential
+    with:
+      dimension: Area
+      refused: invalid_dimension_sequential_unfit
+
+  - type: action
+    domain: dimension
+    op: sequential
+    with:
+      dimension: Release
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: later
+      field: ready
+      equals: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: later
+      present: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "waiting_on_values:yes"
+      target: later
+      present: true
+
+  # The first value's task has nothing open before it.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: first
+      field: ready
+      equals: true
+
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: later
+      status: in_progress
+      refused: not_ready
+
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v1
+      refused: invalid_dimension_close_unfinished
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: first
+      report: shipped with v1
+
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v1
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: later
+      present: true
+
+steps_gui:
+  - type: action
+    domain: dimension
+    op: sequential
+    with:
+      dimension: Release
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: later
+      field: ready
+      equals: false
+
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v1
+      refused: invalid_dimension_close_unfinished
+
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: first
+      report: shipped with v1
+
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v1
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: later
+      field: ready
+      equals: true

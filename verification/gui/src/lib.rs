@@ -1716,6 +1716,35 @@ impl Instructor {
                     ),
                 }
             }
+            // Whether the axis's values carry an order a person chose — a box on the axis's row in the
+            // same manager, beside the role boxes.
+            (Domain::Dimension, "ordered") => {
+                let dimension = req(with, "dimension")?;
+                match with.get("ordered").and_then(|v| v.as_bool()).unwrap_or(true) {
+                    true => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn on the box that gives its values an order.",
+                    ),
+                    false => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn off the box that gives its values an order.",
+                    ),
+                }
+            }
+            // Whether a task on the axis waits for every value ordered before its own to close. The
+            // switch sits on the axis's row; raising it asks first, saying how many tasks stop being
+            // ready, and the line has the reader read that count before confirming. On an axis it does
+            // not fit the switch is held down with the reason beside it, so there is no refusal to
+            // meet on this road.
+            (Domain::Dimension, "sequential") => {
+                let dimension = req(with, "dimension")?;
+                match with.get("sequential").and_then(|v| v.as_bool()).unwrap_or(true) {
+                    true => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", turn on the switch that makes a task wait along its order, read how many tasks the question says stop being ready, and confirm.",
+                    ),
+                    false => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn off the switch that makes a task wait along its order.",
+                    ),
+                }
+            }
             // Retiring one of that axis's values, and bringing it back. It is one button on the value's
             // own row rather than two side by side — it flips once it has been pressed — so the two
             // lines send a reader to the same place and name the direction. The button stands only under

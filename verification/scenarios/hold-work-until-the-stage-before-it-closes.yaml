@@ -14,8 +14,9 @@
 #
 # The wait bites at the reserve and nowhere after it. Opening the value before again leaves a task
 # already taken where it is, so its holder is told instead: the value comes back among the premises
-# that moved since the reserve, named by its category and its own name.
-# That half is the terminal's road alone for now: the screen harness cannot yet take a task.
+# that moved since the reserve, named by its category and its own name. The screen tells it twice:
+# the card rings its bell, and the detail pane names the value in the field for what changed since the
+# reserve.
 id: hold-work-until-the-stage-before-it-closes
 title: A task on a category that waits along its order is held back until the value before its own is closed, that value does not close while its own work is unfinished, and opening it again is told to whoever took the task
 description: >
@@ -278,3 +279,41 @@ steps_gui:
       target: later
       field: ready
       equals: true
+
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: later
+      status: in_progress
+
+  - type: action
+    domain: dimension
+    op: value-reopen
+    with:
+      dimension: Release
+      value: v1
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: later
+      field: status
+      equals: in_progress
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: later
+      field: premise_change.reopened_values.0.axis
+      equals: Release
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: later
+      field: premise_change.reopened_values.0.value
+      equals: v1

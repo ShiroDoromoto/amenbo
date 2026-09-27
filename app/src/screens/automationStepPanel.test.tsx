@@ -366,7 +366,7 @@ describe("the panel of one spot", () => {
       ordered: false,
       showOnCard: false,
       required: false,
-      appliesTo: "task",
+      sequential: false, appliesTo: "task",
       values: [],
       ...over,
     });

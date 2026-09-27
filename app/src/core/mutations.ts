@@ -204,6 +204,13 @@ function notReadyParts(t: TaskCard): CmdErrorPart[] {
       fields: { start: t.notStartedUntil },
     });
   }
+  for (const w of t.waitingOnValues) {
+    parts.push({
+      code: "not_ready_waiting_on_value",
+      message_en: `${w.value} (${w.axis}), ordered before it, is not closed yet`,
+      fields: { axis: w.axis, value: w.value },
+    });
+  }
   if (t.draft) {
     parts.push({
       code: "not_ready_draft",
@@ -229,8 +236,11 @@ function startAhead(start: string | null): string | null {
  * *is* `ready`). It lives in one place so that clearing any one premise cannot come to disagree with
  * clearing another about what the remaining three mean.
  */
-function readyOf(t: Pick<TaskCard, "blockedBy" | "blockedByDecisions" | "notStartedUntil" | "draft">): boolean {
-  return t.blockedBy.length === 0 && t.blockedByDecisions.length === 0 && t.notStartedUntil == null && !t.draft;
+function readyOf(
+  t: Pick<TaskCard, "blockedBy" | "blockedByDecisions" | "notStartedUntil" | "draft" | "waitingOnValues">,
+): boolean {
+  return t.blockedBy.length === 0 && t.blockedByDecisions.length === 0 && t.notStartedUntil == null && !t.draft
+    && t.waitingOnValues.length === 0;
 }
 
 /**
@@ -307,7 +317,7 @@ export async function addTask(
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       // A creation lands unfinished, exactly as core's `add` leaves it (`AMB-D-554`): the task is on the
       // board and refused a reservation until the detail pane's "finish creating" ends the second stage.
-      ready: false, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [],
+      ready: false, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [],
       startOn: start ?? null, notStartedUntil: startAhead(start ?? null),
       draft: true,
     };
@@ -1885,6 +1895,27 @@ export async function setDimensionShowOnCard(id: number, showOnCard: boolean): P
 export async function setDimensionRequired(id: number, required: boolean): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("dimension_update", { id, required });
+}
+
+/**
+ * Make a task on this dimension wait for the values ordered before its own, or stop it waiting
+ * (`AMB-D-990`). It bites at the reservation alone, so a task already under way keeps going. Core refuses
+ * to raise it on an axis that is not ordered, closable, single-select and classifying tasks, and — while
+ * it is on — a change that takes one of those away; the panel holds the box down on an axis it does not
+ * fit, and the refusal is the backstop. Turning it off is free.
+ */
+export async function setDimensionSequential(id: number, sequential: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_update", { id, sequential });
+}
+
+/**
+ * How many `todo` tasks raising `sequential` on this dimension would hold back, read before it is raised
+ * so the confirmation can carry the number (`AMB-D-990`). Outside Tauri nothing is held.
+ */
+export async function fetchSequentialHeld(id: number): Promise<number> {
+  if (!inTauri()) return 0;
+  return invoke<number>("dimension_sequential_held", { id });
 }
 
 /**

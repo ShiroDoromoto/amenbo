@@ -1117,7 +1117,13 @@ role: "none" | "time_axis" | "closable", ordered: boolean, showOnCard: boolean, 
  * which of them offer the axis at all — the board and the task card the task side, the decision
  * pane the decision side — while the manager, which is where it is set, offers every axis.
  */
-appliesTo: "task" | "decision" | "both", values: Array<DimensionValueDto>, };
+appliesTo: "task" | "decision" | "both", 
+/**
+ * Does a task on this axis wait for the values ordered before its own (`AMB-D-990`)? Off where
+ * every axis starts; the manager draws the switch that raises it, held down on an axis that is not
+ * ordered, closable, single-select and classifying tasks.
+ */
+sequential: boolean, values: Array<DimensionValueDto>, };
 
 /**
  * One assignment on one project × dimension (`taskId`→`valueId`). The board uses it to bundle tasks by
@@ -3598,6 +3604,12 @@ notStartedUntil: string | null,
  */
 draft: boolean, 
 /**
+ * The values ordered before the task's own that are not closed yet, on an axis whose tasks wait
+ * along its order — the fifth reason `ready` is false (`AMB-D-990`). Empty when nothing is waited
+ * on, so the card names every value a person has to close before the task can be picked up.
+ */
+waitingOnValues: Array<WaitingOnValueDto>, 
+/**
  * Premises pinned on **after this task was reserved** (`AMB-D-366`, the holder-side surface): a
  * blocker or an unsettled decision added since it went `in_progress`, silently withdrawing readiness
  * the holder never asked to give up. Present only for an `in_progress` task that actually acquired
@@ -3833,6 +3845,12 @@ database: string,
  * reader after this press.
  */
 keys: "kept" | "generated", };
+
+/**
+ * One value a task waits on (`AMB-D-990`): the axis and the value, by name — what a person closes to
+ * let the task be picked up.
+ */
+export type WaitingOnValueDto = { axis: string, value: string, };
 
 /**
  * One agent a folder's pane could be opened with, and what the folder and this machine say about

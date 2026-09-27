@@ -524,7 +524,20 @@ export function BoardScreen({
       {view === "timeline" && (
         <TimelineView tasks={tasks} selectedTaskId={selectedTaskId} onSelectTask={onSelectTask} />
       )}
-      {dimMgrOpen && <DimensionManager projectId={projectId} onClose={() => setDimMgrOpen(false)} />}
+      {dimMgrOpen && (
+        <DimensionManager
+          projectId={projectId}
+          onClose={() => setDimMgrOpen(false)}
+          // A value that would not close for its unfinished tasks (`AMB-D-990`): the board narrows to
+          // exactly those — the value, and every status that is not finished — the filter core's refusal names.
+          onShowUnfinished={(dimensionId, valueId) => {
+            setDimMgrOpen(false);
+            setTab("tasks");
+            setSel({ [`dim:${dimensionId}`]: [String(valueId)], status: ["todo", "in_progress", "blocked"] });
+            setFiltersOpen(true);
+          }}
+        />
+      )}
       </>
       )}
       {finishing !== null && (

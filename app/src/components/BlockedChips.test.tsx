@@ -15,7 +15,7 @@ function card(over: Partial<TaskCard>): TaskCard {
     id: 1, title: "t", ref: "#1", notes: "", projectId: null, status: "todo",
     assignee: null, priority: null, due: null, completedAt: null,
     comments: 0, ready: true, blockedBy: [], placement: null, createdBy: null,
-    linkedDecisions: [], blockedByDecisions: [], startOn: null, notStartedUntil: null, draft: false,
+    linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [], startOn: null, notStartedUntil: null, draft: false,
     createdAt: "2026-06-01T09:00:00Z", updatedAt: "2026-06-01T09:00:00Z",
     ...over,
   };
@@ -85,15 +85,27 @@ describe("BlockedChips", () => {
     expect(chips()[0].getAttribute("title")).toContain("finish creating it first");
   });
 
-  it("shows all four when all four hold it back — no reason hides behind another", () => {
+  it("shows values ordered before its own that are not closed as a tag with a count, naming them", () => {
+    render(card({
+      ready: false,
+      waitingOnValues: [{ axis: "リリース", value: "v1" }, { axis: "リリース", value: "v2" }],
+    }));
+    expect(chips()).toHaveLength(1);
+    expect(markOf(chips()[0])).toBe("tag");
+    expect(chips()[0].textContent).toContain("2");
+    expect(chips()[0].getAttribute("title")).toContain("v1 (リリース), v2 (リリース)");
+  });
+
+  it("shows all five when all five hold it back — no reason hides behind another", () => {
     render(card({
       ready: false,
       blockedBy: [{ id: 2, name: "先行" }],
       blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
+      waitingOnValues: [{ axis: "リリース", value: "v1" }],
       notStartedUntil: "2026-08-01",
       draft: true,
     }));
-    expect(chips()).toHaveLength(4);
+    expect(chips()).toHaveLength(5);
   });
 
   it("shows both when both are present", () => {
@@ -110,11 +122,12 @@ describe("BlockedChips", () => {
     expect(chips()).toHaveLength(1);
   });
 
-  it("draws the two nobody can pass on the stop step, and the two that resolve themselves on the heed one", () => {
+  it("draws the three nobody can pass on the stop step, and the two that resolve themselves on the heed one", () => {
     render(card({
       ready: false,
       blockedBy: [{ id: 2, name: "先行" }],
       blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
+      waitingOnValues: [{ axis: "リリース", value: "v1" }],
       notStartedUntil: "2026-08-01",
       draft: true,
     }));
@@ -124,6 +137,7 @@ describe("BlockedChips", () => {
     };
     expect(stepOf("blocked")).toBe("step-stop");
     expect(stepOf("warning")).toBe("step-stop");
+    expect(stepOf("tag")).toBe("step-stop");
     expect(stepOf("hourglass")).toBe("step-heed");
     expect(stepOf("pencil")).toBe("step-heed");
   });

@@ -7,7 +7,7 @@ describe("filters: user-defined classifications (unified dimension)", () => {
   const dim = {
     id: 1, name: "カテゴリー", notes: "", cardinality: "single" as const, role: "none" as const, ordered: false,
     showOnCard: false, required: false,
-    appliesTo: "both" as const,
+    sequential: false, appliesTo: "both" as const,
     values: [{ id: 11, name: "バグ", closed: false }, { id: 12, name: "機能", closed: false }],
   };
   const assign = { t1: { 1: [11] }, t2: { 1: [12] } };
@@ -150,7 +150,7 @@ describe("filters: the decisions tab narrows the same way the board does", () =>
   const dim = {
     id: 1, name: "テーマ", notes: "", cardinality: "single" as const, role: "none" as const, ordered: false,
     showOnCard: false, required: false,
-    appliesTo: "both" as const,
+    sequential: false, appliesTo: "both" as const,
     values: [{ id: 11, name: "メイン", closed: false }, { id: 12, name: "会話の窓", closed: false }],
   };
   const assign = { 1: { 1: [11] }, 2: { 1: [12] } };

@@ -69,7 +69,7 @@ pub const ON_WORKER: &[&str] = &[
     "task_set_notes", "task_set_title", "task_set_priority", "task_set_due", "task_set_start",
     "project_add_folder", "project_get", "project_list_archived", "project_update", "project_move",
     "project_set_archived", "project_delete", "dimension_add", "dimension_rename", "dimension_set_slug",
-    "dimension_update", "dimension_move", "dimension_rm", "dimension_value_add",
+    "dimension_update", "dimension_sequential_held", "dimension_move", "dimension_rm", "dimension_value_add",
     "dimension_value_rename", "dimension_value_set_slug", "dimension_value_set_period",
     "dimension_value_set_closed", "dimension_value_move", "dimension_value_rm",
     "task_set_dimension_value", "task_unset_dimension_value", "task_dimensions",

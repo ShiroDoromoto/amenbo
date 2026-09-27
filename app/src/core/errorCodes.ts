@@ -93,6 +93,11 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // onto it is turned away.
   "invalid_dimension_close_not_closable",
   "invalid_dimension_close_last_open",
+  // Closing a value while tasks on it are unfinished, on an axis whose tasks wait along its order,
+  // and raising that setting where it does not fit or taking away what it stands on (`AMB-D-990`).
+  "invalid_dimension_close_unfinished",
+  "invalid_dimension_sequential_unfit",
+  "invalid_dimension_sequential_held",
   "invalid_dimension_set_closed_value",
   "invalid_task_required_dimension",
   // A status a task still being created cannot take (`AMB-D-846`). The panel does not draw the controls
@@ -175,19 +180,11 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_wait_not_a_count",
 ] as const;
 
-/** Core codes the webview never receives, because the only door they come through is the CLI — which is
- * also why they owe no template. A code that reaches a screen belongs in the sentence list instead, with
- * its prose. */
-export const CORE_CLI_ONLY_ERROR_CODES = [
-  // The three refusals the setting that makes a task wait for the values before its own raises
-  // (`AMB-D-990`): raising it on an axis it does not fit, taking away what it stands on while it is on,
-  // and closing a value that still has unfinished tasks on it. Core carries the setting and the classification panel has no control for it yet, so nothing on
-  // a screen can be refused for these reasons. The door that lands one on a screen moves it into the
-  // sentence list above, with the prose it then owes.
-  "invalid_dimension_sequential_unfit",
-  "invalid_dimension_sequential_held",
-  "invalid_dimension_close_unfinished",
-] as const;
+/** Core codes the webview never receives, because the only door they come through is the CLI. None is
+ * declared today: every code core raises reaches a screen, so each one owes a template and sits in the
+ * sentence list above. The list stays because the parity test reads every code core declares, and a door
+ * the terminal alone can reach is a shape that comes back. */
+export const CORE_CLI_ONLY_ERROR_CODES = [] as const;
 
 /** Every code core can emit (`amenbo_core::ErrorCode::ALL`), at every grain. */
 export const CORE_ERROR_CODES = [

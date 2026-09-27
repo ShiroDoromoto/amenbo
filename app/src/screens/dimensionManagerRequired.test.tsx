@@ -52,7 +52,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
         const axis = {
           id: 900, name: "リリース", slug: "release", notes: "", role: "closable" as const,
           cardinality: "single" as const, ordered: true, showOnCard: false, required: false,
-          appliesTo: "both" as const,
+          sequential: false, appliesTo: "both" as const,
           values,
         };
         withAxis = { ...snap, projects: snap.projects.map((p) => (p.id === 1 ? { ...p, dimensions: [axis] } : p)) };

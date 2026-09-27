@@ -331,7 +331,7 @@ describe("the built-in that splits by an axis", () => {
     ordered: false,
     showOnCard: false,
     required: false,
-    appliesTo: "task",
+    sequential: false, appliesTo: "task",
     values: [],
     ...over,
   });

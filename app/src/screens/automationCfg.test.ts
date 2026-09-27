@@ -124,7 +124,7 @@ describe("a setting's answer", () => {
     ordered: false,
     showOnCard: false,
     required: false,
-    appliesTo,
+    sequential: false, appliesTo,
     values: values.map((one, i) => ({ id: i, name: one }) as DimensionDto["values"][number]),
   });
 

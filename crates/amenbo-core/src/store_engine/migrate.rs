@@ -1070,6 +1070,24 @@ pub const STEPS: &[Step] = &[
         name: "say who acknowledged a failed run, a person for every mark already there",
         apply: Apply::Custom(say_who_acknowledged_a_failure),
     },
+    Step {
+        to: 83,
+        name: "add dimension.sequential, whether a task waits for the values ordered before its own",
+        // `AMB-D-990`. Whether an axis's order is the run of stages its tasks wait along is the axis's
+        // own answer, so it arrives as a column on `dimension` beside `required`.
+        //
+        // **Seeded, and the seed is not a guess: `0` on every row.** The decision starts every axis off,
+        // which is how an upgrading store's axes were already read, so no task that could be reserved
+        // yesterday waits after this runs. `NOT NULL DEFAULT 0` writes that into every existing row and
+        // there is nothing further to backfill — v29's shape.
+        //
+        // The column is spelled out here in frozen text, as every step's is: the registry may rename it
+        // tomorrow, and what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "ALTER TABLE dimension ADD COLUMN sequential BOOLEAN NOT NULL DEFAULT 0 \
+                 CHECK(sequential IN (0, 1));",
+        ),
+    },
 ];
 
 /// v82: `automation_run.acknowledged_by_kind` — who said they had seen a failed run, a person or their
@@ -6459,6 +6477,14 @@ mod tests {
     }
 
     /// The clause v34 rewrites, as every store from the baseline to v33 declares it.
+    /// `dimension`'s columns less the ones a step past v35 appends. The tests of v34 and v35 run the
+    /// chain on to the latest, so those columns arrive too; what the two steps owe is to leave every
+    /// column they found where it was.
+    fn without_later_axis_columns(columns: Vec<String>) -> Vec<String> {
+        const LATER: &[&str] = &["sequential"];
+        columns.into_iter().filter(|c| !LATER.contains(&c.as_str())).collect()
+    }
+
     const NARROW_CARDINALITY_SET: &str = " CHECK(cardinality IN ('', 'single'))";
 
     /// v34 in full, on the store shape v33 left behind: `dimension.cardinality` admits one value, and the
@@ -6502,7 +6528,7 @@ mod tests {
             let tx = engine.conn().unchecked_transaction().unwrap();
             column_names(&tx, "dimension").unwrap()
         };
-        assert_eq!(before, after, "a constraint changed, not the shape");
+        assert_eq!(before, without_later_axis_columns(after), "a constraint changed, not the shape");
         engine
             .conn()
             .execute("UPDATE dimension SET cardinality = 'multi' WHERE id = 1", [])
@@ -6591,7 +6617,11 @@ mod tests {
             let tx = engine.conn().unchecked_transaction().unwrap();
             column_names(&tx, "dimension").unwrap()
         };
-        assert_eq!(before, after, "on `dimension` a constraint changed, not the shape");
+        assert_eq!(
+            before,
+            without_later_axis_columns(after),
+            "on `dimension` a constraint changed, not the shape"
+        );
         engine
             .conn()
             .execute("UPDATE dimension SET role = 'closable' WHERE id = 1", [])
@@ -9386,6 +9416,36 @@ mod tests {
                 .execute("UPDATE automation_run SET acknowledged_by_kind = 'robot' WHERE id = 2", [])
                 .is_err(),
             "only the two facets go in"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v83: every axis an upgrade brings in arrives without the setting — no task that could be
+    /// reserved before waits after — and the column takes the two booleans and nothing else.
+    #[test]
+    fn every_axis_arrives_without_the_wait() {
+        let dir = scratch("dimension-sequential");
+        let engine = store_at(&dir, 82);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO dimension (id, project_id, name, cardinality, ordered, role, applies_to, order_key)
+                     VALUES (1, 1, 'リリース', 'single', 1, 'closable', 'both', 'a0');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let on: bool = engine
+            .conn()
+            .query_row("SELECT sequential FROM dimension WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert!(!on, "an axis the store already had starts without it");
+        assert!(
+            engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
+            "only the two booleans go in"
         );
         std::fs::remove_dir_all(&dir).ok();
     }

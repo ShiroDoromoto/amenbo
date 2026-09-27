@@ -159,6 +159,58 @@ fn closing_the_last_open(axis: &str, value: &str) -> Error {
     )
 }
 
+/// What an axis has to be for its order to be the run of stages a task waits along (`AMB-D-990`), or
+/// `None` where it is all of it. Read off the axis as it *would* stand, so [`update`] asks one question
+/// whichever flag it moved. The four, in the order they are named:
+///
+/// - **ordered** — an unordered axis has no order a person chose, so "the values before" names nothing;
+/// - **closable** — a stage is over when a person closes it, and only this role closes a value;
+/// - **single-select** — a task on two values would wait for the one it is itself standing on, and
+///   that value cannot close until the task is done, so neither would move;
+/// - **classifying tasks** — the wait is a task's; an axis that answers decisions alone has nobody
+///   waiting on it.
+fn unfit_for_sequence(d: &Dimension) -> Option<&'static str> {
+    if !d.ordered {
+        Some("ordered")
+    } else if d.role != DimensionRole::Closable {
+        Some("closable")
+    } else if d.cardinality != DimensionCardinality::Single {
+        Some("single-select")
+    } else if d.applies_to == DimensionAppliesTo::Decision {
+        Some("applied to tasks")
+    } else {
+        None
+    }
+}
+
+/// The refusal raising the setting meets on an axis that is not what [`unfit_for_sequence`] asks: the
+/// wait would not mean anything there (`AMB-D-990`). It names the first thing missing, so the caller
+/// knows what to change first.
+fn sequence_unfit(name: &str, missing: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!(
+            "'{name}' is not {missing}, so its tasks cannot wait for the values before their own —              the setting goes on an axis that is ordered, closable, single-select and classifies tasks"
+        ))
+        .coded(ErrorCode::InvalidDimensionSequentialUnfit)
+        .with("name", name)
+        .with("missing", missing),
+    )
+}
+
+/// The refusal an axis carrying the setting meets when a change would take away one of the four things
+/// the setting stands on (`AMB-D-990`). Turning the setting off is free, and then the axis changes like
+/// any other — so the caller is pointed there rather than having the setting dropped under them.
+fn sequence_held(name: &str, missing: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!(
+            "'{name}' makes its tasks wait for the values before their own, so it has to stay {missing}              — turn that setting off first"
+        ))
+        .coded(ErrorCode::InvalidDimensionSequentialHeld)
+        .with("name", name)
+        .with("missing", missing),
+    )
+}
+
 /// The refusal a closed value meets at both assignment doors ([`set`] and [`set_on_decision`]): it is
 /// retired from what a record is newly filed under (`AMB-D-829`). That is the whole of what closing
 /// does — every record already on the value keeps it, every filter naming it goes on resolving, and only
@@ -346,6 +398,9 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
         show_on_card: new.show_on_card,
         required: new.required,
         applies_to: new.applies_to,
+        // Off at birth: the four things it asks of an axis are set here and may be moved at once, so
+        // the one door that holds them all is `update`.
+        sequential: false,
         slug: Some(slug),
         order_key,
         created_at: now,
@@ -409,6 +464,12 @@ fn live_value_before(tx: &WriteTx<'_>, id: i64) -> Result<DimensionValue> {
 /// there is no precondition on either direction: an axis with no values narrows as readily as one with
 /// a hundred, since this flag says where the axis is offered, not whether it can be answered.
 ///
+/// `sequential` says whether a task on the axis waits for the values ordered before its own
+/// (`AMB-D-990`). It is the one flag that holds the others in place: it goes on only an axis that is
+/// ordered, closable, single-select and classifies tasks ([`unfit_for_sequence`]), and while it is on,
+/// a change taking any of the four away is refused rather than dropping the setting under the caller.
+/// Turning it off is free. How many tasks it leaves waiting is [`held_by_order`]'s to say.
+///
 /// `slug` renames the axis's readable key (`AMB-D-735`). It is checked for shape and for a collision
 /// inside the project before anything is written, so the refusal names the axis already holding it
 /// rather than surfacing the table's `UNIQUE`. Passing `None` leaves the slug where it is; there is no
@@ -429,6 +490,7 @@ pub fn update(
     required: Option<bool>,
     applies_to: Option<DimensionAppliesTo>,
     slug: Option<&str>,
+    sequential: Option<bool>,
 ) -> Result<Dimension> {
     let name = match name {
         Some(n) => Some(checked_name("dimension", n)?),
@@ -465,6 +527,20 @@ pub fn update(
     if let Some(a) = applies_to {
         d.applies_to = a;
     }
+    if let Some(s) = sequential {
+        d.sequential = s;
+    }
+    // Read off the axis as it would stand: raising the setting and moving one of the four under it are
+    // one question met from two sides, and which refusal answers is whether the setting was already on.
+    if d.sequential {
+        if let Some(missing) = unfit_for_sequence(&d) {
+            return Err(if before.sequential {
+                sequence_held(&d.name, missing)
+            } else {
+                sequence_unfit(&d.name, missing)
+            });
+        }
+    }
     // Both halves of the pair are read off the axis as it *would* stand, so whichever of them this call
     // moved meets the same refusal (`AMB-D-826`).
     if d.role == DimensionRole::TimeAxis && d.cardinality == DimensionCardinality::Multi {
@@ -495,6 +571,40 @@ pub fn update(
     d.updated_at = Timestamp::now();
     emit_update(tx, record::dimension(&before), record::dimension(&d))?;
     Ok(d)
+}
+
+/// How many tasks the setting leaves waiting on this axis (`AMB-D-990`): `todo` tasks whose value has
+/// an open value ordered before it. What raising the setting reports, so the person sees at once how
+/// much of the backlog it holds back. Counted whatever else holds a task back — a task already waiting
+/// on a dependency is still one this axis now also holds.
+///
+/// Only `todo` is counted: the wait bites at the reservation, and a task already under way keeps going
+/// (`AMB-D-990`). A task with no value on the axis waits on nothing. An axis without the setting holds
+/// nobody, and reads zero.
+pub fn held_by_order(tx: &WriteTx<'_>, axis: &Dimension) -> Result<usize> {
+    if !axis.sequential {
+        return Ok(0);
+    }
+    let open: std::collections::HashSet<i64> =
+        read::open_dimension_value_ids(tx.conn(), axis.id)?.into_iter().collect();
+    // Walked in order: every value past the first open one has an open value before it.
+    let mut held = std::collections::HashSet::new();
+    let mut seen_open = false;
+    for (value, _) in read::dimension_value_siblings(tx.conn(), axis.id, None)? {
+        if seen_open {
+            held.insert(value);
+        }
+        seen_open |= open.contains(&value);
+    }
+    let mut tasks = std::collections::HashSet::new();
+    for (task, value) in read::project_dimension_assignments(tx.conn(), axis.project_id, axis.id)? {
+        if held.contains(&value)
+            && read::task_status(tx.conn(), task)? == Some(crate::model::TaskStatus::Todo)
+        {
+            tasks.insert(task);
+        }
+    }
+    Ok(tasks.len())
 }
 
 pub fn move_to(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Dimension> {
@@ -1138,7 +1248,7 @@ mod tests {
         let squatter = add(tx, p, custom("先客")).unwrap();
         // Take the slug the *next* axis would otherwise be born with.
         let next = squatter.id + 1;
-        update(tx, squatter.id, None, None, None, None, None, None, None, None, Some(&format!("d{next}")))
+        update(tx, squatter.id, None, None, None, None, None, None, None, None, Some(&format!("d{next}")), None)
             .unwrap();
         let born = add(tx, p, custom("あと")).unwrap();
         assert_eq!(born.id, next);
@@ -1168,7 +1278,7 @@ mod tests {
             let code = ErrorCode::InvalidDimensionNameWhitespace.as_str();
             let err = add(tx, p, custom(bad)).unwrap_err();
             assert_eq!(err.code(), code, "{bad:?} is refused on add");
-            let err = update(tx, d.id, Some(bad), None, None, None, None, None, None, None, None).unwrap_err();
+            let err = update(tx, d.id, Some(bad), None, None, None, None, None, None, None, None, None).unwrap_err();
             assert_eq!(err.code(), code, "{bad:?} is refused on rename");
             let err = value_add(tx, d.id, bad, None).unwrap_err();
             assert_eq!(err.code(), code, "{bad:?} is refused on value-add");
@@ -1188,7 +1298,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let d = add(tx, p, custom("軸")).unwrap();
         for good in ["release", "run-2", "a", &"a".repeat(SLUG_MAX)] {
-            update(tx, d.id, None, None, None, None, None, None, None, None, Some(good)).unwrap();
+            update(tx, d.id, None, None, None, None, None, None, None, None, Some(good), None).unwrap();
             assert_eq!(dim(tx, d.id).slug.as_deref(), Some(good));
         }
         for bad in [
@@ -1201,7 +1311,7 @@ mod tests {
             "re lease",      // nor is a space
             &"a".repeat(SLUG_MAX + 1),
         ] {
-            let err = update(tx, d.id, None, None, None, None, None, None, None, None, Some(bad)).unwrap_err();
+            let err = update(tx, d.id, None, None, None, None, None, None, None, None, Some(bad), None).unwrap_err();
             assert_eq!(err.code(), ErrorCode::InvalidDimensionSlugShape.as_str(), "{bad:?} is refused");
         }
     }
@@ -1216,12 +1326,12 @@ mod tests {
         let q = project_named(tx, "QJ");
         let d1 = add(tx, p, NewDimension { slug: Some("phase".into()), ..custom("フェーズ") }).unwrap();
         let d2 = add(tx, p, custom("製品")).unwrap();
-        let err = update(tx, d2.id, None, None, None, None, None, None, None, None, Some("phase")).unwrap_err();
+        let err = update(tx, d2.id, None, None, None, None, None, None, None, None, Some("phase"), None).unwrap_err();
         assert_eq!(err.code(), ErrorCode::InvalidDimensionSlugTaken.as_str());
         // Another project is another reach.
         add(tx, q, NewDimension { slug: Some("phase".into()), ..custom("フェーズ") }).unwrap();
         // Naming an axis the slug it already holds is not a collision with itself.
-        update(tx, d1.id, None, None, None, None, None, None, None, None, Some("phase")).unwrap();
+        update(tx, d1.id, None, None, None, None, None, None, None, None, Some("phase"), None).unwrap();
 
         let v1 = value_add(tx, d1.id, "運用第2期", Some("ops2")).unwrap();
         let v2 = value_add(tx, d1.id, "運用第1期", None).unwrap();
@@ -1280,7 +1390,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let d1 = add(tx, p, custom("D1")).unwrap();
         let d2 = add(tx, p, custom("D2")).unwrap();
-        update(tx, d1.id, Some("分類"), None, None, None, None, None, None, None, None).unwrap();
+        update(tx, d1.id, Some("分類"), None, None, None, None, None, None, None, None, None).unwrap();
         assert_eq!(dim(tx, d1.id).name, "分類");
         // Resolves by name or by id (exact match).
         assert_eq!(read::resolve_dimension_in(tx.conn(), None, "分類").unwrap(), vec![d1.id]);
@@ -1447,13 +1557,13 @@ mod tests {
 
         // Nominate it later and the very same dates start acting as windows. Name and notes are
         // left as they were.
-        let named = update(tx, d.id, None, None, None, None, Some(DimensionRole::TimeAxis), None, None, None, None).unwrap();
+        let named = update(tx, d.id, None, None, None, None, Some(DimensionRole::TimeAxis), None, None, None, None, None).unwrap();
         assert_eq!(named.name, "時代");
         assert_eq!(current(tx, p, day("2026-07-09")).unwrap(), now.id);
 
         // Un-nominate it and it steps out of the resolution; the dates stay in their columns but
         // stop meaning anything.
-        update(tx, d.id, None, None, None, None, Some(DimensionRole::None), None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, Some(DimensionRole::None), None, None, None, None, None).unwrap();
         assert!(current(tx, p, day("2026-07-09")).is_none());
         assert_eq!(val(tx, now.id).start_on, Some(day("2026-07-08")));
     }
@@ -1472,7 +1582,7 @@ mod tests {
 
         // Turn `ordered` on and `order_key` takes effect, so values can be reordered. Name and
         // notes are left as they were.
-        let updated = update(tx, d.id, None, None, None, Some(true), None, None, None, None, None).unwrap();
+        let updated = update(tx, d.id, None, None, None, Some(true), None, None, None, None, None, None).unwrap();
         assert!(updated.ordered);
         assert_eq!(updated.name, "カテゴリー");
         value_move(tx, b.id, Position::Top).unwrap();
@@ -1481,7 +1591,7 @@ mod tests {
 
         // Turn `ordered` back off and the values fall back to a stable ascending-id order rather
         // than `order_key`, so the reordering stops showing.
-        update(tx, d.id, None, None, None, Some(false), None, None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, Some(false), None, None, None, None, None, None).unwrap();
         assert!(!dim(tx, d.id).ordered);
         let mut expected = [("A", &a.id), ("B", &b.id)];
         expected.sort_by(|x, y| x.1.cmp(y.1));
@@ -1504,7 +1614,7 @@ mod tests {
 
         // Raise the flag and it is the axis that carries it — name, notes, order and role are not
         // touched on the way through.
-        let raised = update(tx, d.id, None, None, None, None, None, Some(true), None, None, None).unwrap();
+        let raised = update(tx, d.id, None, None, None, None, None, Some(true), None, None, None, None).unwrap();
         assert!(raised.show_on_card);
         assert_eq!(raised.name, "カテゴリー");
         assert!(raised.ordered);
@@ -1512,12 +1622,12 @@ mod tests {
         assert!(dim(tx, d.id).show_on_card, "and it is what was written, not just what came back");
 
         // Lower it again. Nothing about the axis remembers it was ever up.
-        update(tx, d.id, None, None, None, None, None, Some(false), None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, None, Some(false), None, None, None, None).unwrap();
         assert!(!dim(tx, d.id).show_on_card);
 
         // An update that says nothing about the flag leaves it where it stands.
-        update(tx, d.id, None, None, None, None, None, Some(true), None, None, None).unwrap();
-        update(tx, d.id, Some("区分"), None, None, None, None, None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, None, Some(true), None, None, None, None).unwrap();
+        update(tx, d.id, Some("区分"), None, None, None, None, None, None, None, None, None).unwrap();
         let after = dim(tx, d.id);
         assert_eq!(after.name, "区分");
         assert!(after.show_on_card, "an unmentioned flag is not cleared");
@@ -1539,19 +1649,19 @@ mod tests {
         // Narrow it to the work side. The axis offers no values, and that is no obstacle — the one
         // thing `required` would refuse here, this flag has no opinion about.
         let narrowed =
-            update(tx, d.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Task), None)
+            update(tx, d.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Task), None, None)
                 .unwrap();
         assert_eq!(narrowed.applies_to, DimensionAppliesTo::Task);
         assert!(!narrowed.applies_to.on_decision());
         assert_eq!(dim(tx, d.id).applies_to, DimensionAppliesTo::Task, "and it is what was written");
 
         // Moving it to the other side is just as free; nothing checks what is already assigned.
-        update(tx, d.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Decision), None)
+        update(tx, d.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Decision), None, None)
             .unwrap();
         assert_eq!(dim(tx, d.id).applies_to, DimensionAppliesTo::Decision);
 
         // An update that says nothing about it leaves it where it stands.
-        update(tx, d.id, Some("排他レーン"), None, None, None, None, None, None, None, None).unwrap();
+        update(tx, d.id, Some("排他レーン"), None, None, None, None, None, None, None, None, None).unwrap();
         let after = dim(tx, d.id);
         assert_eq!(after.name, "排他レーン");
         assert_eq!(after.applies_to, DimensionAppliesTo::Decision, "an unmentioned flag is not cleared");
@@ -1570,7 +1680,7 @@ mod tests {
         let t = task_in(tx, "実機で試す", p);
         set(tx, t, v.id).unwrap();
 
-        update(tx, d.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Decision), None)
+        update(tx, d.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Decision), None, None)
             .unwrap();
 
         let live = read::assignment_ids_on_axis(tx.conn(), t, d.id).unwrap();
@@ -1595,22 +1705,22 @@ mod tests {
         let d = add(tx, p, custom("プロダクト")).unwrap();
         assert!(!dim(tx, d.id).required, "a new axis demands nothing");
         assert!(
-            update(tx, d.id, None, None, None, None, None, None, Some(true), None, None).is_err(),
+            update(tx, d.id, None, None, None, None, None, None, Some(true), None, None, None).is_err(),
             "an axis offering no values cannot be required"
         );
 
         // Give it something to answer with and the same call goes through.
         value_add(tx, d.id, "Amenbo本体", None).unwrap();
-        let raised = update(tx, d.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        let raised = update(tx, d.id, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
         assert!(raised.required);
         assert_eq!(raised.name, "プロダクト", "nothing else on the axis moved with the flag");
         assert!(dim(tx, d.id).required, "and it is what was written, not just what came back");
 
         // Lowering it is free, and an update that says nothing about it leaves it standing.
-        update(tx, d.id, None, None, None, None, None, None, Some(false), None, None).unwrap();
+        update(tx, d.id, None, None, None, None, None, None, Some(false), None, None, None).unwrap();
         assert!(!dim(tx, d.id).required);
-        update(tx, d.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
-        update(tx, d.id, Some("製品"), None, None, None, None, None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
+        update(tx, d.id, Some("製品"), None, None, None, None, None, None, None, None, None).unwrap();
         assert!(dim(tx, d.id).required, "an unmentioned flag is not cleared");
     }
 
@@ -1631,7 +1741,7 @@ mod tests {
         assert!(unset(tx, t, core.id).unwrap());
         set(tx, t, core.id).unwrap();
 
-        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
         assert!(unset(tx, t, core.id).is_err(), "a required axis cannot be emptied");
         // Moving to another value on the same axis is `set`, and it still works — the axis stays answered.
         set(tx, t, site.id).unwrap();
@@ -1655,7 +1765,7 @@ mod tests {
         let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
         let site = value_add(tx, axis.id, "Amenboサイト", None).unwrap();
         set(tx, t, core.id).unwrap();
-        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
 
         // Down to the last one is fine — the axis can still be answered. Nobody answers with this one,
         // so it goes without anywhere to send anyone.
@@ -1671,7 +1781,7 @@ mod tests {
         );
 
         // Lowering the flag is the way out, and then the value is ordinary again.
-        update(tx, axis.id, None, None, None, None, None, None, Some(false), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(false), None, None, None).unwrap();
         value_delete(tx, core.id, None).unwrap();
         assert!(val_opt(tx, core.id).is_none());
     }
@@ -1692,7 +1802,7 @@ mod tests {
         let other = add(tx, p, custom("プロダクト")).unwrap();
         let core = value_add(tx, other.id, "Amenbo本体", None).unwrap();
         set(tx, t, theme.id).unwrap();
-        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
 
         let assignment = read::assignment_id(tx.conn(), t, theme.id).unwrap().unwrap();
 
@@ -1757,7 +1867,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let axis = add(tx, p, custom("プロダクト")).unwrap();
         let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
-        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
         delete(tx, axis.id).unwrap();
         assert!(val_opt(tx, core.id).is_none());
     }
@@ -1899,7 +2009,7 @@ mod tests {
         let axis = add(tx, p, custom("カテゴリー")).unwrap();
         let a = value_add(tx, axis.id, "A", None).unwrap();
         let b = value_add(tx, axis.id, "B", None).unwrap();
-        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
         set_on_decision(tx, k, a.id).unwrap();
         assert!(unset_on_decision(tx, k, a.id).unwrap(), "a decision's value on a required axis clears");
 
@@ -1985,7 +2095,7 @@ mod tests {
         set(tx, t, site.id).unwrap();
         assert_eq!(read::task_dimension_assignments(tx.conn(), t).unwrap(), vec![(axis.id, site.id)]);
 
-        update(tx, axis.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None)
+        update(tx, axis.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None, None)
             .unwrap();
 
         // From here the axis gathers: the value that was there stays, and the new one joins it.
@@ -2042,7 +2152,7 @@ mod tests {
             None,
             Some(true),
             None,
-            None,
+            None, None,
         )
         .unwrap();
         set(tx, t, core.id).unwrap();
@@ -2079,7 +2189,7 @@ mod tests {
         )
         .unwrap();
         assert!(
-            update(tx, wide.id, None, None, None, None, Some(DimensionRole::TimeAxis), None, None, None, None)
+            update(tx, wide.id, None, None, None, None, Some(DimensionRole::TimeAxis), None, None, None, None, None)
                 .is_err(),
             "and refused from the role's side",
         );
@@ -2087,7 +2197,7 @@ mod tests {
         // Time axis first, then widened.
         let era = add(tx, p, NewDimension { role: DimensionRole::TimeAxis, ..custom("フェーズ") }).unwrap();
         assert!(
-            update(tx, era.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None)
+            update(tx, era.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None, None)
                 .is_err(),
             "and from the cardinality's side",
         );
@@ -2114,9 +2224,9 @@ mod tests {
 
         // Nobody answers with several yet, so the demotion is an ordinary edit — and widening back is free.
         set(tx, t, core.id).unwrap();
-        update(tx, axis.id, None, None, Some(DimensionCardinality::Single), None, None, None, None, None, None)
+        update(tx, axis.id, None, None, Some(DimensionCardinality::Single), None, None, None, None, None, None, None)
             .unwrap();
-        update(tx, axis.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None)
+        update(tx, axis.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None, None)
             .unwrap();
 
         set(tx, t, site.id).unwrap();
@@ -2133,7 +2243,7 @@ mod tests {
             None,
             None,
             None,
-            None,
+            None, None,
         )
         .unwrap_err();
         assert!(refused.to_string().contains('2'), "the refusal names the count: {refused}");
@@ -2142,7 +2252,7 @@ mod tests {
         // Clearing the extra values off both is what opens the way.
         assert!(unset(tx, t, site.id).unwrap());
         assert!(unset_on_decision(tx, k, site.id).unwrap());
-        update(tx, axis.id, None, None, Some(DimensionCardinality::Single), None, None, None, None, None, None)
+        update(tx, axis.id, None, None, Some(DimensionCardinality::Single), None, None, None, None, None, None, None)
             .unwrap();
         assert_eq!(dim(tx, axis.id).cardinality, DimensionCardinality::Single);
     }
@@ -2224,10 +2334,10 @@ mod tests {
 
         // Nominated, the same call goes through — and the nomination can be given up afterwards without
         // stranding what was closed under it.
-        update(tx, plain.id, None, None, None, None, Some(DimensionRole::Closable), None, None, None, None)
+        update(tx, plain.id, None, None, None, None, Some(DimensionRole::Closable), None, None, None, None, None)
             .unwrap();
         value_set_closed(tx, core.id, true).unwrap();
-        update(tx, plain.id, None, None, None, None, Some(DimensionRole::None), None, None, None, None)
+        update(tx, plain.id, None, None, None, None, Some(DimensionRole::None), None, None, None, None, None)
             .unwrap();
         assert!(val(tx, core.id).closed, "dropping the role closes nothing and opens nothing");
         value_set_closed(tx, core.id, false).unwrap();
@@ -2248,7 +2358,7 @@ mod tests {
         let shipped = value_add(tx, axis.id, "v19", None).unwrap();
         let next = value_add(tx, axis.id, "v20", None).unwrap();
         value_set_closed(tx, shipped.id, true).unwrap();
-        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
 
         let refused = value_set_closed(tx, next.id, true).unwrap_err();
         assert!(refused.to_string().contains("v20"), "the refusal names the value: {refused}");
@@ -2262,11 +2372,152 @@ mod tests {
         assert!(val_opt(tx, shipped.id).is_none(), "a closed value takes nothing away by going");
 
         // Lowering the flag is the way out, and then the last value closes like any other.
-        update(tx, axis.id, None, None, None, None, None, None, Some(false), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(false), None, None, None).unwrap();
         value_set_closed(tx, next.id, true).unwrap();
         let refused =
-            update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap_err();
+            update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None).unwrap_err();
         assert!(refused.to_string().contains("リリース"), "the refusal names the axis: {refused}");
         assert!(!dim(tx, axis.id).required, "an axis offering nothing cannot be required");
+    }
+
+    /// Raises or drops the setting alone — the one flag these tests move (`AMB-D-990`).
+    fn sequence(tx: &WriteTx<'_>, id: i64, on: bool) -> Result<Dimension> {
+        update(tx, id, None, None, None, None, None, None, None, None, None, Some(on))
+    }
+
+    /// An axis the setting fits: ordered, closable, single-select, classifying tasks.
+    fn stages(tx: &WriteTx<'_>, p: i64) -> Dimension {
+        add(tx, p, NewDimension { ordered: true, role: DimensionRole::Closable, ..custom("リリース") })
+            .unwrap()
+    }
+
+    /// The setting goes only on an axis whose order can be read as stages (`AMB-D-990`), and the
+    /// refusal names the first of the four the axis is missing. Where it fits it goes on, and off again
+    /// for free.
+    #[test]
+    fn the_setting_goes_only_on_an_axis_whose_order_is_stages() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let unfit = |d: NewDimension, missing: &str| {
+            let axis = add(tx, p, d).unwrap();
+            let err = sequence(tx, axis.id, true).unwrap_err();
+            assert_eq!(err.code(), ErrorCode::InvalidDimensionSequentialUnfit.as_str(), "{err}");
+            assert!(err.to_string().contains(missing), "the refusal names what is missing: {err}");
+            assert!(!dim(tx, axis.id).sequential, "and nothing was written");
+        };
+        unfit(NewDimension { role: DimensionRole::Closable, ..custom("無順") }, "ordered");
+        unfit(NewDimension { ordered: true, ..custom("閉じない") }, "closable");
+        unfit(
+            NewDimension {
+                ordered: true,
+                role: DimensionRole::Closable,
+                cardinality: DimensionCardinality::Multi,
+                ..custom("複数")
+            },
+            "single-select",
+        );
+        unfit(
+            NewDimension {
+                ordered: true,
+                role: DimensionRole::Closable,
+                applies_to: DimensionAppliesTo::Decision,
+                ..custom("決定だけ")
+            },
+            "applied to tasks",
+        );
+
+        let axis = stages(tx, p);
+        assert!(!axis.sequential, "an axis starts without it");
+        assert!(sequence(tx, axis.id, true).unwrap().sequential);
+        assert!(dim(tx, axis.id).sequential, "and it is what was written, not just what came back");
+        assert!(!sequence(tx, axis.id, false).unwrap().sequential, "turning it off is free");
+
+        let both = add(
+            tx,
+            p,
+            NewDimension { ordered: true, role: DimensionRole::Closable, ..custom("両方") },
+        )
+        .unwrap();
+        assert_eq!(both.applies_to, DimensionAppliesTo::Both);
+        assert!(sequence(tx, both.id, true).is_ok(), "an axis classifying both sides classifies tasks");
+    }
+
+    /// While the setting is on, each of the four it stands on is held: a change taking one away is
+    /// refused, with the refusal that says to turn the setting off first. Every other change goes
+    /// through, and once the setting is off, so do the four.
+    #[test]
+    fn the_setting_holds_what_it_stands_on() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let axis = stages(tx, p);
+        sequence(tx, axis.id, true).unwrap();
+
+        let held = |r: Result<Dimension>, missing: &str| {
+            let err = r.unwrap_err();
+            assert_eq!(err.code(), ErrorCode::InvalidDimensionSequentialHeld.as_str(), "{err}");
+            assert!(err.to_string().contains(missing), "the refusal names what it holds: {err}");
+        };
+        held(update(tx, axis.id, None, None, None, Some(false), None, None, None, None, None, None), "ordered");
+        held(
+            update(tx, axis.id, None, None, None, None, Some(DimensionRole::None), None, None, None, None, None),
+            "closable",
+        );
+        held(
+            update(tx, axis.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None, None),
+            "single-select",
+        );
+        held(
+            update(tx, axis.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Decision), None, None),
+            "applied to tasks",
+        );
+        let kept = dim(tx, axis.id);
+        assert!(kept.ordered && kept.role == DimensionRole::Closable && kept.sequential, "nothing moved");
+
+        update(tx, axis.id, Some("出荷"), None, None, None, None, Some(true), None, None, None, None)
+            .expect("a change leaving the four alone goes through");
+        update(tx, axis.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Task), None, None)
+            .expect("narrowing to tasks keeps it classifying tasks");
+
+        sequence(tx, axis.id, false).unwrap();
+        update(tx, axis.id, None, None, None, Some(false), None, None, None, None, None, None)
+            .expect("with the setting off, the axis changes like any other");
+    }
+
+    /// How many tasks the setting holds back (`AMB-D-990`): `todo` tasks on a value that has an open
+    /// value before it. Not a task on the first open value, nor on a value everything before which is
+    /// closed, nor one already under way, nor one with no value; and nobody on an axis without it.
+    #[test]
+    fn the_count_is_the_todo_tasks_behind_an_open_value() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let axis = stages(tx, p);
+        let v1 = value_add(tx, axis.id, "v1", None).unwrap();
+        let v2 = value_add(tx, axis.id, "v2", None).unwrap();
+        let v3 = value_add(tx, axis.id, "v3", None).unwrap();
+        let on = |value: i64, title: &str| {
+            let t = task_in(tx, title, p);
+            set(tx, t, value).unwrap();
+            t
+        };
+        on(v1.id, "前");
+        on(v2.id, "次");
+        on(v3.id, "その次");
+        let going = on(v3.id, "着手済み");
+        crate::ops::task::set_status(tx, going, crate::model::TaskStatus::InProgress).unwrap();
+        task_in(tx, "値なし", p);
+
+        assert_eq!(held_by_order(tx, &dim(tx, axis.id)).unwrap(), 0, "an axis without it holds nobody");
+
+        let raised = sequence(tx, axis.id, true).unwrap();
+        assert_eq!(held_by_order(tx, &raised).unwrap(), 2, "v2's and v3's todo tasks wait on v1");
+
+        value_set_closed(tx, v1.id, true).unwrap();
+        assert_eq!(held_by_order(tx, &dim(tx, axis.id)).unwrap(), 1, "with v1 closed, only v3 waits, on v2");
+
+        value_set_closed(tx, v2.id, true).unwrap();
+        assert_eq!(held_by_order(tx, &dim(tx, axis.id)).unwrap(), 0, "everything before v3 is closed");
     }
 }

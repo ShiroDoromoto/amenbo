@@ -779,6 +779,9 @@ datasets! {
         // (model.rs states why). The `''` here is the not-yet-written sentinel every required column
         // carries, not a fourth value: `ops::dimension` writes one of the three at create.
         applies_to: enum_col("task", "decision", "both"),
+        // Whether a task on this axis waits for the values ordered before its own to close
+        // (`AMB-D-990`). Off where every axis starts; model.rs says which axes may carry it.
+        sequential: bool_col,
         order_key: col(ORDER_KEY),
         // The axis's readable, stable key — what names it outside Amenbo, where a Japanese display name
         // with spaces in it cannot go and `AMB-DIM-7` can go but says nothing (`AMB-D-735`). Unique per

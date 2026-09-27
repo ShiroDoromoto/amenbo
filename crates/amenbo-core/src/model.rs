@@ -977,6 +977,16 @@ pub struct Dimension {
     /// `None`.
     #[serde(default)]
     pub applies_to: DimensionAppliesTo,
+    /// Does a task on this axis wait for the values ordered before its own (`AMB-D-990`)? Set, a task
+    /// is not ready while any value ahead of its value in the order is still open — the order is read
+    /// as the one run of stages the whole axis moves through, and closing a value is a person saying a
+    /// stage is over. It is the axis's own answer, like `required`, and only an axis on which the
+    /// reading holds may carry it: ordered, closable, single-select, and classifying tasks
+    /// (`ops::dimension` holds those four while it is set). `false` is where an axis starts and where
+    /// every axis an upgrade brings in stays, since order and closing alone do not say the values are
+    /// stages — a client axis is ordered and closable, and its values run side by side.
+    #[serde(default)]
+    pub sequential: bool,
     /// The axis's readable, stable key — what names it **outside** Amenbo (`AMB-D-735`). The id is the
     /// real identifier; the slug is the one that can be read and typed where the id cannot be and the
     /// display name (Japanese, spaces and all) may not go. Unique within the project. `None` is only

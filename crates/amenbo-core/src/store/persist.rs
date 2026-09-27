@@ -982,9 +982,12 @@ impl Store {
     }
 
     /// Update a dimension's name, notes, how many of its values one record may hold, whether its values
-    /// are ordered, its role, whether it
-    /// belongs on the task card, whether it refuses to be left empty, which entity it classifies, and
-    /// its slug (one operation = one transaction).
+    /// are ordered, its role, whether it belongs on the task card, whether it refuses to be left empty,
+    /// which entity it classifies, its slug, and whether its tasks wait for the values before their own
+    /// (one operation = one transaction). Handed back beside the axis is how many tasks that wait holds
+    /// now ([`crate::ops::dimension::held_by_order`]) — read in the same transaction, so raising the
+    /// setting says at once how much of the backlog it holds back (`AMB-D-990`). Zero on an axis
+    /// without it.
     #[allow(clippy::too_many_arguments)]
     pub fn dimension_update(
         &mut self,
@@ -998,12 +1001,15 @@ impl Store {
         required: Option<bool>,
         applies_to: Option<crate::model::DimensionAppliesTo>,
         slug: Option<&str>,
-    ) -> Result<crate::model::Dimension> {
+        sequential: Option<bool>,
+    ) -> Result<(crate::model::Dimension, usize)> {
         self.write_one(&[WriteTarget::Dimension(id)], |tx| {
-            crate::ops::dimension::update(
+            let d = crate::ops::dimension::update(
                 tx, id, name, notes, cardinality, ordered, role, show_on_card, required, applies_to,
-                slug,
-            )
+                slug, sequential,
+            )?;
+            let held = crate::ops::dimension::held_by_order(tx, &d)?;
+            Ok((d, held))
         })
     }
 

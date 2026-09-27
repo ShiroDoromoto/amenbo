@@ -1042,10 +1042,11 @@ mod tests {
         });
     }
 
-    /// **A run that fails after its step closed the task leaves the task as it is** (`AMB-D-963`).
+    /// **A run that fails after its task was closed leaves the task as it is** (`AMB-D-963`).
     ///
-    /// The agent ran `task done` and then the step's program went away before `step-done`. The run
-    /// still fails, the task stays done, and nothing is said on it — nobody reads a closed task.
+    /// A person closed the task while the step ran — the step itself cannot, `task done` being refused
+    /// inside it — and then the step's program went away before `step-done`. The run still fails, the
+    /// task stays done, and nothing is said on it — nobody reads a closed task.
     #[test]
     fn a_run_that_fails_after_its_task_was_closed_leaves_no_line_on_it() {
         with_tx(|tx| {
@@ -1053,7 +1054,7 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);
             let task = a_task_in_hand(tx, p.project, step.run_step.id);
-            crate::ops::task::set_status(tx, task, TaskStatus::Done).expect("the agent closes it");
+            crate::ops::task::set_status(tx, task, TaskStatus::Done).expect("a person closes it");
 
             let ended = step_ended(tx, step.run_step.id).expect("step ended").expect("a run to end");
             assert_eq!(ended.run.status, AutomationRunStatus::Failed);
@@ -1071,7 +1072,7 @@ mod tests {
             let closed = a_run(tx, &p.automation);
             let step = opened(tx, &closed, &p.first);
             let task = a_task_in_hand(tx, p.project, step.run_step.id);
-            crate::ops::task::set_status(tx, task, TaskStatus::Done).expect("the agent closes it");
+            crate::ops::task::set_status(tx, task, TaskStatus::Done).expect("a person closes it");
             let another = a_run(tx, &p.automation);
 
             let caught = sweep(tx).expect("sweep");

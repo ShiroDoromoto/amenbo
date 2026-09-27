@@ -1481,6 +1481,7 @@ export const ru: Translation = {
     not_ready_premise_unsettled: "{ref} не решена — дождитесь, пока её допишут, или уберите связь",
     not_ready_not_started: "она начинается только {start} — измените дату начала, если она неверна",
     not_ready_draft: "она ещё создаётся — сначала завершите создание",
+    not_ready_waiting_on_value: "предыдущее значение {value} ({axis}) ещё не закрыто",
     invalid_action_still_placed:
       "Это действие всё ещё стоит на схемах — всего {count}. Уберите его оттуда, прежде чем удалять.",
     invalid_automation_has_runs:

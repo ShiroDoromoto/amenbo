@@ -1473,6 +1473,7 @@ export const es: Translation = {
     not_ready_premise_unsettled: "{ref} está sin resolver: espera a que se termine de escribir o quita el enlace",
     not_ready_not_started: "no empieza hasta el {start}: cambia la fecha de inicio si no es correcta",
     not_ready_draft: "todavía se está creando: termina de crearla primero",
+    not_ready_waiting_on_value: "{value} ({axis}), que va antes, aún no está cerrado",
     invalid_action_still_placed:
       "Esta acción sigue en diagramas: {count} en total. Quítala de ellos antes de eliminarla.",
     invalid_automation_has_runs:

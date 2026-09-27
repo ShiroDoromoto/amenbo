@@ -1740,6 +1740,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   // Core's English names the command that moves the day; a reader in the window has the field instead.
   not_ready_not_started: "it does not start until {start} — change the start date if that is wrong",
   not_ready_draft: "it is still being created — finish creating it first",
+  not_ready_waiting_on_value: "{value} ({axis}), ordered before it, is not closed yet",
   // Pressing launch, and the list the build screen draws before anybody presses — one set of
   // sentences, because they are the same sentences. The list is a read that succeeded and the refusal
   // is a write that did not, so both hand over the code and the values, and both are written from

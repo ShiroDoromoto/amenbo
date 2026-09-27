@@ -306,6 +306,28 @@ pub fn waiting_on_start(conn: &Connection, q: &TaskQuery) -> Result<Option<(usiz
     Ok((count > 0).then_some((count as usize, earliest)))
 }
 
+/// How many tasks `q` matches — one count, no ids. What an empty `ready:yes` mailbox says beside the
+/// start-day queue: fed the caller's own query with `ready:` dropped and `waiting_on_values:yes` in its
+/// place, it is how many tasks a value still to be closed is holding back (`AMB-D-990`).
+pub fn task_count(conn: &Connection, q: &TaskQuery) -> Result<usize> {
+    let started = std::time::Instant::now();
+    let scope = [q.reach.project(), q.project_id]
+        .into_iter()
+        .flatten()
+        .map(|pid| Pred::eq(T.project_id, pid));
+    let pred = Pred::all(scope.chain(filter_preds(q)));
+
+    let mut sel = Select::new();
+    let count = sel.count_all();
+    let mut sql = Sql::from(&sel, T.table);
+    sql.push_where(pred.as_ref());
+    let count = conn
+        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| count.get(r))
+        .map_err(StoreEngineError::from)?;
+    crate::perf::record_count_query("engine.task_count", count.max(0) as usize, started.elapsed());
+    Ok(count.max(0) as usize)
+}
+
 /// **Whether `q` matches any task at all** — one id read, with no count and no order. For a caller
 /// that asks the same question again and again and only needs a yes: a page would count every match
 /// and sort them to hand back the first. `q.sort`, `q.limit` and `q.offset` are not read.
@@ -598,6 +620,11 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
     if let Some(ready) = f.ready {
         preds.push(held_back(q.today).negated_if(ready));
     }
+    if let Some(waiting) = f.waiting_on_values {
+        // `waiting_on_values:` — the fifth premise asked for on its own (`AMB-D-990`), the way `draft:`
+        // asks for the fourth.
+        preds.push(waiting_on_order().negated_if(!waiting));
+    }
     if let Some(decision) = f.decision {
         preds.push(decision_link_pred(decision));
     }
@@ -677,7 +704,8 @@ fn ai_pred(ai: bool) -> Pred {
 /// This is `crate::view::is_ready` restated in SQL, because a filter cannot ask four booleans of a row it
 /// has not read yet. A task is held back by an *open* blocker (a live dependency edge to a live blocker
 /// that has not ended), by an *unsettled premise* ([`unsettled_premise`]), by a *start day that has not
-/// arrived*, or by a *creation not yet finished*. The reserve guard ([`reserve_blockers`]) reads the same
+/// arrived*, by a *creation not yet finished*, or by a *value ordered before its own that is not closed*
+/// ([`waiting_on_order`]). The reserve guard ([`reserve_blockers`]) reads the same
 /// derivations, so the filter and the guard cannot drift apart, and
 /// `a_start_day_still_ahead_holds_the_task_back_on_every_read` holds this restatement to the predicate on
 /// every arm.
@@ -708,7 +736,108 @@ fn held_back(today: NaiveDate) -> Pred {
     // The fourth premise, read straight off the column — the creation has not been finished.
     let still_draft = Pred::eq(T.draft, true);
 
-    open_blocker.or(premise).or(not_started).or(still_draft)
+    open_blocker.or(premise).or(not_started).or(still_draft).or(waiting_on_order())
+}
+
+/// The fifth premise (`AMB-D-990`), in SQL: the task holds a value on an axis whose values are stages
+/// (`sequential`), and some value ordered before it on that axis is not closed. What `waiting_on_values:`
+/// asks on its own, and what [`waiting_on_values`] reads out value by value — the order compared here is
+/// the `order_key` the axis is listed by, so "before" means what the person sees above it.
+fn waiting_on_order() -> Pred {
+    let (link, axis, own, before) = WAITING_ON_ORDER;
+    Exists::over(link.table)
+        .join(axis.table, same(axis.id, link.dimension_id))
+        .join(own.table, same(own.id, link.value_id))
+        .join(before.table, same(before.dimension_id, link.dimension_id))
+        .filter(same(link.task_id, T.id))
+        .filter(waits_on_order(axis, own, before))
+        .pred()
+}
+
+/// The tables [`waiting_on_order`] and [`waiting_on_values`] walk, aliased once so the two say the same
+/// join: the task's assignment, its axis, the value it holds, and a value of the same axis before it.
+const WAITING_ON_ORDER: (
+    col::task_dimension_value::Cols,
+    col::dimension::Cols,
+    col::dimension_value::Cols,
+    col::dimension_value::Cols,
+) = (
+    col::task_dimension_value::of("wtv"),
+    col::dimension::of("wdm"),
+    col::dimension_value::of("wown"),
+    col::dimension_value::of("wpre"),
+);
+
+/// What makes `before` a value the holder of `own` waits on: the axis says its values are stages, and
+/// `before` is ordered ahead of `own` and not closed.
+fn waits_on_order(axis: col::dimension::Cols, own: col::dimension_value::Cols, before: col::dimension_value::Cols) -> Pred {
+    Pred::eq(axis.sequential, true)
+        .and(Pred::eq(before.closed, false))
+        .and(Pred::plain(format!("{} < {}", before.order_key.to_sql(), own.order_key.to_sql())))
+}
+
+/// The values each of `task_ids` waits on (`AMB-D-990`), by name — axis in the order the project lists
+/// its axes, then value in the axis's own order. A task waiting on nothing has no entry. The reasons
+/// [`waiting_on_order`] says yes or no to, read the same way.
+pub fn waiting_on_values(
+    conn: &Connection,
+    task_ids: impl IntoIterator<Item = i64>,
+) -> Result<HashMap<i64, Vec<crate::view::WaitingOnValue>>> {
+    let (link, axis, own, before) = WAITING_ON_ORDER;
+    let mut sel = Select::new();
+    let (task, axis_name, value_name) = (sel.col(link.task_id), sel.col(axis.name), sel.col(before.name));
+    let mut sql = Sql::from(&sel, link.table);
+    sql.join(axis.table, same(axis.id, link.dimension_id))
+        .join(own.table, same(own.id, link.value_id))
+        .join(before.table, same(before.dimension_id, link.dimension_id))
+        .push_where(Some(&Pred::is_in(link.task_id, task_ids).and(waits_on_order(axis, own, before))))
+        .order_by([Sort::by(link.task_id), Sort::by(axis.order_key), Sort::by(before.order_key)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let mut rows = stmt.query(rusqlite::params_from_iter(sql.params())).map_err(StoreEngineError::from)?;
+    let mut out: HashMap<i64, Vec<crate::view::WaitingOnValue>> = HashMap::new();
+    while let Some(r) = rows.next().map_err(StoreEngineError::from)? {
+        out.entry(task.get(r)?)
+            .or_default()
+            .push(crate::view::WaitingOnValue { axis: axis_name.get(r)?, value: value_name.get(r)? });
+    }
+    Ok(out)
+}
+
+/// The `todo` tasks closing `value_id` has just made ready (`AMB-D-990`) — the tasks on the same axis
+/// whose own value is ordered after it, now that [`reserve_blockers`] finds nothing to hold them. Read
+/// **after** the close has committed, for the reason [`newly_ready_by`] is. An axis whose values are not
+/// stages held nobody back, so it releases nobody.
+pub fn newly_ready_by_closing(conn: &Connection, value_id: i64) -> Result<Vec<i64>> {
+    let (link, axis, own, closed) = WAITING_ON_ORDER;
+    let mut sel = Select::new();
+    sel.distinct();
+    let holder = sel.col(link.task_id);
+    let mut sql = Sql::from(&sel, link.table);
+    sql.join(axis.table, same(axis.id, link.dimension_id))
+        .join(own.table, same(own.id, link.value_id))
+        .join(closed.table, same(closed.dimension_id, link.dimension_id))
+        .join(T.table, same(T.id, link.task_id))
+        .push_where(Some(
+            &Pred::eq(closed.id, value_id)
+                .and(Pred::eq(axis.sequential, true))
+                .and(Pred::eq(T.status, TaskStatus::Todo.as_str()))
+                .and(Pred::plain(format!("{} < {}", closed.order_key.to_sql(), own.order_key.to_sql()))),
+        ))
+        .order_by([Sort::by(link.task_id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let holders = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| holder.get(r))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<i64>>>()
+        .map_err(StoreEngineError::from)?;
+    let today = crate::time::today();
+    let mut ready = Vec::new();
+    for task_id in holders {
+        if reserve_blockers(conn, task_id, today)?.is_empty() {
+            ready.push(task_id);
+        }
+    }
+    Ok(ready)
 }
 
 /// `decision:` — tasks a decision links to (live link, live decision), as an EXISTS so it seeks the link
@@ -1645,7 +1774,11 @@ pub fn reserve_blockers(
                 out.push(ReserveBlocker::NotStartedYet { start_on });
             }
         }
-        // Last, because it is the reason a reader acts on last: the other three name work elsewhere, and
+        // The values a person has yet to close, before the draft for the reason the draft is last.
+        for waiting in waiting_on_values(conn, [task_id])?.remove(&task_id).unwrap_or_default() {
+            out.push(ReserveBlocker::WaitingOnValue { axis: waiting.axis, value: waiting.value });
+        }
+        // Last, because it is the reason a reader acts on last: the others name work elsewhere, and
         // this one is settled on the task in front of them (`AMB-D-553`).
         if scalar_by_id(conn, TA.id, TA.draft, task_id)?.unwrap_or(false) {
             out.push(ReserveBlocker::StillDraft);
@@ -3620,6 +3753,8 @@ pub struct TaskDetailRow {
     /// `(id, title)` of the unsettled decisions linked to this task, in link-`id` order — a task cannot
     /// be reserved while one of them is unsettled.
     pub blocked_by_decisions: Vec<(i64, String)>,
+    /// The values ordered before the task's own that are not closed yet ([`waiting_on_values`]).
+    pub waiting_on_values: Vec<crate::view::WaitingOnValue>,
     pub num_comments: usize,
 }
 
@@ -3657,6 +3792,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
                 blocked_by: Vec::new(),
                 blocks: Vec::new(),
                 blocked_by_decisions: Vec::new(),
+                waiting_on_values: Vec::new(),
                 num_comments: 0,
             })
         })
@@ -3713,6 +3849,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
             .map_err(StoreEngineError::from)?;
     }
 
+    row.waiting_on_values = waiting_on_values(conn, [task_id])?.remove(&task_id).unwrap_or_default();
     row.num_comments = comment_count(conn, task_id)?;
 
     crate::perf::record_query("engine.task_detail", 1, usize::from(row.placement.is_some()), started.elapsed());
@@ -3772,6 +3909,9 @@ pub struct TaskCardRow {
     /// The subset of `linked_decisions` that is unsettled. Together with `blocked_by` this decides
     /// `ready` (both empty ⇒ ready), mirroring [`reserve_blockers`].
     pub blocked_by_decisions: Vec<DecisionCardRef>,
+    /// The values ordered before the task's own that are not closed yet ([`waiting_on_values`]) — the
+    /// fifth premise of `ready`.
+    pub waiting_on_values: Vec<crate::view::WaitingOnValue>,
     /// When the row was written, and when it was last written to (RFC3339 UTC, as stored). Carried for
     /// the reader alone — how long a task has been sitting there is a question nothing else on the card
     /// answers. Never a judgement input: what a face may decide from is an intent column (`AMB-D-372`).
@@ -3817,6 +3957,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
                 num_comments: 0,
                 linked_decisions: Vec::new(),
                 blocked_by_decisions: Vec::new(),
+                waiting_on_values: Vec::new(),
             })
         })
         .optional()
@@ -3872,6 +4013,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
         }
     }
 
+    row.waiting_on_values = waiting_on_values(conn, [task_id])?.remove(&task_id).unwrap_or_default();
     crate::perf::record_query("engine.task_card_row", 1, usize::from(row.placement.is_some()), started.elapsed());
     Ok(Some(row))
 }
@@ -4813,6 +4955,9 @@ pub fn hydrate_task_cards(
         }
     }
 
+    // 5) Values waited on: the fifth premise's reasons (`AMB-D-990`), read the way the filter asks it.
+    let mut waiting_by_task = waiting_on_values(conn, hydrated.iter().copied())?;
+
     // Assemble cards in input-id order; skip ids with no live task (parity with list).
     let mut out = Vec::with_capacity(ids.len());
     for id in ids {
@@ -4820,12 +4965,14 @@ pub fn hydrate_task_cards(
         let ctx = ctx_by_task.get(id);
         let blocked_by_open = blocked_by_task.get(id).cloned().unwrap_or_default();
         let blocked_by_decisions = blocked_by_decision.get(id).cloned().unwrap_or_default();
+        let waiting_on_values = waiting_by_task.remove(id).unwrap_or_default();
         let ready = crate::view::is_ready(
             !blocked_by_open.is_empty(),
             !blocked_by_decisions.is_empty(),
             b.start_on,
             today,
             b.draft,
+            !waiting_on_values.is_empty(),
         );
         let not_started_until = crate::view::not_started_until(b.start_on, today);
         out.push(TaskCompact {
@@ -4843,6 +4990,7 @@ pub fn hydrate_task_cards(
             blocked_by_open,
             blocked_by_decisions,
             not_started_until,
+            waiting_on_values,
             ready,
         });
     }

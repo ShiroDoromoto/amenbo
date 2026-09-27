@@ -108,6 +108,10 @@ pub struct Filter {
     /// the creations still open on purpose, rather than inferring them from a `ready:no` four premises
     /// share — the same reason `start:` exists beside `ready:`.
     pub draft: Option<bool>,
+    /// `waiting_on_values:yes|no` — whether a value ordered before the task's own, on an axis whose
+    /// values are stages, is still open (`AMB-D-990`). The fifth premise of `ready`, asked for on its own
+    /// for the reason `draft:` asks for the fourth.
+    pub waiting_on_values: Option<bool>,
     /// Filtering by classification axis (dimension). Folds together `dim:<axis>=<value>` and
     /// `time_axis:<value>`, the sugar that names only the time axis. The key may appear several times,
     /// and what the repetition means is read off the axis (`AMB-D-655`): tokens naming **different**
@@ -497,6 +501,14 @@ impl Filter {
                         _ => return Err(Error::invalid("draft must be yes / no")),
                     })
                 }
+                // `waiting_on_values:yes|no` — the fifth premise of `ready`, asked for on its own.
+                "waiting_on_values" => {
+                    f.waiting_on_values = Some(match value {
+                        "yes" => true,
+                        "no" => false,
+                        _ => return Err(Error::invalid("waiting_on_values must be yes / no")),
+                    })
+                }
                 // Traverse the decision ⇄ task link (symmetric with `task:` on `decision list`).
                 "decision" => f.decision = Some(parse_cross_ref(value, true)?),
                 // Reverse chain git → task: tasks recording this commit SHA. Normalise through the same
@@ -534,7 +546,7 @@ impl Filter {
                 }
                 other => {
                     return Err(Error::invalid(
-                        format!("unknown filter key '{other}' (done/status/due/start/priority/project/number/ref/assignee/ai/ready/draft/decision/commit/dim/time_axis)"),
+                        format!("unknown filter key '{other}' (done/status/due/start/priority/project/number/ref/assignee/ai/ready/draft/waiting_on_values/decision/commit/dim/time_axis)"),
                     ))
                 }
             }
@@ -564,6 +576,17 @@ pub struct TaskListResult {
     /// matched but for a start day still ahead. Always serialized (`null` when there is nothing to say),
     /// and only ever filled in on that path — see [`WaitingOnStart`].
     pub waiting_on_start: Option<WaitingOnStart>,
+    /// The same, for the tasks a value still to be closed is holding back (`AMB-D-990`) — see
+    /// [`WaitingOnValues`]. `null` off that path, and when nothing is waiting.
+    pub waiting_on_values: Option<WaitingOnValues>,
+}
+
+/// How many tasks an empty `ready:yes` mailbox is not showing because a value ordered before theirs is
+/// still open (`AMB-D-990`). A count alone: which values they wait on is on each task, and closing one
+/// is a person's call, so there is no date to offer the way [`WaitingOnStart`] does.
+#[derive(Clone, Debug, Serialize)]
+pub struct WaitingOnValues {
+    pub count: usize,
 }
 
 /// The waiting queue behind an empty mailbox: how many tasks a start day is holding back, and the earliest
@@ -721,6 +744,26 @@ pub fn list(
     } else {
         None
     };
+    // And what a value still to be closed is holding back, read the same way.
+    let waiting_on_values = if page.total_matched == 0 && filter.ready == Some(true) {
+        let waiting = Filter { ready: None, waiting_on_values: Some(true), ..filter.clone() };
+        let count = store_engine::task_count(
+            conn,
+            &TaskQuery {
+                reach,
+                project_id,
+                filter: &waiting,
+                sort: &params.sort,
+                today,
+                limit: None,
+                offset: None,
+            },
+        )
+        .map_err(crate::error::engine_on(conn))?;
+        (count > 0).then_some(WaitingOnValues { count })
+    } else {
+        None
+    };
 
     Ok(TaskListResult {
         query: ListQueryEcho {
@@ -732,6 +775,7 @@ pub fn list(
         count,
         tasks,
         waiting_on_start,
+        waiting_on_values,
     })
 }
 
@@ -2058,13 +2102,15 @@ pub fn task_detail(
     let start_on = parse_date(&row.start_on);
     let today = time::today();
     // The one ready predicate, shared with the task card and the `ready:` filter, and beside it the
-    // third reason it can return false (the fourth rides on the row as `draft`).
+    // third reason it can return false (the fourth rides on the row as `draft`, the fifth as the values
+    // it waits on).
     let ready = crate::view::is_ready(
         !blocked_by.is_empty(),
         !blocked_by_decisions.is_empty(),
         start_on,
         today,
         row.draft,
+        !row.waiting_on_values.is_empty(),
     );
     let not_started_until = crate::view::not_started_until(start_on, today);
     let blocks: Vec<crate::view::TaskRef> =
@@ -2099,6 +2145,7 @@ pub fn task_detail(
         blocked_by_decisions,
         not_started_until,
         draft: row.draft,
+        waiting_on_values: row.waiting_on_values,
         ready,
         blocks,
         num_comments: row.num_comments,

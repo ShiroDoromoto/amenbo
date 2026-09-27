@@ -1473,6 +1473,7 @@ export const ptBR: Translation = {
     not_ready_premise_unsettled: "{ref} não está resolvida — espere terminarem de escrevê-la ou desvincule",
     not_ready_not_started: "ela só começa em {start} — mude a data de início se não for essa",
     not_ready_draft: "ela ainda está sendo criada — termine a criação primeiro",
+    not_ready_waiting_on_value: "{value} ({axis}), que vem antes, ainda não foi fechado",
     invalid_action_still_placed:
       "Esta ação ainda está em diagramas — {count} no total. Tire-a deles antes de excluí-la.",
     invalid_automation_has_runs:

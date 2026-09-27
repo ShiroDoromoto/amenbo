@@ -1462,6 +1462,7 @@ export const de: Translation = {
     not_ready_premise_unsettled: "{ref} ist noch nicht entschieden — warte, bis sie fertig geschrieben ist, oder löse die Verknüpfung",
     not_ready_not_started: "sie beginnt erst am {start} — ändere das Startdatum, falls das nicht stimmt",
     not_ready_draft: "sie wird noch erstellt — schließe die Erstellung zuerst ab",
+    not_ready_waiting_on_value: "{value} ({axis}) davor ist noch nicht geschlossen",
     invalid_action_still_placed:
       "Diese Aktion steht noch in Bildern – insgesamt {count}. Nimm sie dort heraus, bevor du sie löschst.",
     invalid_automation_has_runs:

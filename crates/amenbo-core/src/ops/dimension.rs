@@ -2612,4 +2612,149 @@ mod tests {
         set(tx, t, w.id).unwrap();
         assert!(value_set_closed(tx, w.id, true).is_ok(), "an axis without the setting closes as before");
     }
+
+    /// Where a task stands on every read that says `ready` (`AMB-D-990`): the card, the detail, the
+    /// `ready:yes` and `waiting_on_values:yes` filters, and the reservation guard — the five places the
+    /// predicate is written have to agree, value for value.
+    #[derive(Debug, PartialEq, Eq)]
+    struct Standing {
+        card: (bool, Vec<String>),
+        detail: (bool, Vec<String>),
+        in_mailbox: bool,
+        waiting: bool,
+        refused: Vec<String>,
+    }
+
+    fn standing(tx: &WriteTx<'_>, task: i64) -> Standing {
+        let listed = |filter: Option<&str>| {
+            crate::query::list(
+                tx.conn(),
+                crate::reach::Reach::All,
+                crate::query::ListParams {
+                    project_id: None,
+                    filter_expr: filter.map(str::to_string),
+                    text: None,
+                    sort: "created".to_string(),
+                    limit: None,
+                    offset: None,
+                },
+            )
+            .unwrap()
+            .tasks
+        };
+        let names = |w: &[crate::view::WaitingOnValue]| w.iter().map(|w| format!("{}={}", w.axis, w.value)).collect();
+        let card = listed(None).into_iter().find(|t| t.id == task).expect("every task is listed");
+        let detail = crate::query::task_detail(tx.conn(), task).unwrap();
+        let refused = read::reserve_blockers(tx.conn(), task, crate::time::today())
+            .unwrap()
+            .into_iter()
+            .filter_map(|b| match b {
+                crate::view::ReserveBlocker::WaitingOnValue { axis, value } => Some(format!("{axis}={value}")),
+                _ => None,
+            })
+            .collect();
+        Standing {
+            card: (card.ready, names(&card.waiting_on_values)),
+            detail: (detail.ready, names(&detail.waiting_on_values)),
+            in_mailbox: listed(Some("ready:yes")).iter().any(|t| t.id == task),
+            waiting: listed(Some("waiting_on_values:yes")).iter().any(|t| t.id == task),
+            refused,
+        }
+    }
+
+    fn ready_standing() -> Standing {
+        Standing { card: (true, vec![]), detail: (true, vec![]), in_mailbox: true, waiting: false, refused: vec![] }
+    }
+
+    fn waiting_standing(on: &[&str]) -> Standing {
+        let on: Vec<String> = on.iter().map(|v| format!("リリース={v}")).collect();
+        Standing { card: (false, on.clone()), detail: (false, on.clone()), in_mailbox: false, waiting: true, refused: on }
+    }
+
+    /// With the setting on, a task waits for every value ordered before its own to close, and every read
+    /// says so with the values it waits on (`AMB-D-990`). The first open value's task, a task with no
+    /// value, and every task on an axis without the setting wait on nothing. Closing a value releases what
+    /// waited on it alone, and names those tasks as the ones it made ready.
+    #[test]
+    fn a_task_behind_an_open_value_waits_on_every_read() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let axis = stages(tx, p);
+        let v1 = value_add(tx, axis.id, "v1", None).unwrap();
+        let v2 = value_add(tx, axis.id, "v2", None).unwrap();
+        let v3 = value_add(tx, axis.id, "v3", None).unwrap();
+        let on = |value: i64, title: &str| {
+            let t = task_in(tx, title, p);
+            set(tx, t, value).unwrap();
+            t
+        };
+        let first = on(v1.id, "前");
+        let second = on(v2.id, "次");
+        let third = on(v3.id, "その次");
+        let bare = task_in(tx, "値なし", p);
+
+        for t in [first, second, third, bare] {
+            assert_eq!(standing(tx, t), ready_standing(), "an axis without the setting holds nobody");
+        }
+
+        sequence(tx, axis.id, true).unwrap();
+        assert_eq!(standing(tx, first), ready_standing(), "nothing is open before the first value");
+        assert_eq!(standing(tx, second), waiting_standing(&["v1"]));
+        assert_eq!(standing(tx, third), waiting_standing(&["v1", "v2"]), "every open value before, in order");
+        assert_eq!(standing(tx, bare), ready_standing(), "a task with no value waits on nothing");
+
+        // A value closes once its own tasks are finished (`AMB-D-990`).
+        crate::ops::task::set_status(tx, first, crate::model::TaskStatus::Done).unwrap();
+        value_set_closed(tx, v1.id, true).unwrap();
+        assert_eq!(
+            read::newly_ready_by_closing(tx.conn(), v1.id).unwrap(),
+            vec![second],
+            "closing v1 releases v2's task, and not v3's, which still waits on v2",
+        );
+        assert_eq!(standing(tx, second), ready_standing());
+        assert_eq!(standing(tx, third), waiting_standing(&["v2"]));
+
+        crate::ops::task::set_status(tx, second, crate::model::TaskStatus::Done).unwrap();
+        value_set_closed(tx, v2.id, true).unwrap();
+        assert_eq!(read::newly_ready_by_closing(tx.conn(), v2.id).unwrap(), vec![third]);
+        assert_eq!(standing(tx, third), ready_standing());
+    }
+
+    /// The wait bites at the reservation and nowhere else (`AMB-D-990`): reserving a waiting task is
+    /// refused with the value to close, a task already under way keeps going when a value before it is
+    /// reopened, and the refusal carries its own code.
+    #[test]
+    fn the_wait_refuses_the_reservation_and_leaves_a_task_under_way_alone() {
+        use crate::model::TaskStatus;
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let axis = stages(tx, p);
+        let v1 = value_add(tx, axis.id, "v1", None).unwrap();
+        let v2 = value_add(tx, axis.id, "v2", None).unwrap();
+        let waiting = task_in(tx, "待つ", p);
+        set(tx, waiting, v2.id).unwrap();
+        let going = task_in(tx, "着手する", p);
+        set(tx, going, v2.id).unwrap();
+        sequence(tx, axis.id, true).unwrap();
+
+        let err = crate::ops::task::set_status(tx, waiting, TaskStatus::InProgress).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::NotReady.as_str(), "{err}");
+        assert!(err.to_string().contains("v1"), "the refusal names the value to close: {err}");
+        assert!(
+            err.parts().iter().any(|m| m.code() == Some(ErrorCode::NotReadyWaitingOnValue)),
+            "the reason carries its own code: {err}",
+        );
+
+        value_set_closed(tx, v1.id, true).unwrap();
+        crate::ops::task::set_status(tx, going, TaskStatus::InProgress).unwrap();
+        value_set_closed(tx, v1.id, false).unwrap();
+        assert_eq!(
+            read::task_status(tx.conn(), going).unwrap(),
+            Some(TaskStatus::InProgress),
+            "reopening a value before it does not take the task back",
+        );
+        assert!(read::newly_ready_by_closing(tx.conn(), v1.id).unwrap().is_empty(), "v1 is open again");
+    }
 }

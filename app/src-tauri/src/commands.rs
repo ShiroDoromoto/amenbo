@@ -216,6 +216,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         start_date,
         amenbo_core::time::today(),
         row.draft,
+        !row.waiting_on_values.is_empty(),
     );
     let blocked_by: Vec<TaskRefDto> = row
         .blocked_by

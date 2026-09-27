@@ -349,6 +349,28 @@ fn a_folder_wired_for_one_tool_tells_the_next_one_it_is_not() {
     );
 }
 
+/// The settings are read in the bound folder, not where the command was typed: a subfolder of a wired
+/// folder carries no `.claude` of its own, and reading it there reported the wiring as missing on every
+/// response.
+#[test]
+fn a_subfolder_of_a_wired_folder_reads_the_wiring_of_the_bound_folder() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+    std::fs::create_dir_all(cli.home.join(".claude")).unwrap();
+    wire(&cli, "claude-code");
+    let sub = cli.home.join("kakeibo");
+    std::fs::create_dir_all(&sub).unwrap();
+
+    let doc = cli.json_from(&sub, &["task", "list", "--json", "--actor", "ai"]);
+    let report = &doc["setup_incomplete"]["agent_hook"];
+    assert_eq!(report["any_wired"], true, "the wiring of the bound folder is not read from a subfolder: {doc}");
+    let claude = report["tools"]
+        .as_array()
+        .and_then(|tools| tools.iter().find(|one| one["tool"] == "claude-code"))
+        .unwrap_or_else(|| panic!("the catalog omits claude-code: {report}"));
+    assert_eq!(claude["wired"], true, "{report}");
+}
+
 /// What ends the machine face's report is the whole catalog being wired — the one state in which no reader
 /// of it can be the unwired one. The catalog it names is where the list to wire comes from, so a provider
 /// added to it later is covered here rather than left out.

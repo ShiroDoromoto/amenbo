@@ -10,7 +10,7 @@ use amenbo_core::config::Paths;
 use amenbo_core::model::ActorKind;
 
 use crate::cli::*;
-use crate::cmd::place::binding_project;
+use crate::cmd::place::{binding_folder, binding_project};
 use crate::output::{human, print_json, set_setup_report, CliError, Flags};
 
 /// `amenbo agent-hook snippet <tool>` — hand over the request that has one AI tool wired to run
@@ -699,10 +699,11 @@ fn ask_yes_no(prompt: &str) -> Option<bool> {
 pub(crate) fn agent_hook_setup(store: &Store, flags: &Flags, lint_asked: bool) {
     use amenbo_core::harness::{self, Consent, ConsentAction, ConsentContext};
 
-    let Some(project) = binding_project(store) else { return };
-    let Ok(cwd) = std::env::current_dir() else { return };
+    // The settings are looked for in the bound folder and not the CWD: a command run in a subfolder of it
+    // would otherwise find none and report a wired folder as unwired, on every response.
+    let Some((folder, project)) = binding_folder(store) else { return };
     let cmd = Paths::command_name();
-    let found = harness::probe(&cwd, cmd);
+    let found = harness::probe(&folder, cmd);
     let recorded = store.harness_consent(project).unwrap_or(None);
     let can_ask = !flags.json
         && flags.actor != Some(ActorKind::Ai)

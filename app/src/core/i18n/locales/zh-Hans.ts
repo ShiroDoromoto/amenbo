@@ -1456,6 +1456,7 @@ export const zhHans: Translation = {
     not_ready_premise_unsettled: "{ref} 尚未定论——等它写完或解除关联",
     not_ready_not_started: "它要到 {start} 才开始——日期不对就改开始日",
     not_ready_draft: "它还在创建中——请先完成创建",
+    not_ready_waiting_on_value: "排在前面的 {axis}「{value}」还没有关闭",
     invalid_action_still_placed:
       "此动作仍放在图中——共 {count} 处。先从图中移除再删除。",
     invalid_automation_has_runs:

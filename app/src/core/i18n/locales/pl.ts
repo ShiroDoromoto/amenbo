@@ -1481,6 +1481,7 @@ export const pl: Translation = {
     not_ready_premise_unsettled: "{ref} jest nierozstrzygnięte — poczekaj, aż zostanie dopisane do końca, albo je odepnij",
     not_ready_not_started: "zaczyna się dopiero {start} — zmień datę startu, jeśli to pomyłka",
     not_ready_draft: "wciąż jest tworzone — najpierw zakończ tworzenie",
+    not_ready_waiting_on_value: "wcześniejsza wartość {value} ({axis}) nie jest jeszcze zamknięta",
     invalid_action_still_placed:
       "Ta akcja nadal stoi na schematach — łącznie {count}. Zdejmij ją z nich, zanim ją usuniesz.",
     invalid_automation_has_runs:

@@ -1456,6 +1456,7 @@ export const id: Translation = {
     not_ready_premise_unsettled: "{ref} belum selesai diputuskan — tunggu sampai selesai ditulis atau lepaskan tautannya",
     not_ready_not_started: "tugas ini baru mulai {start} — ubah tanggal mulai kalau itu keliru",
     not_ready_draft: "tugas ini masih dibuat — selesaikan pembuatannya dulu",
+    not_ready_waiting_on_value: "{value} ({axis}) sebelumnya belum ditutup",
     invalid_action_still_placed:
       "Aksi ini masih ada di gambar — total {count}. Keluarkan dulu dari sana sebelum menghapusnya.",
     invalid_automation_has_runs:

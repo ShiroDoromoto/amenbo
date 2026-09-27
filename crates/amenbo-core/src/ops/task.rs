@@ -386,6 +386,17 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
                         .coded(ErrorCode::NotReadyDraft),
                 );
             }
+            // A value a person closes, not one the reserver can move past: the axis says its values are
+            // stages (`AMB-D-990`), and what comes before this task's own has not been called finished.
+            // Both names ride along, so a screen can say which value to go and close.
+            ReserveBlocker::WaitingOnValue { axis, value } => {
+                reasons.push(
+                    Msg::new(format!("{value} ({axis}), ordered before it, is not closed yet"))
+                        .coded(ErrorCode::NotReadyWaitingOnValue)
+                        .with("axis", axis)
+                        .with("value", value),
+                );
+            }
         }
     }
     let sentence = format!(

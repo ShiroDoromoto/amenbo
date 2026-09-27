@@ -1473,6 +1473,7 @@ export const fr: Translation = {
     not_ready_premise_unsettled: "{ref} n'est pas tranchée — attendez qu'elle soit écrite jusqu'au bout ou retirez le lien",
     not_ready_not_started: "elle ne commence que le {start} — changez la date de début si ce n'est pas la bonne",
     not_ready_draft: "elle est encore en cours de création — terminez d'abord sa création",
+    not_ready_waiting_on_value: "{value} ({axis}), placé avant, n'est pas encore fermé",
     invalid_action_still_placed:
       "Cette action figure encore dans des schémas — {count} au total. Retirez-la avant de la supprimer.",
     invalid_automation_has_runs:

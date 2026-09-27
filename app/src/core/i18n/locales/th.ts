@@ -1455,6 +1455,7 @@ export const th: Translation = {
     not_ready_premise_unsettled: "{ref} ยังไม่ยุติ — รอให้เขียนจนจบหรือปลดการเชื่อม",
     not_ready_not_started: "งานนี้เริ่มวันที่ {start} — ถ้าไม่ถูกต้องให้แก้วันเริ่ม",
     not_ready_draft: "งานนี้ยังสร้างไม่เสร็จ — กรุณาสร้างให้เสร็จก่อน",
+    not_ready_waiting_on_value: "{value} ({axis}) ที่อยู่ก่อนหน้ายังไม่ถูกปิด",
     invalid_action_still_placed:
       "แอ็กชันนี้ยังวางอยู่ในแผนภาพ — รวม {count} แห่ง นำออกจากแผนภาพก่อนแล้วจึงลบ",
     invalid_automation_has_runs:

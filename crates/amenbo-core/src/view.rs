@@ -27,6 +27,10 @@ use crate::time::Timestamp;
 /// and out of a reservation, and out of nothing else — a draft is on the board and in every listing
 /// (`AMB-D-555`).
 ///
+/// The fifth is `waiting_on_order` (`AMB-D-990`): on an axis whose raiser said its values are stages
+/// (`Dimension::sequential`), a task waits until every value ordered before its own is closed. It is
+/// the premise a person clears by closing a value, not one the task's own row can say.
+///
 /// `today` is the caller's reference day ([`crate::time::today`]), the same one the `status` view's
 /// buckets are cut against — a task the status view calls started must not read as not-yet-started here.
 /// The `ready:` filter says the same thing in SQL, where the premises are predicates rather than
@@ -38,11 +42,22 @@ pub fn is_ready(
     start_on: Option<NaiveDate>,
     today: NaiveDate,
     draft: bool,
+    waiting_on_order: bool,
 ) -> bool {
     !has_open_blocker
         && !has_unsettled_premise
         && not_started_until(start_on, today).is_none()
         && !draft
+        && !waiting_on_order
+}
+
+/// One value a task waits on (`AMB-D-990`): on an axis whose values are stages, a value ordered before
+/// the task's own that is not closed yet. Named by words, the way [`ClassifiedAs`] names what a task is
+/// classified as, since what clears it is a person closing that value.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct WaitingOnValue {
+    pub axis: String,
+    pub value: String,
 }
 
 /// The third premise as a *reason* rather than a boolean: the declared start day, when it is still ahead
@@ -176,8 +191,12 @@ pub struct TaskCompact {
     /// at all because a draft **is** listed (`AMB-D-555`), so its row has to be able to say why it is not
     /// in the mailbox.
     pub draft: bool,
-    /// Derived: no open blockers, no unsettled grounds, the declared start day arrived, and the creation
-    /// finished — i.e. this can be started ([`is_ready`]).
+    /// The values ordered before the task's own that are not closed yet, on every axis whose values are
+    /// stages (`AMB-D-990`) — the fifth reason a task is not ready. Empty when nothing is waited on;
+    /// cleared by closing them, which is a person's to do.
+    pub waiting_on_values: Vec<WaitingOnValue>,
+    /// Derived: no open blockers, no unsettled grounds, the declared start day arrived, the creation
+    /// finished, and no value waited on — i.e. this can be started ([`is_ready`]).
     pub ready: bool,
 }
 
@@ -286,8 +305,12 @@ pub struct TaskDetail {
     /// Still being put together — the fourth reason this task is not ready (`AMB-D-553`). The one premise
     /// the reader of a detail page can settle on the spot: finishing the creation is what clears it.
     pub draft: bool,
-    /// Derived: no open blockers, no unsettled grounds, the declared start day arrived, and the creation
-    /// finished — i.e. this can be started ([`is_ready`]).
+    /// The values ordered before the task's own that are not closed yet, on every axis whose values are
+    /// stages (`AMB-D-990`) — the fifth reason a task is not ready. Empty when nothing is waited on;
+    /// cleared by closing them, which is a person's to do.
+    pub waiting_on_values: Vec<WaitingOnValue>,
+    /// Derived: no open blockers, no unsettled grounds, the declared start day arrived, the creation
+    /// finished, and no value waited on — i.e. this can be started ([`is_ready`]).
     pub ready: bool,
     /// The reverse of `blocked_by`: the not-yet-done tasks that hold this one as a blocker — what
     /// finishing this task unblocks (empty means nothing waits on it).
@@ -435,8 +458,8 @@ pub fn priority_rank(p: Option<Priority>) -> u8 {
 /// **Invariant**: [`crate::store_engine::read::reserve_blockers`] is empty ⇔ `ready`. To keep the
 /// reservation guard and the mailbox's `ready:` filter from drifting onto different predicates, both look
 /// at the same derivations, and nothing else — open blockers (a live dependency edge whose far end is
-/// not done), unsettled grounds (a linked decision that is not accepted), a start day still ahead, and a
-/// creation not finished.
+/// not done), unsettled grounds (a linked decision that is not accepted), a start day still ahead, a
+/// creation not finished, and a value ordered before the task's own that is not closed yet.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReserveBlocker {
     /// A predecessor task that is not done yet. `label` is the conversational ref (`AMB-T-12`).
@@ -456,4 +479,7 @@ pub enum ReserveBlocker {
     /// is that the creation has not been finished, and what clears it is finishing it — there is nothing
     /// further for the refusal to name.
     StillDraft,
+    /// A value ordered before the task's own, on an axis whose values are stages, is not closed yet
+    /// (`AMB-D-990`). One per value, so the refusal names each value a person has to close.
+    WaitingOnValue { axis: String, value: String },
 }

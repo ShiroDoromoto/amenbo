@@ -1455,6 +1455,7 @@ export const vi: Translation = {
     not_ready_premise_unsettled: "{ref} chưa ngã ngũ — hãy chờ viết xong hoặc gỡ mối nối",
     not_ready_not_started: "việc này đến {start} mới bắt đầu — hãy sửa ngày bắt đầu nếu sai",
     not_ready_draft: "việc này vẫn đang được tạo — hãy hoàn tất việc tạo trước",
+    not_ready_waiting_on_value: "{value} ({axis}) đứng trước vẫn chưa được đóng",
     invalid_action_still_placed:
       "Hành động này vẫn nằm trên sơ đồ — tổng cộng {count}. Gỡ nó ra trước khi xóa.",
     invalid_automation_has_runs:

@@ -294,18 +294,15 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             let applies_to = applies_to.as_deref().map(parse_applies_to).transpose()?;
             let cardinality = cardinality.as_deref().map(parse_cardinality).transpose()?;
             let (d, held) = store.dimension_update(did, name.as_deref(), notes.as_deref(), cardinality, ordered, role, show_on_card, required, applies_to, slug.as_deref(), sequential).map_err(CliError::from)?;
-            let mut line = format!("✓ Updated dimension: {}", dimension_label(d.id));
             // How many tasks the setting holds back, said where it is on (`AMB-D-990`): raising it can take
             // a stretch of the backlog out of the mailbox at once, and the person doing it should see how
-            // much.
+            // much. A line of its own after the write's, so the facet mark stays on the line it marks.
             let extra = [("held_by_order", json!(held))];
-            let extra: &[(&str, serde_json::Value)] = if d.sequential {
-                line.push_str(&format!("\n  {held} task(s) wait for a value ordered before their own to close"));
-                &extra
-            } else {
-                &[]
-            };
-            write_envelope_with(flags, "dimension.update", "dimension", serde_json::to_value(&d).unwrap(), Some(changed), false, line, extra);
+            let extra: &[(&str, serde_json::Value)] = if d.sequential { &extra } else { &[] };
+            write_envelope_with(flags, "dimension.update", "dimension", serde_json::to_value(&d).unwrap(), Some(changed), false, format!("✓ Updated dimension: {}", dimension_label(d.id)), extra);
+            if d.sequential && !flags.json {
+                human(flags, format!("  {held} task(s) wait for a value ordered before their own to close"));
+            }
         }
         DimensionCmd::Move { id, before, after, top, bottom } => {
             let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;

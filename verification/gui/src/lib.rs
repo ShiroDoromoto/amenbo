@@ -543,9 +543,9 @@ impl Instructor {
     ///
     /// The four ops here are every one the registry has for moving a task across that line. A premise
     /// takes `status` and none of the other three, and a screen road ends a task with `done` alone —
-    /// the one of them this harness maps. It is walked on the road as well as in the world — the rule
-    /// is that an action noted is an action walked, so mapping another of them later needs nothing
-    /// remembered here.
+    /// its `status` moves a task along without ending it. It is walked on the road as well as in the
+    /// world — the rule is that an action noted is an action walked, so mapping another of them later
+    /// needs nothing remembered here.
     ///
     fn note_end(&mut self, domain: Domain, op: &str, with: &Args) {
         if domain != Domain::Task {
@@ -1301,6 +1301,21 @@ impl Instructor {
                 self.target_label(with),
                 req(with, "report")?
             ),
+            // Every other move along the status is the same pulldown with no question after it. The two
+            // that end a task are not: the screen asks for their text first, and a status step carries
+            // none — so they are refused here, and `done` is the op that walks that dialog.
+            (Domain::Task, "status") => {
+                let label = match req(with, "status")? {
+                    "todo" => "to do",
+                    "in_progress" => "in progress",
+                    "blocked" => "blocked",
+                    "done" | "rejected" => {
+                        return Err("ending a task on this face asks for its text first — `done` is the op that walks that dialog".to_string())
+                    }
+                    other => return Err(format!("`status: {other}` is not a status a task's pulldown offers")),
+                };
+                format!("Open the task \"{}\" and choose {label} on its status pulldown.", self.target_label(with))
+            }
             (Domain::Task, "assign") => format!(
                 "Open the task \"{}\" and set its assignee to \"{}\".",
                 self.target_label(with),
@@ -4911,6 +4926,21 @@ impl Instructor {
                     req(with, "field")?
                 )
             }
+            // A value opened again after the reserve is not a field the pane lists under that name: it is
+            // told on the card, by the bell that says the premises moved, and on the detail pane, in the
+            // field for what changed since the reserve — each value with its category in brackets after it.
+            // So the line sends a reader to both, and names the half of the pair the step reads.
+            (Domain::Task, "field") if reopened_value_part(req(with, "field")?).is_some() => {
+                let equals = show(with.get("equals").ok_or("assert `field` needs `equals`")?);
+                let named = match reopened_value_part(req(with, "field")?) {
+                    Some("axis") => format!("a value opened again whose category, in the brackets after it, is {equals}"),
+                    _ => format!("{equals} as a value opened again"),
+                };
+                format!(
+                    "Confirm the card \"{0}\" carries the bell saying its premises moved since it was taken, then open the task \"{0}\" and confirm the field for what changed since it was reserved names {named}.",
+                    self.target_label(with)
+                )
+            }
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",
                 self.target_label(with),
@@ -7397,6 +7427,14 @@ fn activity_kind(kind: &str) -> Result<&'static str, String> {
             ))
         }
     })
+}
+
+/// Which half of a reopened value a `field` step reads — `axis` or `value` — when the field is one of
+/// `premise_change.reopened_values`, and nothing for any other field.
+fn reopened_value_part(field: &str) -> Option<&str> {
+    let rest = field.strip_prefix("premise_change.reopened_values.")?;
+    let (index, part) = rest.split_once('.')?;
+    (index.parse::<usize>().is_ok() && matches!(part, "axis" | "value")).then_some(part)
 }
 
 /// One of a task's own controls, named by what it does rather than by what it is labelled with — the
@@ -9966,6 +10004,74 @@ steps_gui:
         let mut ins = Instructor::new();
         ins.render(&s.steps(Driver::Gui)[0]).unwrap();
         assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "a field assert is not OCR-judged");
+    }
+
+    /// A task is taken on its status pulldown, and the two statuses that end it are left to `done`:
+    /// the screen asks for their text first, and a status step carries none.
+    #[test]
+    fn a_status_step_is_a_pick_on_the_pulldown_short_of_an_ending() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+    as: a
+  - type: action
+    domain: task
+    op: status
+    with: { target: a, status: in_progress }
+  - type: action
+    domain: task
+    op: status
+    with: { target: a, status: done }
+"#;
+        let s = load(yaml);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        ins.render(&steps[0]).unwrap();
+        let line = ins.render(&steps[1]).unwrap();
+        assert!(line.contains("\"T\"") && line.contains("choose in progress on its status pulldown"), "{line}");
+        let err = ins.render(&steps[2]).unwrap_err();
+        assert!(err.contains("`done`"), "{err}");
+    }
+
+    /// A value opened again after the reserve is read where the screen tells it — the card's bell and
+    /// the detail pane's field — and not as a dotted path the pane never draws.
+    #[test]
+    fn a_reopened_value_is_read_off_the_bell_and_the_detail_pane() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+    as: a
+  - type: assert
+    domain: task
+    op: field
+    with: { target: a, field: premise_change.reopened_values.0.axis, equals: Release }
+  - type: assert
+    domain: task
+    op: field
+    with: { target: a, field: premise_change.reopened_values.0.value, equals: v1 }
+"#;
+        let s = load(yaml);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        ins.render(&steps[0]).unwrap();
+        for (step, named) in [(&steps[1], "is Release"), (&steps[2], "v1 as a value opened again")] {
+            let line = ins.render(step).unwrap();
+            assert!(line.contains("bell") && line.contains(named), "{line}");
+            assert!(!line.contains("premise_change"), "{line}");
+        }
+        assert_eq!(reopened_value_part("premise_change.reopened_values.0.value"), Some("value"));
+        assert_eq!(reopened_value_part("premise_change.reopened_values.x.value"), None);
+        assert_eq!(reopened_value_part("premise_change.added_blockers.0"), None);
     }
 
     /// The quote a pane puts round a pasted path and a box does not. `fold` keeps letters and

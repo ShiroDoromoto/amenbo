@@ -4438,8 +4438,9 @@ const REGISTRY: &[OpSpec] = &[
     // goes on from `pick-box`.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-reason", required: &["reason", "box"], refs: &[], strings: &["reason", "box"], binds: false },
     //
-    // The pane a run is drawn in, and what its header carries: the run's own number and which step
-    // on the name's line, and the task it is on with how many tasks in on the line under it. The step is said with the action it was opened
+    // The pane a run is drawn in, and what its header carries: the run's own number on the name's
+    // line, which step on the line under it, and the task it is on with how many tasks in on the
+    // third. The step is said with the action it was opened
     // from (`action`), as one value — the step is one terminal, and which action it belongs to is
     // what says where on the automation's picture the run has got to. A run whose placement has been
     // taken off the picture since says the step alone. `label` reads a pane's name and nothing else,

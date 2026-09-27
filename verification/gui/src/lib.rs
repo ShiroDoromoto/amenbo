@@ -6616,13 +6616,14 @@ impl Instructor {
                     }
                 ),
             },
-            // The pane a run is drawn in, and what its header carries — the run and its step on the
-            // name's own line, and the task with how many tasks in on the line under it. `label` reads
+            // The pane a run is drawn in, and what its header carries — the run on the name's own
+            // line, its step on the line under it, and the task with how many tasks in on the third.
+            // `label` reads
             // a pane's name and nothing else, which is why this one is here. Where the run stands is
             // read off the same header, in the words `run-row` reads the tab in.
             (Domain::Automation, "run-pane") => match present(with) {
                 true => format!(
-                    "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands in front of its name, and that its header carries on the name's line the run's own number and which step it is on{}{}{}{}.",
+                    "In the workspace, confirm a pane is standing for this run, that the mark saying it is Amenbo's own run stands in front of its name, and that its header carries on the name's line the run's own number, and on the line under it which step it is on{}{}{}{}.",
                     // The step and the action it was opened from are one value on the screen, in the
                     // order the reader's language puts them — so the line names both and leaves the
                     // order to the eye.
@@ -6633,14 +6634,14 @@ impl Instructor {
                         (None, None) => String::new(),
                     },
                     match with.get("nth") {
-                        Some(_) => format!(", with how many tasks into the run it is on the line under it ({})", count(with, "nth")?),
+                        Some(_) => format!(", with how many tasks into the run it is on the third line ({})", count(with, "nth")?),
                         None => String::new(),
                     },
-                    // The line under the name stands only while the run is working a task, so a road
-                    // that names none says nothing of it — a run on no task yet, or one that failed
-                    // before it took one, has no such line to point at.
+                    // The third line is empty while the run is on no task, so a road that names none
+                    // says nothing of it — a run on no task yet, or one that failed before it took
+                    // one, has nothing there to point at.
                     match with.get("task") {
-                        Some(_) => format!(", and on the line under it the number of the task it is working (\"{}\")", self.labels
+                        Some(_) => format!(", and on the third line the number of the task it is working (\"{}\")", self.labels
                             .get(with.get("task").and_then(|v| v.as_str()).unwrap_or(""))
                             .cloned()
                             .unwrap_or_else(|| "<the task>".to_string())),

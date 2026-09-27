@@ -1085,6 +1085,12 @@ fn a_sequential_axis_holds_tasks_until_the_values_before_theirs_close() {
     assert_eq!(raised["held_by_order"], 1, "v2's task waits on v1: {raised}");
     let (shown, _) = cli.run(&["dimension", "show", "リリース"]);
     assert!(shown.contains("sequential"), "show says the axis carries it: {shown}");
+    // The human output says the count on a line of its own, after the write's own line — which is the
+    // line a facet mark goes on.
+    let (said, _) = cli.run(&["dimension", "update", "リリース", "--sequential", "true"]);
+    let lines: Vec<&str> = said.lines().collect();
+    assert!(lines[0].starts_with("✓ Updated dimension"), "{said}");
+    assert_eq!(lines[1], "  1 task(s) wait for a value ordered before their own to close", "{said}");
 
     // While it is on, what it stands on is held.
     let (err, code) = cli.run_err(&["dimension", "update", "リリース", "--ordered", "false", "--json"]);

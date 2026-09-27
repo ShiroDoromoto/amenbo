@@ -55,6 +55,9 @@ given:
 # that will not report. Letting it go is only for a run that has settled, so the terminal road stops
 # at the request and leaves the settled hold, and picking it up again, to the screen.
 steps_cli:
+  # A run's steps are opened by the app, so a run is started with one up on the store.
+  - { type: action, domain: store, op: app-up }
+
   - type: action
     domain: automation
     op: start

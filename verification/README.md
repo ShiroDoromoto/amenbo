@@ -131,6 +131,12 @@ A scenario with no `steps_cli` road is **skipped**: printed as skipped, counted 
 out of the verdict. If that leaves nothing to run, the exit is non-zero rather than
 an empty green — a gate that verified nothing must not read as one that verified everything.
 
+**A terminal road has no app, so it stands one up where it needs one** (`store app-up`).
+`automation start` refuses to start a run with no app up on the store, because a step's terminal is
+opened by the app. The driver takes the lock an app holds while it runs and keeps it for the rest of
+the road; a road that leaves it off walks that refusal instead. A screen road is walked on the app
+itself, so the op is the terminal road's alone.
+
 The exit code is the roll-up — `0` when every scenario that ran is green, non-zero when any is red
 or errored — so a release gate reads it directly. The `--json` aggregate carries `total` / `passed`
 / `failed` / `skipped` / `green` plus each scenario's own report (or its error, or the drivers

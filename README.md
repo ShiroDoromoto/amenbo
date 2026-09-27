@@ -407,7 +407,7 @@ amenbo automation list                                 # what this project has, 
 amenbo automation show 3                               # one whole definition, every spot resolved
 amenbo automation action-list                          # the library this project reaches
 amenbo automation action-show 7                        # one action, and the picture inside it
-amenbo automation start 3                              # away it goes
+amenbo automation start 3                              # away it goes (with the app up: it opens the steps, so with none running this is refused)
 amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand a make_task entry the task it files: title, notes, classification and attachments
 amenbo automation pause 7                              # ...at the end of the step under way (a wait under way included: the run pauses once its time is up)
 amenbo automation stop 7                               # ...now, handing the task back to todo and to the person

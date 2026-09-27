@@ -73,6 +73,12 @@ pub enum CliErrorCode {
     /// meet outside a step, and a code of its own because what the caller does next is to type it
     /// somewhere else.
     AutomationOutsideOnly,
+    /// `automation start` was typed while no app is up on this store (`AMB-D-995`). A step's terminal
+    /// is opened by the app, so a run started then would stand `running` with nothing moving, and the
+    /// next launch would end it `crashed`. It is the CLI's because the store has nothing to say about
+    /// it: whether the app is up is a lock on disk (`amenbo_core::app_running`), and the GUI, which is
+    /// the app, never meets it.
+    AppNotRunning,
 
     // The refusals `worktree start` / `worktree finish` meet (`AMB-D-881`). One code per refusal, because
     // what a caller does next differs in every one of them: take a different task, commit first, merge
@@ -122,6 +128,7 @@ impl CliErrorCode {
             CliErrorCode::AiGuardrail => "ai_guardrail",
             CliErrorCode::TalkOutsideSurface => "talk_outside_surface",
             CliErrorCode::AutomationOutsideOnly => "automation_outside_only",
+            CliErrorCode::AppNotRunning => "app_not_running",
             CliErrorCode::WorktreeExists => "worktree_exists",
             CliErrorCode::WorktreeBranchExists => "worktree_branch_exists",
             CliErrorCode::WorktreeElsewhere => "worktree_elsewhere",
@@ -154,6 +161,7 @@ impl CliErrorCode {
         CliErrorCode::AiGuardrail,
         CliErrorCode::TalkOutsideSurface,
         CliErrorCode::AutomationOutsideOnly,
+        CliErrorCode::AppNotRunning,
         CliErrorCode::WorktreeExists,
         CliErrorCode::WorktreeBranchExists,
         CliErrorCode::WorktreeElsewhere,
@@ -437,6 +445,22 @@ impl CliError {
             ),
             hint: Some(STEP_REACHES.to_string()),
             exit: 2,
+        }
+    }
+
+    /// **`automation start` with no app up on this store** (`AMB-D-995`). Nothing was started: a run
+    /// accepted now would move no further than its first step, which only the app can open, and be
+    /// ended `crashed` when the app next comes up — a failure whose reason the caller never sees.
+    pub fn app_not_running() -> CliError {
+        CliError {
+            code: CliErrorCode::AppNotRunning.as_str(),
+            message: "Amenbo's app is not running, and a run's steps are opened by the app. No run was started."
+                .to_string(),
+            hint: Some(format!(
+                "Start the app, then type `{} automation start` again.",
+                Paths::command_name()
+            )),
+            exit: 1,
         }
     }
 
@@ -951,6 +975,7 @@ mod tests {
             "ai_guardrail",
             "talk_outside_surface",
             "automation_outside_only",
+            "app_not_running",
             "worktree_exists",
             "worktree_branch_exists",
             "worktree_elsewhere",

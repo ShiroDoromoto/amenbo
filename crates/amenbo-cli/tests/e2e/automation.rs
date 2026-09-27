@@ -721,6 +721,7 @@ fn a_launchable(cli: &Cli) -> (String, String, String) {
 #[test]
 fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
     let cli = Cli::new();
+    let _app = cli.the_app_up();
     let (a, _, _) = a_launchable(&cli);
 
     let started = cli.json(&["automation", "start", &a, "--json"]);
@@ -744,6 +745,7 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
 #[test]
 fn only_a_failed_run_is_acknowledged() {
     let cli = Cli::new();
+    let _app = cli.the_app_up();
     let (a, _, _) = a_launchable(&cli);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     cli.json(&["automation", "stop", &run, "--json"]);
@@ -764,6 +766,7 @@ fn only_a_failed_run_is_acknowledged() {
 #[test]
 fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
     let cli = Cli::new();
+    let _app = cli.the_app_up();
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "File one", "--json"]), "automation");
     let make = an_entry(&cli, &a, "make_task");
@@ -801,12 +804,35 @@ fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
     assert!(runs.to_string().contains(&run), "{runs}");
 }
 
+/// **With no app up on the store, nothing is started** (`AMB-D-995`). A step's terminal is opened by the
+/// app, so a run accepted now would stand `running` with nothing moving until the next launch ended it
+/// `crashed`. The refusal says to start the app, and the same launch goes through once it is up.
+#[test]
+fn a_launch_is_refused_while_the_app_is_not_running() {
+    let cli = Cli::new();
+    let (a, _, _) = a_launchable(&cli);
+
+    let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("app_not_running"), "{err}");
+    assert!(err.contains("Start the app"), "the hint says what to do: {err}");
+    let runs = cli.json(&["automation", "run-list", "--automation", &a, "--json"]);
+    assert_eq!(runs["count"].as_u64(), Some(0), "no run was made: {runs}");
+
+    let app = cli.the_app_up();
+    cli.json(&["automation", "start", &a, "--json"]);
+    app.release();
+    let (err, _) = cli.run_err(&["automation", "start", &a, "--json"]);
+    assert!(err.contains("app_not_running"), "an app that quit is no app: {err}");
+}
+
 /// The launch check refuses an unfinished automation and names what is missing. Nothing on the
 /// building side ever did: a picture is half-built for as long as somebody is drawing it, and this is
 /// the moment a person is about to be let down by one.
 #[test]
 fn a_launch_is_refused_while_a_way_out_has_nothing_after_it() {
     let cli = Cli::new();
+    let _app = cli.the_app_up();
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Half drawn", "--json"]), "automation");
     an_entry(&cli, &a, "take_task");
@@ -822,6 +848,7 @@ fn a_launch_is_refused_while_a_way_out_has_nothing_after_it() {
 #[test]
 fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
     let cli = Cli::new();
+    let _app = cli.the_app_up();
     let (a, placement, step) = a_launchable(&cli);
 
     let chosen = cli.json(&[

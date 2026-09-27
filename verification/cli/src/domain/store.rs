@@ -10,6 +10,10 @@ use rusqlite::OptionalExtension;
 use crate::{opt_bool, path_str, req_bool, req_i64, req_str, unmapped, Driver, Outcome};
 use crate::judge::judge_field;
 
+/// The file an app holds a lock on while it is up on a store — core's `app_running::FILE_NAME`,
+/// spelled here because this crate reads the product from outside.
+const APP_MARK: &str = "app.running.lock";
+
 impl Driver<'_> {
     pub(crate) fn store_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
         match op {
@@ -219,6 +223,25 @@ impl Driver<'_> {
                     "wrote the skin `{name}` out at {} ({bytes} bytes)",
                     out.display()
                 )))
+            }
+            // The app up on this store, which `automation start` asks before it starts anything.
+            // This driver has no app, so it stands where one would: it takes the lock
+            // an app holds while it runs and keeps it for the rest of the road. The lock is the
+            // whole of the answer — a file alone is an app that went — so nothing else is written.
+            "app-up" => {
+                let mark = self.session.home.join(APP_MARK);
+                let file = std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .truncate(false)
+                    .open(&mark)
+                    .map_err(|e| format!("could not open the app's mark at {}: {e}", mark.display()))?;
+                file.try_lock().map_err(|e| {
+                    format!("could not take the app's mark at {} — something already holds it: {e}", mark.display())
+                })?;
+                self.app_up = Some(file);
+                Ok(Outcome::action("stood the app up on the store, for the rest of the road".to_string()))
             }
             "skin-rm" => {
                 let name = req_str(with, "name")?;

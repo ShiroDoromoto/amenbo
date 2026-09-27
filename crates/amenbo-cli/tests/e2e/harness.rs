@@ -102,6 +102,16 @@ pub(crate) struct Cli {
 }
 
 impl Cli {
+    /// Stand where the app would be: hold the mark an app holds on this home's store while it is up
+    /// (`amenbo_core::app_running`), for as long as the answer is kept. `automation start` is refused
+    /// without one (`AMB-D-995`), so a test about what a run does holds this across its launches.
+    pub(crate) fn the_app_up(&self) -> amenbo_core::app_running::Presence {
+        let paths = amenbo_core::config::Paths::at(self.home.clone());
+        amenbo_core::app_running::claim(&paths)
+            .expect("claim the app's mark")
+            .expect("nothing else holds the mark on a fresh home")
+    }
+
     pub(crate) fn new() -> Cli {
         let home = temp_home();
         // Isolate the CWD too, so the .amenbo / AGENTS.md that init drops never land in the repo.

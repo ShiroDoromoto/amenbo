@@ -226,6 +226,10 @@ pub(crate) struct Driver<'a> {
     /// keeps it standing through a screen road is that the world outlives the walk
     /// ([`stand_world`]).
     asking: Option<amenbo_static_host::StaticHost>,
+    /// The mark an app holds on the store while it is up, taken by `store app-up` and held for the
+    /// rest of the road. Held for the reason the two lines above are: the OS lets it go the moment
+    /// this is dropped, and a road that let go of it would be a road with the app gone.
+    app_up: Option<std::fs::File>,
     /// What the machine's own scheduler was holding when this run began. Read once, before anything
     /// walks: nothing in this harness registers a timer, so the only reading an assert can honestly
     /// make is the difference — whether the run left the machine as it found it. The absolute state
@@ -346,6 +350,7 @@ impl<'a> Driver<'a> {
             last_rebind: None,
             moved: HashMap::new(),
             last_worktree: None,
+            app_up: None,
             artifacts: HashMap::new(),
             server: None,
             asking: None,

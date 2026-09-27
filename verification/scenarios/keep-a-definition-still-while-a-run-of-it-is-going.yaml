@@ -40,6 +40,9 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 steps_cli:
+  # A run's steps are opened by the app, so a run is started with one up on the store.
+  - { type: action, domain: store, op: app-up }
+
   - type: action
     domain: automation
     op: start

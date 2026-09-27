@@ -11,7 +11,7 @@
 // build screen's head, in words**, every reason the check can give taking a line a person can act on;
 // and **the start press is
 // shut while anything is in the way**, which is the whole of what that list is for.
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -72,9 +72,32 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { errSentence, errText, t, tf } from "../core/i18n";
-import { AutomationsScreen } from "./AutomationsScreen";
+import { AutomationsScreen, type AutoPlace } from "./AutomationsScreen";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/**
+ * The shell's side of the screen, as small as it goes: the places the screen went to, on a trail its
+ * "back" walks — which is what the shell's history does with them (`../shell/AppShell`).
+ */
+let trail: AutoPlace[] = [];
+function Host({
+  start,
+  ...rest
+}: {
+  start: AutoPlace;
+  workspaceOpen: boolean;
+  onGoToRun?: (project: number, run: number) => void;
+}) {
+  const [places, setPlaces] = useState<AutoPlace[]>([start]);
+  trail = places;
+  return createElement(AutomationsScreen, {
+    place: places[places.length - 1]!,
+    onGo: (next: AutoPlace) => setPlaces((was) => [...was, next]),
+    onBack: () => setPlaces((was) => (was.length > 1 ? was.slice(0, -1) : was)),
+    ...rest,
+  });
+}
 
 let container: HTMLDivElement;
 let root: Root;
@@ -103,7 +126,7 @@ const wentToRun = vi.fn();
 
 async function render(workspaceOpen = true) {
   await act(async () => {
-    root.render(createElement(AutomationsScreen, { pick: 1, workspaceOpen, onGoToRun: wentToRun }));
+    root.render(createElement(Host, { start: { pick: 1 }, workspaceOpen, onGoToRun: wentToRun }));
   });
 }
 
@@ -283,7 +306,7 @@ describe("the automations screen with every project picked", () => {
   }
   async function renderEverywhere() {
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { workspaceOpen: true, onGoToRun: wentToRun }));
+      root.render(createElement(Host, { start: {}, workspaceOpen: true, onGoToRun: wentToRun }));
     });
   }
 
@@ -365,13 +388,49 @@ describe("the automations screen with every project picked", () => {
   });
 });
 
+// Every move inside the screen is a place of its own, pushed onto the shell's history (`AMB-D-993`),
+// and the screen's "back" walks that history rather than a state of its own.
+describe("moving inside the screen", () => {
+  it("pushes the row opened, the tab chosen and the project picked, each as a place", async () => {
+    hoisted.automations = [card()];
+    hoisted.detail = detail();
+    hoisted.check = { ready: true, blocks: [] };
+    await render();
+    await act(async () => { button("Morning round").click(); });
+    expect(trail[trail.length - 1]).toEqual({ pick: 1, tab: "automations", automation: 7, automationIn: 1 });
+    await act(async () => {
+      container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")[1]!.click();
+    });
+    expect(trail[trail.length - 1]).toEqual({ pick: 1, tab: "actions" });
+    const pick = container.querySelector<HTMLSelectElement>(".autopick select")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(pick, "3");
+      pick.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(trail[trail.length - 1]).toEqual({ pick: 3, tab: "actions" });
+    expect(trail).toHaveLength(4);
+  });
+
+  it("goes back along the same trail from the build screen's own back", async () => {
+    hoisted.automations = [card()];
+    hoisted.detail = detail();
+    hoisted.check = { ready: true, blocks: [] };
+    await render();
+    await act(async () => { button("Morning round").click(); });
+    expect(container.querySelector(".autolist")).toBeNull();
+    await act(async () => { button(t("auto.build.back")).click(); });
+    expect(trail).toHaveLength(1);
+    expect(container.querySelector(".autolist")).not.toBeNull();
+  });
+});
+
 describe("arriving with an automation named", () => {
   it("opens on its build screen", async () => {
     hoisted.automations = [card()];
     hoisted.detail = detail();
     hoisted.check = { ready: true, blocks: [] };
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { pick: 1, opening: 7, workspaceOpen: true }));
+      root.render(createElement(Host, { start: { pick: 1, automation: 7, automationIn: 1 }, workspaceOpen: true }));
     });
     expect(container.querySelector(".autolist")).toBeNull();
     expect(container.textContent).toContain(t("auto.build.picture"));
@@ -401,14 +460,14 @@ describe("arriving from a run's pane (AMB-T-5539)", () => {
     hoisted.detail = detail({ placements: [read] });
     hoisted.check = { ready: true, blocks: [] };
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { pick: 1, opening: 7, openingBox: 4, workspaceOpen: true }));
+      root.render(createElement(Host, { start: { pick: 1, automation: 7, automationIn: 1, placement: 4 }, workspaceOpen: true }));
     });
     expect(container.querySelector(".actpanel__title")?.textContent).toBe("Read");
   });
 
   it("opens on the history tab", async () => {
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { pick: 1, openingTab: "history", workspaceOpen: true }));
+      root.render(createElement(Host, { start: { pick: 1, tab: "history" }, workspaceOpen: true }));
     });
     const lit = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
     expect(lit?.textContent).toBe(t("auto.tab.history"));
@@ -416,7 +475,7 @@ describe("arriving from a run's pane (AMB-T-5539)", () => {
 
   it("opens on the running tab, where a failure nobody has acknowledged is listed (AMB-T-5672)", async () => {
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { pick: 1, openingTab: "running", workspaceOpen: true }));
+      root.render(createElement(Host, { start: { pick: 1, tab: "running" }, workspaceOpen: true }));
     });
     const lit = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
     expect(lit?.textContent).toBe(t("auto.tab.running"));
@@ -704,7 +763,7 @@ describe("an automation a run is going on (AMB-D-961)", () => {
     hoisted.check = { ready: true, blocks: [] };
     goToRun.mockClear();
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { pick: 1, opening: 7, workspaceOpen: true, onGoToRun: goToRun }));
+      root.render(createElement(Host, { start: { pick: 1, automation: 7, automationIn: 1 }, workspaceOpen: true, onGoToRun: goToRun }));
     });
   }
 

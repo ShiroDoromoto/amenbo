@@ -90,13 +90,27 @@ describe("navReduce", () => {
 
   it("pushes a move to the project already in front, where it arrives with something open (AMB-T-5539)", () => {
     let s = start(L(p("1")));
-    s = push(s, L({ type: "project", id: "1", automation: 8, placement: 21, nth: 1 }));
+    const auto = { type: "view", id: "automations", pick: 1 } as const;
+    s = push(s, L({ ...auto, automation: 8, automationIn: 1, placement: 21, nth: 1 }));
     expect(s.index).toBe(1);
     // The same button pressed again is another arrival.
-    s = push(s, L({ type: "project", id: "1", automation: 8, placement: 21, nth: 2 }));
+    s = push(s, L({ ...auto, automation: 8, automationIn: 1, placement: 21, nth: 2 }));
     expect(s.index).toBe(2);
-    s = push(s, L({ type: "project", id: "1", runs: "history", nth: 3 }));
+    s = push(s, L({ ...auto, tab: "history", nth: 3 }));
     expect(s.index).toBe(3);
+  });
+
+  it("pushes each move inside the automations screen: the tab, the project picked, and what is open (AMB-D-993)", () => {
+    const auto = { type: "view", id: "automations" } as const;
+    let s = start(L(auto));
+    s = push(s, L({ ...auto, pick: 2 }));
+    s = push(s, L({ ...auto, pick: 2, tab: "actions" }));
+    s = push(s, L({ ...auto, pick: 2, tab: "actions", action: 4 }));
+    s = push(s, L({ ...auto, pick: 2, tab: "actions", builtin: "take_task" }));
+    s = push(s, L({ ...auto, pick: 2, automation: 7, automationIn: 3 }));
+    expect(s.index).toBe(5);
+    s = navReduce(s, { type: "back" });
+    expect(s.stack[s.index].nav.builtin).toBe("take_task");
   });
 
   it("push after going back truncates the forward tail", () => {

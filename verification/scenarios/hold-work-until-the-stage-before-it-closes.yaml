@@ -11,14 +11,20 @@
 # closes the value before it. Closing is guarded from the other side — a value with unfinished work on
 # it will not close, or that work would be left with nothing open before it and be picked up beside
 # the next stage's.
+#
+# The wait bites at the reserve and nowhere after it. Opening the value before again leaves a task
+# already taken where it is, so its holder is told instead: the value comes back among the premises
+# that moved since the reserve, named by its category and its own name.
+# That half is the terminal's road alone for now: the screen harness cannot yet take a task.
 id: hold-work-until-the-stage-before-it-closes
-title: A task on a category that waits along its order is held back until the value before its own is closed, and that value does not close while its own work is unfinished
+title: A task on a category that waits along its order is held back until the value before its own is closed, that value does not close while its own work is unfinished, and opening it again is told to whoever took the task
 description: >
   Try to make a category's tasks wait along its order on a category that has no order, and be
   refused. Raise it on an ordered, closable category, and read the task on the later value leave the
   mailbox, show up among those waiting on a value, and be refused when named for a reserve. Try to
   close the earlier value while its task is open, and be refused. Finish that task, close the value,
-  and the later task is ready to be taken.
+  and the later task is ready to be taken. Take it, open the earlier value again, and the taken task
+  stays in progress and names that value among the premises that moved since it was taken.
 # One ordered, closable category with two values and a task on each, and one plain category beside it.
 # Classifying work and nominating the role are other roads' to prove, so the world carries them:
 # what this road reads starts at the setting.
@@ -188,6 +194,45 @@ steps_cli:
       filter: "status:todo ready:yes"
       target: later
       present: true
+
+  # Taken, then the stage before it opened again: the reserve is not undone, and the holder is told.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: later
+      status: in_progress
+
+  - type: action
+    domain: dimension
+    op: value-reopen
+    with:
+      dimension: Release
+      value: v1
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: later
+      field: status
+      equals: in_progress
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: later
+      field: premise_change.reopened_values.0.axis
+      equals: Release
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: later
+      field: premise_change.reopened_values.0.value
+      equals: v1
 
 steps_gui:
   - type: action

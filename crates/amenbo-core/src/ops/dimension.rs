@@ -211,6 +211,26 @@ fn sequence_held(name: &str, missing: &str) -> Error {
     )
 }
 
+/// The refusal closing meets on an axis whose tasks wait along its order, while tasks on the value are
+/// not finished (`AMB-D-990`). Closed with them still there, they would have no open value before them
+/// and be picked up beside the next stage's. Moving them is the caller's to do — closing takes no
+/// target (`AMB-D-829`) — so the refusal hands over the count and the filter that lists them.
+fn closing_with_tasks_left(axis: &str, value: &str, left: usize) -> Error {
+    let filter = format!("dim:{axis}={value} status:todo,in_progress,blocked");
+    Error::Invalid(
+        Msg::new(format!(
+            "{left} task(s) on '{value}' are not finished, and '{axis}' makes its tasks wait for the \
+             values before their own, so '{value}' cannot be closed yet — move them to another value \
+             first (`{filter}` lists them)"
+        ))
+        .coded(ErrorCode::InvalidDimensionCloseUnfinished)
+        .with("name", axis)
+        .with("value", value)
+        .with("count", left.to_string())
+        .with("filter", filter),
+    )
+}
+
 /// The refusal a closed value meets at both assignment doors ([`set`] and [`set_on_decision`]): it is
 /// retired from what a record is newly filed under (`AMB-D-829`). That is the whole of what closing
 /// does — every record already on the value keeps it, every filter naming it goes on resolving, and only
@@ -764,6 +784,18 @@ pub fn value_set_dates(
 ///
 /// Deleting is a separate act and this says nothing about it: a closed value is deleted on the same terms
 /// an open one is, the way a task's being `done` says nothing about whether it may be deleted.
+/// How many tasks on this value are not finished — every status a dependency does not count as closed
+/// ([`crate::model::TaskStatus::is_closed`]): `todo`, a draft included, `in_progress` and `blocked`.
+fn unfinished_on(tx: &WriteTx<'_>, axis: &Dimension, value_id: i64) -> Result<usize> {
+    let mut left = 0;
+    for (task, value) in read::project_dimension_assignments(tx.conn(), axis.project_id, axis.id)? {
+        if value == value_id && read::task_status(tx.conn(), task)?.is_some_and(|s| !s.is_closed()) {
+            left += 1;
+        }
+    }
+    Ok(left)
+}
+
 pub fn value_set_closed(tx: &WriteTx<'_>, value_id: i64, closed: bool) -> Result<DimensionValue> {
     let before = live_value_before(tx, value_id)?;
     let axis = live_before(tx, before.dimension_id)?;
@@ -777,6 +809,12 @@ pub fn value_set_closed(tx: &WriteTx<'_>, value_id: i64, closed: bool) -> Result
             let still_offered = read::open_dimension_value_ids(tx.conn(), axis.id)?;
             if still_offered.iter().all(|id| *id == before.id) {
                 return Err(closing_the_last_open(&axis.name, &before.name));
+            }
+        }
+        if axis.sequential {
+            let left = unfinished_on(tx, &axis, before.id)?;
+            if left > 0 {
+                return Err(closing_with_tasks_left(&axis.name, &before.name, left));
             }
         }
     }
@@ -2502,8 +2540,8 @@ mod tests {
             set(tx, t, value).unwrap();
             t
         };
-        on(v1.id, "前");
-        on(v2.id, "次");
+        let first = on(v1.id, "前");
+        let second = on(v2.id, "次");
         on(v3.id, "その次");
         let going = on(v3.id, "着手済み");
         crate::ops::task::set_status(tx, going, crate::model::TaskStatus::InProgress).unwrap();
@@ -2514,11 +2552,65 @@ mod tests {
         let raised = sequence(tx, axis.id, true).unwrap();
         assert_eq!(held_by_order(tx, &raised).unwrap(), 2, "v2's and v3's todo tasks wait on v1");
 
+        // A value closes once its own tasks are finished.
+        crate::ops::task::set_status(tx, first, crate::model::TaskStatus::Done).unwrap();
         value_set_closed(tx, v1.id, true).unwrap();
         assert_eq!(held_by_order(tx, &dim(tx, axis.id)).unwrap(), 1, "with v1 closed, only v3 waits, on v2");
 
+        crate::ops::task::set_status(tx, second, crate::model::TaskStatus::Done).unwrap();
         value_set_closed(tx, v2.id, true).unwrap();
         assert_eq!(held_by_order(tx, &dim(tx, axis.id)).unwrap(), 0, "everything before v3 is closed");
+    }
+
+    /// On an axis whose tasks wait along its order, a value with unfinished tasks on it is not closed
+    /// (`AMB-D-990`): the refusal gives the count and the filter that lists them. Finished tasks — done
+    /// or rejected — do not hold it, and an axis without the setting closes as before.
+    #[test]
+    fn a_value_with_unfinished_tasks_stays_open_where_tasks_wait() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let axis = add(tx, p, NewDimension { ordered: true, role: DimensionRole::Closable, ..custom("リリース") })
+            .unwrap();
+        let v1 = value_add(tx, axis.id, "v1", None).unwrap();
+        value_add(tx, axis.id, "v2", None).unwrap();
+        let on = |title: &str, status: Option<crate::model::TaskStatus>| {
+            let t = task_in(tx, title, p);
+            set(tx, t, v1.id).unwrap();
+            if let Some(s) = status {
+                crate::ops::task::set_status(tx, t, s).unwrap();
+            }
+            t
+        };
+        on("済み", Some(crate::model::TaskStatus::Done));
+        on("やめた", Some(crate::model::TaskStatus::Rejected));
+        let todo = on("まだ", None);
+        let going = on("作業中", Some(crate::model::TaskStatus::InProgress));
+        update(tx, axis.id, None, None, None, None, None, None, None, None, None, Some(true)).unwrap();
+
+        let err = value_set_closed(tx, v1.id, true).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::InvalidDimensionCloseUnfinished.as_str(), "{err}");
+        let said = err.to_string();
+        assert!(said.contains("2 task(s)"), "the count leaves the finished ones out: {said}");
+        assert!(
+            said.contains("dim:リリース=v1 status:todo,in_progress,blocked"),
+            "and the filter lists the rest: {said}"
+        );
+        assert!(!val(tx, v1.id).closed, "and nothing was written");
+
+        crate::ops::task::set_status(tx, going, crate::model::TaskStatus::Blocked).unwrap();
+        assert!(value_set_closed(tx, v1.id, true).is_err(), "a blocked task is not finished either");
+
+        crate::ops::task::set_status(tx, todo, crate::model::TaskStatus::Done).unwrap();
+        crate::ops::task::set_status(tx, going, crate::model::TaskStatus::Done).unwrap();
+        assert!(value_set_closed(tx, v1.id, true).unwrap().closed, "with every task finished it closes");
+
+        let loose = add(tx, p, NewDimension { ordered: true, role: DimensionRole::Closable, ..custom("区切り") })
+            .unwrap();
+        let w = value_add(tx, loose.id, "w1", None).unwrap();
+        let t = task_in(tx, "残り", p);
+        set(tx, t, w.id).unwrap();
+        assert!(value_set_closed(tx, w.id, true).is_ok(), "an axis without the setting closes as before");
     }
 
     /// Where a task stands on every read that says `ready` (`AMB-D-990`): the card, the detail, the
@@ -2612,6 +2704,8 @@ mod tests {
         assert_eq!(standing(tx, third), waiting_standing(&["v1", "v2"]), "every open value before, in order");
         assert_eq!(standing(tx, bare), ready_standing(), "a task with no value waits on nothing");
 
+        // A value closes once its own tasks are finished (`AMB-D-990`).
+        crate::ops::task::set_status(tx, first, crate::model::TaskStatus::Done).unwrap();
         value_set_closed(tx, v1.id, true).unwrap();
         assert_eq!(
             read::newly_ready_by_closing(tx.conn(), v1.id).unwrap(),
@@ -2621,6 +2715,7 @@ mod tests {
         assert_eq!(standing(tx, second), ready_standing());
         assert_eq!(standing(tx, third), waiting_standing(&["v2"]));
 
+        crate::ops::task::set_status(tx, second, crate::model::TaskStatus::Done).unwrap();
         value_set_closed(tx, v2.id, true).unwrap();
         assert_eq!(read::newly_ready_by_closing(tx.conn(), v2.id).unwrap(), vec![third]);
         assert_eq!(standing(tx, third), ready_standing());

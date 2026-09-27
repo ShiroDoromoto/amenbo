@@ -341,6 +341,7 @@ pub enum ErrorCode {
     InvalidDimensionSetClosedValue,
     InvalidDimensionSequentialUnfit,
     InvalidDimensionSequentialHeld,
+    InvalidDimensionCloseUnfinished,
     InvalidTaskRequiredDimension,
     // A status transition turned away because the task's creation is still open (`AMB-D-846`). It is not
     // `not_ready`: that sentence opens with "cannot reserve", and this one is refusing to close or stall a
@@ -487,6 +488,7 @@ impl ErrorCode {
             ErrorCode::InvalidDimensionSetClosedValue => "invalid_dimension_set_closed_value",
             ErrorCode::InvalidDimensionSequentialUnfit => "invalid_dimension_sequential_unfit",
             ErrorCode::InvalidDimensionSequentialHeld => "invalid_dimension_sequential_held",
+            ErrorCode::InvalidDimensionCloseUnfinished => "invalid_dimension_close_unfinished",
             ErrorCode::InvalidTaskRequiredDimension => "invalid_task_required_dimension",
             ErrorCode::InvalidTaskStatusDraft => "invalid_task_status_draft",
             ErrorCode::InvalidDecisionRequiredDimension => "invalid_decision_required_dimension",
@@ -596,6 +598,7 @@ impl ErrorCode {
         ErrorCode::InvalidDimensionSetClosedValue,
         ErrorCode::InvalidDimensionSequentialUnfit,
         ErrorCode::InvalidDimensionSequentialHeld,
+        ErrorCode::InvalidDimensionCloseUnfinished,
         ErrorCode::InvalidTaskRequiredDimension,
         ErrorCode::InvalidTaskStatusDraft,
         ErrorCode::InvalidDecisionRequiredDimension,
@@ -836,6 +839,7 @@ mod tests {
             "invalid_dimension_set_closed_value",
             "invalid_dimension_sequential_unfit",
             "invalid_dimension_sequential_held",
+            "invalid_dimension_close_unfinished",
             "invalid_task_required_dimension",
             "invalid_task_status_draft",
             "invalid_decision_required_dimension",

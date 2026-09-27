@@ -296,19 +296,7 @@ fn resolve_attachment(store: &Store, id: &str) -> Result<Attachment, CliError> {
 
 /// One attachment, summarized as a line for a human.
 pub(crate) fn attach_line(a: &Attachment) -> String {
-    use amenbo_core::model::AttachmentKind;
-    let label = a.filename.clone().or_else(|| a.url.clone()).unwrap_or_else(|| "(no name)".to_string());
-    match a.kind {
-        AttachmentKind::Blob => {
-            let size = a.size_bytes.unwrap_or(0);
-            let mime = a.mime.as_deref().unwrap_or("application/octet-stream");
-            format!("{}  blob  {label}  {mime}  {size}B", attach_label(a))
-        }
-        AttachmentKind::Url => {
-            let u = a.url.as_deref().unwrap_or("");
-            format!("{}  url   {label}  {u}", attach_label(a))
-        }
-    }
+    a.listed_as(&attach_label(a))
 }
 
 /// The one directory `attach open` puts its temp copies in. Everything it leaves behind lives here, which

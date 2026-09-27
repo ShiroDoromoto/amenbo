@@ -1304,6 +1304,27 @@ pub struct Attachment {
     pub updated_at: Timestamp,
 }
 
+impl Attachment {
+    /// The attachment as one line of a list, led by `handle` (`AMB-ATT-<n>`, spelled however the surface
+    /// spells refs): its kind, its name, then a blob's type and size or a link's address. `attach ls`,
+    /// `task show` and a step's launch text all list attachments in this one shape, so an id read off any
+    /// of them is the one `attach show` / `save` take.
+    pub fn listed_as(&self, handle: &str) -> String {
+        let label = self.filename.clone().or_else(|| self.url.clone()).unwrap_or_else(|| "(no name)".to_string());
+        match self.kind {
+            AttachmentKind::Blob => {
+                let size = self.size_bytes.unwrap_or(0);
+                let mime = self.mime.as_deref().unwrap_or("application/octet-stream");
+                format!("{handle}  blob  {label}  {mime}  {size}B")
+            }
+            AttachmentKind::Url => {
+                let u = self.url.as_deref().unwrap_or("");
+                format!("{handle}  url   {label}  {u}")
+            }
+        }
+    }
+}
+
 // ───────────────────────── automation: what is built ─────────────────────────
 //
 // Eleven records for the definition, mirroring the eleven definition tables the store_engine schema

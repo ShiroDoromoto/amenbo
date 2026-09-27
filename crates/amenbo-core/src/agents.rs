@@ -164,7 +164,8 @@ pub fn preamble(cmd: &str) -> String {
          \n\
          **The task this run is on** carries that task as it stood when this step opened — its title, \
          then whichever of its notes, the decisions linked to it and its comments this step was built \
-         to be handed, each whole. Work from it as written rather than reading the task again with \
+         to be handed, each whole, and one line per file attached to it, led by its `AMB-ATT-<n>` \
+         (`{cmd} attach show` reads one, `{cmd} attach save` writes it out). Work from it as written rather than reading the task again with \
          `{cmd} task show`. It is left out before the run has taken a task, and when this step was \
          built to be handed none of the three.\n\
          \n\

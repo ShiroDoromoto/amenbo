@@ -25,8 +25,9 @@
 
 use crate::error::{Error, Result};
 use std::collections::BTreeSet;
+use crate::idref::{self, RefKind};
 use crate::model::{
-    AutomationCfgKind, AutomationPortDirection, AutomationPortKind, AutomationRun,
+    AttachmentTarget, AutomationCfgKind, AutomationPortDirection, AutomationPortKind, AutomationRun,
     AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
     AutomationStoppedReason, RunDefCfg, RunDefExit, RunDefIn, RunDefPort, ERROR_EXIT,
 };
@@ -641,7 +642,7 @@ impl TaskParts {
 
 /// **The task this run is on, as the store holds it when the step opens** (`AMB-D-965`): its title, then
 /// those of its notes, the decisions linked to it and its comments the step is handed, each whole and
-/// oldest first.
+/// oldest first, and the files attached to it — one line each, the shape `task show` lists them in.
 ///
 /// It is written here so the step does not spend its first turns fetching it with `task show`,
 /// `decision show` and `comment list` — and cannot forget to. What a task that this one depends on
@@ -666,6 +667,18 @@ fn the_task(tx: &WriteTx<'_>, task_id: i64, parts: TaskParts) -> Result<String> 
     }
     if !decisions.is_empty() {
         out.push_str(&format!("\n\n### The decisions linked to it\n\n{}", decisions.join("\n\n")));
+    }
+    // What is attached to the task itself — the files a run was started with land here (`AMB-D-981`). Not
+    // behind a switch of its own: a line per file is cheap, and a step told to work from this block
+    // rather than `task show` has no other way to learn the task carries one.
+    let mut attachments = Vec::new();
+    for id in read::live_attachment_ids_for_target(conn, AttachmentTarget::Task, task_id)? {
+        if let Some(a) = read::attachment(conn, id)? {
+            attachments.push(format!("- {}", a.listed_as(&idref::render(RefKind::Attachment, a.id))));
+        }
+    }
+    if !attachments.is_empty() {
+        out.push_str(&format!("\n\n### Its attachments\n\n{}", attachments.join("\n")));
     }
     let mut comments = Vec::new();
     for id in if parts.comments { read::task_comment_ids(conn, task_id)? } else { Vec::new() } {
@@ -1482,8 +1495,9 @@ mod tests {
         });
     }
 
-    /// A task with notes, one decision linked to it and one comment, taken by the first step of `p`.
-    fn a_task_with_its_context(tx: &WriteTx<'_>, p: &Picture) -> (i64, i64, i64) {
+    /// A task with notes, one decision linked to it, one comment and one file attached (`AMB-ATT-<n>`, the
+    /// fourth value), taken by the first step of `p`.
+    fn a_task_with_its_context(tx: &WriteTx<'_>, p: &Picture) -> (i64, i64, i64, i64) {
         let project = p.automation.project_id;
         let task = crate::ops::test_support::mk_task_in(tx, "直すもの", Some(project));
         crate::ops::task::update(
@@ -1502,7 +1516,18 @@ mod tests {
         crate::ops::decision::finish_writing(tx, decision, None).expect("settled");
         crate::ops::decision::link(tx, decision, task).expect("link");
         let comment = crate::ops::comment::add_comment(tx, task, ActorKind::Human, "ここも見て").expect("comment");
-        (task, decision, comment.id)
+        let file = crate::ops::attachment::add_blob(
+            tx,
+            AttachmentTarget::Task,
+            task,
+            &"a".repeat(64),
+            "明細.csv",
+            Some("text/csv"),
+            42,
+            ActorKind::Human,
+        )
+        .expect("attach");
+        (task, decision, comment.id, file.id)
     }
 
     /// **A step is handed the task its run is on, whole** (`AMB-D-965`) — its notes, the decision linked to
@@ -1512,7 +1537,7 @@ mod tests {
     fn a_step_is_handed_the_task_with_its_decisions_and_comments() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
-            let (task, decision, comment) = a_task_with_its_context(tx, &p);
+            let (task, decision, comment, file) = a_task_with_its_context(tx, &p);
             let run = a_run(tx, &p.automation);
             let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             assert!(!first.text.contains("## The task this run is on"), "{}", first.text);
@@ -1531,6 +1556,7 @@ mod tests {
             assert!(text.contains("こう直す"), "{text}");
             assert!(text.contains(&format!("### Its comments, oldest first\n\n**AMB-TC-{comment}** — human, ")), "{text}");
             assert!(text.contains("ここも見て"), "{text}");
+            assert!(text.contains(&format!("### Its attachments\n\n- AMB-ATT-{file}  blob  明細.csv  text/csv  42B")), "{text}");
             // It comes before what the run has done, which is read against it.
             let at = |s: &str| text.find(s).unwrap_or_else(|| panic!("{s} in {text}"));
             assert!(at("## The task this run is on") < at("## What has happened so far"), "{text}");
@@ -1556,7 +1582,7 @@ mod tests {
                 Some(false),
             )
             .expect("task off");
-            let (task, _, _) = a_task_with_its_context(tx, &p);
+            let (task, _, _, _) = a_task_with_its_context(tx, &p);
             let run = a_run(tx, &p.automation);
             let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
@@ -1589,7 +1615,7 @@ mod tests {
                 Some(false),
             )
             .expect("decisions and comments off");
-            let (task, _, _) = a_task_with_its_context(tx, &p);
+            let (task, _, _, _) = a_task_with_its_context(tx, &p);
             let run = a_run(tx, &p.automation);
             let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
@@ -1602,6 +1628,25 @@ mod tests {
             assert!(!text.contains("こう直す"), "{text}");
             assert!(!text.contains("### Its comments"), "{text}");
             assert!(!text.contains("ここも見て"), "{text}");
+            // The files attached are not behind a switch: a step handed the task at all is told of them.
+            assert!(text.contains("### Its attachments\n\n- AMB-ATT-"), "{text}");
+        });
+    }
+
+    /// A task with no file attached is handed without an empty attachments heading.
+    #[test]
+    fn a_task_with_no_attachments_is_handed_without_the_heading() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let task = crate::ops::test_support::mk_task_in(tx, "添付の無いもの", Some(p.automation.project_id));
+            let run = a_run(tx, &p.automation);
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
+            reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open")).text;
+            assert!(text.contains(&format!("## The task this run is on\n\n**AMB-T-{task}** — 添付の無いもの")), "{text}");
+            assert!(!text.contains("### Its attachments"), "{text}");
         });
     }
 

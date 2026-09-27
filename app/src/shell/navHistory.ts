@@ -21,6 +21,8 @@ export type NavHistory = {
   go: (loc: Location) => void;
   back: () => void;
   forward: () => void;
+  /** The Location ＜ would land on, or nothing at the start of the trail. */
+  prev: Location | undefined;
   canBack: boolean;
   canForward: boolean;
 };
@@ -33,11 +35,13 @@ export type NavAction = { type: "push"; loc: Location } | { type: "back" } | { t
 // sidebar would leave the first one's project still on the screen. What a project arrives with open
 // is part of it for the same reason: a run's pane sending the reader to a picture or to the history
 // of the project already picked in front of them is a move, and an arrival counted again is another one
-// (`AMB-T-5539`).
+// (`AMB-T-5539`). So is what the automations screen has open inside it — its tab, and the automation,
+// action or built-in on it (`AMB-D-993`).
 const sameNav = (a: Nav, b: Nav) =>
   a.type === b.type && a.id === b.id && a.pick === b.pick &&
-  a.automation === b.automation &&
-  a.placement === b.placement && a.runs === b.runs && a.nth === b.nth;
+  a.tab === b.tab && a.automation === b.automation && a.automationIn === b.automationIn &&
+  a.action === b.action && a.builtin === b.builtin &&
+  a.placement === b.placement && a.nth === b.nth;
 const sameSel = (a: Selection, b: Selection) =>
   a.type === b.type && (a.type === "none" || a.id === (b as { id: string | number }).id);
 const sameLocation = (a: Location | undefined, b: Location) =>
@@ -82,6 +86,7 @@ export function useNavHistory(initialNav: Nav): NavHistory {
     go,
     back,
     forward,
+    prev: stack[index - 1],
     canBack: index > 0,
     canForward: index < stack.length - 1,
   };

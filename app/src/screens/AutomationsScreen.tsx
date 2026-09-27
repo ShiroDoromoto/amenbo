@@ -36,7 +36,12 @@
 // **The tabs stay over a build screen** (`AMB-T-5419`), so another tab is one press away rather than
 // "back" and then the tab. The tab lit is the one the open screen belongs to — "actions" over an
 // action, "automations" over an automation — and a press on any tab, that one included, closes what is
-// open and lands on that tab's list, as "back" does.
+// open and lands on that tab's list.
+//
+// **Where the screen is lives on the shell's history, not in the screen** (`AMB-D-993`): the project
+// picked, the tab and what is open are each a place, so ＜/＞ walk through them and the sidebar never
+// points somewhere the screen is not. The screen's own "back" walks the same trail
+// (`../shell/AppShell`).
 //
 // **A row leads with the automation's ID**, the number the terminal names it by
 // (`amenbo automation start <ID>`): a name can be changed, so the ID is what ties a row on this
@@ -56,6 +61,7 @@
 // there is anything to write them about (`AutomationNew`). With none yet, that press is the whole
 // list: a sentence saying the list is empty would stand beside the one move it leaves.
 import { useState } from "react";
+import type { Nav } from "../shell/AppShell";
 import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 import { AutomationActionsTab, firstLine } from "./AutomationActionsTab";
 import { AutomationBuiltinScreen } from "./AutomationBuiltinScreen";
@@ -70,14 +76,23 @@ import { dataAdapter } from "../mock/adapter";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { errSentence, t, tf } from "../core/i18n";
 import type { AutomationCardDto } from "../bindings/bindings";
-import type { RunsTab } from "../core/refNav";
 
 /** Which of the four tabs the screen is on. */
-type Tab = "automations" | "actions" | "running" | "history";
+export type AutoTab = "automations" | "actions" | "running" | "history";
+
+/**
+ * **Where the screen is** — the project picked, the tab and what is open on it — held on the shell's
+ * place rather than in the screen (`AMB-D-993`), so ＜/＞ walk through it. `nth` and `placement` are an
+ * arrival's from a run's pane; a move inside the screen leaves both off.
+ */
+export type AutoPlace = Pick<
+  Nav,
+  "pick" | "tab" | "automation" | "automationIn" | "action" | "builtin" | "placement" | "nth"
+>;
 
 // Spelled out rather than built from the id, so the key gate can see every label a reader can be
 // shown (`core/i18n/sourceKeys.test.ts`).
-const TABS: readonly { id: Tab; label: () => string }[] = [
+const TABS: readonly { id: AutoTab; label: () => string }[] = [
   { id: "automations", label: () => t("auto.tab.automations") },
   { id: "actions", label: () => t("auto.tab.actions") },
   { id: "running", label: () => t("auto.tab.running") },
@@ -85,72 +100,62 @@ const TABS: readonly { id: Tab; label: () => string }[] = [
 ];
 
 export function AutomationsScreen({
-  pick,
-  opening,
-  openingBox,
-  openingTab,
+  place,
+  onGo,
+  onBack,
   workspaceOpen,
   onGoToRun,
 }: {
-  /** The project the pulldown arrives on, or nothing for every project — a project's header, and a
-   *  run's pane, name theirs. */
-  pick?: number;
-  /** The definition to arrive already open on, in the project picked — from a run's pane. */
-  opening?: number;
-  /** The box that definition arrives with pressed on its picture (`./AutomationBuildScreen`). */
-  openingBox?: number;
-  /** The tab to arrive on — the one a run is listed on, for a run's pane once its run is over
-   *  (`AMB-T-5539`): "history", or "running" for a failure nobody has acknowledged yet. */
-  openingTab?: RunsTab;
+  /** Where the screen is. */
+  place: AutoPlace;
+  /** Move inside the screen — a new place, pushed onto the shell's history. */
+  onGo: (next: AutoPlace) => void;
+  /** The screen's own "back", from whatever is open. */
+  onBack: () => void;
   /** Whether the workspace is standing — the build screen's to hand to the press (`./AutomationBuildScreen`). */
   workspaceOpen: boolean;
   /** Go to the pane a run is drawn in, for a press on a row of the "running" tab. */
   onGoToRun?: (project: number, run: number) => void;
 }) {
   // The project the pulldown is on, or `null` for every project.
-  const [projectId, setProjectId] = useState<number | null>(pick ?? null);
-  const [tab, setTab] = useState<Tab>(openingTab ?? "automations");
-  // Which definition is open, and whose project it is, or nothing while the list is. The build screen
-  // replaces the list rather than standing beside it, so this is where the screen is and not a
-  // selection within it. The project is the row's own, since with every project picked the pulldown
-  // does not say it.
-  const [open, setOpen] = useState<Opened | null>(
-    opening === undefined || pick === undefined ? null : { id: opening, projectId: pick },
-  );
-  // Which library action is open, for the same reason and in the same spot: the build screen stands
-  // in place of the list rather than beside it.
-  const [openAction, setOpenAction] = useState<number | null>(null);
-  // Which built-in is open to be read, by its key — in the same spot again.
-  const [openBuiltin, setOpenBuiltin] = useState<string | null>(null);
+  const projectId = place.pick ?? null;
+  const tab: AutoTab = place.tab ?? "automations";
+  // What is open: a built-in over an action over a definition, since each is opened from the one
+  // under it. The build screen replaces the list rather than standing beside it, so this is where the
+  // screen is and not a selection within it.
+  const open: Opened | null =
+    place.automation === undefined || place.automationIn === undefined
+      ? null
+      : { id: place.automation, projectId: place.automationIn };
+  const openAction = place.action ?? null;
+  const openBuiltin = place.builtin ?? null;
 
   // The tab the reader sees lit: the open screen's own while one is open, the chosen one otherwise.
-  const lit: Tab =
+  const lit: AutoTab =
     openAction !== null || openBuiltin !== null ? "actions" : open !== null ? "automations" : tab;
 
-  function close() {
-    setOpenBuiltin(null);
-    setOpenAction(null);
-    setOpen(null);
-  }
-
-  function choose(next: Tab) {
-    close();
-    setTab(next);
-  }
+  // A tab closes what is open and lands on that tab's list, as "back" does.
+  const choose = (next: AutoTab) => onGo({ pick: place.pick, tab: next });
 
   // Another project picked closes what is open and stays on the tab: what was open is one project's,
   // and the list it lands on is the one the pulldown now says.
-  function narrow(next: number | null) {
-    close();
-    setProjectId(next);
-  }
+  const narrow = (next: number | null) => onGo({ pick: next ?? undefined, tab: place.tab });
 
-  // An automation an open action is placed on, opened here in place of the action — whichever
-  // project it is in.
-  const goToAutomation = (project: number, automation: number) => {
-    setOpenAction(null);
-    setOpen({ id: automation, projectId: project });
-  };
+  const openAutomation = (opened: Opened) =>
+    onGo({ pick: place.pick, tab: "automations", automation: opened.id, automationIn: opened.projectId });
+
+  // An action opened from the library, or from the build screen of a definition — which stays open
+  // under it, so the screen's "back" lands on it again.
+  const openActionOf = (id: number) =>
+    onGo({
+      pick: place.pick,
+      tab: open === null ? "actions" : place.tab,
+      automation: open?.id,
+      automationIn: open?.projectId,
+      action: id,
+    });
+
+  const openBuiltinOf = (key: string) => onGo({ pick: place.pick, tab: "actions", builtin: key });
 
   const head = (
     <>
@@ -176,7 +181,7 @@ export function AutomationsScreen({
     return (
       <div className="autoscreen autoscreen--build">
         {head}
-        <AutomationBuiltinScreen builtinKey={openBuiltin} onBack={() => setOpenBuiltin(null)} />
+        <AutomationBuiltinScreen builtinKey={openBuiltin} onBack={onBack} />
       </div>
     );
   }
@@ -186,10 +191,11 @@ export function AutomationsScreen({
       <div className="autoscreen autoscreen--build">
         {head}
         <AutomationActionBuildScreen
+          key={openAction}
           id={openAction}
-          onBack={() => setOpenAction(null)}
+          onBack={onBack}
           onGoToRun={onGoToRun}
-          onGoToAutomation={goToAutomation}
+          onGoToAutomation={(project, automation) => openAutomation({ id: automation, projectId: project })}
         />
       </div>
     );
@@ -200,13 +206,14 @@ export function AutomationsScreen({
       <div className="autoscreen autoscreen--build">
         {head}
         <AutomationBuildScreen
+          // Built again for each arrival, which is what presses the box it names.
+          key={`${open.id}:${place.nth ?? 0}`}
           id={open.id}
           projectId={open.projectId}
           workspaceOpen={workspaceOpen}
-          // Only the definition arrived on: a later one opened from the list starts with nothing pressed.
-          openingBox={open.id === opening ? openingBox : undefined}
-          onBack={() => setOpen(null)}
-          onOpenAction={setOpenAction}
+          openingBox={place.placement}
+          onBack={onBack}
+          onOpenAction={openActionOf}
           onGoToRun={onGoToRun}
         />
       </div>
@@ -226,13 +233,13 @@ export function AutomationsScreen({
           // A fresh list per project picked: a form half filled in for one is not the other's.
           key={projectId ?? "every"}
           projectId={projectId}
-          onOpen={setOpenAction}
-          onOpenBuiltin={setOpenBuiltin}
+          onOpen={openActionOf}
+          onOpenBuiltin={openBuiltinOf}
         />
       )}
 
       {tab === "automations" && projectId === null && (
-        <EveryAutomationList workspaceOpen={workspaceOpen} onOpen={setOpen} onGoToRun={onGoToRun} />
+        <EveryAutomationList workspaceOpen={workspaceOpen} onOpen={openAutomation} onGoToRun={onGoToRun} />
       )}
 
       {tab === "automations" && projectId !== null && (
@@ -240,7 +247,7 @@ export function AutomationsScreen({
           key={projectId}
           projectId={projectId}
           workspaceOpen={workspaceOpen}
-          onOpen={setOpen}
+          onOpen={openAutomation}
           onGoToRun={onGoToRun}
         />
       )}

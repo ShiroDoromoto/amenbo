@@ -10,7 +10,7 @@ import { endingConfirm } from "./openPanes";
 import { Sidebar } from "./Sidebar";
 import { BoardScreen } from "../screens/BoardScreen";
 import { ActivityFeed } from "../screens/ActivityFeed";
-import { AutomationsScreen } from "../screens/AutomationsScreen";
+import { AutomationsScreen, type AutoPlace, type AutoTab } from "../screens/AutomationsScreen";
 import { UpdateBanner, UpdateCheckFeedback } from "../components/UpdateBanner";
 import { HealthBanner } from "../components/HealthBanner";
 import { ManagedBlockBanner } from "../components/ManagedBlockBanner";
@@ -45,16 +45,18 @@ import { currentLang, errLabel, t, type CmdError } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
 /**
- * `automation` is the definition the automations screen arrives with open on its build screen, in the
- * project `pick` names (`AMB-D-992`). It is kept on the place for `pick`'s reason.
+ * **What the automations screen has open is part of where you are** (`AMB-D-993`): `tab` is the tab
+ * it stands on, `automation` the definition open on its build screen and `automationIn` the project
+ * that definition is in, `action` the library action open and `builtin` the built-in open to be read.
+ * Each move inside the screen is a place of its own, so ＜/＞ walk through them the way they walk
+ * through screens, and the sidebar and what the screen shows never point at two different places.
  *
  * `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the gear in the board toolbar.
  *
- * `placement` is the box that build screen arrives with pressed, and `runs` the tab the automations
- * arrive on instead — both from a run's pane, which is read in the workspace and followed here
- * (`AMB-T-5539`). `nth` counts those arrivals, so that a second press on the same button opens the
- * screen again rather than finding it already where it was sent and leaving it as the reader has
- * since moved it.
+ * `placement` is the box that build screen arrives with pressed — from a run's pane, which is read in
+ * the workspace and followed here (`AMB-T-5539`). `nth` counts those arrivals, so that a second press
+ * on the same button opens the screen again rather than finding it already where it was sent and
+ * leaving it as the reader has since moved it.
  *
  * `pick` is the project a screen should arrive already holding — the one the creation screen just
  * raised, carried into the MCP screen so its rows open on it (`AMB-D-684`), and the one the automations
@@ -66,9 +68,12 @@ export type Nav = {
   type: "view" | "project" | "projectSettings";
   id: string;
   pick?: number;
+  tab?: AutoTab;
   automation?: number;
+  automationIn?: number;
+  action?: number;
+  builtin?: string;
   placement?: number;
-  runs?: RunsTab;
   nth?: number;
 };
 
@@ -100,7 +105,7 @@ export function AppShell() {
     const first = dataAdapter.listProjects()[0];
     return first ? { type: "project", id: String(first.id) } : { type: "view", id: "onboarding" };
   });
-  const { loc, go, back, forward, canBack, canForward } = useNavHistory(initialNav);
+  const { loc, go, back, forward, prev, canBack, canForward } = useNavHistory(initialNav);
   const nav = loc.nav;
   // The right-pane selection is derived from the current Location (no separate state; ＜/＞ restore the selection too).
   const selectedTaskId = loc.sel.type === "task" ? loc.sel.id : null;
@@ -635,6 +640,7 @@ export function AppShell() {
       id: "automations",
       pick: project,
       automation,
+      automationIn: project,
       ...(placement === null ? {} : { placement }),
       nth: arrivals.current,
     });
@@ -642,10 +648,24 @@ export function AppShell() {
   }, [navTo]);
   const openRuns = useCallback((project: number, tab: RunsTab) => {
     arrivals.current += 1;
-    navTo({ type: "view", id: "automations", pick: project, runs: tab, nth: arrivals.current });
+    navTo({ type: "view", id: "automations", pick: project, tab, nth: arrivals.current });
     setFace("tasks");
   }, [navTo]);
   const openWorkspace = useCallback(() => selectFace("workspace"), [selectFace]);
+  // A move inside the automations screen, pushed like any other (`AMB-D-993`).
+  const goInAutomations = useCallback(
+    (place: AutoPlace) => navTo({ type: "view", id: "automations", ...place }),
+    [navTo],
+  );
+  // The screen's own "back": ＜ where the place before is on this screen too, so the two walk one
+  // trail; the list otherwise, since the press says it goes back to the list and not off the screen.
+  const backInAutomations = useCallback(() => {
+    if (prev?.nav.type === "view" && prev.nav.id === "automations") {
+      void goBack();
+      return;
+    }
+    navTo({ type: "view", id: "automations", pick: nav.pick, tab: nav.tab });
+  }, [prev, goBack, navTo, nav.pick, nav.tab]);
   const refNav = useMemo(
     () => ({ selectTask, selectDecision, openAutomation, openRuns, openWorkspace }),
     [selectTask, selectDecision, openAutomation, openRuns, openWorkspace],
@@ -813,13 +833,9 @@ export function AppShell() {
           )}
           {nav.type === "view" && nav.id === "automations" && (
             <AutomationsScreen
-              // A fresh screen per place, and per arrival from a run's pane: what it arrives holding
-              // is read once, as it opens.
-              key={`${nav.pick ?? "every"}:${nav.nth ?? 0}`}
-              pick={nav.pick}
-              opening={nav.automation}
-              openingBox={nav.placement}
-              openingTab={nav.runs}
+              place={nav}
+              onGo={goInAutomations}
+              onBack={backInAutomations}
               workspaceOpen={workspaceOpen}
               onGoToRun={goToRun}
             />

@@ -1226,6 +1226,15 @@ toKind?: string,
 tasks?: number, decisions?: number, };
 
 /**
+ * **One library action in the list that spans every project** — the row the sidebar's "actions" tab
+ * draws with "every project" chosen, with whose shelf holds it (`AMB-D-992`).
+ *
+ * The project is `null` for the device's own, which is no project's. It comes by id as well as by
+ * name: the name is what the row's column says, and the id is what the row's owner is read from.
+ */
+export type EveryAutomationActionCardDto = { projectId: number | null, projectName: string | null, card: AutomationActionCardDto, };
+
+/**
  * **One automation in the list that spans every project** — the row the sidebar's "automations"
  * tab draws, with whose it is.
  *

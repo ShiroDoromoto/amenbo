@@ -490,6 +490,7 @@ pub fn run() {
       automation::automation_entry_replace,
       automation::automation_remove,
       automation::automation_action_page,
+      automation::automation_action_page_everywhere,
       automation::automation_action_add,
       automation::automation_action_edit,
       automation::automation_action_set_scope,

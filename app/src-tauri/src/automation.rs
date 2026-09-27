@@ -66,7 +66,7 @@ use crate::dto::{
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto,
-    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationCardDto,
+    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
 };
 use crate::error::CmdError;
@@ -227,6 +227,35 @@ pub fn automation_action_page(
         });
     }
     Ok(out)
+}
+
+/// **The library of every project** — the device's own actions first, then each project's own,
+/// project by project in the sidebar's order ([`automation_view::every_action_card`]).
+///
+/// What the sidebar's "actions" tab lists with "every project" chosen (`AMB-D-992`), so each row
+/// carries whose shelf holds it. The window holds every project, so nothing narrows the walk. Built-ins
+/// are left out for the reason [`automation_action_page`] gives.
+#[tauri::command]
+pub fn automation_action_page_everywhere() -> Result<Vec<EveryAutomationActionCardDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_action_page_everywhere");
+    let store = open_store_read()?;
+    let cards = automation_view::every_action_card(store.read_model().conn(), None)?;
+    Ok(cards
+        .into_iter()
+        .filter(|one| one.card.action.builtin.is_none())
+        .map(|one| EveryAutomationActionCardDto {
+            project_id: one.card.action.project_id,
+            project_name: one.project_name,
+            card: AutomationActionCardDto {
+                id: one.card.action.id,
+                name: one.card.action.name,
+                note: one.card.action.note,
+                steps: one.card.steps,
+                global: one.card.action.project_id.is_none(),
+                used_by: one.card.used_by,
+            },
+        })
+        .collect())
 }
 
 /// **The built-ins** (`AMB-D-964`), in the order the library lists them — read off Amenbo's own

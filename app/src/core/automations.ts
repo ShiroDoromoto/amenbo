@@ -39,6 +39,7 @@ import type {
   AutomationRunCardDto,
   AutomationRunHistoryDto,
   AutomationRunStartedDto,
+  EveryAutomationActionCardDto,
   EveryAutomationCardDto,
   WakeDto,
 } from "../bindings/bindings";
@@ -144,6 +145,23 @@ export function useAutomationActions(projectId: number | null): AutomationAction
   const { data } = useQuery<AutomationActionCardDto[]>(
     ["automationActions", projectId ?? null],
     () => fetchAutomationActions(projectId),
+  );
+  return data ?? [];
+}
+
+/**
+ * **The library of every project** — the device's own actions first, then each project's own, each
+ * row with whose shelf holds it (`null` for the device's). The sidebar's list with "every project"
+ * chosen (`AMB-D-992`).
+ *
+ * Its key starts with `automationActions` like the one project's, so a write that says it moved the
+ * library re-reads both lists.
+ */
+export function useEveryAutomationAction(): EveryAutomationActionCardDto[] {
+  const { data } = useQuery<EveryAutomationActionCardDto[]>(["automationActions", "everywhere"], () =>
+    inTauri()
+      ? invoke<EveryAutomationActionCardDto[]>("automation_action_page_everywhere")
+      : Promise.resolve([]),
   );
   return data ?? [];
 }

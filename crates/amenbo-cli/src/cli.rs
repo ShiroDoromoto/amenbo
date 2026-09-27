@@ -1082,6 +1082,9 @@ pub enum DimensionCmd {
         /// which side this axis classifies: `task`, `decision` or `both` (default: both)
         #[arg(long)]
         applies_to: Option<String>,
+        /// make a task on this axis wait until every value ordered before its own is closed (the axis has to be --ordered, --closable, single-select and classify tasks; default: off)
+        #[arg(long)]
+        sequential: bool,
         /// readable key for naming this axis outside Amenbo (lower-case letters, digits and hyphens, starting with a letter; defaults to `d<id>`)
         #[arg(long)]
         slug: Option<String>,
@@ -1095,7 +1098,7 @@ pub enum DimensionCmd {
         #[arg(long)]
         closed: bool,
     },
-    /// Show a dimension (name, notes, cardinality/ordered/role/card/applies-to, open values)
+    /// Show a dimension (name, notes, cardinality/ordered/role/card/applies-to/sequential, open values)
     Show {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
@@ -1103,7 +1106,7 @@ pub enum DimensionCmd {
         #[arg(long)]
         closed: bool,
     },
-    /// Update a dimension's name, notes, how many values one record may hold, value ordering, its role (time-axis / closable), whether it goes on the task card, whether it must be answered, which side it classifies, and/or its slug (only the given fields change)
+    /// Update a dimension's name, notes, how many values one record may hold, value ordering, its role (time-axis / closable), whether it goes on the task card, whether it must be answered, which side it classifies, whether its tasks wait for the values before their own, and/or its slug (only the given fields change)
     Update {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
@@ -1133,6 +1136,9 @@ pub enum DimensionCmd {
         /// which side this axis classifies (`--applies-to task|decision|both`); narrowing it takes no assignment away
         #[arg(long)]
         applies_to: Option<String>,
+        /// whether a task on this axis waits until every value ordered before its own is closed (`--sequential true|false`); it goes on an ordered, closable, single-select axis that classifies tasks, and holds those four while it is on
+        #[arg(long)]
+        sequential: Option<bool>,
         /// rename the readable key this axis is named by outside Amenbo
         #[arg(long)]
         slug: Option<String>,

@@ -54,6 +54,10 @@ pub struct NewDimension {
     /// side — `Both` — because an axis nobody said anything about is one whose raiser expects it where
     /// they raised it. Narrowing is [`update`]'s to do, and takes no assignment away.
     pub applies_to: DimensionAppliesTo,
+    /// Whether a task on this axis waits for the values ordered before its own (`AMB-D-990`). Checked
+    /// here as [`update`] checks it — the axis has to be ordered, closable, single-select and classify
+    /// tasks — and a new axis has no values, so raising it here holds nobody back yet.
+    pub sequential: bool,
     /// The readable key this axis is to be known by outside Amenbo (`AMB-D-735`). `None` takes the
     /// id-derived default, which is what nearly every axis keeps; naming one here is for the axis whose
     /// slug somebody outside has to type.
@@ -71,6 +75,7 @@ impl Default for NewDimension {
             show_on_card: false,
             required: false,
             applies_to: DimensionAppliesTo::Both,
+            sequential: false,
             slug: None,
         }
     }
@@ -418,14 +423,18 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
         show_on_card: new.show_on_card,
         required: new.required,
         applies_to: new.applies_to,
-        // Off at birth: the four things it asks of an axis are set here and may be moved at once, so
-        // the one door that holds them all is `update`.
-        sequential: false,
+        sequential: new.sequential,
         slug: Some(slug),
         order_key,
         created_at: now,
         updated_at: now,
     };
+    // Asked of the axis as it will be born, with `update`'s question: the four arrive here together.
+    if dimension.sequential {
+        if let Some(missing) = unfit_for_sequence(&dimension) {
+            return Err(sequence_unfit(&dimension.name, missing));
+        }
+    }
     emit_create(tx, record::dimension(&dimension))?;
     Ok(dimension)
 }

@@ -1049,3 +1049,81 @@ fn multi_is_refused_on_the_time_axis_and_a_demotion_names_what_it_would_drop() {
         "single"
     );
 }
+
+/// An axis whose tasks wait along its order (`AMB-D-990`), end to end on this face: the flag goes on only
+/// an axis it fits, raising it says how many tasks it holds, a waiting task says what it waits on and is
+/// refused the reservation, and a value with unfinished tasks on it stays open with the filter that lists
+/// them.
+#[test]
+fn a_sequential_axis_holds_tasks_until_the_values_before_theirs_close() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "段階PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    // Refused on an axis it does not fit, naming what is missing, and nothing is created.
+    let (err, code) = cli.run_err(&["dimension", "add", "--project", &pid, "--name", "無順", "--sequential", "--json"]);
+    assert_ne!(code, 0);
+    let v: Value = serde_json::from_str(&err).unwrap();
+    assert_eq!(v["error"]["code"], "invalid_dimension_sequential_unfit", "{err}");
+    assert!(v["error"]["message"].as_str().unwrap().contains("ordered"), "{err}");
+
+    let axis = cli.json(&[
+        "dimension", "add", "--project", &pid, "--name", "リリース", "--ordered", "--closable", "--json",
+    ]);
+    assert_eq!(axis["dimension"]["sequential"], false, "an axis starts without it");
+    cli.json(&["dimension", "value-add", "リリース", "--name", "v1", "--json"]);
+    cli.json(&["dimension", "value-add", "リリース", "--name", "v2", "--json"]);
+    let first = id_str(&cli.json(&["task", "add", "--title", "前", "--project", &pid, "--dim", "リリース=v1", "--json"])["task"]["id"]);
+    let later = id_str(&cli.json(&["task", "add", "--title", "後", "--project", &pid, "--dim", "リリース=v2", "--json"])["task"]["id"]);
+    cli.finish_creating(&first);
+    cli.finish_creating(&later);
+
+    // Raised afterwards: the envelope says how many tasks it now holds back, and the kind line says so.
+    let raised = cli.json(&["dimension", "update", "リリース", "--sequential", "true", "--json"]);
+    assert_eq!(raised["dimension"]["sequential"], true);
+    assert_eq!(raised["changed"], serde_json::json!(["sequential"]));
+    assert_eq!(raised["held_by_order"], 1, "v2's task waits on v1: {raised}");
+    let (shown, _) = cli.run(&["dimension", "show", "リリース"]);
+    assert!(shown.contains("sequential"), "show says the axis carries it: {shown}");
+
+    // While it is on, what it stands on is held.
+    let (err, code) = cli.run_err(&["dimension", "update", "リリース", "--ordered", "false", "--json"]);
+    assert_ne!(code, 0);
+    assert!(err.contains("invalid_dimension_sequential_held"), "{err}");
+
+    // The waiting task says what it waits on, on the row and on its page, and the mailbox leaves it out.
+    let (listed, _) = cli.run(&["task", "list", "--project", &pid]);
+    assert!(listed.contains("waiting-on:リリース=v1"), "the row names the value: {listed}");
+    let (page, _) = cli.run(&["task", "show", &later]);
+    assert!(page.contains("waiting on values: リリース=v1"), "the page names it: {page}");
+    let (page, _) = cli.run(&["task", "show", &first]);
+    assert!(page.contains("waiting on values: (none)"), "the first value's task waits on nothing: {page}");
+    let waiting = cli.json(&["task", "list", "--project", &pid, "--filter", "waiting_on_values:yes", "--json"]);
+    assert_eq!(waiting["count"], 1);
+    assert_eq!(id_str(&waiting["tasks"][0]["id"]), later);
+
+    // Reserving it is refused with the value to close.
+    let (err, code) = cli.run_err(&["task", "status", &later, "in_progress", "--json"]);
+    assert_ne!(code, 0);
+    let v: Value = serde_json::from_str(&err).unwrap();
+    assert_eq!(v["error"]["code"], "not_ready", "{err}");
+    assert!(v["error"]["message"].as_str().unwrap().contains("v1"), "{err}");
+
+    // v1 stays open while its task is unfinished, and the refusal hands over the filter.
+    let (err, code) = cli.run_err(&["dimension", "value-close", "リリース", "v1", "--json"]);
+    assert_ne!(code, 0);
+    let v: Value = serde_json::from_str(&err).unwrap();
+    assert_eq!(v["error"]["code"], "invalid_dimension_close_unfinished", "{err}");
+    assert!(
+        v["error"]["message"].as_str().unwrap().contains("dim:リリース=v1 status:todo,in_progress,blocked"),
+        "{err}"
+    );
+
+    // Finish it, close v1, and the later task is free.
+    cli.json(&["task", "status", &first, "in_progress", "--json"]);
+    cli.json(&["task", "done", &first, "--json"]);
+    cli.json(&["dimension", "value-close", "リリース", "v1", "--json"]);
+    let (page, _) = cli.run(&["task", "show", &later]);
+    assert!(page.contains("waiting on values: (none)"), "closing v1 released it: {page}");
+    cli.json(&["task", "status", &later, "in_progress", "--json"]);
+}

@@ -235,6 +235,12 @@ amenbo dimension update Release --closable true
 amenbo dimension value-close Release v18.0.0
 amenbo task list --filter "dim:Release=v18.0.0" --json   # still answers
 amenbo dimension value-reopen Release v18.0.0
+# --sequential reads the order as the stages the whole axis moves through: a task waits
+# until every value ordered before its own is closed. It goes on an ordered, closable,
+# single-select axis that classifies tasks, and says how many tasks it now holds back.
+# Closing a value is refused while unfinished tasks are still on it, and the refusal
+# names the filter that lists them.
+amenbo dimension update Release --sequential true
 # An axis and each of its values also carry a slug: a readable key for naming one
 # outside Amenbo, where a display name may not go and an id says nothing. Lower-case
 # letters, digits and hyphens, starting with a letter. Nobody has to pick one — a row
@@ -308,8 +314,9 @@ amenbo task list --filter "commit:<full-sha>" --json # walk history -> task insi
 amenbo task depend 13 --on 12                # 13 is blocked until 12 is done
 amenbo task undepend 13 --on 12
 # A task is ready when no blocker is open, every decision linked to it is settled and written
-# out, its declared start day has arrived, and it is no longer being created; ready:yes hides what
-# is not ready, ready:no lists what's waiting — and every task says which of the four is
+# out, its declared start day has arrived, it is no longer being created, and — on a --sequential
+# axis — every value ordered before its own is closed; ready:yes hides what is not ready, ready:no
+# lists what's waiting — and every task says which of the five is
 # holding it back. Reserving a task that is not ready is refused (not_ready) — resolve the
 # premise; there is no --force
 amenbo task list --filter "ready:yes" --json
@@ -319,6 +326,9 @@ amenbo task list --filter "start:future" --json
 # draft:yes is the same doorway onto the fourth premise — the tasks still being put
 # together, which are listed like any other but cannot be reserved (draft:no is the rest)
 amenbo task list --filter "draft:yes" --json
+# waiting_on_values:yes is the doorway onto the fifth — the tasks waiting for a value before
+# theirs to close
+amenbo task list --filter "waiting_on_values:yes" --json
 
 # Decisions: the premises that hold now (a Task sibling, not a task —
 # no mailbox workflow, its own device-global number space)

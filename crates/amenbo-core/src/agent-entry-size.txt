@@ -1,14 +1,14 @@
 # `amenbo agent --json` in bytes: each top-level section, then the whole document.
 # Not a ceiling — those are constants in agent.rs. This is the increment, made to land in a diff.
 # Rewrite it deliberately: cargo test -p amenbo-core record_the_entry_size -- --ignored
-agentCycle       5901
+agentCycle       6082
 amenbo           104
 capabilities     9411
 commandDetail    568
 commands         3085
 conventions      5282
 cycles           13669
-filterGrammar    5183
+filterGrammar    5472
 inspect          150
 mode             10
 notes            645
@@ -17,5 +17,5 @@ principles       350
 schemaVersion    3
 updateAvailable  5
 version          7
-TOTAL            47270
-TOTAL_IN_A_PANE  47785
+TOTAL            47740
+TOTAL_IN_A_PANE  48255

@@ -399,6 +399,7 @@ pub(crate) mod test_support {
                 show_on_card: false,
                 required: false,
                 applies_to: crate::model::DimensionAppliesTo::Both,
+                sequential: false,
                 slug: None,
             },
         )
@@ -694,6 +695,7 @@ mod delete_children_tests {
                 show_on_card: false,
                 required: false,
                 applies_to: crate::model::DimensionAppliesTo::Both,
+                sequential: false,
                 slug: None,
             },
         )

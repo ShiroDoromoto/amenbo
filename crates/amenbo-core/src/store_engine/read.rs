@@ -3549,6 +3549,12 @@ pub struct PremiseChangeRow {
     /// edge's) — as decision id + title, in link-`id` order. Disjoint from `added_decisions`: a decision
     /// that arrived after the status began is reported once, as the link it is.
     pub reopened_decisions: Vec<(i64, String)>,
+    /// Values ordered before the task's own, on an axis whose values are stages, that were **reopened**
+    /// after the status began and are still open (`AMB-D-990`) — as axis name + value name, axis in the
+    /// project's order and value in the axis's own. A reservation is never taken back for one, so this is
+    /// how its holder learns the stage before theirs is not over after all. Dated by the value's own
+    /// [`closed_changed_at`](crate::model::DimensionValue::closed_changed_at).
+    pub reopened_values: Vec<(String, String)>,
 }
 
 impl PremiseChangeRow {
@@ -3558,6 +3564,7 @@ impl PremiseChangeRow {
         !self.added_blockers.is_empty()
             || !self.added_decisions.is_empty()
             || !self.reopened_decisions.is_empty()
+            || !self.reopened_values.is_empty()
     }
 }
 
@@ -3580,6 +3587,7 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
             added_blockers: Vec::new(),
             added_decisions: Vec::new(),
             reopened_decisions: Vec::new(),
+            reopened_values: Vec::new(),
         }));
     };
     // Columns store the `to_rfc3339_z` form (fixed-width UTC), so a lexicographic `>` is chronological.
@@ -3641,7 +3649,7 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
         let mut sel = Select::new();
         let (did, dtitle) = (sel.col(DC.id), sel.col(DC.title));
         let pred = Pred::eq(L.task_id, task_id).and(unsettled_premise(DC)).and(
-            Pred::cmp(DC.status_changed_at, ">", since.clone()).or(superseded_since(DC, since)),
+            Pred::cmp(DC.status_changed_at, ">", since.clone()).or(superseded_since(DC, since.clone())),
         );
         let mut sql = Sql::from(&sel, L.table);
         sql.join(DC.table, same(DC.id, L.decision_id)).push_where(Some(&pred)).order_by([Sort::by(L.id)]);
@@ -3654,9 +3662,34 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
         rows.into_iter().filter(|(id, _)| !added_decisions.iter().any(|(a, _)| a == id)).collect::<Vec<_>>()
     };
 
-    let n = added_blockers.len() + added_decisions.len() + reopened_decisions.len();
+    // Values the task waits on again because they were reopened after the status began (`AMB-D-990`). The
+    // join and the wait are `waiting_on_values`' own, so a value named here is one the task would be
+    // refused a reservation for today; what this adds is the date, read off the value's own clock.
+    let reopened_values = {
+        let (link, axis, own, before) = WAITING_ON_ORDER;
+        let mut sel = Select::new();
+        let (axis_name, value_name) = (sel.col(axis.name), sel.col(before.name));
+        let pred = Pred::eq(link.task_id, task_id)
+            .and(waits_on_order(axis, own, before))
+            .and(Pred::cmp(before.closed_changed_at, ">", since));
+        let mut sql = Sql::from(&sel, link.table);
+        sql.join(axis.table, same(axis.id, link.dimension_id))
+            .join(own.table, same(own.id, link.value_id))
+            .join(before.table, same(before.dimension_id, link.dimension_id))
+            .push_where(Some(&pred))
+            .order_by([Sort::by(axis.order_key), Sort::by(before.order_key)]);
+        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| Ok((axis_name.get(r)?, value_name.get(r)?)))
+            .map_err(StoreEngineError::from)?
+            .collect::<rusqlite::Result<Vec<(String, String)>>>()
+            .map_err(StoreEngineError::from)?;
+        rows
+    };
+
+    let n = added_blockers.len() + added_decisions.len() + reopened_decisions.len() + reopened_values.len();
     crate::perf::record_query("engine.premise_change_since", n, n, started.elapsed());
-    Ok(Some(PremiseChangeRow { added_blockers, added_decisions, reopened_decisions }))
+    Ok(Some(PremiseChangeRow { added_blockers, added_decisions, reopened_decisions, reopened_values }))
 }
 
 /// Comments posted **after a task's current status began** (`AMB-D-963`), oldest first — what a holder has

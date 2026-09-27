@@ -1088,6 +1088,21 @@ pub const STEPS: &[Step] = &[
                  CHECK(sequential IN (0, 1));",
         ),
     },
+    Step {
+        to: 84,
+        name: "add dimension_value.closed_changed_at, when a value was last closed or reopened",
+        // `AMB-D-990`. A task under way is left alone when a value ordered before its own is reopened, so
+        // its holder is shown it instead (`AMB-D-366`) — and "after the reservation" needs the reopen dated
+        // by a clock of its own, since `updated_at` moves on a rename or a reorder too (`AMB-D-372`).
+        //
+        // **Not seeded.** When an existing value was last closed or reopened was never written down, and
+        // `updated_at` would guess it from edits that were neither. NULL reads as predating every
+        // reservation, which is the quiet side every other premise errs on.
+        apply: Apply::Sql(
+            "ALTER TABLE dimension_value ADD COLUMN closed_changed_at TEXT \
+                 CHECK(closed_changed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
+        ),
+    },
 ];
 
 /// v82: `automation_run.acknowledged_by_kind` — who said they had seen a failed run, a person or their
@@ -9446,6 +9461,42 @@ mod tests {
         assert!(
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v84: every value an upgrade brings in arrives undated — no reopen is invented for it, so no task
+    /// reserved before the upgrade is told a value was reopened under it — and the column takes an
+    /// instant and nothing else.
+    #[test]
+    fn every_value_arrives_without_a_reopen_date() {
+        let dir = scratch("dimension-value-closed-changed-at");
+        let engine = store_at(&dir, 83);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO dimension (id, project_id, name, cardinality, ordered, role, applies_to, order_key)
+                     VALUES (1, 1, 'リリース', 'single', 1, 'closable', 'both', 'a0');
+                 INSERT INTO dimension_value (id, dimension_id, name, order_key, slug, closed, updated_at)
+                     VALUES (1, 1, 'v1', 'a0', 'v1', 0, '2026-09-27T00:00:00Z');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let at: Option<String> = engine
+            .conn()
+            .query_row("SELECT closed_changed_at FROM dimension_value WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(at, None, "an edit is not a reopen, so nothing is guessed from updated_at");
+        assert!(
+            engine
+                .conn()
+                .execute("UPDATE dimension_value SET closed_changed_at = 'yesterday' WHERE id = 1", [])
+                .is_err(),
+            "only an instant goes in"
         );
         std::fs::remove_dir_all(&dir).ok();
     }

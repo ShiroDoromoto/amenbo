@@ -808,6 +808,11 @@ datasets! {
         // value keeps its name, its key and its place, so `UNIQUE (dimension_id, slug)` and the order
         // below go on counting it: reopening has to find it where it was.
         closed: bool_col,
+        // When `closed` last flipped — stamped by `ops::dimension::value_set_closed` on a move only, never by
+        // a rename or a reorder, so it answers "was this value reopened after a task was reserved?"
+        // (`AMB-D-990`, dated the way `AMB-D-372` dates every premise). Nullable: a value no close or reopen
+        // has touched since the column arrived has nothing to date, and reads as predating every task.
+        closed_changed_at: ts_opt,
     } => "UNIQUE (dimension_id, slug)"
 
     task_dimension_value {

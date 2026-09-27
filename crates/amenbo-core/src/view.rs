@@ -148,6 +148,11 @@ pub struct PremiseChange {
     /// holder, and superseded under the holder — the second dated by the `supersedes` edge, currency being
     /// an edge rather than a status.
     pub reopened_decisions: Vec<DecisionRef>,
+    /// Values ordered before the task's own, on an axis whose values are stages, that were **reopened**
+    /// after the status began and are open still (`AMB-D-990`) — axis in the project's order, then value in
+    /// the axis's. The wait bites only at the reservation, so a task already under way keeps going; this
+    /// is where its holder is told the stage before theirs is not over after all.
+    pub reopened_values: Vec<WaitingOnValue>,
 }
 
 impl PremiseChange {
@@ -157,6 +162,7 @@ impl PremiseChange {
         !self.added_blockers.is_empty()
             || !self.added_decisions.is_empty()
             || !self.reopened_decisions.is_empty()
+            || !self.reopened_values.is_empty()
     }
 }
 

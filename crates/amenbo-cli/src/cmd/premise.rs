@@ -103,6 +103,7 @@ fn no_premise_change() -> amenbo_core::view::PremiseChange {
         added_blockers: Vec::new(),
         added_decisions: Vec::new(),
         reopened_decisions: Vec::new(),
+        reopened_values: Vec::new(),
     }
 }
 
@@ -128,6 +129,10 @@ pub(crate) fn premise_change_lines(pc: &amenbo_core::view::PremiseChange) -> Vec
     // The reopen axis (`AMB-D-373`): the link is not new, the decision's settlement is what went away.
     for d in &pc.reopened_decisions {
         out.push(format!("  decision {} {} (no longer settled)", decision_label(d.id), decision_ref_name(&d.name)));
+    }
+    // The stage axis (`AMB-D-990`): a value ordered before the task's own was closed, and is open again.
+    for v in &pc.reopened_values {
+        out.push(format!("  value {}={} (reopened)", v.axis, v.value));
     }
     out
 }
@@ -219,5 +224,21 @@ mod tests {
         };
         attach_premise_change(&mut v, &pc);
         assert_eq!(v["premise_change"]["added_blockers"][0]["id"], 7);
+    }
+
+    /// A value reopened before the task's own (`AMB-D-990`) is a premise change of its own: it alone turns
+    /// the key on, and it gets a line naming the axis and the value.
+    #[test]
+    fn a_reopened_value_is_a_premise_change_with_its_own_line() {
+        use amenbo_core::view::{PremiseChange, WaitingOnValue};
+
+        let pc = PremiseChange {
+            reopened_values: vec![WaitingOnValue { axis: "リリース".to_string(), value: "v1".to_string() }],
+            ..no_premise_change()
+        };
+        assert_eq!(premise_change_lines(&pc), vec!["  value リリース=v1 (reopened)".to_string()]);
+        let mut v = json!({ "id": 1 });
+        attach_premise_change(&mut v, &pc);
+        assert_eq!(v["premise_change"]["reopened_values"][0]["value"], "v1");
     }
 }

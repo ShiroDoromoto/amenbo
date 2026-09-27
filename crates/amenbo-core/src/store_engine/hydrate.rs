@@ -384,6 +384,7 @@ pub(super) fn dimension_value_row(r: &Row) -> rusqlite::Result<DimensionValue> {
         start_on: date_opt(r, C.start_on)?,
         end_on: date_opt(r, C.end_on)?,
         closed: get(r, C.closed)?,
+        closed_changed_at: ts_opt(r, C.closed_changed_at)?,
         created_at,
         updated_at,
     })
@@ -965,6 +966,8 @@ mod tests {
                 // Closed (not the field's default) so a dropped column cannot pass, as the edge kind
                 // above does with its enum.
                 closed: true,
+                // Stamped, for the reason `closed` is set away from its default.
+                closed_changed_at: Some(now),
                 created_at: now,
                 updated_at: now,
             }],

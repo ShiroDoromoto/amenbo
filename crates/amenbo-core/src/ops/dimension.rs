@@ -2837,5 +2837,10 @@ mod tests {
         value_set_closed(tx, v1.id, false).unwrap();
         at("dimension_value", "closed_changed_at", v1.id, "2000-01-01T00:00:00Z");
         assert!(reopened(tx).is_empty(), "a reopen from before the reservation is not news to its holder");
+
+        // In the reservation's own second: the value refused the reservation while it was open, so being
+        // open now it was reopened after — a machine driving both moves back to back lands here.
+        at("dimension_value", "closed_changed_at", v1.id, "2001-01-01T00:00:00Z");
+        assert_eq!(reopened(tx), vec!["リリース=v1".to_string()], "the same second counts as after");
     }
 }

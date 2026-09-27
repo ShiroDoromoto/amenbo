@@ -156,6 +156,26 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
     Ok(task)
 }
 
+/// **The time-axis value a new task gets without anyone naming it** (`AMB-D-147`), as (axis, value): the
+/// period of `project_id`'s time axis that contains `today`, or `None` when there is none — no time axis,
+/// no window containing today, a time axis narrowed off tasks (`AMB-D-789`) — or when its axis is one of
+/// `named_axes`, since what the caller names wins over the default.
+///
+/// Every way a task is filed asks this one place — `task add` ([`crate::Store::add_task_with_dimensions`])
+/// and the built-in that files a task (`automation_builtin_make`), which asks it before it checks the
+/// axes the project requires, so a required time axis is filled rather than refused.
+pub(crate) fn time_axis_default(
+    conn: &rusqlite::Connection,
+    project_id: i64,
+    today: NaiveDate,
+    named_axes: &[i64],
+) -> Result<Option<(i64, i64)>> {
+    let Some(value_id) = read::current_time_axis_value(conn, project_id, today)? else { return Ok(None) };
+    let Some(axis_id) = read::dimension_id_of_value(conn, value_id)? else { return Ok(None) };
+    let Some(axis) = read::dimension(conn, axis_id)? else { return Ok(None) };
+    Ok((axis.applies_to.on_task() && !named_axes.contains(&axis_id)).then_some((axis_id, value_id)))
+}
+
 /// Finish creating a task — the second stage of the creation [`add`] began (`AMB-D-554`). It clears the
 /// fourth premise and touches nothing else: the status, the assignee, and every edge drawn while the task
 /// was being put together all stay as they are. What changes is that the task stops being held out of the

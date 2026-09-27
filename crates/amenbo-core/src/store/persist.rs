@@ -477,13 +477,10 @@ impl Store {
                 named_axes.push(tv.dimension_id);
             }
             if let Some(project_id) = task.project_id {
-                let value_id =
-                    crate::store_engine::read::current_time_axis_value(tx.conn(), project_id, today)?;
-                if let Some(value_id) = value_id {
-                    let axis = crate::store_engine::read::dimension_id_of_value(tx.conn(), value_id)?;
-                    if !axis.is_some_and(|axis| named_axes.contains(&axis)) {
-                        crate::ops::dimension::set(tx, task.id, value_id)?;
-                    }
+                let default =
+                    crate::ops::task::time_axis_default(tx.conn(), project_id, today, &named_axes)?;
+                if let Some((_, value_id)) = default {
+                    crate::ops::dimension::set(tx, task.id, value_id)?;
                 }
             }
             // No `task.created` here: the creation is not over yet, and a subscriber hearing about a task

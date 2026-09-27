@@ -26,7 +26,8 @@
 //! The files handed along with them hang off the run until it files the task, and are moved on to that
 //! task then (`AMB-D-981`), so what comes after reads them as the task's attachments.
 //! That person chooses on the axes the step before it would have, and also gives a value on every axis
-//! the project requires and [`CLASSIFY`] does not fix: nobody else is there to. The launch checks all of
+//! the project requires and [`CLASSIFY`] does not fix: nobody else is there to. The time axis is the one
+//! exception — it is filled from the period that contains today, as `task add` fills it ([`with_time_axis`]). The launch checks all of
 //! it before a run is made ([`handed_at_launch`]).
 //!
 //! **Its creation is finished here.** A task left being created is one nobody can reserve.
@@ -173,6 +174,7 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
         };
         values.extend(chosen(conn, project_id, ai_axes.as_deref(), written, &values, by)?);
     }
+    with_time_axis(conn, project_id, &mut values)?;
     refusal(carry, &values, if takes { &depends_on } else { &[] })?;
     let assignee = match choice(carry, ASSIGNEE)?.as_deref() {
         Some(HUMAN) => Some(ActorKind::Human),
@@ -307,6 +309,16 @@ fn refusal(carry: &Carry<'_, '_>, values: &[(i64, i64)], taken_after: &[i64]) ->
             ));
         }
     }
+    Ok(())
+}
+
+/// **The classification, with the time-axis value the task gets without anyone naming it** (`AMB-D-147`)
+/// — the same default `task add` fills ([`task::time_axis_default`]), added before [`unfilable`] reads
+/// the axes the project requires, so a required time axis is filled rather than refused. An axis the
+/// classification already answers keeps its answer.
+fn with_time_axis(conn: &rusqlite::Connection, project_id: i64, values: &mut Vec<(i64, i64)>) -> Result<()> {
+    let named: Vec<i64> = values.iter().map(|&(axis, _)| axis).collect();
+    values.extend(task::time_axis_default(conn, project_id, crate::time::today(), &named)?);
     Ok(())
 }
 
@@ -595,6 +607,7 @@ pub(crate) fn handed_at_launch(
         let ai_axes = answer(AI_AXES)?;
         values.extend(chosen(conn, project_id, ai_axes.as_deref(), written, &values, Chooser::Launcher)?);
     }
+    with_time_axis(conn, project_id, &mut values)?;
     unfilable(conn, project_id, &values)?;
     Ok(written)
 }
@@ -686,7 +699,8 @@ fn answered(settings: &[crate::model::AutomationCfg], name: &str) -> Result<Opti
 
 /// **An axis the person launching a run whose entry this is gives a value on**, with the values open
 /// on it in the order the axis lists them. `required` is the project's: a launch that leaves it
-/// without a value is refused ([`handed_at_launch`]).
+/// without a value is refused ([`handed_at_launch`]). A required time axis is not, while a period
+/// contains today — that period fills it ([`with_time_axis`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LaunchAxis {
     pub name: String,
@@ -707,6 +721,8 @@ pub(crate) fn launch_axes(
 ) -> Result<Vec<LaunchAxis>> {
     let settings = crate::ops::automation_run::settings_of(conn, entry)?;
     let fixed = fixed(conn, project_id, answered(&settings, CLASSIFY)?.as_deref()).unwrap_or_default();
+    let mut filled = fixed.clone();
+    with_time_axis(conn, project_id, &mut filled)?;
     let required: Vec<i64> = read::required_dimensions(conn, project_id, crate::model::ClassifiedSide::Task)?
         .into_iter()
         .map(|(axis_id, _)| axis_id)
@@ -725,7 +741,8 @@ pub(crate) fn launch_axes(
         axes.push(LaunchAxis {
             name: dimension.name,
             values: open_values(conn, axis_id)?,
-            required: required.contains(&axis_id),
+            // A required time axis the period containing today fills is offered, not demanded.
+            required: required.contains(&axis_id) && !filled.iter().any(|(on, _)| *on == axis_id),
         });
     }
     Ok(axes)
@@ -1435,6 +1452,49 @@ mod tests {
             let run = launch_with(tx, &automation, &with_values("an issue", &[("職能", "実装")])).expect("launch");
             let filed = filed_first(tx, &run, &make);
             assert!(read::assignment_id(tx.conn(), filed.id, build.id).expect("read").is_some());
+        });
+    }
+
+    /// **A required time axis is filled, not demanded** (`AMB-D-147`): the period that contains today goes
+    /// on the task it files, as `task add` puts it on, and the launch offers the axis without requiring it.
+    #[test]
+    fn a_required_time_axis_is_filled_from_the_period_containing_today() {
+        use crate::ops::automation_run::{launch_asks, LaunchAsks};
+        with_tx(|tx| {
+            let (automation, make, project) = entry(tx);
+            let era = crate::ops::dimension::add(
+                tx,
+                project,
+                crate::ops::dimension::NewDimension {
+                    name: "フェーズ".into(),
+                    role: crate::model::DimensionRole::TimeAxis,
+                    ..Default::default()
+                },
+            )
+            .expect("axis");
+            let now = crate::ops::dimension::value_add(tx, era.id, "運用期", None).expect("value");
+            let today = crate::time::today();
+            crate::ops::dimension::value_set_dates(tx, now.id, Some(today), None).expect("period");
+            crate::ops::dimension::update(tx, era.id, None, None, None, None, None, None, Some(true), None, None, None)
+                .expect("required");
+
+            let LaunchAsks::Task { axes } = launch_asks(tx.conn(), automation.id).expect("asks") else {
+                panic!("the entry files a task");
+            };
+            assert_eq!(
+                axes,
+                vec![LaunchAxis { name: "フェーズ".into(), values: vec!["運用期".into()], required: false }]
+            );
+
+            let run = launch_with(tx, &automation, &titled("an issue")).expect("launch");
+            let filed = filed_first(tx, &run, &make);
+            assert!(read::assignment_id(tx.conn(), filed.id, now.id).expect("read").is_some());
+
+            // Narrowed off tasks, the axis gives a task nothing (`AMB-D-789`).
+            let decisions_only = Some(crate::model::DimensionAppliesTo::Decision);
+            crate::ops::dimension::update(tx, era.id, None, None, None, None, None, None, None, decisions_only, None, None)
+                .expect("narrowed");
+            assert_eq!(task::time_axis_default(tx.conn(), project, today, &[]).expect("read"), None);
         });
     }
 

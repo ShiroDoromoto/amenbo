@@ -3665,13 +3665,18 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
     // Values the task waits on again because they were reopened after the status began (`AMB-D-990`). The
     // join and the wait are `waiting_on_values`' own, so a value named here is one the task would be
     // refused a reservation for today; what this adds is the date, read off the value's own clock.
+    //
+    // **`>=`, where every other premise here says `>`.** The clocks count whole seconds, so a reopen in the
+    // reservation's own second would read as before it. Here that cannot be: a value that is open, ahead
+    // of the task's own on a sequential axis, refuses the reservation, so one open now and stamped in
+    // that second was reopened after it. The other premises have no such guard to lean on.
     let reopened_values = {
         let (link, axis, own, before) = WAITING_ON_ORDER;
         let mut sel = Select::new();
         let (axis_name, value_name) = (sel.col(axis.name), sel.col(before.name));
         let pred = Pred::eq(link.task_id, task_id)
             .and(waits_on_order(axis, own, before))
-            .and(Pred::cmp(before.closed_changed_at, ">", since));
+            .and(Pred::cmp(before.closed_changed_at, ">=", since));
         let mut sql = Sql::from(&sel, link.table);
         sql.join(axis.table, same(axis.id, link.dimension_id))
             .join(own.table, same(own.id, link.value_id))

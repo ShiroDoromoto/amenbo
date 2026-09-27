@@ -407,7 +407,9 @@ amenbo automation acknowledge 7                        # a failed run has been s
 # step's text lists for it — and what it did). The task the run works is taken by a built-in, never
 # by the step. Those two, with `list` / `show` /
 # `action-list` / `action-show` / `run-list` / `run-show` to read where it stands, are all that
-# terminal reaches — every other verb here is typed outside a run.
+# terminal reaches — every other verb here is typed outside a run. Past `automation`, it still files
+# tasks and changes their edges and fields (`task depend`, `decision link`, `dimension set`, `task
+# update`); a task's status and who it is assigned to stay the run's, and no decision is written there.
 amenbo automation run-list --task AMB-T-<n> --json     # the runs that worked one task
 amenbo automation run-show 7                           # one run in full, step by step
 

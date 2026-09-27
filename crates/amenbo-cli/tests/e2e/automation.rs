@@ -973,6 +973,43 @@ fn inside_a_step_the_reading_verbs_still_answer() {
     }
 }
 
+/// **Inside a step, a task's edges and fields can still be changed** (`AMB-D-991`), on any task in the
+/// project as outside a run — a step that files several tasks orders them and hangs them on their
+/// premise. Writing a decision stays refused: one is written only on what a person settled.
+#[test]
+fn inside_a_step_a_tasks_edges_and_fields_can_be_changed() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    // What the AI reaches is the bound project, so the tasks are filed there.
+    let p = cli.bound_project();
+    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
+    let u = id_str(&cli.json(&["task", "add", "--title", "two", "--project", &p, "--json"])["task"]["id"]);
+    let d = id_str(&cli.json(&["decision", "add", "--project", &p, "--title", "why", "--json"])["decision"]["id"]);
+    cli.json(&["dimension", "add", "--project", &p, "--name", "Area", "--json"]);
+    cli.json(&["dimension", "value-add", "Area", "--name", "core", "--json"]);
+    let (tr, ur) = (task_ref(&t), task_ref(&u));
+
+    for args in [
+        vec!["--actor", "ai", "task", "depend", &tr, "--on", &ur, "--json"],
+        vec!["--actor", "ai", "task", "undepend", &tr, "--on", &ur, "--json"],
+        vec!["--actor", "ai", "decision", "link", &d, &tr, "--json"],
+        vec!["--actor", "ai", "decision", "link", &d, &tr, "--unlink", "--json"],
+        vec!["--actor", "ai", "dimension", "set", &tr, "Area", "core", "--json"],
+        vec!["--actor", "ai", "dimension", "unset", &tr, "Area", "core", "--json"],
+        vec!["--actor", "ai", "task", "update", &tr, "--priority", "high", "--json"],
+    ] {
+        let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
+        assert_eq!(code, 0, "{args:?}: {err}");
+    }
+    let shown = cli.json(&["task", "show", &t, "--json"]);
+    assert_eq!(shown["priority"], "high", "{shown}");
+
+    let args = ["--actor", "ai", "decision", "add", "--project", &p, "--title", "another", "--json"];
+    let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("automation_outside_only"), "{err}");
+}
+
 /// **Inside a step, `agent --json` is the step's own entry** (`AMB-T-5385`): the folder sends every
 /// step's fresh session there first, and the whole entry is about a mailbox a step does not work. The
 /// two verbs that hand the work back come in full; `--full` still answers with everything.

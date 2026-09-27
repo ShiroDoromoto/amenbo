@@ -342,9 +342,9 @@ pub fn done(
         )));
     }
 
-    // A step that closed its task with `task done --report` has already said its piece there; a closed
-    // task is read by nobody, so the report stays on the run's history alone, and the history says so
-    // (`AMB-D-963`).
+    // A step cannot close its task (`task done` is refused inside it), but a person can while it runs;
+    // a closed task is read by nobody, so the report stays on the run's history alone, and the history
+    // says so (`AMB-D-963`).
     let owed_to = stretch
         .as_ref()
         .and_then(|s| s.task_id)
@@ -999,12 +999,13 @@ mod tests {
         });
     }
 
-    /// **A step that closed its task still finishes, and leaves no line on it** (`AMB-D-963`).
+    /// **A step whose task was closed under it still finishes, and leaves no line on it** (`AMB-D-963`).
     ///
-    /// The agent closes the task with `task done --report` inside the step; the step's own report then
-    /// goes to the run's history alone, and `step-done` must not fail on the task being closed.
+    /// A person closes the task while the step runs — the step itself cannot, `task done` being refused
+    /// inside it; the step's own report then goes to the run's history alone, and `step-done` must not
+    /// fail on the task being closed.
     #[test]
-    fn a_step_that_closed_its_task_finishes_without_a_line_on_it() {
+    fn a_step_whose_task_was_closed_under_it_finishes_without_a_line_on_it() {
         with_tx(|tx| {
             let p = picture(tx, false);
             automation::step_update(tx, p.first.id, None, None, None, None, Some(true), None, None, None, None)
@@ -1013,7 +1014,7 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "閉じる");
             take(tx, step.run_step.id, task.id).expect("take");
-            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("the agent closes it");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("a person closes it");
 
             done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.")
                 .expect("the step finishes all the same");
@@ -1040,7 +1041,7 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "閉じる");
             take(tx, step.run_step.id, task.id).expect("take");
-            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("the agent closes it");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("a person closes it");
 
             done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.").expect("done");
 

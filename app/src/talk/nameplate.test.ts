@@ -101,7 +101,7 @@ describe("the row above a run's pane", () => {
     expect(chip.textContent).toBe(t("auto.actions.reachBuiltin"));
   });
 
-  it("says which automation and which step on the first line, and which task on the second", () => {
+  it("says which run on the first line, which step on the second, and which task on the third", () => {
     // All of them are Amenbo's own — off the execution row and off the ledger — which is the whole
     // of why they can be said at all (`AMB-D-858`). What the step printed is not among them: that is
     // in the terminal under the row.
@@ -112,13 +112,18 @@ describe("the row above a run's pane", () => {
 
     expect(host.querySelector(".plate__auto")?.textContent).toBeTruthy();
     expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(false);
-    // The first line holds the run and the step and the state, nothing more (`AMB-T-5529`): the count
-    // of tasks is the task line's. The chip after the step is drawn on a built-in's step alone.
+    // The first line holds the run and the state, nothing more (`AMB-T-5739`): the step is the
+    // second line's, and the count of tasks is the task line's. The lamp is not drawn: beside the
+    // state's own dot it read as a second mark saying running.
     const row = host.querySelector(".plate") as HTMLElement;
-    expect([...row.children].filter((el) => !(el as HTMLElement).hidden || !el.classList.contains("plate__builtin"))
-      .map((el) => el.className))
-      .toEqual(["plate__dot", "plate__auto", "plate__name", "plate__no", "plate__into", "plate__step", "plate__state"]);
+    expect([...row.children].map((el) => el.className))
+      .toEqual(["plate__dot", "plate__auto", "plate__name", "plate__no", "plate__state"]);
+    expect((host.querySelector(".plate__dot") as HTMLElement).hidden).toBe(true);
     expect(row.classList.contains("plate--run")).toBe(true);
+    // The step's line: the step, and the chip after it, drawn on a built-in's step alone.
+    const stepLine = host.querySelector(".plate-step") as HTMLElement;
+    expect(stepLine.hidden).toBe(false);
+    expect([...stepLine.children].map((el) => el.classList[0])).toEqual(["plate__step", "plate__builtin"]);
     expect(host.querySelector(".plate__no")?.textContent).toBe("#7");
     // Which step, with the action its spot stands on where that is not the step's own name
     // (`AMB-D-949`). The step's own name is the part drawn heavier.
@@ -172,16 +177,18 @@ describe("the row above a run's pane", () => {
     expect(host.querySelector(".plate__step b")?.textContent).toBe("取る");
   });
 
-  /// A step that takes its task opens on none. The line under the name is the task's, so it is down
-  /// until there is one.
-  it("draws no task line while the run is on no task", () => {
+  /// A step that takes its task opens on none. The task's line is left up and empty rather than
+  /// taken down, so the header does not grow a line under the terminal when the task comes
+  /// (`AMB-T-5739`).
+  it("keeps the task line, empty, while the run is on no task", () => {
     const host = document.createElement("div");
     const draw = mountNameplate(host);
 
     draw({ name: "/work/a", dot: STILL, run: { ...RUN, task: null } });
 
-    expect((host.querySelector(".plate-run") as HTMLElement).hidden).toBe(true);
-    expect((host.querySelector(".plate__step") as HTMLElement).hidden).toBe(false);
+    expect((host.querySelector(".plate-run") as HTMLElement).hidden).toBe(false);
+    expect(host.querySelector(".plate-run")?.textContent).toBe("");
+    expect((host.querySelector(".plate-step") as HTMLElement).hidden).toBe(false);
   });
 
   /// Until the run has been read the row says nothing of its state: a mark guessed from the step
@@ -219,8 +226,9 @@ describe("the row above a run's pane", () => {
     draw({ name: "the migration", dot: STILL, run: null });
 
     expect((host.querySelector(".plate-run") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate-step") as HTMLElement).hidden).toBe(true);
     expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(true);
-    expect((host.querySelector(".plate__step") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate__dot") as HTMLElement).hidden).toBe(false);
     expect((host.querySelector(".plate__no") as HTMLElement).hidden).toBe(true);
     expect((host.querySelector(".plate__state") as HTMLElement).hidden).toBe(true);
     // The panel is the name's, exactly as it was: an empty line in it would push it taller for a
@@ -236,6 +244,7 @@ describe("the row above a run's pane", () => {
     draw(null);
 
     expect((host.querySelector(".plate-run") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate-step") as HTMLElement).hidden).toBe(true);
     expect((host.querySelector(".plate-peek") as HTMLElement).hidden).toBe(true);
   });
 });

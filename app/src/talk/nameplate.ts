@@ -1,5 +1,5 @@
 // The one line above a pane: what the pane is called — and, on a pane an automation run is drawn in,
-// a second line saying where that run has got to.
+// two more lines saying where that run has got to.
 //
 // **It says the name because the name is the one thing about a pane that is not guesswork**
 // (`AMB-D-862`). What the row carried beside it was whether somebody was being waited on, which is an
@@ -14,17 +14,21 @@
 //
 // **A run's pane is drawn as its own kind of pane** (`AMB-T-5252`). It is headed with the automation
 // the run was launched from rather than with the place's name (`./plate`), and the header is the
-// run's, in the run's colour (`AMB-T-5428`). It is two lines, each about one thing (`AMB-T-5529`):
-// the first says which automation and which step — a mark saying nobody is typing in this one, the
-// automation, which run it is, and the step running — and the line under it says which task, by
-// reference and by title, with how many tasks into the run it is. Every one of those is a value
+// run's, in the run's colour (`AMB-T-5428`). It is three lines, each about one thing (`AMB-T-5529`,
+// `AMB-T-5739`): the first says which run — a mark saying nobody is typing in this one, the
+// automation, which run it is, and where it stands — the second which step, and the third which task,
+// by reference and by title, with how many tasks into the run it is. **The three are there whether or
+// not each has anything to say**, so a run that takes a task or gives one up does not move the
+// terminal under them. Every one of those is a value
 // Amenbo holds — the execution rows and the ledger — so none of it is the agent's word about itself,
 // which is the whole of what this row stopped saying (`AMB-D-858`). **What the step printed is not
 // here**: that is in the terminal under the row, where a reader can scroll it.
 //
 // **The first line holds as little as it can**, because a pane is often a quarter of a window and
-// every value on the line is one more thing the automation's name is cut short by. So the task count
-// is on the task's line, which is what it counts, and a run's number is written the short way (`#12`).
+// every value on the line is one more thing the automation's name is cut short by. So the step has a
+// line of its own, the task count is on the task's line, which is what it counts, and a run's number
+// is written the short way (`#12`). **The lamp is not drawn on a run's pane**: its lit face says
+// output is arriving, and beside the state's own moving dot it read as a second mark saying running.
 //
 // **Which step says the action it is inside where that says something** (`AMB-D-949`). A launch opens
 // one spot of the picture into a column of steps, so a step's name on its own does not always say
@@ -39,7 +43,8 @@
 // state's own colour. A pane outlives the step it was opened for, so without it a run that had
 // finished and one that had stopped partway looked the same — the row went on naming the last step
 // either way. **Running is drawn moving**, because it is the one state that is about now: the other
-// four are over or held, and hold still. What a failure is waiting for is not the row's to say: it
+// four are over or held, and hold still. It is last on the first line, so the pane's controls for the
+// run stand straight after it (`../shell/TerminalPane`). What a failure is waiting for is not the row's to say: it
 // is the band under the header, which has the press that answers it (`../shell/TerminalPane`).
 //
 // **A name too long for the row is elided, and given back in full by a panel of the row's own**
@@ -194,28 +199,32 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   const auto = part("auto");
   auto.textContent = t("face.auto");
   const name = part("name");
-  // Which run, and which step it is on, on the name's own line. They follow the name rather than
-  // taking a line of their own because they are what the name is doing now, and the line under it is
-  // the task's.
+  // Which run, on the name's own line: it says which of the automation's runs the name is, and is
+  // short enough (`#12`) not to cost the name much.
   const runNo = part("no");
-  const into = part("into");
-  into.textContent = "›";
-  into.setAttribute("aria-hidden", "true");
-  const step = part("step");
-  // The chip a built-in is marked with, where the step is one. It is the chip the actions list draws
-  // (`../screens/automationParts`'s `ReachChip`), built here out of the same classes.
-  const builtin = part("builtin");
-  builtin.classList.add("actscope", "actscope--builtin");
-  const builtinDot = document.createElement("em");
-  builtinDot.setAttribute("aria-hidden", "true");
-  builtin.append(builtinDot, t("auto.actions.reachBuiltin"));
   // The run's state, last on the line: it is what the rest of the line is doing, and the pane's own
   // controls for it stand straight after it (`../shell/TerminalPane`).
   const state = part("state");
   host.append(row);
 
-  // The task the run is working, on a line of its own under the name. It is a second row and not more
-  // of the first one because the first is one line by construction, and a title elided into what
+  // Which step, on a line of its own under the name. It is the part that changes from one step to the
+  // next and the longest, so on the first line it was what the automation's name was cut short by.
+  const stepRow = document.createElement("div");
+  stepRow.className = "plate-step";
+  const step = document.createElement("span");
+  step.className = "plate__step";
+  // The chip a built-in is marked with, where the step is one. It is the chip the actions list draws
+  // (`../screens/automationParts`'s `ReachChip`), built here out of the same classes.
+  const builtin = document.createElement("span");
+  builtin.className = "plate__builtin actscope actscope--builtin";
+  const builtinDot = document.createElement("em");
+  builtinDot.setAttribute("aria-hidden", "true");
+  builtin.append(builtinDot, t("auto.actions.reachBuiltin"));
+  stepRow.append(step, builtin);
+  host.append(stepRow);
+
+  // The task the run is working, on a line of its own under the step. It is a row of its own and not
+  // more of the first one because the first is one line by construction, and a title elided into what
   // the run's values leave of a pane's width would be a word and a half (`../styles/global.css`).
   // It carries no label: the reference says it is a task.
   const runRow = document.createElement("div");
@@ -252,9 +261,10 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
 
   return (plate: Plate | null) => {
     row.hidden = plate === null;
-    // A run on no task yet has nothing for the second line to say, and an empty band under the first
-    // would read as a task that is there and has no name.
-    runRow.hidden = plate === null || plate.run?.task == null;
+    // A run's lines are drawn on a run's pane and nowhere else. A run on no task yet leaves the task's
+    // line empty rather than taking it down: a header that grew a line when the run took a task would
+    // move the terminal under it every time.
+    stepRow.hidden = runRow.hidden = plate === null || plate.run == null;
     if (plate === null) {
       // The panel comes down with the row it belongs to. It is said here as well as below because the
       // row being taken away is the one path that never reaches the name, and a panel left up is an
@@ -263,6 +273,8 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
       peek.hidden = true;
       return;
     }
+    // The lamp is the pane's and not the run's, and a run's pane says where the run stands instead.
+    dot.hidden = plate.run !== null;
     dot.style.setProperty("--dot-hue", String(plate.dot.hue));
     dot.dataset.face = plate.dot.face;
     name.textContent = plate.name ?? "";
@@ -271,8 +283,8 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     // those over the panel is the same word twice in two shapes.
     peekName.textContent = plate.name ?? "";
     // A run's pane is drawn as its own kind of pane, and an ordinary one is left exactly as it was:
-    // the mark is away, the second row is down, and the panel says only the name.
-    auto.hidden = runNo.hidden = into.hidden = step.hidden = plate.run === null;
+    // the mark is away, the run's lines are down, and the panel says only the name.
+    auto.hidden = runNo.hidden = plate.run === null;
     builtin.hidden = plate.run?.builtin !== true;
     state.hidden = plate.run?.state == null;
     row.classList.toggle("plate--run", plate.run !== null);

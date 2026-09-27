@@ -2901,10 +2901,10 @@ body.dragging-row { user-select: none; }
   color: var(--c-on-ai);
 }
 /* Spelled out for the reason `.plate[hidden]` is: the run's parts are drawn on the same row as an
-   ordinary pane's name, and are away there. The built-in's chip is one of them twice over: it wears
-   `.actscope`'s `display`, and without this it was drawn on every step of a run (`AMB-T-5589`). */
-.plate__auto[hidden], .plate__no[hidden], .plate__into[hidden], .plate__step[hidden],
-.plate__builtin[hidden] { display: none; }
+   ordinary pane's name, and are away there — and the lamp is away on a run's pane (`../talk/nameplate`).
+   The built-in's chip is one of them twice over: it wears `.actscope`'s `display`, and without this it
+   was drawn on every step of a run (`AMB-T-5589`). */
+.plate__dot[hidden], .plate__auto[hidden], .plate__no[hidden], .plate__builtin[hidden] { display: none; }
 
 /* **A run's pane is drawn in the run's colour** (`AMB-T-5428`): the frame is edged in it and the
    header is laid on its wash, so a run's pane is told from a person's at a glance across the page —
@@ -2914,55 +2914,76 @@ body.dragging-row { user-select: none; }
 .slot--run .slot__frame { border-color: var(--c-ai); }
 .slot--run.slot--focused .slot__frame { border-color: var(--c-accent); }
 .slot--run .slot__bar {
+  --plate-line: 1.5rem;
   margin: calc(-1 * var(--s-1)) calc(-1 * var(--s-1)) 0;
   padding: var(--s-1) var(--s-1) 0;
   border-radius: var(--r-md) var(--r-md) 0 0;
   background: var(--c-ai-weak);
+  align-items: flex-start;
 }
+/* **The run's controls stand on the first line, straight after the state they act on**
+   (`AMB-T-5739`). The header is three lines, and a control centred on the whole of it was drawn
+   between the first two, apart from the state and at another height. So every control is held to the
+   first line's height, and the first line is drawn that tall. */
+.slot--run .slot__bar > :not(.slot__plate) { height: var(--plate-line); }
 
 /* The name row on a run's pane is the run's: the automation and where it has got to, in its colour.
    It gives up its bottom margin to the task's line under it, the two being one block over the
    terminal. */
-.plate--run { padding-bottom: 0; color: var(--c-ai); font-weight: 600; }
+.plate--run {
+  height: var(--plate-line);
+  align-items: center;
+  padding-bottom: 0;
+  color: var(--c-ai); font-weight: 600;
+}
 .plate--run .plate__name { flex: 0 1 auto; color: var(--c-ai); }
 
-/* Which run, and which step it is on, after the name (`../talk/nameplate`): `#12 › step`.
+/* Which run, after the name (`../talk/nameplate`): `#12`.
 
    **The pane is what decides how much of it is drawn**, not the window: the row is measured against
    `.slot__plate`, and a pane a sixth of the page wide holds fewer words than the same row in the
-   split-out window. The step is cut before the name (`AMB-T-5529`) — the name is what says which
-   automation this is, and the step is the terminal's to say at length — and the run's number is the
-   first thing given up whole. */
-.plate__no, .plate__into { flex: 0 0 auto; }
-.plate__no { font-weight: 400; font-variant-numeric: tabular-nums; color: var(--c-text-muted); }
+   split-out window. The run's number is the first thing given up whole. */
+.plate__no { flex: 0 0 auto; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--c-text-muted); }
 .plate__into { color: var(--c-text-faint); font-weight: 400; }
+
+/* Which step, on the line under the name (`../talk/nameplate`, `AMB-T-5739`): the action it is inside
+   and the step, `prepare › take`. It has the line to itself, so it is cut only where the pane is
+   narrower than it — the chip a built-in is marked with is kept, and the words go first. */
+.plate-step, .plate-run {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  /* One line each, and one line tall even with nothing on it: the header is three lines whatever the
+     run is doing, so the terminal under it does not move when the run takes a task or gives one up. */
+  height: calc(var(--fs-xs) * 1.5 + var(--s-1));
+  padding: 0 var(--s-2) var(--s-1);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+.plate-step[hidden] { display: none; }
 .plate__step {
-  flex: 0 100 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 400;
+  color: var(--c-text);
 }
 .plate__step b { font-weight: 700; }
+.plate-step .plate__builtin { flex: 0 0 auto; }
 .plate__step .plate__into { margin-inline: var(--s-1); }
 /* The number of the box the step was opened from, drawn as the picture draws it (`AMB-T-5538`). */
 .plate__step .plate__box { margin-inline-end: var(--s-1); vertical-align: 1px; }
 
-/* The task the run is working, on the line under the name (`../talk/nameplate`). The reference is the
+/* The task the run is working, on the line under the step (`../talk/nameplate`). The reference is the
    ledger's own, which is what a person types to reach it; the title beside it says which task it is,
    and is cut first — the panel has it whole (`.plate-peek__task`).
 
-   One line, like the row above it, and for the same reason: a line that can grow pushes the terminal
-   about every time a task with a long title comes up. */
-.plate-run {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-2);
-  padding: 0 var(--s-2) var(--s-2);
-  font-size: var(--fs-xs);
-  color: var(--c-text-muted);
-  white-space: nowrap;
-}
+   One line, like the rows above it, and for the same reason: a line that can grow pushes the terminal
+   about every time a task with a long title comes up. It closes the header, so it keeps the room
+   under it that an ordinary pane's one row keeps (`.plate`). */
+.plate-run { height: calc(var(--fs-xs) * 1.5 + var(--s-2)); padding-bottom: var(--s-2); }
 .plate-run[hidden] { display: none; }
 .plate-run__task, .plate-run__nth { flex: 0 0 auto; }
 .plate-run__task { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -2980,7 +3001,8 @@ body.dragging-row { user-select: none; }
   font-variant-numeric: tabular-nums;
 }
 .plate-run__nth:empty { display: none; }
-/* **Where the run stands**, last on the name's line (`../talk/nameplate`, `AMB-T-5506`). The word and a
+/* **Where the run stands**, last on the name's line (`../talk/nameplate`, `AMB-T-5506`), with the
+   run's controls straight after it (`.slot__runacts`). The word and a
    dot in the state's colour, the colours being the "running" tab's own (`.autorun--*`), so a state
    reads the same on the pane and on the tab. It never shrinks: it is what a reader glancing at the
    pane is asking, and a narrow pane gives up the run's number before it.

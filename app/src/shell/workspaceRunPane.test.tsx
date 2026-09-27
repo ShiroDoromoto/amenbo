@@ -642,8 +642,9 @@ describe("a built-in on a run's pane", () => {
       statusLabel("todo"),
       t("auto.step.readyYes"),
     ]);
-    // And no task: the one it closed before is not the one it is on.
-    expect(q(".plate-run")[0]?.hidden).toBe(true);
+    // And no task: the one it closed before is not the one it is on. The line stays, empty, so the
+    // header keeps its three lines (`AMB-T-5739`).
+    expect(q(".plate-run")[0]?.textContent).toBe("");
   });
 
   it("says when its time comes while the built-in that waits holds its step (AMB-D-983)", async () => {

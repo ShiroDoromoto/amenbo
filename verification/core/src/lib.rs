@@ -920,6 +920,13 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A CLI command is a run of its own that ends when it has printed, so a
     // terminal carries nothing across and there is no gap here for this op to be.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "run-again", required: &[], refs: &[], strings: &[], binds: false },
+    // The app up on this store, for the rest of the road. `automation start` refuses to start a run
+    // with no app up, because a step's terminal is opened by the app — so a terminal
+    // road about a run stands one up first, and a road that leaves it off walks the refusal.
+    //
+    // A terminal road alone. A screen road is walked on the app itself, which is up for as long as
+    // the road is, so there is nothing for this to stand up there.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "app-up", required: &[], refs: &[], strings: &[], binds: false },
     // The app asked to end. It is the gesture and not what comes of it: a process with a terminal
     // open has something to lose and says so, and one with none goes on the press
     // (`app/src-tauri/src/quit.rs`). Which of the two happened is the whole of what these roads read.

@@ -729,6 +729,12 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         }
 
         AutomationCmd::Start { id, files, title, notes, dim } => {
+            // Asked before anything is read or ingested, so a refusal leaves nothing behind
+            // (`AMB-D-995`).
+            let paths = amenbo_core::config::Paths::resolve().map_err(CliError::from)?;
+            if !amenbo_core::app_running::is_running(&paths).map_err(CliError::from)? {
+                return Err(CliError::app_not_running());
+            }
             let notes = crate::cmd::arg::body_arg_opt(notes)?;
             // Split here and looked up by the launch, which answers for the axes against where the
             // entry is placed (`amenbo_core::ops::automation_builtin_make`).

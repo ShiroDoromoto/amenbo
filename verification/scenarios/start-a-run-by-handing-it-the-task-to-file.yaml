@@ -7,7 +7,8 @@
 # The terminal hands it a file the run wrote as well, and meets the guards the start keeps in front of
 # it. A title is required, an axis the project requires needs a value when where the built-in is
 # placed leaves it open, and a file that is not there cannot be attached. Each is refused before any
-# run is made. A run started at a terminal opens no step, so what is read is the run it started.
+# run is made. So is a start with no app up on the store, since only the app opens a step. A run
+# started at a terminal opens no step, so what is read is the run it started.
 #
 # The screen asks the same three things in the dialog every start opens — a title, notes, and a value
 # on each axis the entry offers — with files to attach to the task, and no text on its own. The run it
@@ -16,8 +17,9 @@ id: start-a-run-by-handing-it-the-task-to-file
 title: A run whose entry files a task starts with the title, classification and file it is handed
 description: >
   Place the built-in that files a task as an automation's entry, set to take the task it files, then
-  close it. Start it from the terminal handing a title, notes, a value on the axis the project
-  requires and a file, and read the run under way. Start it with no title, with no value on that
+  close it. Start it from the terminal with no app up on the store and read it refused; then, with the
+  app up, start it handing a title, notes, a value on the axis the project requires and a file, and
+  read the run under way. Start it with no title, with no value on that
   axis, and with a file that is not there, and read each refused. On screen, start it from the dialog
   with a title, notes and a value typed in and chosen and a file added, and read the run completed on
   the history tab.
@@ -44,6 +46,19 @@ steps_cli:
     with:
       path: screenshot-notes.md
       content: "the field is gone below 400 pixels wide\n"
+
+  # With no app up on the store, nothing is started: a run's steps are opened by the app, so a run
+  # accepted now would move no further. Once one is up, the same start goes through.
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+      title: the login page loses the password field on a narrow window
+      dim: 職種=エンジニア
+      refused: app_not_running
+
+  - { type: action, domain: store, op: app-up }
 
   - type: action
     domain: automation

@@ -1042,6 +1042,16 @@ pub struct DimensionValue {
     /// `false` is where every value starts and where every value an upgrade brings in stays.
     #[serde(default)]
     pub closed: bool,
+    /// When [`closed`](Self::closed) last flipped, one way or the other — stamped by
+    /// `ops::dimension::value_set_closed` when the move changes something, and by nothing else: a rename or
+    /// a reorder moves `updated_at` and leaves this alone. It is the value's side of the comparison that
+    /// says a value ordered before a task's own came back open **after** the task was reserved
+    /// (`AMB-D-990`, `AMB-D-366`) — the twin of [`Decision::status_changed_at`] on the reopen axis.
+    ///
+    /// `None` where no close or reopen has happened since the column arrived, which reads as predating
+    /// every reservation: an undatable reopen errs quiet, as every other premise does.
+    #[serde(default)]
+    pub closed_changed_at: Option<Timestamp>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

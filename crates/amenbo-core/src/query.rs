@@ -2191,6 +2191,11 @@ pub fn premise_change_since(
             .into_iter()
             .map(|(id, name)| DecisionRef { id, name: Some(name) })
             .collect(),
+        reopened_values: row
+            .reopened_values
+            .into_iter()
+            .map(|(axis, value)| crate::view::WaitingOnValue { axis, value })
+            .collect(),
     })
 }
 

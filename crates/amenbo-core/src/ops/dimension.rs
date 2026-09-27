@@ -721,6 +721,8 @@ pub fn value_add(
         end_on: None,
         // Open, whatever the axis's role: a value is raised in order to be filed under (`AMB-D-829`).
         closed: false,
+        // Never flipped yet: a value born open was not reopened under anyone.
+        closed_changed_at: None,
         created_at: now,
         updated_at: now,
     };
@@ -835,7 +837,11 @@ pub fn value_set_closed(tx: &WriteTx<'_>, value_id: i64, closed: bool) -> Result
             }
         }
     }
-    let after = DimensionValue { closed, updated_at: Timestamp::now(), ..before.clone() };
+    // The clock moves with the flag and only with it (`AMB-D-990`): setting a value to the state it is
+    // already in reopens nothing, so it must not look, to a task reserved in between, as if it had.
+    let now = Timestamp::now();
+    let closed_changed_at = if closed != before.closed { Some(now) } else { before.closed_changed_at };
+    let after = DimensionValue { closed, closed_changed_at, updated_at: now, ..before.clone() };
     emit_update(tx, record::dimension_value(&before), record::dimension_value(&after))?;
     Ok(after)
 }
@@ -2778,5 +2784,58 @@ mod tests {
             "reopening a value before it does not take the task back",
         );
         assert!(read::newly_ready_by_closing(tx.conn(), v1.id).unwrap().is_empty(), "v1 is open again");
+    }
+
+    /// Reopening a value before a task under way is shown to its holder instead (`AMB-D-990`, `AMB-D-366`):
+    /// the premise change names the value while it stays open, and forgets it once it is closed again. A
+    /// reopen from before the reservation, and a close that moved nothing, are not news to the holder.
+    #[test]
+    fn a_value_reopened_under_a_task_under_way_is_shown_to_its_holder() {
+        use crate::model::TaskStatus;
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let axis = stages(tx, p);
+        let v1 = value_add(tx, axis.id, "v1", None).unwrap();
+        let v2 = value_add(tx, axis.id, "v2", None).unwrap();
+        let going = task_in(tx, "着手する", p);
+        set(tx, going, v2.id).unwrap();
+        sequence(tx, axis.id, true).unwrap();
+        value_set_closed(tx, v1.id, true).unwrap();
+        crate::ops::task::set_status(tx, going, TaskStatus::InProgress).unwrap();
+        // The clocks count whole seconds, so the reservation is put in the past for what follows to be
+        // after it.
+        let at = |table: &str, column: &str, id: i64, when: &str| {
+            tx.conn().execute(&format!("UPDATE {table} SET {column} = ?1 WHERE id = ?2"), rusqlite::params![when, id]).unwrap();
+        };
+        at("task", "status_changed_at", going, "2001-01-01T00:00:00Z");
+        let reopened = |tx: &WriteTx<'_>| -> Vec<String> {
+            crate::query::premise_change_since(tx.conn(), going)
+                .unwrap()
+                .reopened_values
+                .into_iter()
+                .map(|w| format!("{}={}", w.axis, w.value))
+                .collect()
+        };
+        assert!(reopened(tx).is_empty(), "v1 was closed before the reservation and is closed still");
+
+        at("dimension_value", "closed_changed_at", v1.id, "2000-01-01T00:00:00Z");
+        value_set_closed(tx, v1.id, true).unwrap();
+        assert_eq!(
+            val(tx, v1.id).closed_changed_at.map(|t| t.to_rfc3339_z()).as_deref(),
+            Some("2000-01-01T00:00:00Z"),
+            "closing a closed value moves nothing, so its clock stays where it was",
+        );
+
+        value_set_closed(tx, v1.id, false).unwrap();
+        assert_eq!(reopened(tx), vec!["リリース=v1".to_string()]);
+        assert!(crate::query::premise_change_since(tx.conn(), going).unwrap().any());
+
+        value_set_closed(tx, v1.id, true).unwrap();
+        assert!(reopened(tx).is_empty(), "closed again, it holds nobody back");
+
+        value_set_closed(tx, v1.id, false).unwrap();
+        at("dimension_value", "closed_changed_at", v1.id, "2000-01-01T00:00:00Z");
+        assert!(reopened(tx).is_empty(), "a reopen from before the reservation is not news to its holder");
     }
 }

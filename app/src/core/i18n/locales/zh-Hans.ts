@@ -1366,10 +1366,12 @@ export const zhHans: Translation = {
     "premise.changed": "你预约之后前提发生了变化：{detail}",
     "premise.warn": "你预约之后前提发生了变化：{detail}。只完成能独立成立的那部分，或者把它设回待办交还回去。",
     "premise.noLongerSettled": "不再是定论",
+    "premise.valueReopened": "前面的值被重新打开",
     "detail.premiseChanged": "预约后有变动",
     "detail.premiseChangedHint": "你预约之后发生变动的前提——新挂上的，或者不再是定论的（就绪状态被撤回）",
     "detail.premiseAdded": "在你预约之后才挂上",
     "detail.premiseReopened": "在你预约之后不再是定论——被退回草稿或被取代（关联更早）",
+    "detail.premiseValueReopened": "你预订之后被重新打开的值——排在此任务的值之前。任务照常进行，但前一阶段尚未结束",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

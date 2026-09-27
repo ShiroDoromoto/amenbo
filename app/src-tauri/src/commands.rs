@@ -285,9 +285,7 @@ fn premise_change_dto(store: &Store, task_id: i64, status: TaskStatus) -> Option
         return None;
     }
     let change = store.premise_change_since(task_id).ok()?;
-    // Asked of the lists the card carries, not of `change.any()`: a reopened value before the task's own
-    // (`AMB-D-990`) is not drawn on the card yet, and a chip naming nothing would be worse than none.
-    if change.added_blockers.is_empty() && change.added_decisions.is_empty() && change.reopened_decisions.is_empty() {
+    if !change.any() {
         return None;
     }
     let decisions = |refs: Vec<amenbo_core::view::DecisionRef>| -> Vec<DecisionRefDto> {
@@ -307,6 +305,11 @@ fn premise_change_dto(store: &Store, task_id: i64, status: TaskStatus) -> Option
             .collect(),
         added_decisions: decisions(change.added_decisions),
         reopened_decisions: decisions(change.reopened_decisions),
+        reopened_values: change
+            .reopened_values
+            .into_iter()
+            .map(|w| WaitingOnValueDto { axis: w.axis, value: w.value })
+            .collect(),
     })
 }
 

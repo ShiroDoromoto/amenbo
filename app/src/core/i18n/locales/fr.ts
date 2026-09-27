@@ -1382,10 +1382,12 @@ export const fr: Translation = {
     "premise.changed": "Les prémisses ont changé après votre réservation : {detail}",
     "premise.warn": "Les prémisses ont changé après votre réservation : {detail}. Ne terminez que la part qui tient toute seule, ou rendez-la en la remettant à faire.",
     "premise.noLongerSettled": "n'est plus tranchée",
+    "premise.valueReopened": "valeur précédente rouverte",
     "detail.premiseChanged": "A changé depuis la réservation",
     "detail.premiseChangedHint": "Prémisses qui ont bougé après votre réservation — ajoutées, ou qui ne sont plus tranchées (la validité a été retirée)",
     "detail.premiseAdded": "Ajoutée après votre réservation",
     "detail.premiseReopened": "A cessé d'être tranchée après votre réservation — rouverte ou remplacée (le lien est plus ancien)",
+    "detail.premiseValueReopened": "Rouverte après ta réservation — une valeur placée avant celle de cette tâche. La tâche continue ; l'étape précédente n'est pas terminée",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

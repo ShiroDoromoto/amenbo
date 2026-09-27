@@ -1364,10 +1364,12 @@ export const nl: Translation = {
     "premise.changed": "De gronden zijn veranderd nadat je dit reserveerde: {detail}",
     "premise.warn": "De gronden zijn veranderd nadat je dit reserveerde: {detail}. Maak alleen het deel af dat op zichzelf staat, of geef het terug door het op “Te doen” te zetten.",
     "premise.noLongerSettled": "niet langer beslecht",
+    "premise.valueReopened": "eerdere waarde heropend",
     "detail.premiseChanged": "Veranderd sinds de reservering",
     "detail.premiseChangedHint": "Gronden die bewogen nadat je dit reserveerde — er vastgeprikt, of niet langer beslecht (de gereedheid is ingetrokken)",
     "detail.premiseAdded": "Vastgeprikt nadat je dit reserveerde",
     "detail.premiseReopened": "Niet langer beslecht nadat je dit reserveerde — heropend of vervangen (de koppeling is ouder)",
+    "detail.premiseValueReopened": "Heropend nadat je dit reserveerde — een waarde die vóór die van deze taak is geordend. De taak loopt door; de fase ervoor is niet afgerond",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

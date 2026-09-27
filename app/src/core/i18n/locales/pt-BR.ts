@@ -1383,10 +1383,12 @@ export const ptBR: Translation = {
     "premise.changed": "As premissas mudaram depois que você reservou: {detail}",
     "premise.warn": "As premissas mudaram depois que você reservou: {detail}. Termine só a parte que se sustenta sozinha, ou devolva colocando de volta em a fazer.",
     "premise.noLongerSettled": "não está mais resolvida",
+    "premise.valueReopened": "valor anterior reaberto",
     "detail.premiseChanged": "Mudou após a reserva",
     "detail.premiseChangedHint": "Premissas que se mexeram depois que você reservou — acrescentadas, ou que não estão mais resolvidas (a prontidão foi retirada)",
     "detail.premiseAdded": "Acrescentada depois que você reservou",
     "detail.premiseReopened": "Deixou de estar resolvida depois que você reservou — reaberta ou substituída (o vínculo é mais antigo)",
+    "detail.premiseValueReopened": "Reaberto depois que você reservou isto — um valor ordenado antes do desta tarefa. A tarefa continua; a etapa anterior não terminou",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

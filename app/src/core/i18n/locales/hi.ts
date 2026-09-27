@@ -1364,10 +1364,12 @@ export const hi: Translation = {
     "premise.changed": "आपके आरक्षित करने के बाद आधार बदले: {detail}",
     "premise.warn": "आपके आरक्षित करने के बाद आधार बदले: {detail}। सिर्फ़ वही हिस्सा पूरा करें जो अपने आप में टिकता है, या इसे “करना है” पर लौटाकर छोड़ दें।",
     "premise.noLongerSettled": "अब तय नहीं रहा",
+    "premise.valueReopened": "पिछला मान फिर से खोला गया",
     "detail.premiseChanged": "आरक्षित करने के बाद बदला",
     "detail.premiseChangedHint": "वे आधार जो आपके आरक्षित करने के बाद हिले — नए जुड़े, या अब तय नहीं रहे (तैयारी वापस ले ली गई)",
     "detail.premiseAdded": "आपके आरक्षित करने के बाद जोड़ा गया",
     "detail.premiseReopened": "आपके आरक्षित करने के बाद तय नहीं रहा — फिर खोला गया या अधिक्रमित हुआ (कड़ी उससे पुरानी है)",
+    "detail.premiseValueReopened": "आपके आरक्षित करने के बाद फिर से खोला गया — इस कार्य के मान से पहले क्रम में आने वाला मान। कार्य जारी रहता है; पिछला चरण अभी पूरा नहीं हुआ",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

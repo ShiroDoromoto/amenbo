@@ -433,7 +433,12 @@ export function premiseChangeDetail(pc: PremiseChangeDto): string {
   const reopened = pc.reopenedDecisions.length > 0
     ? `${t("premise.noLongerSettled")}: ${named(pc.reopenedDecisions)}`
     : "";
-  return [blockers, named(pc.addedDecisions), reopened].filter(Boolean).join(" / ");
+  // A value ordered before the task's own, opened again (`AMB-D-990`), written the way the waiting chip
+  // writes one — value first, its category beside it.
+  const values = pc.reopenedValues.length > 0
+    ? `${t("premise.valueReopened")}: ${pc.reopenedValues.map((w) => `${w.value} (${w.axis})`).join(", ")}`
+    : "";
+  return [blockers, named(pc.addedDecisions), reopened, values].filter(Boolean).join(" / ");
 }
 
 /**
@@ -451,7 +456,8 @@ export function PremiseChangedChip({ task, compact = false }: { task: TaskCard; 
   const pc = task.premiseChange;
   if (!pc) return null;
   const detail = premiseChangeDetail(pc);
-  const count = pc.addedBlockers.length + pc.addedDecisions.length + pc.reopenedDecisions.length;
+  const count =
+    pc.addedBlockers.length + pc.addedDecisions.length + pc.reopenedDecisions.length + pc.reopenedValues.length;
   const cls = `${compact ? "chip--blockglyph" : "chip chip--premise"} step-heed`;
   return (
     <span className={cls} role="img" title={tf("premise.changed", { detail })} aria-label={tf("premise.changed", { detail })}>
@@ -517,6 +523,18 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
           >
             <Icon name="unlock" /> {premiseDecisionName(d)}
           </button>
+        ))}
+        {/* A reopened value is not a record to go to, so it is named rather than pressed — in the tag the
+            waiting chip draws a value with. */}
+        {pc.reopenedValues.map((w) => (
+          <span
+            className="feed__target"
+            key={`v${w.axis}=${w.value}`}
+            style={{ marginRight: 4 }}
+            title={t("detail.premiseValueReopened")}
+          >
+            <Icon name="tag" /> {w.value} ({w.axis})
+          </span>
         ))}
       </span>
     </div>

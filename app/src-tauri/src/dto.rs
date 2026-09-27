@@ -443,8 +443,9 @@ pub struct PlacementDto {
 
 /// Premises that moved under a task **after it was reserved** (`AMB-D-366`, `AMB-D-373`) — the holder-side
 /// surface. Each list is a way readiness was withdrawn since the task went `in_progress`: a blocker that
-/// has not ended pinned on, a decision linked but not yet settled, or a decision that was already linked
-/// and has stopped being settled. Carried on the card only when there is a change to show (see
+/// has not ended pinned on, a decision linked but not yet settled, a decision that was already linked
+/// and has stopped being settled, or a value ordered before the task's own reopened (`AMB-D-990`).
+/// Carried on the card only when there is a change to show (see
 /// [`TaskCardDto::premise_change`]), so the screen draws the note exactly when it matters.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
@@ -456,6 +457,10 @@ pub struct PremiseChangeDto {
     pub(crate) added_decisions: Vec<DecisionRefDto>,
     /// Decisions already linked that stopped being settled after the reservation, in link order.
     pub(crate) reopened_decisions: Vec<DecisionRefDto>,
+    /// Values ordered before the task's own that were reopened after the reservation and are open still
+    /// (`AMB-D-990`). The task keeps going — the wait bites at the reservation alone — so this is how
+    /// its holder hears that the stage before theirs is not over after all.
+    pub(crate) reopened_values: Vec<WaitingOnValueDto>,
 }
 
 #[derive(Serialize, TS)]

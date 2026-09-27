@@ -1361,10 +1361,12 @@ export const ko: Translation = {
     "premise.changed": "예약한 뒤에 전제가 바뀌었습니다: {detail}",
     "premise.warn": "예약한 뒤에 전제가 바뀌었습니다: {detail}. 혼자서도 성립하는 부분만 끝내거나, 할 일로 되돌려 넘기세요.",
     "premise.noLongerSettled": "더는 정해진 상태가 아님",
+    "premise.valueReopened": "앞선 값이 다시 열림",
     "detail.premiseChanged": "예약 후 바뀜",
     "detail.premiseChangedHint": "예약한 뒤에 움직인 전제 — 새로 붙었거나, 더는 정해진 상태가 아닌 것(준비 상태가 거둬들여짐)",
     "detail.premiseAdded": "예약한 뒤에 붙음",
     "detail.premiseReopened": "예약한 뒤에 정해진 상태에서 벗어남 — 초안으로 되돌아갔거나 대체됨(연결이 더 오래됨)",
+    "detail.premiseValueReopened": "예약한 뒤에 다시 열린, 순서상 이 작업의 값보다 앞선 값입니다. 작업은 계속 진행되지만 앞 단계는 아직 끝나지 않았습니다",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

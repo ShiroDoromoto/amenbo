@@ -1390,10 +1390,12 @@ export const uk: Translation = {
     "premise.changed": "Засади змінилися після того, як ви це зарезервували: {detail}",
     "premise.warn": "Засади змінилися після того, як ви це зарезервували: {detail}. Доведіть до кінця лише ту частину, що стоїть сама по собі, або поверніть завдання, перевівши його в «До виконання».",
     "premise.noLongerSettled": "уже не вирішено",
+    "premise.valueReopened": "попереднє значення відкрито знову",
     "detail.premiseChanged": "Змінилося після резервування",
     "detail.premiseChangedHint": "Засади, що зрушили після вашого резервування — щойно прикріплені або вже не вирішені (готовність відкликано)",
     "detail.premiseAdded": "Прикріплено після вашого резервування",
     "detail.premiseReopened": "Перестало бути вирішеним після вашого резервування — відкрито знову або замінено (зв'язок старіший)",
+    "detail.premiseValueReopened": "Відкрито знову після того, як ви зарезервували завдання, — значення, що стоїть за порядком перед значенням цього завдання. Завдання триває; попередній етап не завершено",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

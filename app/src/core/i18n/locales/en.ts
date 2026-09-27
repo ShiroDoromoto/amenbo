@@ -1630,10 +1630,12 @@ const ui = {
   "premise.changed": "Premises changed after you reserved this: {detail}",
   "premise.warn": "Premises changed after you reserved this: {detail}. Finish only the part that stands on its own, or hand it back by setting it to todo.",
   "premise.noLongerSettled": "no longer settled",
+  "premise.valueReopened": "earlier value reopened",
   "detail.premiseChanged": "Changed since reserved",
   "detail.premiseChangedHint": "Premises that moved after you reserved this — pinned on, or no longer settled (readiness withdrawn)",
   "detail.premiseAdded": "Pinned on after you reserved this",
   "detail.premiseReopened": "Stopped being settled after you reserved this — reopened or superseded (the link is older)",
+  "detail.premiseValueReopened": "Opened again after you reserved this — a value ordered before this task's own. The task keeps going; the stage before it is not over",
   // What a notification says one event was, said the same way to every carrier a project reports
   // through. Four slots and never more: who drove the write, which record it was, the second thing the
   // event names (a status, an assignee, a project), and the event's own name where there are no words

@@ -1380,10 +1380,12 @@ export const ja: Translation = {
     // One phrase covering both arms of the axis — unsettled (reopen/reject) and superseded. A word naming
     // only the first cannot describe a decision that is still accepted and merely stopped being current.
     "premise.noLongerSettled": "確定が外れた",
+    "premise.valueReopened": "前の値が開き直された",
     "detail.premiseChanged": "予約後の変化",
     "detail.premiseChangedHint": "予約後に動いた前提（後から付いた／確定が外れた・着手可否が下がった）",
     "detail.premiseAdded": "予約後に付いた前提",
     "detail.premiseReopened": "予約後に確定が外れた前提（書きかけに戻った／置き換えられた。リンクは前からある）",
+    "detail.premiseValueReopened": "予約したあとで開き直された、並び順でこのタスクの値より前の値。タスクはそのまま進められるが、前の段階はまだ終わっていない",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

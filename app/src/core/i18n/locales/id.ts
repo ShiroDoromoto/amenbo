@@ -1365,10 +1365,12 @@ export const id: Translation = {
     "premise.changed": "Premisnya berubah setelah Anda memesan ini: {detail}",
     "premise.warn": "Premisnya berubah setelah Anda memesan ini: {detail}. Selesaikan hanya bagian yang berdiri sendiri, atau kembalikan dengan menyetelnya ke “Akan dikerjakan”.",
     "premise.noLongerSettled": "tidak lagi selesai",
+    "premise.valueReopened": "nilai sebelumnya dibuka lagi",
     "detail.premiseChanged": "Berubah sejak dipesan",
     "detail.premiseChangedHint": "Premis yang bergerak setelah Anda memesan ini — baru disematkan, atau tidak lagi selesai (kesiapannya ditarik)",
     "detail.premiseAdded": "Disematkan setelah Anda memesan ini",
     "detail.premiseReopened": "Berhenti selesai setelah Anda memesan ini — dibuka lagi atau digantikan (tautannya lebih tua)",
+    "detail.premiseValueReopened": "Dibuka lagi setelah kamu memesan ini — nilai yang urutannya sebelum nilai tugas ini. Tugas tetap berjalan; tahap sebelumnya belum selesai",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

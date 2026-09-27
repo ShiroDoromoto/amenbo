@@ -1366,10 +1366,12 @@ export const zhHant: Translation = {
     "premise.changed": "你預約之後前提有了變動：{detail}",
     "premise.warn": "你預約之後前提有了變動：{detail}。只做完能獨立成立的那部分，或者把它設回待辦交還回去。",
     "premise.noLongerSettled": "不再是定案",
+    "premise.valueReopened": "前面的值被重新開啟",
     "detail.premiseChanged": "預約後有變動",
     "detail.premiseChangedHint": "你預約之後變動過的前提——新掛上的，或是不再是定案的（就緒狀態被收回）",
     "detail.premiseAdded": "在你預約之後才掛上",
     "detail.premiseReopened": "在你預約之後不再是定案——被退回草稿或被取代（連結更早）",
+    "detail.premiseValueReopened": "你預訂之後被重新開啟的值——排在此任務的值之前。任務照常進行，但前一階段尚未結束",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

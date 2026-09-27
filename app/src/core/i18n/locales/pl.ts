@@ -1390,10 +1390,12 @@ export const pl: Translation = {
     "premise.changed": "Przesłanki zmieniły się po tym, jak to zarezerwowałeś: {detail}",
     "premise.warn": "Przesłanki zmieniły się po tym, jak to zarezerwowałeś: {detail}. Dokończ tylko tę część, która broni się sama, albo oddaj zadanie, ustawiając je z powrotem na „Do zrobienia”.",
     "premise.noLongerSettled": "już nierozstrzygnięta",
+    "premise.valueReopened": "wcześniejsza wartość ponownie otwarta",
     "detail.premiseChanged": "Zmieniło się od rezerwacji",
     "detail.premiseChangedHint": "Przesłanki, które ruszyły się po Twojej rezerwacji — dopięte albo już nierozstrzygnięte (gotowość cofnięta)",
     "detail.premiseAdded": "Dopięta po Twojej rezerwacji",
     "detail.premiseReopened": "Przestała być rozstrzygnięta po Twojej rezerwacji — wróciła do szkicu albo została zastąpiona (powiązanie jest starsze)",
+    "detail.premiseValueReopened": "Ponownie otwarta po Twojej rezerwacji — wartość uporządkowana przed wartością tego zadania. Zadanie trwa dalej; poprzedni etap się nie skończył",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

@@ -1365,10 +1365,12 @@ export const vi: Translation = {
     "premise.changed": "Tiền đề đã đổi sau khi bạn nhận việc: {detail}",
     "premise.warn": "Tiền đề đã đổi sau khi bạn nhận việc: {detail}. Chỉ hoàn tất phần tự nó đứng vững, hoặc trả lại bằng cách đặt về “Cần làm”.",
     "premise.noLongerSettled": "không còn ngã ngũ",
+    "premise.valueReopened": "giá trị trước được mở lại",
     "detail.premiseChanged": "Đã đổi từ khi nhận việc",
     "detail.premiseChangedHint": "Những tiền đề đã dịch chuyển sau khi bạn nhận việc — mới được ghim vào, hoặc không còn ngã ngũ (tính sẵn sàng bị rút)",
     "detail.premiseAdded": "Được ghim vào sau khi bạn nhận việc",
     "detail.premiseReopened": "Hết ngã ngũ sau khi bạn nhận việc — được mở lại hoặc bị thay thế (mối nối cũ hơn)",
+    "detail.premiseValueReopened": "Được mở lại sau khi bạn giữ việc này — một giá trị xếp trước giá trị của việc này. Việc vẫn tiếp tục; giai đoạn trước chưa xong",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

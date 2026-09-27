@@ -1365,10 +1365,12 @@ export const th: Translation = {
     "premise.changed": "ข้อตั้งเปลี่ยนไปหลังจากคุณจองงานนี้: {detail}",
     "premise.warn": "ข้อตั้งเปลี่ยนไปหลังจากคุณจองงานนี้: {detail} ให้ทำเฉพาะส่วนที่ยืนได้ด้วยตัวเอง หรือคืนงานด้วยการตั้งกลับเป็น “รอทำ”",
     "premise.noLongerSettled": "ไม่ยุติอีกต่อไป",
+    "premise.valueReopened": "ค่าก่อนหน้าถูกเปิดอีกครั้ง",
     "detail.premiseChanged": "เปลี่ยนไปตั้งแต่จองงาน",
     "detail.premiseChangedHint": "ข้อตั้งที่ขยับหลังจากคุณจองงานนี้ — เพิ่งถูกตรึงเข้ามา หรือไม่ยุติอีกต่อไป (ความพร้อมถูกถอน)",
     "detail.premiseAdded": "ถูกตรึงเข้ามาหลังจากคุณจองงานนี้",
     "detail.premiseReopened": "เลิกยุติหลังจากคุณจองงานนี้ — ถูกเปิดใหม่หรือถูกแทนที่ (การเชื่อมเก่ากว่า)",
+    "detail.premiseValueReopened": "ถูกเปิดอีกครั้งหลังจากคุณจองงานนี้ — ค่าที่เรียงอยู่ก่อนค่าของงานนี้ งานยังดำเนินต่อได้ แต่ขั้นก่อนหน้ายังไม่จบ",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

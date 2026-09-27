@@ -25,7 +25,7 @@ function card(over: Partial<TaskCard>): TaskCard {
 }
 
 const change = (over: Partial<PremiseChangeDto> = {}): PremiseChangeDto => ({
-  addedBlockers: [], addedDecisions: [], reopenedDecisions: [], ...over,
+  addedBlockers: [], addedDecisions: [], reopenedDecisions: [], reopenedValues: [], ...over,
 });
 
 const chips = () => Array.from(container.querySelectorAll(".chip--premise"));
@@ -92,6 +92,16 @@ describe("PremiseChangedChip", () => {
     expect(title.indexOf("D-159")).toBeLessThan(title.indexOf(t("premise.noLongerSettled")));
   });
 
+  it("counts a value before the task's own that was opened again, and names it with its category", () => {
+    act(() => root.render(createElement(PremiseChangedChip, { task: card({
+      status: "in_progress",
+      premiseChange: change({ reopenedValues: [{ axis: "リリース", value: "v1" }] }),
+    }) })));
+    expect(chips()).toHaveLength(1);
+    expect(chips()[0].textContent).toContain("1");
+    expect(chips()[0].getAttribute("title")).toContain(`${t("premise.valueReopened")}: v1 (リリース)`);
+  });
+
   it("compact drops the count and shows only the mark, tooltip still names what changed", () => {
     act(() => root.render(createElement(PremiseChangedChip, { task: card({
       status: "in_progress",
@@ -130,6 +140,17 @@ describe("PremiseChangedField (the detail pane's spelled-out surface)", () => {
     expect(labels[2]).toContain("D-373 開き直った決定");
     act(() => { (fieldChips()[2] as HTMLButtonElement).click(); });
     expect(opened).toEqual([373]);
+  });
+
+  it("names a reopened value in the tag the waiting chip uses, as a mark and not a way in", () => {
+    act(() => root.render(createElement(PremiseChangedField, {
+      pc: change({ reopenedValues: [{ axis: "リリース", value: "v1" }] }),
+    })));
+    expect(fieldChips()).toHaveLength(0);
+    const named = container.querySelector("span.feed__target");
+    expect(named?.textContent).toContain("v1 (リリース)");
+    expect(markOf(named as Element)).toBe("tag");
+    expect(named?.getAttribute("title")).toBe(t("detail.premiseValueReopened"));
   });
 
   it("marks which axis each decision is on, so the two glyphs are readable", () => {
@@ -180,6 +201,15 @@ describe("StatusSelect premise-change safety net (AMB-D-366)", () => {
     // The toast once fired with an empty detail here: the axis was in the chip and missing from the warn.
     expect(notices).toHaveLength(1);
     expect(notices[0]).toContain("開き直った決定");
+  });
+
+  it("names a value opened again before the task's own", () => {
+    const notices = fireChange({
+      id: 7, status: "in_progress", onStatus: () => {},
+      premiseChange: change({ reopenedValues: [{ axis: "リリース", value: "v1" }] }),
+    }, "blocked");
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain("v1 (リリース)");
   });
 
   it("stays silent when there is no premise change", () => {

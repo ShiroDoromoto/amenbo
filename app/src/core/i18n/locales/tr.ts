@@ -1364,10 +1364,12 @@ export const tr: Translation = {
     "premise.changed": "Bunu üstlendikten sonra dayanaklar değişti: {detail}",
     "premise.warn": "Bunu üstlendikten sonra dayanaklar değişti: {detail}. Yalnızca kendi başına ayakta duran kısmı bitirin ya da “Yapılacak”a alarak geri bırakın.",
     "premise.noLongerSettled": "artık karara bağlı değil",
+    "premise.valueReopened": "önceki değer yeniden açıldı",
     "detail.premiseChanged": "Üstlenildiğinden beri değişti",
     "detail.premiseChangedHint": "Bunu üstlendikten sonra oynayan dayanaklar — yeni iliştirilmiş ya da artık karara bağlı olmayan (hazırlığı geri çekilmiş)",
     "detail.premiseAdded": "Bunu üstlendikten sonra iliştirildi",
     "detail.premiseReopened": "Bunu üstlendikten sonra karara bağlı olmaktan çıktı — yeniden açıldı ya da yerine geçildi (bağ daha eski)",
+    "detail.premiseValueReopened": "Siz bunu ayırdıktan sonra yeniden açıldı — sırada bu görevin değerinden önce gelen bir değer. Görev devam eder; önceki aşama bitmedi",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

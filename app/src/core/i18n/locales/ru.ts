@@ -1390,10 +1390,12 @@ export const ru: Translation = {
     "premise.changed": "Предпосылки изменились после того, как вы взяли задачу: {detail}",
     "premise.warn": "Предпосылки изменились после того, как вы взяли задачу: {detail}. Доделайте только ту часть, что держится сама по себе, либо верните задачу, переведя её в «К выполнению».",
     "premise.noLongerSettled": "больше не решена",
+    "premise.valueReopened": "предыдущее значение открыто снова",
     "detail.premiseChanged": "Изменилось после взятия в работу",
     "detail.premiseChangedHint": "Предпосылки, сдвинувшиеся после того, как вы взяли задачу, — добавленные или переставшие быть решёнными (готовность отозвана)",
     "detail.premiseAdded": "Добавлена после того, как вы взяли задачу",
     "detail.premiseReopened": "Перестала быть решённой после того, как вы взяли задачу, — возвращена в черновик или заменена (связь старше)",
+    "detail.premiseValueReopened": "Открыто снова после того, как вы зарезервировали задачу, — значение, стоящее по порядку перед значением этой задачи. Задача продолжается; предыдущий этап не завершён",
     // What a notification says one event was, said the same way to every carrier a project reports
     // through. Four slots and never more: who drove the write, which record it was, the second thing the
     // event names (a status, an assignee, a project), and the event's own name where there are no words

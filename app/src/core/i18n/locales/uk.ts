@@ -957,7 +957,6 @@ export const uk: Translation = {
     "auto.hand.nothing": "Ця автоматизація нічого не приймає під час запуску.",
     "auto.launch.see": "Показати на схемі",
     "auto.launch.openWorkspace": "Відкрити робочу область",
-    "auto.startOne": "Запустити автоматизацію",
     "auto.pic.lap": "Одне завдання",
     "auto.pic.insert": "Вставити сюди дію",
     "auto.pic.errorExit": "помилка",

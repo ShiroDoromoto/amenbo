@@ -952,7 +952,6 @@ export const fr: Translation = {
     "auto.hand.nothing": "Cette automatisation ne reçoit rien au démarrage.",
     "auto.launch.see": "Voir dans le schéma",
     "auto.launch.openWorkspace": "Ouvrir l’espace de travail",
-    "auto.startOne": "Lancer une automatisation",
     "auto.pic.lap": "Une tâche",
     "auto.pic.insert": "Insérer une action ici",
     "auto.pic.errorExit": "erreur",

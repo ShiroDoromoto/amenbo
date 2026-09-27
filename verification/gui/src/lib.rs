@@ -4603,12 +4603,6 @@ impl Instructor {
                     other => return Err(format!("`on` does not know `{other}` — it is row / pane")),
                 }
             }
-            // The way in that is not the build screen. It hands nothing over at the press: which task
-            // and which folder are the definition's.
-            (Domain::Automation, "start-from-frame") => format!(
-                "In the workspace, on a page with room left on it, press the empty frame's control that starts an automation, then pick \"{}\". {HAND_NOTHING}",
-                self.target_label(with)
-            ),
             // The press beside a row of the list the sidebar opens — beside it, not inside it, so it
             // starts the run rather than going to the project.
             (Domain::Automation, "start-from-list") => format!(
@@ -8955,15 +8949,6 @@ steps_gui:
     domain: automation
     op: action-rewrite
     with: { step: look, prompt: look at it twice }
-  - type: action
-    domain: automation
-    op: start-from-frame
-    with: { target: auto }
-    as: from_frame
-  - type: assert
-    domain: automation
-    op: history-row
-    with: { target: from_frame, state: canceled }
   - type: assert
     domain: automation
     op: every-listed
@@ -8973,6 +8958,10 @@ steps_gui:
     op: start-from-list
     with: { target: auto }
     as: from_list
+  - type: assert
+    domain: automation
+    op: history-row
+    with: { target: from_list, state: canceled }
   - type: action
     domain: automation
     op: every-open

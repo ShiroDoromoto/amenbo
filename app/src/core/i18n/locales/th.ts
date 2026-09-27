@@ -941,7 +941,6 @@ export const th: Translation = {
     "auto.hand.nothing": "ออโตเมชันนี้ไม่รับอะไรเมื่อเริ่มทำงาน",
     "auto.launch.see": "ดูในแผนภาพ",
     "auto.launch.openWorkspace": "เปิดพื้นที่ทำงาน",
-    "auto.startOne": "เริ่มออโตเมชัน",
     "auto.pic.lap": "หนึ่งงาน",
     "auto.pic.insert": "แทรกแอ็กชันตรงนี้",
     "auto.pic.errorExit": "ข้อผิดพลาด",

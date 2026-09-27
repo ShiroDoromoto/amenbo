@@ -1093,7 +1093,7 @@ fn render_action(flags: &Flags, view: &ActionView) {
         human(flags, format!("declares  {}", one_cfg(cfg)));
     }
     for exit in &view.exits {
-        human(flags, format!("way out {}", one_exit(&exit.exit.name)));
+        human(flags, format!("way out {}  [{}]", one_exit(&exit.exit.name), exit.exit.id));
         for port in &exit.outputs {
             human(flags, format!("    hands on  {}", one_port(port)));
         }
@@ -1196,10 +1196,11 @@ fn write_body(flags: &Flags, what: &str, body: &str) {
     }
 }
 
-/// One port on one line: the name it is handed under, what it carries, and whether it may be missing.
+/// One port on one line: the name it is handed under, what it carries, whether it may be missing, and
+/// the id `port-update` and `port-rm` take.
 fn one_port(port: &amenbo_core::model::AutomationPort) -> String {
     let required = if port.required { "required" } else { "optional" };
-    format!("{}  {}  {required}", port.name, port.kind.as_str())
+    format!("{}  {}  {required}  [{}]", port.name, port.kind.as_str(), port.id)
 }
 
 /// One setting on one line, with the answer written while building where there is one.

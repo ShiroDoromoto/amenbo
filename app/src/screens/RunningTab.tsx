@@ -1,9 +1,9 @@
 // The "running" tab — what is under way right now, and every failure nobody has seen yet, on one line
 // each (`AMB-D-955`).
 //
-// **Opened from the sidebar it crosses projects, and says which project each run is in.** A run holds
-// a terminal on this machine, and this machine is not divided up per project. **Opened from a project
-// it is that project's runs alone** (`AMB-D-954`), and then naming the project says nothing, so it is
+// **With every project picked it crosses projects, and says which project each run is in.** A run
+// holds a terminal on this machine, and this machine is not divided up per project. **With a project
+// picked it is that project's runs alone** (`AMB-D-992`), and then naming the project says nothing, so it is
 // left off: a reader inside one project who is shown another's runs cannot read at a glance what is
 // going in their own.
 //
@@ -167,7 +167,7 @@ export function RunningTab({
   projectId,
   onGoToRun,
 }: {
-  /** The project whose runs these are, or `null` for every project's — the sidebar's. */
+  /** The project whose runs these are, or `null` for every project's. */
   projectId: number | null;
   /** Go to the pane this run is drawn in. Absent in the window that has no workspace face to send
    *  anybody to, and then the rows are read rather than pressed. */

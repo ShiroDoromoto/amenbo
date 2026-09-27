@@ -3963,10 +3963,11 @@ impl Instructor {
                 landing(with)?
             ),
             // ---- automation on screen ----------------------------------------------------------
-            // Standing on the automations screen. It is one place with three tabs, and a road says
-            // which it is standing on rather than naming three screens.
+            // Standing on the automations screen. It is one place with four tabs, and a road says
+            // which it is standing on rather than naming four screens. It is reached from the
+            // project's header, which opens it with that project picked.
             (Domain::Automation, "screen") => format!(
-                "Open the automations screen of the project on the ledger and stand on {}.",
+                "In the header of the project on the ledger, press the automations button — the automations screen opens with that project picked in the pulldown over its tabs — and stand on {}.",
                 automation_tab(req(with, "tab")?)?
             ),
             // **Making one from the list.** The press takes a name and nothing else, and lands on the
@@ -4010,18 +4011,17 @@ impl Instructor {
                     Some(other) => return Err(format!("`reach` does not know `{other}` — it is device / project")),
                 }
             ),
-            // Moving an action to the other library, from the "actions" tab of the entrance that owns
-            // it now — the one place it is changed from: a project's own is sent to the global
-            // library from that project's automations screen; a global one is sent into a project from
-            // the sidebar's automations, which asks which project under the row. Either is picked from
-            // the row's "⋯" menu and then confirmed by a second press under the row.
+            // Moving an action to the other library, from the "actions" tab, whatever the pulldown has
+            // picked: a project's own is sent to the global library; a global one is sent
+            // into a project, which is asked for under the row. Either is picked from the row's "⋯" menu
+            // and then confirmed by a second press under the row.
             (Domain::Automation, "action-scope") => match req(with, "reach")? {
                 "device" => format!(
-                    "Open the automations screen of the project on the ledger, stand on the actions tab, and on the row for \"{}\" open its \"⋯\" menu, pick the item that moves it to the global library, and press the button under the row that moves it there.",
+                    "In the header of the project on the ledger, press the automations button, stand on the actions tab, and on the row for \"{}\" open its \"⋯\" menu, pick the item that moves it to the global library, and press the button under the row that moves it there.",
                     self.target_label(with)
                 ),
                 "project" => format!(
-                    "In the sidebar, press the smart view for automations and stand on the actions tab. On the row for \"{}\" open its \"⋯\" menu, pick the item that moves it to a project, pick {} in the list that opens under the row, and press the button that moves it.",
+                    "In the sidebar, press the smart view for automations — it opens with every project picked in the pulldown over its tabs — and stand on the actions tab. On the row for \"{}\" open its \"⋯\" menu, pick the item that moves it to a project, pick {} in the list that opens under the row, and press the button that moves it.",
                     self.target_label(with),
                     match with.get("project").and_then(|v| v.as_str()) {
                         Some(name) => format!(
@@ -4609,9 +4609,10 @@ impl Instructor {
                 "On the automations tab the sidebar opened, press the button beside the row for \"{}\" that starts it. {HAND_NOTHING}",
                 self.target_label(with)
             ),
-            // The row itself goes to the automation's own project and opens it there.
+            // The row itself opens the automation here, in its own project, whichever the pulldown has
+            // picked — the screen does not move to the project.
             (Domain::Automation, "every-open") => format!(
-                "On the automations tab the sidebar opened, press the row for \"{}\". Confirm the ledger moves to the project \"{}\" and opens the build screen for it on that project's automations.",
+                "On the automations tab the sidebar opened, press the row for \"{}\", which names the project \"{}\". Confirm the build screen for it opens on this screen in place of the list, with the automations smart view still the one selected in the sidebar.",
                 self.target_label(with),
                 self.key_label(with, "project")
             ),
@@ -6731,12 +6732,12 @@ fn step_mark(with: &Args, key: &str) -> Result<Option<bool>, String> {
     }
 }
 
-/// Which of the automations screen's three tabs a road means. The screen is one place and the tabs
+/// Which of the automations screen's four tabs a road means. The screen is one place and the tabs
 /// are what is on it, so an instruction names the tab and never a screen of its own.
 fn automation_tab(tab: &str) -> Result<&'static str, String> {
     Ok(match tab {
         "running" => "the tab holding the runs that are under way",
-        "automations" => "the tab holding this project's automations",
+        "automations" => "the tab holding the automations",
         "actions" => "the tab holding the library of actions",
         "history" => "the tab holding the runs that are over",
         other => return Err(format!("`tab` does not know `{other}` — it is automations / actions / running / history")),

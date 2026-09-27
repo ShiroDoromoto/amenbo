@@ -102,7 +102,6 @@ async function render() {
     root.render(
       createElement(AutomationActionBuildScreen, {
         id: 4,
-        projectId: 1,
         onBack: () => undefined,
       }),
     );
@@ -216,7 +215,6 @@ describe("the action build screen", () => {
       root.render(
         createElement(AutomationActionBuildScreen, {
           id: 4,
-          projectId: 1,
           onBack: () => undefined,
           onGoToAutomation: goTo,
         }),
@@ -225,10 +223,11 @@ describe("the action build screen", () => {
     await openDeclaration();
     const names = [...container.querySelectorAll(".actplaced__one")];
     expect(names.map((one) => one.textContent?.replace(" ↗", ""))).toEqual(["Dev loop", "Elsewhere"]);
-    // Another project's automation is not gone to from this project's screen.
-    expect(names[1]!.tagName).toBe("SPAN");
+    // Every project's is gone to, since each opens on the one automations screen (`AMB-D-992`).
     await act(async () => (names[0] as HTMLButtonElement).click());
     expect(goTo).toHaveBeenCalledWith(1, 7);
+    await act(async () => (names[1] as HTMLButtonElement).click());
+    expect(goTo).toHaveBeenCalledWith(2, 8);
   });
 
   it("closes the panel from its own close button", async () => {
@@ -318,65 +317,26 @@ describe("the action build screen", () => {
 
 });
 
-// A global action opened from a project (`AMB-D-954`): read there and changed from the sidebar. The
-// panels still open, with every control in them shut; nothing adds a step; and the row carries the
-// press that goes to where it is changed. Opened from the sidebar, or a project's own, it is written.
-describe("a global action opened from a project", () => {
-  const goTo = vi.fn();
-  async function renderAt(projectId: number | null, global = true) {
-    hoisted.action = action({ global });
+// A global action is written wherever it is opened (`AMB-D-992`): whether it can be changed is its
+// own, not the screen's it was reached from.
+describe("a global action", () => {
+  async function render() {
+    hoisted.action = action({ global: true });
     await act(async () => {
-      root.render(
-        createElement(AutomationActionBuildScreen, {
-          id: 4,
-          projectId,
-          onBack: () => undefined,
-          onGoToGlobal: goTo,
-        }),
-      );
+      root.render(createElement(AutomationActionBuildScreen, { id: 4, onBack: () => undefined }));
     });
   }
-  beforeEach(() => goTo.mockClear());
 
-  it("says it is changed from the sidebar, and goes there on the row's press", async () => {
-    await renderAt(1);
-    expect(container.querySelector('[data-icon="lock"]')).not.toBeNull();
-    await act(async () => {
-      buttons().find((one) => one.textContent === t("auto.act.openInSidebar"))!.click();
-    });
-    expect(goTo).toHaveBeenCalledWith(4);
-  });
-
-  // One press on the head, and it goes to where the action is changed (`AMB-T-5526`).
-  it("offers no Edit, only the press that goes to where it is changed", async () => {
-    await renderAt(1);
-    expect(has(t("auto.act.edit"))).toBe(false);
-    expect(container.querySelectorAll(".actbuild__head button")).toHaveLength(2);
-  });
-
-  it("opens a step to be read, with the fields shut", async () => {
-    await renderAt(1);
-    await act(async () => { nodes()[0].click(); });
-    const body = container.querySelector<HTMLFieldSetElement>(".actpanel__body");
-    expect(body?.disabled).toBe(true);
-    expect(container.querySelector<HTMLButtonElement>(".actpanel__close")?.disabled).toBe(false);
-  });
-
-  it("offers no way to add a step", async () => {
-    await renderAt(1);
-    expect(has(t("auto.act.stepAdd"))).toBe(false);
-  });
-
-  it("is written from the sidebar, where it is changed", async () => {
-    await renderAt(null);
+  it("is written, with Edit on its head and no lock", async () => {
+    await render();
     expect(has(t("auto.act.edit"))).toBe(true);
     expect(container.querySelector('[data-icon="lock"]')).toBeNull();
   });
 
-  it("leaves a project's own action written from that project", async () => {
-    await renderAt(1, false);
-    expect(has(t("auto.act.edit"))).toBe(true);
-    expect(has(t("auto.act.openInSidebar"))).toBe(false);
+  it("opens a step with the fields open", async () => {
+    await render();
+    await act(async () => { nodes()[0].click(); });
+    expect(container.querySelector<HTMLFieldSetElement>(".actpanel__body")?.disabled).toBe(false);
   });
 });
 
@@ -406,8 +366,7 @@ describe("an action a run is going on (AMB-D-961)", () => {
       root.render(
         createElement(AutomationActionBuildScreen, {
           id: 4,
-          projectId: 1,
-          onBack: () => undefined,
+            onBack: () => undefined,
           onGoToRun: goToRun,
         }),
       );

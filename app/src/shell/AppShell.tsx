@@ -45,21 +45,20 @@ import { currentLang, errLabel, t, type CmdError } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
 /**
- * `automation` is the definition a project arrives with open on its build screen — a press on the
- * sidebar's list of every project's automations, which goes to the project that owns the row
- * (`AMB-D-954`). `action` is the other way: the global action the sidebar's automations arrive with
- * open, sent there from a project, which only reads it. Both are kept on the place for `pick`'s reason.
+ * `automation` is the definition the automations screen arrives with open on its build screen, in the
+ * project `pick` names (`AMB-D-992`). It is kept on the place for `pick`'s reason.
  *
  * `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the gear in the board toolbar.
  *
- * `placement` is the box that build screen arrives with pressed, and `runs` the tab a project's
- * automations arrive on instead — both from a run's pane, which is read in the workspace and followed
- * here (`AMB-T-5539`). `nth` counts those arrivals, so that a second press on the same button opens
- * the screen again rather than finding the board already where it was sent and leaving it as the
- * reader has since moved it.
+ * `placement` is the box that build screen arrives with pressed, and `runs` the tab the automations
+ * arrive on instead — both from a run's pane, which is read in the workspace and followed here
+ * (`AMB-T-5539`). `nth` counts those arrivals, so that a second press on the same button opens the
+ * screen again rather than finding it already where it was sent and leaving it as the reader has
+ * since moved it.
  *
  * `pick` is the project a screen should arrive already holding — the one the creation screen just
- * raised, carried into the MCP screen so its rows open on it (`AMB-D-684`). It is part of where you
+ * raised, carried into the MCP screen so its rows open on it (`AMB-D-684`), and the one the automations
+ * screen's pulldown arrives on. It is part of where you
  * are rather than a message passed alongside, so ＜/＞ land back on the same screen holding the same
  * project; a way in that names no project simply leaves it off.
  */
@@ -71,7 +70,6 @@ export type Nav = {
   placement?: number;
   runs?: RunsTab;
   nth?: number;
-  action?: number;
 };
 
 /**
@@ -627,14 +625,15 @@ export function AppShell() {
   const showDetail = hasDetail && !paneClaimed;
   const showRight = paneClaimed || hasDetail;
 
-  // A run's pane reads in the workspace and is followed on the ledger, so both moves put the ledger up —
+  // A run's pane reads in the workspace and is followed on the ledger's automations, so both moves put the ledger up —
   // in one window the workspace is the face in front of it (`AMB-T-5539`).
   const arrivals = useRef(0);
   const openAutomation = useCallback((project: number, automation: number, placement: number | null) => {
     arrivals.current += 1;
     navTo({
-      type: "project",
-      id: String(project),
+      type: "view",
+      id: "automations",
+      pick: project,
       automation,
       ...(placement === null ? {} : { placement }),
       nth: arrivals.current,
@@ -643,7 +642,7 @@ export function AppShell() {
   }, [navTo]);
   const openRuns = useCallback((project: number, tab: RunsTab) => {
     arrivals.current += 1;
-    navTo({ type: "project", id: String(project), runs: tab, nth: arrivals.current });
+    navTo({ type: "view", id: "automations", pick: project, runs: tab, nth: arrivals.current });
     setFace("tasks");
   }, [navTo]);
   const openWorkspace = useCallback(() => selectFace("workspace"), [selectFace]);
@@ -776,8 +775,6 @@ export function AppShell() {
         <div className="main">
           {nav.type === "project" && (
             <BoardScreen
-              // Built again for each arrival from a run's pane, which is what opens the screen it names.
-              key={nav.nth ?? 0}
               projectId={Number(nav.id)}
               headerSlot={headerSlot}
               selectedTaskId={selectedTaskId}
@@ -787,12 +784,7 @@ export function AppShell() {
               onComposeTask={openCompose}
               onOpenSettings={() => navTo({ type: "projectSettings", id: nav.id })}
               onStartTerminal={startTerminalIn}
-              workspaceOpen={workspaceOpen}
-              onGoToRun={goToRun}
-              openAutomation={nav.automation}
-              openPlacement={nav.placement}
-              openRuns={nav.runs}
-              onGoToGlobalAction={(action) => navTo({ type: "view", id: "automations", action })}
+              onOpenAutomations={() => navTo({ type: "view", id: "automations", pick: Number(nav.id) })}
             />
           )}
           {nav.type === "projectSettings" && (
@@ -821,13 +813,15 @@ export function AppShell() {
           )}
           {nav.type === "view" && nav.id === "automations" && (
             <AutomationsScreen
-              // A fresh screen per place: what it arrives holding is read once, as it opens.
-              key={nav.action ?? "list"}
-              projectId={null}
-              openingAction={nav.action}
+              // A fresh screen per place, and per arrival from a run's pane: what it arrives holding
+              // is read once, as it opens.
+              key={`${nav.pick ?? "every"}:${nav.nth ?? 0}`}
+              pick={nav.pick}
+              opening={nav.automation}
+              openingBox={nav.placement}
+              openingTab={nav.runs}
               workspaceOpen={workspaceOpen}
               onGoToRun={goToRun}
-              onGoToAutomation={(project, automation) => navTo({ type: "project", id: String(project), automation })}
             />
           )}
           {nav.type === "view" && nav.id === "mcp" && <McpAppsScreen pick={nav.pick ?? null} />}

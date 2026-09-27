@@ -740,7 +740,7 @@ The two listings — a row per definition, a row per library action — are read
 move into a project names (`scope-refusal-names`): the terminal reads the error it is turned away
 with, a screen the sentence left under the row. The list the sidebar opens is a screen's alone, since
 no terminal lists every project's automations: a row naming its project (`every-listed`), the start
-beside it (`start-from-list`), and the row going to its project (`every-open`). So is a definition
+beside it (`start-from-list`), and the row opening its build screen on that same screen (`every-open`). So is a definition
 held by a run: on either build screen a band per run holding it is drawn over a picture that takes no
 write (`held-by`, `present: false` once the run is over), and the band's press goes to the run's pane
 (`held-go`) — the terminal's half is the refusal itself, `refused: conflict` on the write.

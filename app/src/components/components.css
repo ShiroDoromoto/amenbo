@@ -1278,6 +1278,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoscreen { padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
 /* A build screen under the tabs sits in the screen's padding, so its own margin would double it. */
 .autoscreen--build > .actbuild { margin: 0; }
+/* The pulldown every tab is narrowed by, over the tabs and at the start of the line, where the
+   reader looks first for which projects the screen is showing. */
+.autopick { display: flex; align-items: center; gap: var(--s-2); align-self: flex-start; }
+.autopick__label { font-size: var(--fs-xs); color: var(--c-text-faint); }
 /* The four tabs, left to right on a rule, the one open underlined in the accent. Each is as wide as
    its word: they name lists, and a tab stretched to a quarter of the screen would be read as a field. */
 .autotabs {
@@ -1822,6 +1826,11 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
    columns; which project, and a refusal, go under the row across all of it. */
 .actlib__line { align-items: center; }
 .actlib__line > .actlib__row { min-width: 0; }
+/* With every project listed, a column naming whose shelf a row is on stands after the name. */
+.actlib__table--every { grid-template-columns: minmax(0, 1fr) auto auto auto auto auto; }
+.actlib__table--every .actlib__row { grid-column: 1 / 6; }
+.actlib__table--every .actlib__moveslot { grid-column: 6; }
+.actlib__project { color: var(--c-text-muted); font-size: var(--fs-xs); white-space: nowrap; }
 .actlib__moveslot { grid-column: 5; display: flex; justify-content: flex-end; padding-inline-end: var(--s-2); }
 .actlib__moveslot > .btn { white-space: nowrap; }
 /* The row's "⋯": the moves and the delete, which the entrance that owns the action is the one to make. */

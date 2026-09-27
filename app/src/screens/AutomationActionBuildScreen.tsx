@@ -28,15 +28,13 @@
 // show nothing. The panel stands in the shell's right-pane column, where the board's detail does
 // (`../shell/paneSlot`), so it scrolls on its own and is as tall as the window lets it be.
 //
-// **A global action opened from a project is read, not written** (`AMB-D-954`). It is no one
-// project's, so it is changed from the sidebar's entrance and nowhere else: here the panels still open
-// to be read, with everything in them held shut, nothing adds a step, and the head carries the lock
-// and the one press that goes to it there in place of "Edit". One place to change a thing is what keeps a reader from wondering which
-// of two is the real one.
+// **It is written wherever it is opened** (`AMB-D-992`): a global action opened from a project's
+// automation is the same action the library lists, and whether it can be changed is its own — not the
+// screen's it was reached from.
 //
 // **An action a run is going on is read, not written, for as long as the run goes** (`AMB-D-961`). Core
 // refuses every rewrite of it while a run of an automation placing it is running or paused, so the
-// screen holds itself shut the way it does for a global action, and names those runs over the picture
+// screen holds itself shut, and names those runs over the picture
 // with the way to each one's pane (`./AutomationHeldBy`).
 //
 // **A built-in's action is read as its definition** (`./AutomationBuiltinScreen`). Its rows are Amenbo's
@@ -52,7 +50,7 @@ import { AutomationActionDeclaresPanel } from "./AutomationActionDeclaresPanel";
 import { AutomationActionStepPanel } from "./AutomationActionStepPanel";
 import { AutomationBuiltinScreen } from "./AutomationBuiltinScreen";
 import { AutomationHeldBy } from "./AutomationHeldBy";
-import { LockMark, ReachChip, usedCount } from "./automationParts";
+import { ReachChip, usedCount } from "./automationParts";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
 import { editAutomationAction, editAutomationStep, useAutomationAction } from "../core/automations";
@@ -83,20 +81,16 @@ function whereTo(action: AutomationActionDetailDto | null, target: AddTarget): W
  */
 function PlacedOn({
   placedOn,
-  projectId,
   onGoTo,
 }: {
   placedOn: AutomationPlacedOnDto[];
-  /** The project whose screen this is — from there, only its own automations are gone to. `null` is
-   *  the sidebar's, which goes to any. */
-  projectId: number | null;
   onGoTo?: (project: number, automation: number) => void;
 }) {
   if (placedOn.length === 0) return <span className="autostep__label">{t("auto.actions.unused")}</span>;
   return (
     <div className="actplaced">
       {placedOn.map((one) =>
-        onGoTo === undefined || (projectId !== null && one.project !== projectId) ? (
+        onGoTo === undefined ? (
           <span key={one.id} className="actplaced__one">
             {one.name}
           </span>
@@ -210,19 +204,12 @@ export function Panel({
 
 export function AutomationActionBuildScreen({
   id,
-  projectId,
   onBack,
-  onGoToGlobal,
   onGoToRun,
   onGoToAutomation,
 }: {
   id: number;
-  /** Whose project this is — what the machine is asked about when a step picks an agent. `null` is
-   *  the sidebar's entrance, where a global action is changed. */
-  projectId: number | null;
   onBack: () => void;
-  /** Go to a global action on the sidebar's entrance, where it is changed. */
-  onGoToGlobal?: (id: number) => void;
   /** Go to the pane a run holding this action is drawn in. */
   onGoToRun?: (project: number, run: number) => void;
   /** Go to the build screen of an automation this action is placed on. Absent, the names are read
@@ -230,8 +217,7 @@ export function AutomationActionBuildScreen({
   onGoToAutomation?: (project: number, automation: number) => void;
 }) {
   const action = useAutomationAction(id);
-  const elsewhere = projectId !== null && action?.global === true;
-  const readOnly = elsewhere || (action?.heldBy.length ?? 0) > 0;
+  const readOnly = (action?.heldBy.length ?? 0) > 0;
   // What the panel is showing: a pressed step, the action itself, its input or its output — or
   // nothing, until one is pressed. An action opens on the picture, and a place picked for the reader
   // would be one they did not choose.
@@ -282,27 +268,16 @@ export function AutomationActionBuildScreen({
           <>
             <ReachChip global={action.global} />
             <span className="actdecl__used">{usedCount(action.usedBy)}</span>
-            {elsewhere ? (
-              <>
-                <LockMark />
-                {onGoToGlobal && (
-                  <button type="button" className="btn actbuild__edit" onClick={() => onGoToGlobal(action.id)}>
-                    {t("auto.act.openInSidebar")}
-                  </button>
-                )}
-              </>
-            ) : (
-              // "Edit" whether or not a run holds it: held, the panel it opens is shut, which is where
-              // a reader finds out — the head does not change its word for it.
-              <button
-                type="button"
-                className={part === "about" ? "btn btn--on actbuild__edit" : "btn actbuild__edit"}
-                aria-pressed={part === "about"}
-                onClick={() => pickPart("about")}
-              >
-                {t("auto.act.edit")}
-              </button>
-            )}
+            {/* "Edit" whether or not a run holds it: held, the panel it opens is shut, which is where
+                a reader finds out — the head does not change its word for it. */}
+            <button
+              type="button"
+              className={part === "about" ? "btn btn--on actbuild__edit" : "btn actbuild__edit"}
+              aria-pressed={part === "about"}
+              onClick={() => pickPart("about")}
+            >
+              {t("auto.act.edit")}
+            </button>
           </>
         )}
       </div>
@@ -378,7 +353,7 @@ export function AutomationActionBuildScreen({
                 </span>
               </div>
               <Sec title={t("auto.act.placedOn")}>
-                <PlacedOn placedOn={action.placedOn} projectId={projectId} onGoTo={onGoToAutomation} />
+                <PlacedOn placedOn={action.placedOn} onGoTo={onGoToAutomation} />
               </Sec>
             </>
           ) : (

@@ -116,7 +116,7 @@ describe("a built-in, opened", () => {
       placedOn: [],
     };
     await act(async () => {
-      root.render(createElement(AutomationActionBuildScreen, { id: 40, projectId: 1, onBack: back }));
+      root.render(createElement(AutomationActionBuildScreen, { id: 40, onBack: back }));
     });
     expect(container.querySelector('[data-icon="lock"]')).not.toBeNull();
     expect(container.querySelector(".actbuild__canvas")).toBeNull();

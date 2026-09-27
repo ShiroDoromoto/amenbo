@@ -59,6 +59,14 @@ vi.mock("../core/automations", () => ({
   setAutomationWire: () => Promise.resolve(),
   clearAutomationWire: () => Promise.resolve(),
 }));
+vi.mock("../mock/adapter", () => ({
+  dataAdapter: {
+    listProjects: () => [
+      { id: 1, name: "amenbo" },
+      { id: 3, name: "site" },
+    ],
+  },
+}));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
 }));
@@ -95,7 +103,7 @@ const wentToRun = vi.fn();
 
 async function render(workspaceOpen = true) {
   await act(async () => {
-    root.render(createElement(AutomationsScreen, { projectId: 1, workspaceOpen, onGoToRun: wentToRun }));
+    root.render(createElement(AutomationsScreen, { pick: 1, workspaceOpen, onGoToRun: wentToRun }));
   });
 }
 
@@ -266,24 +274,20 @@ describe("the automations screen", () => {
   });
 });
 
-// The sidebar's entrance (`AMB-D-954`): every project's definitions, each with its project; started
-// from the row; a press on the row goes to that project rather than opening anything here; and
-// nothing is made here, since making one would first ask which project it is for.
-describe("the automations screen opened from the sidebar", () => {
-  const goTo = vi.fn();
+// Every project picked in the pulldown (`AMB-D-992`): every project's definitions, each with its
+// project; started from the row; a press on the row opens it here, in its own project; and a new one
+// asks which project it is for.
+describe("the automations screen with every project picked", () => {
   function everywhere(over: Partial<EveryAutomationCardDto> = {}): EveryAutomationCardDto {
     return { projectId: 3, projectName: "site", card: card(), ...over };
   }
   async function renderEverywhere() {
     await act(async () => {
-      root.render(createElement(AutomationsScreen, {
-        projectId: null, workspaceOpen: true, onGoToAutomation: goTo, onGoToRun: wentToRun,
-      }));
+      root.render(createElement(AutomationsScreen, { workspaceOpen: true, onGoToRun: wentToRun }));
     });
   }
-  beforeEach(() => goTo.mockClear());
 
-  it("lists every project's automations, each naming its project, and offers no new one", async () => {
+  it("lists every project's automations, each naming its project", async () => {
     hoisted.everywhere = [
       everywhere({ projectId: 1, projectName: "amenbo", card: card({ id: 7, name: "Morning round" }) }),
       everywhere({ projectId: 3, projectName: "site", card: card({ id: 9, name: "Publish" }) }),
@@ -294,21 +298,35 @@ describe("the automations screen opened from the sidebar", () => {
     expect(rows[0]).toContain("Morning round");
     expect(rows[0]).toContain("amenbo");
     expect(rows[1]).toContain("site");
-    expect(buttons().some((b) => b.textContent === t("auto.new"))).toBe(false);
   });
 
-  it("says no project has one yet, rather than that this project has none", async () => {
+  it("offers the first one alone while no project has any", async () => {
     await renderEverywhere();
-    expect(container.textContent).toContain(t("auto.emptyEverywhere"));
-    expect(container.querySelector(".autolist__first")).toBeNull();
+    expect(container.querySelector(".autolist__first")).not.toBeNull();
   });
 
-  it("goes to the row's own project to open it, rather than opening it here", async () => {
+  it("asks which project a new one is for, and makes nothing until one is picked", async () => {
     hoisted.everywhere = [everywhere()];
     await renderEverywhere();
+    await act(async () => { button(t("auto.new")).click(); });
+    const which = container.querySelector<HTMLSelectElement>(`select[aria-label="${t("auto.new.which")}"]`);
+    expect(which).not.toBeNull();
+    const input = container.querySelector<HTMLInputElement>(".autolist__newname input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Nightly");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(button(t("auto.new.make")).disabled).toBe(true);
+  });
+
+  it("opens the row's automation here, rather than going to its project", async () => {
+    hoisted.everywhere = [everywhere()];
+    hoisted.detail = detail({ projectId: 3 });
+    hoisted.check = { ready: true, blocks: [] };
+    await renderEverywhere();
     await act(async () => { button("Morning round").click(); });
-    expect(goTo).toHaveBeenCalledWith(3, 7);
-    expect(container.querySelector(".autolist")).not.toBeNull();
+    expect(container.querySelector(".autolist")).toBeNull();
+    expect(container.textContent).toContain(t("auto.build.picture"));
   });
 
   it("starts the row's automation in the row's project", async () => {
@@ -318,7 +336,6 @@ describe("the automations screen opened from the sidebar", () => {
     await act(async () => { button(t("auto.start")).click(); });
     await handOver();
     expect(hoisted.launch).toHaveBeenCalledWith(7, 3, [], true, { files: [], title: "", notes: "", classification: [] });
-    expect(goTo).not.toHaveBeenCalled();
   });
 
   it("goes to the pane of the run it started, in the row's project", async () => {
@@ -338,7 +355,7 @@ describe("the automations screen opened from the sidebar", () => {
     expect(button(t("auto.start")).disabled).toBe(true);
   });
 
-  it("puts no heading over the run tabs, from the sidebar or a project", async () => {
+  it("puts no heading over the run tabs", async () => {
     await renderEverywhere();
     const tabs = [...container.querySelectorAll<HTMLButtonElement>(".autotabs__tab")];
     await act(async () => { tabs[2].click(); });
@@ -348,26 +365,13 @@ describe("the automations screen opened from the sidebar", () => {
   });
 });
 
-describe("arriving on the sidebar with a global action", () => {
-  it("opens on that action's build screen, and goes back to the actions tab", async () => {
-    await act(async () => {
-      root.render(createElement(AutomationsScreen, { projectId: null, openingAction: 4, workspaceOpen: true }));
-    });
-    const lit = () => container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
-    expect(lit()?.textContent).toBe(t("auto.tab.actions"));
-    await act(async () => { button(t("auto.build.back")).click(); });
-    const on = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
-    expect(on?.textContent).toBe(t("auto.tab.actions"));
-  });
-});
-
-describe("arriving from the sidebar's list", () => {
-  it("opens on the build screen of the automation that was pressed", async () => {
+describe("arriving with an automation named", () => {
+  it("opens on its build screen", async () => {
     hoisted.automations = [card()];
     hoisted.detail = detail();
     hoisted.check = { ready: true, blocks: [] };
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { projectId: 1, opening: 7, workspaceOpen: true }));
+      root.render(createElement(AutomationsScreen, { pick: 1, opening: 7, workspaceOpen: true }));
     });
     expect(container.querySelector(".autolist")).toBeNull();
     expect(container.textContent).toContain(t("auto.build.picture"));
@@ -397,14 +401,14 @@ describe("arriving from a run's pane (AMB-T-5539)", () => {
     hoisted.detail = detail({ placements: [read] });
     hoisted.check = { ready: true, blocks: [] };
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { projectId: 1, opening: 7, openingBox: 4, workspaceOpen: true }));
+      root.render(createElement(AutomationsScreen, { pick: 1, opening: 7, openingBox: 4, workspaceOpen: true }));
     });
     expect(container.querySelector(".actpanel__title")?.textContent).toBe("Read");
   });
 
   it("opens on the history tab", async () => {
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { projectId: 1, openingTab: "history", workspaceOpen: true }));
+      root.render(createElement(AutomationsScreen, { pick: 1, openingTab: "history", workspaceOpen: true }));
     });
     const lit = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
     expect(lit?.textContent).toBe(t("auto.tab.history"));
@@ -412,7 +416,7 @@ describe("arriving from a run's pane (AMB-T-5539)", () => {
 
   it("opens on the running tab, where a failure nobody has acknowledged is listed (AMB-T-5672)", async () => {
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { projectId: 1, openingTab: "running", workspaceOpen: true }));
+      root.render(createElement(AutomationsScreen, { pick: 1, openingTab: "running", workspaceOpen: true }));
     });
     const lit = container.querySelector<HTMLButtonElement>(".autotabs__tab[aria-selected='true']");
     expect(lit?.textContent).toBe(t("auto.tab.running"));
@@ -700,7 +704,7 @@ describe("an automation a run is going on (AMB-D-961)", () => {
     hoisted.check = { ready: true, blocks: [] };
     goToRun.mockClear();
     await act(async () => {
-      root.render(createElement(AutomationsScreen, { projectId: 1, opening: 7, workspaceOpen: true, onGoToRun: goToRun }));
+      root.render(createElement(AutomationsScreen, { pick: 1, opening: 7, workspaceOpen: true, onGoToRun: goToRun }));
     });
   }
 

@@ -1,7 +1,7 @@
 // The "history" tab — the runs that are over and need nobody: completed, canceled, and failures a
-// person has acknowledged, newest first (`AMB-D-955`). Opened from a project it is that project's
-// alone, read so from the store a page at a time, and the rows leave the project off; opened from the
-// sidebar it is every project's (`AMB-D-954`).
+// person has acknowledged, newest first (`AMB-D-955`). With a project picked it is that project's
+// alone, read so from the store a page at a time, and the rows leave the project off; with every
+// project picked it is every project's (`AMB-D-992`).
 //
 // **One page at a time, with page numbers.** The history only grows and lives in the store, so the
 // screen holds one page of it and reads that page alone (`../core/automations`). A "show more" that
@@ -53,7 +53,7 @@ export function pageNumbers(current: number, pages: number): (number | null)[] {
 export function HistoryTab({
   projectId,
 }: {
-  /** The project whose runs these are, or `null` for every project's — the sidebar's. */
+  /** The project whose runs these are, or `null` for every project's. */
   projectId: number | null;
 }) {
   const [filter, setFilter] = useState<RunHistoryFilter>("all");

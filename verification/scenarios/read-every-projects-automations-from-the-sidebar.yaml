@@ -1,13 +1,13 @@
-# The automations screen has two ways in. From a project it is that project's, where one is made
-# and changed. From the sidebar it is every project's on one list: each row names its project, a run
-# is started from the row, and a press on the row goes to the project the automation is in rather
-# than opening it here — an automation is changed in its own project, and this list changes nothing.
+# The automations screen is one screen, the sidebar's. With every project picked in the
+# pulldown over its tabs, it lists every project's on one list: each row names its project, a run is
+# started from the row, and a press on the row opens that automation's build screen right here — in its
+# own project, without the screen moving to the project.
 id: read-every-projects-automations-from-the-sidebar
-title: The sidebar's automations list every project's, start one from its row, and go to a row's own project to change it
+title: The sidebar's automations list every project's, start one from its row, and open a row's build screen in place
 description: >
   Open the automations from the sidebar and read a row from another project naming that project.
   Start this project's automation from its row and read the pane the run stands up. Then press the
-  other project's row and land on its build screen inside that project.
+  other project's row and read its build screen open on the same screen.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
   # The task the built-in the run starts at takes, so the run goes on to the step after it.
@@ -102,7 +102,7 @@ steps_gui:
     with:
       face: tasks
 
-  # The row goes to the project that owns it, where the automation is changed.
+  # The row opens here, in the project that owns it — the screen does not move to that project.
   - type: action
     domain: automation
     op: every-open

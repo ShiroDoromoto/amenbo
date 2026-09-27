@@ -478,8 +478,9 @@ commands! {
 pub enum InAStep {
     /// One of the two that hand the step's work back. The step's entry teaches them in full.
     HandsBack,
-    /// Reaches the step, and does not hand anything back: it reads, it writes a comment, or it is
-    /// something the prompts a run is carried out on still do for themselves.
+    /// Reaches the step, and does not hand anything back: it reads, it writes a comment, it draws a
+    /// task's edges or sets its fields, or it is something the prompts a run is carried out on still
+    /// do for themselves.
     Reaches,
     /// Refused: it moves a task's status or who it is assigned to. Taking a task, ending it, and
     /// handing it to a person are the run's, and a step that did them itself would close a task with
@@ -557,7 +558,18 @@ impl Cmd {
             // table's again, since it re-runs this executable.
             | Cmd::TaskAdd
             | Cmd::TaskFinishCreating
-            | Cmd::Mcp => InAStep::Reaches,
+            | Cmd::Mcp
+            // A task's edges and fields, on any task in the project as outside a run (`AMB-D-991`): a
+            // step that files several tasks has to order them and hang them on their premise. Changing
+            // the wrong one is the same risk here as anywhere, and what this table keeps from a step
+            // is the run's task's status and assignee, not these. Writing a decision stays outside:
+            // one is written only on what a person settled, and there is no person in a run.
+            | Cmd::TaskUpdate
+            | Cmd::TaskDepend
+            | Cmd::TaskUndepend
+            | Cmd::DecisionLink
+            | Cmd::DimensionSet
+            | Cmd::DimensionUnset => InAStep::Reaches,
 
             Cmd::TaskCommitAdd
             | Cmd::WorktreeStart
@@ -618,12 +630,7 @@ impl Cmd {
             | Cmd::DimensionValueClose
             | Cmd::DimensionValueReopen
             | Cmd::DimensionValueRm
-            | Cmd::DimensionSet
-            | Cmd::DimensionUnset
-            | Cmd::TaskUpdate
             | Cmd::TaskMove
-            | Cmd::TaskDepend
-            | Cmd::TaskUndepend
             | Cmd::TaskCommitRm
             | Cmd::TaskDelete
             | Cmd::CommentRm
@@ -637,7 +644,6 @@ impl Cmd {
             | Cmd::DecisionAmend
             | Cmd::DecisionBuildsOn
             | Cmd::DecisionUnlink
-            | Cmd::DecisionLink
             | Cmd::DecisionPromote
             | Cmd::DecisionCommentRm
             | Cmd::TaskAttach
@@ -2543,7 +2549,7 @@ pub fn build_step() -> Value {
         "commands": hand_back,
         "reaches": {
             "commands": reaches,
-            "note": format!("The rest of what this terminal is for: reading where the step stands, writing on a timeline, and what the text you were started on has you do. Use no other command here. The ones that move a task's status or who it is assigned to ({moves}) are the run's: Amenbo moves the task's status, and if a person's judgement is needed, leave by that way out. The worktree and the commit ({built_in}) are Amenbo's built-ins': hand on what they need — the commit's SHA, say — and leave the rest to them. `{cli} agent --command <name>` prints any command's full spec."),
+            "note": format!("The rest of what this terminal is for: reading where the step stands, writing on a timeline, drawing a task's edges and setting its fields, and what the text you were started on has you do. Use no other command here. The ones that move a task's status or who it is assigned to ({moves}) are the run's: Amenbo moves the task's status, and if a person's judgement is needed, leave by that way out. The worktree and the commit ({built_in}) are Amenbo's built-ins': hand on what they need — the commit's SHA, say — and leave the rest to them. `{cli} agent --command <name>` prints any command's full spec."),
         },
     })
 }
@@ -2752,7 +2758,19 @@ mod tests {
         for name in ["task show", "comment add", "automation run-show"] {
             assert!(reaches.contains(&name), "{name} is left with a step: {reaches:?}");
         }
-        for name in ["task status", "task done", "task assign", "automation start", "worktree start", "task commit-add"] {
+        for name in ["task depend", "task undepend", "decision link", "dimension set", "dimension unset", "task update"] {
+            assert!(reaches.contains(&name), "a task's edges and fields are a step's to change (AMB-D-991): {reaches:?}");
+        }
+        for name in [
+            "task status",
+            "task done",
+            "task assign",
+            "automation start",
+            "worktree start",
+            "task commit-add",
+            "decision add",
+            "decision finish-writing",
+        ] {
             assert!(!reaches.contains(&name), "{name} is not a step's to type: {reaches:?}");
         }
         let note = entry["reaches"]["note"].as_str().expect("note");

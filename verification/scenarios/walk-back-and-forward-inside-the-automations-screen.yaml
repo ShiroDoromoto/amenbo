@@ -1,0 +1,140 @@
+# The window's way back walks the places inside the automations screen as well as the sidebar's rows.
+# A project picked in the pulldown is a place, and so is a build screen opened from the
+# list: the way back returns the pulldown to what it said and closes the build screen onto the list it
+# was opened from, and the way forward goes there again. Every press leaves the sidebar on the
+# automations it opened, so the sidebar and the screen go on pointing at the same place.
+id: walk-back-and-forward-inside-the-automations-screen
+title: The window's way back and way forward walk the automations screen's pulldown and its build screen, with the sidebar staying on the automations
+description: >
+  Open the automations from the sidebar and narrow the list to another project with the pulldown. Go
+  back and read every project's list again, then forward and read the narrowed one. Open the other
+  project's automation from every project's list, go back and read the list, then forward and read
+  its build screen. After every press the sidebar still has the automations selected.
+given:
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — this project's round" }, as: here }
+  # Another project's automation, which the list draws beside this project's until the pulldown narrows
+  # it away. It holds nothing, so its build screen is the one that says so.
+  - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — another }, as: another }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the other's round", project: another }, as: elsewhere }
+
+steps_gui:
+  - type: action
+    domain: task
+    op: open-view
+    with:
+      view: automations
+
+  - type: assert
+    domain: automation
+    op: every-listed
+    with:
+      target: elsewhere
+      project: another
+
+  # Narrowed to the other project: this project's row goes.
+  - type: action
+    domain: automation
+    op: narrow
+    with:
+      project: another
+
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: here
+      present: false
+
+  # Back: the pulldown says every project again, so this project's row is drawn again.
+  - type: action
+    domain: task
+    op: back
+
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: here
+
+  - type: assert
+    domain: task
+    op: view-selected
+    with:
+      view: automations
+
+  # Forward: narrowed to the other project again.
+  - type: action
+    domain: task
+    op: forward
+
+  - type: assert
+    domain: automation
+    op: listed
+    with:
+      target: here
+      present: false
+
+  - type: assert
+    domain: task
+    op: view-selected
+    with:
+      view: automations
+
+  # Back to every project, and the other project's row opened into its build screen here.
+  - type: action
+    domain: task
+    op: back
+
+  - type: action
+    domain: automation
+    op: every-open
+    with:
+      target: elsewhere
+      project: another
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: no_steps
+      pressable: false
+      present: true
+
+  # Back: the build screen closes onto the list it was opened from.
+  - type: action
+    domain: task
+    op: back
+
+  - type: assert
+    domain: automation
+    op: every-listed
+    with:
+      target: elsewhere
+      project: another
+
+  - type: assert
+    domain: task
+    op: view-selected
+    with:
+      view: automations
+
+  # Forward: the build screen again.
+  - type: action
+    domain: task
+    op: forward
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: no_steps
+      pressable: false
+      present: true
+
+  - type: assert
+    domain: task
+    op: view-selected
+    with:
+      view: automations

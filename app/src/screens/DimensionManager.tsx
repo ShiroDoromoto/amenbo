@@ -459,14 +459,6 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
           {value.closed ? t("dimmgr.reopenValue") : t("dimmgr.closeValue")}
         </button>
       )}
-      {unfinished && (
-        <span className="dimmgr__refusal" role="alert">
-          {unfinished}
-          {onShowUnfinished && (
-            <button className="btn" onClick={onShowUnfinished}>{t("dimmgr.showUnfinished")}</button>
-          )}
-        </span>
-      )}
       {moveTo === null ? (
         <button
           className="btn btn--danger"
@@ -505,6 +497,15 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
             {t("dimmgr.removeValue")}
           </button>
           <button className="btn" onClick={() => setMoveTo(null)}>{t("dimmgr.cancel")}</button>
+        </span>
+      )}
+      {/* Last on the row, so it breaks onto a line of its own under the value's controls. */}
+      {unfinished && (
+        <span className="dimmgr__refusal" role="alert">
+          {unfinished}
+          {onShowUnfinished && (
+            <button className="btn" onClick={onShowUnfinished}>{t("dimmgr.showUnfinished")}</button>
+          )}
         </span>
       )}
     </div>

@@ -7,6 +7,7 @@ use amenbo_core::{ops, Store};
 
 use crate::cli::*;
 use crate::cmd::comment::{resolve_live_decision_comment, resolve_live_task_comment};
+use crate::cmd::labels::attachment_label;
 use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
 
 /// A label carrying the source file's suffix, unless it already ends in that same one.
@@ -30,9 +31,9 @@ fn keep_the_suffix(label: &str, on_disk: Option<&str>) -> String {
     if label.to_lowercase().ends_with(&suffix) { label.to_string() } else { format!("{label}.{ext}") }
 }
 
-/// The attachment's display label (`att:<id>`).
+/// The attachment's display label (`AMB-ATT-<n>`).
 fn attach_label(a: &Attachment) -> String {
-    format!("att:{}", a.id)
+    attachment_label(a.id)
 }
 
 /// The shared body of `task attach` / `decision attach`: ingest `source` as a blob (the default), or with
@@ -294,7 +295,7 @@ fn resolve_attachment(store: &Store, id: &str) -> Result<Attachment, CliError> {
 }
 
 /// One attachment, summarized as a line for a human.
-fn attach_line(a: &Attachment) -> String {
+pub(crate) fn attach_line(a: &Attachment) -> String {
     use amenbo_core::model::AttachmentKind;
     let label = a.filename.clone().or_else(|| a.url.clone()).unwrap_or_else(|| "(no name)".to_string());
     match a.kind {

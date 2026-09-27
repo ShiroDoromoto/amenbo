@@ -9,7 +9,7 @@ use amenbo_core::{activity_log, ops, query, time, Store};
 
 use crate::cli::*;
 use crate::cmd::arg::{body_arg, body_arg_opt, parse_date_opt, parse_priority, pos_from_keys};
-use crate::cmd::attach::attach_add;
+use crate::cmd::attach::{attach_add, attach_line};
 use crate::cmd::comment::comment_section;
 use crate::cmd::decision::decision_ref_name;
 use crate::cmd::guard::guard_ai_task_delete;
@@ -177,6 +177,10 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             // to go and look.
             let decisions = store.decisions_for_task(tid);
             let comments = store.comment_list(tid, None, None).map(|r| r.comments).unwrap_or_default();
+            // What is attached to the task itself (`AMB-D-981` hands the files a run was started with to the
+            // task it files). Without it here, the only way to learn a task carries a file is to think of
+            // asking `attach ls` — which a reader who does not know there is one never does.
+            let attachments = store.attachments_for_target(AttachmentTarget::Task, tid).map_err(CliError::from)?;
             if flags.json {
                 // TaskDetail stays as it is (task at the top level); linked_decisions / comments are added
                 // beside it. `comments` carries the whole timeline, under the name `decision show` gives
@@ -185,6 +189,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 if let Some(obj) = v.as_object_mut() {
                     obj.insert("linked_decisions".to_string(), serde_json::to_value(&decisions).unwrap_or(json!([])));
                     obj.insert("comments".to_string(), serde_json::to_value(&comments).unwrap_or(json!([])));
+                    obj.insert("attachments".to_string(), serde_json::to_value(&attachments).unwrap_or(json!([])));
                 }
                 // The holder-side surface of `AMB-D-366`: only the reservation holder (in_progress) is at risk
                 // of a premise silently pinned on after they reserved, so gate on it and fold in what changed.
@@ -350,6 +355,17 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                     for d in &decisions {
                         let r = decision_label(d.id);
                         human(flags, format!("  {r} [{}] {}", d.status, d.title));
+                    }
+                }
+                // Marked even when empty, like the notes and the decisions: `attachments: (none)` says the
+                // task carries no file, where a missing line would leave that unchecked. The line is the one
+                // `attach ls` prints, so the id read here is the one `attach open` takes.
+                if attachments.is_empty() {
+                    human(flags, "attachments: (none)");
+                } else {
+                    human(flags, format!("attachments ({}):", attachments.len()));
+                    for a in &attachments {
+                        human(flags, format!("  {}", attach_line(a)));
                     }
                 }
                 // The timeline's tail, in the shape `decision show` prints it too (`AMB-D-448`).

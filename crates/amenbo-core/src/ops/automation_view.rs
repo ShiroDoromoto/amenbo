@@ -59,6 +59,17 @@ pub struct ActionCard {
     pub used_by: usize,
 }
 
+/// **One library action in the list that spans every project**: its card, and the name of the project
+/// whose shelf holds it — `None` for the device's own, which is no project's.
+///
+/// The name comes with the row for the reason [`ProjectAutomationCard`] gives: a list drawn from many
+/// projects is read by whose each row is.
+#[derive(Clone, Debug, Serialize)]
+pub struct ProjectActionCard {
+    pub project_name: Option<String>,
+    pub card: ActionCard,
+}
+
 /// **One automation's whole definition** — every placement with what it runs under, and what joins
 /// them.
 #[derive(Clone, Debug, Serialize)]
@@ -198,14 +209,43 @@ pub fn every_card(conn: &Connection, reach: Option<i64>) -> Result<Vec<ProjectAu
 pub fn action_cards(conn: &Connection, project_id: Option<i64>) -> Result<Vec<ActionCard>> {
     let mut out = Vec::new();
     for reach in shelves(project_id) {
-        for (id, _) in read::automation_action_siblings(conn, reach, None)? {
-            let Some(action) = read::automation_action(conn, id)? else { continue };
-            out.push(ActionCard {
-                action,
-                steps: read::automation_action_step_ids(conn, id)?.len(),
-                used_by: used_by(conn, id)?,
-            });
+        out.extend(shelf_cards(conn, reach)?);
+    }
+    Ok(out)
+}
+
+/// **The library of every project** — the device's own actions first, then each project's own, project
+/// by project in the sidebar's order.
+///
+/// Archived projects come too, for the reason [`every_card`] gives. `reach` narrows the walk to one
+/// project, the way a bound session sees only that one; the device's shelf stays, since every project
+/// reaches it.
+pub fn every_action_card(conn: &Connection, reach: Option<i64>) -> Result<Vec<ProjectActionCard>> {
+    let mut out: Vec<ProjectActionCard> = action_cards(conn, None)?
+        .into_iter()
+        .map(|card| ProjectActionCard { project_name: None, card })
+        .collect();
+    for project in read::project_list(conn, true)? {
+        if reach.is_some_and(|pid| pid != project.id) {
+            continue;
         }
+        for card in shelf_cards(conn, Some(project.id))? {
+            out.push(ProjectActionCard { project_name: Some(project.name.clone()), card });
+        }
+    }
+    Ok(out)
+}
+
+/// The actions on one shelf — the device's for `None` — in the order they were placed in.
+fn shelf_cards(conn: &Connection, reach: Option<i64>) -> Result<Vec<ActionCard>> {
+    let mut out = Vec::new();
+    for (id, _) in read::automation_action_siblings(conn, reach, None)? {
+        let Some(action) = read::automation_action(conn, id)? else { continue };
+        out.push(ActionCard {
+            action,
+            steps: read::automation_action_step_ids(conn, id)?.len(),
+            used_by: used_by(conn, id)?,
+        });
     }
     Ok(out)
 }
@@ -349,7 +389,7 @@ fn ports_of(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::automation::{add, NewAutomation};
+    use crate::ops::automation::{action_add, add, NewAutomation};
     use crate::ops::test_support::{mk_project, with_tx};
 
     fn names(cards: &[ProjectAutomationCard]) -> Vec<(String, String)> {
@@ -402,6 +442,51 @@ mod tests {
 
             let bound = every_card(tx.conn(), Some(site)).unwrap();
             assert_eq!(names(&bound), vec![("site".into(), "記事を出す".into())]);
+        });
+    }
+
+    fn action_names(cards: &[ProjectActionCard]) -> Vec<(Option<String>, String)> {
+        cards
+            .iter()
+            .map(|one| (one.project_name.clone(), one.card.action.name.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn every_action_card_lists_the_devices_then_each_projects_with_its_name() {
+        with_tx(|tx| {
+            let amenbo = mk_project(tx, "amenbo");
+            let site = mk_project(tx, "site");
+            action_add(tx, Some(site), "記事を書く", "").unwrap();
+            action_add(tx, None, "レビューする", "").unwrap();
+            action_add(tx, Some(amenbo), "実装する", "").unwrap();
+
+            let all = every_action_card(tx.conn(), None).unwrap();
+            assert_eq!(
+                action_names(&all),
+                vec![
+                    (None, "レビューする".into()),
+                    (Some("amenbo".into()), "実装する".into()),
+                    (Some("site".into()), "記事を書く".into()),
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn every_action_card_through_a_bound_reach_keeps_the_devices_shelf() {
+        with_tx(|tx| {
+            let amenbo = mk_project(tx, "amenbo");
+            let site = mk_project(tx, "site");
+            action_add(tx, None, "レビューする", "").unwrap();
+            action_add(tx, Some(amenbo), "実装する", "").unwrap();
+            action_add(tx, Some(site), "記事を書く", "").unwrap();
+
+            let bound = every_action_card(tx.conn(), Some(site)).unwrap();
+            assert_eq!(
+                action_names(&bound),
+                vec![(None, "レビューする".into()), (Some("site".into()), "記事を書く".into())]
+            );
         });
     }
 }

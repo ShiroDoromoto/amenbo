@@ -3356,6 +3356,21 @@ pub struct AutomationActionCardDto {
     pub(crate) used_by: usize,
 }
 
+/// **One library action in the list that spans every project** — the row the sidebar's "actions" tab
+/// draws with "every project" chosen, with whose shelf holds it (`AMB-D-992`).
+///
+/// The project is `null` for the device's own, which is no project's. It comes by id as well as by
+/// name: the name is what the row's column says, and the id is what the row's owner is read from.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct EveryAutomationActionCardDto {
+    #[ts(type = "number | null")]
+    pub(crate) project_id: Option<i64>,
+    pub(crate) project_name: Option<String>,
+    pub(crate) card: AutomationActionCardDto,
+}
+
 /// **One built-in, as Amenbo defines it** (`AMB-D-964`) — what the library draws under its own head,
 /// beside the device's actions and the project's, and what opening one reads.
 ///

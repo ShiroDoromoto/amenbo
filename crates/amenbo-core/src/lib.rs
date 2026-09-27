@@ -14,6 +14,7 @@ pub mod agent;
 pub mod agent_models;
 pub mod agent_sessions;
 pub mod agents;
+pub mod app_running;
 pub mod archive;
 pub mod binding;
 pub mod blob;

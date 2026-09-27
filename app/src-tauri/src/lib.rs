@@ -109,6 +109,8 @@ mod pty;
 /// The way out of the app, and the question asked on the way: quitting ends every terminal in the
 /// process, and none of them comes back.
 mod quit;
+/// The mark a CLI reads to know the app is up on this store (`AMB-D-995`).
+mod running;
 /// One process per store: what turns a second launch into the window that is already open, coming to
 /// the front. Desktop-only, because the claim it holds is an OS primitive with no shape elsewhere.
 #[cfg(desktop)]
@@ -391,6 +393,9 @@ pub fn run() {
       let _ = app.handle().plugin(diag::logger().build());
       // And a panic goes into it, before the abort that can follow leaves nothing behind (`diag`).
       diag::install_panic_hook();
+      // The mark a CLI reads to know the app is up (`running`). After the logger, so a mark that could
+      // not be taken is written down.
+      running::claim(app.handle());
       // Where git is on this machine, settled now rather than under the first thing that wants it
       // (`AMB-D-774`). `sys::git` keeps its answer for the life of the process, so this is the one call
       // that pays for it — and what it can cost is a login shell (~40ms measured), which is why it is on
@@ -819,6 +824,9 @@ pub fn run() {
     // (`windows`). A close on the talk window is never `destroy`, which is what the page's own way
     // out uses, so this holds a person's press and nothing else.
     .run(|app, event| {
+      if let tauri::RunEvent::Exit = &event {
+        running::release(app);
+      }
       if let tauri::RunEvent::WindowEvent {
         label,
         event: tauri::WindowEvent::CloseRequested { api, .. },

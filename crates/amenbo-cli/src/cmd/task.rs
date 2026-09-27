@@ -135,6 +135,11 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                         ),
                     );
                 }
+                // The same, for the tasks a value still open before theirs is holding back (`AMB-D-990`).
+                // There is no date to give: closing a value is a person's call.
+                if let Some(w) = &result.waiting_on_values {
+                    human(flags, format!("  ({} waiting on a value ordered before theirs to close)", w.count));
+                }
                 for t in &result.tasks {
                     let check = if t.completed { "x" } else { " " };
                     let due = t.due_on.map(|d| format!(" due:{}", time::date_to_string(d))).unwrap_or_default();
@@ -151,7 +156,14 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                     // The same thing said about the fourth premise: a task still being created is listed
                     // like any other (`AMB-D-555`), so the row is where it says why the mailbox skips it.
                     let draft = if t.draft { " draft" } else { "" };
-                    human(flags, format!("  [{check}] {}  {}{}{}{}{}", task_label(t.id), t.title, due, waiting, draft, pri));
+                    // And the fifth (`AMB-D-990`): the values ordered before the task's own that are still
+                    // open, as a filter would name them.
+                    let on_values = if t.waiting_on_values.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" waiting-on:{}", values_waited_on(&t.waiting_on_values))
+                    };
+                    human(flags, format!("  [{check}] {}  {}{}{}{}{}{}", task_label(t.id), t.title, due, waiting, on_values, draft, pri));
                 }
             }
         }
@@ -287,6 +299,19 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                         "creation: finished"
                     },
                 );
+                // The fifth reason (`AMB-D-990`): a value ordered before the task's own is still open, on an
+                // axis whose tasks wait along its order. Marked even when empty, like the four above.
+                if detail.waiting_on_values.is_empty() {
+                    human(flags, "waiting on values: (none)");
+                } else {
+                    human(
+                        flags,
+                        format!(
+                            "waiting on values: {} (not closed — cannot start yet)",
+                            values_waited_on(&detail.waiting_on_values)
+                        ),
+                    );
+                }
                 // The quiet early-warning surface of `AMB-D-366`: if this task is reserved (in_progress) and a
                 // premise was pinned on after the reservation — silently dropping `ready` — say so here, on
                 // an ordinary read, so the holder notices long before they try to complete it. Only printed
@@ -731,4 +756,9 @@ fn task_reject(store: &mut Store, flags: &Flags, id: &str, reason: String) -> Re
     warn_premise_change(&pc);
     warn_comments_since(&unread);
     Ok(0)
+}
+
+/// The values a task waits on, as a filter names them — `<axis>=<value>`, in order, joined by `,`.
+fn values_waited_on(values: &[amenbo_core::view::WaitingOnValue]) -> String {
+    values.iter().map(|w| format!("{}={}", w.axis, w.value)).collect::<Vec<_>>().join(",")
 }

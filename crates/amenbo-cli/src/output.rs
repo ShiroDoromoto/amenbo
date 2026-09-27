@@ -768,6 +768,23 @@ pub fn write_envelope(
     noop: bool,
     human_line: impl AsRef<str>,
 ) {
+    write_envelope_with(flags, action, resource_key, resource, changed, noop, human_line, &[]);
+}
+
+/// [`write_envelope`] with fields of its own beside the resource — what a write learned in the same
+/// transaction and the caller would otherwise have to read again, such as how many tasks it now holds
+/// back. Each is a top-level key of the JSON envelope; the human line is the caller's to word.
+#[allow(clippy::too_many_arguments)]
+pub fn write_envelope_with(
+    flags: &Flags,
+    action: &str,
+    resource_key: &str,
+    resource: serde_json::Value,
+    changed: Option<Vec<String>>,
+    noop: bool,
+    human_line: impl AsRef<str>,
+    extra: &[(&str, serde_json::Value)],
+) {
     if flags.json {
         // State the facet acted on, so a mis-set one (meant ai, acted as human) is visible right in the
         // output. Every write declares one, so the key is always there; it is written from the declaration
@@ -780,6 +797,9 @@ pub fn write_envelope(
             obj["changed"] = json!(c);
         }
         obj[resource_key] = resource;
+        for (key, value) in extra {
+            obj[*key] = value.clone();
+        }
         print_json(&obj);
     } else {
         // Writes on the ai facet carry the effective facet in the human line too (so a mix-up shows); the interactive human gets no marker.

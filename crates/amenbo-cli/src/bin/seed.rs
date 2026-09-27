@@ -69,6 +69,7 @@ fn generate(store: &mut Store, opts: &Opts) -> amenbo_core::Result<Summary> {
             show_on_card: false,
             required: false,
             applies_to: DimensionAppliesTo::Both,
+            sequential: false,
             slug: None,
         },
     )?;

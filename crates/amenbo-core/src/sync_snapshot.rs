@@ -1000,6 +1000,7 @@ mod tests {
                         show_on_card: false,
                         required: false,
                         applies_to: crate::model::DimensionAppliesTo::Both,
+                        sequential: false,
                         slug: None,
                     },
                 )

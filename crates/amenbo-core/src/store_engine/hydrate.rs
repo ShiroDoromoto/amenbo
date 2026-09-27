@@ -362,6 +362,7 @@ pub(super) fn dimension_row(r: &Row) -> rusqlite::Result<Dimension> {
         show_on_card: get(r, C.show_on_card)?,
         required: get(r, C.required)?,
         applies_to: enum_req(r, C.applies_to, DimensionAppliesTo::parse)?,
+        sequential: get(r, C.sequential)?,
         // A store an older binary left behind reads null here (no slug), which is faithful — the same
         // reading `project_row` gives its own.
         slug: get(r, C.slug)?,
@@ -945,6 +946,8 @@ mod tests {
                 // Set away from `Both`, its default, for the reason the two flags above are set away
                 // from theirs.
                 applies_to: DimensionAppliesTo::Decision,
+                // Set away from `false`, its default, for the reason the flags above are.
+                sequential: true,
                 // The readable key — exercises the `slug` column, as `project`'s own does above.
                 slug: Some("phase".to_string()),
                 order_key: "a0".to_string(),

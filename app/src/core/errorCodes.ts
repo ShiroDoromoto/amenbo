@@ -174,11 +174,18 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_wait_not_a_count",
 ] as const;
 
-/** Core codes the webview never receives, because the only door they come through is the CLI. None is
- * declared today: every code core raises reaches a screen, so each one owes a template and sits in the
- * sentence list above. The list stays because the parity test reads every code core declares, and a door
- * the terminal alone can reach is a shape that comes back. */
-export const CORE_CLI_ONLY_ERROR_CODES = [] as const;
+/** Core codes the webview never receives, because the only door they come through is the CLI — which is
+ * also why they owe no template. A code that reaches a screen belongs in the sentence list instead, with
+ * its prose. */
+export const CORE_CLI_ONLY_ERROR_CODES = [
+  // The two refusals the setting that makes a task wait for the values before its own raises
+  // (`AMB-D-990`): raising it on an axis it does not fit, and taking away what it stands on while it is
+  // on. Core carries the setting and the classification panel has no control for it yet, so nothing on
+  // a screen can be refused for these reasons. The door that lands one on a screen moves it into the
+  // sentence list above, with the prose it then owes.
+  "invalid_dimension_sequential_unfit",
+  "invalid_dimension_sequential_held",
+] as const;
 
 /** Every code core can emit (`amenbo_core::ErrorCode::ALL`), at every grain. */
 export const CORE_ERROR_CODES = [

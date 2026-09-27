@@ -1425,7 +1425,7 @@ mod tests {
             .expect("axis");
             let build = crate::ops::dimension::value_add(tx, axis.id, "実装", None).expect("value");
             // An axis is required only once it offers a value.
-            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None)
+            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
                 .expect("required");
 
             let err = launch_with(tx, &automation, &titled("an issue")).expect_err("no value on it");
@@ -1485,7 +1485,7 @@ mod tests {
             )
             .expect("axis");
             crate::ops::dimension::value_add(tx, kind.id, "不具合", None).expect("value");
-            crate::ops::dimension::update(tx, kind.id, None, None, None, None, None, None, Some(true), None, None)
+            crate::ops::dimension::update(tx, kind.id, None, None, None, None, None, None, Some(true), None, None, None)
                 .expect("required");
             let axis = |name: &str, values: &[&str], required: bool| LaunchAxis {
                 name: name.into(),

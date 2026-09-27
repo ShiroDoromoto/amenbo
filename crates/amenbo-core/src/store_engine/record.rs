@@ -380,6 +380,7 @@ pub fn dimension(d: &Dimension) -> Record {
                 ("show_on_card", bv(d.show_on_card)),
                 ("required", bv(d.required)),
                 ("applies_to", tv(d.applies_to.as_str())),
+                ("sequential", bv(d.sequential)),
                 ("order_key", tv(&d.order_key)),
                 ("slug", ov(&d.slug)),
             ],

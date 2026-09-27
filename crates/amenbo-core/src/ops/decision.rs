@@ -797,7 +797,7 @@ mod tests {
         )
         .unwrap();
         let value = crate::ops::dimension::value_add(tx, axis.id, "この一箇所", None).unwrap();
-        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None)
+        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
             .unwrap();
 
         let d = new_decision(tx, pid, "分類のない決定");
@@ -833,7 +833,7 @@ mod tests {
         let settled = new_decision(tx, pid, "先に書き終えた決定");
         finish_writing(tx, settled.id, None).unwrap();
 
-        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None)
+        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
             .unwrap();
         assert!(
             !finish_writing(tx, settled.id, None).unwrap().1,
@@ -864,7 +864,7 @@ mod tests {
         )
         .unwrap();
         crate::ops::dimension::value_add(tx, axis.id, "この一箇所", None).unwrap();
-        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None)
+        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
             .unwrap();
 
         let fresh = new_decision(tx, pid, "分類のない新側");

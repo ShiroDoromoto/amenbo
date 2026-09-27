@@ -294,14 +294,14 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let tags = axis(tx, project, "タグ", &["a"]);
-            dimension::update(tx, tags, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None)
+            dimension::update(tx, tags, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None, None)
                 .expect("widen");
             assert!(action(tx, tags).is_err(), "a task could hold two of its values");
 
             let role = axis(tx, project, "職能", &["技術"]);
             action(tx, role).expect("split by it");
             let widened =
-                dimension::update(tx, role, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None);
+                dimension::update(tx, role, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None, None);
             assert!(widened.is_err(), "an axis split by keeps holding one value");
         });
     }

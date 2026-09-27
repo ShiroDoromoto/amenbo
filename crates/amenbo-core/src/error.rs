@@ -322,6 +322,7 @@ pub enum ErrorCode {
     NotReadyPremiseUnsettled,
     NotReadyNotStarted,
     NotReadyDraft,
+    NotReadyWaitingOnValue,
 
     // `invalid_value`, one refusal at a time.
     InvalidCommitSha,
@@ -467,6 +468,7 @@ impl ErrorCode {
             ErrorCode::NotReadyPremiseUnsettled => "not_ready_premise_unsettled",
             ErrorCode::NotReadyNotStarted => "not_ready_not_started",
             ErrorCode::NotReadyDraft => "not_ready_draft",
+            ErrorCode::NotReadyWaitingOnValue => "not_ready_waiting_on_value",
             ErrorCode::InvalidCommitSha => "invalid_commit_sha",
             ErrorCode::InvalidAttachmentTooLarge => "invalid_attachment_too_large",
             ErrorCode::InvalidDimensionPeriodOrder => "invalid_dimension_period_order",
@@ -577,6 +579,7 @@ impl ErrorCode {
         ErrorCode::NotReadyPremiseUnsettled,
         ErrorCode::NotReadyNotStarted,
         ErrorCode::NotReadyDraft,
+        ErrorCode::NotReadyWaitingOnValue,
         ErrorCode::InvalidCommitSha,
         ErrorCode::InvalidAttachmentTooLarge,
         ErrorCode::InvalidDimensionPeriodOrder,
@@ -816,6 +819,7 @@ mod tests {
             "not_ready_premise_unsettled",
             "not_ready_not_started",
             "not_ready_draft",
+            "not_ready_waiting_on_value",
             "invalid_commit_sha",
             "invalid_attachment_too_large",
             "invalid_dimension_period_order",

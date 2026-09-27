@@ -1455,6 +1455,7 @@ export const hi: Translation = {
     not_ready_premise_unsettled: "{ref} तय नहीं है — उसके पूरा लिखे जाने की प्रतीक्षा करें या कड़ी हटाएँ",
     not_ready_not_started: "यह {start} से पहले शुरू नहीं होती — तारीख़ ग़लत हो तो आरंभ तिथि बदलें",
     not_ready_draft: "यह अभी बन ही रही है — पहले इसे बनाना पूरा करें",
+    not_ready_waiting_on_value: "इससे पहले का {value} ({axis}) अभी बंद नहीं हुआ है",
     invalid_action_still_placed:
       "यह क्रिया अभी भी चित्रों में रखी है — कुल {count}। हटाने से पहले उसे वहाँ से निकालें।",
     invalid_automation_has_runs:

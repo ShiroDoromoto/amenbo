@@ -722,6 +722,13 @@ impl Store {
         Ok(crate::store_engine::read::newly_ready_by(self.engine.conn(), blocker_id)?)
     }
 
+    /// The `todo` tasks closing `value_id` has just made ready (`AMB-D-990`) — the value's twin of
+    /// [`Store::newly_ready_by`], called **after** the close for the same reason
+    /// ([`crate::store_engine::read::newly_ready_by_closing`]).
+    pub fn newly_ready_by_closing(&self, value_id: i64) -> Result<Vec<i64>> {
+        Ok(crate::store_engine::read::newly_ready_by_closing(self.engine.conn(), value_id)?)
+    }
+
     /// Borrow the read-model the read layer queries with indexed SQL (`store_engine::read::list_task_ids`
     /// and friends) — which is **the truth-source engine itself**. Writes maintain it incrementally, so a
     /// read never has to re-project everything: it is a bounded, direct query.

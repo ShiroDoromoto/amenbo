@@ -1455,6 +1455,7 @@ export const nl: Translation = {
     not_ready_premise_unsettled: "{ref} is nog niet beslecht — wacht tot hij is afgeschreven of ontkoppel hem",
     not_ready_not_started: "hij begint pas op {start} — pas de startdatum aan als die niet klopt",
     not_ready_draft: "hij wordt nog aangemaakt — rond het aanmaken eerst af",
+    not_ready_waiting_on_value: "{value} ({axis}) ervoor is nog niet gesloten",
     invalid_action_still_placed:
       "Deze actie staat nog in schema’s — {count} in totaal. Haal haar daar weg voordat je haar verwijdert.",
     invalid_automation_has_runs:

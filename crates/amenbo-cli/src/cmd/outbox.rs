@@ -108,6 +108,19 @@ pub(crate) fn newly_ready_or_warn(store: &Store, blocker_id: i64) -> Vec<i64> {
     })
 }
 
+/// After value `value_id` is closed, send `task.unblocked` to every task on its axis that just became
+/// ready (`AMB-D-990`). The line names the value as what released it, the way it names a blocker. It
+/// takes [`newly_ready_or_warn`]'s stance: the line may be dropped, the fact of the failure is not.
+pub(crate) fn emit_unblocks_by_closing(store: &mut Store, flags: &Flags, value_id: i64, value: &str) {
+    let released = store.newly_ready_by_closing(value_id).unwrap_or_else(|e| {
+        eprintln!("warning: could not tell which tasks closing this released: {e}");
+        Vec::new()
+    });
+    for tid in released {
+        emit_event(store, flags, tid, activity_log::event::task_unblocked(value));
+    }
+}
+
 /// After blocker `blocker_id` goes done, send `task.unblocked` to every dependent that just became ready.
 pub(crate) fn emit_unblocks(store: &mut Store, flags: &Flags, blocker_id: i64) {
     let blocker = blocker_id.to_string();

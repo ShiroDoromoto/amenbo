@@ -357,6 +357,8 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;
             let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
             let v = store.dimension_value_set_closed(vid, true).map_err(CliError::from)?;
+            // What the close released, on an axis whose values are stages (`AMB-D-990`).
+            crate::cmd::outbox::emit_unblocks_by_closing(store, flags, vid, &dimension_value_label(vid));
             write_envelope(flags, "dimension.value-close", "dimension_value", serde_json::to_value(&v).unwrap(), Some(vec!["closed".to_string()]), false, format!("✓ Closed value: {} ({})", v.name, dimension_value_label(v.id)));
         }
         DimensionCmd::ValueReopen { dimension, value } => {

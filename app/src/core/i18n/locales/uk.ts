@@ -1481,6 +1481,7 @@ export const uk: Translation = {
     not_ready_premise_unsettled: "{ref} не вирішено — дочекайтеся, поки його допишуть, або відв'яжіть його",
     not_ready_not_started: "воно починається аж {start} — змініть дату початку, якщо вона хибна",
     not_ready_draft: "воно ще створюється — спершу завершіть створення",
+    not_ready_waiting_on_value: "попереднє значення {value} ({axis}) ще не закрите",
     invalid_action_still_placed:
       "Ця дія ще стоїть на схемах — усього {count}. Приберіть її звідти, перш ніж видаляти.",
     invalid_automation_has_runs:

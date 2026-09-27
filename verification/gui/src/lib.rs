@@ -856,6 +856,9 @@ impl Instructor {
     /// the screen rather than the shot, and the instruction says so and says for how long. The shot is
     /// still kept, for the half of the row a picture does carry — which pane the mark belongs to.
     ///
+    /// `task view-selected` is a `Review` for the reason `files row-mark` below is: the selection is a
+    /// colour behind a row, and every row of the sidebar says its words whichever one is selected.
+    ///
     /// `files row-mark` is a `Review`, and the plainest one here: what it reads is a colour, and a
     /// reading answers with words. The row wearing one says the same letters as the row beside it that
     /// wears none, so no folding of the two sides can tell them apart. The instruction therefore names
@@ -1544,6 +1547,16 @@ impl Instructor {
             // Which width a run came up at is the device's business — it is kept between launches —
             // so a line that pressed unconditionally would fold the column on the run that had it
             // folded already.
+            // The window's way back and way forward. They are said by what they are drawn as rather
+            // than by a word, because they carry none — their labels are for a reader who hovers — and
+            // by where they are, since the pair stands over both faces and nothing else there points
+            // across.
+            (Domain::Task, "back") =>
+                "At the top-left of the window, press the arrow pointing left — the way back along where the window has been. The window goes back to the place it was at before the last move."
+                    .to_string(),
+            (Domain::Task, "forward") =>
+                "At the top-left of the window, press the arrow pointing right, beside the one pointing left — the way forward again along where the window has been. The window goes to the place it was at before the last press of the way back."
+                    .to_string(),
             (Domain::Task, "sidebar") => format!(
                 "Have the column down the left of the ledger standing {}. What moves it is at the column's own foot — under the rows, outside what scrolls — a control in a frame of its own, drawn as an arrow run into the window's edge. Press it where the column is at the other width, and leave it where it is already at this one: the same press is what moves it back.",
                 sidebar_width(with)?.wanted,
@@ -4616,6 +4629,16 @@ impl Instructor {
                 self.target_label(with),
                 self.key_label(with, "project")
             ),
+            // The pulldown over the tabs. A project is named by the road's binding; no project is the
+            // pulldown's first line, which is the interface's own wording and so is said by what it does.
+            (Domain::Automation, "narrow") => match with.contains_key("project") {
+                true => format!(
+                    "On the automations screen, in the pulldown over its tabs, choose the project \"{}\". The list under the tabs narrows to that project's.",
+                    self.key_label(with, "project")
+                ),
+                false => "On the automations screen, in the pulldown over its tabs, choose its first line — the one that takes in every project. The list under the tabs is every project's again."
+                    .to_string(),
+            },
             // A row of the runs holding the open build screen's definition. The row is the running
             // tab's own line, so it goes where that line goes: the pane the run is drawn in.
             (Domain::Automation, "held-go") => {
@@ -5137,6 +5160,13 @@ impl Instructor {
             // And what the press landed on. The view is named again rather than left to the step
             // before it: a shot of the wrong listing and a shot of the right one both hold rows, and
             // the line has to say which listing the eye is standing in front of.
+            // Which row the sidebar has selected. The selection is drawn as a colour behind the row,
+            // so this is an eye's: a reading gives back the words, and every row's words are on the
+            // shot whichever is selected.
+            (Domain::Task, "view-selected") => format!(
+                "In the sidebar, confirm {} is the row selected, and no project's row is.",
+                view_row(req(with, "view")?)?
+            ),
             (Domain::Task, "view-lists") => format!(
                 "Confirm the task \"{}\" is {} the rows of the listing opened from {}.{}",
                 self.target_label(with),

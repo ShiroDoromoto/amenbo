@@ -740,7 +740,8 @@ The two listings — a row per definition, a row per library action — are read
 move into a project names (`scope-refusal-names`): the terminal reads the error it is turned away
 with, a screen the sentence left under the row. The list the sidebar opens is a screen's alone, since
 no terminal lists every project's automations: a row naming its project (`every-listed`), the start
-beside it (`start-from-list`), and the row opening its build screen on that same screen (`every-open`). So is a definition
+beside it (`start-from-list`), the row opening its build screen on that same screen (`every-open`), and the
+pulldown over the tabs narrowing it to one project or every one (`narrow`). So is a definition
 held by a run: on either build screen a band per run holding it is drawn over a picture that takes no
 write (`held-by`, `present: false` once the run is over), and the band's press goes to the run's pane
 (`held-go`) — the terminal's half is the refusal itself, `refused: conflict` on the write.
@@ -1866,6 +1867,12 @@ view-lists`), are one road's for a reason of their own: what they are about is b
 A terminal is only ever asked. It answers the same question about days when a reader types for it, which
 is what `task status-bucket` reads — but there is no row standing in front of it to carry a colour, and
 nothing to press through to a listing it has already printed.
+
+The window's way back and way forward, and which smart view the sidebar has selected once they are
+pressed (`task back` / `task forward` / `task view-selected`), are one road's because a terminal has no
+trail of where it has been. What the three are for is that the trail carries the places inside a screen
+as well as the sidebar's rows — the automations screen's pulldown and what it has open — so a walk back
+is read twice: on what the screen draws, and on the sidebar still pointing at the same screen.
 
 Folding that same column to its marks and reading which of its two widths it is standing at (`task
 sidebar` / `task sidebar-drawn`) are one road's for a plainer reason than its neighbours': a width is a

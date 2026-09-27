@@ -554,6 +554,18 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. What a column is drawn at is a thing on a screen, and a terminal has no
     // column to fold.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "sidebar", required: &["names"], refs: &[], strings: &["names"], binds: false },
+    // The window's own way back and way forward, the two arrows at the top-left over both faces
+    // (`app/src/shell/TopBar.tsx`). They walk one trail of where the window has been: a sidebar row
+    // pressed, and a place moved to inside a screen — the automations screen's pulldown, its tabs, and
+    // what it has open. They are the window's and not a panel's, which is what sets them
+    // apart from `files back` and `files history-back`: those take one layer off one column, and these
+    // move the whole window, the sidebar's selection with it.
+    //
+    // Two ops rather than one with a direction, because they are two controls pressed in two places.
+    //
+    // A screen road alone. A terminal has no trail of where it has been to walk back along.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "back", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "forward", required: &[], refs: &[], strings: &[], binds: false },
     // A project's own life: its fields, where it sits in the list, and whether it is still in play.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes", "view"], binds: false },
@@ -1750,6 +1762,12 @@ const REGISTRY: &[OpSpec] = &[
     // out: a smart view carries a selection of its own, so what is under test is that selection
     // agreeing with the warning the row gave — never a filter the road could have spelled to match.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "view-lists", required: &["target", "view"], refs: &["target"], strings: &["view"], binds: false },
+    // Which smart view the sidebar has selected. It is what a walk back along the window's trail is
+    // read for beside what the screen draws: the sidebar and the screen are two claims about where the
+    // window is, and a trail that moved one without the other leaves them pointing at two places.
+    //
+    // A screen road alone, for `open-view`'s reason.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "view-selected", required: &["view"], refs: &[], strings: &["view"], binds: false },
     // The three faces the store shows of itself, each a dotted path into what that read prints:
     // `config` its settings, `identity` the name and the hardware it was raised on, `update` what a
     // check for a newer build comes back with.
@@ -4535,6 +4553,10 @@ const REGISTRY: &[OpSpec] = &[
     // Pressing the row, which goes to the project the automation is in and opens its build screen
     // there — an automation is changed in its own project, and this list changes nothing.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "every-open", required: &["target", "project"], refs: &["target", "project"], strings: &[], binds: false },
+    // Narrowing the screen with the pulldown over its tabs: to one project with `project`, and back to
+    // every project without it. Each pick is a place on the window's trail, so `task back` returns
+    // the pulldown to what it said before.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "narrow", required: &[], refs: &["project"], strings: &[], binds: false },
     //
     // **A definition a run is going on, on its build screen** — an automation's or a library
     // action's, whichever is open. While a run of it is running or paused, core refuses every rewrite,

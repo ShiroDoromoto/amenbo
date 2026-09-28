@@ -1448,6 +1448,20 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The wider stroke an edge is pointed at by. Only its stroke takes the pointer: the lines' drawing
    takes none, and a fill would catch the pointer across the whole bend of the line. */
 .autopic__hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; }
+/* A way out nothing has been decided for (`AMB-D-1003`): dashed in the accent, the colour of the press
+   at its end, so it reads as a place to go on from rather than as one more line. */
+.autopic__line--open { stroke: var(--c-accent); stroke-dasharray: 4 4; }
+.autopic__swatch--open { border-top-color: var(--c-accent); border-top-style: dashed; }
+/* The press at its end, beside the way out's name. Always shown: there are few of them, and each is
+   one somebody has to fill before a launch. */
+.autopic__open {
+  position: absolute; transform: translateY(-50%);
+  padding: 2px var(--s-2); border-radius: 999px; white-space: nowrap;
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-accent-text);
+  border: 1.5px dashed var(--c-accent); font: inherit; font-size: var(--fs-xs); cursor: pointer;
+}
+.autopic__open:enabled:hover { background: var(--c-accent-faint); }
+.autopic__open:disabled { cursor: default; opacity: 0.5; }
 
 /* ---------- the "running" and "history" tabs (`app/src/screens/RunningTab.tsx`, `HistoryTab.tsx`) ---------- */
 /* One bordered stack of runs, the shape the list of definitions has (`.autolist`). */

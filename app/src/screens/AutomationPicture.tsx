@@ -27,6 +27,11 @@
 // shows while it holds the focus. Each edge is traced by a wider stroke nobody sees, so the pointer
 // does not have to land on a line one and a half pixels wide.
 //
+// **A way out nothing has been decided for ends in a press, shown all the time** (`AMB-D-1003`). It is
+// drawn dashed, apart from every line that goes somewhere, and the press at its end — "+ place the next
+// action", or the next step on an action's picture — is how a reader goes on from a box whose ways out
+// say nothing yet. Held shut, like every `+`, where nothing can be put in.
+//
 // **What a box hands on is not drawn** (`AMB-D-1001`). The dotted wires took the right of the
 // picture and crossed the tops of the boxes, and nobody makes or drops one on it: the panel beside it
 // does both, and says where each goes. What stays on a box is its "⚠" for an input nothing reaches.
@@ -44,7 +49,7 @@
 // brought to the middle. Nothing is put in there, so no `+` is drawn, and the legend is left to the
 // build screen: what a line means is read where the picture is made.
 import { useEffect, useId, useRef, useState } from "react";
-import { edgeWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
+import { edgeWord, layOut, openWord, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { Icon } from "../components/Icon";
@@ -108,6 +113,7 @@ function Legend({ inAction }: { inAction: boolean }) {
       {one("branch", t("auto.pic.legendBranch"))}
       {one("error", t("auto.pic.legendError"))}
       {inAction && one("leaves", t("auto.pic.legendLeaves"))}
+      {one("open", t("auto.pic.legendOpen"))}
       {one("lap", t("auto.pic.lap"))}
       <span className="autopic__legenditem">
         <span className="autopic__entry">{t("auto.pic.entry")}</span>
@@ -132,6 +138,7 @@ export function AutomationPicture({
   selectedBoxId,
   onPickBox,
   onInsert,
+  onOpenExit,
   onPickPart,
   selectedPart,
   trail,
@@ -151,6 +158,9 @@ export function AutomationPicture({
    * built, and every `+` is held shut until it is there.
    */
   onInsert?: (edgeId: number) => void;
+  /** Put the next box on after a way out nothing has been decided for (`AMB-D-1003`). Absent, the
+   *  press at its end is held shut. */
+  onOpenExit?: (from: { boxId: number; exitName: string }) => void;
   /**
    * The action's own input or output, pressed — its frame over or under the picture. Only an
    * action's picture has them; the panel beside it opens on the one pressed, as it does on a step.
@@ -276,6 +286,7 @@ export function AutomationPicture({
                 "autopic__line",
                 line.back ? "autopic__line--back" : "",
                 line.leaves ? "autopic__line--leaves" : "",
+                line.open === true ? "autopic__line--open" : "",
                 line.tone !== undefined ? `autopic__line--${line.tone}` : "",
                 lineLit(line.key, trail) ? "autopic__line--lit" : "",
               ]
@@ -464,6 +475,18 @@ export function AutomationPicture({
               onClick={() => onInsert?.(insert.edgeId)}
             >
               <Icon name="plus" />
+            </button>
+          ))}
+          {trail === undefined && picture.opens.map((open) => (
+            <button
+              key={`open-${open.boxId}-${open.exitName}`}
+              type="button"
+              className="autopic__open"
+              style={{ left: `${open.x}px`, top: `${open.y}px` }}
+              disabled={onOpenExit === undefined}
+              onClick={() => onOpenExit?.({ boxId: open.boxId, exitName: open.exitName })}
+            >
+              {openWord(graph?.boundary !== undefined)}
             </button>
           ))}
         </div>

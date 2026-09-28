@@ -10,12 +10,13 @@
 // which is the panel's reading of a press on a box. The press that starts a run is not a place of its
 // own: it stands at the far end of the head (`AMB-T-5523`).
 //
-// **Everything else the screen asks is the panel too.** A `+` on a line, or the press on an empty
-// picture, opens the library in it (`./AutomationLibraryPanel`); "Edit" on the head opens the
-// definition's own name, notes and archiving, with the press that deletes it
-// (`./AutomationAboutPanel`). They are one panel rather than four places stacked under the picture:
-// a picture that runs long would push whatever is under it off the bottom of the window, and the
-// panel stands where the reader is looking however far they scrolled. Only the picture scrolls.
+// **Everything else the screen asks is the panel too.** A `+` on a line, the press at the end of a way
+// out nothing has been decided for (`AMB-D-1003`), or the press on an empty picture, opens the
+// library in it (`./AutomationLibraryPanel`); "Edit" on the head opens the definition's own name,
+// notes and archiving, with the press that deletes it (`./AutomationAboutPanel`). They are one panel
+// rather than four places stacked under the picture: a picture that runs long would push whatever is
+// under it off the bottom of the window, and the panel stands where the reader is looking however far
+// they scrolled. Only the picture scrolls.
 //
 // **The head leads with the automation's ID**, as the list's rows do: it is what the terminal names
 // the definition by, and it does not change when the name does.
@@ -265,6 +266,11 @@ export function AutomationBuildScreen({
           selectedBoxId={pressed?.id}
           onPickBox={(box) => setShowing({ kind: "box", id: box })}
           onInsert={held ? undefined : (edgeId) => setShowing({ kind: "library", target: { edgeId } })}
+          onOpenExit={
+            held
+              ? undefined
+              : ({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })
+          }
         />
         {automation !== null && automation.placements.length === 0 && !held && (
           <button

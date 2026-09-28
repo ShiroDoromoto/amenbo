@@ -83,8 +83,9 @@ import {
 } from "./automationCfg";
 import { choiceKey, wireChoices, wireInto } from "./automationWires";
 import { kindLabel } from "./automationPortKinds";
-import { AxisChips, CLASSIFY, ClassRows, makeTaskControl, NumberLines } from "./AutomationMakeTaskCfg";
+import { AxisChips, CLASSIFY, ClassRows, makeTaskControl, NumberLines, projectFolderOnly } from "./AutomationMakeTaskCfg";
 import { useBoundFolders } from "../core/boundFolders";
+import { pickFolder } from "../core/mutations";
 import type {
   AutomationCfgDto,
   AutomationDetailDto,
@@ -296,26 +297,48 @@ function CfgRow({ placementId, projectId, builtin, cfg, siblings, run }: {
       )}
       {special === "numbers" && <NumberLines name={cfg.name} label={shown} value={cfg.value} onAnswer={answer} />}
 
-      {/* A folder answered with one this project has not got stays offered, so what is written shows. */}
-      {cfg.kind === "folder" && folderPaths.length > 0 && (
-        <select
-          aria-label={shown}
-          value={readText(cfg.value)}
-          onChange={(e) => answer(writeText(e.target.value))}
-        >
-          <option value="">—</option>
-          {readText(cfg.value) !== "" && !folderPaths.includes(readText(cfg.value)) && (
-            <option value={readText(cfg.value)}>{readText(cfg.value)}</option>
+      {/* A folder is picked from the project's own or, with the press beside it, from anywhere on the
+          machine (`AMB-T-5801`) — save for the one a filed task is set in, which has to be the project's.
+          One answered with a folder this project has not got stays offered, so what is written shows. */}
+      {cfg.kind === "folder" && (
+        <div className="autostep__folder">
+          {folderPaths.length > 0 ? (
+            <select
+              aria-label={shown}
+              value={readText(cfg.value)}
+              onChange={(e) => answer(writeText(e.target.value))}
+            >
+              <option value="">—</option>
+              {readText(cfg.value) !== "" && !folderPaths.includes(readText(cfg.value)) && (
+                <option value={readText(cfg.value)}>{readText(cfg.value)}</option>
+              )}
+              {folderPaths.map((path) => (
+                <option key={path} value={path}>
+                  {path}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              aria-label={shown}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onBlur={() => writeText(text) !== (cfg.value ?? null) && answer(writeText(text))}
+            />
           )}
-          {folderPaths.map((path) => (
-            <option key={path} value={path}>
-              {path}
-            </option>
-          ))}
-        </select>
+          {!projectFolderOnly(builtin, cfg.name) && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void pickFolder().then((dir) => dir !== null && answer(writeText(dir)))}
+            >
+              {t("auto.step.pickFolder")}
+            </button>
+          )}
+        </div>
       )}
 
-      {special === undefined && (cfg.kind === "text" || (cfg.kind === "folder" && folderPaths.length === 0)) && (
+      {special === undefined && cfg.kind === "text" && (
         <input
           aria-label={shown}
           value={text}

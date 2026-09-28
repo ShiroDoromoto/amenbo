@@ -1015,6 +1015,7 @@ export const id: Translation = {
     "auto.step.cfg": "Pengaturan",
     "auto.step.declaresNone": "Tidak ada yang dideklarasikan",
     "auto.step.required": "wajib",
+    "auto.step.pickFolder": "Pilih folder…",
     "auto.step.noAxes": "Belum ada sumbu untuk mengklasifikasikan tugas",
     "auto.step.oneALine": "Satu per baris (mis. AMB-T-12)",
     "auto.step.oneADecisionALine": "Satu per baris (mis. AMB-D-12)",

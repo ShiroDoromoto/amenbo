@@ -1018,6 +1018,7 @@ export const de: Translation = {
     "auto.step.cfg": "Einstellungen",
     "auto.step.declaresNone": "Nichts deklariert",
     "auto.step.required": "erforderlich",
+    "auto.step.pickFolder": "Ordner wählen…",
     "auto.step.noAxes": "Es gibt noch keine Achse, nach der Aufgaben klassifiziert werden",
     "auto.step.oneALine": "Eine pro Zeile (z. B. AMB-T-12)",
     "auto.step.oneADecisionALine": "Eine pro Zeile (z. B. AMB-D-12)",

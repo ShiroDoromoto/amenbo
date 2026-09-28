@@ -1259,6 +1259,7 @@ const ui = {
   "auto.step.cfg": "Settings",
   "auto.step.declaresNone": "None declared",
   "auto.step.required": "required",
+  "auto.step.pickFolder": "Choose a folder…",
   "auto.step.noAxes": "There is no axis to classify a task by yet",
   "auto.step.oneALine": "One a line (e.g. AMB-T-12)",
   "auto.step.oneADecisionALine": "One a line (e.g. AMB-D-12)",

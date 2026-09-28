@@ -39,6 +39,7 @@ const hoisted = vi.hoisted(() => ({
   removePlacement: vi.fn(),
   dimensions: [] as DimensionDto[],
   folders: [] as { path: string }[],
+  picked: null as string | null,
 }));
 
 vi.mock("../core/automations", () => ({
@@ -57,6 +58,11 @@ vi.mock("../core/automations", () => ({
 }));
 // Taking a spot off asks first, and what the machine would put up is not this test's business.
 vi.mock("../core/dialog", () => ({ confirmDialog: () => Promise.resolve(true) }));
+// The folder dialog: what the machine would hand back is this test's to say.
+vi.mock("../core/mutations", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../core/mutations")>()),
+  pickFolder: () => Promise.resolve(hoisted.picked),
+}));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: (projectId: number | null) => {
     const all = projectId === null ? [] : hoisted.folders;
@@ -455,6 +461,36 @@ describe("the panel of one spot", () => {
       expect([...folder.options].map((o) => o.textContent)).toEqual(["—", "/work/app", "/work/site"]);
       await pick(folder, "/work/site");
       expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "作業フォルダ", JSON.stringify("/work/site"));
+    });
+
+    it("picks a folder anywhere on the machine with the press beside it, and a cancelled one writes nothing (AMB-T-5801)", async () => {
+      const saveTo = detail({
+        placements: [spot({ settings: [{ name: "保存先", kind: "folder", required: false }] })],
+      });
+      const press = () => [...container.querySelectorAll<HTMLButtonElement>(".autostep__folder .btn")];
+      for (const own of [[{ path: "/work/app" }], []]) {
+        hoisted.folders = own;
+        hoisted.answerCfg.mockClear();
+        await render({ automation: saveTo, placementId: 1 });
+        expect(press().map((b) => b.textContent)).toEqual([t("auto.step.pickFolder")]);
+        hoisted.picked = null;
+        await act(async () => {
+          press()[0]!.click();
+        });
+        expect(hoisted.answerCfg).not.toHaveBeenCalled();
+        hoisted.picked = "/elsewhere/out";
+        await act(async () => {
+          press()[0]!.click();
+        });
+        expect(hoisted.answerCfg).toHaveBeenCalledWith(1, "保存先", JSON.stringify("/elsewhere/out"));
+      }
+      hoisted.picked = null;
+    });
+
+    it("offers no folder elsewhere for the folder a filed task is set in, which the launch check takes only from the project", async () => {
+      await render({ automation: makeTask(), placementId: 1 });
+      expect(container.querySelector(".autostep__folder select")).not.toBeNull();
+      expect(container.querySelectorAll(".autostep__folder .btn")).toHaveLength(0);
     });
   });
 

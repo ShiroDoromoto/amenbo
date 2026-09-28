@@ -1016,6 +1016,7 @@ export const zhHant: Translation = {
     "auto.step.cfg": "設定",
     "auto.step.declaresNone": "沒有宣告",
     "auto.step.required": "必填",
+    "auto.step.pickFolder": "選擇資料夾…",
     "auto.step.noAxes": "還沒有用於給任務分類的軸",
     "auto.step.oneALine": "每行一個（例：AMB-T-12）",
     "auto.step.oneADecisionALine": "每行一個（例：AMB-D-12）",

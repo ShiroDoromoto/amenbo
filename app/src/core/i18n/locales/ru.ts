@@ -1031,6 +1031,7 @@ export const ru: Translation = {
     "auto.step.cfg": "Настройки",
     "auto.step.declaresNone": "Ничего не объявлено",
     "auto.step.required": "обязательный",
+    "auto.step.pickFolder": "Выбрать папку…",
     "auto.step.noAxes": "Пока нет оси для классификации задач",
     "auto.step.oneALine": "По одной в строке (например, AMB-T-12)",
     "auto.step.oneADecisionALine": "По одной в строке (например, AMB-D-12)",

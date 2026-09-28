@@ -4319,8 +4319,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "pictured", required: &[], refs: &[], strings: &["name", "builtin"], binds: false },
     // A line leaving one box, and what is written along it: the way out's own name, and where it
     // goes — on to a box (`to`, or `to_builtin` for a built-in's by its key), or to the end of the task
-    // or the run (`ends`). `present: false` is no line leaving by that way out, and names neither.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "line-pictured", required: &["from"], refs: &[], strings: &["from", "exit", "to", "to_builtin", "ends", "exit_to"], binds: false },
+    // or the run (`ends`). `present: false` is nothing decided for that way out, and names neither: no
+    // line goes anywhere, and what is drawn in its place is the dashed stub ending in the press that
+    // puts the next box on. The box it leaves is `from`, or `from_builtin` for a
+    // built-in's by its key — and its way out is then the word the store keeps it under.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "line-pictured", required: &[], refs: &[], strings: &["from", "from_builtin", "exit", "to", "to_builtin", "ends", "exit_to"], binds: false },
     // The dashed outline around the boxes one task is worked by, named by the box that takes it.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "lap-pictured", required: &["head"], refs: &[], strings: &["head"], binds: false },
     // Pressing a box, which is what puts what it holds in the panel beside the picture. A built-in's
@@ -4331,16 +4334,28 @@ const REGISTRY: &[OpSpec] = &[
     // leaves by, which is the pair a line hangs on. A line leaving a built-in's box names that box by
     // its key (`after_builtin`) and the way out by the word the store keeps it under.
     //
+    // **A way out nothing has been decided for has no line to press a `+` on**. It is
+    // drawn dashed, ending in a press of its own that is always shown — "+ place the next action" —
+    // and `undecided: true` presses that one instead. The box goes in after the way out and goes on
+    // to nothing, its own ways out as undecided as the one it was put on.
+    //
     // What goes in is a placement: an action picked off the library (`action`), or one made on the
     // spot (`name`, and `reach` for which library keeps it — this project's where none is named).
     // One made on the spot is asked nothing else: it is born empty, its steps built on its own
-    // screen, so a road that names a prompt, ways out or inputs here is refused.
+    // screen, so a road that names a prompt, ways out or inputs here is refused. The name is
+    // searched for first, and made off the press the search leaves when nothing is found. What it
+    // lands on is its build screen over the automation's, **still being made**, and
+    // the step ends there: only one of the two presses at its foot closes it (`action-finish-creating`,
+    // `action-abandon`), and a road says which.
     //
     // Or one of Amenbo's built-ins (`builtin`), picked under the library's own head for them. It is
     // named by its key, the one word of it that is the same in every language: what its row draws is
     // Amenbo's own, in the machine's language, so the driver says what the built-in is and the
     // operator finds it by that.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &[], refs: &["action"], strings: &["after", "after_builtin", "exit", "name", "reach", "builtin"], binds: false },
+    //
+    // One made on the spot is bound, so a later step can read its row in the library by it — there,
+    // or gone once it is given up.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "insert-box", required: &[], refs: &["action"], strings: &["after", "after_builtin", "exit", "name", "reach", "builtin"], binds: true },
     // The `＋` on a way out's card, and the row it opens inside that card.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "add-output", required: &["name", "kind"], refs: &[], strings: &["exit", "name", "kind"], binds: false },
     //
@@ -4381,9 +4396,24 @@ const REGISTRY: &[OpSpec] = &[
     // it, and leaves the action in the library — so the machine's own question stands between the
     // press and the write, the way it does for deleting a step.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "remove-placement", required: &[], refs: &[], strings: &[], binds: false },
-    // The press on the pressed placement's panel that opens the action standing on it. A library
-    // action opens into its build screen, and a built-in into the screen that reads its definition.
+    // The press on the pressed placement's panel that opens the action standing on it, over the
+    // automation (`action-over`). A library action opens into its build screen, and a built-in into
+    // the screen that reads its definition.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-placed", required: &[], refs: &[], strings: &[], binds: false },
+    //
+    // **An action opened over its automation**. Reached from the automation's picture,
+    // an action's build screen stands over it rather than in its place: the tabs, the sidebar and
+    // "＜" "＞" are behind the backdrop, and neither a press outside nor Escape closes it.
+    // `action-over` reads that screen for the action named (`name`). `draft` is the mark saying it is
+    // still being made — with the pair at its foot that closes it, and neither the back nor "open full
+    // screen" — or, `false`, the back named after the automation and "open full screen" beside it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "action-over", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // The two ways out of one still being made, the pair the CLI names alike. Finishing
+    // keeps it, empty or not, and lands on the automation. Giving it up asks once — naming it and
+    // saying the placement it stands on goes with it — and the road answers with the answer that goes
+    // ahead; the action and its placement are taken away, and the automation is what is left.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-finish-creating", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-abandon", required: &[], refs: &[], strings: &[], binds: false },
     //
     // **A built-in, read and never built.** The actions tab lists the built-ins after
     // the library's rows, and a press on one opens the screen that reads its definition in place of
@@ -5159,6 +5189,17 @@ impl Scenario {
                     errs.push(at(i, "a box is named one way — `name`, or `builtin` for a built-in's key, not both".to_string()));
                 } else if !name && !builtin {
                     errs.push(at(i, "which box is missing — write `name`, or `builtin` naming a built-in's key".to_string()));
+                }
+            }
+
+            // The box a line leaves is named the same one way, under keys of its own.
+            if step.domain() == Domain::Automation && step.op() == "line-pictured" {
+                let name = step.with().contains_key("from");
+                let builtin = step.with().contains_key("from_builtin");
+                if name && builtin {
+                    errs.push(at(i, "a line leaves one box — `from`, or `from_builtin` for a built-in's key, not both".to_string()));
+                } else if !name && !builtin {
+                    errs.push(at(i, "which box the line leaves is missing — write `from`, or `from_builtin` naming a built-in's key".to_string()));
                 }
             }
 

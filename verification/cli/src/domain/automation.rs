@@ -486,6 +486,25 @@ impl Driver<'_> {
                 let id = self.bound_id(&args, "automation_run", bind)?;
                 Ok(Outcome::action(format!("started automation {automation} as run {id}")))
             }
+            // A test run: the same text a start is handed, and nothing kept, so no binding either.
+            "test-run" => {
+                let automation = self.resolve(with)?;
+                let mut args = vec!["automation".into(), "test-run".into(), automation.to_string()];
+                for (key, flag) in [("title", "--title"), ("notes", "--notes")] {
+                    if let Some(value) = with.get(key).and_then(|v| v.as_str()) {
+                        args.extend([flag.into(), value.to_string()]);
+                    }
+                }
+                if let Some(pairs) = with.get("dim").and_then(|v| v.as_str()) {
+                    for pair in pairs.lines().map(str::trim).filter(|l| !l.is_empty()) {
+                        args.extend(["--dim".into(), pair.to_string()]);
+                    }
+                }
+                args.push("--json".into());
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                self.last_test_run = Some(v);
+                Ok(Outcome::action(format!("walked automation {automation} as a test run")))
+            }
             verb @ ("pause" | "resume") => {
                 let run = self.resolve(with)?;
                 self.run_json(&["automation", verb, &run.to_string(), "--json"])?;
@@ -733,6 +752,67 @@ impl Driver<'_> {
             "placement-read" => {
                 let automation = self.resolve(with)?;
                 judge_placement(automation, &self.definition(automation)?, with)
+            }
+            // The test run just before this one: every step it opened with the way out it left by, and
+            // how it ended. Then the store, counted afterwards, for anything the walk should not have
+            // left behind.
+            "test-run-walked" => {
+                let automation = self.resolve(with)?;
+                let last = self
+                    .last_test_run
+                    .as_ref()
+                    .ok_or("no test run has been walked yet, so there is no answer to read")?;
+                let walk = &last["test_run"];
+                let want: Vec<(String, String)> = with
+                    .get("walked")
+                    .and_then(|v| v.as_sequence())
+                    .ok_or("arg `walked` must be a list of `[step, way out]` pairs")?
+                    .iter()
+                    .map(|pair| match pair.as_sequence().map(Vec::as_slice) {
+                        Some([name, exit]) => match (name.as_str(), exit.as_str()) {
+                            (Some(name), Some(exit)) => Ok((name.to_string(), exit.to_string())),
+                            _ => Err("each pair in `walked` must be two strings".to_string()),
+                        },
+                        _ => Err("each entry in `walked` must be a `[step, way out]` pair".to_string()),
+                    })
+                    .collect::<Result<_, _>>()?;
+                let got: Vec<(String, String)> = walk["steps"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+                    .iter()
+                    .map(|s| {
+                        let text = |k: &str| s[k].as_str().unwrap_or("(none reported)").to_string();
+                        (text("name"), text("exit"))
+                    })
+                    .collect();
+                let status = walk["status"].as_str().unwrap_or("(none reported)");
+                let want_status = req_str(with, "status")?;
+                let mut pass = got == want && status == want_status;
+                let spell = |pairs: &[(String, String)]| {
+                    pairs.iter().map(|(n, e)| format!("{n} → {e}")).collect::<Vec<_>>().join(", ")
+                };
+                let mut said = format!(
+                    "test run of automation {automation} walked [{}] (expected [{}]) and ended `{status}` (expected `{want_status}`",
+                    spell(&got),
+                    spell(&want),
+                );
+                if with.contains_key("runs") {
+                    let want = req_i64(with, "runs")?;
+                    let v = self.run_json(&["automation", "run-list", "--automation", &automation.to_string(), "--json"])?;
+                    let n = v["runs"].as_array().map_or(0, Vec::len) as i64;
+                    pass = pass && n == want;
+                    said.push_str(&format!(", {n} runs behind it afterwards, expected {want}"));
+                }
+                if with.contains_key("tasks") {
+                    let want = req_i64(with, "tasks")?;
+                    let v = self.run_json(&["task", "list", "--json"])?;
+                    let n = v["tasks"].as_array().map_or(0, Vec::len) as i64;
+                    pass = pass && n == want;
+                    said.push_str(&format!(", {n} tasks in the project afterwards, expected {want}"));
+                }
+                said.push_str(if pass { ", as expected)" } else { ", MISMATCH)" });
+                Ok(Outcome::assert(pass, said))
             }
             // One step inside a library action, read back off `automation action-show`.
             "step-read" => {

@@ -501,7 +501,7 @@ export function AutomationPicture({
                   built-in's is Amenbo's own, though it is kept on the device's shelf. */}
               {node.global !== undefined && placedForYou?.has(node.boxId) === true ? (
                 <span className="autopic__nodesub" title={t("auto.pic.placedForYouWhy")}>
-                  {t("auto.pic.placedForYouWhy")}
+                  <span className="autopic__lib">{t("auto.pic.placedForYouWhy")}</span>
                 </span>
               ) : node.global !== undefined && (
                 <span className="autopic__nodesub">

@@ -1,6 +1,6 @@
 # A reader watching a run is in the pane it is drawn in, and the line over that pane carries the same
-# three controls as the running tab's row: hold the run, pick it up again, stop it. This is the road
-# that presses them there. Stopping from the line keeps the pane — the control that takes the pane
+# controls as the running tab's row: hold the run, pick it up again, force-cancel it. This is the road
+# that presses them there. Force-cancelling from the line keeps the pane — the control that takes the pane
 # away cannot be pressed while the run is going or held, so this is the one way to end it from here.
 #
 # The picture is the one hold-a-run-and-let-it-go-again walks, for the reason given there: a hold
@@ -101,8 +101,9 @@ steps_gui:
       target: run
       state: running
 
-  # Holding while the first step is open. The step cannot be cut in half, so the line says the run
-  # will hold when that step ends, not that it already has.
+  # Holding while the first step is open. The action under way is not cut in half, so the line says
+  # the run will hold when that action ends, not that it already has. The action here is one step, so
+  # that is when the step reports (`pause-a-run-at-the-end-of-the-action-under-way` walks two).
   - type: action
     domain: automation
     op: press-run
@@ -149,7 +150,8 @@ steps_gui:
       target: run
       state: running
 
-  # Stopping from the line is final and asks nothing, as on the tab's row.
+  # Force-cancelling from the line is final, and it asks first, as on the tab's row — the road goes
+  # through with it.
   - type: action
     domain: automation
     op: press-run

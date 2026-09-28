@@ -163,8 +163,8 @@ steps_gui:
       target: run
       state: running
 
-  # Holding while the first step is open. The step cannot be cut in half, so the row says the run
-  # will hold when that step ends, not that it already has.
+  # Holding while the first step is open. The action under way is not cut in half, so the row says
+  # the run will hold when that action ends, not that it already has.
   - type: action
     domain: automation
     op: press-run

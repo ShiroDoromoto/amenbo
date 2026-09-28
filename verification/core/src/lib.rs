@@ -4211,7 +4211,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &["file", "title", "notes", "dim"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "resume", required: &[], refs: &["target"], strings: &[], binds: false },
+    // `stop` is the force-cancel: the run ends `canceled` where it stands, whatever it is in the middle
+    // of. `cancel` ends a paused run only — nothing is under way in one — and a run still going is
+    // refused (`invalid_value`) with the two ways on: pause it first, or force-cancel it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "stop", required: &[], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "cancel", required: &[], refs: &["target"], strings: &[], binds: false },
     //
     // Asserts. What a run is doing, read the way a person reads it back — from the run itself.
     // `stopped_reason` is asked only of a run that is stopped, and a road that names it is saying

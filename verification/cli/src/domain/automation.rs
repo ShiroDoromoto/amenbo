@@ -497,6 +497,13 @@ impl Driver<'_> {
                 self.run_json(&["automation", "cancel", &run.to_string(), "--force", "--json"])?;
                 Ok(Outcome::action(format!("force-canceled run {run}")))
             }
+            // A paused run, ended on the spot. One still going is turned away, which a road reads
+            // with `refused:`.
+            "cancel" => {
+                let run = self.resolve(with)?;
+                self.run_json(&["automation", "cancel", &run.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("canceled run {run}")))
+            }
             _ => Err(unmapped(Domain::Automation, op)),
         }
     }

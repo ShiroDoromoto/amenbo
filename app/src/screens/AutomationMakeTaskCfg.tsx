@@ -21,6 +21,9 @@ const MAKE_TASK = "make_task";
 /** Its settings that name several things, by the store's word — what core reads each answer by. */
 export const CLASSIFY = "分類";
 const AI_AXES = "AI に選ばせる軸";
+/** The folder a filed task is set in, which core finds among the project's own folders
+ *  (`amenbo_core::ops::automation_builtin_make::FOLDER`, `AMB-D-987`). */
+const FOLDER = "作業フォルダ";
 /** Each setting answered a number a line, with the example its box shows: a task's number for the tasks
  *  it depends on, and a decision's for the decisions it links to. */
 const NUMBERS: Readonly<Record<string, string>> = {
@@ -37,6 +40,12 @@ export function makeTaskControl(
   if (name === CLASSIFY) return "classes";
   if (name === AI_AXES) return "axes";
   return name in NUMBERS ? "numbers" : undefined;
+}
+
+/** Whether a folder setting is answered only from the project's own folders: the launch check refuses
+ *  any other for the folder a filed task is set in, so no folder elsewhere on the machine is offered for it. */
+export function projectFolderOnly(builtin: string | undefined, name: string): boolean {
+  return builtin === MAKE_TASK && name === FOLDER;
 }
 
 /** The axes a task is filed under in this project, with the values it can newly be filed under. */

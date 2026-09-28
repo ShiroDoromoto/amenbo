@@ -1582,6 +1582,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .autostep__who { display: grid; grid-template-columns: 6rem minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: var(--s-1); }
 .autostep__who > .autostep__rowname { min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-md); color: var(--c-text); }
 .autostep__who > select { min-width: 0; }
+/* A folder's answer, then the press that picks one anywhere on the machine, on one line. */
+.autostep__folder { display: flex; align-items: center; gap: var(--s-1); }
+.autostep__folder > select, .autostep__folder > input { flex: 1; min-width: 0; }
+.autostep__folder > .btn { flex: none; }
 .autostep__chip {
   background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text);
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);

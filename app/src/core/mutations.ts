@@ -1152,8 +1152,8 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
 
 /**
  * Open the native folder picker and return the absolute path chosen — this backs every place a folder
- * is asked for: the creation screen's field, the settings screen's list, and the workspace's way in
- * (`chooseWorkFolder`). Null if the dialog is cancelled. **It does not read the folder's contents**: it
+ * is asked for: the creation screen's field, the settings screen's list, the workspace's way in
+ * (`chooseWorkFolder`), and a folder setting on an automation's placement. Null if the dialog is cancelled. **It does not read the folder's contents**: it
  * returns a path string, and the actual binding (placing the `.amenbo` pointer) is done on the Rust
  * side by whatever the caller does with it. Outside Tauri (browser) nothing touches the filesystem, so
  * this is a no-op returning null.

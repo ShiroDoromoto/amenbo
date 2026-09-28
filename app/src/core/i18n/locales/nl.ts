@@ -1017,6 +1017,7 @@ export const nl: Translation = {
     "auto.step.cfg": "Instellingen",
     "auto.step.declaresNone": "Niets verklaard",
     "auto.step.required": "verplicht",
+    "auto.step.pickFolder": "Map kiezen…",
     "auto.step.noAxes": "Er is nog geen as om taken mee te classificeren",
     "auto.step.oneALine": "Eén per regel (bijv. AMB-T-12)",
     "auto.step.oneADecisionALine": "Eén per regel (bijv. AMB-D-12)",

@@ -1014,6 +1014,7 @@ export const ko: Translation = {
     "auto.step.cfg": "설정",
     "auto.step.declaresNone": "선언된 것이 없습니다",
     "auto.step.required": "필수",
+    "auto.step.pickFolder": "폴더 고르기…",
     "auto.step.noAxes": "작업을 분류할 축이 아직 없다",
     "auto.step.oneALine": "한 줄에 하나(예: AMB-T-12)",
     "auto.step.oneADecisionALine": "한 줄에 하나(예: AMB-D-12)",

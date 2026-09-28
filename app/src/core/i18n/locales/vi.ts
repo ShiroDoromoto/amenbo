@@ -1018,6 +1018,7 @@ export const vi: Translation = {
     "auto.step.cfg": "Thiết lập",
     "auto.step.declaresNone": "Không khai báo gì",
     "auto.step.required": "bắt buộc",
+    "auto.step.pickFolder": "Chọn thư mục…",
     "auto.step.noAxes": "Chưa có trục nào để phân loại việc",
     "auto.step.oneALine": "Mỗi dòng một mục (vd. AMB-T-12)",
     "auto.step.oneADecisionALine": "Mỗi dòng một mục (vd. AMB-D-12)",

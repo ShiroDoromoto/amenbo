@@ -1023,6 +1023,7 @@ export const ja: Translation = {
     "auto.step.cfg": "設定",
     "auto.step.declaresNone": "まだありません",
     "auto.step.required": "必須",
+    "auto.step.pickFolder": "フォルダを選ぶ…",
     "auto.step.noAxes": "タスクを分類する軸がまだ無い",
     "auto.step.oneALine": "1行に1つ（例：AMB-T-12）",
     "auto.step.oneADecisionALine": "1行に1つ（例：AMB-D-12）",

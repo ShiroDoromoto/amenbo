@@ -1019,6 +1019,7 @@ export const zhHans: Translation = {
     "auto.step.cfg": "设置",
     "auto.step.declaresNone": "没有声明",
     "auto.step.required": "必填",
+    "auto.step.pickFolder": "选择文件夹…",
     "auto.step.noAxes": "还没有用于给任务分类的轴",
     "auto.step.oneALine": "每行一个（例：AMB-T-12）",
     "auto.step.oneADecisionALine": "每行一个（例：AMB-D-12）",

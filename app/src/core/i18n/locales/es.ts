@@ -1029,6 +1029,7 @@ export const es: Translation = {
     "auto.step.cfg": "Ajustes",
     "auto.step.declaresNone": "Nada declarado",
     "auto.step.required": "obligatorio",
+    "auto.step.pickFolder": "Elegir una carpeta…",
     "auto.step.noAxes": "Aún no hay ningún eje para clasificar tareas",
     "auto.step.oneALine": "Una por línea (p. ej., AMB-T-12)",
     "auto.step.oneADecisionALine": "Una por línea (p. ej., AMB-D-12)",

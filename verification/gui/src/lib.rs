@@ -4508,6 +4508,14 @@ impl Instructor {
                 "In the workspace, on the band under the header of the pane this run is drawn in, press the button that shows it on the picture. Confirm the ledger comes forward on the automation's build screen, with {} picked out on the picture and its panel open beside it.",
                 box_named(with, "box", "builtin")?
             ),
+            // Following a waiting run to the value that holds its tasks back. The line is named by what
+            // it says, since the card lists a line for every thing stopping them and only a value's
+            // opens the panel its axis is managed in.
+            (Domain::Automation, "open-held-value") => format!(
+                "In the workspace, on the card the pane this run is drawn in stands on while it waits for a task, press the line \"{} ({})\" among the things keeping its tasks from being taken.",
+                req(with, "value")?,
+                req(with, "dimension")?
+            ),
             (Domain::Automation, "see-history") => {
                 "In the workspace, on the header of the pane this run is drawn in, press the button that shows it in the history. Confirm the ledger comes forward on the automations' history tab."
                     .to_string()
@@ -6671,6 +6679,16 @@ impl Instructor {
                     false => "In the workspace, confirm the press stood no new pane up.".to_string(),
                 },
             },
+            // What keeps a waiting run waiting, read off the card its pane stands on. An eye closes it:
+            // the count sits beside the line rather than in its words, and which line it belongs to is a
+            // matter of where it is drawn.
+            (Domain::Automation, "held-back") => format!(
+                "In the workspace, on the card the pane this run is drawn in stands on while it waits for a task, confirm it says how many tasks it cannot take yet ({}), and that among the lines under it, one per thing keeping them from being taken, the line \"{} ({})\" carries the count {} beside it.",
+                count(with, "tasks")?,
+                req(with, "value")?,
+                req(with, "dimension")?,
+                count(with, "count")?
+            ),
             // Read by typing, because the screen alone cannot say it: the last lines stay whether or
             // not the program is still there. The wait is the watch's look, a few seconds at most.
             (Domain::Automation, "run-pane-ended") => {

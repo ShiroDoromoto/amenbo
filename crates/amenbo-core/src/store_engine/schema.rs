@@ -1051,6 +1051,10 @@ datasets! {
         // one per key. An axis deleted from under it leaves it with none, and carrying it out then falls
         // over rather than guess.
         builtin_dimension_id: fk_opt("dimension", "SET NULL"),
+        // The version of the built-in's definition the rows were written from (`AMB-D-1000`), or NULL
+        // for an action a person wrote. One action per version: a placement points at the one it was
+        // placed with, and a newer definition is written beside it rather than over it.
+        builtin_version: col(INT_OPT),
         order_key: col(ORDER_KEY),
     }
 
@@ -1300,6 +1304,9 @@ datasets! {
         // The built-in the step was, copied with it — what tells `automation_step::open` to carry it out
         // rather than open a terminal. `agent` is `''` on such a copy: nobody is chosen for it.
         builtin: col(OPT),
+        // That built-in's version, copied with it (`AMB-D-1000`) — what its code reads to behave as the
+        // definition the copy's ways out were written from.
+        builtin_version: col(INT_OPT),
         agent: col(REQ),
         model: col(OPT),
         interactive: bool_col,

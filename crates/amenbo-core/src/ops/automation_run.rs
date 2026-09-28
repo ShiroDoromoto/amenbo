@@ -1530,6 +1530,12 @@ fn snapshot(
         let port = RunDefPort { id: p.id, name: p.name, kind: p.kind, required: p.required };
         ins.push(RunDefIn { port, from });
     }
+    // The version of the built-in the placed action was written from (`AMB-D-1000`) — the one whose ways
+    // out were just copied, and so the one its code is to behave as.
+    let builtin_version = match &step.builtin {
+        Some(_) => read::automation_action(conn, placement.action_id)?.and_then(|a| a.builtin_version),
+        None => None,
+    };
     let cfg: Vec<RunDefCfg> = settings_of(conn, placement)?
         .into_iter()
         .map(|c| RunDefCfg {
@@ -1548,6 +1554,7 @@ fn snapshot(
         name: step.name.clone(),
         prompt: step.builtin.is_none().then(|| step.prompt.clone()),
         builtin: step.builtin.clone(),
+        builtin_version,
         agent: chosen.agent,
         model: chosen.model,
         interactive: step.interactive,

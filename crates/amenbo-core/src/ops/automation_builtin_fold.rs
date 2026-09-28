@@ -31,6 +31,7 @@ pub const UNMERGED: &str = "未マージ";
 
 pub(super) const FOLD_WORKTREE: Builtin = Builtin {
     key: "fold_worktree",
+    version: 1,
     name: "worktree を畳む",
     does: "いま扱っているタスクの worktree とブランチを片付ける。リモートの既定ブランチにまだ入っていない変更があれば、畳まずに「未マージ」から出る",
     settings: &[],

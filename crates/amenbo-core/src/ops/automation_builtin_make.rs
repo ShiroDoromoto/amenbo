@@ -98,6 +98,7 @@ const LOW: &str = "低";
 
 pub(super) const MAKE_TASK: Builtin = Builtin {
     key: KEY,
+    version: 1,
     name: "タスクを起票する",
     does: "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この実行で扱える",
     settings: &[

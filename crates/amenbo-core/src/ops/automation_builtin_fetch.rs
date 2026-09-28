@@ -63,6 +63,7 @@ const LIMIT: u64 = 1024 * 1024;
 
 pub(super) const FETCH: Builtin = Builtin {
     key: "fetch",
+    version: 1,
     name: "取りに行く",
     does: "設定した先（URL・ファイルパス・コマンド）を見に行き、取ってきた中身を渡す。何も無ければ「見つからない」から出る",
     settings: &[

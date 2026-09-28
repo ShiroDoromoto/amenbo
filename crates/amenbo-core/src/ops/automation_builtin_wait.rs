@@ -30,6 +30,7 @@ pub const SECONDS: &str = "秒";
 
 pub(super) const WAIT: Builtin = Builtin {
     key: "wait",
+    version: 1,
     name: "待つ",
     does: "設定した時間だけ待ってから、「完了」から出る",
     settings: &[

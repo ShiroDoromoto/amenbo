@@ -3853,6 +3853,45 @@ pub struct AutomationHeldByRecordDto {
     pub(crate) count: usize,
 }
 
+/// **The way a run has come on the task it is working** (`amenbo_core::ops::automation_run::Trail`)
+/// — what the picture on its pane lights up. It starts again with each task the run takes.
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunTrailDto {
+    /// The spots it passed, in the order it passed them. A spot passed twice is here twice.
+    pub(crate) passed: Vec<AutomationRunPassDto>,
+    /// The placement whose step is under way, or the one the run is about to open or waiting on.
+    /// Absent for a run that is not going.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) at: Option<i64>,
+}
+
+/// **One pass through one spot**, keyed the way the automation's picture keys its boxes and lines.
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunPassDto {
+    /// The placement. Absent where the run's copy names no spot.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) placement: Option<i64>,
+    /// How the last step the run opened there stands.
+    #[ts(type = "\"running\" | \"done\" | \"failed\" | \"stopped\"")]
+    pub(crate) status: &'static str,
+    /// The action's way out it left the spot by ([`AutomationExitDto`]'s `id`). Absent while it is
+    /// still inside the spot, and where it left by no way out of the action.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) exit: Option<i64>,
+    /// The line on the automation's picture it walked from there ([`AutomationEdgeDto`]'s `id`).
+    /// Absent while it is still inside the spot, and where nothing was drawn after the way out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) edge: Option<i64>,
+}
+
 /// **A built-in step of a run, as its pane draws it** — the one card Amenbo puts up in place of a
 /// terminal while it carries the step out itself (`AMB-D-964`).
 ///

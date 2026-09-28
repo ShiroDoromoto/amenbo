@@ -64,6 +64,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} hat etwas an {what} gemacht ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "der Worktree unter {path} oder der Branch {branch} ist bereits vorhanden, deshalb wurde nichts angelegt"),
             ("bi.answered", "{url} hat mit {status} geantwortet"),
             ("bi.answeredFailed", "{url} hat mit {status} geantwortet, daher wurde nichts abgerufen"),
             ("bi.axisGone", "die Achse, nach der aufgeteilt wird, gibt es nicht mehr – sie wurde gelöscht, nachdem die Automation gebaut wurde"),
@@ -305,6 +306,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} acted on {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "the worktree at {path} or the branch {branch} is there already, so nothing was cut"),
             ("bi.answered", "{url} answered {status}"),
             ("bi.answeredFailed", "{url} answered {status}, so nothing was fetched"),
             ("bi.axisGone", "the axis this splits by is gone — it was deleted after the automation was built"),
@@ -546,6 +548,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} hizo algo en {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "el worktree de {path} o la rama {branch} ya existe, así que no se creó nada"),
             ("bi.answered", "{url} respondió {status}"),
             ("bi.answeredFailed", "{url} respondió {status}, así que no se obtuvo nada"),
             ("bi.axisGone", "el eje por el que se divide ya no existe: se eliminó después de crear la automatización"),
@@ -787,6 +790,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} est intervenu sur {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "le worktree dans {path} ou la branche {branch} existe déjà, rien n'a donc été créé"),
             ("bi.answered", "{url} a répondu {status}"),
             ("bi.answeredFailed", "{url} a répondu {status}, rien n’a donc été récupéré"),
             ("bi.axisGone", "l'axe de répartition n'existe plus : il a été supprimé après la création de l'automatisation"),
@@ -1028,6 +1032,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} ने {what} पर कुछ किया ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "{path} पर worktree या ब्रांच {branch} पहले से है, इसलिए कुछ नहीं बनाया गया"),
             ("bi.answered", "{url} ने {status} लौटाया"),
             ("bi.answeredFailed", "{url} ने {status} लौटाया, इसलिए कुछ प्राप्त नहीं हुआ"),
             ("bi.axisGone", "जिस अक्ष से बाँटा जाता है वह अब नहीं है — ऑटोमेशन बनने के बाद उसे हटा दिया गया"),
@@ -1269,6 +1274,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} melakukan sesuatu pada {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "worktree di {path} atau branch {branch} sudah ada, jadi tidak ada yang dibuat"),
             ("bi.answered", "{url} menjawab {status}"),
             ("bi.answeredFailed", "{url} menjawab {status}, jadi tidak ada yang diambil"),
             ("bi.axisGone", "sumbu untuk memisahkan sudah tidak ada — sumbu itu dihapus setelah otomasi dibuat"),
@@ -1510,6 +1516,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} è intervenuto su {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "il worktree in {path} o il branch {branch} è già presente, quindi non è stato creato nulla"),
             ("bi.answered", "{url} ha risposto {status}"),
             ("bi.answeredFailed", "{url} ha risposto {status}, quindi non è stato recuperato nulla"),
             ("bi.axisGone", "l'asse per cui si suddivide non esiste più: è stato eliminato dopo che l'automazione è stata costruita"),
@@ -1751,6 +1758,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} が {what} を操作しました（{event}）"),
         ],
         runs: &[
+            ("bi.alreadyCut", "{path} の worktree かブランチ {branch} が既にあるので、切りませんでした"),
             ("bi.answered", "{url} が {status} を返しました"),
             ("bi.answeredFailed", "{url} が {status} を返したので、何も取得できませんでした"),
             ("bi.axisGone", "分ける軸がありません。オートメーションを作ったあとで消されました"),
@@ -1992,6 +2000,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who}이(가) {what}에 무언가 했습니다 ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "{path}의 worktree 또는 브랜치 {branch}이(가) 이미 있어서 만들지 않았습니다"),
             ("bi.answered", "{url}이(가) {status}을(를) 돌려주었습니다"),
             ("bi.answeredFailed", "{url}이(가) {status}을(를) 돌려주어 아무것도 가져오지 못했습니다"),
             ("bi.axisGone", "나누는 기준 축이 없습니다. 오토메이션을 만든 뒤에 삭제되었습니다"),
@@ -2233,6 +2242,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} heeft iets met {what} gedaan ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "de worktree op {path} of de branch {branch} bestaat al, dus er is niets gemaakt"),
             ("bi.answered", "{url} antwoordde {status}"),
             ("bi.answeredFailed", "{url} antwoordde {status}, dus er is niets opgehaald"),
             ("bi.axisGone", "de as waarop gesplitst wordt bestaat niet meer — die is verwijderd nadat de automatisering was gebouwd"),
@@ -2474,6 +2484,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} zrobił(a) coś z {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "worktree w {path} lub gałąź {branch} już istnieje, więc niczego nie utworzono"),
             ("bi.answered", "{url} odpowiedział {status}"),
             ("bi.answeredFailed", "{url} odpowiedział {status}, więc nic nie pobrano"),
             ("bi.axisGone", "oś, według której następuje podział, już nie istnieje — usunięto ją po zbudowaniu automatyzacji"),
@@ -2715,6 +2726,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} fez algo em {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "o worktree em {path} ou o branch {branch} já existe, então nada foi criado"),
             ("bi.answered", "{url} respondeu {status}"),
             ("bi.answeredFailed", "{url} respondeu {status}, então nada foi buscado"),
             ("bi.axisGone", "o eixo pelo qual se divide não existe mais: ele foi excluído depois que a automação foi criada"),
@@ -2956,6 +2968,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} что-то сделал с {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "worktree в {path} или ветка {branch} уже есть, поэтому ничего не создано"),
             ("bi.answered", "{url} ответил {status}"),
             ("bi.answeredFailed", "{url} ответил {status}, поэтому ничего не получено"),
             ("bi.axisGone", "оси, по которой идёт разделение, больше нет — её удалили после того, как автоматизацию собрали"),
@@ -3197,6 +3210,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} ทำบางอย่างกับ {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "worktree ที่ {path} หรือ branch {branch} มีอยู่แล้ว จึงไม่ได้สร้างใหม่"),
             ("bi.answered", "{url} ตอบกลับ {status}"),
             ("bi.answeredFailed", "{url} ตอบ {status} จึงไม่ได้ดึงอะไรมา"),
             ("bi.axisGone", "แกนที่ใช้แยกไม่มีอยู่แล้ว — ถูกลบหลังจากสร้างออโตเมชัน"),
@@ -3438,6 +3452,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who}, {what} üzerinde bir işlem yaptı ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "{path} konumundaki worktree ya da {branch} dalı zaten var, bu yüzden hiçbir şey açılmadı"),
             ("bi.answered", "{url} {status} yanıtını verdi"),
             ("bi.answeredFailed", "{url} {status} yanıtını verdi, bu yüzden hiçbir şey alınmadı"),
             ("bi.axisGone", "ayırmanın yapıldığı eksen artık yok — otomasyon kurulduktan sonra silindi"),
@@ -3679,6 +3694,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} щось зробив з {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "worktree в {path} або гілка {branch} уже є, тому нічого не створено"),
             ("bi.answered", "{url} відповів {status}"),
             ("bi.answeredFailed", "{url} відповів {status}, тому нічого не отримано"),
             ("bi.axisGone", "осі, за якою йде розділення, більше немає — її видалили після того, як автоматизацію зібрали"),
@@ -3920,6 +3936,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} đã tác động đến {what} ({event})"),
         ],
         runs: &[
+            ("bi.alreadyCut", "worktree tại {path} hoặc nhánh {branch} đã có, nên không tạo gì"),
             ("bi.answered", "{url} đã trả lời {status}"),
             ("bi.answeredFailed", "{url} trả về {status}, nên không lấy được gì"),
             ("bi.axisGone", "trục dùng để chia không còn nữa — nó đã bị xoá sau khi tự động hoá được tạo"),
@@ -4161,6 +4178,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} 对 {what} 做了操作（{event}）"),
         ],
         runs: &[
+            ("bi.alreadyCut", "{path} 的 worktree 或分支 {branch} 已存在，因此没有创建"),
             ("bi.answered", "{url} 返回了 {status}"),
             ("bi.answeredFailed", "{url} 返回了 {status}，因此没有获取到任何内容"),
             ("bi.axisGone", "用于分流的轴已不存在——它在自动化建好之后被删除了"),
@@ -4402,6 +4420,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("unknown", "{who} 對 {what} 做了操作（{event}）"),
         ],
         runs: &[
+            ("bi.alreadyCut", "{path} 的 worktree 或分支 {branch} 已存在，因此沒有建立"),
             ("bi.answered", "{url} 傳回了 {status}"),
             ("bi.answeredFailed", "{url} 回應了 {status}，因此沒有取得任何內容"),
             ("bi.axisGone", "用來分流的軸已不存在——它在自動化建好之後被刪除了"),

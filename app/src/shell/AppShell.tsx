@@ -74,6 +74,8 @@ export type Nav = {
   action?: number;
   builtin?: string;
   placement?: number;
+  /** On a project: the axis its classification panel opens on (`openDimension`). */
+  dimension?: number;
   nth?: number;
 };
 
@@ -652,6 +654,12 @@ export function AppShell() {
     setFace("tasks");
   }, [navTo]);
   const openWorkspace = useCallback(() => selectFace("workspace"), [selectFace]);
+  // `nth` makes a second press on the same axis a new arrival, so the panel opens again after being closed.
+  const openDimension = useCallback((project: number, dimension: number) => {
+    arrivals.current += 1;
+    navTo({ type: "project", id: String(project), dimension, nth: arrivals.current });
+    setFace("tasks");
+  }, [navTo]);
   // A move inside the automations screen, pushed like any other (`AMB-D-993`).
   const goInAutomations = useCallback(
     (place: AutoPlace) => navTo({ type: "view", id: "automations", ...place }),
@@ -667,8 +675,8 @@ export function AppShell() {
     navTo({ type: "view", id: "automations", pick: nav.pick, tab: nav.tab });
   }, [prev, goBack, navTo, nav.pick, nav.tab]);
   const refNav = useMemo(
-    () => ({ selectTask, selectDecision, openAutomation, openRuns, openWorkspace }),
-    [selectTask, selectDecision, openAutomation, openRuns, openWorkspace],
+    () => ({ selectTask, selectDecision, openAutomation, openRuns, openWorkspace, openDimension }),
+    [selectTask, selectDecision, openAutomation, openRuns, openWorkspace, openDimension],
   );
 
   // A run's pane followed from the workspace's own window (`AMB-T-5539`). The host has brought this
@@ -805,6 +813,7 @@ export function AppShell() {
               onOpenSettings={() => navTo({ type: "projectSettings", id: nav.id })}
               onStartTerminal={startTerminalIn}
               onOpenAutomations={() => navTo({ type: "view", id: "automations", pick: Number(nav.id) })}
+              openDimensionAt={nav.dimension === undefined ? undefined : { dimension: nav.dimension, nth: nav.nth ?? 0 }}
             />
           )}
           {nav.type === "projectSettings" && (

@@ -288,6 +288,7 @@ export const fr: Translation = {
     "detail.project": "Projet", "detail.none": "Aucun",
     "detail.blockedBy": "En attente de", "detail.blockedByHint": "bloquée (dépendance)",
     "detail.notStarted": "Commence le",
+    "detail.waitingOnValues": "Attend des valeurs précédentes", "detail.waitingOnValuesHint": "Ne peut pas démarrer avant la fermeture de cette valeur — appuie pour ouvrir la classification où elle se ferme",
     "detail.draft": "Création", "detail.finishCreating": "Terminer la création",
     "detail.finishCreatingBlocked": "Renseignez d'abord {names}",
     "detail.linkedDecisions": "Motivée par",

@@ -286,6 +286,7 @@ export const id: Translation = {
     "detail.project": "Proyek", "detail.none": "Tidak ada",
     "detail.blockedBy": "Menunggu", "detail.blockedByHint": "terhambat (ketergantungan)",
     "detail.notStarted": "Mulai pada",
+    "detail.waitingOnValues": "Menunggu nilai sebelumnya", "detail.waitingOnValuesHint": "Tidak bisa mulai sampai nilai ini ditutup — tekan untuk membuka klasifikasi tempat nilai ini ditutup",
     "detail.draft": "Pembuatan", "detail.finishCreating": "Selesaikan pembuatan",
     "detail.finishCreatingBlocked": "Isi {names} dulu",
     "detail.linkedDecisions": "Didasari oleh",

@@ -95,7 +95,7 @@ describe("PremiseChangedChip", () => {
   it("counts a value before the task's own that was opened again, and names it with its category", () => {
     act(() => root.render(createElement(PremiseChangedChip, { task: card({
       status: "in_progress",
-      premiseChange: change({ reopenedValues: [{ axis: "リリース", value: "v1" }] }),
+      premiseChange: change({ reopenedValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }] }),
     }) })));
     expect(chips()).toHaveLength(1);
     expect(chips()[0].textContent).toContain("1");
@@ -144,7 +144,7 @@ describe("PremiseChangedField (the detail pane's spelled-out surface)", () => {
 
   it("names a reopened value in the tag the waiting chip uses, as a mark and not a way in", () => {
     act(() => root.render(createElement(PremiseChangedField, {
-      pc: change({ reopenedValues: [{ axis: "リリース", value: "v1" }] }),
+      pc: change({ reopenedValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }] }),
     })));
     expect(fieldChips()).toHaveLength(0);
     const named = container.querySelector("span.feed__target");
@@ -206,7 +206,7 @@ describe("StatusSelect premise-change safety net (AMB-D-366)", () => {
   it("names a value opened again before the task's own", () => {
     const notices = fireChange({
       id: 7, status: "in_progress", onStatus: () => {},
-      premiseChange: change({ reopenedValues: [{ axis: "リリース", value: "v1" }] }),
+      premiseChange: change({ reopenedValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }] }),
     }, "blocked");
     expect(notices).toHaveLength(1);
     expect(notices[0]).toContain("v1 (リリース)");

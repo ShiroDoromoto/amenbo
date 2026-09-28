@@ -285,6 +285,7 @@ export const ja: Translation = {
     "detail.project": "プロジェクト", "detail.none": "なし",
     "detail.blockedBy": "待ち", "detail.blockedByHint": "着手不可（依存）",
     "detail.notStarted": "着手日待ち",
+    "detail.waitingOnValues": "前の値待ち", "detail.waitingOnValuesHint": "この値が閉じるまで着手できません。押すと、値を閉じる分類の画面を開きます",
     "detail.draft": "作成", "detail.finishCreating": "作成を終える",
     "detail.finishCreatingBlocked": "先に{names}を選んでください",
     "detail.linkedDecisions": "根拠",

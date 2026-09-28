@@ -56,6 +56,11 @@ pub fn is_ready(
 /// classified as, since what clears it is a person closing that value.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct WaitingOnValue {
+    /// The axis's id, which a face takes a reader to the axis by — its name is not unique in a project,
+    /// so a name cannot be looked up again. The words stay what every face prints; this one is not
+    /// printed, so the CLI's JSON reads as it did.
+    #[serde(skip)]
+    pub dimension_id: i64,
     pub axis: String,
     pub value: String,
 }

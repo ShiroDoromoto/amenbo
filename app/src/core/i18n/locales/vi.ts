@@ -286,6 +286,7 @@ export const vi: Translation = {
     "detail.project": "Dự án", "detail.none": "Không có",
     "detail.blockedBy": "Đang chờ", "detail.blockedByHint": "bị chặn (phụ thuộc)",
     "detail.notStarted": "Bắt đầu từ",
+    "detail.waitingOnValues": "Đang chờ các giá trị trước", "detail.waitingOnValuesHint": "Chưa khởi động được cho đến khi giá trị này được đóng — nhấn để mở phân loại nơi đóng giá trị này",
     "detail.draft": "Tạo", "detail.finishCreating": "Hoàn tất việc tạo",
     "detail.finishCreatingBlocked": "Hãy điền {names} trước",
     "detail.linkedDecisions": "Xuất phát từ",

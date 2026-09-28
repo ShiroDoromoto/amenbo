@@ -289,6 +289,7 @@ export const uk: Translation = {
     "detail.project": "Проєкт", "detail.none": "Немає",
     "detail.blockedBy": "Чекає на", "detail.blockedByHint": "заблоковано (залежність)",
     "detail.notStarted": "Початок",
+    "detail.waitingOnValues": "Чекає на попередні значення", "detail.waitingOnValuesHint": "Не може початися, доки це значення не закрито — натисніть, щоб відкрити класифікацію, де його закривають",
     "detail.draft": "Створення", "detail.finishCreating": "Завершити створення",
     "detail.finishCreatingBlocked": "Спершу заповніть {names}",
     "detail.linkedDecisions": "Постало з",

@@ -284,6 +284,7 @@ export const zhHans: Translation = {
     "detail.project": "项目", "detail.none": "无",
     "detail.blockedBy": "等待", "detail.blockedByHint": "受阻（依赖）",
     "detail.notStarted": "开始于",
+    "detail.waitingOnValues": "在等之前的取值", "detail.waitingOnValuesHint": "此取值关闭前无法开始——按下即可打开关闭它的分类",
     "detail.draft": "创建", "detail.finishCreating": "完成创建",
     "detail.finishCreatingBlocked": "请先填写{names}",
     "detail.linkedDecisions": "依据",

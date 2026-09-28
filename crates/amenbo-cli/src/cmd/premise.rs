@@ -233,7 +233,7 @@ mod tests {
         use amenbo_core::view::{PremiseChange, WaitingOnValue};
 
         let pc = PremiseChange {
-            reopened_values: vec![WaitingOnValue { axis: "リリース".to_string(), value: "v1".to_string() }],
+            reopened_values: vec![WaitingOnValue { dimension_id: 1, axis: "リリース".to_string(), value: "v1".to_string() }],
             ..no_premise_change()
         };
         assert_eq!(premise_change_lines(&pc), vec!["  value リリース=v1 (reopened)".to_string()]);

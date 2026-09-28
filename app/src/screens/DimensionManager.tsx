@@ -1,4 +1,4 @@
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getSnapshot, subscribe } from "../core/snapshot";
 import { errText, formatNumber, isErr, t, tf, tn } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
@@ -39,8 +39,12 @@ import { Pager, usePager } from "../components/Pager";
 // before their own (`AMB-D-990`). Raising it asks first, naming how many tasks it holds back now; and on
 // such an axis a value still carrying unfinished tasks will not close, which the value's row says in place
 // with the count and a way to the tasks left.
-export function DimensionManager({ projectId, onClose, onShowUnfinished }: {
+// A task waiting on such a value opens the panel on its axis (`focusDimensionId`): the row is scrolled to
+// and marked, since closing the value there is what lets the task start.
+export function DimensionManager({ projectId, focusDimensionId, onClose, onShowUnfinished }: {
   projectId: number;
+  /** The axis the panel opens on — scrolled into view and marked. Null or left out, none. */
+  focusDimensionId?: number | null;
   onClose: () => void;
   /** Show the unfinished tasks on one value — where the panel sends a reader whose closing was refused
    *  for them. Left out, the refusal is said without the way there. */
@@ -62,7 +66,14 @@ export function DimensionManager({ projectId, onClose, onShowUnfinished }: {
         ) : (
           <div className="dimmgr__list">
             {dims.map((d) => (
-              <DimensionRow key={d.id} dim={d} projectId={projectId} store={store} onShowUnfinished={onShowUnfinished} />
+              <DimensionRow
+                key={d.id}
+                dim={d}
+                projectId={projectId}
+                store={store}
+                focused={d.id === focusDimensionId}
+                onShowUnfinished={onShowUnfinished}
+              />
             ))}
           </div>
         )}
@@ -77,10 +88,12 @@ export function DimensionManager({ projectId, onClose, onShowUnfinished }: {
   );
 }
 
-function DimensionRow({ dim, projectId, store, onShowUnfinished }: {
+function DimensionRow({ dim, projectId, store, focused = false, onShowUnfinished }: {
   dim: DimensionDto;
   projectId: number;
   store: ReturnType<typeof useStore>;
+  /** The axis the panel was opened on: scrolled to once, and marked for as long as the panel is up. */
+  focused?: boolean;
   onShowUnfinished?: (dimensionId: number, valueId: number) => void;
 }) {
   const currentId = currentTimeAxisValueId(dim, todayStr());
@@ -111,6 +124,10 @@ function DimensionRow({ dim, projectId, store, onShowUnfinished }: {
   // One move at a time on an axis: the next is anchored on the row beside it on screen, and until the first
   // has landed that row is where it was before the first — the second would be worked out from an old order.
   const { run: runMove } = useSingleFlight();
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (focused) rowRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [focused]);
   async function removeDim() {
     if (await confirmDialog(tf("dimmgr.confirmRemoveDim", { name: dim.name }))) store.removeDimension(dim.id);
   }
@@ -136,7 +153,7 @@ function DimensionRow({ dim, projectId, store, onShowUnfinished }: {
     }
   }
   return (
-    <div className="dimmgr__dim">
+    <div ref={rowRef} className={`dimmgr__dim ${focused ? "dimmgr__dim--focus" : ""}`}>
       <div className="dimmgr__dimhead">
         <InlineText
           className="dimmgr__name"

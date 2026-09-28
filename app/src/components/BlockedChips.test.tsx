@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BlockedChips } from "./atoms";
+import { RefNavProvider, type RefNav } from "../core/refNav";
 import type { TaskCard } from "../mock/types";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,6 +27,8 @@ const glyphs = () => Array.from(container.querySelectorAll(".chip--blockglyph"))
 // Which mark a chip drew. The icons carry no text, so the name is read off the svg itself.
 const markOf = (el: Element) => el.querySelector("svg")?.getAttribute("data-icon");
 const render = (task: TaskCard) => act(() => root.render(createElement(BlockedChips, { task })));
+const renderIn = (nav: RefNav, task: TaskCard, compact = false) =>
+  act(() => root.render(createElement(RefNavProvider, { value: nav, children: createElement(BlockedChips, { task, compact }) })));
 const renderCompact = (task: TaskCard) =>
   act(() => root.render(createElement(BlockedChips, { task, compact: true })));
 
@@ -88,7 +91,7 @@ describe("BlockedChips", () => {
   it("shows values ordered before its own that are not closed as a tag with a count, naming them", () => {
     render(card({
       ready: false,
-      waitingOnValues: [{ axis: "リリース", value: "v1" }, { axis: "リリース", value: "v2" }],
+      waitingOnValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }, { dimensionId: 7, axis: "リリース", value: "v2" }],
     }));
     expect(chips()).toHaveLength(1);
     expect(markOf(chips()[0])).toBe("tag");
@@ -101,7 +104,7 @@ describe("BlockedChips", () => {
       ready: false,
       blockedBy: [{ id: 2, name: "先行" }],
       blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
-      waitingOnValues: [{ axis: "リリース", value: "v1" }],
+      waitingOnValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }],
       notStartedUntil: "2026-08-01",
       draft: true,
     }));
@@ -127,7 +130,7 @@ describe("BlockedChips", () => {
       ready: false,
       blockedBy: [{ id: 2, name: "先行" }],
       blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
-      waitingOnValues: [{ axis: "リリース", value: "v1" }],
+      waitingOnValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }],
       notStartedUntil: "2026-08-01",
       draft: true,
     }));
@@ -184,5 +187,46 @@ describe("BlockedChips compact", () => {
   it("shows nothing even on a dense surface when ready", () => {
     renderCompact(card({ ready: true, blockedBy: [{ id: 2, name: "先行" }] }));
     expect(glyphs()).toHaveLength(0);
+  });
+});
+
+describe("BlockedChips waiting on values, as a way to the axis", () => {
+  // Closing the value is the only thing that lets the task start, and it is done in the classification
+  // panel — so the chip that names the wait is also the press that goes there (`AMB-D-990`).
+  const waiting = card({
+    ready: false,
+    projectId: 3,
+    waitingOnValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }, { dimensionId: 7, axis: "リリース", value: "v2" }],
+  });
+
+  it("is a button that opens the task's project on the axis of the first value it waits on", () => {
+    const opened: string[] = [];
+    let bubbled = 0;
+    const nav: RefNav = { openDimension: (project, dimension) => opened.push(`${project}:${dimension}`) };
+    act(() => root.render(
+      createElement("div", { onClick: () => { bubbled += 1; } },
+        createElement(RefNavProvider, { value: nav, children: createElement(BlockedChips, { task: waiting }) })),
+    ));
+    const chip = container.querySelector<HTMLButtonElement>("button.chip--block");
+    expect(chip).not.toBeNull();
+    expect(markOf(chip!)).toBe("tag");
+    expect(chip!.textContent).toContain("2");
+    act(() => chip!.click());
+    expect(opened).toEqual(["3:7"]);
+    // The card under it is a press of its own, which must not also fire.
+    expect(bubbled).toBe(0);
+  });
+
+  it("stays a mark where there is nowhere to go, or on the dense surfaces", () => {
+    renderIn({}, waiting);
+    expect(container.querySelector("button.chip--block")).toBeNull();
+    expect(chips()).toHaveLength(1);
+
+    renderIn({ openDimension: () => {} }, card({ ...waiting, projectId: null }));
+    expect(container.querySelector("button.chip--block")).toBeNull();
+
+    renderIn({ openDimension: () => {} }, waiting, true);
+    expect(container.querySelector("button")).toBeNull();
+    expect(glyphs()).toHaveLength(1);
   });
 });

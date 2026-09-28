@@ -283,6 +283,7 @@ export const ko: Translation = {
     "detail.project": "프로젝트", "detail.none": "없음",
     "detail.blockedBy": "기다리는 대상", "detail.blockedByHint": "막힘(의존)",
     "detail.notStarted": "시작일",
+    "detail.waitingOnValues": "앞선 값 대기", "detail.waitingOnValuesHint": "이 값이 닫힐 때까지 시작할 수 없습니다. 누르면 이 값을 닫는 분류 화면을 엽니다",
     "detail.draft": "작성", "detail.finishCreating": "작성 마치기",
     "detail.finishCreatingBlocked": "{names}을(를) 먼저 채워 주세요",
     "detail.linkedDecisions": "근거",

@@ -1294,6 +1294,9 @@ export const pl: Translation = {
     "auto.run.body.completed": "Osiągnięto koniec diagramu. Ostatnim krokiem był „{step}”.",
     "auto.run.body.canceled": "Zatrzymano na „{step}”. Ten przebieg nie pójdzie dalej.",
     "auto.run.body.failed": "Niepowodzenie na „{step}”. Powód jest na pasku powyżej.",
+    "auto.run.body.completedNoStep": "Osiągnięto koniec diagramu.",
+    "auto.run.body.canceledNoStep": "Zatrzymano. Ten przebieg nie pójdzie dalej.",
+    "auto.run.body.failedNoStep": "Niepowodzenie. Powód jest na pasku powyżej.",
 
     "mcp.title": "Połącz przez MCP",
     "mcp.setupTitle": "Korzystaj ze swoich projektów z poziomu AI",

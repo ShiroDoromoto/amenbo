@@ -1279,6 +1279,9 @@ export const zhHans: Translation = {
     "auto.run.body.completed": "已走到图的末尾。最后一步是“{step}”。",
     "auto.run.body.canceled": "在“{step}”处停止了。此次运行不会继续。",
     "auto.run.body.failed": "在“{step}”处失败。原因见上方的横条。",
+    "auto.run.body.completedNoStep": "已走到图的末尾。",
+    "auto.run.body.canceledNoStep": "已停止。此次运行不会继续。",
+    "auto.run.body.failedNoStep": "失败。原因见上方的横条。",
 
     "mcp.title": "通过 MCP 连接",
     "mcp.setupTitle": "让 AI 可以使用你的项目",

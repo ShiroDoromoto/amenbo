@@ -1277,6 +1277,9 @@ export const hi: Translation = {
     "auto.run.body.completed": "आरेख के अंत तक पहुँच गया। अंतिम चरण “{step}” था।",
     "auto.run.body.canceled": "“{step}” पर रोका गया। यह रन आगे नहीं चलेगा।",
     "auto.run.body.failed": "“{step}” पर विफल। कारण ऊपर की पट्टी में है।",
+    "auto.run.body.completedNoStep": "आरेख के अंत तक पहुँच गया।",
+    "auto.run.body.canceledNoStep": "रोका गया। यह रन आगे नहीं चलेगा।",
+    "auto.run.body.failedNoStep": "विफल। कारण ऊपर की पट्टी में है।",
 
     "mcp.title": "MCP से जोड़ें",
     "mcp.setupTitle": "अपने प्रोजेक्ट AI से इस्तेमाल करें",

@@ -1290,6 +1290,9 @@ export const ptBR: Translation = {
     "auto.run.body.completed": "Chegou ao fim do diagrama. O último passo foi “{step}”.",
     "auto.run.body.canceled": "Parada em “{step}”. Esta execução não continua.",
     "auto.run.body.failed": "Falhou em “{step}”. A faixa acima diz por quê.",
+    "auto.run.body.completedNoStep": "Chegou ao fim do diagrama.",
+    "auto.run.body.canceledNoStep": "Parada. Esta execução não continua.",
+    "auto.run.body.failedNoStep": "Falhou. A faixa acima diz por quê.",
 
     "mcp.title": "Conectar por MCP",
     "mcp.setupTitle": "Usar seus projetos a partir de uma IA",

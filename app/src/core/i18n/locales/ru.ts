@@ -1294,6 +1294,9 @@ export const ru: Translation = {
     "auto.run.body.completed": "Дошёл до конца схемы. Последний шаг — «{step}».",
     "auto.run.body.canceled": "Остановлен на «{step}». Этот запуск не продолжится.",
     "auto.run.body.failed": "Сбой на «{step}». Причина указана на полосе выше.",
+    "auto.run.body.completedNoStep": "Дошёл до конца схемы.",
+    "auto.run.body.canceledNoStep": "Остановлен. Этот запуск не продолжится.",
+    "auto.run.body.failedNoStep": "Сбой. Причина указана на полосе выше.",
 
     "mcp.title": "Подключение по MCP",
     "mcp.setupTitle": "Работать со своими проектами из ИИ",

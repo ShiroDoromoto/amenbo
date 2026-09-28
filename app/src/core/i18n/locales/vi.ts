@@ -1278,6 +1278,9 @@ export const vi: Translation = {
     "auto.run.body.completed": "Đã đến cuối sơ đồ. Bước cuối là “{step}”.",
     "auto.run.body.canceled": "Đã dừng ở “{step}”. Lượt chạy này không tiếp tục.",
     "auto.run.body.failed": "Thất bại ở “{step}”. Lý do ở dải phía trên.",
+    "auto.run.body.completedNoStep": "Đã đến cuối sơ đồ.",
+    "auto.run.body.canceledNoStep": "Đã dừng. Lượt chạy này không tiếp tục.",
+    "auto.run.body.failedNoStep": "Thất bại. Lý do ở dải phía trên.",
 
     "mcp.title": "Kết nối qua MCP",
     "mcp.setupTitle": "Dùng các dự án của bạn từ AI",

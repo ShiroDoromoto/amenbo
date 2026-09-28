@@ -537,6 +537,24 @@ pub fn automation_placement_insert_new(
     Ok(WriteAck::new(&["automations", "automationActions"]).action(placement.action_id))
 }
 
+/// **Make an empty action and put it on after a way out that says nothing yet**
+/// ([`amenbo_core::ops::automation::placement_insert_new_at_exit`]) — [`automation_placement_insert_new`]
+/// for a way out with no line to press. The way out comes to point at the new placement, whose own
+/// ways out are left saying nothing; the ack names the action it made, as that one's does.
+#[tauri::command]
+pub fn automation_placement_insert_new_at_exit(
+    from_id: i64,
+    exit_name: Option<String>,
+    name: String,
+    shelf: String,
+) -> Result<WriteAck, CmdError> {
+    let shelf = action_shelf(&shelf)?;
+    let placement = with_store_mut(|store| {
+        Ok(store.automation_placement_insert_new_at_exit(from_id, exit_name.as_deref(), shelf, &name)?)
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]).action(placement.action_id))
+}
+
 /// Which library an action written at a picture lands in, as the screen sends it. An unknown word is
 /// refused here rather than guessed at: the two are what core knows
 /// ([`amenbo_core::ops::automation::ActionShelf`]).
@@ -585,6 +603,34 @@ pub fn automation_action_step_insert(
     };
     with_store_mut(|store| {
         store.automation_step_insert(edge_id, new, &exits, &ports)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Put a step on after a way out that says nothing yet, inside an action**
+/// ([`amenbo_core::ops::automation::step_insert_at_exit`]) — [`automation_action_step_insert`] for a
+/// way out with no line to press. The way out comes to point at the new step, whose own ways out are
+/// left saying nothing.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn automation_action_step_insert_at_exit(
+    from_id: i64,
+    exit_name: Option<String>,
+    name: String,
+    prompt: String,
+    interactive: bool,
+    exits: Vec<String>,
+    inputs: Vec<(String, String, bool)>,
+) -> Result<WriteAck, CmdError> {
+    let mut ports = Vec::with_capacity(inputs.len());
+    for (name, kind, required) in inputs {
+        ports.push((name, port_kind(&kind)?, required));
+    }
+    let mut new = NewStep::new(&name, &prompt);
+    new.interactive = interactive;
+    with_store_mut(|store| {
+        store.automation_step_insert_at_exit(from_id, exit_name.as_deref(), new, &exits, &ports)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -1003,6 +1049,23 @@ pub fn automation_placement_step_set(
 pub fn automation_step_insert(edge_id: i64, action: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.automation_placement_insert(edge_id, action)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Put a library action on after a way out that says nothing yet**
+/// ([`amenbo_core::ops::automation::placement_insert_at_exit`]) — [`automation_step_insert`] for a way
+/// out with no line to press. The way out comes to point at the new placement, whose own ways out are
+/// left saying nothing.
+#[tauri::command]
+pub fn automation_step_insert_at_exit(
+    from_id: i64,
+    exit_name: Option<String>,
+    action: i64,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_placement_insert_at_exit(from_id, exit_name.as_deref(), action)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))

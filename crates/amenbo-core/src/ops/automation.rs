@@ -1214,6 +1214,79 @@ pub fn placement_insert_new(
     ))
 }
 
+/// **Put an action on after a way out that says nothing yet** — [`placement_insert`] for a way out
+/// with no line on it. The way out comes to point at the new placement, and the new placement's own
+/// ways out are left saying nothing, for the reader to decide next.
+///
+/// It is not the "add at the end" [`splice_onto_edge`] has no room for: the way out that was pressed
+/// points at the new placement, so it is never a box nothing points at. Without it, a way out with no
+/// line has no `+` to press, and the picture cannot grow past its first box until something else is
+/// decided there (`AMB-D-1003`).
+pub fn placement_insert_at_exit(
+    tx: &WriteTx<'_>,
+    from_id: i64,
+    exit_name: Option<&str>,
+    action_id: i64,
+) -> Result<AutomationPlacement> {
+    open_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name)?;
+    let automation_id = live_placement(tx, from_id)?.automation_id;
+    let placement = placement_add(tx, automation_id, action_id)?;
+    hang_on_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name, placement.id)?;
+    Ok(placement)
+}
+
+/// **Make an empty action and put it on after a way out that says nothing yet** —
+/// [`placement_insert_new`] for a way out with no line on it, and [`placement_insert_at_exit`] for an
+/// action made on the spot.
+pub fn placement_insert_new_at_exit(
+    tx: &WriteTx<'_>,
+    from_id: i64,
+    exit_name: Option<&str>,
+    shelf: ActionShelf,
+    name: &str,
+) -> Result<AutomationPlacement> {
+    open_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name)?;
+    let automation_id = live_placement(tx, from_id)?.automation_id;
+    let project_id = live_automation(tx, automation_id)?.project_id;
+    let action = action_add(tx, shelf.under(project_id), name, "")?;
+    let placement = placement_add(tx, automation_id, action.id)?;
+    hang_on_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name, placement.id)?;
+    Ok(placement)
+}
+
+/// **The way out a box is to be followed on from**, refused when it already says what happens after
+/// it: that one has a line, and a box goes in on the line ([`placement_insert`], [`step_insert`]).
+/// Asked before anything is written, so the refusal names the way out rather than an edge.
+fn open_exit(
+    tx: &WriteTx<'_>,
+    owner_kind: AutomationPictureOwner,
+    from_id: i64,
+    exit_name: Option<&str>,
+) -> Result<AutomationExit> {
+    let exit = box_exit(tx, owner_kind, from_id, exit_name)?;
+    if read::automation_edge_for_exit(tx.conn(), owner_kind, from_id, exit.id)?.is_some() {
+        return Err(Error::invalid(format!(
+            "'{}' already says what happens after it — put the {} in on that line instead",
+            exit.name,
+            box_word(owner_kind)
+        )));
+    }
+    Ok(exit)
+}
+
+/// The one line from a way out that said nothing to the box put on after it. It carries the standing
+/// limit, as the lines [`splice_onto_edge`] writes into a box do.
+fn hang_on_exit(
+    tx: &WriteTx<'_>,
+    owner_kind: AutomationPictureOwner,
+    from_id: i64,
+    exit_name: Option<&str>,
+    new_box: i64,
+) -> Result<()> {
+    edge_add(tx, owner_kind, from_id, exit_name, EdgeTarget::Go(new_box), Some(DEFAULT_MAX_TIMES))?;
+    Ok(())
+}
+
 /// Reorder a placement within its automation. It moves it in the lists alone — the picture is walked
 /// from the entry along the edges, and no order here reaches it.
 pub fn placement_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationPlacement> {
@@ -1539,6 +1612,38 @@ pub fn step_insert(
         ));
     }
     let action_id = box_picture(tx, AutomationPictureOwner::Action, edge.from_id)?;
+    let step = write_step(tx, action_id, new, exits, inputs)?;
+    splice_onto_edge(tx, &edge, step.id)?;
+    Ok(step)
+}
+
+/// **Put a step on after a way out that says nothing yet**, inside one action —
+/// [`placement_insert_at_exit`]'s twin, and [`step_insert`] for a way out with no line on it. One
+/// transaction, for the reason given there.
+pub fn step_insert_at_exit(
+    tx: &WriteTx<'_>,
+    from_id: i64,
+    exit_name: Option<&str>,
+    new: NewStep,
+    exits: &[String],
+    inputs: &[(String, AutomationPortKind, bool)],
+) -> Result<AutomationStep> {
+    open_exit(tx, AutomationPictureOwner::Action, from_id, exit_name)?;
+    let action_id = live_step(tx, from_id)?.action_id;
+    let step = write_step(tx, action_id, new, exits, inputs)?;
+    hang_on_exit(tx, AutomationPictureOwner::Action, from_id, exit_name, step.id)?;
+    Ok(step)
+}
+
+/// A step with the ways out and the inputs the dialog took — what [`step_insert`] and
+/// [`step_insert_at_exit`] write before the line that reaches it.
+fn write_step(
+    tx: &WriteTx<'_>,
+    action_id: i64,
+    new: NewStep,
+    exits: &[String],
+    inputs: &[(String, AutomationPortKind, bool)],
+) -> Result<AutomationStep> {
     let step = step_add(tx, action_id, new)?;
     for name in exits {
         exit_add(tx, AutomationOwner::Step, step.id, Some(name))?;
@@ -1554,7 +1659,6 @@ pub fn step_insert(
             *required,
         )?;
     }
-    splice_onto_edge(tx, &edge, step.id)?;
     Ok(step)
 }
 
@@ -3343,6 +3447,113 @@ mod tests {
     }
 
     #[test]
+    fn an_action_put_on_after_a_way_out_that_says_nothing_is_pointed_at_and_says_nothing_itself() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            let (action, _) = mk_placed(tx, &automation, "実装する");
+
+            let put = placement_insert_at_exit(tx, first.id, None, action.id).expect("put it on");
+
+            assert_eq!(
+                edge_of(tx, AutomationPictureOwner::Automation, first.id, None),
+                (AutomationEnds::Go, Some(put.id)),
+                "the way out that said nothing now opens the new placement",
+            );
+            assert_eq!(
+                edge_on(tx, AutomationPictureOwner::Automation, first.id, None)
+                    .unwrap()
+                    .unwrap()
+                    .max_times,
+                Some(DEFAULT_MAX_TIMES),
+            );
+            assert!(
+                edge_on(tx, AutomationPictureOwner::Automation, put.id, None).unwrap().is_none(),
+                "and the new placement's own way out is left for the reader to decide",
+            );
+        });
+    }
+
+    #[test]
+    fn an_action_made_after_a_way_out_that_says_nothing_is_born_empty_on_the_shelf_it_was_told() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+
+            let made = placement_insert_new_at_exit(tx, first.id, None, ActionShelf::Device, "書く")
+                .expect("make one there");
+
+            let action = live_action(tx, made.action_id).unwrap();
+            assert_eq!((action.name.as_str(), action.project_id, action.entry_step_id), ("書く", None, None));
+            assert_eq!(
+                edge_of(tx, AutomationPictureOwner::Automation, first.id, None),
+                (AutomationEnds::Go, Some(made.id)),
+            );
+            assert!(edge_on(tx, AutomationPictureOwner::Automation, made.id, None).unwrap().is_none());
+        });
+    }
+
+    #[test]
+    fn a_way_out_that_already_says_something_takes_nothing_put_on_after_it() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            edge_add(tx, AutomationPictureOwner::Automation, first.id, None, EdgeTarget::Done, None)
+                .expect("close the task after it");
+            let before = read::automation_placement_ids(tx.conn(), automation.id).unwrap().len();
+
+            let refused = placement_insert_new_at_exit(tx, first.id, None, ActionShelf::Project, "書く")
+                .expect_err("that way out has a line, and a box goes in on the line");
+            assert!(format!("{refused}").contains("already says what happens after it"), "{refused}");
+            assert_eq!(
+                read::automation_placement_ids(tx.conn(), automation.id).unwrap().len(),
+                before,
+                "nothing is placed",
+            );
+        });
+    }
+
+    #[test]
+    fn a_step_put_on_after_a_way_out_that_says_nothing_is_pointed_at_by_it() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &automation, "取る");
+            let first = only_step(tx, &action);
+            exit_add(tx, AutomationOwner::Step, first.id, Some("直す")).expect("a way out with no line");
+
+            let put = step_insert_at_exit(
+                tx,
+                first.id,
+                Some("直す"),
+                NewStep::new("直す", "やる"),
+                &["もう一度".to_string()],
+                &[],
+            )
+            .expect("put it on");
+
+            assert_eq!(
+                edge_of(tx, AutomationPictureOwner::Action, first.id, Some("直す")),
+                (AutomationEnds::Go, Some(put.id)),
+            );
+            assert_eq!(
+                edge_of(tx, AutomationPictureOwner::Action, first.id, None),
+                (AutomationEnds::Exit, None),
+                "the other way out keeps what it said",
+            );
+            assert!(edge_on(tx, AutomationPictureOwner::Action, put.id, None).unwrap().is_none());
+            assert_eq!(
+                exit_names(tx, AutomationOwner::Step, put.id),
+                vec![DONE_EXIT.to_string(), ERROR_EXIT.to_string(), "もう一度".to_string()],
+            );
+            assert!(
+                step_insert_at_exit(tx, first.id, None, NewStep::new("また", "やる"), &[], &[])
+                    .is_err(),
+                "the done way out already leaves the action",
+            );
+        });
+    }
+
+    #[test]
     fn the_error_way_out_is_neither_renamed_nor_deleted() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
@@ -4658,9 +4869,12 @@ mod held_by_a_run {
             "action_from_prompt",
             "placement_insert",
             "placement_insert_new",
+            "placement_insert_at_exit",
+            "placement_insert_new_at_exit",
             "placement_steps_default",
             "placement_step_default",
             "step_insert",
+            "step_insert_at_exit",
             // Only through `declare_port`, which asks.
             "port_add",
             // Only through `draw_wire`, which asks.

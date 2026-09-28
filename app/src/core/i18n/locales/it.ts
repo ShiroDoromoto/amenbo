@@ -949,7 +949,7 @@ export const it: Translation = {
     "auto.hand.fileAdd": "＋ Aggiungi un file",
     "auto.hand.fileRemove": "Rimuovi {name}",
     "auto.hand.taskTitle": "Titolo dell'attività da creare",
-    "auto.hand.taskNotes": "Note",
+    "auto.hand.taskNotes": "Cosa passare all’azione",
     "auto.hand.required": "obbligatorio",
     "auto.hand.unchosen": "Non scelto",
     "auto.hand.nothing": "Questa automazione non riceve nulla all'avvio.",

@@ -954,7 +954,7 @@ export const uk: Translation = {
     "auto.hand.fileAdd": "＋ Додати файл",
     "auto.hand.fileRemove": "Прибрати {name}",
     "auto.hand.taskTitle": "Назва завдання, яке буде створено",
-    "auto.hand.taskNotes": "Опис",
+    "auto.hand.taskNotes": "Що передати дії",
     "auto.hand.required": "обов'язково",
     "auto.hand.unchosen": "Не вибрано",
     "auto.hand.nothing": "Ця автоматизація нічого не приймає під час запуску.",

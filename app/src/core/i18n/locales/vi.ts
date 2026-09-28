@@ -938,7 +938,7 @@ export const vi: Translation = {
     "auto.hand.fileAdd": "＋ Thêm tệp",
     "auto.hand.fileRemove": "Bỏ {name}",
     "auto.hand.taskTitle": "Tiêu đề của công việc sẽ tạo",
-    "auto.hand.taskNotes": "Ghi chú",
+    "auto.hand.taskNotes": "Nội dung trao cho hành động",
     "auto.hand.required": "bắt buộc",
     "auto.hand.unchosen": "Không chọn",
     "auto.hand.nothing": "Tự động hóa này không nhận gì khi bắt đầu.",

@@ -939,7 +939,7 @@ export const zhHans: Translation = {
     "auto.hand.fileAdd": "＋ 添加文件",
     "auto.hand.fileRemove": "移除 {name}",
     "auto.hand.taskTitle": "要创建的任务标题",
-    "auto.hand.taskNotes": "正文",
+    "auto.hand.taskNotes": "要交给动作的内容",
     "auto.hand.required": "必填",
     "auto.hand.unchosen": "不选择",
     "auto.hand.nothing": "此自动化启动时不接收任何内容。",

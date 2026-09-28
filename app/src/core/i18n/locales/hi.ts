@@ -937,7 +937,7 @@ export const hi: Translation = {
     "auto.hand.fileAdd": "＋ फ़ाइल जोड़ें",
     "auto.hand.fileRemove": "{name} हटाएँ",
     "auto.hand.taskTitle": "बनाए जाने वाले टास्क का शीर्षक",
-    "auto.hand.taskNotes": "विवरण",
+    "auto.hand.taskNotes": "ऐक्शन को सौंपी जाने वाली सामग्री",
     "auto.hand.required": "आवश्यक",
     "auto.hand.unchosen": "नहीं चुना",
     "auto.hand.nothing": "यह ऑटोमेशन शुरू होते समय कुछ नहीं लेता।",

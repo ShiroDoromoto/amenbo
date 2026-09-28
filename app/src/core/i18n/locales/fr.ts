@@ -949,7 +949,7 @@ export const fr: Translation = {
     "auto.hand.fileAdd": "＋ Ajouter un fichier",
     "auto.hand.fileRemove": "Retirer {name}",
     "auto.hand.taskTitle": "Titre de la tâche à créer",
-    "auto.hand.taskNotes": "Description",
+    "auto.hand.taskNotes": "Ce que l’on transmet à l’action",
     "auto.hand.required": "obligatoire",
     "auto.hand.unchosen": "Non choisi",
     "auto.hand.nothing": "Cette automatisation ne reçoit rien au démarrage.",

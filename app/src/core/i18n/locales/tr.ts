@@ -937,7 +937,7 @@ export const tr: Translation = {
     "auto.hand.fileAdd": "＋ Dosya ekle",
     "auto.hand.fileRemove": "{name} kaldır",
     "auto.hand.taskTitle": "Oluşturulacak görevin başlığı",
-    "auto.hand.taskNotes": "Notlar",
+    "auto.hand.taskNotes": "Eyleme verilecek içerik",
     "auto.hand.required": "zorunlu",
     "auto.hand.unchosen": "Seçilmedi",
     "auto.hand.nothing": "Bu otomasyon başlarken hiçbir şey almaz.",

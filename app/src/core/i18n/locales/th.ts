@@ -938,7 +938,7 @@ export const th: Translation = {
     "auto.hand.fileAdd": "＋ เพิ่มไฟล์",
     "auto.hand.fileRemove": "เอา {name} ออก",
     "auto.hand.taskTitle": "ชื่อของงานที่จะสร้าง",
-    "auto.hand.taskNotes": "รายละเอียด",
+    "auto.hand.taskNotes": "เนื้อหาที่ส่งให้แอ็กชัน",
     "auto.hand.required": "จำเป็น",
     "auto.hand.unchosen": "ไม่เลือก",
     "auto.hand.nothing": "ออโตเมชันนี้ไม่รับอะไรเมื่อเริ่มทำงาน",

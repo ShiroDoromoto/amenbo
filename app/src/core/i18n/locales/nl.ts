@@ -937,7 +937,7 @@ export const nl: Translation = {
     "auto.hand.fileAdd": "＋ Bestand toevoegen",
     "auto.hand.fileRemove": "{name} weghalen",
     "auto.hand.taskTitle": "Titel van de taak die wordt aangemaakt",
-    "auto.hand.taskNotes": "Notities",
+    "auto.hand.taskNotes": "Wat de actie meekrijgt",
     "auto.hand.required": "verplicht",
     "auto.hand.unchosen": "Niet gekozen",
     "auto.hand.nothing": "Deze automatisering neemt bij het starten niets aan.",

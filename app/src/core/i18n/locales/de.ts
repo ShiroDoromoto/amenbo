@@ -941,7 +941,7 @@ export const de: Translation = {
     "auto.hand.fileAdd": "＋ Datei hinzufügen",
     "auto.hand.fileRemove": "{name} entfernen",
     "auto.hand.taskTitle": "Titel der anzulegenden Aufgabe",
-    "auto.hand.taskNotes": "Beschreibung",
+    "auto.hand.taskNotes": "Was die Aktion bekommt",
     "auto.hand.required": "erforderlich",
     "auto.hand.unchosen": "Nicht gewählt",
     "auto.hand.nothing": "Diese Automation nimmt beim Start nichts entgegen.",

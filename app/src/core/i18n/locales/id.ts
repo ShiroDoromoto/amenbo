@@ -938,7 +938,7 @@ export const id: Translation = {
     "auto.hand.fileAdd": "＋ Tambah berkas",
     "auto.hand.fileRemove": "Hapus {name}",
     "auto.hand.taskTitle": "Judul tugas yang akan dibuat",
-    "auto.hand.taskNotes": "Catatan",
+    "auto.hand.taskNotes": "Isi yang diberikan ke aksi",
     "auto.hand.required": "wajib",
     "auto.hand.unchosen": "Tidak dipilih",
     "auto.hand.nothing": "Otomatisasi ini tidak menerima apa pun saat dimulai.",

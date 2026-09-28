@@ -2,7 +2,7 @@
 //
 // What these guard is the reading, not the pixels: **a task's span is one outline** and the spot
 // that takes the next task starts the next one; **depth runs down and the same depth runs across**;
-// **what comes after a spot is tied down the left and what it hands on down the right**; **a line
+// **what comes after a spot is tied down the left, and what it hands on is not drawn**; **a line
 // whose two boxes are not neighbours leaves for a lane**, dashed where it goes back up; **the error
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
@@ -250,7 +250,7 @@ describe("the picture of an automation", () => {
     expect(picture.nodes.map((node) => node.boxId).sort()).toEqual([1, 2]);
   });
 
-  it("ties what comes after a step down its left and what it hands on down its right", () => {
+  it("ties what comes after a step down its left, and draws no line for what it hands on (AMB-D-1001)", () => {
     const one = detail({
       entryPlacementId: 1,
       placements: [
@@ -264,9 +264,8 @@ describe("the picture of an automation", () => {
     });
     const picture = layOut(one);
     const middle = at(picture, 1).x + at(picture, 1).w / 2;
-    const line = (kind: "edge" | "wire") => picture.lines.find((one) => one.kind === kind)!;
-    expect(line("edge").points[0]!.x).toBeLessThan(middle);
-    expect(line("wire").points[0]!.x).toBeGreaterThan(middle);
+    expect(picture.lines.map((one) => one.key)).toEqual(["edge-1"]);
+    expect(picture.lines[0]!.points[0]!.x).toBeLessThan(middle);
   });
 
   it("sends a line back to a shallower row out to a lane, dashed", () => {
@@ -938,35 +937,29 @@ describe("the picture inside an action", () => {
     expect(end.x).toBeLessThanOrEqual(gaveUp.x + gaveUp.w);
   });
 
-  it("wires what the action takes in from the top mark, and what it hands out into a way out's mark", () => {
+  it("draws no line for what the action takes in or hands out (AMB-D-1001)", () => {
+    const boxes = [
+      step({
+        id: 1,
+        name: "draft",
+        inputs: [port("title", "value")],
+        exits: [{ id: 11, name: "*", outputs: [port("reason", "file")] }],
+      }),
+      step({ id: 2, name: "review" }),
+    ];
     const picture = layOut(
       inside({
-        boxes: [
-          step({
-            id: 1,
-            name: "draft",
-            inputs: [port("title", "value")],
-            exits: [{ id: 11, name: "*", outputs: [port("reason", "file")] }],
-          }),
-          step({ id: 2, name: "review" }),
-        ],
+        boxes,
         wires: [
           wire({ id: 41, fromId: 0, fromPortName: "title", toId: 1, toPortName: "title" }),
           wire({ id: 42, fromId: 1, fromExitName: "*", fromPortName: "reason", toId: 0, toPortName: "reason" }),
         ],
       }),
     );
-    const wires = picture.lines.filter((one) => one.kind === "wire");
-    expect(wires.map((one) => one.hands)).toEqual([
-      { from: "title", to: ["title"] },
-      { from: "reason", to: ["reason"] },
-    ]);
-    // Into the way out's mark — down into its top, since the next way out stands beside it.
-    const gaveUp = picture.marks.find((one) => one.exitName === "gave up")!;
-    const end = wires[1]!.branches![0]!.slice(-1)[0]!;
-    expect(end.y).toBe(gaveUp.y);
-    expect(end.x).toBeGreaterThan(gaveUp.x);
-    expect(end.x).toBeLessThan(gaveUp.x + gaveUp.w);
+    // The same picture with no wire at all: the wires change no line, and take no room.
+    const without = layOut(inside({ boxes }));
+    expect(picture.lines.map((one) => one.key)).toEqual(without.lines.map((one) => one.key));
+    expect(picture.width).toBe(without.width);
   });
 
   it("draws no marks on an automation's picture", () => {
@@ -977,7 +970,7 @@ describe("the picture inside an action", () => {
 });
 
 describe("what the action itself hands in", () => {
-  it("counts an input wired from the action itself as fed, and draws that wire out to the right", () => {
+  it("counts an input wired from the action itself as fed", () => {
     const picture = layOut({
       entryId: 1,
       boxes: [step({ id: 1, name: "draft", inputs: [port("title", "value")] })],
@@ -986,167 +979,5 @@ describe("what the action itself hands in", () => {
       boundary: { inputs: [port("title", "value")], exits: [] },
     });
     expect(at(picture, 1).unfed).toEqual([]);
-    // Out past the boxes and back in, never straight down: a wire under a box would cross the names
-    // of the lines that leave it there.
-    const line = picture.lines.find((one) => one.kind === "wire")!;
-    const box = at(picture, 1);
-    expect(line.branches).toHaveLength(1);
-    expect(line.points[1]!.x).toBeGreaterThan(box.x + box.w);
-    expect(line.branches![0]!.slice(-1)[0]!.x).toBe(box.x + box.w);
-  });
-});
-
-describe("the wires", () => {
-  /** A step that hands `draft` on, and three that take it, one under the other. */
-  const fanned = (wires: AutomationWireDto[]) =>
-    layOut(
-      detail({
-        entryPlacementId: 1,
-        placements: [
-          taker(1, "write", { exits: [{ id: 91, name: "完了", outputs: [port("draft", "value"), port("notes", "value")] }] }),
-          step({ id: 2, name: "check", inputs: [port("draft", "value")] }),
-          step({ id: 3, name: "fix", inputs: [port("draft", "value")] }),
-          step({ id: 4, name: "ship", inputs: [port("draft", "value"), port("notes", "value")] }),
-        ],
-        edges: [
-          edge({ id: 1, fromId: 1, toId: 2 }),
-          edge({ id: 2, fromId: 2, toId: 3 }),
-          edge({ id: 3, fromId: 3, toId: 4 }),
-        ],
-        wires,
-      }),
-    );
-
-  it("draws one output handed to several boxes as one line, split into each of them", () => {
-    const picture = fanned([
-      wire({ id: 1, fromId: 1, fromPortName: "draft", toId: 2, toPortName: "draft" }),
-      wire({ id: 2, fromId: 1, fromPortName: "draft", toId: 3, toPortName: "draft" }),
-      wire({ id: 3, fromId: 1, fromPortName: "draft", toId: 4, toPortName: "draft" }),
-    ]);
-    const wires = picture.lines.filter((one) => one.kind === "wire");
-    expect(wires).toHaveLength(1);
-    expect(wires[0]!.hands).toEqual({ from: "draft", to: ["draft", "draft", "draft"] });
-    // Every branch comes off the one trunk, and ends at the right side of a box that takes it.
-    const trunkX = wires[0]!.points[1]!.x;
-    expect(wires[0]!.branches!.map((branch) => branch[0]!.x)).toEqual([trunkX, trunkX, trunkX]);
-    expect(wires[0]!.branches!.map((branch) => branch.slice(-1)[0]!.x)).toEqual(
-      [2, 3, 4].map((id) => at(picture, id).x + at(picture, id).w),
-    );
-  });
-
-  it("gives every wire an end of its own down a box's right side, the legs in over the stems out", () => {
-    const value = (name: string) => port(name, "value", false);
-    // Handed on down the picture and back up it, with two outputs of one name leaving the same way.
-    const picture = layOut(
-      detail({
-        entryPlacementId: 1,
-        placements: [
-          taker(1, "take"),
-          step({ id: 2, name: "cut", exits: [{ id: 200, name: "完了", outputs: [value("tree")] }, { id: 201, name: "*", outputs: [] }] }),
-          step({ id: 3, name: "build", inputs: [value("tree"), value("note")] }),
-          step({
-            id: 4,
-            name: "review",
-            inputs: [value("tree")],
-            exits: [{ id: 400, name: "完了", outputs: [] }, { id: 401, name: "fix", outputs: [value("note")] }, { id: 402, name: "*", outputs: [] }],
-          }),
-          step({
-            id: 5,
-            name: "merge",
-            inputs: [value("tree")],
-            exits: [
-              { id: 500, name: "完了", outputs: [value("commit")] },
-              { id: 501, name: "red", outputs: [value("note")] },
-              { id: 502, name: "*", outputs: [] },
-            ],
-          }),
-          step({ id: 6, name: "close", inputs: [value("commit")] }),
-        ],
-        edges: [
-          edge({ id: 1, fromId: 1, toId: 2 }),
-          edge({ id: 2, fromId: 2, toId: 3 }),
-          edge({ id: 3, fromId: 3, toId: 4 }),
-          edge({ id: 4, fromId: 4, toId: 5 }),
-          edge({ id: 5, fromId: 5, toId: 6 }),
-          edge({ id: 6, fromId: 4, exitName: "fix", toId: 3 }),
-          edge({ id: 7, fromId: 5, exitName: "red", toId: 3 }),
-        ],
-        wires: [
-          wire({ id: 1, fromId: 2, fromPortName: "tree", toId: 3, toPortName: "tree" }),
-          wire({ id: 2, fromId: 2, fromPortName: "tree", toId: 4, toPortName: "tree" }),
-          wire({ id: 3, fromId: 2, fromPortName: "tree", toId: 5, toPortName: "tree" }),
-          wire({ id: 4, fromId: 4, fromExitName: "fix", fromPortName: "note", toId: 3, toPortName: "note" }),
-          wire({ id: 5, fromId: 5, fromExitName: "red", fromPortName: "note", toId: 3, toPortName: "note" }),
-          wire({ id: 6, fromId: 5, fromPortName: "commit", toId: 6, toPortName: "commit" }),
-        ],
-      }),
-    );
-    const drawn = (key: string) => picture.lines.find((one) => one.key === key)!;
-    const stemY = (key: string) => drawn(key).points[0]!.y;
-    const landY = (key: string, nth = 0) => drawn(key).branches![nth]!.slice(-1)[0]!.y;
-    // Into the fifth step one leg comes, and out of it two stems go: three heights, the leg highest.
-    const into5 = landY("wire-1", 2);
-    expect(new Set([into5, stemY("wire-5"), stemY("wire-6")]).size).toBe(3);
-    expect(into5).toBeLessThan(Math.min(stemY("wire-5"), stemY("wire-6")));
-    // Into the third step's one input two wires come up from below: each lands at its own height.
-    expect(landY("wire-4")).not.toBe(landY("wire-5"));
-    // The one from the trunk further out lands higher, so its leg passes over the nearer trunk.
-    expect(drawn("wire-5").points[1]!.x).toBeGreaterThan(drawn("wire-4").points[1]!.x);
-    expect(landY("wire-5")).toBeLessThan(landY("wire-4"));
-    // And a wire says the way out it is handed on by, where that way out has a name.
-    expect(drawn("wire-5").exitName).toBe("red");
-    expect(drawn("wire-6").exitName).toBeUndefined();
-  });
-
-  it("comes down into the top of a box with another beside it, rather than through that one", () => {
-    const picture = layOut(
-      detail({
-        entryPlacementId: 1,
-        placements: [
-          taker(1, "write", {
-            exits: [
-              { id: 91, name: "完了", outputs: [port("draft", "value")] },
-              // Handing the task on too, so both of what follows are that task's and share a row.
-              { id: 92, name: "other", outputs: [port("task", "task_take")] },
-            ],
-          }),
-          step({ id: 2, name: "left", inputs: [port("draft", "value")] }),
-          step({ id: 3, name: "right" }),
-        ],
-        edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 1, toId: 3, exitName: "other" })],
-        wires: [wire({ id: 1, fromId: 1, fromPortName: "draft", toId: 2, toPortName: "draft" })],
-      }),
-    );
-    const left = at(picture, 2);
-    const right = at(picture, 3);
-    expect(left.y).toBe(right.y);
-    const branch = picture.lines.find((one) => one.kind === "wire")!.branches![0]!;
-    const end = branch.slice(-1)[0]!;
-    // Into the top, inside the box, and the leg across runs over the row rather than through it.
-    expect(end.y).toBe(left.y);
-    expect(end.x).toBeLessThan(left.x + left.w);
-    expect(branch.slice(-2)[0]!.y).toBeLessThan(right.y);
-  });
-
-  it("gives each output of a box a trunk of its own, and writes its name past every trunk", () => {
-    const picture = fanned([
-      wire({ id: 1, fromId: 1, fromPortName: "draft", toId: 4, toPortName: "draft" }),
-      wire({ id: 2, fromId: 1, fromPortName: "notes", toId: 4, toPortName: "notes" }),
-    ]);
-    const wires = picture.lines.filter((one) => one.kind === "wire");
-    expect(wires.map((one) => one.hands?.from)).toEqual(["draft", "notes"]);
-    // Side by side rather than one over the other: the two run past the same rows.
-    expect(wires[0]!.points[1]!.x).not.toBe(wires[1]!.points[1]!.x);
-    // Each leaves at a height of its own, and lands in the input it names.
-    expect(wires[0]!.points[0]!.y).not.toBe(wires[1]!.points[0]!.y);
-    expect(wires[0]!.branches![0]!.slice(-1)[0]!.y).toBeLessThan(wires[1]!.branches![0]!.slice(-1)[0]!.y);
-    // The name is past the outermost trunk, where no line runs through it, level with its own stem;
-    // and the picture is wide enough to hold it.
-    const outermost = Math.max(...wires.map((one) => one.points[1]!.x));
-    for (const one of wires) {
-      expect(one.at.x).toBeGreaterThan(outermost);
-      expect(Math.abs(one.at.y - one.points[0]!.y)).toBeLessThan(8);
-      expect(one.at.x).toBeLessThan(picture.width);
-    }
   });
 });

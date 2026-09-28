@@ -733,7 +733,7 @@ startedAt?: string,
  */
 endedAt?: string, 
 /**
- * Whether a pause has been asked for and the step under way has not reported yet. The run is
+ * Whether a pause has been asked for and the action under way has not ended yet. The run is
  * still `running` — this is the gap between the button and the pause
  * ([`amenbo_core::ops::automation_stop::pause`]).
  */
@@ -831,6 +831,29 @@ pageSize: number,
 byEnding: AutomationRunEndingsDto, };
 
 /**
+ * **One pass through one spot**, keyed the way the automation's picture keys its boxes and lines.
+ */
+export type AutomationRunPassDto = { 
+/**
+ * The placement. Absent where the run's copy names no spot.
+ */
+placement?: number, 
+/**
+ * How the last step the run opened there stands.
+ */
+status: "running" | "done" | "failed" | "stopped", 
+/**
+ * The action's way out it left the spot by ([`AutomationExitDto`]'s `id`). Absent while it is
+ * still inside the spot, and where it left by no way out of the action.
+ */
+exit?: number, 
+/**
+ * The line on the automation's picture it walked from there ([`AutomationEdgeDto`]'s `id`).
+ * Absent while it is still inside the spot, and where nothing was drawn after the way out.
+ */
+edge?: number, };
+
+/**
  * **A run, just launched** — what the press is answered with.
  *
  * A run says nothing beyond its id: it starts on the spot, nothing being in line ahead of it
@@ -852,6 +875,21 @@ export type AutomationRunTaskDto = { id: number, ref: string, title: string,
  * stretch per task, so this and not the step count says how many tasks in a reader is.
  */
 seq: number, };
+
+/**
+ * **The way a run has come on the task it is working** (`amenbo_core::ops::automation_run::Trail`)
+ * — what the picture on its pane lights up. It starts again with each task the run takes.
+ */
+export type AutomationRunTrailDto = { 
+/**
+ * The spots it passed, in the order it passed them. A spot passed twice is here twice.
+ */
+passed: Array<AutomationRunPassDto>, 
+/**
+ * The placement whose step is under way, or the one the run is about to open or waiting on.
+ * Absent for a run that is not going.
+ */
+at?: number, };
 
 /**
  * **One step inside an action**: the terminal it stands up, and what it declares inside the picture.

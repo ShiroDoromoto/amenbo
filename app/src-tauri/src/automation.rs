@@ -66,7 +66,8 @@ use crate::dto::{
     AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
-    AutomationRunHistoryDto, AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto,
+    AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunStartedDto, AutomationRunTaskDto,
+    AutomationRunTrailDto, AutomationStepDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
 };
@@ -1595,6 +1596,29 @@ pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBack
     }))
 }
 
+/// **The way a run has come on the task it is working** (`automation_run::trail`) — the spots it
+/// passed with the way out and the line it left each by, and the spot it stands at now. What the
+/// picture on the run's pane lights up.
+#[tauri::command]
+pub fn automation_run_trail(run_id: i64) -> Result<AutomationRunTrailDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_run_trail");
+    let store = open_store_read()?;
+    let trail = automation_run::trail(store.read_model().conn(), run_id)?;
+    Ok(AutomationRunTrailDto {
+        passed: trail
+            .passed
+            .into_iter()
+            .map(|pass| AutomationRunPassDto {
+                placement: pass.placement_id,
+                status: pass.status.as_str(),
+                exit: pass.exit_id,
+                edge: pass.edge_id,
+            })
+            .collect(),
+        at: trail.at,
+    })
+}
+
 /// The event the workspace hears when a step of a run is ready to be drawn.
 ///
 /// It travels as an event rather than as an answer because of where the two ends are: the press that
@@ -1641,7 +1665,7 @@ pub fn automation_step_open(
     open_one(&app, &mut store, run_id, def_id)
 }
 
-/// **Pause a run** — it settles at the end of the step under way
+/// **Pause a run** — it settles at the end of the action under way
 /// ([`amenbo_core::ops::automation_stop::pause`]). Pressed on a row of the "running" tab.
 ///
 /// **It is not a `WriteAck` write**, for the reason [`automation_run_stop`] is not: what it moves is a
@@ -2074,8 +2098,9 @@ fn worked_task(
     }))
 }
 
-/// **Stop a run now** — what closing the pane a run is drawn in means
-/// (`app/src/shell/TerminalPane.tsx`), and what the "running" tab's third button presses.
+/// **Stop a run now** — what the "running" tab's third button presses. Closing the pane a run is
+/// drawn in does not stop it: that press is offered only once the run is over
+/// (`app/src/shell/TerminalPane.tsx`).
 ///
 /// The cleanup is core's and is the same one every other stop goes through
 /// ([`amenbo_core::ops::automation_stop::stop`]): the task the run was working goes to `todo`, and
@@ -2083,7 +2108,7 @@ fn worked_task(
 /// standing in the pane is this side's to end — it is a process this side started, and core has
 /// no window to end one from. The look the press wakes ends it (`crate::automation_watch`).
 ///
-/// **A run that is over already is not an error here.** The pane is closed by a person, and between
+/// **A run that is over already is not an error here.** The press is a person's, and between
 /// the last step reporting and the press there is a window in which the run has finished on its own;
 /// a refusal then would put a red sentence in front of somebody who did nothing wrong. What comes
 /// back says whether this press was the one that stopped it.

@@ -2004,8 +2004,9 @@ impl AutomationStoppedReason {
 
 /// **One launch of one automation.**
 ///
-/// `pause_requested` is the gap between the button and the pause: a step is under way and cannot be cut
-/// in half, so the request is recorded and the run reaches `paused` when that step reports.
+/// `pause_requested` is the gap between the button and the pause: an action is under way and is not cut
+/// in half, so the request is recorded and the run reaches `paused` when that action ends
+/// (`AMB-D-1002`).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationRun {
     pub id: i64,

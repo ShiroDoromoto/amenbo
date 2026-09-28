@@ -252,9 +252,9 @@ describe("the picture of the steps", () => {
     expect(near()).toEqual([false, false]);
   });
 
-  /// Every wire named at once was a column of words nobody was reading (`AMB-T-5698`): a wire keeps
-  /// its name where it touches the box picked, and the rest are drawn fainter.
-  it("names a wire only where it touches the box picked, and quiets the rest", async () => {
+  /// The wires took the right of the picture and crossed the tops of the boxes (`AMB-D-1001`): they
+  /// are read in the panel, and the picture draws and names none of them, whatever is picked.
+  it("draws and names no wire, whichever box is picked", async () => {
     const one = detail({
       placements: [
         step({ id: 1, name: "take" }),
@@ -268,20 +268,10 @@ describe("the picture of the steps", () => {
       wires: [{ id: 5, fromId: 1, fromExitName: "完了", fromPortName: "task", toId: 3, toPortName: "task" }],
     });
     const words = () => [...container.querySelectorAll("text.autopic__word")].map((one) => one.textContent);
-    const quiet = () => container.querySelector("polyline.autopic__line--wire")!.classList.contains("autopic__line--aside");
-
-    await render({ graph: one, onPickBox: vi.fn() });
-    expect(words().some((word) => word?.includes("task"))).toBe(false);
-    expect(quiet()).toBe(false);
-
-    await render({ graph: one, onPickBox: vi.fn(), selectedBoxId: 2 });
-    expect(words().some((word) => word?.includes("task"))).toBe(false);
-    expect(quiet()).toBe(true);
-
-    for (const picked of [1, 3]) {
+    for (const picked of [undefined, 1, 2, 3]) {
       await render({ graph: one, onPickBox: vi.fn(), selectedBoxId: picked });
-      expect(words().some((word) => word?.includes("task"))).toBe(true);
-      expect(quiet()).toBe(false);
+      expect(container.querySelectorAll("polyline.autopic__line")).toHaveLength(2);
+      expect(words().some((word) => word?.includes("task"))).toBe(false);
     }
   });
 
@@ -414,7 +404,6 @@ describe("what the picture marks, as the mock draws it", () => {
       "auto.pic.legendNext",
       "auto.pic.legendBack",
       "auto.pic.legendBranch",
-      "auto.pic.legendWire",
       "auto.pic.lap",
       "auto.pic.entry",
       "auto.pic.legendUnfed",

@@ -538,6 +538,7 @@ pub fn run() {
       automation::automation_running_page,
       automation::automation_run_cards,
       automation::automation_run_held_back,
+      automation::automation_run_trail,
       automation::automation_history_page,
       automation::automation_run_acknowledge,
       automation::automation_run_pause,

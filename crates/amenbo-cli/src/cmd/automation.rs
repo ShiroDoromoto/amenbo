@@ -789,7 +789,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let (value, line) = match &paused {
                 Paused::Asked(r) => (
                     json!({ "run": r.id, "state": "asked" }),
-                    format!("✓ Run {} pauses at the end of the step under way", r.id),
+                    format!("✓ Run {} pauses at the end of the action under way", r.id),
                 ),
                 Paused::Now(ended) => (
                     json!({ "run": ended.run.id, "state": "paused" }),

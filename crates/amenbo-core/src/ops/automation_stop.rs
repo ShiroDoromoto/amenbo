@@ -6,10 +6,15 @@
 //! two acts: release the task the run was holding, and leave a line on that task saying what became of
 //! it — unless the task is closed by then, which takes no line. A road per ending would have been a place per ending for one of the two to be forgotten.
 //!
-//! **Pausing is a request, not a stop.** A step under way cannot be cut in half — it is an agent in a
-//! terminal, mid-sentence — so pressing pause writes `pause_requested` and the run goes on until that
-//! step reports. What reads the flag is [`crate::ops::automation_report::done`], which is the only
-//! place that knows a step has finished.
+//! **Pausing is a request, not a stop.** An action under way is not cut in half — its step is an agent
+//! in a terminal, mid-sentence, or a built-in half way through its git — so pressing pause writes
+//! `pause_requested` and the run goes on until the action ends (`AMB-D-1002`). What reads the flag is
+//! [`crate::ops::automation_report::done`], which is the only place that knows a step has finished,
+//! and it takes hold only where the line out of that step leaves the action.
+//!
+//! **Canceling is for a paused run** ([`cancel`], `AMB-D-1002`). Nothing is under way then, so it ends
+//! the run at once and cuts nothing off. A run still going is refused: pause it first, or force-cancel
+//! it ([`stop`]), which ends it where it stands.
 //!
 //! **Paused holds its task.** The work is half done and nobody else should take it. Stopping does the
 //! opposite — hands the task back to `todo` — because a run that was cut off left no one carrying it.
@@ -49,7 +54,7 @@ pub enum Ending {
     Completed,
     /// It could not get to the end of the picture, for this reason.
     Failed(AutomationStoppedReason),
-    /// A person said stop — pressed it, or closed the run's pane.
+    /// A person canceled it — a paused run ([`cancel`]), or one still going, forced ([`stop`]).
     Canceled,
 }
 
@@ -78,7 +83,7 @@ impl Ending {
 /// What pressing pause did.
 #[derive(Clone, Debug)]
 pub enum Paused {
-    /// A step is under way. The run is still `running` and stops at the end of it.
+    /// An action is under way. The run is still `running` and stops at the end of it.
     Asked(AutomationRun),
     /// Nothing was under way, so it is `paused` already.
     Now(Ended),
@@ -331,7 +336,8 @@ fn why(ending: Ending) -> &'static str {
 
 // ───────────────────────────── pause, resume, stop ─────────────────────────────
 
-/// **Ask a run to pause.** It stops at the end of the step under way, not in the middle of one.
+/// **Ask a run to pause.** It stops at the end of the action under way, not in the middle of one —
+/// nor between two steps of one (`AMB-D-1002`).
 pub fn pause(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
     let before = live_run(tx, run_id)?;
     match before.status {
@@ -424,11 +430,34 @@ fn next_after_the_pause(
     })
 }
 
-/// **Stop a run now** — the terminal is closed wherever it is, and the cleanup runs.
+/// **Cancel a paused run** (`AMB-D-1002`) — it ends [`Ending::Canceled`], through the same cleanup as
+/// any other ending.
 ///
-/// This is what a person presses when pausing will not do, and what closing a run's pane means — both
-/// [`Ending::Canceled`]. It is also the door the watch comes through when a run has nowhere left to go,
-/// naming the failure. A run is not completed from here: that is the picture running out.
+/// **Only a paused run is canceled here.** Nothing is under way in one, so ending it cuts no work off.
+/// A run still going is refused with the two ways on: pause it and cancel it once it has stopped, or
+/// force-cancel it ([`stop`]) and have it end where it stands.
+pub fn cancel(tx: &WriteTx<'_>, run_id: i64) -> Result<Ended> {
+    let before = live_run(tx, run_id)?;
+    match before.status {
+        AutomationRunStatus::Paused => ended(tx, before, Ending::Canceled),
+        AutomationRunStatus::Running => Err(Error::invalid(format!(
+            "run '{run_id}' is running, and only a paused run is canceled. Pause it first and cancel \
+             it once it has stopped, or force-cancel it to end it where it stands"
+        ))),
+        other => Err(Error::invalid(format!(
+            "run '{run_id}' is {} — it is over already",
+            other.as_str()
+        ))),
+    }
+}
+
+/// **Stop a run now** — the force-cancel (`AMB-D-1002`): the terminal is closed wherever it is, and
+/// the cleanup runs.
+///
+/// This is what a person presses when waiting for the action under way will not do —
+/// [`Ending::Canceled`], where a paused run is canceled by [`cancel`] instead. It is also the door the
+/// watch comes through when a run has nowhere left to go, naming the failure. A run is not completed
+/// from here: that is the picture running out.
 pub fn stop(tx: &WriteTx<'_>, run_id: i64, ending: Ending) -> Result<Ended> {
     if ending == Ending::Completed {
         return Err(Error::invalid(format!(
@@ -485,7 +514,8 @@ pub fn acknowledge(tx: &WriteTx<'_>, run_id: i64, by: ActorKind) -> Result<Autom
 /// - **the run is over** — its step was closed as it ended ([`ended`]), and the app ends the terminal
 ///   of a run that is over, so the program ends after it.
 ///
-/// A paused run fails too: pausing waits for the step under way to report, and this one never will.
+/// A run asked to pause fails too: pausing waits for the action under way to end, and this step never
+/// will.
 pub fn step_ended(tx: &WriteTx<'_>, run_step_id: i64) -> Result<Option<Ended>> {
     let Some(step) = read::automation_run_step(tx.conn(), run_step_id)? else { return Ok(None) };
     if step.status != AutomationRunStepStatus::Running {
@@ -712,7 +742,7 @@ mod tests {
     }
 
     #[test]
-    fn pausing_a_running_run_waits_for_the_step_under_way() {
+    fn pausing_a_running_run_waits_for_the_action_under_way() {
         with_tx(|tx| {
             let p = picture(tx, false);
             let run = a_run(tx, &p.automation);
@@ -720,11 +750,11 @@ mod tests {
             a_task_in_hand(tx, p.project, step.run_step.id);
 
             let asked = pause(tx, run.id).expect("pause");
-            assert!(matches!(asked, Paused::Asked(_)), "a step is under way");
+            assert!(matches!(asked, Paused::Asked(_)), "an action is under way");
             assert_eq!(status_of(tx, run.id), AutomationRunStatus::Running, "not cut in half");
 
             let next = done(tx, step.run_step.id, None, "Looked at it.").expect("done");
-            assert!(matches!(next, Next::Paused(_)), "the pause is answered at the end of the step");
+            assert!(matches!(next, Next::Paused(_)), "the pause is answered at the end of the action");
             assert_eq!(status_of(tx, run.id), AutomationRunStatus::Paused);
             assert!(
                 read::automation_run_ids_running(tx.conn()).expect("running").is_empty(),
@@ -1541,6 +1571,71 @@ mod tests {
                 read::automation_run(tx.conn(), run.id).expect("read").expect("run").stopped_reason,
                 Some(AutomationStoppedReason::MaxTimes),
             );
+        });
+    }
+
+    /// **A pause does not take hold between two steps of one action** (`AMB-D-1002`): the line from
+    /// the first to the second is inside the action, so the run goes on to the second and is still
+    /// asked to pause at the end of the action.
+    #[test]
+    fn a_pause_waits_past_a_step_that_goes_on_inside_its_action() {
+        with_tx(|tx| {
+            let p = two_steps_inside(tx, false);
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            a_task_in_hand(tx, p.project, first.run_step.id);
+            let next = stepped_to(done(tx, first.run_step.id, None, "Looked.").expect("done"));
+            let write = opened_step(tx, &run, &next);
+
+            pause(tx, run.id).expect("pause");
+            let next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
+            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "on to the second step");
+            let still = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+            assert_eq!(still.status, AutomationRunStatus::Running, "not paused half way through the action");
+            assert!(still.pause_requested, "and still asked to pause at the end of it");
+        });
+    }
+
+    /// **A paused run is canceled at once** (`AMB-D-1002`), and its task goes back as any cancel's
+    /// does: to `todo`, the person's, with a line saying so.
+    #[test]
+    fn canceling_a_paused_run_ends_it_and_hands_the_task_back() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, step.run_step.id);
+            pause(tx, run.id).expect("pause");
+            done(tx, step.run_step.id, None, "Looked at it.").expect("done");
+
+            let ended = cancel(tx, run.id).expect("cancel");
+            assert_eq!(ended.run.status, AutomationRunStatus::Canceled);
+            assert!(ended.run.ended_at.is_some());
+            let after = read::task(tx.conn(), task).expect("read").expect("the task");
+            assert_eq!(after.status, TaskStatus::Todo);
+            assert_eq!(after.assignee_kind, Some(ActorKind::Human), "it is the person's turn");
+            assert!(!comments_on(tx, task).is_empty(), "and it was told what happened");
+        });
+    }
+
+    /// **A run still going is not canceled** (`AMB-D-1002`): the refusal names the two ways on, and
+    /// the run and its task are left as they were. A run that is over is refused as well.
+    #[test]
+    fn canceling_a_run_still_going_is_refused_and_leaves_it_going() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, step.run_step.id);
+
+            let refused = cancel(tx, run.id).expect_err("a running run is not canceled");
+            let said = refused.to_string();
+            assert!(said.contains("Pause it first") && said.contains("force-cancel"), "{said}");
+            assert_eq!(status_of(tx, run.id), AutomationRunStatus::Running);
+            assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::InProgress));
+
+            stop(tx, run.id, Ending::Canceled).expect("force-cancel");
+            assert!(cancel(tx, run.id).is_err(), "a run that is over has nothing to cancel");
         });
     }
 }

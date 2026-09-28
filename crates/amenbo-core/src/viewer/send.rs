@@ -722,8 +722,30 @@ fn drain(
         left.build = the_build_that_answered(answered.build);
         // **Zero is "not known"**, which is what a carrier that has never been told stands at, so the
         // check begins with the answer to the first write rather than against a number nothing gave.
+        //
+        // **Short is a failure, and further on is not.** The Worker writes a part in one batch, so an
+        // answer that stands further on than this device expected is one that wrote everything it was
+        // handed and more besides — the remembered number was stale, because a write was taken and its
+        // answer never came back, or something else wrote there. Calling that a failure kept the records
+        // queued to be sent again, and every send after it was taken, paid for in the day's rows, and
+        // reported as not written: the queue stopped moving and the allowance went on the same
+        // front.
+        //
+        // **The server's answer is kept either way.** A check against a number nothing will ever correct
+        // fails on every write after it, so even a short answer re-anchors, and the next write is checked
+        // against where the server says it stands.
         let expected = left.seq + records.len() as i64;
-        if left.seq != 0 && answered.seq != expected {
+        let known = left.seq != 0;
+        let short = known && answered.seq < expected;
+        if known && answered.seq != expected {
+            tracing::info!(
+                "the Viewer's server stood at {} after part {at} of {parts}, where this device expected \
+                 {expected} — taking its number",
+                answered.seq,
+            );
+        }
+        left.seq = answered.seq;
+        if short {
             return Err(Error::invalid(format!(
                 "the Viewer's server took part {at} of {parts} and did not write it: {} records should \
                  have carried the ordering to {expected}, and it answered {} — what it did not write is \
@@ -732,7 +754,6 @@ fn drain(
                 answered.seq,
             )));
         }
-        left.seq = answered.seq;
         store.drop_viewer_front(records.len() as i64)?;
         landed += records.len();
         // A Worker that took something is one that is not asking to be left alone any more.
@@ -1239,6 +1260,56 @@ mod tests {
         assert!(refused.to_string().contains("did not write it"), "{refused}");
         assert_eq!(store.viewer_waiting().unwrap(), 2, "nothing is dropped from a turn that failed");
         assert_ne!(left.placed, 3, "a turn that did not empty settles no version");
+    }
+
+    /// **A Worker standing further on than this device remembers wrote what it was handed.**
+    /// A write that was taken and never answered leaves the remembered number behind for good, and calling
+    /// every answer after it a failure kept the same front queued, sent and paid for on every turn. The
+    /// records are dropped, the turn settles, and the next write is checked against the server's number.
+    #[test]
+    fn a_server_further_on_than_remembered_took_the_records() {
+        let mut store = store_at("seq-ahead");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        // Remembered at 10; a write this device never heard back from carried the server to 510.
+        host.set_replies("/records", [took(512, 4), took(513, 2)]);
+        store.enqueue_viewer(&[waiting("task/1"), waiting("task/2")]).unwrap();
+
+        let server = Server::of_device(&store).unwrap().unwrap();
+        let mut left = Carried { seq: 10, ..Carried::default() };
+        let placed = drain(&store, &server, &mut left, 3, Utc::now()).unwrap();
+
+        assert_eq!(placed, 2);
+        assert_eq!(store.viewer_waiting().unwrap(), 0, "what the server took is not sent again");
+        assert_eq!(left.seq, 512, "the server's number is the one kept");
+        assert_eq!(left.placed, 3, "the queue emptied, so the turn settles");
+
+        // The next write is checked against where the server said it stood.
+        store.enqueue_viewer(&[waiting("task/3")]).unwrap();
+        drain(&store, &server, &mut left, 4, Utc::now()).unwrap();
+        assert_eq!(left.seq, 513);
+    }
+
+    /// **A short answer is still a failure, and still re-anchors.** The records stay queued, but the next
+    /// write is checked against the number the server gave rather than the one that was already wrong —
+    /// otherwise one short answer would fail every write after it.
+    #[test]
+    fn a_short_answer_keeps_the_records_and_the_servers_number() {
+        let mut store = store_at("seq-short");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        host.set_replies("/records", [took(11, 1), took(13, 2)]);
+        store.enqueue_viewer(&[waiting("task/1"), waiting("task/2")]).unwrap();
+
+        let server = Server::of_device(&store).unwrap().unwrap();
+        let mut left = Carried { seq: 10, ..Carried::default() };
+        assert!(drain(&store, &server, &mut left, 3, Utc::now()).is_err());
+        assert_eq!(left.seq, 11);
+        assert_eq!(store.viewer_waiting().unwrap(), 2);
+
+        let placed = drain(&store, &server, &mut left, 3, Utc::now()).unwrap();
+        assert_eq!(placed, 2, "checked against 11, the retry adds up");
+        assert_eq!(left.seq, 13);
     }
 
     /// **A carrier that has not been told where the Worker stands trusts the first answer**, and checks

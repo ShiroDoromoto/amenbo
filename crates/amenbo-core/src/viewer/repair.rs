@@ -172,8 +172,9 @@ fn compared_with(store: &Store, holds: &Holding, queue: bool) -> Result<Option<D
     // **Where the server stands is taken from the server**, which nothing else here can do. The ordering a
     // send checks its answer against is remembered from the last answer, and a server written by something
     // else — a second machine, a placement that was taken and never answered for — stands somewhere that
-    // memory does not name. Every send after that fails the check and nothing lands again, so a comparison
-    // that did not re-anchor this would report a drift it had just made permanent.
+    // memory does not name. A send re-anchors on its first answer too, but that answer is
+    // checked against the stale number first, and one standing short of it is reported as a failure — so
+    // the comparison, which already holds the server's own word, sets it before anything is sent.
     let mut left = store.viewer_carried()?;
     left.seq = holds.seq;
     store.set_viewer_carried(&left)?;

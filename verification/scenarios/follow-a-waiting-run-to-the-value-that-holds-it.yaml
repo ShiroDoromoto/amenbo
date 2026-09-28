@@ -20,7 +20,7 @@ description: >
   the category panel with the category marked. Finish the first task, close the first value, and
   read the run take the second task within 30 seconds.
 given:
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
 
   # The category whose values are stages: ordered and closable. Setting it to hold a task until the
   # values before its own are closed is a step of the road, since a world is not stood up with it.

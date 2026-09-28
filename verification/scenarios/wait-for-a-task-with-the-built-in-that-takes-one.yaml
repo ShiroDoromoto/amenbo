@@ -18,7 +18,7 @@ description: >
   seconds for the run's next look, and read the task gone to in_progress and the agent's step in the
   run's pane working it.
 given:
-  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
 
   # Left unhanded: the built-in's filter, unanswered, takes the tasks given to the AI, so this one is
   # not a task the run can take until it is handed over. Its creation is left open for the same reason.

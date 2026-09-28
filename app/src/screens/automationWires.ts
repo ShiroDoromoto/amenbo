@@ -153,3 +153,25 @@ export function wireOutOf(
   );
   return all[all.length - 1];
 }
+
+/** One input of a box as its card says it: the name, and which box hands it its value. */
+export type CardInput = {
+  name: string;
+  /** The box the wire into it comes from — `ACTION_BOUNDARY` for what the action itself was handed.
+   *  Absent where no wire reaches it. */
+  from?: number;
+};
+
+/**
+ * **What a step's card on an action's picture says it takes in and hands on** (`AMB-T-5798`) — its
+ * inputs, each with the box its value comes from, and the outputs of its ways out, each name once.
+ * The card writes them as words, not lines (`AMB-D-1001`): a reader sees what flows through a step
+ * without opening its panel, and the picture keeps no line running across the boxes.
+ */
+export function cardIo(graph: PicGraph, boxId: number): { inputs: CardInput[]; outputs: string[] } {
+  const box = graph.boxes.find((one) => one.id === boxId);
+  if (box === undefined) return { inputs: [], outputs: [] };
+  const inputs = box.inputs.map((port) => ({ name: port.name, from: wireInto(graph, boxId, port.name)?.fromId }));
+  const outputs = [...new Set(box.exits.flatMap((exit) => exit.outputs.map((port) => port.name)))];
+  return { inputs, outputs };
+}

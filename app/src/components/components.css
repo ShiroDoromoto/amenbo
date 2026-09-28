@@ -1419,6 +1419,9 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autopic__node--on .autopic__no { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); }
 .autopic__lib { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; }
+/* What a step takes in and hands on, on an action's picture — a line each, cut short where it runs out. */
+.autopic__io { display: flex; flex-direction: column; align-items: stretch; gap: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autopic__iopart { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A box that takes the next task, said over its top-right corner — where a stretch begins. */
 .autopic__takes {
   position: absolute; transform: translate(-100%, calc(-100% - 2px));

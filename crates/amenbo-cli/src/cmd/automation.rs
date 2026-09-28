@@ -804,11 +804,14 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let line = format!("✓ Run {} picks up at {} ({})", r.id, next.name, next.id);
             write_envelope(flags, "automation.resume", "automation_run", value, None, false, line);
         }
-        AutomationCmd::Stop { run } => {
-            let ended = store
-                .automation_stop(run, Ending::Canceled)
-                .map_err(CliError::from)?;
-            write_envelope(flags, "automation.stop", "automation_run", serde_json::to_value(&ended.run).unwrap(), None, false, format!("✓ Run {} canceled", ended.run.id));
+        AutomationCmd::Cancel { run, force } => {
+            // Only a paused run is canceled; `--force` ends one still going where it stands (`AMB-D-1002`).
+            let ended = match force {
+                true => store.automation_stop(run, Ending::Canceled),
+                false => store.automation_cancel(run),
+            }
+            .map_err(CliError::from)?;
+            write_envelope(flags, "automation.cancel", "automation_run", serde_json::to_value(&ended.run).unwrap(), None, false, format!("✓ Run {} canceled", ended.run.id));
         }
         AutomationCmd::Acknowledge { run } => {
             let r = store

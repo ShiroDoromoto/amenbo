@@ -1,5 +1,5 @@
 # The terminal a run opens for a step has the same `amenbo` on its PATH as any other, so the agent
-# working that step can type `automation start` and set a second run going, or `automation stop` and
+# working that step can type `automation start` and set a second run going, or `automation cancel` and
 # put its own down. Neither is the agent's to do: the work came with the text the step starts on, and
 # what the run does next is the run's. So the binary asks where it is standing before it reads or
 # writes anything, and turns those verbs away there. The same holds past `automation`:
@@ -14,7 +14,7 @@ id: reach-for-a-run-verb-from-inside-a-step
 title: A verb that drives a run, or closes a task, is turned away in the pane that run is drawn in
 description: >
   Start a run, and in the pane it is drawn in reach for the two verbs that would put it down — pause
-  and stop — as the agent working the step could. Each is turned away, and the running tab still says
+  and cancel — as the agent working the step could. Each is turned away, and the running tab still says
   the run is under way. Both are walked because they are two ways to the same end: a build where only
   one arm of the guard was written would turn the first away and let the second through. Then reach
   for `task done` on a task of the project: it is turned away too, and the task is still to do — and
@@ -136,7 +136,7 @@ steps_gui:
     op: command-in-pane
     with:
       target: run
-      command: automation stop <run>
+      command: automation cancel <run> --force
       refused: automation_outside_only
 
   - type: action

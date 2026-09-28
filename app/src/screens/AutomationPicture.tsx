@@ -247,8 +247,9 @@ export function AutomationPicture({
                   <polyline
                     className={drawn}
                     points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                    // Into the box it goes to. A line that goes nowhere ends in its words instead.
-                    markerEnd={line.points.length > 2 ? head(headOf(line)) : undefined}
+                    // Into the box it goes to. A line that goes nowhere ends in its words instead, and one
+                    // that joins others on its lane ends there.
+                    markerEnd={line.points.length > 2 && line.joins !== true ? head(headOf(line)) : undefined}
                   />
                   {/* Last in the group, so it lies over the line it traces. */}
                   {edgeId !== undefined && (

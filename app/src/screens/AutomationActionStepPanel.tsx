@@ -85,7 +85,7 @@ function ExitCard({
       edit={isError ? undefined : <ExitEdit owner="step" ownerId={step.id} exit={exit} run={run} />}
       below={
         <>
-          {adding && <AutomationOutputAdd exit={exit} onClose={onAdded} />}
+          {adding && <AutomationOutputAdd exit={exit} run={run} onClose={onAdded} />}
           <NextRow
             graph={actionGraph(action)!}
             picture="action"

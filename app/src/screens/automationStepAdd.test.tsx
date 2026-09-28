@@ -206,12 +206,30 @@ describe("making an action on the spot", () => {
 });
 
 describe("declaring what a way out hands on", () => {
-  async function open(outputs: { name: string; kind: "value"; required: boolean }[]) {
+  // The panel's `run`, as the panels spell it: a refusal is kept rather than thrown.
+  const refused: unknown[] = [];
+  const run = (write: Promise<void> | void) =>
+    Promise.resolve(write)
+      .then(() => true)
+      .catch((e: unknown) => {
+        refused.push(e);
+        return false;
+      });
+
+  beforeEach(() => {
+    refused.length = 0;
+  });
+
+  async function open(
+    outputs: { name: string; kind: "value"; required: boolean }[],
+    onClose: () => void = () => undefined,
+  ) {
     await act(async () => {
       root.render(
         createElement(AutomationOutputAdd, {
           exit: { id: 3, name: "drafted", outputs },
-          onClose: () => undefined,
+          run,
+          onClose,
         }),
       );
     });
@@ -241,6 +259,26 @@ describe("declaring what a way out hands on", () => {
     });
   });
 
+  it("is put away once the write is taken", async () => {
+    const onClose = vi.fn();
+    hoisted.output.mockResolvedValueOnce(undefined);
+    await open([], onClose);
+    await act(async () => button(t("auto.out.add")).click());
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  // The refusal goes to the panel's line, and the row stays so the name can be changed.
+  it("stays open when the write is refused", async () => {
+    const onClose = vi.fn();
+    const no = { code: "conflict", message_en: "drafted already hands that on" };
+    hoisted.output.mockRejectedValueOnce(no);
+    await open([], onClose);
+    await act(async () => button(t("auto.out.add")).click());
+    expect(refused).toEqual([no]);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(boxes()[0]!.value).toBe("drafted");
+  });
+
   // Only a built-in takes the task a run works, and core refuses a way out that says it hands it on.
   it("does not offer the task a run works", async () => {
     await open([]);
@@ -251,9 +289,7 @@ describe("declaring what a way out hands on", () => {
   // A row in the card rather than a dialog: nothing half written is lost by putting it away.
   it("is put away by Escape or its ×", async () => {
     const onClose = vi.fn();
-    await act(async () => {
-      root.render(createElement(AutomationOutputAdd, { exit: { id: 3, name: "drafted", outputs: [] }, onClose }));
-    });
+    await open([], onClose);
     expect(document.body.querySelector(".modal__overlay")).toBeNull();
     await act(async () => {
       boxes()[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));

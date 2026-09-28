@@ -14,19 +14,26 @@
 //
 // **Escape or the × puts it away**, unlike the dialog that writes a step: there is a name and a kind
 // here and no prompt half written, so nothing is lost by closing it.
+//
+// **The write goes through the panel's `run`, and the row stays until it is taken.** A refusal (the
+// name already handed on by this way out) lands on the panel's one line for it with the row still
+// open, so the name can be changed rather than typed again.
 import { useState } from "react";
 import { addAutomationOutput } from "../core/automations";
 import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { Icon } from "../components/Icon";
 import { OUTPUT_KINDS } from "./automationPortKinds";
+import type { Run } from "./automationPanel";
 import type { AutomationExitDto } from "../bindings/bindings";
 
 export function AutomationOutputAdd({
   exit,
+  run,
   onClose,
 }: {
   exit: AutomationExitDto;
+  run: Run;
   onClose: () => void;
 }) {
   // Nothing written yet. The way out's own name stands in until it is, and `null` is what says so.
@@ -35,10 +42,9 @@ export function AutomationOutputAdd({
   const [required, setRequired] = useState(true);
   const name = own ?? (exit.outputs.length === 0 ? exit.name : "");
 
-  const add = () => {
+  const add = async () => {
     if (name.trim() === "") return;
-    void addAutomationOutput(exit.id, { name: name.trim(), kind, required });
-    onClose();
+    if (await run(addAutomationOutput(exit.id, { name: name.trim(), kind, required }))) onClose();
   };
 
   return (
@@ -52,7 +58,7 @@ export function AutomationOutputAdd({
         value={name}
         onChange={(e) => setOwn(e.target.value)}
         onKeyDown={(e) => {
-          if (isEnterSubmit(e)) add();
+          if (isEnterSubmit(e)) void add();
           else if (e.key === "Escape") onClose();
         }}
       />
@@ -78,7 +84,7 @@ export function AutomationOutputAdd({
       >
         {t("auto.decl.required")}
       </button>
-      <button type="button" className="btn btn--primary" disabled={name.trim() === ""} onClick={add}>
+      <button type="button" className="btn btn--primary" disabled={name.trim() === ""} onClick={() => void add()}>
         {t("auto.out.add")}
       </button>
       <button type="button" className="autoout__close" aria-label={t("auto.add.cancel")} onClick={onClose}>

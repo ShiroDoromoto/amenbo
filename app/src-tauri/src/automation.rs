@@ -66,7 +66,8 @@ use crate::dto::{
     AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
-    AutomationRunHistoryDto, AutomationRunStartedDto, AutomationRunTaskDto, AutomationStepDto,
+    AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunStartedDto, AutomationRunTaskDto,
+    AutomationRunTrailDto, AutomationStepDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
 };
@@ -1593,6 +1594,29 @@ pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBack
         first_start: held.first_start.map(|day| day.format("%Y-%m-%d").to_string()),
         drafts: held.drafts,
     }))
+}
+
+/// **The way a run has come on the task it is working** (`automation_run::trail`) — the spots it
+/// passed with the way out and the line it left each by, and the spot it stands at now. What the
+/// picture on the run's pane lights up.
+#[tauri::command]
+pub fn automation_run_trail(run_id: i64) -> Result<AutomationRunTrailDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_run_trail");
+    let store = open_store_read()?;
+    let trail = automation_run::trail(store.read_model().conn(), run_id)?;
+    Ok(AutomationRunTrailDto {
+        passed: trail
+            .passed
+            .into_iter()
+            .map(|pass| AutomationRunPassDto {
+                placement: pass.placement_id,
+                status: pass.status.as_str(),
+                exit: pass.exit_id,
+                edge: pass.edge_id,
+            })
+            .collect(),
+        at: trail.at,
+    })
 }
 
 /// The event the workspace hears when a step of a run is ready to be drawn.

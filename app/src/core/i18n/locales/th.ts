@@ -1025,6 +1025,8 @@ export const th: Translation = {
     "auto.step.oneADecisionALine": "บรรทัดละหนึ่ง (เช่น AMB-D-12)",
     "auto.step.inputs": "อินพุต",
     "auto.step.unwired": "ไม่มีอะไรไปถึง",
+    "auto.step.joined": "เชื่อมกับเอาต์พุต “{name}” ของขั้นตอน {no} ({step}) แล้ว",
+    "auto.step.joinedUndo": "เลิกทำ",
     "auto.step.atLaunch": "ส่งให้ตอนเริ่มการรัน",
     "auto.step.exits": "ทางออก",
     "auto.step.modelDefault": "ค่าเริ่มต้นของเอเจนต์เอง",

@@ -1041,6 +1041,8 @@ export const pl: Translation = {
     "auto.step.oneADecisionALine": "Jedna w wierszu (np. AMB-D-12)",
     "auto.step.inputs": "Wejścia",
     "auto.step.unwired": "nic do niego nie dociera",
+    "auto.step.joined": "Połączono z wynikiem „{name}” kroku {no}, {step}",
+    "auto.step.joinedUndo": "Cofnij",
     "auto.step.atLaunch": "przekazywane przy starcie przebiegu",
     "auto.step.exits": "Wyjścia",
     "auto.step.modelDefault": "własna wartość domyślna agenta",

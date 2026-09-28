@@ -12,7 +12,7 @@
 // (`amenbo_core::ops::automation::wire_add`), so an output of another kind in the list would be a
 // choice that is refused the moment it is made.
 import type { AutomationPortDto, AutomationWireDto } from "../bindings/bindings";
-import { ACTION_BOUNDARY, type PicGraph } from "./automationLayout";
+import { ACTION_BOUNDARY, pictureOrder, type PicGraph } from "./automationLayout";
 
 /** One thing that could fill an input: the way out of the box that hands it on. */
 export type WireChoice = {
@@ -85,6 +85,31 @@ export function wireChoices(
     }
   }
   return out;
+}
+
+/**
+ * **The output a new input is joined to as it is declared** (`AMB-T-5799`): one of the same name and
+ * kind, on a way out of a step a run comes to before this one — the nearest of them, the one with the
+ * highest number on the picture. Nothing where no step before it hands one on, and the input then
+ * starts with nothing reaching it, as it always has.
+ *
+ * "Before" is a line leading down from that step to this one, not a lower number: a step on a branch
+ * beside this one is numbered first, and hands nothing to a run that never passes it.
+ */
+export function sameNameBefore(
+  graph: PicGraph,
+  boxId: number,
+  input: Pick<AutomationPortDto, "name" | "kind">,
+): WireChoice | undefined {
+  const order = pictureOrder(graph);
+  let nearest: WireChoice | undefined;
+  for (const one of wireChoices(graph, boxId, { ...input, required: false })) {
+    if (one.boxId === ACTION_BOUNDARY || one.boxId === boxId || one.portName !== input.name) continue;
+    if (!order.goesBack(boxId, one.boxId)) continue;
+    const no = order.numberOf.get(one.boxId) ?? 0;
+    if (nearest === undefined || no > (order.numberOf.get(nearest.boxId) ?? 0)) nearest = one;
+  }
+  return nearest;
 }
 
 /**

@@ -13,6 +13,12 @@
 // **A wire is picked from a list, not drawn** (`./automationWires`), the way it is on an automation,
 // and what does not fit is not offered.
 //
+// **An input declared here is joined to the output of the same name before it** (`AMB-T-5799`) — the
+// nearest step a run comes to first that hands one on. Naming them alike is how a builder says they
+// are the same thing, so starting from "nothing reaches it" asked for a second pick that only
+// repeated the name. The panel says what it joined, with a press that takes it back, and the
+// pulldown picks another as it always did.
+//
 // **What each part is, is said by its shape, not by a sentence under it** (`AMB-T-5522`): the name is
 // the panel's head (`./AutomationActionBuildScreen`), the entry is a switch, a declaration is a chip
 // with its "⋯", and a way out is a card (`./automationDeclParts`).
@@ -36,11 +42,11 @@ import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import { ErrorNote } from "../components/ErrorNote";
-import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT, fed } from "./automationLayout";
+import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT, fed, pictureOrder } from "./automationLayout";
 import { DeclEdit, choicesOfKinds, exitLabel, NextRow, useDraft, type Run } from "./automationPanel";
 import { DeclItem, DeclSec, ExitEdit, OutputPlus, PortChip, Sec, Switch } from "./automationDeclParts";
 import { ExitMark } from "./automationParts";
-import { choiceKey, wireChoices, wireInto } from "./automationWires";
+import { choiceKey, sameNameBefore, wireChoices, wireInto } from "./automationWires";
 import { AutomationOutputAdd } from "./AutomationOutputAdd";
 import { PORT_KINDS } from "./automationPortKinds";
 import type {
@@ -238,9 +244,12 @@ export function AutomationActionStepPanel({
   // The way out whose card has the row open that declares one more thing it hands on.
   const [adding, setAdding] = useState<number | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  // The input just joined to the output of the same name before it, said until the next write.
+  const [joined, setJoined] = useState<{ input: string; no: number; step: string; port: string } | null>(null);
 
   const run: Run = (write) => {
     setRefused(null);
+    setJoined(null);
     return Promise.resolve(write)
       .then(() => true)
       .catch((e: unknown) => {
@@ -299,18 +308,51 @@ export function AutomationActionStepPanel({
         title={t("auto.decl.inputs")}
         what={t("auto.decl.inputName")}
         kinds={choicesOfKinds(PORT_KINDS)}
-        onAdd={(declared, kind) =>
-          run(
-            declareAutomationInput("step", step.id, {
-              name: declared,
-              kind: kind as AutomationPortDto["kind"],
-            }),
-          )
-        }
+        onAdd={async (declared, kind) => {
+          const port = { name: declared, kind: kind as AutomationPortDto["kind"] };
+          // Read off the picture before the write: the input does not have to exist to find an output
+          // it could be joined to.
+          const graph = actionGraph(action)!;
+          const from = sameNameBefore(graph, step.id, port);
+          if (!(await run(declareAutomationInput("step", step.id, port)))) return false;
+          if (from === undefined) return true;
+          const wired = await run(
+            setAutomationWire(
+              "action",
+              { boxId: from.boxId, exitName: from.exitName, portName: from.portName },
+              { boxId: step.id, portName: declared },
+            ),
+          );
+          if (wired) {
+            setJoined({
+              input: declared,
+              no: pictureOrder(graph).numberOf.get(from.boxId) ?? 0,
+              step: from.boxName,
+              port: from.portName,
+            });
+          }
+          return true;
+        }}
       >
         {step.inputs.map((input) => (
           <InputRow key={input.name} action={action} step={step} input={input} run={run} />
         ))}
+        {joined !== null && (
+          <div className="autostep__joined" role="status">
+            <span>{tf("auto.step.joined", { no: joined.no, step: joined.step, name: joined.port })}</span>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                const now = wireInto(actionGraph(action)!, step.id, joined.input);
+                if (now === undefined) setJoined(null);
+                else void run(clearAutomationWire(now.id));
+              }}
+            >
+              {t("auto.step.joinedUndo")}
+            </button>
+          </div>
+        )}
       </DeclSec>
 
       <DeclSec

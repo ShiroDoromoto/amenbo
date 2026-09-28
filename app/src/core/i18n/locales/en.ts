@@ -1269,6 +1269,8 @@ const ui = {
   "auto.step.oneADecisionALine": "One a line (e.g. AMB-D-12)",
   "auto.step.inputs": "Inputs",
   "auto.step.unwired": "nothing reaches it",
+  "auto.step.joined": "Joined to the output “{name}” of step {no}, {step}",
+  "auto.step.joinedUndo": "Undo",
   "auto.step.atLaunch": "handed over as the run starts",
   "auto.step.exits": "Exits",
   "auto.step.modelDefault": "the agent's own default",

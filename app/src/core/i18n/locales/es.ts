@@ -1036,6 +1036,8 @@ export const es: Translation = {
     "auto.step.oneADecisionALine": "Una por línea (p. ej., AMB-D-12)",
     "auto.step.inputs": "Entradas",
     "auto.step.unwired": "no llega nada",
+    "auto.step.joined": "Conectado al resultado «{name}» del paso {no}, {step}",
+    "auto.step.joinedUndo": "Deshacer",
     "auto.step.atLaunch": "se entrega al iniciar la ejecución",
     "auto.step.exits": "Salidas",
     "auto.step.modelDefault": "el predeterminado del agente",

@@ -1604,6 +1604,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .autostep__atlaunch { color: var(--c-text-muted); font-size: var(--fs-md); }
 /* A required input nothing reaches the first time a run comes — the mark the picture puts on its box. */
 .autostep__unfed { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--c-heed); font-size: var(--fs-md); }
+/* What an input just declared was joined to, with the press that takes it back (`AMB-T-5799`). */
+.autostep__joined {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap;
+  padding: var(--s-1) var(--s-2); border-radius: var(--r-md);
+  background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text); font-size: var(--fs-md);
+}
 /* No markers: a way out carries a control beside its name, and a bullet in front of a row with a
    button on it reads as a list of buttons. */
 .autostep__exits { margin: 0; padding: 0; list-style: none; font-size: var(--fs-md); }

@@ -1030,6 +1030,8 @@ export const ja: Translation = {
     "auto.step.oneADecisionALine": "1行に1つ（例：AMB-D-12）",
     "auto.step.inputs": "入力",
     "auto.step.unwired": "何も届かない",
+    "auto.step.joined": "ステップ {no}「{step}」の出力「{name}」につなぎました",
+    "auto.step.joinedUndo": "元に戻す",
     "auto.step.atLaunch": "起動するときに渡す",
     "auto.step.exits": "出口",
     "auto.step.modelDefault": "エージェントの既定",

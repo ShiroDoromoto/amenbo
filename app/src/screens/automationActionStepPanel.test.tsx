@@ -11,8 +11,9 @@
 // **the error way out is drawn with that pulldown and nothing else**, being carried from birth and
 // neither renamed nor removed; **the task is handed on unless its toggle is let up**
 // (`AMB-D-965`); **a row to declare one more is there only after the section's add**; **the entry is
-// a switch, on and held at the step it names**; and **deleting asks first**, taking the panel's
-// selection with it.
+// a switch, on and held at the step it names**; **an input declared is joined to the output of the same
+// name on a step before it, said with a press that takes it back** (`AMB-T-5799`); and **deleting asks
+// first**, taking the panel's selection with it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,7 +61,7 @@ vi.mock("../core/boundFolders", () => ({
 // draws is the step's own value.
 vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { AutomationActionStepPanel } from "./AutomationActionStepPanel";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -195,6 +196,72 @@ describe("the panel of one step", () => {
     expect(hoisted.declareInput).toHaveBeenCalledWith("step", 11, {
       name: "draft",
       kind: "value",
+    });
+  });
+
+  describe("joining an input declared to the output of the same name before it (AMB-T-5799)", () => {
+    // Step 11 hands on "theme" and leads down to step 12, which declares one; step 13 stands on a
+    // branch beside it and hands on a "theme" too, which a run through 12 never passes.
+    function joined(): AutomationActionDetailDto {
+      const handsTheme = [{ id: 0, name: "完了", outputs: [{ name: "theme", kind: "value" as const, required: false }] }];
+      return action({
+        steps: [
+          step({ id: 11, name: "Ask for a theme", exits: handsTheme.map((one) => ({ ...one, id: 110 })) }),
+          step({ id: 12, name: "Write it up" }),
+          step({ id: 13, name: "Beside", exits: handsTheme.map((one) => ({ ...one, id: 130 })) }),
+        ],
+        edges: [{ id: 1, fromId: 11, exitName: "完了", toId: 12, ends: "go" }],
+      });
+    }
+    async function declare(name: string, over?: AutomationActionDetailDto) {
+      await render({ action: over ?? joined(), stepId: 12, onRemoved: () => undefined });
+      await act(async () => addOf(t("auto.decl.inputs")).click());
+      const line = declareLine(t("auto.decl.inputName"));
+      await typeInto(line.querySelector("input")!, name);
+      await act(async () => line.querySelector<HTMLButtonElement>("button")!.click());
+    }
+
+    it("wires it from the step a run comes to first, and says so", async () => {
+      await declare("theme");
+      expect(hoisted.setWire).toHaveBeenCalledWith(
+        "action",
+        { boxId: 11, exitName: "完了", portName: "theme" },
+        { boxId: 12, portName: "theme" },
+      );
+      expect(container.querySelector(".autostep__joined")?.textContent).toContain(
+        tf("auto.step.joined", { no: 1, step: "Ask for a theme", name: "theme" }),
+      );
+    });
+
+    it("takes the wire back on the press, once the picture has it", async () => {
+      await declare("theme");
+      const drawn = joined();
+      drawn.steps[1] = step({ id: 12, name: "Write it up", inputs: [{ name: "theme", kind: "value", required: false }] });
+      drawn.wires = [{ id: 77, fromId: 11, fromExitName: "完了", fromPortName: "theme", toId: 12, toPortName: "theme" }];
+      await render({ action: drawn, stepId: 12, onRemoved: () => undefined });
+      await act(async () => button(t("auto.step.joinedUndo")).click());
+      expect(hoisted.clearWire).toHaveBeenCalledWith(77);
+      expect(container.querySelector(".autostep__joined")).toBeNull();
+    });
+
+    it("wires nothing where no step before it hands on one of that name", async () => {
+      await declare("draft");
+      expect(hoisted.declareInput).toHaveBeenCalled();
+      expect(hoisted.setWire).not.toHaveBeenCalled();
+      expect(container.querySelector(".autostep__joined")).toBeNull();
+    });
+
+    it("wires nothing from a step on a branch beside it", async () => {
+      const beside = joined();
+      beside.edges = [];
+      await declare("theme", beside);
+      expect(hoisted.setWire).not.toHaveBeenCalled();
+    });
+
+    it("wires nothing where the input was refused", async () => {
+      hoisted.declareInput.mockRejectedValue(new Error("taken"));
+      await declare("theme");
+      expect(hoisted.setWire).not.toHaveBeenCalled();
     });
   });
 

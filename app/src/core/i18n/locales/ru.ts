@@ -1041,6 +1041,8 @@ export const ru: Translation = {
     "auto.step.oneADecisionALine": "По одной в строке (например, AMB-D-12)",
     "auto.step.inputs": "Входы",
     "auto.step.unwired": "до него ничего не доходит",
+    "auto.step.joined": "Связано с результатом «{name}» шага {no}, {step}",
+    "auto.step.joinedUndo": "Отменить",
     "auto.step.atLaunch": "передаётся при запуске",
     "auto.step.exits": "Выходы",
     "auto.step.modelDefault": "собственное значение агента по умолчанию",

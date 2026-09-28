@@ -1026,6 +1026,8 @@ export const zhHant: Translation = {
     "auto.step.oneADecisionALine": "每行一個（例：AMB-D-12）",
     "auto.step.inputs": "輸入",
     "auto.step.unwired": "沒有東西送到",
+    "auto.step.joined": "已連接到步驟 {no}「{step}」的輸出「{name}」",
+    "auto.step.joinedUndo": "復原",
     "auto.step.atLaunch": "在啟動時傳入",
     "auto.step.exits": "出口",
     "auto.step.modelDefault": "代理自己的預設值",

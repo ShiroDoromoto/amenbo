@@ -1025,6 +1025,8 @@ export const vi: Translation = {
     "auto.step.oneADecisionALine": "Mỗi dòng một mục (vd. AMB-D-12)",
     "auto.step.inputs": "Đầu vào",
     "auto.step.unwired": "không có gì đến được",
+    "auto.step.joined": "Đã nối với đầu ra “{name}” của bước {no}, {step}",
+    "auto.step.joinedUndo": "Hoàn tác",
     "auto.step.atLaunch": "được đưa vào khi bắt đầu lượt chạy",
     "auto.step.exits": "Lối ra",
     "auto.step.modelDefault": "mặc định của chính tác nhân",

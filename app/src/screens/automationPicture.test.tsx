@@ -4,7 +4,7 @@
 //
 // What these guard: **a spot is a button carrying the name of the action standing there**
 // (`AMB-D-949`), which is what the panel beside the picture is opened from (`AMB-T-5256`); **a `+`
-// stands on every edge**, shown while its line is pointed at, and is held shut while nothing is
+// stands on every edge**, shown while its line is pointed at or goes into or out of the picked box, and is held shut while nothing is
 // listening for the press, so one never lands on nothing; **where a run opens is marked on the box**; **a spot a required input does not
 // reach names that input** rather than only turning red; and **an automation with nothing on it says
 // so in words**.
@@ -250,6 +250,37 @@ describe("the picture of the steps", () => {
       hits[1]!.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
     });
     expect(near()).toEqual([false, false]);
+  });
+
+  /// A `+` only a pointer brings up is one nobody finds (`AMB-D-1003`): the lines into and out of the
+  /// picked box show theirs all the time, and the others still wait to be pointed at.
+  it("shows the + on the lines into and out of the picked box, and on no others", async () => {
+    const three = detail({
+      placements: [
+        step({ id: 1, name: "take" }),
+        step({ id: 2, name: "work" }),
+        step({ id: 3, name: "close", exits: [{ id: 30, name: "完了", outputs: [] }] }),
+      ],
+      edges: [
+        { id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" },
+        { id: 2, fromId: 2, exitName: "完了", toId: 3, ends: "go" },
+        { id: 3, fromId: 3, exitName: "完了", ends: "done" },
+      ],
+    });
+    const shown = () => plusses().filter((plus) => plus.className.includes("autopic__plus--near")).length;
+
+    await render({ graph: three, onInsert: vi.fn() });
+    expect(plusses()).toHaveLength(3);
+    expect(shown()).toBe(0);
+
+    await render({ graph: three, onInsert: vi.fn(), selectedBoxId: 1, onPickBox: vi.fn() });
+    expect(shown()).toBe(1);
+
+    await render({ graph: three, onInsert: vi.fn(), selectedBoxId: 2, onPickBox: vi.fn() });
+    expect(shown()).toBe(2);
+
+    await render({ graph: three, onInsert: vi.fn(), selectedBoxId: 3, onPickBox: vi.fn() });
+    expect(shown()).toBe(2);
   });
 
   /// The wires took the right of the picture and crossed the tops of the boxes (`AMB-D-1001`): they

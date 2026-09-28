@@ -3791,6 +3791,59 @@ pub struct AutomationStepOpenDto {
     pub(crate) missing: Vec<String>,
 }
 
+/// **What is keeping a waiting run waiting** (`AMB-D-999`) — the tasks its filter matches that cannot
+/// be taken, counted by what stops them (`amenbo_core::ops::automation_builtin::HeldBack`). A task
+/// stopped by two things is counted under both, and once in `tasks`.
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationHeldBackDto {
+    /// How many tasks are held back.
+    #[ts(type = "number")]
+    pub(crate) tasks: usize,
+    /// The values ordered before the task's own that are not closed yet, most tasks first.
+    pub(crate) values: Vec<AutomationHeldByValueDto>,
+    /// The unfinished tasks they depend on, most tasks first.
+    pub(crate) blockers: Vec<AutomationHeldByRecordDto>,
+    /// The linked decisions that are not live grounds, most tasks first.
+    pub(crate) decisions: Vec<AutomationHeldByRecordDto>,
+    /// How many wait for their start day.
+    #[ts(type = "number")]
+    pub(crate) not_started: usize,
+    /// The first of those start days (`YYYY-MM-DD`). Absent when none waits for one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) first_start: Option<String>,
+    /// How many are still being created.
+    #[ts(type = "number")]
+    pub(crate) drafts: usize,
+}
+
+/// One value holding tasks back: the axis's id, which is where closing it is done, and the words.
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationHeldByValueDto {
+    #[ts(type = "number")]
+    pub(crate) dimension_id: i64,
+    pub(crate) axis: String,
+    pub(crate) value: String,
+    #[ts(type = "number")]
+    pub(crate) count: usize,
+}
+
+/// One task or decision holding tasks back, by its id and its title.
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationHeldByRecordDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) title: String,
+    #[ts(type = "number")]
+    pub(crate) count: usize,
+}
+
 /// **A built-in step of a run, as its pane draws it** — the one card Amenbo puts up in place of a
 /// terminal while it carries the step out itself (`AMB-D-964`).
 ///

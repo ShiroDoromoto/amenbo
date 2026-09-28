@@ -1853,6 +1853,17 @@ pub fn is_waiting(conn: &Connection, run_id: i64) -> Result<bool> {
     crate::ops::automation_builtin::waiting(conn, &run, &def)
 }
 
+/// **What is keeping a run waiting** (`AMB-D-999`) — `None` for a run that is not waiting on a
+/// built-in. Read when a person is about to look, never by the watch's once-a-second look.
+pub fn held_back(conn: &Connection, run_id: i64) -> Result<Option<crate::ops::automation_builtin::HeldBack>> {
+    let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(None) };
+    let Some(run) = read::automation_run(conn, run_id)? else { return Ok(None) };
+    if !crate::ops::automation_builtin::waiting(conn, &run, &def)? {
+        return Ok(None);
+    }
+    crate::ops::automation_builtin::held_back(conn, &run, &def)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

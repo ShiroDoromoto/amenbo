@@ -20,20 +20,24 @@
 //! **Or it waits for one** (`AMB-D-969`), where [`WHEN_NONE`] is answered [`WAIT`]. A run or a session
 //! closing a task can make another one ready, and so can a new one being filed, so there is no point at
 //! which none will ever turn up: it waits until a person pauses or stops the run. Left unanswered it
-//! does not wait, so a run nobody chose to keep open does not stay open.
+//! does not wait, so a run nobody chose to keep open does not stay open. What is keeping it waiting
+//! is counted apart from that look (`AMB-D-999`): the tasks the filter matches that are not started
+//! and not ready, by what stops them ([`held_back`]).
 
 use rusqlite::Connection;
 
 use crate::error::Result;
 use crate::model::{AutomationCfgKind, AutomationPortKind, AutomationRun, RunDefCfg};
 use crate::ops::automation_builtin::{
-    answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Waits, Work,
+    answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, HeldBack, HeldByRecord,
+    HeldByValue, Waits, Work,
 };
 use crate::ops::automation_report;
 use crate::run_wording::builtin as say;
 use crate::ops::automation_step::{taskfilter_expr, taskfilter_sort, TASKFILTER_SORT_DEFAULT};
 use crate::query::{self, ListParams};
 use crate::reach::Reach;
+use crate::store_engine::read;
 
 /// The way out it leaves by once it has reserved a task.
 pub const TAKEN: &str = "着手した";
@@ -52,11 +56,16 @@ pub const GO_ON: &str = "待たずに出口「着手できるタスクが無い�
 
 /// What every search adds to the filter, whatever the setting says.
 const TAKEABLE: &str = "status:todo ready:yes";
+/// What counting the tasks held back adds instead: the same tasks, but the ones that cannot be taken.
+const HELD: &str = "status:todo ready:no";
 /// What the filter is when nobody answered it.
 const UNANSWERED: &str = "assignee:me-ai";
 /// How many candidates are read at a time. Most runs reserve the first; the rest are read only while
 /// the ones before them were taken by somebody else.
 const PAGE: usize = 20;
+/// How many held-back tasks are read at a time while counting them. Every one is read, so the page
+/// only bounds what one read holds.
+const COUNT_PAGE: usize = 200;
 
 pub(super) const TAKE_TASK: Builtin = Builtin {
     key: "take_task",
@@ -85,6 +94,7 @@ pub(super) const TAKE_TASK: Builtin = Builtin {
         instead_of: NONE_TO_TAKE,
         turned_up,
         looks_for: |cfg| expression(answer(cfg, FILTER)),
+        held_back,
     }),
     chooses: None,
     work: Work::InStore(take),
@@ -127,6 +137,84 @@ fn turned_up(conn: &Connection, run: &AutomationRun, cfg: &[RunDefCfg]) -> Resul
     query::any(conn, Reach::binding(run.project_id), &expression(answer(cfg, FILTER)))
 }
 
+/// **What is keeping it waiting** (`AMB-D-999`): every task the filter matches that is not started and
+/// not ready, counted by what stops it. The reasons are the five the list already carries on each row
+/// (`view::is_ready`), so a reason counted here is one the reservation would refuse by.
+fn held_back(conn: &Connection, run: &AutomationRun, cfg: &[RunDefCfg]) -> Result<HeldBack> {
+    let expr = with_asked(narrowing(answer(cfg, FILTER)), HELD);
+    let mut held = HeldBack::default();
+    let (mut blockers, mut decisions): (Counts, Counts) = (Vec::new(), Vec::new());
+    let mut offset = 0;
+    loop {
+        let page = query::list(
+            conn,
+            Reach::binding(run.project_id),
+            ListParams {
+                filter_expr: Some(expr.clone()),
+                sort: TASKFILTER_SORT_DEFAULT.to_string(),
+                limit: Some(COUNT_PAGE),
+                offset: Some(offset),
+                ..Default::default()
+            },
+        )?;
+        for task in &page.tasks {
+            held.tasks += 1;
+            for w in &task.waiting_on_values {
+                match held.values.iter_mut().find(|v| v.dimension_id == w.dimension_id && v.value == w.value) {
+                    Some(v) => v.count += 1,
+                    None => held.values.push(HeldByValue {
+                        dimension_id: w.dimension_id,
+                        axis: w.axis.clone(),
+                        value: w.value.clone(),
+                        count: 1,
+                    }),
+                }
+            }
+            task.blocked_by_open.iter().for_each(|id| bump(&mut blockers, *id));
+            task.blocked_by_decisions.iter().for_each(|id| bump(&mut decisions, *id));
+            if let Some(day) = task.not_started_until {
+                held.not_started += 1;
+                held.first_start = Some(held.first_start.map_or(day, |first| first.min(day)));
+            }
+            if task.draft {
+                held.drafts += 1;
+            }
+        }
+        if page.tasks.len() < COUNT_PAGE {
+            break;
+        }
+        offset += COUNT_PAGE;
+    }
+    held.blockers = titled(blockers, |id| Ok(read::task_title(conn, id)?))?;
+    held.decisions = titled(decisions, |id| Ok(read::decision_title(conn, id)?))?;
+    // Stable, so records holding as many keep the order they were first met in.
+    held.values.sort_by_key(|v| std::cmp::Reverse(v.count));
+    Ok(held)
+}
+
+/// How many tasks each record holds back, by its id, in the order the records were first met.
+type Counts = Vec<(i64, usize)>;
+
+fn bump(counts: &mut Counts, id: i64) {
+    match counts.iter_mut().find(|(seen, _)| *seen == id) {
+        Some((_, count)) => *count += 1,
+        None => counts.push((id, 1)),
+    }
+}
+
+/// The counted ids, each with its title, from the one holding the most down. A record gone since is
+/// named by nothing rather than left out, since the tasks it held are still counted.
+fn titled(
+    mut counts: Counts,
+    title: impl Fn(i64) -> Result<Option<String>>,
+) -> Result<Vec<HeldByRecord>> {
+    counts.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+    counts
+        .into_iter()
+        .map(|(id, count)| Ok(HeldByRecord { id, title: title(id)?.unwrap_or_default(), count }))
+        .collect()
+}
+
 /// One page of the tasks the filter answered with lists, in the order it asks for.
 fn search(
     conn: &Connection,
@@ -156,21 +244,29 @@ fn search(
 /// answer is refused when it is written and at the launch; one that got past both would otherwise have
 /// the run take any task in the project — a person's among them.
 fn expression(answer: Option<&str>) -> String {
+    with_asked(narrowing(answer), TAKEABLE)
+}
+
+/// The parts the setting chose, less `status:` and `ready:` — `None` where that leaves nothing.
+fn narrowing(answer: Option<&str>) -> Option<String> {
     let parts = answer.and_then(|value| match serde_json::from_str::<serde_json::Value>(value) {
         Ok(serde_json::Value::Object(parts)) => Some(parts),
         _ => None,
     });
-    let chosen = match parts {
+    match parts {
         None => Some(UNANSWERED.to_string()),
         Some(mut parts) => {
             parts.remove("status");
             parts.remove("ready");
             taskfilter_expr(&serde_json::Value::Object(parts).to_string())
         }
-    };
+    }
+}
+
+fn with_asked(chosen: Option<String>, asked: &str) -> String {
     match chosen {
-        Some(chosen) => format!("{chosen} {TAKEABLE}"),
-        None => TAKEABLE.to_string(),
+        Some(chosen) => format!("{chosen} {asked}"),
+        None => asked.to_string(),
     }
 }
 
@@ -184,7 +280,10 @@ mod tests {
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
-    use crate::ops::automation_run::{check, is_waiting, launch, next_def, nothing_asked, Launcher, Unmet, Waiting};
+    use crate::ops::automation_run::{
+        check, held_back as held_back_of, is_waiting, launch, next_def, nothing_asked, Launcher, Unmet,
+        Waiting,
+    };
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
     use crate::ops::automation_stop;
@@ -394,6 +493,58 @@ mod tests {
         });
     }
 
+    /// **While it waits, what keeps it waiting is counted** (`AMB-D-999`): the tasks the filter matches
+    /// that cannot be taken, by what stops them — a task stopped twice counted under both and once in
+    /// the whole. A run that is not waiting has nothing to say.
+    #[test]
+    fn while_it_waits_the_tasks_it_cannot_take_are_counted_by_what_stops_them() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+            // A person's task, which the filter does not take, is what two of the AI's wait on.
+            let first = mk_task_in(tx, "the part before", Some(project));
+            let after_a = for_ai(tx, "after it, a", project, None);
+            let after_b = for_ai(tx, "after it, b", project, None);
+            crate::ops::dependency::add(tx, after_a, first, None).expect("depend");
+            crate::ops::dependency::add(tx, after_b, first, None).expect("depend");
+            // One of them also stands on a decision nobody has settled.
+            let premise = crate::ops::decision::add(
+                tx,
+                crate::ops::decision::NewDecision {
+                    title: "the premise".to_string(),
+                    body: String::new(),
+                    project_id: project,
+                    made_in: None,
+                },
+            )
+            .expect("decision");
+            crate::ops::decision::link(tx, premise.id, after_b).expect("link");
+            // And one waits for its start day.
+            let later = for_ai(tx, "later", project, None);
+            let day = crate::time::today() + chrono::Days::new(30);
+            task::update(tx, later, TaskPatch { start_on: Some(day), ..Default::default() }).expect("start");
+
+            let run = launched(tx, &automation);
+            assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
+            let held = held_back_of(tx.conn(), run.id).expect("held back").expect("it is waiting");
+            assert_eq!(held.tasks, 3, "each task once, however many things stop it");
+            assert_eq!(
+                held.blockers,
+                vec![HeldByRecord { id: first, title: "the part before".into(), count: 2 }],
+            );
+            assert_eq!(
+                held.decisions,
+                vec![HeldByRecord { id: premise.id, title: "the premise".into(), count: 1 }],
+            );
+            assert_eq!((held.not_started, held.first_start), (1, Some(day)));
+            assert!(held.values.is_empty());
+            assert_eq!(held.drafts, 0);
+
+            for_ai(tx, "one it can take", project, None);
+            assert_eq!(held_back_of(tx.conn(), run.id).expect("held back"), None, "no longer waiting");
+        });
+    }
+
     /// **A pause takes hold while it waits**, since a waiting step never reports; picked up again, the
     /// run starts at its entry as though it had just been launched.
     #[test]
@@ -456,6 +607,11 @@ mod tests {
 
     #[test]
     fn the_expression_drops_status_and_ready_and_asks_for_the_takeable() {
+        assert_eq!(
+            with_asked(narrowing(Some(r#"{"ready":["yes"],"priority":["high"]}"#)), HELD),
+            "priority:high status:todo ready:no",
+            "counting what is held back asks for the same tasks, the ones that cannot be taken",
+        );
         assert_eq!(expression(None), "assignee:me-ai status:todo ready:yes");
         assert_eq!(
             expression(Some(r#"{"status":["done"],"ready":["no"],"priority":["high"]}"#)),

@@ -33,6 +33,7 @@ import type {
   AutomationCfgDto,
   AutomationDetailDto,
   AutomationEdgeDto,
+  AutomationHeldBackDto,
   AutomationLaunchAsksDto,
   AutomationLaunchCheckDto,
   AutomationPortDto,
@@ -898,6 +899,15 @@ export function useLiveRuns(): AutomationRunCardDto[] {
 export async function fetchRunCards(runs: readonly number[]): Promise<AutomationRunCardDto[]> {
   if (!inTauri() || runs.length === 0) return [];
   return invoke<AutomationRunCardDto[]>("automation_run_cards", { runIds: runs });
+}
+
+/**
+ * **What is keeping a run waiting** (`AMB-D-999`): the tasks the built-in it waits on could take but for
+ * what stops them, counted by that. Null for a run that is not waiting, and outside Tauri.
+ */
+export async function fetchHeldBack(run: number): Promise<AutomationHeldBackDto | null> {
+  if (!inTauri()) return null;
+  return invoke<AutomationHeldBackDto | null>("automation_run_held_back", { runId: run });
 }
 
 /**

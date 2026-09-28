@@ -1562,7 +1562,11 @@ pub fn automation_run_cards(run_ids: Vec<i64>) -> Result<Vec<AutomationRunCardDt
 pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBackDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_run_held_back");
     let store = open_store_read()?;
-    let Some(held) = automation_run::held_back(store.read_model().conn(), run_id)? else {
+    let conn = store.read_model().conn();
+    let Some(held) = automation_run::held_back(conn, run_id)? else {
+        return Ok(None);
+    };
+    let Some(run) = read::automation_run(conn, run_id)? else {
         return Ok(None);
     };
     let record = |r: automation_builtin::HeldByRecord| AutomationHeldByRecordDto {
@@ -1571,6 +1575,7 @@ pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBack
         count: r.count,
     };
     Ok(Some(AutomationHeldBackDto {
+        project: run.project_id,
         tasks: held.tasks,
         values: held
             .values

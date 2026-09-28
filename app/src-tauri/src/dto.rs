@@ -1150,9 +1150,11 @@ pub struct RefTargetDto {
 
 /// **A place on the ledger a run's pane sends the reader to** (`AMB-T-5539`): one automation's build
 /// screen, with the box the run stopped at pressed where there is one, or — with no automation named —
-/// the project's automations on the tab the run is listed on. It is asked for from the workspace and
-/// followed on the board, so when the two are separate windows it crosses between them
-/// (`crate::windows::show_ledger`), the way a ref does ([`RefTargetDto`]).
+/// the project's automations on the tab the run is listed on, or — with an axis named — the project's
+/// board with its classification panel open on that axis, where a value holding a waiting run's tasks
+/// back is closed (`AMB-D-999`). It is asked for from the workspace and followed on the board, so
+/// when the two are separate windows it crosses between them (`crate::windows::show_ledger`), the
+/// way a ref does ([`RefTargetDto`]).
 #[derive(Clone, Deserialize, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -1173,6 +1175,10 @@ pub struct LedgerPlaceDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "\"running\" | \"history\"")]
     pub(crate) runs: Option<String>,
+    /// The axis to open the project's classification panel on. Named, it wins over the other two.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) dimension: Option<i64>,
 }
 
 /// A folder to work in and the project it belongs to — the first loop's one press, on its way from
@@ -3798,6 +3804,9 @@ pub struct AutomationStepOpenDto {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationHeldBackDto {
+    /// The project the run is in — where a value holding tasks back is closed.
+    #[ts(type = "number")]
+    pub(crate) project: i64,
     /// How many tasks are held back.
     #[ts(type = "number")]
     pub(crate) tasks: usize,

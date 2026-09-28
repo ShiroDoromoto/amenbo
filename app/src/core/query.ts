@@ -141,6 +141,10 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   // or ending — every one of which is a row of `automation_run`, of the stretch it is spending on
   // a task, or of the steps it has opened (`core/changes`).
   automationRuns: ["automationRuns"],
+  // What keeps a waiting run waiting (`AMB-D-999`): the tasks it could take but for what stops them.
+  // Every one of those reasons — a value closed, a blocker finished, a decision settled, a start day,
+  // a creation ended — folds to "tasks"; the run moving on is what ends the wait.
+  heldBack: ["tasks", "automationRuns"],
   // The library the "actions" tab draws. It moves on two kinds of row — the action itself, and a
   // step being pointed at one or away from one, which is what the count beside each action is —
   // and both fold to this scope.

@@ -1274,6 +1274,7 @@ export const id: Translation = {
     "auto.run.heldUntil": "Menunggu hingga {at}",
     "auto.run.body.taskWait": "Menunggu tugas yang bisa diambil",
     "auto.run.body.taskWaitNext": "Begitu ada tugas yang cocok dan bisa diambil, tugas itu diambil dan proses berlanjut sendiri. Untuk berhenti menunggu, tekan jeda atau hentikan di atas.",
+    "auto.run.heldBack": "Tugas yang belum bisa diambil: {count}",
     "auto.run.body.paused": "Dijeda. Saat dilanjutkan, proses berlanjut dari langkah berikutnya.",
     "auto.run.body.completed": "Sampai di akhir diagram. Langkah terakhir adalah “{step}”.",
     "auto.run.body.canceled": "Dihentikan di “{step}”. Proses ini tidak berlanjut.",

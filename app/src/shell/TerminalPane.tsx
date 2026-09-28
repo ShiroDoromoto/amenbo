@@ -1089,7 +1089,7 @@ export function TerminalPane({
             see={t(runsTab === "running" ? "auto.run.seeRunning" : "auto.run.seeHistory")}
             onSee={ledger.openRuns === undefined ? undefined : () => ledger.openRuns?.(project, runsTab)}
           />
-        ) : builtin !== null ? <BuiltinCard builtin={builtin} /> : running
+        ) : builtin !== null ? <BuiltinCard builtin={builtin} run={run?.run ?? null} /> : running
           ? (
             <>
               {/* Not on a run's pane: a step's program ending is the run moving on, and the row

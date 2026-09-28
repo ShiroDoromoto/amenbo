@@ -150,6 +150,11 @@ function TalkWindow() {
       const place: LedgerPlaceDto = { project, runs };
       void invoke("show_ledger", { place }).catch(() => {});
     },
+    // A value holding a waiting run's tasks back is closed on the ledger's board (`AMB-D-999`).
+    openDimension: (project, dimension) => {
+      const place: LedgerPlaceDto = { project, dimension };
+      void invoke("show_ledger", { place }).catch(() => {});
+    },
   }), []);
 
   return (

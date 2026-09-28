@@ -509,6 +509,10 @@ name: string, outputs: Array<AutomationPortDto>, };
  */
 export type AutomationHeldBackDto = { 
 /**
+ * The project the run is in — where a value holding tasks back is closed.
+ */
+project: number, 
+/**
  * How many tasks are held back.
  */
 tasks: number, 
@@ -2231,9 +2235,11 @@ cmd: string, };
 /**
  * **A place on the ledger a run's pane sends the reader to** (`AMB-T-5539`): one automation's build
  * screen, with the box the run stopped at pressed where there is one, or — with no automation named —
- * the project's automations on the tab the run is listed on. It is asked for from the workspace and
- * followed on the board, so when the two are separate windows it crosses between them
- * (`crate::windows::show_ledger`), the way a ref does ([`RefTargetDto`]).
+ * the project's automations on the tab the run is listed on, or — with an axis named — the project's
+ * board with its classification panel open on that axis, where a value holding a waiting run's tasks
+ * back is closed (`AMB-D-999`). It is asked for from the workspace and followed on the board, so
+ * when the two are separate windows it crosses between them (`crate::windows::show_ledger`), the
+ * way a ref does ([`RefTargetDto`]).
  */
 export type LedgerPlaceDto = { project: number, 
 /**
@@ -2249,7 +2255,11 @@ placement?: number,
  * nobody has acknowledged yet (`AMB-D-955`). Absent is "history". Passed through as it came: only
  * the ledger that opens the tab reads it.
  */
-runs?: "running" | "history", };
+runs?: "running" | "history", 
+/**
+ * The axis to open the project's classification panel on. Named, it wins over the other two.
+ */
+dimension?: number, };
 
 /**
  * A reference to a task a decision spawned. A [`DecisionRefDto`] plus **status**, so the screen can

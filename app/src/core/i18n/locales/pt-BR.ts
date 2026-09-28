@@ -1286,6 +1286,7 @@ export const ptBR: Translation = {
     "auto.run.heldUntil": "Aguardando até {at}",
     "auto.run.body.taskWait": "Esperando uma tarefa que possa pegar",
     "auto.run.body.taskWaitNext": "Quando uma tarefa que corresponda puder ser pega, ela a pega e segue sozinha. Para parar de esperar, pressione pausar ou parar acima.",
+    "auto.run.heldBack": "Tarefas que ainda não pode assumir: {count}",
     "auto.run.body.paused": "Em pausa. Ao retomar, segue a partir do próximo passo.",
     "auto.run.body.completed": "Chegou ao fim do diagrama. O último passo foi “{step}”.",
     "auto.run.body.canceled": "Parada em “{step}”. Esta execução não continua.",

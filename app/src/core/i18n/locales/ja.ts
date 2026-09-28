@@ -1279,6 +1279,7 @@ export const ja: Translation = {
     "auto.run.heldUntil": "{at} まで待つ",
     "auto.run.body.taskWait": "着手できるタスクを待っています",
     "auto.run.body.taskWaitNext": "条件に合うタスクが着手できるようになると、自動で着手して進みます。待つのをやめるときは、上の一時停止か止めるを押します。",
+    "auto.run.heldBack": "着手できないタスク: {count} 件",
     "auto.run.body.paused": "一時停止しています。再開すると、次のステップから続けます。",
     "auto.run.body.completed": "図の終わりまで進みました。最後のステップは「{step}」です。",
     "auto.run.body.canceled": "「{step}」のところで止めました。この実行は続きません。",

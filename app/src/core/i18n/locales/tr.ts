@@ -1273,6 +1273,7 @@ export const tr: Translation = {
     "auto.run.heldUntil": "{at} saatine kadar bekliyor",
     "auto.run.body.taskWait": "Alınabilecek bir görev bekleniyor",
     "auto.run.body.taskWaitNext": "Uyan bir görev alınabilir olduğunda onu alır ve kendiliğinden devam eder. Beklemeyi bırakmak için yukarıdaki duraklat veya durdur düğmesine basın.",
+    "auto.run.heldBack": "Henüz alınamayan görevler: {count}",
     "auto.run.body.paused": "Duraklatıldı. Sürdürüldüğünde bir sonraki adımdan devam eder.",
     "auto.run.body.completed": "Diyagramın sonuna ulaşıldı. Son adım “{step}” idi.",
     "auto.run.body.canceled": "“{step}” adımında durduruldu. Bu çalıştırma devam etmez.",

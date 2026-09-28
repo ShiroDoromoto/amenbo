@@ -1275,6 +1275,7 @@ export const zhHans: Translation = {
     "auto.run.heldUntil": "等待至 {at}",
     "auto.run.body.taskWait": "正在等待可以着手的任务",
     "auto.run.body.taskWaitNext": "有符合条件且可以着手的任务时，会自动着手并继续。要停止等待，请按上方的暂停或停止。",
+    "auto.run.heldBack": "尚无法开始的任务：{count} 个",
     "auto.run.body.paused": "已暂停。继续后，从下一步开始。",
     "auto.run.body.completed": "已走到图的末尾。最后一步是“{step}”。",
     "auto.run.body.canceled": "在“{step}”处停止了。此次运行不会继续。",

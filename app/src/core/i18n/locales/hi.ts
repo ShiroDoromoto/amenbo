@@ -1273,6 +1273,7 @@ export const hi: Translation = {
     "auto.run.heldUntil": "{at} तक प्रतीक्षा",
     "auto.run.body.taskWait": "लेने योग्य कार्य की प्रतीक्षा",
     "auto.run.body.taskWaitNext": "जब कोई मेल खाता कार्य लिया जा सकेगा, यह उसे लेकर अपने आप आगे बढ़ेगा। प्रतीक्षा रोकने के लिए ऊपर रोकें या बंद करें दबाएँ।",
+    "auto.run.heldBack": "कार्य जिन्हें अभी नहीं लिया जा सकता: {count}",
     "auto.run.body.paused": "रुका हुआ है। फिर से शुरू करने पर अगले चरण से आगे बढ़ेगा।",
     "auto.run.body.completed": "आरेख के अंत तक पहुँच गया। अंतिम चरण “{step}” था।",
     "auto.run.body.canceled": "“{step}” पर रोका गया। यह रन आगे नहीं चलेगा।",

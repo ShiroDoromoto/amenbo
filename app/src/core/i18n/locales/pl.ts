@@ -1290,6 +1290,7 @@ export const pl: Translation = {
     "auto.run.heldUntil": "Czeka do {at}",
     "auto.run.body.taskWait": "Czeka na zadanie, które można podjąć",
     "auto.run.body.taskWaitNext": "Gdy pasujące zadanie będzie można podjąć, przebieg je podejmie i pójdzie dalej sam. Aby przestać czekać, naciśnij u góry pauzę lub zatrzymaj.",
+    "auto.run.heldBack": "Zadania, których nie może jeszcze podjąć: {count}",
     "auto.run.body.paused": "Wstrzymano. Po wznowieniu przebieg pójdzie dalej od następnego kroku.",
     "auto.run.body.completed": "Osiągnięto koniec diagramu. Ostatnim krokiem był „{step}”.",
     "auto.run.body.canceled": "Zatrzymano na „{step}”. Ten przebieg nie pójdzie dalej.",

@@ -351,6 +351,20 @@ describe("the picture of the steps", () => {
     expect(nodes().filter((node) => node.className.includes("autopic__node--empty"))).toHaveLength(1);
   });
 
+  /// An action made on the spot and still being made says so, and not that it is empty: having
+  /// nothing in it yet is what being made means (`AMB-D-1005`).
+  it("marks the action still being made, in place of empty", async () => {
+    const one = detail({
+      placements: [step({ id: 1, name: "making", draft: true }), step({ id: 2, name: "hollow" })],
+    });
+    await render({ graph: one });
+    const box = (name: string) => nodes().find((node) => node.textContent?.includes(name))!;
+    expect(box("making").className).toContain("autopic__node--draft");
+    expect(box("making").textContent).toContain(t("chip.draft"));
+    expect(box("making").className).not.toContain("autopic__node--empty");
+    expect(box("hollow").className).not.toContain("autopic__node--draft");
+  });
+
   /// Which box a launch enters by cannot be read off the lines: two stretches nothing joins are
   /// drawn the same, so the box says it.
   it("marks the placement a run opens, and only that one", async () => {

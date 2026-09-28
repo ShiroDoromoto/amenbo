@@ -88,7 +88,8 @@ export function AutomationBuiltinScreen({
 }: {
   /** Which built-in, by the key its definition carries. */
   builtinKey: string;
-  onBack: () => void;
+  /** Go back. Absent, the head has no back. */
+  onBack?: () => void;
   /** What the back is called, where it is not the list it goes back to (`./AutomationActionOver`). */
   backLabel?: string;
   /** What stands between the back and the name. */
@@ -101,9 +102,11 @@ export function AutomationBuiltinScreen({
   return (
     <div className="actbuild">
       <div className="actbuild__head">
-        <button type="button" className="btn" onClick={onBack}>
-          <Icon name="chevronLeft" /> {backLabel ?? t("auto.builtin.back")}
-        </button>
+        {onBack !== undefined && (
+          <button type="button" className="btn" onClick={onBack}>
+            <Icon name="chevronLeft" /> {backLabel ?? t("auto.builtin.back")}
+          </button>
+        )}
         {headLead}
         <span className="actbuild__name">{builtin?.name ?? ""}</span>
         {builtin !== null && (

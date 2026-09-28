@@ -360,6 +360,11 @@ export function AutomationBuildScreen({
         boxNo={holdingNo}
         onBack={backFromOver}
         onFull={() => onOpenAction(over)}
+        onAbandoned={() => {
+          // The placement went with the action, so there is no box left to land on pressed.
+          close();
+          setOver(null);
+        }}
       />
     )}
     </>

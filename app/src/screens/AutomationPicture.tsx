@@ -412,6 +412,7 @@ export function AutomationPicture({
                 "autopic__node",
                 node.unfed.length > 0 ? "autopic__node--unfed" : "",
                 node.empty === true ? "autopic__node--empty" : "",
+                node.draft === true ? "autopic__node--draft" : "",
                 node.boxId === selectedBoxId ? "autopic__node--on" : "",
                 trail?.boxes.has(node.boxId) === true ? "autopic__node--lit" : "",
                 trail?.at === node.boxId ? "autopic__node--at" : "",
@@ -449,6 +450,7 @@ export function AutomationPicture({
                   </span>
                 )}
                 {node.empty === true && <span className="autopic__emptymark">{t("auto.pic.emptyMark")}</span>}
+                {node.draft === true && <span className="autopic__draftmark">{t("chip.draft")}</span>}
               </span>
               {/* Which library the action standing here comes from, on an automation's picture — a
                   built-in's is Amenbo's own, though it is kept on the device's shelf. */}

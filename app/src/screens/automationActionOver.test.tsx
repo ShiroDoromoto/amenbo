@@ -3,9 +3,11 @@
 // and the write doors are stubbed; the screen, its panel and the column that panel lands in run for
 // real.
 //
-// What these guard: **only the back closes it** — a press on the backdrop and Escape leave it where it
-// is; **the back is named after the automation**, which is where it lands, and the head names the box by its number; **"open full screen" is
-// the other way out**; and **its panel lands in its own column**, the shell's being behind the backdrop.
+// What these guard: **only the back closes it** — a press on the backdrop and Escape leave it where
+// it is; **the back is named after the automation**, which is where it lands, and the head names the
+// box by its number; **"open full screen" is the other way out**; **its panel lands in its own
+// column**, the shell's being behind the backdrop; and **an action still being made is closed only by
+// the pair at its foot**, "stop making it" only once the reader has said so to the question it asks.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,6 +16,9 @@ import type { AutomationActionDetailDto } from "../bindings/bindings";
 const hoisted = vi.hoisted(() => ({
   action: null as AutomationActionDetailDto | null,
   editAction: vi.fn(),
+  finish: vi.fn(),
+  abandon: vi.fn(),
+  confirm: vi.fn(),
   editStep: vi.fn(),
 }));
 
@@ -23,6 +28,8 @@ vi.mock("../core/automations", () => ({
   useAutomationAction: () => hoisted.action,
   useAutomationActions: () => [],
   editAutomationAction: hoisted.editAction,
+  finishCreatingAutomationAction: hoisted.finish,
+  abandonAutomationAction: hoisted.abandon,
   editAutomationStep: hoisted.editStep,
   setAutomationWire: vi.fn(),
   clearAutomationWire: vi.fn(),
@@ -48,6 +55,7 @@ vi.mock("../core/automations", () => ({
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
 }));
+vi.mock("../core/dialog", () => ({ confirmDialog: hoisted.confirm }));
 vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
 import { t, tf } from "../core/i18n";
@@ -77,11 +85,12 @@ const action: AutomationActionDetailDto = {
 
 const onBack = vi.fn();
 const onFull = vi.fn();
+const onAbandoned = vi.fn();
 
 async function render() {
   await act(async () => {
     root.render(
-      createElement(AutomationActionOver, { actionId: 4, automationName: "Nightly", onBack, onFull }),
+      createElement(AutomationActionOver, { actionId: 4, automationName: "Nightly", onBack, onFull, onAbandoned }),
     );
   });
 }
@@ -93,6 +102,10 @@ beforeEach(() => {
   hoisted.action = action;
   onBack.mockReset();
   onFull.mockReset();
+  onAbandoned.mockReset();
+  hoisted.finish.mockReset().mockResolvedValue(undefined);
+  hoisted.abandon.mockReset().mockResolvedValue(undefined);
+  hoisted.confirm.mockReset();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -125,7 +138,7 @@ describe("an action opened over its automation", () => {
   it("names the box it is placed in by its number on the picture", async () => {
     await act(async () => {
       root.render(
-        createElement(AutomationActionOver, { actionId: 4, automationName: "Nightly", boxNo: 3, onBack, onFull }),
+        createElement(AutomationActionOver, { actionId: 4, automationName: "Nightly", boxNo: 3, onBack, onFull, onAbandoned }),
       );
     });
     const where = document.body.querySelector(".actover__where")!;
@@ -146,5 +159,39 @@ describe("an action opened over its automation", () => {
     await act(async () => press(t("auto.act.edit")).click());
     expect(pane.hidden).toBe(false);
     expect(pane.querySelector(".actpanel")).not.toBeNull();
+  });
+});
+
+describe("an action still being made, opened over its automation", () => {
+  beforeEach(() => {
+    hoisted.action = { ...action, draft: true };
+  });
+
+  it("says it is being made and offers neither the back nor the full screen", async () => {
+    await render();
+    expect(document.body.querySelector(".actover__draft")?.textContent).toBe(t("chip.draft"));
+    expect(buttons().some((one) => one.textContent?.includes(tf("auto.over.back", { name: "Nightly" })))).toBe(false);
+    expect(buttons().some((one) => one.textContent?.includes(t("auto.over.full")))).toBe(false);
+  });
+
+  it("finishes creating and then goes back", async () => {
+    await render();
+    await act(async () => press(t("auto.over.finish")).click());
+    expect(hoisted.finish).toHaveBeenCalledWith(4);
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the action up only once the reader says so", async () => {
+    await render();
+    hoisted.confirm.mockResolvedValue(false);
+    await act(async () => press(t("auto.over.abandon")).click());
+    expect(hoisted.abandon).not.toHaveBeenCalled();
+    expect(onAbandoned).not.toHaveBeenCalled();
+
+    hoisted.confirm.mockResolvedValue(true);
+    await act(async () => press(t("auto.over.abandon")).click());
+    expect(hoisted.confirm).toHaveBeenLastCalledWith(tf("auto.over.abandonConfirm", { name: "Take one" }));
+    expect(hoisted.abandon).toHaveBeenCalledWith(4);
+    expect(onAbandoned).toHaveBeenCalledTimes(1);
   });
 });

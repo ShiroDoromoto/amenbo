@@ -1153,7 +1153,16 @@ pub fn pty_open(
     start(
         &app,
         window.label(),
-        Opening { frame, cwd, agent, at: (cols, rows), say: None, fresh: fresh.unwrap_or(false), step: None },
+        Opening {
+            frame,
+            cwd,
+            agent,
+            model: None,
+            at: (cols, rows),
+            say: None,
+            fresh: fresh.unwrap_or(false),
+            step: None,
+        },
     )
 }
 
@@ -1163,6 +1172,9 @@ struct Opening {
     frame: Option<String>,
     cwd: Option<String>,
     agent: Option<String>,
+    /// The model a step was placed on, where one was chosen for it (`AMB-D-960`). `None` for a pane,
+    /// whose own model is read off its frame instead ([`model_to_open_on`]).
+    model: Option<String>,
     at: Size,
     /// What the agent is handed as its opening prompt in place of the sentence that points it at
     /// `agent --json` — a step's own text already carries the way in among everything else it says.
@@ -1172,10 +1184,22 @@ struct Opening {
     step: Option<(i64, i64)>,
 }
 
+/// **The model a terminal is opened on, where it has one of its own**: the one its step was placed
+/// on, and otherwise the one its pane was answering on. Neither leaves it to the agent's answer
+/// ([`started_as`]).
+///
+/// The step's comes first because it is the only one a step has. Its terminal is always a fresh
+/// session, so there is no model it was answering on — and left to the agent's answer, a step placed
+/// on a cheaper model ran on whatever the agent was last chosen for, while its pane named the model
+/// the step was placed on (`AMB-D-960`, `AMB-T-5763`).
+fn model_to_open_on<'a>(placed: Option<&'a str>, was_on: Option<&'a str>) -> Option<&'a str> {
+    placed.or(was_on)
+}
+
 /// Start a terminal and put it in the registry, its output going to the window labelled `target`
 /// until a pane takes it up ([`pty_attach`]).
 fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySessionDto, CmdError> {
-    let Opening { frame, cwd, agent, at: (cols, rows), say, fresh, step } = opening;
+    let Opening { frame, cwd, agent, model, at: (cols, rows), say, fresh, step } = opening;
     let run_step = step.map(|(_, run_step)| run_step);
     let terminals = app.state::<Terminals>();
     // A session of its own, every time, with nothing of it written on the frame — what an
@@ -1251,7 +1275,10 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
         .and_then(|(frame, agent)| face.model_on(frame, agent));
     let started = agent
         .as_deref()
-        .map(|id| started_as(id, was_on.as_deref(), handle, say.as_deref()))
+        .map(|id| {
+            let model = model_to_open_on(model.as_deref(), was_on.as_deref());
+            started_as(id, model, handle, say.as_deref())
+        })
         .transpose()?;
     // Written down before the program is started, so a quit that comes between the two still leaves
     // the pane a way back — the session is made under this handle whether or not anybody is watching.
@@ -1931,6 +1958,7 @@ pub fn open_step(
     run_step: i64,
     folder: Option<String>,
     agent: String,
+    model: Option<String>,
     say: String,
 ) -> Result<String, CmdError> {
     end_steps_of(app, run);
@@ -1948,6 +1976,7 @@ pub fn open_step(
             frame: Some(format!("run-{run}")),
             cwd: folder,
             agent: Some(agent),
+            model,
             at: STEP_SIZE,
             say: Some(say),
             fresh: true,
@@ -2149,6 +2178,26 @@ mod tests {
 
     /// The size a pane opens a terminal at, for a test that is not about the size.
     const OPENED_AT: Size = (80, 24);
+
+    /// A step placed on a model starts its agent with that model named on the line, over the model the
+    /// agent was last chosen for (`AMB-T-5763`).
+    #[test]
+    fn a_step_placed_on_a_model_is_started_on_it() {
+        let started = started_as(
+            "claude-code",
+            model_to_open_on(Some("sonnet"), None),
+            Some(Handle::New("0b9c1c1e-0000-4000-8000-000000000000")),
+            Some("the step's own text"),
+        )
+        .expect("claude code is catalogued");
+        // Each word of the line is quoted for the shell, so the quotes are taken off before reading it.
+        let unquoted = started.line.replace(['\'', '"'], "");
+        assert!(unquoted.contains("--model sonnet"), "{}", started.line);
+        assert_eq!(started.model.as_deref(), Some("sonnet"));
+        // Where the step was placed on none, a pane's own model is the one it goes back on.
+        assert_eq!(model_to_open_on(None, Some("opus")), Some("opus"));
+        assert_eq!(model_to_open_on(Some("sonnet"), Some("opus")), Some("sonnet"));
+    }
 
     /// The line typed into a pane says the provider's own rename command, and only for a provider
     /// that has one.

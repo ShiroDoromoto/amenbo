@@ -2440,7 +2440,7 @@ fn all_commands() -> Value {
                    "amenbo automation edge-add --from \"11:something to fix\" --to 12 --max-times 3",
                    "amenbo automation edge-add --from 12: --to 11",
                    "amenbo automation edge-add --in-action --from 21:approved --exit-to"])),
-        cmd("automation edge-update", "Changes where an edge goes, or how often it may be taken. Only the fields given change. Which picture it is on is read off the row, so it is not asked for again. The way out it hangs on is not among them either — that pair is what the edge is, so pointing it at another way out is a delete and an add.",
+        cmd("automation edge-update", "Changes where an edge goes, or how often it may be taken. Only the fields given change — except that pointing a --to edge at --exit-to, --done or --halt drops its cap, since those are taken once. Which picture it is on is read off the row, so it is not asked for again. The way out it hangs on is not among them either — that pair is what the edge is, so pointing it at another way out is a delete and an add.",
             json!([{ "name": "<id>", "help": "edge id", "required": true },
                    { "name": "--to <id> / --exit-to [name] / --done / --halt", "help": "what happens after that way out" },
                    { "name": "--max-times <n> / --no-max", "help": "how often it may be taken for one task" }]),

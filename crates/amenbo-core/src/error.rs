@@ -436,6 +436,17 @@ pub enum ErrorCode {
     InvalidMakeTaskAxisFixed,
     InvalidMakeTaskAxisTwice,
     InvalidWaitNotACount,
+
+    // Building an automation or an action — the refusals a person can walk into from the build screen,
+    // which checks none of them before sending: a name already taken on the same box, the error way
+    // out's name, a number setting answered with a fraction or below zero, a limit under one. The rest of
+    // the build ops' refusals stay on `invalid_value`, since the screen offers no way to reach them.
+    InvalidAutomationExitReserved,
+    InvalidAutomationExitTaken,
+    InvalidAutomationInputTaken,
+    InvalidAutomationOutputTaken,
+    InvalidAutomationCfgNotACount,
+    InvalidAutomationLimitBelowOne,
 }
 
 impl ErrorCode {
@@ -550,6 +561,12 @@ impl ErrorCode {
             ErrorCode::InvalidMakeTaskAxisFixed => "invalid_make_task_axis_fixed",
             ErrorCode::InvalidMakeTaskAxisTwice => "invalid_make_task_axis_twice",
             ErrorCode::InvalidWaitNotACount => "invalid_wait_not_a_count",
+            ErrorCode::InvalidAutomationExitReserved => "invalid_automation_exit_reserved",
+            ErrorCode::InvalidAutomationExitTaken => "invalid_automation_exit_taken",
+            ErrorCode::InvalidAutomationInputTaken => "invalid_automation_input_taken",
+            ErrorCode::InvalidAutomationOutputTaken => "invalid_automation_output_taken",
+            ErrorCode::InvalidAutomationCfgNotACount => "invalid_automation_cfg_not_a_count",
+            ErrorCode::InvalidAutomationLimitBelowOne => "invalid_automation_limit_below_one",
         }
     }
 
@@ -661,6 +678,12 @@ impl ErrorCode {
         ErrorCode::InvalidMakeTaskAxisFixed,
         ErrorCode::InvalidMakeTaskAxisTwice,
         ErrorCode::InvalidWaitNotACount,
+        ErrorCode::InvalidAutomationExitReserved,
+        ErrorCode::InvalidAutomationExitTaken,
+        ErrorCode::InvalidAutomationInputTaken,
+        ErrorCode::InvalidAutomationOutputTaken,
+        ErrorCode::InvalidAutomationCfgNotACount,
+        ErrorCode::InvalidAutomationLimitBelowOne,
     ];
 }
 
@@ -903,6 +926,12 @@ mod tests {
             "invalid_make_task_axis_fixed",
             "invalid_make_task_axis_twice",
             "invalid_wait_not_a_count",
+            "invalid_automation_exit_reserved",
+            "invalid_automation_exit_taken",
+            "invalid_automation_input_taken",
+            "invalid_automation_output_taken",
+            "invalid_automation_cfg_not_a_count",
+            "invalid_automation_limit_below_one",
         ]
         .into_iter()
         .collect();

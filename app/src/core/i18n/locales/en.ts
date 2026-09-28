@@ -1837,6 +1837,13 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_make_task_axis_fixed: "“Chosen classification” names the axis “{axis}”, which “Classification” already fixes where this is placed",
   invalid_make_task_axis_twice: "“Chosen classification” names more than one value on the axis “{axis}”",
   invalid_wait_not_a_count: "How long to wait is not a whole number of zero or more: {value}",
+  // Building an automation or an action: the refusals the build screen lets a person walk into.
+  invalid_automation_exit_reserved: "“{name}” is the error way out’s name, and every step and action already has that one. Give this way out another name.",
+  invalid_automation_exit_taken: "A way out called “{name}” is already here. Give this one another name.",
+  invalid_automation_input_taken: "An input called “{name}” is already here. Give this one another name.",
+  invalid_automation_output_taken: "An output called “{name}” is already on this way out. Give this one another name.",
+  invalid_automation_cfg_not_a_count: "The setting “{cfg}” takes a whole number of zero or more, and {value} is not one.",
+  invalid_automation_limit_below_one: "“Taken at most” is 1 or more, and {value} is less. Leave it empty for no limit.",
   not_ready_automation_split_axis_gone: "{step} (placement {placement}): the axis it splits by has been deleted — take this placement off and place it again on an axis that is there",
   store_busy: "The store is in use right now. Try again in a moment.",
   // The store itself giving way — a disk that would not answer, a database that could not be read.

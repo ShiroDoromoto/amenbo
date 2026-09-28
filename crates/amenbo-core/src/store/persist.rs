@@ -1725,6 +1725,25 @@ impl Store {
         })
     }
 
+    /// Say an action made on the spot is written (`AMB-D-1005`; one operation = one transaction).
+    pub fn automation_action_finish_creating(&mut self, id: i64) -> Result<crate::model::AutomationAction> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, id)], |tx| {
+            crate::ops::automation::action_finish_creating(tx, id)
+        })
+    }
+
+    /// Give up an action made on the spot, with every placement standing on it, the lines into them put
+    /// back as they were (`AMB-D-1005`; one operation = one transaction). Each placement is declared as
+    /// well as the action: a device's action can stand on another project's automation, and that
+    /// picture is rewritten too.
+    pub fn automation_action_abandon(&mut self, id: i64) -> Result<()> {
+        let mut targets = vec![WriteTarget::AutomationPart(AutomationPart::Action, id)];
+        for placement in crate::store_engine::read::automation_placement_ids_using_action(self.engine.conn(), id)? {
+            targets.push(WriteTarget::AutomationPart(AutomationPart::Placement, placement));
+        }
+        self.write_one(&targets, |tx| crate::ops::automation::action_abandon(tx, id))
+    }
+
     /// Create an automation (one operation = one transaction).
     pub fn automation_add(
         &mut self,

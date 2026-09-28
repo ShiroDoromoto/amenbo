@@ -1502,6 +1502,7 @@ export const vi: Translation = {
     not_ready_automation: "“{automation}” chưa thể chạy: {reasons}",
     not_ready_automation_no_steps: "Chưa đặt hành động nào lên nó",
     not_ready_automation_no_entry: "chưa có vị trí đặt nào là điểm bắt đầu",
+    not_ready_automation_action_draft: "hành động “{action}” đã đặt vẫn đang được tạo",
     not_ready_automation_action_empty: "hành động “{action}” đã đặt không có bước bắt đầu",
     not_ready_automation_entry_takes_no_task: "{step}: bước bắt đầu không nhận nhiệm vụ nào, nên mọi bước sau nó sẽ không nói về điều gì",
     not_ready_automation_open_exit: "{step}: chưa đặt việc gì sau “{exit}”",

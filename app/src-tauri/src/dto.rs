@@ -3472,6 +3472,10 @@ pub struct AutomationPlacementDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) builtin: Option<String>,
+    /// **The action standing here is still being written** (`AMB-D-1005`) — what the box is marked
+    /// with. Absent on every other spot.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) draft: bool,
     /// **The way out this spot never leaves by**, as its settings stand — a built-in that leaves by one
     /// of two ways out as a setting chooses, or that waits instead of leaving by one
     /// ([`amenbo_core::ops::automation_builtin::never_leaves_by`]). What it would hand on through that way
@@ -3550,6 +3554,10 @@ pub struct AutomationActionDetailDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) builtin: Option<String>,
+    /// **Still being written** (`AMB-D-1005`): made on the spot where it was placed, and neither
+    /// finished nor given up yet. Absent on every other action.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) draft: bool,
     /// How many automations place it: what a rewrite here reaches.
     #[ts(type = "number")]
     pub(crate) used_by: usize,

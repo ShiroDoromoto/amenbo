@@ -1520,6 +1520,7 @@ export const it: Translation = {
     not_ready_automation: "«{automation}» non si può ancora avviare: {reasons}",
     not_ready_automation_no_steps: "Non ha nessuna azione collocata",
     not_ready_automation_no_entry: "nessun posizionamento è l'inizio",
+    not_ready_automation_action_draft: "l'azione «{action}» posizionata è ancora in creazione",
     not_ready_automation_action_empty: "l'azione «{action}» posizionata non ha un passo d'inizio",
     not_ready_automation_entry_takes_no_task: "{step}: il passo d'inizio non prende alcuna attività, quindi ogni passo successivo non riguarderebbe nulla",
     not_ready_automation_open_exit: "{step}: dopo «{exit}» non è previsto nulla",

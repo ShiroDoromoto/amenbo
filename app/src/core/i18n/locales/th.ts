@@ -1502,6 +1502,7 @@ export const th: Translation = {
     not_ready_automation: "“{automation}” ยังเริ่มไม่ได้: {reasons}",
     not_ready_automation_no_steps: "ยังไม่ได้วางแอ็กชันใดเลย",
     not_ready_automation_no_entry: "ยังไม่มีการวางที่เป็นจุดเริ่ม",
+    not_ready_automation_action_draft: "แอ็กชัน “{action}” ที่วางไว้ยังกำลังสร้างอยู่",
     not_ready_automation_action_empty: "แอ็กชัน “{action}” ที่วางไว้ไม่มีขั้นตอนที่เป็นจุดเริ่ม",
     not_ready_automation_entry_takes_no_task: "{step}: ขั้นตอนที่เป็นจุดเริ่มไม่ได้รับงาน ขั้นตอนถัดไปจึงไม่มีเรื่องที่จะทำ",
     not_ready_automation_open_exit: "{step}: ยังไม่ได้กำหนดว่าหลัง “{exit}” จะทำอะไร",

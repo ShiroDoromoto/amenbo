@@ -1528,6 +1528,7 @@ export const uk: Translation = {
     not_ready_automation: "«{automation}» поки запустити не можна: {reasons}",
     not_ready_automation_no_steps: "На ній не розміщено жодної дії",
     not_ready_automation_no_entry: "жодне розміщення не призначено стартом",
+    not_ready_automation_action_draft: "розміщена дія «{action}» ще створюється",
     not_ready_automation_action_empty: "розміщена дія «{action}» не має стартового кроку",
     not_ready_automation_entry_takes_no_task: "{step}: стартовий крок не бере завдання, тож усі кроки після нього були б ні про що",
     not_ready_automation_open_exit: "{step}: після «{exit}» нічого не задано",

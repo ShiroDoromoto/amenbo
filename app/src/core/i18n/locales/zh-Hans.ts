@@ -1503,6 +1503,7 @@ export const zhHans: Translation = {
     not_ready_automation: "“{automation}”还不能启动：{reasons}",
     not_ready_automation_no_steps: "上面没有放置任何动作",
     not_ready_automation_no_entry: "尚未确定起点的放置",
+    not_ready_automation_action_draft: "所放置的动作“{action}”仍在创建中",
     not_ready_automation_action_empty: "所放置的动作“{action}”没有起点步骤",
     not_ready_automation_entry_takes_no_task: "{step}：起点步骤不领取任务，因此其后的步骤不知道要处理什么",
     not_ready_automation_open_exit: "{step}：“{exit}”之后要做什么还没定",

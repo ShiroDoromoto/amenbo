@@ -1502,6 +1502,7 @@ export const nl: Translation = {
     not_ready_automation: "“{automation}” kan nog niet gestart worden: {reasons}",
     not_ready_automation_no_steps: "Er is geen actie op geplaatst",
     not_ready_automation_no_entry: "geen plaatsing is de start",
+    not_ready_automation_action_draft: "de geplaatste actie ‘{action}’ wordt nog aangemaakt",
     not_ready_automation_action_empty: "de geplaatste actie ‘{action}’ heeft geen startstap",
     not_ready_automation_entry_takes_no_task: "{step}: de startstap pakt geen taak op, dus elke stap erna zou nergens over gaan",
     not_ready_automation_open_exit: "{step}: na ‘{exit}’ staat niets vast",

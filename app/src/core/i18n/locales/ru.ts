@@ -1528,6 +1528,7 @@ export const ru: Translation = {
     not_ready_automation: "«{automation}» пока запустить нельзя: {reasons}",
     not_ready_automation_no_steps: "На ней не размещено ни одного действия",
     not_ready_automation_no_entry: "ни одно размещение не назначено стартом",
+    not_ready_automation_action_draft: "размещённое действие «{action}» ещё создаётся",
     not_ready_automation_action_empty: "у размещённого действия «{action}» нет стартового шага",
     not_ready_automation_entry_takes_no_task: "{step}: стартовый шаг не берёт задачу, поэтому все шаги после него были бы ни о чём",
     not_ready_automation_open_exit: "{step}: после «{exit}» ничего не задано",

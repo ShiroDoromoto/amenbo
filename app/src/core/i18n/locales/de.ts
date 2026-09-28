@@ -1509,6 +1509,7 @@ export const de: Translation = {
     not_ready_automation: "„{automation}“ kann noch nicht gestartet werden: {reasons}",
     not_ready_automation_no_steps: "Es ist keine Aktion darauf platziert",
     not_ready_automation_no_entry: "Keine Platzierung ist der Start",
+    not_ready_automation_action_draft: "Die platzierte Aktion „{action}“ wird noch erstellt",
     not_ready_automation_action_empty: "Die platzierte Aktion „{action}“ hat keinen Startschritt",
     not_ready_automation_entry_takes_no_task: "{step}: Der Startschritt übernimmt keine Aufgabe, also ginge es in allen folgenden Schritten um nichts",
     not_ready_automation_open_exit: "{step}: Nach „{exit}“ ist nichts festgelegt",

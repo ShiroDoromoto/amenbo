@@ -413,6 +413,30 @@ pub fn automation_action_remove(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["automationActions"]))
 }
 
+/// **Say an action made on the spot is written** (`AMB-D-1005`,
+/// [`amenbo_core::ops::automation::action_finish_creating`]). It is taken with nothing inside the
+/// action too. The pictures standing on it draw its mark, so the ack moves the automations as well.
+#[tauri::command]
+pub fn automation_action_finish_creating(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_finish_creating(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Give up an action made on the spot** (`AMB-D-1005`,
+/// [`amenbo_core::ops::automation::action_abandon`]): the action and the placement standing on it go
+/// in one act, and the lines into the placement go back to how they were before it was placed.
+#[tauri::command]
+pub fn automation_action_abandon(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_abandon(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
 /// **Change the step one library action opens.** Only what is `Some` is written.
 ///
 /// The fields are the step's, not the placement's: a prompt and the flags belong to the terminal
@@ -2264,6 +2288,7 @@ fn action_detail_dto(
         note: action.note,
         global: action.project_id.is_none(),
         builtin: action.builtin,
+        draft: action.draft,
         used_by: view.used_by,
         entry_step_id: action.entry_step_id,
         steps: view.steps.into_iter().map(step_dto).collect(),
@@ -2364,6 +2389,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         action_id: placement.action_id,
         global: action.as_ref().is_some_and(|one| one.project_id.is_none()),
         builtin: action.as_ref().and_then(|one| one.builtin.clone()),
+        draft: action.as_ref().is_some_and(|one| one.draft),
         never_leaves_by: never_leaves_by.map(str::to_string),
         step_id: opens.as_ref().map(|s| s.id),
         prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),

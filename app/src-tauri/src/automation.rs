@@ -61,7 +61,8 @@ use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
     AutomationActionCardDto, AutomationActionDetailDto, AutomationBuiltinDto,
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
-    AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationLaunchAsksDto,
+    AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationHeldBackDto,
+    AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
     AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
@@ -1550,6 +1551,43 @@ pub fn automation_run_cards(run_ids: Vec<i64>) -> Result<Vec<AutomationRunCardDt
     let _perf = amenbo_core::perf::Timer::start("automation_run_cards");
     let store = open_store_read()?;
     run_cards(&store, run_ids)
+}
+
+/// **What is keeping a run waiting** (`AMB-D-999`) — the tasks the built-in it waits on could take but
+/// for what stops them, counted by that. `None` for a run that is not waiting on a built-in.
+///
+/// Asked by the pane as the wait begins and again when the store changes; the watch never asks it,
+/// since every task its filter matches is read.
+#[tauri::command]
+pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBackDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_run_held_back");
+    let store = open_store_read()?;
+    let Some(held) = automation_run::held_back(store.read_model().conn(), run_id)? else {
+        return Ok(None);
+    };
+    let record = |r: automation_builtin::HeldByRecord| AutomationHeldByRecordDto {
+        id: r.id,
+        title: r.title,
+        count: r.count,
+    };
+    Ok(Some(AutomationHeldBackDto {
+        tasks: held.tasks,
+        values: held
+            .values
+            .into_iter()
+            .map(|v| AutomationHeldByValueDto {
+                dimension_id: v.dimension_id,
+                axis: v.axis,
+                value: v.value,
+                count: v.count,
+            })
+            .collect(),
+        blockers: held.blockers.into_iter().map(record).collect(),
+        decisions: held.decisions.into_iter().map(record).collect(),
+        not_started: held.not_started,
+        first_start: held.first_start.map(|day| day.format("%Y-%m-%d").to_string()),
+        drafts: held.drafts,
+    }))
 }
 
 /// The event the workspace hears when a step of a run is ready to be drawn.

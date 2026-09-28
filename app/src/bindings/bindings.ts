@@ -503,6 +503,51 @@ export type AutomationExitDto = { id: number,
 name: string, outputs: Array<AutomationPortDto>, };
 
 /**
+ * **What is keeping a waiting run waiting** (`AMB-D-999`) — the tasks its filter matches that cannot
+ * be taken, counted by what stops them (`amenbo_core::ops::automation_builtin::HeldBack`). A task
+ * stopped by two things is counted under both, and once in `tasks`.
+ */
+export type AutomationHeldBackDto = { 
+/**
+ * How many tasks are held back.
+ */
+tasks: number, 
+/**
+ * The values ordered before the task's own that are not closed yet, most tasks first.
+ */
+values: Array<AutomationHeldByValueDto>, 
+/**
+ * The unfinished tasks they depend on, most tasks first.
+ */
+blockers: Array<AutomationHeldByRecordDto>, 
+/**
+ * The linked decisions that are not live grounds, most tasks first.
+ */
+decisions: Array<AutomationHeldByRecordDto>, 
+/**
+ * How many wait for their start day.
+ */
+notStarted: number, 
+/**
+ * The first of those start days (`YYYY-MM-DD`). Absent when none waits for one.
+ */
+firstStart?: string, 
+/**
+ * How many are still being created.
+ */
+drafts: number, };
+
+/**
+ * One task or decision holding tasks back, by its id and its title.
+ */
+export type AutomationHeldByRecordDto = { id: number, title: string, count: number, };
+
+/**
+ * One value holding tasks back: the axis's id, which is where closing it is done, and the words.
+ */
+export type AutomationHeldByValueDto = { dimensionId: number, axis: string, value: string, count: number, };
+
+/**
  * **What a launch asks the person starting it for** — what the entry reads at launch
  * ([`amenbo_core::ops::automation_run::LaunchAsks`]), so the dialog every press opens asks for that
  * and nothing else (`AMB-D-970`).

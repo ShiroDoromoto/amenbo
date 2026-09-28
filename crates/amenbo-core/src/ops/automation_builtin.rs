@@ -229,6 +229,51 @@ pub struct Waits {
     /// What it looks for, as a person reads it beside the run while it waits — read from the same
     /// answers. What it would find is not listed or counted: that is asked of every task there is.
     pub looks_for: fn(&[RunDefCfg]) -> String,
+    /// **What is keeping it waiting** ([`HeldBack`], `AMB-D-999`) — read from the same answers, and
+    /// only when a person is about to look: as the wait begins and when the store changes. Never by
+    /// the once-a-second look, which is the reason [`Waits::looks_for`] counts nothing.
+    pub held_back: fn(&Connection, &AutomationRun, &[RunDefCfg]) -> Result<HeldBack>,
+}
+
+/// **What keeps the tasks a waiting built-in looks for from being taken** (`AMB-D-999`): the tasks its
+/// filter matches that are not started and not ready, counted by what stops them — so a person can
+/// read what to close, finish or settle for the run to move again.
+///
+/// A task stopped by two things is counted under both, and once in [`HeldBack::tasks`]. Each list runs
+/// from the one holding the most tasks down.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct HeldBack {
+    /// How many tasks are held back.
+    pub tasks: usize,
+    /// The values ordered before the task's own that are not closed yet.
+    pub values: Vec<HeldByValue>,
+    /// The unfinished tasks they depend on.
+    pub blockers: Vec<HeldByRecord>,
+    /// The linked decisions that are not live grounds.
+    pub decisions: Vec<HeldByRecord>,
+    /// How many are waiting for their start day, and the first of those days.
+    pub not_started: usize,
+    pub first_start: Option<chrono::NaiveDate>,
+    /// How many are still being created.
+    pub drafts: usize,
+}
+
+/// One value holding tasks back — by the axis's id, which is where a person goes to close it, and by
+/// the words a face shows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HeldByValue {
+    pub dimension_id: i64,
+    pub axis: String,
+    pub value: String,
+    pub count: usize,
+}
+
+/// One task or decision holding tasks back, by its id and its title.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HeldByRecord {
+    pub id: i64,
+    pub title: String,
+    pub count: usize,
 }
 
 impl Waits {
@@ -281,6 +326,16 @@ pub fn looks_for(def: &AutomationRunDef) -> Result<Option<String>> {
     };
     let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
     Ok(Some((waits.looks_for)(&cfg)))
+}
+
+/// **What is keeping this copy of a step waiting** ([`Waits::held_back`]), or `None` for a step that
+/// does not wait.
+pub fn held_back(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -> Result<Option<HeldBack>> {
+    let Some(waits) = def.builtin.as_deref().and_then(find).and_then(|b| b.waits.as_ref()) else {
+        return Ok(None);
+    };
+    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    Ok(Some((waits.held_back)(conn, run, &cfg)?))
 }
 
 /// **The way out a placed built-in never leaves by**, as it is set there — the launch check asks no

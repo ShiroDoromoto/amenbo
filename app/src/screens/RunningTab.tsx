@@ -30,7 +30,7 @@
 // built to carry its report onto the task leaves none on a closed one, and without the mark nothing
 // on screen would say why the task holds no report.
 import { useState, type ReactNode } from "react";
-import { acknowledgeRun, pauseRun, resumeRun, stopRun, useLiveRuns } from "../core/automations";
+import { acknowledgeRun, cancelRun, forceCancelRun, pauseRun, resumeRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { runReasonWord, runStatusWord } from "../core/runWords";
@@ -195,8 +195,9 @@ export function RunningTab({
     }
   };
 
-  // The buttons a row carries are the moves its state has: a run going can be held or stopped, a held
-  // one picked up again or stopped, and a failure acknowledged.
+  // The buttons a row carries are the moves its state has (`AMB-D-1002`): a run going can be paused,
+  // or force-cancelled where it stands; a paused one picked up again or cancelled; a failure
+  // acknowledged.
   const actsOf = (run: AutomationRunCardDto) => {
     if (run.status === "failed") {
       return (
@@ -205,24 +206,30 @@ export function RunningTab({
         </button>
       );
     }
-    return (
-      <>
-        {run.status === "paused" ? (
+    if (run.status === "paused") {
+      return (
+        <>
           <button type="button" className="btn" disabled={pressing} onClick={() => void press(() => resumeRun(run.run))}>
             {t("auto.run.resume")}
           </button>
-        ) : (
-          <button
-            type="button"
-            className="btn"
-            disabled={pressing || run.pauseRequested}
-            onClick={() => void press(() => pauseRun(run.run))}
-          >
-            {t("auto.run.pause")}
+          <button type="button" className="btn" disabled={pressing} onClick={() => void press(() => cancelRun(run.run))}>
+            {t("auto.run.cancel")}
           </button>
-        )}
-        <button type="button" className="btn" disabled={pressing} onClick={() => void press(() => stopRun(run.run))}>
-          {t("auto.run.stop")}
+        </>
+      );
+    }
+    return (
+      <>
+        <button
+          type="button"
+          className="btn"
+          disabled={pressing || run.pauseRequested}
+          onClick={() => void press(() => pauseRun(run.run))}
+        >
+          {t("auto.run.pause")}
+        </button>
+        <button type="button" className="btn" disabled={pressing} onClick={() => void press(() => forceCancelRun(run.run))}>
+          {t("auto.run.forceCancel")}
         </button>
       </>
     );

@@ -544,6 +544,7 @@ pub fn run() {
       automation::automation_run_pause,
       automation::automation_run_resume,
       automation::automation_run_stop,
+      automation::automation_run_cancel,
       commands::store_signature,
       commands::version_status,
       commands::check_updates_fresh,

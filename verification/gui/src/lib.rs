@@ -6484,7 +6484,7 @@ impl Instructor {
             // list is gone and the writes are back.
             (Domain::Automation, "held-by") => match present(with) {
                 true => match with.contains_key("target") {
-                    true => "On the build screen, confirm a band marked with a lock is drawn over the picture, saying this run is using it, with a press that opens its pane and one that stops it. Confirm the definition is only read: no line on the picture offers a box to put in, nothing adds one above it, and every field in the panel a box opens is shut.".to_string(),
+                    true => "On the build screen, confirm a band marked with a lock is drawn over the picture, saying this run is using it, with a press that opens its pane and the two its state has — pause and force-cancel for a run going, resume and cancel for a paused one. Confirm the definition is only read: no line on the picture offers a box to put in, nothing adds one above it, and every field in the panel a box opens is shut.".to_string(),
                     false => return Err("`held-by` names the run it lists — give it `target`, or say `present: false`".to_string()),
                 },
                 false => "On the build screen, confirm no band over the picture says a run is using it, and the definition takes writes again: the lines on the picture offer a box to put in, and the fields in the panel a box opens can be changed.".to_string(),
@@ -7199,8 +7199,11 @@ fn run_press(press: &str) -> Result<&'static str, String> {
         "open" => "press the row itself — the workspace comes forward with that run's pane picked out",
         "pause" => "press the control that holds the run",
         "resume" => "press the control that picks it up again",
-        "stop" => "press the control that stops it",
-        other => return Err(format!("`press` does not know `{other}` — it is open / pause / resume / stop")),
+        "stop" => "press the control that force-cancels it. A question asks first, saying that changes made part way through and the worktree may be left behind — answer it with the press that goes through with it",
+        "cancel" => "press the control that cancels it — the run is paused, so it ends on the spot and nothing asks first",
+        other => {
+            return Err(format!("`press` does not know `{other}` — it is open / pause / resume / stop / cancel"))
+        }
     })
 }
 

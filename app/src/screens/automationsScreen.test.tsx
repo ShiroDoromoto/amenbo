@@ -31,6 +31,7 @@ const hoisted = vi.hoisted(() => ({
   check: null as AutomationLaunchCheckDto | null,
   launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
   stop: vi.fn(async (..._args: unknown[]) => true),
+  cancel: vi.fn(async (..._args: unknown[]) => {}),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -47,7 +48,10 @@ vi.mock("../core/automations", () => ({
   // An agent's step as the entry: the dialog every start opens asks for a text and files.
   useLaunchAsks: () => ({ reads: "nothing", axes: [] }),
   NOTHING_HANDED: { files: [], title: "", notes: "", classification: [] },
-  stopRun: hoisted.stop,
+  forceCancelRun: hoisted.stop,
+  cancelRun: hoisted.cancel,
+  pauseRun: async () => {},
+  resumeRun: async () => {},
   // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
   // it is the tab being reachable that matters.
   useLiveRuns: () => [],
@@ -774,13 +778,27 @@ describe("an automation a run is going on (AMB-D-961)", () => {
     expect(goToRun).toHaveBeenCalledWith(1, 31);
   });
 
-  it("stops the run from the band", async () => {
+  it("force-cancels a going run from the band", async () => {
     hoisted.stop.mockClear();
-    await openHeld();
+    await openHeld([{ ...run, status: "running" }]);
     const stop = container.querySelector<HTMLButtonElement>(".autoheld .btn--danger");
-    expect(stop?.textContent).toBe(t("auto.run.stop"));
+    expect(stop?.textContent).toBe(t("auto.run.forceCancel"));
+    expect(buttons().some((b) => b.textContent === t("auto.run.pause"))).toBe(true);
     await act(async () => { stop?.click(); });
     expect(hoisted.stop).toHaveBeenCalledWith(31);
+  });
+
+  it("cancels a paused run from the band, without forcing it", async () => {
+    // A paused run has nothing under way, so it ends on the spot (`AMB-D-1002`).
+    hoisted.stop.mockClear();
+    hoisted.cancel.mockClear();
+    await openHeld([{ ...run, status: "paused" }]);
+    const cancel = container.querySelector<HTMLButtonElement>(".autoheld .btn--danger");
+    expect(cancel?.textContent).toBe(t("auto.run.cancel"));
+    expect(buttons().some((b) => b.textContent === t("auto.run.resume"))).toBe(true);
+    await act(async () => { cancel?.click(); });
+    expect(hoisted.cancel).toHaveBeenCalledWith(31);
+    expect(hoisted.stop).not.toHaveBeenCalled();
   });
 
   it("offers nothing to place, and opens its own fields with them shut", async () => {

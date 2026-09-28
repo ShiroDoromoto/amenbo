@@ -1455,7 +1455,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
         }
         // A step's program that ended by itself, where the step has not reported, fails its run now
         // rather than leaving it at "running" until the next startup (`AMB-D-961`). One Amenbo ended
-        // — the next step taking the place, or a person closing the pane — is not this.
+        // — the next step taking the place, or a person force-cancelling the run — is not this.
         if let Some(run_step) = run_step.filter(|_| itself) {
             crate::automation::step_program_ended(run_step);
         }

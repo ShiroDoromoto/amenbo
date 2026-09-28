@@ -2098,9 +2098,10 @@ fn worked_task(
     }))
 }
 
-/// **Stop a run now** — what the "running" tab's third button presses. Closing the pane a run is
-/// drawn in does not stop it: that press is offered only once the run is over
-/// (`app/src/shell/TerminalPane.tsx`).
+/// **Force-cancel a run** — stop it now, whatever it is in the middle of (`AMB-D-1002`). What the
+/// force-cancel of a running run presses, once the person has said yes to what it may leave behind.
+/// Closing the pane a run is drawn in does not stop it: that press is offered only once the run is
+/// over (`app/src/shell/TerminalPane.tsx`).
 ///
 /// The cleanup is core's and is the same one every other stop goes through
 /// ([`amenbo_core::ops::automation_stop::stop`]): the task the run was working goes to `todo`, and
@@ -2121,6 +2122,20 @@ pub fn automation_run_stop(run_id: i64) -> Result<bool, CmdError> {
     }
     crate::automation_watch::wake();
     Ok(true)
+}
+
+/// **Cancel a paused run** ([`amenbo_core::ops::automation_stop::cancel`], `AMB-D-1002`). Nothing is
+/// under way in a paused run, so it is `canceled` on the spot and there is no terminal to end.
+/// Refused for a run that is not paused: a running one is paused first, or force-cancelled
+/// ([`automation_run_stop`]).
+///
+/// **It is not a `WriteAck` write**, for the reason [`automation_run_stop`] is not.
+#[tauri::command]
+pub fn automation_run_cancel(run_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_cancel(run_id)?;
+    crate::automation_watch::wake();
+    Ok(())
 }
 
 /// The half of the stop that has no window in it: stop the run where it is still going, and answer

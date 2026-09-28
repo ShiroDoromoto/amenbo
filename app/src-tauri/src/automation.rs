@@ -1758,6 +1758,7 @@ fn open_one(
                 ready.run_step.id,
                 folder.clone(),
                 def.agent.clone(),
+                def.model.clone(),
                 ready.text.clone(),
             )?;
             (

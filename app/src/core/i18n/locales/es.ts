@@ -1285,6 +1285,7 @@ export const es: Translation = {
     "auto.run.heldUntil": "Esperando hasta {at}",
     "auto.run.body.taskWait": "Esperando una tarea que pueda tomar",
     "auto.run.body.taskWaitNext": "Cuando una tarea que coincida pueda tomarse, la toma y sigue por sí sola. Para dejar de esperar, pulsa pausa o detener arriba.",
+    "auto.run.heldBack": "Tareas que aún no puede tomar: {count}",
     "auto.run.body.paused": "En pausa. Al reanudar, sigue desde el paso siguiente.",
     "auto.run.body.completed": "Llegó al final del diagrama. El último paso fue «{step}».",
     "auto.run.body.canceled": "Detenida en «{step}». Esta ejecución no continúa.",

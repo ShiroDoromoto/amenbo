@@ -1277,6 +1277,7 @@ export const de: Translation = {
     "auto.run.heldUntil": "Wartet bis {at}",
     "auto.run.body.taskWait": "Wartet auf eine Aufgabe, die übernommen werden kann",
     "auto.run.body.taskWaitNext": "Sobald eine passende Aufgabe übernommen werden kann, übernimmt der Lauf sie und geht von selbst weiter. Zum Beenden des Wartens oben Pause oder Stopp drücken.",
+    "auto.run.heldBack": "Aufgaben, die es noch nicht übernehmen kann: {count}",
     "auto.run.body.paused": "Pausiert. Beim Fortsetzen geht es mit dem nächsten Schritt weiter.",
     "auto.run.body.completed": "Das Ende des Diagramms ist erreicht. Der letzte Schritt war „{step}“.",
     "auto.run.body.canceled": "Bei „{step}“ gestoppt. Dieser Lauf geht nicht weiter.",

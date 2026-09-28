@@ -688,7 +688,9 @@ export function AppShell() {
     let disposed = false;
     void import("@tauri-apps/api/event")
       .then(({ listen }) => listen<LedgerPlaceDto>("ledger-activated", ({ payload }) => {
-        if (payload.automation !== undefined) {
+        if (payload.dimension !== undefined) {
+          openDimension(payload.project, payload.dimension);
+        } else if (payload.automation !== undefined) {
           openAutomation(payload.project, payload.automation, payload.placement ?? null);
         } else {
           openRuns(payload.project, payload.runs ?? "history");
@@ -702,7 +704,7 @@ export function AppShell() {
       disposed = true;
       unlisten?.();
     };
-  }, [openAutomation, openRuns]);
+  }, [openAutomation, openRuns, openDimension]);
 
   // Only the detail closes on a blank-space click. A build panel sits beside a picture whose every box
   // and line is a press, and it closes with its own ×.

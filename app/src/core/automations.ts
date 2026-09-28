@@ -911,6 +911,19 @@ export async function fetchHeldBack(run: number): Promise<AutomationHeldBackDto 
 }
 
 /**
+ * Subscribing read of what keeps a run waiting — read as the wait begins, and again whenever the store
+ * changes under it (`core/query`'s `heldBack`), never on the watch's once-a-second look. Null while
+ * there is nothing to say, or no run.
+ */
+export function useHeldBack(run: number | null): AutomationHeldBackDto | null {
+  const { data } = useQuery<AutomationHeldBackDto | null>(
+    ["heldBack", run],
+    () => (run === null ? Promise.resolve(null) : fetchHeldBack(run)),
+  );
+  return data ?? null;
+}
+
+/**
  * Subscribing read of the runs named. It sits under the running tab's key, so a run moving — a step
  * opened, a way out taken, the run ending — reads them again. Empty until the first answer lands.
  */

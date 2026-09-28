@@ -891,6 +891,13 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 .slot__runbody-mark { font-size: var(--fs-xl); font-weight: 700; line-height: 1; color: var(--c-text-muted); }
 .slot__runbody[data-status="completed"] .slot__runbody-mark { color: var(--c-done); }
 .slot__runbody[data-status="failed"] .slot__runbody-mark { color: var(--c-stop); }
+/* What keeps a waiting run waiting (`../shell/BuiltinCard`'s `HeldBack`): how many tasks it cannot take,
+   then one line per thing stopping them with how many it holds — the thing a press, the count beside it. */
+.slot__held { display: flex; flex-direction: column; align-items: center; gap: var(--s-1); max-width: 40em; }
+.slot__held-head { margin: 0; }
+.slot__held-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; align-items: center; gap: var(--s-1); }
+.slot__held-list li { display: flex; align-items: center; gap: var(--s-2); }
+.slot__held-count { color: var(--c-text-muted); font-variant-numeric: tabular-nums; }
 .filterchips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-1); max-width: 100%; }
 
 /* The question and the row under it, kept together: the words are what say the pills are an offer, so

@@ -1520,6 +1520,7 @@ const ui = {
   "auto.run.heldUntil": "Waiting until {at}",
   "auto.run.body.taskWait": "Waiting for a task it can take",
   "auto.run.body.taskWaitNext": "When a task that matches can be taken, it takes it and goes on by itself. To stop waiting, press pause or stop above.",
+  "auto.run.heldBack": "Tasks it cannot take yet: {count}",
   "auto.run.body.paused": "Paused. Resume it to go on from the next step.",
   "auto.run.body.completed": "Reached the end of the picture. The last step was “{step}”.",
   "auto.run.body.canceled": "Stopped at “{step}”. This run does not go on.",

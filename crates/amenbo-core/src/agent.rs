@@ -433,6 +433,7 @@ commands! {
     AutomationPlaceAdd => "automation place-add",
     AutomationPlaceRm => "automation place-rm",
     AutomationStart => "automation start",
+    AutomationTestRun => "automation test-run",
     AutomationPause => "automation pause",
     AutomationResume => "automation resume",
     AutomationCancel => "automation cancel",
@@ -671,6 +672,7 @@ impl Cmd {
             | Cmd::AutomationPlaceAdd
             | Cmd::AutomationPlaceRm
             | Cmd::AutomationStart
+            | Cmd::AutomationTestRun
             | Cmd::AutomationPause
             | Cmd::AutomationResume
             | Cmd::AutomationCancel
@@ -1518,8 +1520,8 @@ fn capabilities() -> Value {
             &["automation run-list", "automation run-show"],
         ),
         cap(
-            "Run an automation — start one, pause it, pick it up again, cancel it, and acknowledge a failed one",
-            &["automation start", "automation pause", "automation resume", "automation cancel", "automation acknowledge"],
+            "Run an automation — walk one through as a test run, start one, pause it, pick it up again, cancel it, and acknowledge a failed one",
+            &["automation test-run", "automation start", "automation pause", "automation resume", "automation cancel", "automation acknowledge"],
         ),
         cap(
             "Report the step of a run you are carrying out — hand things on, and say you are done",
@@ -2248,6 +2250,13 @@ fn all_commands() -> Value {
                    { "name": "--file <path>", "help": "a file to attach to that task (repeat for several)" },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation start 3 --actor ai", "amenbo automation start 3 --title \"the login page loses the password field\" --file ./issue.md --actor ai"])),
+        cmd("automation test-run", "Walks an automation from its entry to its end without running anything, to see how it would go before starting it for real. It goes the road `automation start` goes — the same launch check, refused the same way (not_ready_automation, invalid_automation_archived), what each step is handed resolved along the wires, and the whole prompt each agent would be started on composed — but no agent is started, no built-in is carried out (nothing is filed, taken, closed, cut, folded, fetched or merged), and nothing it wrote is kept: the run, its steps and any task it made up are thrown away when it returns, so no run id is printed. Each step leaves by the first way out it declares, and by the next one each time it is reached again — a take_task that goes round leaves by \"着手した\" once and by \"着手できるタスクが無い\" the second time; the error way out is never taken. Whatever a step would have handed on is a placeholder, and a task handed on is one made up for the purpose, carrying the --title and --notes a make_task entry would file. It needs no app running. Answers with every step it opened (name, built-in or agent and model, the prompt, the folder, the way out) and how the run ended: completed, failed with its reason, stopped on a required input nothing reached (`missing`) or an agent this machine cannot start (`no_agent`), or cut short (`cut`: looped when a step was reached again with no way out left to try, too_long past 200 steps).",
+            json!([{ "name": "<id>", "help": "automation id", "required": true },
+                   { "name": "--title <title>", "help": "the title of the task a make_task entry would file (required there)" },
+                   { "name": "--notes <notes>", "help": "that task's notes, as Markdown (`-` reads stdin)" },
+                   { "name": "--dim <axis=value>", "help": "classify that task, by name (repeat for several axes)" },
+                   { "name": "--json", "help": "machine-readable output" }]),
+            json!(["amenbo automation test-run 3 --actor ai", "amenbo automation test-run 3 --title \"a post about the rainy season\" --json --actor ai"])),
         cmd("automation pause", "Asks a run to pause. The action under way finishes first and the run pauses at the end of it, keeping the task it is working. `resume` picks it up from the same way out.",
             json!([{ "name": "<run>", "help": "run id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),

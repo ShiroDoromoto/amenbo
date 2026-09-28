@@ -118,6 +118,30 @@ pub fn open(
     startable: Option<&[String]>,
     outside: Option<super::automation_builtin::DoneOutside>,
 ) -> Result<Opened> {
+    open_as(tx, run_id, run_def_id, startable, outside, false)
+}
+
+/// [`open`] for a test run ([`super::automation_rehearse`]): **a built-in is opened as an agent's step
+/// is**, handed its inputs and written down, and neither carried out, held nor waited on — what it
+/// would have done is the test run's to stand in for. Its [`Opening::text`] is empty: no terminal is
+/// started on it.
+pub(crate) fn open_rehearsing(
+    tx: &WriteTx<'_>,
+    run_id: i64,
+    run_def_id: i64,
+    startable: Option<&[String]>,
+) -> Result<Opened> {
+    open_as(tx, run_id, run_def_id, startable, None, true)
+}
+
+fn open_as(
+    tx: &WriteTx<'_>,
+    run_id: i64,
+    run_def_id: i64,
+    startable: Option<&[String]>,
+    outside: Option<super::automation_builtin::DoneOutside>,
+    rehearsing: bool,
+) -> Result<Opened> {
     let conn = tx.conn();
     let run = read::automation_run(conn, run_id)?.ok_or_else(|| not_found("run", run_id))?;
     if run.status != AutomationRunStatus::Running {
@@ -199,7 +223,7 @@ pub fn open(
     }
     // Asked before anything is written, so a built-in that is waiting leaves no execution behind it
     // on each look (`super::automation_builtin::Waits`).
-    if super::automation_builtin::waiting(conn, &run, &def)? {
+    if !rehearsing && super::automation_builtin::waiting(conn, &run, &def)? {
         let run = match run.pause_requested {
             true => super::automation_stop::settle(tx, run)?.run,
             false => run,
@@ -216,6 +240,9 @@ pub fn open(
     let run_step = new_execution(tx, &run, &def, stretch.as_ref(), now)?;
     for found in &handed {
         write_in(tx, &run_step, found, now)?;
+    }
+    if rehearsing && def.builtin.is_some() {
+        return Ok(Opened::Ready(Box::new(Opening { run_step, run_def: def, text: String::new(), folder: None })));
     }
     // A built-in that holds its step open is not carried out: it stands under way until the watch
     // ends it (`AMB-D-983`).

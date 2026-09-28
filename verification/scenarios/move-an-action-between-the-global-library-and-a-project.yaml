@@ -46,7 +46,7 @@ steps_cli:
     with:
       target: shared
       reach: project
-      refused: invalid
+      refused: invalid_action_placed_elsewhere
 
   - type: assert
     domain: automation
@@ -85,7 +85,7 @@ steps_gui:
     with:
       target: shared
       reach: project
-      refused: invalid
+      refused: invalid_action_placed_elsewhere
 
   - type: assert
     domain: automation

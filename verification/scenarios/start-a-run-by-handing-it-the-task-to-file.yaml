@@ -85,7 +85,7 @@ steps_cli:
     with:
       target: auto
       dim: 職種=エンジニア
-      refused: invalid
+      refused: invalid_value
 
   # The project requires the axis, and nothing where the built-in is placed answers it.
   - type: action
@@ -94,7 +94,7 @@ steps_cli:
     with:
       target: auto
       title: one with no value on the axis
-      refused: invalid
+      refused: invalid_make_task_required_empty
 
   # A file that is not there has nothing to attach.
   - type: action

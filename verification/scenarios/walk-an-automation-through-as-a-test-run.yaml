@@ -19,7 +19,7 @@ description: >
 given:
   # The agent the work step names is one this machine can start, so the walk goes past it rather than
   # stopping where a run would — on whichever machine the screen road is walked.
-  - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
+  - { type: action, domain: workspace, op: can-start, with: { count: 2 } }
 
   # The task a take could take, which the walk must leave alone.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task to take }, as: real }

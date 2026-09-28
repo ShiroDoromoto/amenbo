@@ -381,6 +381,9 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
     store.set_viewer_carried(&left)?;
     copied?;
 
+    // A queue filled before a key's older version was taken off as the newer was queued still holds
+    // them, and each would cost the day's rows (`AMB-T-5812`).
+    store.fold_viewer()?;
     let placed = drain(store, &server, &mut left, sending, now);
     store.set_viewer_carried(&left)?;
     let placed = placed?;

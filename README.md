@@ -421,7 +421,7 @@ amenbo automation acknowledge 7                        # a failed run has been s
 # tasks and changes their edges and fields (`task depend`, `decision link`, `dimension set`, `task
 # update`); a task's status and who it is assigned to stay the run's, and no decision is written there.
 amenbo automation run-list --task AMB-T-<n> --json     # the runs that worked one task
-amenbo automation run-show 7                           # one run in full, step by step
+amenbo automation run-show 7                           # one run in full, step by step, and whether it is waiting for a task
 
 # Status and data ownership
 amenbo status                               # overdue / today / in-progress summary

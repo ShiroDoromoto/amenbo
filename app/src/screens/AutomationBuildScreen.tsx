@@ -65,6 +65,9 @@
 // the build screen drawing it among things somebody has to go and fix. Core refuses it as well
 // (`amenbo_core::ops::automation_run::launch`), for one that closes while the dialog is up. Whether it
 // is standing is handed down from the shell, which is the one place that knows which window holds it.
+//
+// **The head says whether the last write was saved** (`./AutomationSaved`, `AMB-D-1005`). Nothing
+// here has a Save press, so the head says when a write landed and "Saved" stands beside its field.
 import { useState } from "react";
 import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPanel";
 import { Panel } from "./AutomationActionBuildScreen";
@@ -73,6 +76,7 @@ import { AutomationPicture } from "./AutomationPicture";
 import { automationGraph } from "./automationLayout";
 import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationHeldBy } from "./AutomationHeldBy";
+import { useSaved } from "./AutomationSaved";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 import type { WhereTo } from "./automationParts";
 import { useAutomationStart } from "../components/StartAutomation";
@@ -143,9 +147,10 @@ export function AutomationBuildScreen({
       ? automation?.placements.find((one) => one.id === showing.id) ?? null
       : null;
   const close = () => setShowing(null);
+  const saved = useSaved();
 
   return (
-    <div className="actbuild">
+    <div className="actbuild" {...saved.capture}>
       <div className="actbuild__head">
         <button type="button" className="btn" onClick={onBack}>
           <Icon name="chevronLeft" /> {t("auto.build.back")}
@@ -154,6 +159,7 @@ export function AutomationBuildScreen({
           <span className="autoid">{tf("auto.id", { id: automation.id })}</span>
         )}
         <span className="actbuild__name">{automation?.name ?? ""}</span>
+        {saved.head}
         <button
           type="button"
           className={showing?.kind === "about" ? "btn btn--on actbuild__edit" : "btn actbuild__edit"}
@@ -299,6 +305,7 @@ export function AutomationBuildScreen({
           onClose={() => setMaking(null)}
         />
       )}
+      {saved.marks}
     </div>
   );
 }

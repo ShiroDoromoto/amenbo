@@ -1962,6 +1962,19 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
    The action build screen's frame (`.actbuild`). "Edit" and the start press stand at the far end of
    the head, and what keeps the press from being pressed is listed under the head. */
 .actbuild__edit { margin-inline-start: auto; }
+/* Whether the last write was saved, at the far end of a build screen's head, before "Edit"
+   (`../screens/AutomationSaved`). It takes the far end's space, so "Edit" stands right after it. */
+.actsaved { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.actsaved + .actbuild__edit { margin-inline-start: 0; }
+.actsaved--failed { color: var(--c-stop); font-weight: var(--fw-bold); }
+/* "Saved" beside the field a write came from, for two seconds. It stands over the page, not in the
+   field's row, so its coming and going moves nothing. */
+.actsaved__mark {
+  position: fixed; z-index: 50; transform: translateY(-50%); pointer-events: none; white-space: nowrap;
+  padding: 0 var(--s-1); border-radius: var(--r-md); font-size: var(--fs-xs);
+  color: var(--c-accent); background: var(--c-accent-weak);
+}
+.actsaved__mark--inside { transform: translate(-100%, -50%); }
 /* Which action stands on the pressed spot, as one card at the head of its panel: a mark, the name with
    its reach and how many automations use it, and the one press — to where it is built — at the far
    end. Nothing on it takes a value, which is what says it is not changed here. */

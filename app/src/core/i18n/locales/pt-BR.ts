@@ -1513,6 +1513,7 @@ export const ptBR: Translation = {
     not_ready_automation: "“{automation}” ainda não pode ser iniciada: {reasons}",
     not_ready_automation_no_steps: "Não tem nenhuma ação colocada",
     not_ready_automation_no_entry: "nenhum posicionamento é o início",
+    not_ready_automation_action_draft: "a ação “{action}” posicionada ainda está em criação",
     not_ready_automation_action_empty: "a ação “{action}” posicionada não tem etapa de início",
     not_ready_automation_entry_takes_no_task: "{step}: a etapa de início não pega nenhuma tarefa, então cada etapa seguinte não trataria de nada",
     not_ready_automation_open_exit: "{step}: nada está previsto depois de “{exit}”",

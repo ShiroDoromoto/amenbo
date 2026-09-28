@@ -526,6 +526,18 @@ pub fn action_add(
     name: &str,
     note: &str,
 ) -> Result<AutomationAction> {
+    write_action(tx, project_id, name, note, false)
+}
+
+/// [`action_add`], with whether the action is born still being written (`AMB-D-1005`) — which only the
+/// ops that make one on the spot where it is placed say yes to.
+fn write_action(
+    tx: &WriteTx<'_>,
+    project_id: Option<i64>,
+    name: &str,
+    note: &str,
+    draft: bool,
+) -> Result<AutomationAction> {
     let name = checked_name("action", name)?;
     if let Some(project_id) = project_id {
         if read::project(tx.conn(), project_id)?.is_none() {
@@ -545,6 +557,7 @@ pub fn action_add(
         builtin: None,
         builtin_dimension_id: None,
         builtin_version: None,
+        draft,
         order_key,
         created_at: now,
         updated_at: now,
@@ -810,6 +823,77 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     delete_cfgs(tx, AutomationCfgOwner::Action, id)?;
     tx.delete_record("automation_action", id)?;
     Ok(())
+}
+
+/// **Say an action made on the spot is written** (`AMB-D-1005`) — one of the two ways out of being
+/// still written, and the one that keeps it. It is taken with nothing inside the action, too: an action
+/// with no step is the launch check's to refuse (`ActionEmpty`), not this op's.
+///
+/// Finishing an action that is already finished hands it straight back and writes nothing, the way
+/// [`crate::ops::task::finish_creating`] does and for its reason.
+pub fn action_finish_creating(tx: &WriteTx<'_>, id: i64) -> Result<AutomationAction> {
+    let before = live_action(tx, id)?;
+    if !before.draft {
+        return Ok(before);
+    }
+    let after = AutomationAction { draft: false, updated_at: Timestamp::now(), ..before.clone() };
+    emit_update(tx, record::automation_action(&before), record::automation_action(&after))?;
+    Ok(after)
+}
+
+/// **Give up an action made on the spot** (`AMB-D-1005`) — the other way out of being still written.
+/// The action goes, and so does every placement standing on it, in one act: what was made on the spot
+/// was the pair, and half of it left behind is a picture nobody asked for.
+///
+/// **The lines go back to how they were before it was placed.** A line that ran into the placement is
+/// pointed on to wherever the placement's own way out went, which is where it pointed before the
+/// action was put in on it ([`splice_onto_edge`]); where the placement's way out says nothing, the way
+/// out that led into it goes back to saying nothing ([`placement_insert_new_at_exit`]).
+///
+/// Refused for an action that is not being written: that one is kept, and taking it away is
+/// [`action_delete`]'s, which asks first that nothing stands on it.
+pub fn action_abandon(tx: &WriteTx<'_>, id: i64) -> Result<()> {
+    let action = live_action(tx, id)?;
+    if !action.draft {
+        return Err(Error::invalid(format!(
+            "action '{id}' is not being written, so there is nothing to give up — delete it with \
+             `automation action-rm` once nothing stands on it"
+        )));
+    }
+    for placement in read::automation_placement_ids_using_action(tx.conn(), id)? {
+        take_off_as_before(tx, placement)?;
+    }
+    action_delete(tx, id)
+}
+
+/// Take a placement off and join the lines that ran into it to where its way out went — the reverse of
+/// [`splice_onto_edge`] and [`hang_on_exit`], for [`action_abandon`].
+fn take_off_as_before(tx: &WriteTx<'_>, placement_id: i64) -> Result<()> {
+    let owner_kind = AutomationPictureOwner::Automation;
+    let placement = live_placement(tx, placement_id)?;
+    not_under_a_run(tx, Def::Automation(placement.automation_id))?;
+    let done = box_exit(tx, owner_kind, placement_id, None)?;
+    let onward = read::automation_edge_for_exit(tx.conn(), owner_kind, placement_id, done.id)?
+        .filter(|edge| edge.to_id != Some(placement_id));
+    let into: Vec<AutomationEdge> = read::automation_edges_of(tx.conn(), owner_kind, placement.automation_id)?
+        .into_iter()
+        .filter(|edge| edge.ends == AutomationEnds::Go && edge.to_id == Some(placement_id))
+        .filter(|edge| edge.from_id != placement_id)
+        .collect();
+    for edge in into {
+        let Some(onward) = &onward else {
+            edge_delete(tx, edge.id)?;
+            continue;
+        };
+        // The limit the line carried into the placement is the one it carried before, so a line going
+        // on to a box keeps it; one that closes or stops the run carries none.
+        let limit = match onward.ends {
+            AutomationEnds::Go => None,
+            _ => Some(None),
+        };
+        edge_update(tx, edge.id, Some(edge_target(tx, onward)?), limit)?;
+    }
+    placement_delete(tx, placement_id)
 }
 
 // ───────────────────────────── the automation itself ─────────────────────────────
@@ -1190,6 +1274,9 @@ impl ActionShelf {
 /// It is one act because half of it is a picture nobody asked for: an action in the library that
 /// nothing stands on, or a line running past a spot that was meant to be on it.
 ///
+/// **The action is born still being written** (`AMB-D-1005`), and the reader leaves it one of two ways:
+/// [`action_finish_creating`] keeps it, and [`action_abandon`] takes it and its placement away again.
+///
 /// Which library it lands in is the dialog's answer ([`ActionShelf`]), not this op's: an action
 /// made here is an ordinary action, and where an ordinary action is kept is a choice its author
 /// makes.
@@ -1203,7 +1290,7 @@ pub fn placement_insert_new(
     if edge.owner_kind != AutomationPictureOwner::Action {
         let automation_id = box_picture(tx, AutomationPictureOwner::Automation, edge.from_id)?;
         let project_id = live_automation(tx, automation_id)?.project_id;
-        let action = action_add(tx, shelf.under(project_id), name, "")?;
+        let action = write_action(tx, shelf.under(project_id), name, "", true)?;
         let placement = placement_add(tx, automation_id, action.id)?;
         splice_onto_edge(tx, &edge, placement.id)?;
         return Ok(placement);
@@ -1248,7 +1335,7 @@ pub fn placement_insert_new_at_exit(
     open_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name)?;
     let automation_id = live_placement(tx, from_id)?.automation_id;
     let project_id = live_automation(tx, automation_id)?.project_id;
-    let action = action_add(tx, shelf.under(project_id), name, "")?;
+    let action = write_action(tx, shelf.under(project_id), name, "", true)?;
     let placement = placement_add(tx, automation_id, action.id)?;
     hang_on_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name, placement.id)?;
     Ok(placement)
@@ -1566,17 +1653,7 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
 /// A way out that closes or stops the run carries none, so both edges take the standing limit
 /// ([`crate::model::DEFAULT_MAX_TIMES`]) — a box to go on to is what makes a limit mean anything.
 fn splice_onto_edge(tx: &WriteTx<'_>, edge: &AutomationEdge, new_box: i64) -> Result<()> {
-    let onward = match edge.ends {
-        AutomationEnds::Go => EdgeTarget::Go(
-            edge.to_id.ok_or_else(|| Error::invalid("the way out goes on to nothing"))?,
-        ),
-        AutomationEnds::Exit => EdgeTarget::Exit(match edge.exit_to_id {
-            Some(id) => Some(live_exit(tx, id)?.name),
-            None => None,
-        }),
-        AutomationEnds::Done => EdgeTarget::Done,
-        AutomationEnds::Halt => EdgeTarget::Halt,
-    };
+    let onward = edge_target(tx, edge)?;
     let carried = match edge.ends {
         AutomationEnds::Go => edge.max_times,
         _ => Some(DEFAULT_MAX_TIMES),
@@ -1588,6 +1665,21 @@ fn splice_onto_edge(tx: &WriteTx<'_>, edge: &AutomationEdge, new_box: i64) -> Re
     };
     edge_add(tx, edge.owner_kind, new_box, None, onward, onward_limit)?;
     Ok(())
+}
+
+/// Where an edge goes, said the way [`edge_update`] takes it.
+fn edge_target(tx: &WriteTx<'_>, edge: &AutomationEdge) -> Result<EdgeTarget> {
+    Ok(match edge.ends {
+        AutomationEnds::Go => EdgeTarget::Go(
+            edge.to_id.ok_or_else(|| Error::invalid("the way out goes on to nothing"))?,
+        ),
+        AutomationEnds::Exit => EdgeTarget::Exit(match edge.exit_to_id {
+            Some(id) => Some(live_exit(tx, id)?.name),
+            None => None,
+        }),
+        AutomationEnds::Done => EdgeTarget::Done,
+        AutomationEnds::Halt => EdgeTarget::Halt,
+    })
 }
 
 /// **Put a step in on a line** inside one action — [`splice_onto_edge`] with the step written first.
@@ -3493,6 +3585,106 @@ mod tests {
         });
     }
 
+    /// **Only an action made on the spot is born still being written** (`AMB-D-1005`).
+    #[test]
+    fn an_action_made_on_the_spot_is_born_still_being_written_and_no_other_is() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (kept, first) = mk_placed(tx, &automation, "取る");
+            let edge = edge_add(tx, AutomationPictureOwner::Automation, first.id, None, EdgeTarget::Done, None)
+                .expect("close the task after it");
+
+            let on_line = placement_insert_new(tx, edge.id, ActionShelf::Project, "書く").expect("on a line");
+            let after = placement_insert_new_at_exit(tx, on_line.id, Some(ERROR_EXIT), ActionShelf::Project, "直す")
+                .expect("after a way out that says nothing");
+
+            assert!(live_action(tx, on_line.action_id).unwrap().draft);
+            assert!(live_action(tx, after.action_id).unwrap().draft);
+            assert!(!kept.draft, "an action added to the library by itself is not");
+        });
+    }
+
+    /// **Finishing takes an empty action too, and finishing twice writes nothing** (`AMB-D-1005`).
+    #[test]
+    fn finishing_an_action_keeps_it_even_when_it_is_empty() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            let made = placement_insert_new_at_exit(tx, first.id, None, ActionShelf::Project, "書く")
+                .expect("make one");
+
+            let finished = action_finish_creating(tx, made.action_id).expect("finish it, empty as it is");
+            assert!(!finished.draft);
+            assert_eq!(finished.entry_step_id, None);
+            let again = action_finish_creating(tx, made.action_id).expect("finish it again");
+            assert_eq!(again.updated_at, finished.updated_at, "nothing is written the second time");
+            assert_eq!(live_placement(tx, made.id).unwrap().action_id, made.action_id, "it stays placed");
+        });
+    }
+
+    /// **Giving up an action made on a line puts the line back** where it went before (`AMB-D-1005`),
+    /// with the limit it carried.
+    #[test]
+    fn giving_up_an_action_made_on_a_line_puts_the_line_back_as_it_was() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            let (_, last) = mk_placed(tx, &automation, "見直す");
+            let to_last =
+                edge_add(tx, AutomationPictureOwner::Automation, first.id, None, EdgeTarget::Go(last.id), Some(3))
+                    .expect("go on to the last");
+            let to_done =
+                edge_add(tx, AutomationPictureOwner::Automation, last.id, None, EdgeTarget::Done, None)
+                    .expect("close the task after it");
+
+            let between = placement_insert_new(tx, to_last.id, ActionShelf::Project, "書く").expect("between");
+            let closing = placement_insert_new(tx, to_done.id, ActionShelf::Device, "閉じる").expect("at the end");
+            action_abandon(tx, between.action_id).expect("give up the one between");
+            action_abandon(tx, closing.action_id).expect("give up the one at the end");
+
+            let back = edge_on(tx, AutomationPictureOwner::Automation, first.id, None).unwrap().unwrap();
+            assert_eq!((back.ends, back.to_id, back.max_times), (AutomationEnds::Go, Some(last.id), Some(3)));
+            let back = edge_on(tx, AutomationPictureOwner::Automation, last.id, None).unwrap().unwrap();
+            assert_eq!((back.ends, back.to_id, back.max_times), (AutomationEnds::Done, None, None));
+            assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).unwrap(), vec![first.id, last.id]);
+            assert!(read::automation_action(tx.conn(), between.action_id).unwrap().is_none());
+            assert!(read::automation_action(tx.conn(), closing.action_id).unwrap().is_none());
+        });
+    }
+
+    /// **Giving up an action made after a way out that said nothing leaves it saying nothing again**
+    /// (`AMB-D-1005`).
+    #[test]
+    fn giving_up_an_action_made_after_a_way_out_leaves_that_way_out_saying_nothing() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            let made = placement_insert_new_at_exit(tx, first.id, None, ActionShelf::Project, "書く")
+                .expect("make one");
+
+            action_abandon(tx, made.action_id).expect("give it up");
+
+            assert!(edge_on(tx, AutomationPictureOwner::Automation, first.id, None).unwrap().is_none());
+            assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).unwrap(), vec![first.id]);
+        });
+    }
+
+    /// **An action that is not being written is not given up** — deleting it is `action_delete`'s.
+    #[test]
+    fn an_action_that_is_not_being_written_is_not_given_up() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            let made = placement_insert_new_at_exit(tx, first.id, None, ActionShelf::Project, "書く")
+                .expect("make one");
+            action_finish_creating(tx, made.action_id).expect("finish it");
+
+            let refused = action_abandon(tx, made.action_id).expect_err("it is kept");
+            assert!(format!("{refused}").contains("is not being written"), "{refused}");
+            assert!(live_placement(tx, made.id).is_ok(), "and it stays placed");
+        });
+    }
+
     #[test]
     fn a_way_out_that_already_says_something_takes_nothing_put_on_after_it() {
         with_tx(|tx| {
@@ -4883,6 +5075,10 @@ mod held_by_a_run {
             "lines_back",
             // Reads an answer handed to it and writes nothing.
             "answer_misfit",
+            // A flag the launch check reads, on an action no run can have been launched through.
+            "action_finish_creating",
+            // Only through `placement_delete` and `action_delete`, which ask.
+            "action_abandon",
         ];
         let mut forgot = Vec::new();
         for (at, _) in ops.match_indices("\npub fn ") {

@@ -1510,6 +1510,7 @@ export const ja: Translation = {
     not_ready_automation: "「{automation}」は起動できません: {reasons}",
     not_ready_automation_no_steps: "アクションが1つも置かれていない",
     not_ready_automation_no_entry: "起点の配置が決まっていない",
+    not_ready_automation_action_draft: "置いたアクション「{action}」が、まだ作成中",
     not_ready_automation_action_empty: "置いたアクション「{action}」に、起点のステップが無い",
     not_ready_automation_entry_takes_no_task: "{step}：起点のステップがタスクに着手しないので、その先のステップが何についてのものか決まらない",
     not_ready_automation_open_exit: "{step}：出口「{exit}」の次にすることが決まっていない",

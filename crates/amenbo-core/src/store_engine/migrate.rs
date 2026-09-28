@@ -1108,7 +1108,32 @@ pub const STEPS: &[Step] = &[
         name: "give a built-in's library action, and a run's copy of one, the version of the definition it was written from",
         apply: Apply::Custom(give_the_builtins_a_version),
     },
+    Step {
+        to: 86,
+        name: "add automation_action.draft, whether an action made on the spot is still being written",
+        // `AMB-D-1005`. An action made where it is placed is born still being written, and its author
+        // either finishes it or gives it up — the flag `task.draft` and `decision.draft` already are.
+        //
+        // **Seeded, and the seed is not a guess: `0` on every row.** An action that already exists was
+        // written by a build with no such stage, so nobody is still deciding whether to keep it.
+        apply: Apply::Custom(give_the_actions_a_draft_flag),
+    },
 ];
+
+/// v86: `automation_action.draft` — whether an action made on the spot is still being written
+/// (`AMB-D-1005`).
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason: a store raised from before
+/// the automation tables were created has them created in the live shape, column and all.
+fn give_the_actions_a_draft_flag(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_action")?.iter().any(|c| c == "draft") {
+        tx.execute_batch(
+            "ALTER TABLE automation_action ADD COLUMN draft BOOLEAN NOT NULL DEFAULT 0 CHECK(draft IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
 
 /// v85: `automation_action.builtin_version` and `automation_run_def.builtin_version` — which version of a
 /// built-in's definition its rows were written from (`AMB-D-1000`).
@@ -9487,6 +9512,29 @@ mod tests {
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v86: every action an upgrade brings in arrives finished — no build before this one made an action
+    /// that was still being written.
+    #[test]
+    fn every_action_already_written_is_finished() {
+        let dir = scratch("action-draft");
+        let engine = store_at(&dir, 85);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO automation_action (id, name, builtin, builtin_version) VALUES \
+                     (1, 'worktree を切る', 'cut_worktree', 1), (2, 'mine', NULL, NULL);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let mut stmt = engine.conn().prepare("SELECT draft FROM automation_action ORDER BY id").unwrap();
+        let drafts: Vec<bool> = stmt.query_map([], |r| r.get::<_, bool>(0)).unwrap().map(|v| v.unwrap()).collect();
+        assert_eq!(drafts, vec![false, false]);
         std::fs::remove_dir_all(&dir).ok();
     }
 

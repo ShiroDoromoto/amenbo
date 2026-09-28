@@ -1496,6 +1496,7 @@ export const id: Translation = {
     not_ready_automation: "“{automation}” belum siap dijalankan: {reasons}",
     not_ready_automation_no_steps: "Belum ada aksi yang ditempatkan",
     not_ready_automation_no_entry: "tidak ada penempatan yang menjadi awal",
+    not_ready_automation_action_draft: "aksi “{action}” yang ditempatkan masih sedang dibuat",
     not_ready_automation_action_empty: "aksi “{action}” yang ditempatkan tidak punya langkah awal",
     not_ready_automation_entry_takes_no_task: "{step}: langkah awal tidak mengambil tugas, jadi setiap langkah sesudahnya tidak tentang apa pun",
     not_ready_automation_open_exit: "{step}: tidak ada yang ditetapkan setelah “{exit}”",

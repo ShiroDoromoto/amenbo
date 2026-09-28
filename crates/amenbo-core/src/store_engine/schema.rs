@@ -1055,6 +1055,10 @@ datasets! {
         // for an action a person wrote. One action per version: a placement points at the one it was
         // placed with, and a newer definition is written beside it rather than over it.
         builtin_version: col(INT_OPT),
+        // Still being written (`AMB-D-1005`): made on the spot where it was placed, and neither finished
+        // nor given up yet. The launch check refuses an automation standing on one. An action written
+        // before this column was declared was never one.
+        draft: bool_col,
         order_key: col(ORDER_KEY),
     }
 

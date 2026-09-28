@@ -1513,6 +1513,7 @@ export const es: Translation = {
     not_ready_automation: "«{automation}» todavía no se puede iniciar: {reasons}",
     not_ready_automation_no_steps: "No tiene ninguna acción colocada",
     not_ready_automation_no_entry: "ninguna ubicación es el inicio",
+    not_ready_automation_action_draft: "la acción «{action}» colocada sigue en creación",
     not_ready_automation_action_empty: "la acción «{action}» colocada no tiene paso de inicio",
     not_ready_automation_entry_takes_no_task: "{step}: el paso de inicio no toma ninguna tarea, así que todos los pasos siguientes no tratarían de nada",
     not_ready_automation_open_exit: "{step}: no hay nada previsto después de «{exit}»",

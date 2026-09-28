@@ -2243,7 +2243,7 @@ fn all_commands() -> Value {
                    { "name": "--file <path>", "help": "a file to attach to that task (repeat for several)" },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation start 3 --actor ai", "amenbo automation start 3 --title \"the login page loses the password field\" --file ./issue.md --actor ai"])),
-        cmd("automation pause", "Asks a run to pause. A step under way finishes first and the run pauses at the end of it, keeping the task it is working. `resume` picks it up from the same way out.",
+        cmd("automation pause", "Asks a run to pause. The action under way finishes first and the run pauses at the end of it, keeping the task it is working. `resume` picks it up from the same way out.",
             json!([{ "name": "<run>", "help": "run id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation pause 7 --actor ai"])),

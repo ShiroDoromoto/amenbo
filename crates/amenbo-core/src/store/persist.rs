@@ -1994,7 +1994,7 @@ impl Store {
         )
     }
 
-    /// **Ask a run to pause.** A step under way finishes first; one that is not pauses now.
+    /// **Ask a run to pause.** An action under way finishes first; a run with none under way pauses now.
     pub fn automation_pause(
         &mut self,
         run_id: i64,
@@ -2014,7 +2014,19 @@ impl Store {
         })
     }
 
-    /// **Stop a run now** (one operation = one transaction).
+    /// **Cancel a paused run** (one operation = one transaction, `AMB-D-1002`). A run still going is
+    /// refused: it is paused first, or force-canceled through [`Self::automation_stop`]. The reach is
+    /// the run's, as stopping it.
+    pub fn automation_cancel(
+        &mut self,
+        run_id: i64,
+    ) -> Result<crate::ops::automation_stop::Ended> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::cancel(tx, run_id)
+        })
+    }
+
+    /// **Stop a run now** — the force-cancel (one operation = one transaction).
     ///
     /// The reach is the run's, like opening a step: what this writes are the run's own rows, the task
     /// it was holding, and the line left on that task.

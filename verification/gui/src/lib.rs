@@ -7272,7 +7272,7 @@ fn run_state(state: &str) -> Result<&'static str, String> {
         "running" => "under way",
         // Pause pressed while a step is open: the run is still `running`, and the row says it will
         // hold once that step reports rather than either of the two it sits between.
-        "pausing" => "going to hold at the end of the step it is on",
+        "pausing" => "going to hold at the end of the action it is on",
         "paused" => "held",
         "completed" => "completed",
         "failed" => "failed, waiting for somebody to acknowledge it",
@@ -7291,7 +7291,7 @@ fn run_state(state: &str) -> Result<&'static str, String> {
 fn row_state(state: &str) -> Result<&'static str, String> {
     Ok(match state {
         "running" => "under way — the dot in front of its name in the colour of work going on, and no chip beside the name",
-        "pausing" => "going to hold at the end of the step it is on — a chip beside its name saying it is pausing, and the pause press greyed out",
+        "pausing" => "going to hold at the end of the action it is on — a chip beside its name saying it is pausing, and the pause press greyed out",
         "paused" => "held — a chip beside its name saying it is paused",
         "failed" => "failed, waiting for somebody to acknowledge it — the whole row painted in the stop colour, with the press that acknowledges it beside it",
         "completed" | "canceled" => {

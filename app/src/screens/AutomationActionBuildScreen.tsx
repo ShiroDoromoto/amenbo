@@ -335,6 +335,9 @@ export function AutomationActionBuildScreen({
           selectedBoxId={step ?? undefined}
           onPickBox={pickBox}
           onInsert={readOnly ? undefined : (edgeId) => setAdding({ picture: "action", edgeId })}
+          onOpenExit={
+            readOnly ? undefined : ({ boxId, exitName }) => setAdding({ picture: "action", fromId: boxId, exitName })
+          }
           selectedPart={part === "in" || part === "out" ? part : undefined}
           onPickPart={pickPart}
         />

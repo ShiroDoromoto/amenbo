@@ -35,6 +35,12 @@
 // ran across the tops of the boxes, and nothing about them is done on the picture: a wire is made,
 // dropped and read in the panel beside it.
 //
+// **A way out nothing has been decided for is drawn, dashed, with the press that puts the next box on
+// it at its end** (`AMB-D-1003`). Without it a box's ways out had no line until one was decided, so
+// no `+` stood anywhere to add the next box by, and a reader could not find how to go on. They are
+// few, and each is one somebody has to fill before a launch, so the press stands there all the time.
+// The error way out is not one of them: a box leaves by it to a person without any line (below).
+//
 // **The error way out is drawn only where somebody drew a line from it.** Every box is born carrying
 // it with nothing said about what follows, which core reads as stopping the run and calling a person
 // (`AMB-D-966`). Drawn on every box, that one line said the same thing seven times over and crowded
@@ -158,6 +164,10 @@ const WORD_H = 15;
 /** How far a name is written from the `+` it sits beside, and from the line it sits over. */
 const BESIDE = 14;
 const OVER = 12;
+/** How much lower each way out with nothing decided sits than the one to its right — the height of
+ *  the press at its end, so one row of words and a press never lie over the next. */
+const OPEN_H = 26;
+
 /** How much lower a line's `+` sits on its lane for each lane further out. */
 const LANE_PLUS = 24;
 /** The action's input, a frame over the picture: its title, and what it takes in on one line. */
@@ -239,10 +249,25 @@ export type PicLine = {
    * not an edge's.
    */
   joins?: boolean;
+  /** It is a way out nothing has been decided for yet, and no edge: it ends in the press that puts
+   *  the next box on it (`PicOpen`). */
+  open?: boolean;
 };
 
 /** The `+` on a line, which puts a box in at that point. */
 export type PicInsert = { edgeId: number; x: number; y: number };
+
+/**
+ * **The press at the end of a way out nothing has been decided for** (`AMB-D-1003`): it puts the next
+ * box on after that way out. `x` is where its left edge stands and `y` its middle.
+ */
+export type PicOpen = { boxId: number; exitName: string; x: number; y: number };
+
+/** What the press at the end of a way out with nothing decided says — a picture's boxes are actions
+ *  on an automation's and steps on an action's. */
+export function openWord(inAction: boolean): string {
+  return t(inAction ? "auto.act.openPut" : "auto.pic.openPut");
+}
 
 /**
  * One mark for the action itself: its input over the picture (`in`), or one way out it is left by
@@ -273,6 +298,8 @@ export type Picture = {
   nodes: readonly PicNode[];
   lines: readonly PicLine[];
   inserts: readonly PicInsert[];
+  /** The ways out nothing has been decided for, each with its press. */
+  opens: readonly PicOpen[];
   /** The action's own marks. Empty on an automation's picture. */
   marks: readonly PicMark[];
   /** The frame the ways out of the action stand in, when there is that row. */
@@ -667,7 +694,7 @@ function wordW(exitName: string | undefined): number {
  * lanes the left margin turned out to need — which is not known until every line has one.
  */
 export function layOut(graph: PicGraph | null): Picture {
-  const empty: Picture = { width: 0, height: 0, laps: [], nodes: [], lines: [], inserts: [], marks: [] };
+  const empty: Picture = { width: 0, height: 0, laps: [], nodes: [], lines: [], inserts: [], opens: [], marks: [] };
   if (graph === null || graph.boxes.length === 0) return empty;
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
@@ -682,6 +709,16 @@ export function layOut(graph: PicGraph | null): Picture {
     outs.length * OUT_W + Math.max(0, outs.length - 1) * OUT_GAP + FRAME_PAD * 2,
     ...laps.flatMap((lap) => lap.rows.map((row) => row.length * NODE_W + (row.length - 1) * COL_GAP)),
   );
+
+  // How many of each box's ways out say nothing yet (`AMB-D-1003`) — each hangs a row lower than the
+  // one to its right, and under the last row of a stretch they need the room.
+  const undecidedOf = (box: PicBox): readonly AutomationExitDto[] =>
+    box.exits.filter(
+      (exit) =>
+        exit.name !== ERROR_EXIT &&
+        exit.name !== box.neverLeavesBy &&
+        !graph.edges.some((edge) => edge.fromId === box.id && edge.exitName === exit.name),
+    );
 
   // Which row of which stretch each box landed in — what says whether two boxes are neighbours.
   const at = new Map<number, { lap: number; row: number }>();
@@ -722,7 +759,11 @@ export function layOut(graph: PicGraph | null): Picture {
         });
       });
     });
-    const inner = lap.rows.length * NODE_H + (lap.rows.length - 1) * ROW_GAP + END_ROOM;
+    // Under the last row, room for the lowest press of a way out that says nothing yet.
+    const lastRow = lap.rows[lap.rows.length - 1] ?? [];
+    const pressing = Math.max(0, ...lastRow.map((boxId) => undecidedOf(boxes.get(boxId)!).length));
+    const endRoom = pressing === 0 ? END_ROOM : Math.max(END_ROOM, STUB + (pressing - 1) * OPEN_H + OVER + 20);
+    const inner = lap.rows.length * NODE_H + (lap.rows.length - 1) * ROW_GAP + endRoom;
     const height = inner + over + pad;
     if (lap.head !== null) {
       outlines.push({ headBoxId: lap.head, x: -LAP_PAD, y: top, w: contentW + LAP_PAD * 2, h: height });
@@ -921,7 +962,17 @@ export function layOut(graph: PicGraph | null): Picture {
     if (neighbours(edge.fromId, toId)) return 1;
     return sideOf.get(edge.id) === "right" ? 3 : 0;
   };
+  // The ways out nothing has been decided for (`AMB-D-1003`): no line leaves by them yet. The error
+  // one is left out — with no line it stops the run and calls a person — and so is the one a
+  // built-in never leaves by, as its settings stand.
+  const opens = graph.boxes.flatMap((box) =>
+    !node.has(box.id)
+      ? []
+      : undecidedOf(box).map((exit) => ({ key: `open-${box.id}-${exit.name}`, boxId: box.id, exitName: exit.name })),
+  );
+  // `below` is how far under the shortest the foot of a line that goes nowhere hangs, in pixels.
   const slot = new Map<number, { nth: number; below: number }>();
+  const openSlot = new Map<string, { nth: number; below: number }>();
   /** How many of its ways out each box has a line from — the places along its bottom. */
   const slots = new Map<number, number>();
   // The first of each box's lines that go down to a neighbour — the one with nothing of its box's
@@ -932,15 +983,48 @@ export function layOut(graph: PicGraph | null): Picture {
     const own = edges
       .filter((edge) => edge.fromId === box.id)
       .sort((a, b) => reach(a) - reach(b) || exitAt(a) - exitAt(b));
-    slots.set(box.id, own.length);
+    // A way out with nothing decided stands after the lines that go nowhere and before the ones for
+    // the right margin: it hangs down as they do, and its press runs off to the right of its words.
+    const undecided = opens.filter((open) => open.boxId === box.id);
+    const before = own.filter((edge) => reach(edge) <= 2).length;
+    slots.set(box.id, own.length + undecided.length);
     const nowhere = own.filter((edge) => reach(edge) === 2).length;
     let seen = 0;
     own.forEach((edge, nth) => {
-      // How many lines that go nowhere stand to this one's right: its words go that many rows lower.
-      const below = reach(edge) === 2 ? nowhere - 1 - seen++ : 0;
-      slot.set(edge.id, { nth, below });
+      // How many lines that go nowhere stand to this one's right: its words go that many rows lower,
+      // and under every press to its right as well.
+      const below = reach(edge) === 2 ? (nowhere - 1 - seen++) * WORD_H + undecided.length * OPEN_H : 0;
+      slot.set(edge.id, { nth: nth < before ? nth : nth + undecided.length, below });
       if (reach(edge) === 1 && !firstDown.has(box.id)) firstDown.set(box.id, edge.id);
     });
+    undecided.forEach((open, nth) => {
+      openSlot.set(open.key, { nth: before + nth, below: (undecided.length - 1 - nth) * OPEN_H });
+    });
+  }
+
+  // Each way out with nothing decided hangs as a line that goes nowhere does, its name under its foot,
+  // and the press beside the name. Drawn after the edges, so they keep their order.
+  const pressed: PicOpen[] = [];
+  const undecidedLines: PicLine[] = [];
+  const pressW = wordW(openWord(graph.boundary !== undefined)) + 28;
+  for (const open of opens) {
+    const from = node.get(open.boxId)!;
+    const { nth, below } = openSlot.get(open.key)!;
+    const sx = attach(from, nth);
+    const sy = from.y + NODE_H;
+    const foot = sy + STUB + below;
+    const word = exitWord({ exitName: open.exitName, builtin: from.builtin });
+    undecidedLines.push({
+      key: open.key,
+      points: [{ x: sx, y: sy }, { x: sx, y: foot }],
+      back: false,
+      open: true,
+      exitName: open.exitName,
+      builtin: from.builtin,
+      at: { x: sx - 6, y: foot + OVER },
+      align: "start",
+    });
+    pressed.push({ boxId: open.boxId, exitName: open.exitName, x: sx - 6 + wordW(word) + BESIDE / 2, y: foot + OVER - 4 });
   }
 
   for (const edge of edges) {
@@ -954,7 +1038,7 @@ export function layOut(graph: PicGraph | null): Picture {
     const toId = toOf(edge);
     if (toId === undefined) {
       // The one further left runs further down, so its words pass under the shorter lines to its right.
-      const foot = sy + STUB + below * WORD_H;
+      const foot = sy + STUB + below;
       inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
       lines.push({
         key,
@@ -1019,6 +1103,8 @@ export function layOut(graph: PicGraph | null): Picture {
       word: wordW(exitWord({ exitName: edge.exitName, builtin: from.builtin })),
     });
   }
+
+  lines.push(...undecidedLines);
 
   // The lanes. Every line in one margin into the same box is one line from where it reaches the lane
   // on (`AMB-T-5767`): side by side, they stood as many arrowheads on the box's top. So a lane is
@@ -1142,6 +1228,9 @@ export function layOut(graph: PicGraph | null): Picture {
   }
   // Every outline reaches out as far as the furthest name on either side, so none of them crosses it
   // and their edges stay in one line; the lanes start past it.
+  // A press at the end of a way out that says nothing yet runs off to the right of its name, and the
+  // outline reaches past it too.
+  wordsOut.right = Math.max(wordsOut.right, ...pressed.map((one) => one.x + pressW + LAP_PAD / 2));
   for (const lap of outlines) {
     lap.w = wordsOut.right - wordsOut.left;
     lap.x = wordsOut.left;
@@ -1257,6 +1346,7 @@ export function layOut(graph: PicGraph | null): Picture {
       const wide = wordW(edgeWord(line));
       return (line.align === "start" ? line.at.x + wide : line.align === "middle" ? line.at.x + wide / 2 : line.at.x) - contentW;
     }),
+    ...pressed.map((one) => one.x + pressW - contentW),
   );
   return {
     width: dx + contentW + rightRoom + PAD,
@@ -1270,6 +1360,7 @@ export function layOut(graph: PicGraph | null): Picture {
       at: { x: line.at.x + dx, y: line.at.y },
     })),
     inserts: inserts.map((one) => ({ ...one, x: one.x + dx })),
+    opens: pressed.map((one) => ({ ...one, x: one.x + dx })),
     marks: marks.map((one) => ({ ...one, x: one.x + dx })),
     outFrame: outFrame === undefined ? undefined : { ...outFrame, x: outFrame.x + dx },
   };

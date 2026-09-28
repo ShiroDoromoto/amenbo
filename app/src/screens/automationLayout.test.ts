@@ -264,7 +264,8 @@ describe("the picture of an automation", () => {
     });
     const picture = layOut(one);
     const middle = at(picture, 1).x + at(picture, 1).w / 2;
-    expect(picture.lines.map((one) => one.key)).toEqual(["edge-1"]);
+    // The second box's way out says nothing yet, and hangs as its own dashed line (`AMB-D-1003`).
+    expect(picture.lines.map((one) => one.key)).toEqual(["edge-1", "open-2-完了"]);
     expect(picture.lines[0]!.points[0]!.x).toBeLessThan(middle);
   });
 
@@ -1014,5 +1015,85 @@ describe("what the action itself hands in", () => {
       boundary: { inputs: [port("title", "value")], exits: [] },
     });
     expect(at(picture, 1).unfed).toEqual([]);
+  });
+});
+
+describe("a way out nothing has been decided for (AMB-D-1003)", () => {
+  it("hangs dashed from its box, with the press beside its name, and the error way out does not", () => {
+    const one = detail({
+      entryPlacementId: 1,
+      placements: [step({ id: 1, name: "write" })],
+    });
+    const picture = layOut(one);
+    const box = at(picture, 1);
+    const line = picture.lines.find((each) => each.open === true)!;
+    expect(picture.lines.filter((each) => each.open === true)).toHaveLength(1);
+    expect(line.exitName).toBe("完了");
+    expect(line.points[0]).toEqual({ x: line.points[0]!.x, y: box.y + box.h });
+    expect(line.points[1]!.y).toBeGreaterThan(box.y + box.h);
+    expect(picture.opens).toEqual([expect.objectContaining({ boxId: 1, exitName: "完了" })]);
+    // The press stands right of the name, under the line's foot, and inside the picture.
+    expect(picture.opens[0]!.x).toBeGreaterThan(line.at.x);
+    expect(picture.opens[0]!.y).toBeGreaterThan(line.points[1]!.y);
+    expect(picture.width).toBeGreaterThan(picture.opens[0]!.x);
+  });
+
+  it("is gone once a line leaves by it, and stands for each of a box's ways out that still says nothing", () => {
+    const branching = step({
+      id: 1,
+      name: "review",
+      exits: [
+        { id: 51, name: "ok", outputs: [] },
+        { id: 52, name: "fix", outputs: [] },
+        { id: 53, name: "*", outputs: [] },
+      ],
+    });
+    const decided = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [branching, step({ id: 2, name: "ship" })],
+        edges: [edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 })],
+      }),
+    );
+    expect(decided.opens.map((one) => `${one.boxId}-${one.exitName}`).sort()).toEqual(["1-fix", "2-完了"]);
+    const two = layOut(detail({ entryPlacementId: 1, placements: [branching] }));
+    // Side by side along the box, the one further left hanging lower, so neither press lies over the other.
+    const [left, right] = [...two.opens].sort((a, b) => a.x - b.x);
+    expect(two.opens).toHaveLength(2);
+    expect(left!.y).toBeGreaterThan(right!.y);
+  });
+
+  it("stands inside the outline of the task's span, however many hang under the last row", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", {
+            exits: [
+              { id: 61, name: "took", outputs: [port("task", "task_take")] },
+              { id: 62, name: "none left", outputs: [] },
+              { id: 63, name: "*", outputs: [] },
+            ],
+          }),
+        ],
+      }),
+    );
+    const lap = picture.laps[0]!;
+    expect(picture.opens).toHaveLength(2);
+    for (const one of picture.opens) {
+      expect(one.x).toBeGreaterThan(lap.x);
+      expect(one.x + 150).toBeLessThan(lap.x + lap.w);
+      expect(one.y + 12).toBeLessThan(lap.y + lap.h);
+    }
+  });
+
+  it("is not drawn for the way out a built-in never leaves by", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [step({ id: 1, name: "file", neverLeavesBy: "完了" })],
+      }),
+    );
+    expect(picture.opens).toEqual([]);
   });
 });

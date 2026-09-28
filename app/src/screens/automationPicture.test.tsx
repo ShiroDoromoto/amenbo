@@ -301,7 +301,8 @@ describe("the picture of the steps", () => {
     const words = () => [...container.querySelectorAll("text.autopic__word")].map((one) => one.textContent);
     for (const picked of [undefined, 1, 2, 3]) {
       await render({ graph: one, onPickBox: vi.fn(), selectedBoxId: picked });
-      expect(container.querySelectorAll("polyline.autopic__line")).toHaveLength(2);
+      // The two edges; the last box's way out says nothing yet and hangs dashed on its own.
+      expect(container.querySelectorAll("polyline.autopic__line:not(.autopic__line--open)")).toHaveLength(2);
       expect(words().some((word) => word?.includes("task"))).toBe(false);
     }
   });
@@ -438,6 +439,7 @@ describe("what the picture marks, as the mock draws it", () => {
       "auto.pic.lap",
       "auto.pic.entry",
       "auto.pic.legendUnfed",
+      "auto.pic.legendOpen",
     ]) {
       expect(legend.textContent).toContain(t(key));
     }
@@ -494,5 +496,27 @@ describe("the picture of a run", () => {
       globalThis.IntersectionObserver = wasObserver;
       Element.prototype.scrollIntoView = wasScroll;
     }
+  });
+});
+
+describe("a way out nothing has been decided for (AMB-D-1003)", () => {
+  const lone = () => detail({ entryPlacementId: 1, placements: [step({ id: 1, name: "write" })] });
+  const presses = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__open")];
+
+  it("hangs dashed and ends in a press shown without being pointed at, which puts the next box on it", async () => {
+    const onOpenExit = vi.fn();
+    await render({ graph: lone(), onOpenExit });
+    expect(container.querySelectorAll("polyline.autopic__line--open")).toHaveLength(1);
+    expect(presses().map((one) => one.textContent)).toEqual([t("auto.pic.openPut")]);
+    expect(presses()[0]!.disabled).toBe(false);
+    await act(async () => presses()[0]!.click());
+    expect(onOpenExit).toHaveBeenCalledWith({ boxId: 1, exitName: "完了" });
+  });
+
+  it("holds the press shut where nothing can be put in, and draws none on a run's trail", async () => {
+    await render({ graph: lone() });
+    expect(presses()[0]!.disabled).toBe(true);
+    await render({ graph: lone(), trail: { boxes: new Set(), edges: new Set() } });
+    expect(presses()).toHaveLength(0);
   });
 });

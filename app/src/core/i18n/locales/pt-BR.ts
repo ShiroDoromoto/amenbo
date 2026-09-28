@@ -950,7 +950,7 @@ export const ptBR: Translation = {
     "auto.hand.fileAdd": "＋ Adicionar arquivo",
     "auto.hand.fileRemove": "Remover {name}",
     "auto.hand.taskTitle": "Título da tarefa a ser criada",
-    "auto.hand.taskNotes": "Descrição",
+    "auto.hand.taskNotes": "O que entregar à ação",
     "auto.hand.required": "obrigatório",
     "auto.hand.unchosen": "Não escolhido",
     "auto.hand.nothing": "Esta automação não recebe nada ao iniciar.",

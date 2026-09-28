@@ -954,7 +954,7 @@ export const pl: Translation = {
     "auto.hand.fileAdd": "＋ Dodaj plik",
     "auto.hand.fileRemove": "Usuń {name}",
     "auto.hand.taskTitle": "Tytuł zadania do utworzenia",
-    "auto.hand.taskNotes": "Opis",
+    "auto.hand.taskNotes": "Treść do przekazania akcji",
     "auto.hand.required": "wymagane",
     "auto.hand.unchosen": "Nie wybrano",
     "auto.hand.nothing": "Ta automatyzacja niczego nie przyjmuje przy uruchomieniu.",

@@ -1176,7 +1176,7 @@ const ui = {
   "auto.hand.fileAdd": "＋ Add a file",
   "auto.hand.fileRemove": "Remove {name}",
   "auto.hand.taskTitle": "Title of the task to file",
-  "auto.hand.taskNotes": "Its notes",
+  "auto.hand.taskNotes": "What to hand the action",
   "auto.hand.required": "required",
   "auto.hand.unchosen": "Not chosen",
   "auto.hand.nothing": "This automation takes nothing as it starts.",

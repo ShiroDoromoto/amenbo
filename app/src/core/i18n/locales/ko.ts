@@ -934,7 +934,7 @@ export const ko: Translation = {
     "auto.hand.fileAdd": "＋ 파일 추가",
     "auto.hand.fileRemove": "{name} 빼기",
     "auto.hand.taskTitle": "등록할 작업의 제목",
-    "auto.hand.taskNotes": "본문",
+    "auto.hand.taskNotes": "액션에 넘겨줄 내용",
     "auto.hand.required": "필수",
     "auto.hand.unchosen": "선택 안 함",
     "auto.hand.nothing": "이 자동화는 시작할 때 아무것도 받지 않습니다.",

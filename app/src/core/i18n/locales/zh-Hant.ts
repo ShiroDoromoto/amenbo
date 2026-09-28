@@ -939,7 +939,7 @@ export const zhHant: Translation = {
     "auto.hand.fileAdd": "＋ 新增檔案",
     "auto.hand.fileRemove": "移除 {name}",
     "auto.hand.taskTitle": "要建立的任務標題",
-    "auto.hand.taskNotes": "內文",
+    "auto.hand.taskNotes": "要交給動作的內容",
     "auto.hand.required": "必填",
     "auto.hand.unchosen": "不選擇",
     "auto.hand.nothing": "此自動化啟動時不接收任何內容。",

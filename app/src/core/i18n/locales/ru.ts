@@ -954,7 +954,7 @@ export const ru: Translation = {
     "auto.hand.fileAdd": "＋ Добавить файл",
     "auto.hand.fileRemove": "Убрать {name}",
     "auto.hand.taskTitle": "Название создаваемой задачи",
-    "auto.hand.taskNotes": "Описание",
+    "auto.hand.taskNotes": "Что передать действию",
     "auto.hand.required": "обязательно",
     "auto.hand.unchosen": "Не выбрано",
     "auto.hand.nothing": "Эта автоматизация ничего не принимает при запуске.",

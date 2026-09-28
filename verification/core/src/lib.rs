@@ -4490,6 +4490,16 @@ const REGISTRY: &[OpSpec] = &[
     // bring the ledger forward, from the workspace's own window as well as from the one it shares.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "see-picture", required: &[], refs: &["target"], strings: &["box", "builtin"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "see-history", required: &[], refs: &["target"], strings: &[], binds: false },
+    // **What keeps a waiting run waiting**, on the card its pane stands on while the
+    // built-in that takes a task waits: how many of the tasks it looks for it cannot take (`tasks`),
+    // and one line per thing stopping them with how many it holds. The line read here is a value
+    // ordered before theirs that is not closed — `dimension` and `value`, holding `count` tasks.
+    //
+    // A screen road alone. The terminal says a run waits (`run-show`) and counts nothing.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "held-back", required: &["tasks", "dimension", "value", "count"], refs: &["target"], strings: &["dimension", "value"], binds: false },
+    // Pressing that value's line, which goes to where it is closed: the run's project, with the panel
+    // managing its categories open on the value's axis — what `dimension focused` reads.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-held-value", required: &["dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     //
     // **What a step of a run types**, typed where the run opened a terminal for it. Which step is
     // being answered is not in any of them: it comes off the environment the window set on that

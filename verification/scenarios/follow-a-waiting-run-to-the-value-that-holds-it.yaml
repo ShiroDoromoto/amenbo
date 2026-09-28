@@ -1,0 +1,184 @@
+# A run set to wait for a task can wait on something a person has to do. On a category whose tasks
+# wait along its order, the task it would take is held until the value before its own is closed, and
+# nothing on the run moves until somebody closes it. So the card the run's pane stands on while it
+# waits says how many of the tasks it looks for it cannot take, and what stops them — and the value
+# that stops them is a way to where it is closed.
+#
+# The road follows that way: read the value on the waiting run's card, press it, land on the panel
+# managing the project's categories with that axis marked, close the value there, and watch the run
+# take the task on its next look. The value will not close while its own work is open, so the work
+# before it is finished first — the order a person clears a stage in.
+#
+# The road is the screen's alone. A run started at a terminal opens no step (`automation start`), and
+# the terminal counts nothing a run waits on.
+id: follow-a-waiting-run-to-the-value-that-holds-it
+title: A run waiting for a task says the value that keeps its task from being taken, and pressing it leads to where that value is closed
+description: >
+  On a category whose tasks wait along its order, file one task on its first value and hand one on
+  its second to the AI. Start an automation whose built-in that takes a task waits for one. Read the
+  run's pane say one task cannot be taken yet, held by the first value; press that value and land on
+  the category panel with the category marked. Finish the first task, close the first value, and
+  read the run take the second task within 30 seconds.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 1, then: reads } }
+
+  # The category whose values are stages: ordered and closable. Setting it to hold a task until the
+  # values before its own are closed is a step of the road, since a world is not stood up with it.
+  - { type: action, domain: dimension, op: create, with: { name: Release } }
+  - { type: action, domain: dimension, op: ordered, with: { dimension: Release } }
+  - { type: action, domain: dimension, op: closable, with: { dimension: Release } }
+  - { type: action, domain: dimension, op: value-add, with: { dimension: Release, value: v1 } }
+  - { type: action, domain: dimension, op: value-add, with: { dimension: Release, value: v2 } }
+
+  # The work of the first stage, left to a person, and the work of the second, handed to the AI —
+  # the one the run looks for, held back until the first stage is closed.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO WORLD — the work v1 carries }, as: first }
+  - { type: action, domain: task, op: finish-creating, with: { target: first } }
+  - { type: action, domain: dimension, op: set, with: { target: first, dimension: Release, value: v1 } }
+  - { type: action, domain: task, op: create, with: { title: SCENARIO WORLD — the work v2 carries }, as: later }
+  - { type: action, domain: dimension, op: set, with: { target: later, dimension: Release, value: v2 } }
+  - { type: action, domain: task, op: assign, with: { target: later, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: later } }
+
+  # The step the taken task goes on to: an agent's, so the run's pane stands on a terminal working it.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: build, prompt: work the task }, as: build }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: build } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: build, exit_to: "" } }
+
+  # The built-in, set to wait on the screen before the run starts. Its filter is left unanswered, so
+  # it looks for the tasks handed to the AI.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that waits on a stage" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: build, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+steps_gui:
+  # The second stage's work now waits for the first to close.
+  - type: action
+    domain: dimension
+    op: sequential
+    with:
+      dimension: Release
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      builtin: take_task
+
+  - type: action
+    domain: automation
+    op: answer-choice
+    with:
+      builtin: take_task
+      setting: 着手できるタスクが無いとき
+      value: 着手できるタスクが出るまで待つ
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # Waiting, and saying on its pane why: the one task it looks for is held by the first value.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: assert
+    domain: automation
+    op: held-back
+    with:
+      target: run
+      tasks: 1
+      dimension: Release
+      value: v1
+      count: 1
+
+  # Followed to where the value is closed.
+  - type: action
+    domain: automation
+    op: open-held-value
+    with:
+      target: run
+      dimension: Release
+      value: v1
+
+  - type: assert
+    domain: dimension
+    op: focused
+    with:
+      dimension: Release
+
+  # The stage cleared the way a person clears one: its work finished, then the value closed.
+  - type: action
+    domain: task
+    op: done
+    with:
+      target: first
+      report: shipped with v1
+
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v1
+
+  # Taken by the run that was waiting, with nobody starting it again — on its next look.
+  - type: action
+    domain: task
+    op: wait-field
+    with:
+      target: later
+      field: status
+      equals: in_progress
+      seconds: 30
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: build
+      action: work
+      task: later
+      present: true

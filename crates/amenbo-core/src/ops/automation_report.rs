@@ -55,8 +55,8 @@ pub enum Next {
     /// The run is stopped and a person is owed a look — either because the way out says so, or because
     /// nothing says what happens after it.
     Halted(Ended),
-    /// Somebody pressed pause while this step was under way, and this is the end of it. The next step
-    /// is not opened; the run keeps its task ([`super::automation_stop::resume`] picks it up from the
+    /// Somebody pressed pause while this step's action was under way, and this step ended the action.
+    /// The next step is not opened; the run keeps its task ([`super::automation_stop::resume`] picks it up from the
     /// same way out).
     Paused(Ended),
 }
@@ -445,8 +445,10 @@ fn no_task_after_all(
 /// a way out that says nothing would be the run choosing for itself.
 ///
 /// **A pause that was asked for is answered here and nowhere else**, because this is the one moment a
-/// step is known to have finished. It is read last of all: a picture that has run out is over, and
-/// pausing a run that has ended would leave one nobody could pick up again.
+/// step is known to have finished — and it takes hold only where the line leaves the action
+/// ([`leaves_the_action`], `AMB-D-1002`), so a run pauses between actions and never inside one. It is
+/// read last of all: a picture that has run out is over, and pausing a run that has ended would leave
+/// one nobody could pick up again.
 fn whats_next(
     tx: &WriteTx<'_>,
     def: &AutomationRunDef,
@@ -470,12 +472,20 @@ fn whats_next(
             if over_its_turns(tx, def, ended, &line)? {
                 return Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::MaxTimes)?));
             }
-            if run.pause_requested {
+            if run.pause_requested && leaves_the_action(&line) {
                 return Ok(Next::Paused(automation_stop::settle(tx, run)?));
             }
             Ok(Next::Step(next))
         }
     }
+}
+
+/// **Whether a line leaves the action the step belongs to** — the one place a pause takes hold
+/// (`AMB-D-1002`). A line on the automation's picture goes from one placement to the next; a line
+/// inside the action goes on to another step of the same one, and pausing there would stop the action
+/// half done.
+fn leaves_the_action(line: &RunDefLine) -> bool {
+    line.picture == AutomationPictureOwner::Automation
 }
 
 /// Fail the run, through the one cleanup every ending goes through

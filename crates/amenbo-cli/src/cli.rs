@@ -2307,7 +2307,7 @@ pub enum AutomationCmd {
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },
-    /// Ask a run to pause. A step under way finishes first and the run pauses at the end of it,
+    /// Ask a run to pause. The action under way finishes first and the run pauses at the end of it,
     /// keeping the task it is working
     Pause {
         /// run id

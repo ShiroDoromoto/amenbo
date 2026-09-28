@@ -1251,8 +1251,8 @@ datasets! {
 
     // **One launch of one automation.**
     //
-    // `pause_requested` is the gap between the button and the pause: a step is under way and cannot
-    // be cut in half, so the request is recorded and the run reaches `paused` when that step reports.
+    // `pause_requested` is the gap between the button and the pause: an action is under way and is
+    // not cut in half, so the request is recorded and the run reaches `paused` when that action ends.
     //
     // `stopped_reason` is why it failed, and it is stored because it cannot be derived: the records
     // show a crash (that step execution is left `failed`) and say nothing about a loop that ran out

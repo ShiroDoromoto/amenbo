@@ -733,7 +733,7 @@ startedAt?: string,
  */
 endedAt?: string, 
 /**
- * Whether a pause has been asked for and the step under way has not reported yet. The run is
+ * Whether a pause has been asked for and the action under way has not ended yet. The run is
  * still `running` — this is the gap between the button and the pause
  * ([`amenbo_core::ops::automation_stop::pause`]).
  */

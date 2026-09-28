@@ -1945,10 +1945,12 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 /* `[hidden]` loses to any author `display`, as the shell's own column's does. */
 .actover__pane[hidden] { display: none; }
 /* The head carries a longer back and a press more than the screen's own, beside a panel that narrows
-   it. Its presses keep their words on one line and their places, and the action's name is what gives
-   way — cut short, since it is on the box the reader opened it from. */
+   it. Its presses keep their words on one line and their places, and what gives way is what is read —
+   the action's name, which is on the box the reader opened it from, and the line saying when it was
+   saved — each cut short rather than pushing a press out of the card. */
 .actover .actbuild__head > * { flex: none; white-space: nowrap; }
-.actover .actbuild__head > .actbuild__name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.actover .actbuild__head > .actbuild__name,
+.actover .actbuild__head > .actsaved { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Which box of the automation the action is placed in, read before its name. */
 .actover__where { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-md); color: var(--c-text-muted); white-space: nowrap; }
 /* A built-in's head ends on how many use it, so the press after it is what goes to the far end. */

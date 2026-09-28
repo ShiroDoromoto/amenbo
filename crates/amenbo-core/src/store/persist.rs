@@ -1824,6 +1824,41 @@ impl Store {
         })
     }
 
+    /// Put an action on after a way out that says nothing yet (one operation = one transaction): the
+    /// placement and the one line from that way out to it, with the default agent written onto each
+    /// of its steps as [`Self::automation_placement_add`] writes it.
+    pub fn automation_placement_insert_at_exit(
+        &mut self,
+        from_id: i64,
+        exit_name: Option<&str>,
+        action_id: i64,
+    ) -> Result<crate::model::AutomationPlacement> {
+        let config = self.config.clone();
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, from_id)], |tx| {
+            let placement = crate::ops::automation::placement_insert_at_exit(
+                tx, from_id, exit_name, action_id,
+            )?;
+            steps_default(tx, &config, &placement)?;
+            Ok(placement)
+        })
+    }
+
+    /// Make an empty action and put it on after a way out that says nothing yet (one operation = one
+    /// transaction). The shelf is declared as for [`Self::automation_placement_insert_new`].
+    pub fn automation_placement_insert_new_at_exit(
+        &mut self,
+        from_id: i64,
+        exit_name: Option<&str>,
+        shelf: crate::ops::automation::ActionShelf,
+        name: &str,
+    ) -> Result<crate::model::AutomationPlacement> {
+        let mut targets = vec![WriteTarget::AutomationPart(AutomationPart::Placement, from_id)];
+        targets.extend(device_shelf(shelf));
+        self.write_one(&targets, |tx| {
+            crate::ops::automation::placement_insert_new_at_exit(tx, from_id, exit_name, shelf, name)
+        })
+    }
+
     /// **Put a built-in on an automation** (one operation = one transaction): its library action is
     /// written from Amenbo's definition the first time any automation here places it, and found again
     /// after that ([`crate::ops::automation_builtin::action`]).
@@ -2157,6 +2192,27 @@ impl Store {
         let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
             let step = crate::ops::automation::step_insert(tx, edge_id, new, exits, inputs)?;
+            new_step_default(tx, &config, &step)?;
+            Ok(step)
+        })
+    }
+
+    /// Put a step on after a way out that says nothing yet (one operation = one transaction): the
+    /// step, the ways out and inputs it was written with, and the one line from that way out to it —
+    /// with the default agent written onto it as [`Self::automation_step_add`] writes it.
+    pub fn automation_step_insert_at_exit(
+        &mut self,
+        from_id: i64,
+        exit_name: Option<&str>,
+        new: crate::ops::automation::NewStep,
+        exits: &[String],
+        inputs: &[(String, crate::model::AutomationPortKind, bool)],
+    ) -> Result<crate::model::AutomationStep> {
+        let config = self.config.clone();
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Step, from_id)], |tx| {
+            let step = crate::ops::automation::step_insert_at_exit(
+                tx, from_id, exit_name, new, exits, inputs,
+            )?;
             new_step_default(tx, &config, &step)?;
             Ok(step)
         })

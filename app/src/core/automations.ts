@@ -451,6 +451,33 @@ export async function insertAutomationActionStep(
 }
 
 /**
+ * **Put a step on after a way out that says nothing yet, inside an action.** The way out comes to
+ * point at the new step, and the new step's own ways out are left saying nothing — what
+ * `insertAutomationActionStep` does for a way out with no line to press (`AMB-D-1003`).
+ */
+export async function insertAutomationActionStepAtExit(
+  from: { boxId: number; exitName: string | null },
+  step: {
+    name: string;
+    prompt: string;
+    interactive?: boolean;
+    exits?: readonly string[];
+    inputs?: readonly { name: string; kind: string; required: boolean }[];
+  },
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_step_insert_at_exit", {
+    fromId: from.boxId,
+    exitName: from.exitName,
+    name: step.name,
+    prompt: step.prompt,
+    interactive: step.interactive ?? false,
+    exits: [...(step.exits ?? [])],
+    inputs: (step.inputs ?? []).map((one) => [one.name, one.kind, one.required]),
+  });
+}
+
+/**
  * **Take a step out of its action**, with what it declared and every line naming it.
  *
  * Losing the entry clears it rather than being refused — an action under construction has to be able
@@ -742,6 +769,42 @@ export async function makeAutomationAction(
 ): Promise<number | null> {
   if (!inTauri()) return null;
   const ack = await invokeForAck("automation_placement_insert_new", { edgeId, name, shelf });
+  return ack.actions[0] ?? null;
+}
+
+/**
+ * **Put a library action on after a way out that says nothing yet.** The way out comes to point at
+ * the new spot, and the new spot's own ways out are left saying nothing — what
+ * `insertAutomationAction` does for a way out with no line to press (`AMB-D-1003`).
+ */
+export async function insertAutomationActionAtExit(
+  from: { boxId: number; exitName: string | null },
+  actionId: number,
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_step_insert_at_exit", {
+    fromId: from.boxId,
+    exitName: from.exitName,
+    action: actionId,
+  });
+}
+
+/**
+ * **Make an empty action and put it on after a way out that says nothing yet**, and answer with the
+ * action's id — `makeAutomationAction` for a way out with no line to press. `null` outside Tauri.
+ */
+export async function makeAutomationActionAtExit(
+  from: { boxId: number; exitName: string | null },
+  name: string,
+  shelf: ActionShelf,
+): Promise<number | null> {
+  if (!inTauri()) return null;
+  const ack = await invokeForAck("automation_placement_insert_new_at_exit", {
+    fromId: from.boxId,
+    exitName: from.exitName,
+    name,
+    shelf,
+  });
   return ack.actions[0] ?? null;
 }
 

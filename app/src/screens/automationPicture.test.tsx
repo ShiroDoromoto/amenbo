@@ -414,3 +414,54 @@ describe("what the picture marks, as the mock draws it", () => {
     expect(legend.textContent).not.toContain(t("auto.pic.legendLeaves"));
   });
 });
+
+/// Drawn on a run's pane, the picture is the run's trail (`AMB-T-5775`).
+describe("the picture of a run", () => {
+  const two = () =>
+    detail({
+      placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] })],
+      edges: [
+        { id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" },
+        { id: 2, fromId: 2, exitName: "完了", ends: "done" },
+      ],
+    });
+  const trail = { boxes: new Set([1, 2]), edges: new Set([1]), at: 2 };
+
+  it("lights what the run walked, marks the box under way, and puts nothing in", async () => {
+    await render({ graph: two(), selectedBoxId: 2, trail });
+    expect(nodes()[0]!.className).toContain("autopic__node--lit");
+    expect(nodes()[0]!.className).not.toContain("autopic__node--at");
+    expect(nodes()[1]!.className).toContain("autopic__node--at");
+    expect(nodes()[1]!.className).toContain("autopic__node--on");
+    const lit = [...container.querySelectorAll("polyline.autopic__line")].map((one) =>
+      (one.getAttribute("class") ?? "").includes("autopic__line--lit"),
+    );
+    expect(lit).toEqual([true, false]);
+    // Its arrowhead is lit with it.
+    expect(container.querySelector("polyline.autopic__line--lit")?.getAttribute("marker-end")).toMatch(/-lit\)$/);
+    expect(plusses()).toHaveLength(0);
+    expect(container.querySelector(".autopic__legend")).toBeNull();
+  });
+
+  it("brings the box the run reaches to the middle, though it is in sight already", async () => {
+    const wasObserver = globalThis.IntersectionObserver;
+    const wasScroll = Element.prototype.scrollIntoView;
+    const scrolled = vi.fn();
+    globalThis.IntersectionObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof IntersectionObserver;
+    Element.prototype.scrollIntoView = scrolled;
+    try {
+      await render({ graph: two(), selectedBoxId: 1, trail: { ...trail, at: 1 } });
+      expect(scrolled).toHaveBeenLastCalledWith({ block: "center", inline: "center" });
+      scrolled.mockClear();
+      await render({ graph: two(), selectedBoxId: 2, trail });
+      expect(scrolled).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.IntersectionObserver = wasObserver;
+      Element.prototype.scrollIntoView = wasScroll;
+    }
+  });
+});

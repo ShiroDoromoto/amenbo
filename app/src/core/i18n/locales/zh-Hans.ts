@@ -1182,6 +1182,8 @@ export const zhHans: Translation = {
     "auto.history.prev": "‹ 上一页",
     "auto.history.next": "下一页 ›",
     "auto.history.count": "第 {from}–{to} 条，共 {total} 条",
+    "auto.run.facePicture": "图",
+    "auto.run.faceTerminal": "终端",
     "auto.run.pause": "暂停",
     "auto.run.resume": "继续",
     "auto.run.cancel": "取消",

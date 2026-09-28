@@ -1181,6 +1181,8 @@ export const th: Translation = {
     "auto.history.prev": "‹ ก่อนหน้า",
     "auto.history.next": "ถัดไป ›",
     "auto.history.count": "{from}–{to} จาก {total}",
+    "auto.run.facePicture": "แผนผัง",
+    "auto.run.faceTerminal": "เทอร์มินัล",
     "auto.run.pause": "หยุดชั่วคราว",
     "auto.run.resume": "ทำต่อ",
     "auto.run.cancel": "ยกเลิก",

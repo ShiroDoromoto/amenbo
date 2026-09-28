@@ -1180,6 +1180,8 @@ export const hi: Translation = {
     "auto.history.prev": "‹ पिछला",
     "auto.history.next": "अगला ›",
     "auto.history.count": "{total} में से {from}–{to}",
+    "auto.run.facePicture": "आरेख",
+    "auto.run.faceTerminal": "टर्मिनल",
     "auto.run.pause": "रोकें",
     "auto.run.resume": "जारी रखें",
     "auto.run.cancel": "रद्द करें",

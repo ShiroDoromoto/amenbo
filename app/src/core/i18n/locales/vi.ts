@@ -1181,6 +1181,8 @@ export const vi: Translation = {
     "auto.history.prev": "‹ Trước",
     "auto.history.next": "Sau ›",
     "auto.history.count": "{from}–{to} / {total}",
+    "auto.run.facePicture": "Sơ đồ",
+    "auto.run.faceTerminal": "Terminal",
     "auto.run.pause": "Tạm dừng",
     "auto.run.resume": "Tiếp tục",
     "auto.run.cancel": "Hủy",

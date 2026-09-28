@@ -1177,6 +1177,8 @@ export const ko: Translation = {
     "auto.history.prev": "‹ 이전",
     "auto.history.next": "다음 ›",
     "auto.history.count": "{total}개 중 {from}–{to}",
+    "auto.run.facePicture": "그림",
+    "auto.run.faceTerminal": "터미널",
     "auto.run.pause": "일시 중지",
     "auto.run.resume": "재개",
     "auto.run.cancel": "취소",

@@ -1192,6 +1192,8 @@ export const it: Translation = {
     "auto.history.prev": "‹ Precedente",
     "auto.history.next": "Successiva ›",
     "auto.history.count": "{from}–{to} di {total}",
+    "auto.run.facePicture": "Schema",
+    "auto.run.faceTerminal": "Terminale",
     "auto.run.pause": "Metti in pausa",
     "auto.run.resume": "Riprendi",
     "auto.run.cancel": "Annulla",

@@ -165,7 +165,7 @@ mod tests {
     fn the_line_is_written_in_the_language_asked_for() {
         assert_eq!(
             stopped("ja", "canceled", Reached::Step("レビュー"), 7),
-            "オートメーションの実行が中止されました。「レビュー」まで進みました。（実行 7）"
+            "オートメーションの実行がキャンセルされました。「レビュー」まで進みました。（実行 7）"
         );
         assert_eq!(
             stopped("en", "canceled", Reached::Nothing, 7),

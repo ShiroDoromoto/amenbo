@@ -43,6 +43,7 @@ import type {
   AutomationRunCardDto,
   AutomationRunHistoryDto,
   AutomationRunStartedDto,
+  AutomationRunTrailDto,
   EveryAutomationActionCardDto,
   EveryAutomationCardDto,
   WakeDto,
@@ -922,6 +923,27 @@ export function useHeldBack(run: number | null): AutomationHeldBackDto | null {
   const { data } = useQuery<AutomationHeldBackDto | null>(
     ["heldBack", run],
     () => (run === null ? Promise.resolve(null) : fetchHeldBack(run)),
+  );
+  return data ?? null;
+}
+
+/**
+ * **Where a run has been on its task, and where it stands** (`AMB-T-5774`): the spots it passed in the
+ * order it passed them, and the one under way. Null outside Tauri.
+ */
+export async function fetchRunTrail(run: number): Promise<AutomationRunTrailDto | null> {
+  if (!inTauri()) return null;
+  return invoke<AutomationRunTrailDto>("automation_run_trail", { runId: run });
+}
+
+/**
+ * Subscribing read of a run's trail. It sits under the running tab's key, so a step opened, a way out
+ * taken or the next task taken reads it again. Null until the first answer lands.
+ */
+export function useRunTrail(run: number): AutomationRunTrailDto | null {
+  const { data } = useQuery<AutomationRunTrailDto | null>(
+    ["automationRuns", "trail", run],
+    () => fetchRunTrail(run),
   );
   return data ?? null;
 }

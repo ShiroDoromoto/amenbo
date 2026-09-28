@@ -1186,6 +1186,8 @@ export const ja: Translation = {
     "auto.history.prev": "‹ 前",
     "auto.history.next": "次 ›",
     "auto.history.count": "{from}–{to} 件目 / {total} 件",
+    "auto.run.facePicture": "図面",
+    "auto.run.faceTerminal": "ターミナル",
     "auto.run.pause": "一時停止",
     "auto.run.resume": "再開",
     "auto.run.cancel": "キャンセル",

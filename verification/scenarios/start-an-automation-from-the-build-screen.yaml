@@ -39,7 +39,7 @@ given:
   # Both ways out say what happens after them. A way out with nothing after it is the one thing a
   # launch check will not let past, and this road is about the other refusal.
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_close } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }

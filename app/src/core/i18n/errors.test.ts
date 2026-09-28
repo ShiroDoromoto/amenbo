@@ -127,6 +127,18 @@ describe("errLabel", () => {
     expect(errLabel(notFoundTask, "ko")).toContain("AMB-T-12");
     expect(errLabel(notFoundTask, "ko")).not.toBe(notFoundTask.message_en);
   });
+
+  it("writes a refusal met while building an automation in the reader's language", () => {
+    // Declaring an output twice on one way out, from the build screen — which came back in English on
+    // a Japanese screen while the refusal had no code of its own (`AMB-T-5807`).
+    const taken: CmdError = {
+      code: "invalid_automation_output_taken",
+      message_en: "an output called '完了' is already declared here",
+      fields: { name: "完了" },
+    };
+    expect(errLabel(taken, "ja")).toBe("この出口には、出力「完了」がもうあります。別の名前を付けてください。");
+    expect(errLabel(taken, "en")).not.toBe(taken.message_en);
+  });
 });
 
 describe("errText", () => {

@@ -179,6 +179,16 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_make_task_axis_fixed",
   "invalid_make_task_axis_twice",
   "invalid_wait_not_a_count",
+  // Building an automation or an action. The build screen checks none of these before it sends, so a
+  // person can walk into them: a name already taken on the same box, the error way out's name, a number
+  // setting answered below zero or with a fraction, a limit under one. The build ops' other refusals
+  // stay on `invalid_value` — the screen offers no way to reach them.
+  "invalid_automation_exit_reserved",
+  "invalid_automation_exit_taken",
+  "invalid_automation_input_taken",
+  "invalid_automation_output_taken",
+  "invalid_automation_cfg_not_a_count",
+  "invalid_automation_limit_below_one",
 ] as const;
 
 /** Core codes the webview never receives, because the only door they come through is the CLI. None is

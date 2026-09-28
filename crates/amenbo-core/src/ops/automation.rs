@@ -77,10 +77,14 @@ fn checked_name(what: &str, name: &str) -> Result<String> {
 fn checked_exit_name(name: &str) -> Result<String> {
     let s = checked_name("way out", name)?;
     if s == ERROR_EXIT {
-        return Err(Error::invalid(format!(
-            "'{ERROR_EXIT}' is the error way out's own name — every step and every action carries it \
-             already, so it cannot be given to another"
-        )));
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "'{ERROR_EXIT}' is the error way out's own name — every step and every action carries it \
+                 already, so it cannot be given to another"
+            ))
+            .coded(ErrorCode::InvalidAutomationExitReserved)
+            .with("name", ERROR_EXIT),
+        ));
     }
     Ok(s)
 }
@@ -1907,9 +1911,19 @@ pub fn exit_add(
     not_under_a_run(tx, def_of_declarer(tx, owner_kind, owner_id)?)?;
     let name = checked_exit_name(name.unwrap_or(DONE_EXIT))?;
     if read::automation_exit_by_name(tx.conn(), owner_kind, owner_id, Some(&name))?.is_some() {
-        return Err(Error::invalid(format!("a way out called '{name}' is already declared here")));
+        return Err(exit_taken(&name));
     }
     add_exit_row(tx, owner_kind, owner_id, name)
+}
+
+/// A second way out under a name one on the same box already has — an edge names a way out by the box
+/// and the name together, so two would leave it naming either.
+fn exit_taken(name: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!("a way out called '{name}' is already declared here"))
+            .coded(ErrorCode::InvalidAutomationExitTaken)
+            .with("name", name),
+    )
 }
 
 /// Rename a way out.
@@ -1935,7 +1949,7 @@ pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<Auto
         read::automation_exit_by_name(tx.conn(), before.owner_kind, before.owner_id, Some(&name))?
     {
         if holder.id != id {
-            return Err(Error::invalid(format!("a way out called '{name}' is already declared here")));
+            return Err(exit_taken(&name));
         }
     }
     let mut after = before.clone();
@@ -2039,13 +2053,15 @@ pub(crate) fn declare_port(
     }
     not_under_a_run(tx, def_of_port_owner(tx, owner_kind, owner_id)?)?;
     if read::automation_port_by_name(tx.conn(), owner_kind, owner_id, direction, &name)?.is_some() {
-        return Err(Error::invalid(format!(
-            "an {} called '{name}' is already declared here",
-            match direction {
-                AutomationPortDirection::In => "input",
-                AutomationPortDirection::Out => "output",
-            }
-        )));
+        let (said, code) = match direction {
+            AutomationPortDirection::In => ("input", ErrorCode::InvalidAutomationInputTaken),
+            AutomationPortDirection::Out => ("output", ErrorCode::InvalidAutomationOutputTaken),
+        };
+        return Err(Error::Invalid(
+            Msg::new(format!("an {said} called '{name}' is already declared here"))
+                .coded(code)
+                .with("name", &name),
+        ));
     }
     let sibs = read::automation_port_siblings(tx.conn(), owner_kind, owner_id, direction, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
@@ -2415,7 +2431,17 @@ pub fn cfg_set(
     };
     if let Some(value) = value {
         if let Some(why) = answer_misfit(declares.kind, declares.options.as_deref(), value) {
-            return Err(Error::invalid(format!("the setting '{name}' cannot take this answer: {why}")));
+            let msg = Msg::new(format!("the setting '{name}' cannot take this answer: {why}"));
+            // A number is the one kind whose answer is typed rather than picked, so it is the one a
+            // person can get wrong from the screen; every other misfit is a caller writing the JSON by
+            // hand, and keeps the family code with the reason in English.
+            return Err(Error::Invalid(match declares.kind {
+                AutomationCfgKind::Number => msg
+                    .coded(ErrorCode::InvalidAutomationCfgNotACount)
+                    .with("cfg", &name)
+                    .with("value", value),
+                _ => msg,
+            }));
         }
     }
     filter_names_what_is_there(tx, declares.kind, value)?;
@@ -2623,7 +2649,11 @@ fn checked_max_times(max_times: Option<i64>, ends: AutomationEnds) -> Result<()>
     }
     if let Some(n) = max_times {
         if n < 1 {
-            return Err(Error::invalid("a limit of how often an edge may be taken is at least 1"));
+            return Err(Error::Invalid(
+                Msg::new("a limit of how often an edge may be taken is at least 1")
+                    .coded(ErrorCode::InvalidAutomationLimitBelowOne)
+                    .with("value", n),
+            ));
         }
     }
     Ok(())
@@ -2726,6 +2756,12 @@ pub fn edge_update(
         };
         after.ends = ends;
         after.to_id = to_id;
+        // The limit was the old line's, counting how often it went on to a box. A line that now ends
+        // the run, or leaves the action, is taken once, so the limit goes with the box it counted —
+        // unless one is given here too, which is refused below as saying two things at once.
+        if ends != AutomationEnds::Go {
+            after.max_times = None;
+        }
     }
     if let Some(max_times) = max_times {
         after.max_times = max_times;
@@ -3833,6 +3869,114 @@ mod tests {
                 )
                 .is_err(),
                 "a second edge on the same way out would leave the run to pick",
+            );
+        });
+    }
+
+    /// The code a refusal names itself by and the fields its sentence is built from, for the refusals
+    /// the build screen lets a person walk into — each is written in the reader's language from those
+    /// (`AMB-D-413`), so a missing field reads as a hole in the sentence.
+    fn coded(err: Error) -> (Option<ErrorCode>, Vec<String>) {
+        let Error::Invalid(msg) = err else { panic!("a refusal to build is invalid, not {err:?}") };
+        (msg.code(), msg.fields().iter().map(|(key, _)| key.to_string()).collect())
+    }
+
+    #[test]
+    fn the_refusals_the_build_screen_can_walk_into_name_themselves() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, placement) = mk_placed(tx, &automation, "実装する");
+            let step = only_step(tx, &action);
+            let names = |code| (Some(code), vec!["name".to_string()]);
+
+            let reserved = exit_add(tx, AutomationOwner::Step, step.id, Some(ERROR_EXIT)).unwrap_err();
+            assert_eq!(coded(reserved), names(ErrorCode::InvalidAutomationExitReserved));
+            let again = exit_add(tx, AutomationOwner::Step, step.id, Some(DONE_EXIT)).unwrap_err();
+            assert_eq!(coded(again), names(ErrorCode::InvalidAutomationExitTaken));
+            let other = exit_add(tx, AutomationOwner::Step, step.id, Some("直す")).expect("another way out");
+            let onto = exit_rename(tx, other.id, Some(DONE_EXIT)).unwrap_err();
+            assert_eq!(coded(onto), names(ErrorCode::InvalidAutomationExitTaken));
+
+            let input = || {
+                port_add(
+                    tx,
+                    AutomationPortOwner::Step,
+                    step.id,
+                    AutomationPortDirection::In,
+                    "差分",
+                    AutomationPortKind::File,
+                    true,
+                )
+            };
+            input().expect("an input");
+            assert_eq!(coded(input().unwrap_err()), names(ErrorCode::InvalidAutomationInputTaken));
+            let output = || {
+                port_add(
+                    tx,
+                    AutomationPortOwner::Exit,
+                    other.id,
+                    AutomationPortDirection::Out,
+                    "差分",
+                    AutomationPortKind::File,
+                    true,
+                )
+            };
+            output().expect("an output");
+            assert_eq!(coded(output().unwrap_err()), names(ErrorCode::InvalidAutomationOutputTaken));
+
+            cfg_add(tx, action.id, "秒", AutomationCfgKind::Number, false, None).expect("number");
+            cfg_add(tx, action.id, "どれ", AutomationCfgKind::Choice, false, Some(r#"["a"]"#))
+                .expect("choice");
+            for wrong in ["-5", "1.5"] {
+                let refused = cfg_set(tx, placement.id, "秒", Some(wrong)).unwrap_err();
+                assert_eq!(
+                    coded(refused),
+                    (Some(ErrorCode::InvalidAutomationCfgNotACount), vec!["cfg".to_string(), "value".to_string()]),
+                );
+            }
+            // A choice is picked from a list on the screen, so a misfit there is a caller's own JSON and
+            // keeps the family code.
+            assert_eq!(coded(cfg_set(tx, placement.id, "どれ", Some(r#""z""#)).unwrap_err()).0, None);
+
+            let (_, next) = mk_placed(tx, &automation, "点検する");
+            let edge = edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                placement.id,
+                None,
+                EdgeTarget::Go(next.id),
+                Some(3),
+            )
+            .expect("go on");
+            let below = edge_update(tx, edge.id, None, Some(Some(0))).unwrap_err();
+            assert_eq!(
+                coded(below),
+                (Some(ErrorCode::InvalidAutomationLimitBelowOne), vec!["value".to_string()]),
+            );
+        });
+    }
+
+    #[test]
+    fn pointing_a_line_at_an_ending_drops_the_limit_it_carried() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, one) = mk_placed(tx, &automation, "実装する");
+            let (_, two) = mk_placed(tx, &automation, "点検する");
+            let edge = edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                one.id,
+                None,
+                EdgeTarget::Go(two.id),
+                Some(10),
+            )
+            .expect("go on, as the screen draws it");
+            let done = edge_update(tx, edge.id, Some(EdgeTarget::Done), None)
+                .expect("the screen switches the line to an ending and says nothing of the limit");
+            assert_eq!((done.ends, done.max_times), (AutomationEnds::Done, None));
+            assert!(
+                edge_update(tx, edge.id, Some(EdgeTarget::Halt), Some(Some(3))).is_err(),
+                "a limit given with an ending is still refused",
             );
         });
     }

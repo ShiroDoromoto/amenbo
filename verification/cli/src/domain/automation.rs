@@ -185,16 +185,24 @@ impl Driver<'_> {
                     ("task_decisions", "--task-decisions", "the decisions linked to the task"),
                     ("task_comments", "--task-comments", "the comments on the task"),
                     ("history", "--history", "the run's story so far"),
+                    ("interactive", "--interactive", "leave to wait for a person"),
                 ] {
                     if let Some(on) = opt_bool(with, key) {
                         args.push(flag.into());
                         args.push(on.to_string());
-                        said.push(format!("{} {what}", if on { "handed" } else { "not handed" }));
+                        // Leave to wait is given, not handed: it is the step's, not something it reads.
+                        let verb = match (key, on) {
+                            ("interactive", true) => "given",
+                            ("interactive", false) => "not given",
+                            (_, true) => "handed",
+                            (_, false) => "not handed",
+                        };
+                        said.push(format!("{verb} {what}"));
                     }
                 }
                 if said.is_empty() {
                     return Err(
-                        "`step-update` turns `task_notes`, `task_decisions`, `task_comments` or `history` — a step naming none of them would write nothing"
+                        "`step-update` turns `task_notes`, `task_decisions`, `task_comments`, `history` or `interactive` — a step naming none of them would write nothing"
                             .to_string(),
                     );
                 }

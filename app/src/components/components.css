@@ -1402,6 +1402,10 @@ button.feed__target:hover { color: var(--c-accent); }
 /* An action with nothing in it yet: dashed in the heed colour, with the "empty" mark beside the name. */
 .autopic__node--empty { border-color: var(--c-heed); border-style: dashed; }
 .autopic__emptymark { flex: none; font-size: var(--fs-xs); color: var(--c-heed); }
+/* An action still being made (`AMB-D-1005`): dashed like an empty one, in the colour that says it is
+   under way rather than missing something. */
+.autopic__node--draft { border-color: var(--c-accent); border-style: dashed; }
+.autopic__draftmark { flex: none; font-size: var(--fs-xs); color: var(--c-accent); }
 .autopic__node--on { background: var(--c-accent-faint); border-color: var(--c-accent); }
 /* Two lines: the number and the name, and under them where the action comes from — or what it is
    missing, which takes that line's place. */
@@ -1935,7 +1939,8 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
   background: var(--c-bg-pic) var(--c-bg); border: var(--border-w) var(--border-style) var(--c-rule);
   border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); overflow: hidden;
 }
-.actover__main { min-height: 0; overflow-y: auto; }
+.actover__main { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.actover__main > .actbuild { flex: none; }
 /* The card is the screen's frame here, so the screen does not draw a second one inside it. */
 .actover .actbuild { margin: 0; border: 0; border-radius: 0; }
 .actover__pane {
@@ -1951,6 +1956,19 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 .actover .actbuild__head > * { flex: none; white-space: nowrap; }
 .actover .actbuild__head > .actbuild__name,
 .actover .actbuild__head > .actsaved { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* "Being created", first on the head of an action still being made — where the back would stand. */
+.actover__draft {
+  padding: 1px var(--s-2); border-radius: 999px; font-size: var(--fs-xs);
+  color: var(--c-accent); border: var(--border-w) dashed var(--c-accent); background: var(--c-accent-weak);
+}
+/* The two ways out of an action still being made, at the foot of the card however short the picture
+   is, and held there however far it scrolls. */
+.actover__foot {
+  position: sticky; inset-block-end: 0; margin-block-start: auto; display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-2) var(--s-3); border-block-start: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-surface-pic) var(--c-surface);
+}
+.actover__footnote { flex: 1 1 auto; min-width: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* Which box of the automation the action is placed in, read before its name. */
 .actover__where { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-md); color: var(--c-text-muted); white-space: nowrap; }
 /* A built-in's head ends on how many use it, so the press after it is what goes to the far end. */

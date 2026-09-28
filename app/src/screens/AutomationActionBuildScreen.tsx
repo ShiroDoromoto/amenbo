@@ -216,7 +216,9 @@ export function AutomationActionBuildScreen({
   headEnd,
 }: {
   id: number;
-  onBack: () => void;
+  /** Go back. Absent, the head has no back: the screen is left by a way its caller draws
+   *  (`./AutomationActionOver`, while the action is still being made). */
+  onBack?: () => void;
   /** What the back is called — the list's by default, the automation's where it is opened over one
    *  (`./AutomationActionOver`). */
   backLabel?: string;
@@ -283,9 +285,11 @@ export function AutomationActionBuildScreen({
   return (
     <div className="actbuild" {...saved.capture}>
       <div className="actbuild__head">
-        <button type="button" className="btn" onClick={onBack}>
-          <Icon name="chevronLeft" /> {backLabel ?? t("auto.build.back")}
-        </button>
+        {onBack !== undefined && (
+          <button type="button" className="btn" onClick={onBack}>
+            <Icon name="chevronLeft" /> {backLabel ?? t("auto.build.back")}
+          </button>
+        )}
         {headLead}
         <span className="actbuild__name">{action?.name ?? ""}</span>
         {action !== null && (

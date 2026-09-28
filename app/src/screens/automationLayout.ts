@@ -68,6 +68,9 @@ export type PicBox = {
   /** Who carries out each step of the action standing here — one per step it holds. Absent on an
    *  action's picture; on an automation's, none at all is an action with nothing in it yet. */
   steps?: readonly unknown[];
+  /** The action standing here was made on the spot and is still being made (`AMB-D-1005`). Absent on
+   *  an action's picture, and wherever it is not. */
+  draft?: boolean;
 };
 
 /** One picture, whichever of the two it is: the boxes, the lines, and the box a run opens first. */
@@ -195,6 +198,9 @@ export type PicNode = {
   builtin?: string;
   /** The action standing here has nothing in it yet, so a run cannot be started on it. */
   empty?: boolean;
+  /** The action standing here is still being made (`PicBox`). It says so in place of "empty": an
+   *  action being made is expected to have nothing in it yet. */
+  draft?: boolean;
 };
 
 /** The dashed outline around the boxes one task is worked by. */
@@ -713,7 +719,9 @@ export function layOut(graph: PicGraph | null): Picture {
           takes: takesTask(box),
           global: box.global,
           builtin: box.builtin,
-          empty: box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
+          empty:
+            box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
+          draft: box.draft === true,
           unfed: !live.has(boxId)
             ? []
             : box.inputs

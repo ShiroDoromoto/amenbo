@@ -1,0 +1,159 @@
+# A reader watching a run wants to know where it is and where it has been, which a terminal's output
+# does not say. So a run's pane opens on the automation's picture: the box the run is on blinks and is
+# brought to the middle, and what it has passed on the task it is working is lit. A step that may wait
+# for a person turns the pane to its terminal while it runs, so the question it asks is not left behind
+# the picture; once it is over, the pane goes back to the picture. The line over the pane turns it
+# either way by hand.
+#
+# The picture is the one hold-a-run-from-its-pane walks, with its first step made one that may wait for
+# a person.
+id: see-a-run-on-its-picture
+title: A run's pane shows where the run is on its picture, and turns to the terminal while a step may wait for a person
+description: >
+  Start a run whose first step may wait for a person, and read its pane: turned to the terminal while
+  that step runs. Report the step, and the pane is back on the picture, with the box of the next step
+  blinking in the middle and the boxes it passed lit. Turn it to the terminal and back from the line
+  over the pane.
+given:
+  # Two rather than one because the terminal's premise stands its programs up in front of the
+  # machine's own and cannot make a row shorter than two; the step names the first of them either way.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # The task the built-in takes on the screen.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run is watched on its picture over }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
+  # The action the run opens once the built-in has taken the task, holding the one step it runs. Its
+  # way out is declared on both layers: the step's is what the step reports, and the action's is what the
+  # automation's picture goes on from — the line inside the action carries the one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: work the task the run took }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  # The first step may wait for a person, which is what turns the pane to its terminal while it runs.
+  - { type: action, domain: automation, op: step-update, with: { target: claim, interactive: true } }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  # The action the run goes on to, whose step does not wait for a person: the pane goes back to its
+  # picture once the run reaches it.
+  - { type: action, domain: automation, op: action-add, with: { name: after }, as: after }
+  - { type: action, domain: automation, op: step-add, with: { target: after, name: wait, prompt: carry on with the task }, as: wait }
+  - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one watched on its picture" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_after, step: wait, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_after } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_after, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The first step may wait for a person, so its pane is on the terminal, though a run's pane opens on
+  # its picture.
+  - type: assert
+    domain: automation
+    op: run-picture
+    with:
+      target: run
+      face: terminal
+
+  - type: action
+    domain: automation
+    op: done-in-pane
+    with:
+      target: run
+      exit: got one
+      report: worked the task, and the pane goes back to its picture
+
+  # The step after does not wait for a person, so the pane is back on the picture: the run is on the
+  # box of the action it went on to, and what it passed to get there is lit.
+  - type: assert
+    domain: automation
+    op: run-picture
+    with:
+      target: run
+      face: picture
+      box: after
+      passed: [take]
+      passed_builtins: [take_task]
+
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: terminal
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: run-picture
+    with:
+      target: run
+      face: terminal
+
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: picture
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: run-picture
+    with:
+      target: run
+      face: picture
+      box: after

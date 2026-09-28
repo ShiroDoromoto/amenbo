@@ -4512,7 +4512,7 @@ impl Instructor {
             // it says, since the card lists a line for every thing stopping them and only a value's
             // opens the panel its axis is managed in.
             (Domain::Automation, "open-held-value") => format!(
-                "In the workspace, with the pane this run is drawn in turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), on the card it stands on while it waits for a task, press the line \"{} ({})\" among the things keeping its tasks from being taken.",
+                "In the workspace, with the pane this run is drawn in turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), on the card it stands on while it waits for a task, press the line \"{} ({})\" among the things keeping its tasks from being taken.",
                 req(with, "value")?,
                 req(with, "dimension")?
             ),
@@ -4528,7 +4528,7 @@ impl Instructor {
             // is left as a gap, the store issuing the number, so a road can name the output but never
             // the characters the command takes.
             (Domain::Automation, "out-in-pane") => format!(
-                "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo automation step-out \"<id>={}\"` and run it, putting where the command says `<id>` the id the step's text lists in front of the output \"{}\". Confirm the line comes back saying it was handed on.",
+                "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-out \"<id>={}\"` and run it, putting where the command says `<id>` the id the step's text lists in front of the output \"{}\". Confirm the line comes back saying it was handed on.",
                 req(with, "value")?,
                 req(with, "name")?
             ),
@@ -4539,7 +4539,7 @@ impl Instructor {
             // The way out is typed as an id here, since what is refused is an id the step does not
             // carry — a road names one no row can have.
             (Domain::Automation, "done-in-pane") if with.contains_key("refused") => format!(
-                "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{}\" --exit {}` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — each as `--exit` and its id, the error one among them.",
+                "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{}\" --exit {}` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — each as `--exit` and its id, the error one among them.",
                 req(with, "report")?,
                 req(with, "exit")?
             ),
@@ -4552,10 +4552,10 @@ impl Instructor {
                 let report = req(with, "report")?;
                 match arg_str(with, "exit") {
                     Some(exit) => format!(
-                        "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\" --exit <id>` and run it, putting the id the step's text in that pane lists for the way out \"{exit}\" where the command says `<id>`. Confirm the line comes back saying the step is done."
+                        "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\" --exit <id>` and run it, putting the id the step's text in that pane lists for the way out \"{exit}\" where the command says `<id>`. Confirm the line comes back saying the step is done."
                     ),
                     None => format!(
-                        "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\"` and run it, and confirm the line comes back saying the step is done."
+                        "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\"` and run it, and confirm the line comes back saying the step is done."
                     ),
                 }
             }
@@ -4583,7 +4583,7 @@ impl Instructor {
                     false => format!(", putting {}", gaps.join(", and ")),
                 };
                 format!(
-                    "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo {command}` and run it{filling}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
+                    "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo {command}` and run it{filling}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
                 )
             }
             // The report made without the run's pane. The step's number is not on any screen — the
@@ -4614,12 +4614,15 @@ impl Instructor {
             // The program ending itself, in the run's own pane. The stand-in carries out the line it
             // is given, so `exit` ends it the way an agent that gives up ends: by its own doing.
             (Domain::Automation, "quit-in-pane") => {
-                "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `exit` and run it. Confirm the program in that pane has ended and takes no more lines."
+                "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `exit` and run it. Confirm the program in that pane has ended and takes no more lines."
                     .to_string()
             }
             (Domain::Automation, "press-run") => {
                 let press = req(with, "press")?;
                 match arg_str(with, "on").unwrap_or("row") {
+                    "row" if matches!(press, "picture" | "terminal") => {
+                        return Err(format!("`press: {press}` is the pane's — the row has no face to turn"))
+                    }
                     "row" => format!("On the running tab, on the row for this run, {}.", run_press(press)?),
                     // The pane's line carries the same controls as the row, in the same words, save
                     // the one that opens the pane.
@@ -6679,11 +6682,50 @@ impl Instructor {
                     false => "In the workspace, confirm the press stood no new pane up.".to_string(),
                 },
             },
+            // Which face the pane's body is turned to, and on the picture where the run is and where it
+            // has been. The blink is an eye's: a shot catches it at either end, so the line asks for the
+            // box to be watched rather than read.
+            (Domain::Automation, "run-picture") => match req(with, "face")? {
+                "picture" => {
+                    let mut line = "In the workspace, confirm the pane this run is drawn in has \"Picture\" pressed on the line over it, and that its body is the automation's picture rather than a terminal".to_string();
+                    if with.contains_key("box") || with.contains_key("builtin") {
+                        line.push_str(&format!(
+                            ". Confirm {} blinks, stands picked, and has been brought to the middle of the pane",
+                            box_named(with, "box", "builtin")?
+                        ));
+                    }
+                    let mut passed: Vec<String> = Vec::new();
+                    if let Some(names) = with.get("passed") {
+                        let names = names.as_sequence().ok_or("arg `passed` is a list of box names")?;
+                        for name in names {
+                            let name = name.as_str().ok_or("every entry under `passed` must be a box's name")?;
+                            passed.push(format!("the box \"{name}\""));
+                        }
+                    }
+                    if let Some(keys) = with.get("passed_builtins") {
+                        let keys = keys.as_sequence().ok_or("arg `passed_builtins` is a list of built-in keys")?;
+                        for key in keys {
+                            let key = key.as_str().ok_or("every entry under `passed_builtins` must be a built-in's key")?;
+                            passed.push(format!("the box of {}", builtin_words(key)?.called));
+                        }
+                    }
+                    if !passed.is_empty() {
+                        line.push_str(&format!(
+                            ". Confirm {} — the ones it passed on the task it is working — are drawn lit, in the accent's colour, with the lines it walked between them",
+                            passed.join(", and ")
+                        ));
+                    }
+                    line.push('.');
+                    line
+                }
+                "terminal" => "In the workspace, confirm the pane this run is drawn in has \"Terminal\" pressed on the line over it, and that its body is the terminal — or the card of the built-in under way — rather than the picture.".to_string(),
+                other => return Err(format!("`face` does not know `{other}` — it is picture / terminal")),
+            },
             // What keeps a waiting run waiting, read off the card its pane stands on. An eye closes it:
             // the count sits beside the line rather than in its words, and which line it belongs to is a
             // matter of where it is drawn.
             (Domain::Automation, "held-back") => format!(
-                "In the workspace, with the pane this run is drawn in turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), on the card it stands on while it waits for a task, confirm it says how many tasks it cannot take yet ({}), and that among the lines under it, one per thing keeping them from being taken, the line \"{} ({})\" carries the count {} beside it.",
+                "In the workspace, with the pane this run is drawn in turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), on the card it stands on while it waits for a task, confirm it says how many tasks it cannot take yet ({}), and that among the lines under it, one per thing keeping them from being taken, the line \"{} ({})\" carries the count {} beside it.",
                 count(with, "tasks")?,
                 req(with, "value")?,
                 req(with, "dimension")?,
@@ -6692,7 +6734,7 @@ impl Instructor {
             // Read by typing, because the screen alone cannot say it: the last lines stay whether or
             // not the program is still there. The wait is the watch's look, a few seconds at most.
             (Domain::Automation, "run-pane-ended") => {
-                "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), give it up to ten seconds after the run is over, then type `echo still-here` and press Return. Confirm the program in that pane has ended: its last lines are still on the screen, and nothing answers the line — no `still-here` comes back and no new prompt appears."
+                "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), give it up to ten seconds after the run is over, then type `echo still-here` and press Return. Confirm the program in that pane has ended: its last lines are still on the screen, and nothing answers the line — no `still-here` comes back and no new prompt appears."
                     .to_string()
             }
             // A row of the running tab. It draws every run this device is carrying, across projects,
@@ -7201,8 +7243,12 @@ fn run_press(press: &str) -> Result<&'static str, String> {
         "resume" => "press the control that picks it up again",
         "stop" => "press the control that force-cancels it. A question asks first, saying that changes made part way through and the worktree may be left behind — answer it with the press that goes through with it",
         "cancel" => "press the control that cancels it — the run is paused, so it ends on the spot and nothing asks first",
+        "picture" => "press \"Picture\", turning its body to the automation's picture",
+        "terminal" => "press \"Terminal\", turning its body to the terminal",
         other => {
-            return Err(format!("`press` does not know `{other}` — it is open / pause / resume / stop / cancel"))
+            return Err(format!(
+                "`press` does not know `{other}` — it is open / pause / resume / stop / cancel / picture / terminal"
+            ))
         }
     })
 }
@@ -9139,6 +9185,50 @@ steps_gui:
         assert!(lines[0].contains("band under the header") && lines[0].contains("the box of"), "{}", lines[0]);
         assert!(lines[1].contains("the box \"work\" picked out"), "{}", lines[1]);
         assert!(lines[2].contains("history tab"), "{}", lines[2]);
+    }
+
+    /// A run's pane is read for the face it is turned to, and on the picture for the box the run is on
+    /// and the boxes it passed — a built-in's by what it is. The two faces are the
+    /// pane's presses, and never the row's.
+    #[test]
+    fn a_run_pane_is_read_for_its_face_and_turned_from_its_line() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: automation
+    op: run-picture
+    with: { face: picture, box: after, passed: [take], passed_builtins: [take_task] }
+  - type: assert
+    domain: automation
+    op: run-picture
+    with: { face: terminal }
+  - type: action
+    domain: automation
+    op: press-run
+    with: { press: terminal, on: pane }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).expect("every step renders")).collect();
+        assert!(lines[0].contains("\"Picture\" pressed") && lines[0].contains("the box \"after\" blinks"), "{}", lines[0]);
+        assert!(lines[0].contains("the box \"take\"") && lines[0].contains("the box of"), "{}", lines[0]);
+        assert!(lines[1].contains("\"Terminal\" pressed") && !lines[1].contains("blinks"), "{}", lines[1]);
+        assert!(lines[2].contains("line over the pane") && lines[2].contains("press \"Terminal\""), "{}", lines[2]);
+
+        let row = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: press-run
+    with: { press: picture }
+"#);
+        let mut ins = Instructor::new();
+        let refused = ins.render(&row.steps(Driver::Gui)[0]).expect_err("the row has no face to turn");
+        assert!(refused.contains("the pane's"), "{refused}");
     }
 
     /// `held-by` lists a run, so a road reading the hold names which one; only the release names

@@ -1040,6 +1040,8 @@ export const uk: Translation = {
     "auto.step.oneADecisionALine": "По одному в рядку (наприклад, AMB-D-12)",
     "auto.step.inputs": "Входи",
     "auto.step.unwired": "до нього нічого не доходить",
+    "auto.step.joined": "З’єднано з результатом «{name}» кроку {no}, {step}",
+    "auto.step.joinedUndo": "Скасувати",
     "auto.step.atLaunch": "передається під час запуску",
     "auto.step.exits": "Виходи",
     "auto.step.modelDefault": "власне типове значення агента",

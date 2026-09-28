@@ -1023,6 +1023,8 @@ export const nl: Translation = {
     "auto.step.oneADecisionALine": "Eén per regel (bijv. AMB-D-12)",
     "auto.step.inputs": "Invoer",
     "auto.step.unwired": "er bereikt hem niets",
+    "auto.step.joined": "Verbonden met de uitvoer ‘{name}’ van stap {no}, {step}",
+    "auto.step.joinedUndo": "Ongedaan maken",
     "auto.step.atLaunch": "wordt bij het starten van de run meegegeven",
     "auto.step.exits": "Uitgangen",
     "auto.step.modelDefault": "de eigen standaard van de agent",

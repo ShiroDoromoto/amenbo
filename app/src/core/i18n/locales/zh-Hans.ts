@@ -1025,6 +1025,8 @@ export const zhHans: Translation = {
     "auto.step.oneADecisionALine": "每行一个（例：AMB-D-12）",
     "auto.step.inputs": "输入",
     "auto.step.unwired": "没有东西送到",
+    "auto.step.joined": "已连接到步骤 {no}「{step}」的输出「{name}」",
+    "auto.step.joinedUndo": "撤销",
     "auto.step.atLaunch": "在启动时传入",
     "auto.step.exits": "出口",
     "auto.step.modelDefault": "代理自己的默认值",

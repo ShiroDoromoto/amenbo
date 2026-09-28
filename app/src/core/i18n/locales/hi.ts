@@ -1023,6 +1023,8 @@ export const hi: Translation = {
     "auto.step.oneADecisionALine": "हर पंक्ति में एक (जैसे AMB-D-12)",
     "auto.step.inputs": "इनपुट",
     "auto.step.unwired": "कुछ नहीं पहुँचता",
+    "auto.step.joined": "चरण {no} ({step}) के आउटपुट “{name}” से जोड़ा गया",
+    "auto.step.joinedUndo": "पूर्ववत करें",
     "auto.step.atLaunch": "रन शुरू करते समय दिया जाता है",
     "auto.step.exits": "निकास",
     "auto.step.modelDefault": "एजेंट का अपना डिफ़ॉल्ट",

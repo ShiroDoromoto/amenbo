@@ -1,0 +1,84 @@
+# A step's input takes its value from an output of an earlier step, and a builder says they are the
+# same thing by naming them alike. So an input declared on a step is joined, as it is declared, to the
+# output of the same name on a step a run comes to first — and the box never asks for it. A build that
+# lost the join would start every such input at "nothing reaches it", and the box would carry its mark
+# until the wire was picked by hand.
+#
+# ── Why the input is insisted on ───────────────────────────────────────────────────────────────
+# The picture marks only a required input nothing reaches. Made required, an input the join missed
+# would put its mark on the box — which is the one thing that says the wire did not land.
+id: declare-an-input-and-find-it-joined-to-the-output-before-it
+title: An input declared on a step is joined to the output of the same name on the step before it
+description: >
+  Open a library action of two steps, the first handing on "theme" as it leaves. Declare an input
+  "theme" on the second, insist on it, and read the box not ask for it: the input was joined to the
+  first step's output as it was declared.
+given:
+  - { type: action, domain: automation, op: action-add, with: { name: SCENARIO SEED — joined as declared }, as: act }
+  - type: action
+    domain: automation
+    op: step-add
+    with: { target: act, name: ask, prompt: ask for a theme }
+    as: ask
+  - type: action
+    domain: automation
+    op: step-add
+    with: { target: act, name: write, prompt: write it up }
+    as: write
+  - type: action
+    domain: automation
+    op: exit-add
+    with: { step: ask, name: asked }
+    as: ask_asked
+  - type: action
+    domain: automation
+    op: port-add
+    with: { target: ask_asked, name: theme, kind: value }
+  - type: action
+    domain: automation
+    op: action-entry
+    with: { target: act, step: ask }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: ask, exit: asked, to: write } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: write, exit_to: "" } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: actions
+
+  - type: action
+    domain: automation
+    op: action-open
+    with:
+      target: act
+
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: write
+
+  - type: action
+    domain: automation
+    op: declare
+    with:
+      what: input
+      name: theme
+      kind: value
+
+  - type: action
+    domain: automation
+    op: redeclare
+    with:
+      what: input
+      name: theme
+      required: true
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: write
+      unfed: false

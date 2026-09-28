@@ -1023,6 +1023,8 @@ export const tr: Translation = {
     "auto.step.oneADecisionALine": "Satır başına bir tane (ör. AMB-D-12)",
     "auto.step.inputs": "Girdiler",
     "auto.step.unwired": "hiçbir şey ulaşmıyor",
+    "auto.step.joined": "{no}. adımın ({step}) “{name}” çıktısına bağlandı",
+    "auto.step.joinedUndo": "Geri al",
     "auto.step.atLaunch": "çalıştırma başlarken verilir",
     "auto.step.exits": "Çıkışlar",
     "auto.step.modelDefault": "ajanın kendi varsayılanı",

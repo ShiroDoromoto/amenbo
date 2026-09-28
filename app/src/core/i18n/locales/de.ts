@@ -1027,6 +1027,8 @@ export const de: Translation = {
     "auto.step.oneADecisionALine": "Eine pro Zeile (z. B. AMB-D-12)",
     "auto.step.inputs": "Eingaben",
     "auto.step.unwired": "nichts erreicht sie",
+    "auto.step.joined": "Mit der Ausgabe „{name}“ von Schritt {no}, {step}, verbunden",
+    "auto.step.joinedUndo": "Rückgängig",
     "auto.step.atLaunch": "wird beim Start übergeben",
     "auto.step.exits": "Ausgänge",
     "auto.step.modelDefault": "die Vorgabe des Agenten selbst",

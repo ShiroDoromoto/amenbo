@@ -1020,6 +1020,8 @@ export const ko: Translation = {
     "auto.step.oneADecisionALine": "한 줄에 하나(예: AMB-D-12)",
     "auto.step.inputs": "입력",
     "auto.step.unwired": "아무것도 닿지 않습니다",
+    "auto.step.joined": "단계 {no} 「{step}」의 출력 「{name}」에 연결했습니다",
+    "auto.step.joinedUndo": "되돌리기",
     "auto.step.atLaunch": "실행을 시작할 때 넘긴다",
     "auto.step.exits": "출구",
     "auto.step.modelDefault": "에이전트 자체 기본값",

@@ -367,10 +367,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 human(flags, format!("{} action(s) — {about}", cards.len()));
                 for card in &cards {
                     let shelf = if card.action.project_id.is_none() { "  [device]" } else { "" };
+                    let draft = if card.action.draft { "  [being created]" } else { "" };
                     human(
                         flags,
                         format!(
-                            "  {}  {}{shelf}  {} step(s)  used by {} automation(s)",
+                            "  {}  {}{shelf}{draft}  {} step(s)  used by {} automation(s)",
                             card.action.id, card.action.name, card.steps, card.used_by
                         ),
                     );
@@ -443,6 +444,28 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             store.automation_action_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-rm", "automation_action", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted action: {id}"));
+        }
+        AutomationCmd::ActionFinishCreating { id } => {
+            // Core hands an action that is already written straight back without writing it, so
+            // whether this call moved anything is asked before it.
+            let was_draft = store
+                .automation_action_detail(id)
+                .map_err(CliError::from)?
+                .is_some_and(|view| view.action.draft);
+            let a = store.automation_action_finish_creating(id).map_err(CliError::from)?;
+            let line = match was_draft {
+                true => format!("✓ Finished creating action: {} ({})", a.name, a.id),
+                false => format!("✓ Action {} ({}) is not being created — nothing to finish", a.name, a.id),
+            };
+            let changed = was_draft.then(|| vec!["draft".to_string()]);
+            write_envelope(flags, "automation.action-finish-creating", "automation_action", serde_json::to_value(&a).unwrap(), changed, !was_draft, line);
+        }
+        AutomationCmd::ActionAbandon { id } => {
+            if !confirm(flags, "give up this action and the placements standing on it")? {
+                return Ok(0);
+            }
+            store.automation_action_abandon(id).map_err(CliError::from)?;
+            write_envelope(flags, "automation.action-abandon", "automation_action", json!({ "id": id, "abandoned": true }), None, false, format!("✓ Gave up action: {id}"));
         }
         AutomationCmd::StepAdd { action, name, prompt, interactive, work_dir, report_to_task, no_history, no_task_notes, no_task_decisions, no_task_comments } => {
             let prompt = body_arg(prompt)?;
@@ -1071,6 +1094,16 @@ fn render_action(flags: &Flags, view: &ActionView) {
         None => "the device's library".to_string(),
     };
     human(flags, format!("Action {}  {}", a.id, a.name));
+    if a.draft {
+        human(
+            flags,
+            format!(
+                "still being created — keep it with `automation action-finish-creating {}`, or give it up \
+                 with `automation action-abandon {}`",
+                a.id, a.id
+            ),
+        );
+    }
     let entry = match a.entry_step_id {
         Some(step) => format!("opens step {step} first"),
         None => "opens nothing".to_string(),

@@ -1180,6 +1180,8 @@ export const tr: Translation = {
     "auto.history.prev": "‹ Önceki",
     "auto.history.next": "Sonraki ›",
     "auto.history.count": "{from}–{to} / {total}",
+    "auto.run.facePicture": "Şema",
+    "auto.run.faceTerminal": "Terminal",
     "auto.run.pause": "Duraklat",
     "auto.run.resume": "Sürdür",
     "auto.run.stop": "Durdur",

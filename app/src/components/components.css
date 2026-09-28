@@ -1370,6 +1370,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__arrow--branch { fill: var(--c-heed); }
 .autopic__arrow--error, .autopic__arrow--back { fill: var(--c-stop); }
 .autopic__arrow--leaves { fill: var(--c-accent); }
+.autopic__arrow--lit { fill: var(--c-accent); }
 /* What the colours and dashes mean. Each swatch is a short line drawn as the line it stands for. */
 .autopic__legend {
   display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-1) var(--s-3);
@@ -2194,5 +2195,27 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 .autopic__markname { font-weight: var(--fw-bold); }
 .autopic__markports { color: var(--c-text); }
 .autopic__line--leaves { stroke: var(--c-accent); }
+/* **A run's pane, as its picture** (`AMB-T-5775`, `../shell/RunPicture`). It takes the pane's body and
+   scrolls both ways, and the room around the sheet is half the pane each side, so a box on the edge of
+   the picture can still be brought to the middle. */
+.runpic { flex: 1; min-height: 0; display: flex; container-type: size; }
+.runpic .autopic {
+  flex: 1; max-height: none;
+  overflow: scroll;
+  padding: 50cqh 50cqw;
+}
+/* What the run walked on the task it is working: the lines drawn heavier in the accent, and the boxes
+   with the accent's border. */
+.autopic__line--lit { stroke: var(--c-accent); stroke-width: 2.5; }
+.autopic__node--lit { border-color: var(--c-accent); }
+/* The box under way blinks — and where the reader asked for less motion, it wears a heavier border and
+   stays still. */
+.autopic__node--at { animation: autopic-at 1.2s ease-in-out infinite; }
+@keyframes autopic-at {
+  50% { background: var(--c-accent-faint); box-shadow: 0 0 0 3px var(--c-accent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .autopic__node--at { animation: none; box-shadow: 0 0 0 2px var(--c-accent); }
+}
 /* One output a way out of the action hands on, and the step output that fills it. */
 .autostep__outline { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }

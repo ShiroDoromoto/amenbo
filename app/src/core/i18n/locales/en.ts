@@ -1427,6 +1427,8 @@ const ui = {
   "auto.history.prev": "‹ Prev",
   "auto.history.next": "Next ›",
   "auto.history.count": "{from}–{to} of {total}",
+  "auto.run.facePicture": "Picture",
+  "auto.run.faceTerminal": "Terminal",
   "auto.run.pause": "Pause",
   "auto.run.resume": "Resume",
   "auto.run.stop": "Stop",

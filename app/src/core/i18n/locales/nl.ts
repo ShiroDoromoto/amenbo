@@ -1180,6 +1180,8 @@ export const nl: Translation = {
     "auto.history.prev": "‹ Vorige",
     "auto.history.next": "Volgende ›",
     "auto.history.count": "{from}–{to} van {total}",
+    "auto.run.facePicture": "Schema",
+    "auto.run.faceTerminal": "Terminal",
     "auto.run.pause": "Pauzeren",
     "auto.run.resume": "Hervatten",
     "auto.run.stop": "Stoppen",

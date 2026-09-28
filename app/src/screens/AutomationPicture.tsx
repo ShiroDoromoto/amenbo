@@ -37,6 +37,12 @@
 // sight — the box a run stopped at arrives picked from its pane (`AMB-T-5594`), and a band over the
 // screen can push it out of view. It stops moving once the reader's own hand has moved the screen,
 // so a reader scrolling away from the box that stays picked is not pulled back.
+//
+// **Drawn in a run's pane, it is the run's trail** (`AMB-T-5775`, `../shell/RunPicture`). The boxes and
+// lines the run passed on the task it is working are lit, the box under way blinks — or wears only its
+// border where the reader asked for less motion — and each box the run moves on to is picked and
+// brought to the middle. Nothing is put in there, so no `+` is drawn, and the legend is left to the
+// build screen: what a line means is read where the picture is made.
 import { useEffect, useId, useRef, useState } from "react";
 import { edgeWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
@@ -58,11 +64,23 @@ function inputsLine(mark: PicMark): string {
     .join("　");
 }
 
-/** Which arrowhead a line ends in — its colour, since a marker cannot take the line's own. */
-type Head = "next" | "branch" | "error" | "back" | "leaves";
-const HEADS: readonly Head[] = ["next", "branch", "error", "back", "leaves"];
+/**
+ * **What a run has walked on this picture** (`AMB-T-5775`): the boxes and the lines it passed on the task
+ * it is working, and the box under way.
+ */
+export type PicTrail = {
+  boxes: ReadonlySet<number>;
+  edges: ReadonlySet<number>;
+  at?: number;
+};
 
-function headOf(line: PicLine): Head {
+/** Which arrowhead a line ends in — its colour, since a marker cannot take the line's own. */
+type Head = "next" | "branch" | "error" | "back" | "leaves" | "lit";
+const HEADS: readonly Head[] = ["next", "branch", "error", "back", "leaves", "lit"];
+
+/** A line a run walked ends in the colour it is lit in, whatever kind of line it is. */
+function headOf(line: PicLine, trail?: PicTrail): Head {
+  if (lineLit(line.key, trail)) return "lit";
   if (line.back) return "back";
   if (line.leaves) return "leaves";
   return line.tone ?? "next";
@@ -102,6 +120,12 @@ function Legend({ inAction }: { inAction: boolean }) {
   );
 }
 
+/** Whether a line is one the run walked. The line in from the action's top mark is no edge, and never is. */
+function lineLit(key: string, trail: PicTrail | undefined): boolean {
+  if (trail === undefined || !key.startsWith("edge-")) return false;
+  return trail.edges.has(Number(key.slice("edge-".length)));
+}
+
 export function AutomationPicture({
   graph,
   insertLabel,
@@ -110,6 +134,7 @@ export function AutomationPicture({
   onInsert,
   onPickPart,
   selectedPart,
+  trail,
 }: {
   graph: PicGraph | null;
   /**
@@ -133,6 +158,9 @@ export function AutomationPicture({
   onPickPart?: (part: "in" | "out") => void;
   /** Which of the action's two frames the panel is showing, if either. */
   selectedPart?: "in" | "out";
+  /** What a run has walked, where the picture is drawn in its pane. A box picked there is brought to
+   *  the middle, not only into sight. */
+  trail?: PicTrail;
 }) {
   // Arrowheads are looked up by id, and two pictures on one page must not answer for each other's.
   const ids = useId();
@@ -159,9 +187,13 @@ export function AutomationPicture({
   // change to the document, and each change of the box's own size (a face coming up), asks the
   // observer again from the start.
   const drawn = picture.nodes.some((node) => node.boxId === selectedBoxId);
+  const centred = trail !== undefined;
   useEffect(() => {
     const box = pickedRef.current;
     if (!drawn || box === null || typeof IntersectionObserver === "undefined") return;
+    const inline = centred ? "center" : "nearest";
+    // A run's box goes to the middle as it is reached, whether or not it was in sight already.
+    if (centred) box.scrollIntoView?.({ block: "center", inline });
     const reader = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
     const stop = () => {
       watch.disconnect();
@@ -173,7 +205,7 @@ export function AutomationPicture({
       // A box with no size is on a face not shown yet and has no place to be brought to.
       const laidOut = seen !== undefined && (seen.boundingClientRect?.height ?? 1) > 0;
       if (laidOut && seen.intersectionRatio < 1) {
-        box.scrollIntoView?.({ block: "center", inline: "nearest" });
+        box.scrollIntoView?.({ block: "center", inline });
       }
     }, { threshold: 1 });
     const askAgain = () => {
@@ -187,7 +219,7 @@ export function AutomationPicture({
     changed.observe(document.body, { childList: true, subtree: true, characterData: true });
     for (const kind of reader) window.addEventListener(kind, stop, true);
     return stop;
-  }, [selectedBoxId, drawn]);
+  }, [selectedBoxId, drawn, centred]);
   if (picture.nodes.length === 0) return null;
 
   return (
@@ -236,6 +268,7 @@ export function AutomationPicture({
                 line.back ? "autopic__line--back" : "",
                 line.leaves ? "autopic__line--leaves" : "",
                 line.tone !== undefined ? `autopic__line--${line.tone}` : "",
+                lineLit(line.key, trail) ? "autopic__line--lit" : "",
               ]
                 .filter((one) => one !== "")
                 .join(" ");
@@ -248,7 +281,7 @@ export function AutomationPicture({
                     className={drawn}
                     points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
                     // Into the box it goes to. A line that goes nowhere ends in its words instead.
-                    markerEnd={line.points.length > 2 ? head(headOf(line)) : undefined}
+                    markerEnd={line.points.length > 2 ? head(headOf(line, trail)) : undefined}
                   />
                   {/* Last in the group, so it lies over the line it traces. */}
                   {edgeId !== undefined && (
@@ -359,6 +392,8 @@ export function AutomationPicture({
                 node.unfed.length > 0 ? "autopic__node--unfed" : "",
                 node.empty === true ? "autopic__node--empty" : "",
                 node.boxId === selectedBoxId ? "autopic__node--on" : "",
+                trail?.boxes.has(node.boxId) === true ? "autopic__node--lit" : "",
+                trail?.at === node.boxId ? "autopic__node--at" : "",
               ]
                 .filter((one) => one !== "")
                 .join(" ")}
@@ -408,7 +443,7 @@ export function AutomationPicture({
             </button>
           ))}
 
-          {picture.inserts.map((insert) => (
+          {trail === undefined && picture.inserts.map((insert) => (
             <button
               key={insert.edgeId}
               type="button"
@@ -424,7 +459,7 @@ export function AutomationPicture({
         </div>
       </div>
       {/* Under the picture rather than on its sheet, so it stays in view however far it is scrolled. */}
-      <Legend inAction={graph?.boundary !== undefined} />
+      {trail === undefined && <Legend inAction={graph?.boundary !== undefined} />}
     </>
   );
 }

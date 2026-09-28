@@ -1182,6 +1182,8 @@ export const zhHant: Translation = {
     "auto.history.prev": "‹ 上一頁",
     "auto.history.next": "下一頁 ›",
     "auto.history.count": "第 {from}–{to} 筆，共 {total} 筆",
+    "auto.run.facePicture": "圖",
+    "auto.run.faceTerminal": "終端機",
     "auto.run.pause": "暫停",
     "auto.run.resume": "繼續",
     "auto.run.stop": "停止",

@@ -502,6 +502,27 @@ input[type="color"] {
 /* Stop is the one of the two that cannot be taken back, so it is drawn in the stop colour. */
 .slot__runact--stop { color: var(--c-stop); border-color: var(--c-stop); }
 .slot__runact--stop:hover:not(:disabled) { color: var(--c-stop); background: var(--c-stop-weak); }
+/* The picture or the terminal, on a run's pane (`AMB-T-5775`): two words joined into one control, the
+   one up filled in. */
+.slot__faces {
+  flex: 0 0 auto;
+  display: inline-flex;
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.slot__face {
+  padding: 1px var(--s-2);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1.4;
+}
+.slot__face + .slot__face { border-inline-start: var(--border-w) var(--border-style) var(--c-rule); }
+.slot__face:hover { color: var(--c-text); }
+.slot__face--on { background: var(--c-accent-faint); color: var(--c-accent); font-weight: 600; }
+/* What the terminal face is — the cards, the terminal, the box a line is written in and the model row.
+   It lays nothing out of its own, so the frame's column is what it was; with the picture up it is out
+   of the layout altogether, and the terminal inside it measures no size and is not refit. */
+.slot__body { display: contents; }
+.slot__body--away { display: none; }
 /* Where a finished run is read from now (`AMB-T-5539`), standing where its moves stood: a word, since
    it goes somewhere rather than acting on the run. */
 .slot__runlink {

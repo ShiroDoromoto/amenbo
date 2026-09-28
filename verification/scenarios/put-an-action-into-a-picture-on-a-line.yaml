@@ -73,6 +73,11 @@ steps_gui:
       exit: got one
       name: work
 
+  # Made on the spot, it is still being made, over the automation, until it is said to be finished.
+  - type: action
+    domain: automation
+    op: action-finish-creating
+
   - type: assert
     domain: automation
     op: pictured

@@ -1235,6 +1235,8 @@ impl Instructor {
             // an eye closes both of those. So is a line that is not there: the way out's name may still be
             // written on the box it leaves, and a reading would find it and call the line drawn.
             (Domain::Automation, "line-pictured") if !present(with) => None,
+            // A built-in's way out is Amenbo's word, drawn in the machine's language, as its box is.
+            (Domain::Automation, "line-pictured") if with.contains_key("from_builtin") => None,
             (Domain::Automation, "line-pictured") => {
                 Some(Expectation { text: arg_str(with, "exit")?.to_string(), present: true })
             }
@@ -4141,17 +4143,28 @@ impl Instructor {
             // It is the automation picture's `+`, which opens the library in the panel beside the
             // picture: an action off the shelf (`action`) is picked and placed there, and one made on
             // the spot (`name`) is made from the panel's own press. That press asks a name and a
-            // library and nothing else, places the empty action on the line, and goes on to its own
-            // build screen — so the instruction reads that screen and comes back, leaving the operator
-            // on the picture the next step reads. The `+` inside an action opens the step dialog
-            // straight away, and no road walks it yet.
+            // library and nothing else, places the empty action on the line, and opens its build
+            // screen over the automation's, still being made — and the step ends there, since only a
+            // press the road names closes it (`action-finish-creating`, `action-abandon`). The `+`
+            // inside an action opens the step dialog straight away, and no road walks it yet.
+            //
+            // A way out nothing has been decided for has no line and so no `+`: it is drawn dashed,
+            // ending in a press of its own (`undecided`), which opens the same library.
             (Domain::Automation, "insert-box") => {
-                let plus = format!(
-                    "In the build screen's picture, press the `+` on the line leaving {} by {}.{}",
-                    box_named(with, "after", "after_builtin")?,
-                    way_out_of(with, "after_builtin")?,
-                    builtin_note(with, "after_builtin")
-                );
+                let plus = match flagged(with, "undecided") {
+                    true => format!(
+                        "In the build screen's picture, find the dashed line leaving {} by {}, which says nothing about where it goes, and press the button at its end that places the next action — its words are written in the interface's language.{}",
+                        box_named(with, "after", "after_builtin")?,
+                        way_out_of(with, "after_builtin")?,
+                        builtin_note(with, "after_builtin")
+                    ),
+                    false => format!(
+                        "In the build screen's picture, press the `+` on the line leaving {} by {}.{}",
+                        box_named(with, "after", "after_builtin")?,
+                        way_out_of(with, "after_builtin")?,
+                        builtin_note(with, "after_builtin")
+                    ),
+                };
                 if with.contains_key("prompt") || with.contains_key("exits") || with.contains_key("inputs") {
                     return Err(
                         "an action made on a line is asked a name and a library and nothing else — its steps, \
@@ -4160,8 +4173,11 @@ impl Instructor {
                     );
                 }
                 match (arg_str(with, "name"), with.get("action"), arg_str(with, "builtin")) {
+                    // The name is searched for first: a reader reaching for a new action looks for
+                    // it on the shelf, and the press that makes one is named after what was typed
+                    // once nothing is found.
                     (Some(name), None, None) => format!(
-                        "{plus} In the panel that opens beside the picture, press the button that makes a new action and places it. In the dialog, write the name \"{name}\", set where it is kept to {}, and press the button that makes it and opens the action. Confirm the action build screen for \"{name}\" opens, then press the button that goes back — the automation's build screen comes back.",
+                        "{plus} In the panel that opens beside the picture, write \"{name}\" in the search box, and confirm no library action is listed for it. Press the button under the list that makes a new one named \"{name}\". In the dialog, confirm the name reads \"{name}\", set where it is kept to {}, and press the button that makes it and opens the action. Confirm the action build screen for \"{name}\" opens over the automation's, and leave it open.",
                         match arg_str(with, "reach") {
                             None | Some("project") => "this project's library",
                             Some("device") => "the global library",
@@ -4287,7 +4303,12 @@ impl Instructor {
             (Domain::Automation, "remove-placement") => "In the panel showing what the pressed placement holds, press the button that takes this placement off, and answer the question the machine asks with the answer that goes ahead.".to_string(),
             // The press under the action's name on the pressed placement's panel. What it lands on is
             // the action's own: a library action's build screen, or a built-in's read-only one.
-            (Domain::Automation, "open-placed") => "In the panel showing what the pressed placement holds, press the button that opens the action's build screen — the screen for the action standing on it opens in place of the picture.".to_string(),
+            // The pair at the foot of an action still being made, opened over its automation. Both
+            // land on the automation's picture; the second asks first, since it takes the action and
+            // the placement it stands on away and there is no undoing it.
+            (Domain::Automation, "action-finish-creating") => "On the action build screen standing over the automation, press the button at its foot that finishes creating the action and goes back. Confirm the screen over it closes, and the automation's build screen is what is left.".to_string(),
+            (Domain::Automation, "action-abandon") => "On the action build screen standing over the automation, press the button at its foot that stops making the action. Confirm the question the machine asks names the action and says the placement it stands on is taken away with it, and answer it with the answer that goes ahead. Confirm the screen over it closes, and the automation's build screen is what is left.".to_string(),
+            (Domain::Automation, "open-placed") => "In the panel showing what the pressed placement holds, press the button that opens the action's build screen — the screen for the action standing on it opens over the automation's build screen, which stays behind it.".to_string(),
             // A built-in's row on the actions tab, listed after the library's with a chip of its own.
             // Nothing on it builds or moves, so the press opens it to be read.
             (Domain::Automation, "builtin-open") => format!(
@@ -6547,19 +6568,22 @@ impl Instructor {
             // where leaving by it goes. `present: false` is the line taken away — nothing said about
             // where that way out goes, which names no end because there is none.
             (Domain::Automation, "line-pictured") if !present(with) => match (arg_str(with, "to").or(arg_str(with, "to_builtin")), arg_str(with, "ends")) {
+                // Nothing decided is drawn, not left out: a dashed line going to no
+                // box, ending in the press that puts the next box on.
                 (None, None) => format!(
-                    "In the build screen's picture, confirm no line leaves the box \"{}\" by {}.",
-                    req(with, "from")?,
-                    way_out(with)
+                    "In the build screen's picture, confirm the line leaving {} by {} is drawn dashed, going on to no box and with nothing written at its foot about where it goes, and that it ends in the button that puts the next box on — the next action on an automation's picture, the next step on an action's, its words written in the interface's language.{}",
+                    box_named(with, "from", "from_builtin")?,
+                    way_out_of(with, "from_builtin")?,
+                    builtin_note(with, "from_builtin")
                 ),
                 _ => return Err(
                     "a line that is not drawn goes nowhere — leave `to`, `to_builtin` and `ends` out of it".to_string(),
                 ),
             },
             (Domain::Automation, "line-pictured") => format!(
-                "In the build screen's picture, confirm a line leaves the box \"{}\" by {}, {}.",
-                req(with, "from")?,
-                way_out(with),
+                "In the build screen's picture, confirm a line leaves {} by {}, {}.{}",
+                box_named(with, "from", "from_builtin")?,
+                way_out_of(with, "from_builtin")?,
                 // A built-in it goes on to is named by its key (`BUILTIN_WORDS`).
                 match (
                     match (arg_str(with, "to"), arg_str(with, "to_builtin")) {
@@ -6579,6 +6603,20 @@ impl Instructor {
                         "a line goes on to a box (`to`, or `to_builtin`) or ends the run (`ends`), never both and never neither"
                             .to_string(),
                     ),
+                },
+                builtin_note(with, "from_builtin")
+            ),
+            // An action's build screen standing over its automation. What holds it there is the
+            // backdrop, so the tabs, the sidebar and "＜" "＞" are pressed to see that nothing comes of
+            // it — and a press outside and Escape, since neither may close it. The mark saying it is
+            // still being made is the interface's own words, so the whole is an eye's.
+            (Domain::Automation, "action-over") => format!(
+                "Confirm the action build screen for \"{}\" stands over the automation's build screen, with the automation still behind it. {} Press a tab of the automations screen, an item in the sidebar, and \"＜\" and \"＞\" at the top left, and confirm none of them does anything. Press outside the screen over the automation and press Escape, and confirm it stays open.",
+                req(with, "name")?,
+                match step_mark(with, "draft")? {
+                    Some(true) => "Confirm its head carries the mark saying the action is still being made, that its foot holds the button that stops making it and the button that finishes creating it and goes back, and that there is neither a button going back to the automation nor one opening it full screen.",
+                    Some(false) => "Confirm its head carries no mark saying the action is still being made, that it holds the button going back to the automation, named after it, and the one opening it full screen, and that its foot holds neither of the two buttons that finish or stop making it.",
+                    None => "",
                 }
             ),
             // The dashed outline around the boxes one task is worked by. What it is drawn with is a
@@ -9333,10 +9371,72 @@ steps_gui:
         let mut ins = Instructor::new();
         let steps = s.steps(Driver::Gui);
         let line = ins.render(&steps[0]).expect("it renders");
-        assert!(line.contains("write the name \"work\""), "{line}");
+        assert!(line.contains("write \"work\" in the search box"), "{line}");
         assert!(line.contains("the global library"), "{line}");
-        assert!(line.contains("goes back"), "{line}");
+        assert!(line.contains("leave it open") && !line.contains("goes back"), "{line}");
         assert!(ins.render(&steps[1]).is_err(), "a prompt is the action's steps', not the dialog's");
+    }
+
+    /// A way out nothing has been decided for is pressed at the end of its dashed line, not on a `+`,
+    /// and read as that dashed line rather than as no line. What is made there is still being made,
+    /// over the automation, until one of the pair at its foot is pressed.
+    #[test]
+    fn an_action_is_made_off_a_way_out_nothing_was_decided_for() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: insert-box
+    with: { after_builtin: take_task, exit: 着手した, undecided: true, name: work }
+  - type: assert
+    domain: automation
+    op: action-over
+    with: { name: work, draft: true }
+  - type: action
+    domain: automation
+    op: action-finish-creating
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with: { from: work, present: false }
+  - type: action
+    domain: automation
+    op: action-abandon
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with: { from_builtin: take_task, exit: 着手した, present: false }
+  - type: assert
+    domain: automation
+    op: action-over
+    with: { name: work, draft: false }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> =
+            steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
+        assert!(lines[0].contains("dashed line") && !lines[0].contains("`+`"), "{}", lines[0]);
+        assert!(lines[1].contains("still being made") && lines[1].contains("Escape"), "{}", lines[1]);
+        assert!(lines[2].contains("finishes creating"), "{}", lines[2]);
+        assert!(lines[3].contains("drawn dashed") && lines[3].contains("the box \"work\""), "{}", lines[3]);
+        assert!(lines[4].contains("stops making") && lines[4].contains("goes ahead"), "{}", lines[4]);
+        assert!(lines[5].contains("drawn dashed") && lines[5].contains("interface's language"), "{}", lines[5]);
+        assert!(lines[6].contains("no mark saying the action is still being made"), "{}", lines[6]);
+        assert!(ins.expectation(&steps[1]).is_none(), "the mark is the interface's words, an eye's");
+    }
+
+    /// The box a line leaves is named one way, the same as a box on the picture.
+    #[test]
+    fn a_line_leaves_a_box_named_one_way() {
+        for with in ["{ exit: a }", "{ from: a, from_builtin: take_task, exit: 着手した }"] {
+            let doc = format!(
+                "id: x\ntitle: y\nsteps_gui:\n  - type: assert\n    domain: automation\n    op: line-pictured\n    with: {with}\n"
+            );
+            let s = amenbo_scenario::load_str(&doc).expect("parses");
+            assert!(s.validate().is_err(), "{with}");
+        }
     }
 
     /// The action build screen's three: a step added from the press above the picture, what leaving a
@@ -9381,7 +9481,7 @@ steps_gui:
         assert!(lines[2].contains("nothing is said yet"), "{}", lines[2]);
         assert!(lines[3].contains("stops and calls a person"), "{}", lines[3]);
         assert!(lines[4].contains("deletes this step") && lines[4].contains("goes ahead"), "{}", lines[4]);
-        assert!(lines[5].contains("no line leaves the box \"draft\""), "{}", lines[5]);
+        assert!(lines[5].contains("the line leaving the box \"draft\"") && lines[5].contains("drawn dashed"), "{}", lines[5]);
         assert!(ins.expectation(&steps[5]).is_none(), "a line gone is an eye's");
     }
 

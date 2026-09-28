@@ -959,6 +959,7 @@ export const ru: Translation = {
     "auto.hand.unchosen": "Не выбрано",
     "auto.hand.nothing": "Эта автоматизация ничего не принимает при запуске.",
     "auto.launch.see": "Показать на схеме",
+    "auto.launch.fix": "Открыть действие и исправить",
     "auto.launch.openWorkspace": "Открыть рабочую область",
     "auto.pic.lap": "Одна задача",
     "auto.pic.insert": "Вставить сюда действие",

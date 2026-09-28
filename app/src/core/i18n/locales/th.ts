@@ -943,6 +943,7 @@ export const th: Translation = {
     "auto.hand.unchosen": "ไม่เลือก",
     "auto.hand.nothing": "ออโตเมชันนี้ไม่รับอะไรเมื่อเริ่มทำงาน",
     "auto.launch.see": "ดูในแผนภาพ",
+    "auto.launch.fix": "เปิดแอ็กชันเพื่อแก้ไข",
     "auto.launch.openWorkspace": "เปิดพื้นที่ทำงาน",
     "auto.pic.lap": "หนึ่งงาน",
     "auto.pic.insert": "แทรกแอ็กชันตรงนี้",

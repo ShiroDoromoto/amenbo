@@ -954,6 +954,7 @@ export const es: Translation = {
     "auto.hand.unchosen": "Sin elegir",
     "auto.hand.nothing": "Esta automatización no recibe nada al iniciarse.",
     "auto.launch.see": "Ver en el diagrama",
+    "auto.launch.fix": "Abrir la acción para corregirlo",
     "auto.launch.openWorkspace": "Abrir el espacio de trabajo",
     "auto.pic.lap": "Una tarea",
     "auto.pic.insert": "Insertar una acción aquí",

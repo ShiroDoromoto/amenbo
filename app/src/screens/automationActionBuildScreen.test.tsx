@@ -183,6 +183,17 @@ describe("the action build screen", () => {
     expect(textareas().map((one) => one.value)).toContain("take one");
   });
 
+  it("arrives with the step it was opened on pressed", async () => {
+    hoisted.action = action({
+      steps: [step(), step({ id: 12, name: "Review" })],
+      edges: [{ id: 5, fromId: 11, exitName: "完了", toId: 12, ends: "go" }],
+    });
+    await act(async () => {
+      root.render(createElement(AutomationActionBuildScreen, { id: 4, openingStep: 12, onBack: () => undefined }));
+    });
+    expect(titleBox()?.value).toBe("Review");
+  });
+
   it("renames the step from the panel's head, when the caret leaves it", async () => {
     await render();
     await act(async () => nodes()[0]!.click());

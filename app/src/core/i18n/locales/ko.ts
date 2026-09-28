@@ -939,6 +939,7 @@ export const ko: Translation = {
     "auto.hand.unchosen": "선택 안 함",
     "auto.hand.nothing": "이 자동화는 시작할 때 아무것도 받지 않습니다.",
     "auto.launch.see": "그림에서 보기",
+    "auto.launch.fix": "액션을 열어 고치기",
     "auto.launch.openWorkspace": "워크스페이스 열기",
     "auto.pic.lap": "작업 하나",
     "auto.pic.insert": "여기에 액션을 넣기",

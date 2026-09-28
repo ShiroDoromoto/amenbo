@@ -97,6 +97,11 @@ describe("opening a terminal in a pane with none in it", () => {
       tf("auto.run.body.failed", { step: "check" }),
     );
 
+    // Come back with the app, a run's pane may know no step: the sentence names none rather than an
+    // empty one.
+    await pane({ ...FAILED, step: "" });
+    expect(container.querySelector(".slot__runbody-line")?.textContent).toBe(t("auto.run.body.failedNoStep"));
+
     await pane({ ...FAILED, state: { ...FAILED.state!, status: "paused", word: "Paused" } });
     expect(container.querySelector(".slot__runbody-line")?.textContent).toBe(t("auto.run.body.paused"));
   });

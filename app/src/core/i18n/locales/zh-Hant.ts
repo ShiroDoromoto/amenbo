@@ -1279,6 +1279,9 @@ export const zhHant: Translation = {
     "auto.run.body.completed": "已走到圖的末尾。最後一步是「{step}」。",
     "auto.run.body.canceled": "在「{step}」處停止了。此次執行不會繼續。",
     "auto.run.body.failed": "在「{step}」處失敗。原因見上方的橫條。",
+    "auto.run.body.completedNoStep": "已走到圖的末尾。",
+    "auto.run.body.canceledNoStep": "已停止。此次執行不會繼續。",
+    "auto.run.body.failedNoStep": "失敗。原因見上方的橫條。",
 
     "mcp.title": "透過 MCP 連線",
     "mcp.setupTitle": "讓 AI 可以使用你的專案",

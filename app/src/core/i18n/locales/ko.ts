@@ -1274,6 +1274,9 @@ export const ko: Translation = {
     "auto.run.body.completed": "그림의 끝까지 진행했습니다. 마지막 단계는 “{step}”였습니다.",
     "auto.run.body.canceled": "“{step}”에서 중지했습니다. 이 실행은 이어지지 않습니다.",
     "auto.run.body.failed": "“{step}”에서 실패했습니다. 이유는 위의 띠에 나와 있습니다.",
+    "auto.run.body.completedNoStep": "그림의 끝까지 진행했습니다.",
+    "auto.run.body.canceledNoStep": "중지했습니다. 이 실행은 이어지지 않습니다.",
+    "auto.run.body.failedNoStep": "실패했습니다. 이유는 위의 띠에 나와 있습니다.",
 
     "mcp.title": "MCP로 연결",
     "mcp.setupTitle": "내 프로젝트를 AI에서 사용하기",

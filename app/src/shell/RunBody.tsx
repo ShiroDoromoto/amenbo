@@ -18,12 +18,11 @@ import { t, tf } from "../core/i18n";
 /** The body of a run that is over — completed, failed or canceled (`AMB-D-955`). */
 export function RunOverCard({ run, onSee, see }: { run: Say; onSee?: () => void; see: string }) {
   const status = run.state?.status;
-  const [mark, line] =
-    status === "completed"
-      ? ["✓", tf("auto.run.body.completed", { step: run.step })]
-      : status === "failed"
-        ? ["!", tf("auto.run.body.failed", { step: run.step })]
-        : ["■", tf("auto.run.body.canceled", { step: run.step })];
+  const kind = status === "completed" ? "completed" : status === "failed" ? "failed" : "canceled";
+  const mark = kind === "completed" ? "✓" : kind === "failed" ? "!" : "■";
+  // A pane come back with the app knows its run and not the step it was on (`AMB-T-5635`): the row
+  // says none, and so does the sentence rather than quote an empty name.
+  const line = run.step === "" ? t(`auto.run.body.${kind}NoStep`) : tf(`auto.run.body.${kind}`, { step: run.step });
   return (
     <div className="slot__builtin slot__runbody" role="status" data-status={status}>
       <span className="slot__runbody-mark" role="img" aria-label={run.state?.word}>{mark}</span>

@@ -1283,6 +1283,9 @@ export const ja: Translation = {
     "auto.run.body.completed": "図の終わりまで進みました。最後のステップは「{step}」です。",
     "auto.run.body.canceled": "「{step}」のところで止めました。この実行は続きません。",
     "auto.run.body.failed": "「{step}」で失敗しました。理由は上の帯に出ています。",
+    "auto.run.body.completedNoStep": "図の終わりまで進みました。",
+    "auto.run.body.canceledNoStep": "止めました。この実行は続きません。",
+    "auto.run.body.failedNoStep": "失敗しました。理由は上の帯に出ています。",
 
     "mcp.title": "MCP でつなぐ",
     "mcp.setupTitle": "プロジェクトを AI から使えるようにする",

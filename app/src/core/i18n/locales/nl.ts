@@ -1277,6 +1277,9 @@ export const nl: Translation = {
     "auto.run.body.completed": "Het einde van het diagram is bereikt. De laatste stap was ‘{step}’.",
     "auto.run.body.canceled": "Gestopt bij ‘{step}’. Deze run gaat niet verder.",
     "auto.run.body.failed": "Mislukt bij ‘{step}’. De balk hierboven zegt waarom.",
+    "auto.run.body.completedNoStep": "Het einde van het diagram is bereikt.",
+    "auto.run.body.canceledNoStep": "Gestopt. Deze run gaat niet verder.",
+    "auto.run.body.failedNoStep": "Mislukt. De balk hierboven zegt waarom.",
 
     "mcp.title": "Verbinden via MCP",
     "mcp.setupTitle": "Je projecten vanuit een AI gebruiken",

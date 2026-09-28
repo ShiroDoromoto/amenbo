@@ -1278,6 +1278,9 @@ export const id: Translation = {
     "auto.run.body.completed": "Sampai di akhir diagram. Langkah terakhir adalah “{step}”.",
     "auto.run.body.canceled": "Dihentikan di “{step}”. Proses ini tidak berlanjut.",
     "auto.run.body.failed": "Gagal di “{step}”. Alasannya ada di pita di atas.",
+    "auto.run.body.completedNoStep": "Sampai di akhir diagram.",
+    "auto.run.body.canceledNoStep": "Dihentikan. Proses ini tidak berlanjut.",
+    "auto.run.body.failedNoStep": "Gagal. Alasannya ada di pita di atas.",
 
     "mcp.title": "Hubungkan lewat MCP",
     "mcp.setupTitle": "Gunakan proyek Anda dari AI",

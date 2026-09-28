@@ -1278,6 +1278,9 @@ export const th: Translation = {
     "auto.run.body.completed": "ไปถึงท้ายแผนภาพแล้ว ขั้นสุดท้ายคือ “{step}”",
     "auto.run.body.canceled": "หยุดที่ “{step}” การรันนี้จะไม่ทำต่อ",
     "auto.run.body.failed": "ล้มเหลวที่ “{step}” เหตุผลอยู่ในแถบด้านบน",
+    "auto.run.body.completedNoStep": "ไปถึงท้ายแผนภาพแล้ว",
+    "auto.run.body.canceledNoStep": "หยุดแล้ว การรันนี้จะไม่ทำต่อ",
+    "auto.run.body.failedNoStep": "ล้มเหลว เหตุผลอยู่ในแถบด้านบน",
 
     "mcp.title": "เชื่อมต่อผ่าน MCP",
     "mcp.setupTitle": "ใช้โปรเจกต์ของคุณจาก AI",

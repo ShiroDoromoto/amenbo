@@ -1277,6 +1277,9 @@ export const tr: Translation = {
     "auto.run.body.completed": "Diyagramın sonuna ulaşıldı. Son adım “{step}” idi.",
     "auto.run.body.canceled": "“{step}” adımında durduruldu. Bu çalıştırma devam etmez.",
     "auto.run.body.failed": "“{step}” adımında başarısız oldu. Nedeni yukarıdaki şeritte.",
+    "auto.run.body.completedNoStep": "Diyagramın sonuna ulaşıldı.",
+    "auto.run.body.canceledNoStep": "Durduruldu. Bu çalıştırma devam etmez.",
+    "auto.run.body.failedNoStep": "Başarısız oldu. Nedeni yukarıdaki şeritte.",
 
     "mcp.title": "MCP ile bağlan",
     "mcp.setupTitle": "Projelerinizi bir yapay zekâdan kullanın",

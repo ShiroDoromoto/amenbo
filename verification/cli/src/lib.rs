@@ -211,6 +211,9 @@ pub(crate) struct Driver<'a> {
     /// value. A return value is not a state, so the only place a later step can read it is here, and
     /// the assert that reads it has to follow its call.
     last_worktree: Option<String>,
+    /// What the last `automation test-run` answered. A test run keeps nothing in the store, so its
+    /// answer is the whole of what there is to read, and the assert that reads it follows its call.
+    last_test_run: Option<serde_json::Value>,
     /// The files the `store` actions wrote, under the same names. A scenario has one binding
     /// namespace — the loader keeps it unique across all of them — and which map a name lands in
     /// follows from the op that bound it: nothing in the store is a path, and no archive is an id.
@@ -350,6 +353,7 @@ impl<'a> Driver<'a> {
             last_rebind: None,
             moved: HashMap::new(),
             last_worktree: None,
+            last_test_run: None,
             app_up: None,
             artifacts: HashMap::new(),
             server: None,

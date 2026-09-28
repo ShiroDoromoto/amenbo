@@ -1,0 +1,66 @@
+# Before anything real is set moving, a person wants to see how a picture they built would go: which
+# box comes after which, which way out each is left by, and whether it ends. A test run walks it from
+# its entry to its end with no agent started and no built-in carried out, so nothing is taken, closed
+# or filed on the way. What a road has to prove is both halves of that — that the walk followed the
+# picture, round and out again, and that the store is as it was before the walk.
+#
+# Which way out a step is left by is chosen by the test run, since nobody is doing the work that
+# would decide it: the first it declares the first time, the next each time it is reached again. That
+# is what walks a picture that takes tasks until there are none once round and then out.
+id: walk-an-automation-through-as-a-test-run
+title: A test run walks an automation once round and out, and keeps nothing
+description: >
+  Stand up an automation that takes a task, works on it, closes it and goes back to take the next,
+  with a task in the project it could take. Walk it as a test run from the terminal: the take leaves by
+  the way out that took a task, the work and the close each by their done one, and the second take by
+  the way out that found none, which ends the run completed. Afterwards the automation has no run
+  behind it, the project holds the one task it held, and that task is still waiting to be taken.
+given:
+  # The task a take could take, which the walk must leave alone.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task to take }, as: real }
+  - { type: action, domain: task, op: assign, with: { target: real, assignee: me-ai } }
+
+  # The work: one step, left by its done way out, which is the action's own.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: fix, prompt: fix what the task asks for }, as: fix }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: fix } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: fix, exit_to: "" } }
+
+  # Take → work → close → take again, and out once there is nothing left to take.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — take until none are left" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: fix, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close, to: at_take } }
+
+steps_cli:
+  - type: action
+    domain: automation
+    op: test-run
+    with: { target: auto }
+
+  # Once round and out: the first take is left by the way out that took a task, the second by the one
+  # that found none, and the run ends completed rather than being cut short.
+  - type: assert
+    domain: automation
+    op: test-run-walked
+    with:
+      target: auto
+      walked:
+        - [タスクに着手する, 着手した]
+        - [fix, 完了]
+        - [タスクを閉じる, 完了]
+        - [タスクに着手する, 着手できるタスクが無い]
+      status: completed
+      runs: 0
+      tasks: 1
+
+  # And the task a real take would have reserved is still waiting to be taken.
+  - type: assert
+    domain: task
+    op: field
+    with: { target: real, field: status, equals: todo }

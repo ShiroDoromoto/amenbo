@@ -4225,6 +4225,19 @@ const REGISTRY: &[OpSpec] = &[
     // The runs one automation has behind it, or the ones that worked one task — the two doors a run
     // is reached by, and the whole of what a listing of runs is (there is no listing of every run).
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "runs-listed", required: &[], refs: &["target", "automation", "task"], strings: &[], binds: false },
+    //
+    // **A test run** (`automation test-run`): the automation walked from its entry to its end with no
+    // agent started, no built-in carried out and nothing kept. It takes what `start` takes bar the file,
+    // and binds nothing — a test run leaves no run behind to name. What it answered is kept on the
+    // driver for `test-run-walked`, since afterwards the store holds nothing of it to read back.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "test-run", required: &[], refs: &["target"], strings: &["title", "notes", "dim"], binds: false },
+    // What the test run just before this one walked. `walked` is **every** step it opened, in order,
+    // each as `[name, way out]` — the way out being the one it was taken to leave by, which is what says
+    // a picture that goes round was walked once round and then out. `status` is how it ended, spelled
+    // as a run's is. `runs` and `tasks` are counted afterwards off the store: how many runs the
+    // automation has behind it and how many tasks the project holds, which is where anything a test run
+    // wrongly kept would be found.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "test-run-walked", required: &["walked", "status"], refs: &["target"], strings: &["status"], binds: false },
     // ---- reading a definition back --------------------------------------------------------------
     // **The two listings are read on both faces**, which is why they stand here rather than under the
     // screen's heading below: the automations tab draws a row per definition and the actions tab one

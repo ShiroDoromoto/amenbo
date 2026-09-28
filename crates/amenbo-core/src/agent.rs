@@ -435,7 +435,7 @@ commands! {
     AutomationStart => "automation start",
     AutomationPause => "automation pause",
     AutomationResume => "automation resume",
-    AutomationStop => "automation stop",
+    AutomationCancel => "automation cancel",
     AutomationAcknowledge => "automation acknowledge",
     AutomationStepOut => "automation step-out",
     AutomationStepDone => "automation step-done",
@@ -671,7 +671,7 @@ impl Cmd {
             | Cmd::AutomationStart
             | Cmd::AutomationPause
             | Cmd::AutomationResume
-            | Cmd::AutomationStop
+            | Cmd::AutomationCancel
             | Cmd::AutomationAcknowledge
             | Cmd::AutomationActionAdd
             | Cmd::AutomationActionUpdate
@@ -1513,8 +1513,8 @@ fn capabilities() -> Value {
             &["automation run-list", "automation run-show"],
         ),
         cap(
-            "Run an automation — start one, pause it, pick it up again, stop it, and acknowledge a failed one",
-            &["automation start", "automation pause", "automation resume", "automation stop", "automation acknowledge"],
+            "Run an automation — start one, pause it, pick it up again, cancel it, and acknowledge a failed one",
+            &["automation start", "automation pause", "automation resume", "automation cancel", "automation acknowledge"],
         ),
         cap(
             "Report the step of a run you are carrying out — hand things on, and say you are done",
@@ -2235,7 +2235,7 @@ fn all_commands() -> Value {
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation place-rm 11 --yes"])),
 
-        cmd("automation start", "Starts an automation: checks it, copies what is placed on it into the run, and starts it. It is typed while the app is up on this store — a run's steps are opened by the app, so with no app running nothing is started and it is refused as app_not_running; start the app and type it again. While the run is running or paused it holds its definition: an edit, a delete, an archive or a scope move of the automation or of any action placed on it is refused as conflict, naming the run — stop it with `automation stop`, or let it finish, to edit again. Nothing caps how many runs may be going at once, so a start never waits. A run comes in by one of three entrances, and each ends up working a task: a take_task built-in takes one its filter finds; what a person hands over here is read by a make_task entry alone, which files a task from `--title` (required), `--notes` and each `--dim <axis>=<value>` (the axes it offers the step before it, plus every axis the project requires that its placement leaves open, which then need a value — all but the time axis, which the period containing today fills, as task add fills it) and attaches each `--file` to it; take_task and fetch read nothing, and handing an entry what it does not read is refused as invalid; a fetch built-in goes to the URL, file path or command it was set with and hands on what was there. What is handed over or fetched becomes a task through the make_task built-in before the run goes on. Which tasks a step works on and which folder it runs in stay the automation's own answers, given while it was built. An unfinished one is refused as not_ready_automation (a code of its own, apart from a reservation's not_ready), naming every reason: a way out with nothing after it, a required input nothing reaches before the run first comes to it (a wire back from its own way out, or from a box only reached after it, does not count) — both asked of the automation's picture and of the picture inside every action placed on it — a required setting nobody answered, an agent this machine cannot start, nothing placed on it, no entry, an entry that takes no task, an action placed on it with no step to open, a split_by_dim whose axis has been deleted since it was placed (named by its placement). A model the agent does not have here is NOT among them from a terminal: knowing costs a login shell and that provider starting up, and the answers the app keeps are in the app's own process — so the GUI's build screen names it and a step started from here meets it in the pane instead. An archived one is refused as invalid_automation_archived — bring it back with `automation update <id> --archived false`. Prints the run id that pause / resume / stop take.",
+        cmd("automation start", "Starts an automation: checks it, copies what is placed on it into the run, and starts it. It is typed while the app is up on this store — a run's steps are opened by the app, so with no app running nothing is started and it is refused as app_not_running; start the app and type it again. While the run is running or paused it holds its definition: an edit, a delete, an archive or a scope move of the automation or of any action placed on it is refused as conflict, naming the run — cancel it with `automation cancel`, or let it finish, to edit again. Nothing caps how many runs may be going at once, so a start never waits. A run comes in by one of three entrances, and each ends up working a task: a take_task built-in takes one its filter finds; what a person hands over here is read by a make_task entry alone, which files a task from `--title` (required), `--notes` and each `--dim <axis>=<value>` (the axes it offers the step before it, plus every axis the project requires that its placement leaves open, which then need a value — all but the time axis, which the period containing today fills, as task add fills it) and attaches each `--file` to it; take_task and fetch read nothing, and handing an entry what it does not read is refused as invalid; a fetch built-in goes to the URL, file path or command it was set with and hands on what was there. What is handed over or fetched becomes a task through the make_task built-in before the run goes on. Which tasks a step works on and which folder it runs in stay the automation's own answers, given while it was built. An unfinished one is refused as not_ready_automation (a code of its own, apart from a reservation's not_ready), naming every reason: a way out with nothing after it, a required input nothing reaches before the run first comes to it (a wire back from its own way out, or from a box only reached after it, does not count) — both asked of the automation's picture and of the picture inside every action placed on it — a required setting nobody answered, an agent this machine cannot start, nothing placed on it, no entry, an entry that takes no task, an action placed on it with no step to open, a split_by_dim whose axis has been deleted since it was placed (named by its placement). A model the agent does not have here is NOT among them from a terminal: knowing costs a login shell and that provider starting up, and the answers the app keeps are in the app's own process — so the GUI's build screen names it and a step started from here meets it in the pane instead. An archived one is refused as invalid_automation_archived — bring it back with `automation update <id> --archived false`. Prints the run id that pause / resume / cancel take.",
             json!([{ "name": "<id>", "help": "automation id", "required": true },
                    { "name": "--title <title>", "help": "the title of the task a make_task entry files (required there)" },
                    { "name": "--notes <notes>", "help": "that task's notes, as Markdown (`-` reads stdin)" },
@@ -2251,10 +2251,11 @@ fn all_commands() -> Value {
             json!([{ "name": "<run>", "help": "run id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation resume 7 --actor ai"])),
-        cmd("automation stop", "Stops a run, which ends canceled: hands the task it was working back to todo, and leaves a comment on that task saying how far it got — unless the task is closed (done or rejected), which gets no comment. Unlike pause it does not wait for the step under way — use it where a pause will not land.",
+        cmd("automation cancel", "Cancels a paused run, which ends canceled: hands the task it was working back to todo, and leaves a comment on that task saying how far it got — unless the task is closed (done or rejected), which gets no comment. Only a paused run is canceled, since nothing is under way in one to cut off: a run still going is refused as invalid, naming the two ways on — `automation pause` it and cancel it once it has stopped, or pass `--force`. `--force` ends a run still going where it stands, closing the terminal of the step under way — use it where a pause will not land, knowing that step's work may be left half done.",
             json!([{ "name": "<run>", "help": "run id", "required": true },
+                   { "name": "--force", "help": "force-cancel a run still going, ending it where it stands" },
                    { "name": "--json", "help": "machine-readable output" }]),
-            json!(["amenbo automation stop 7 --actor ai"])),
+            json!(["amenbo automation cancel 7 --actor ai", "amenbo automation cancel 7 --force --actor ai"])),
         cmd("automation acknowledge", "Says a failed run has been seen. A failure stays on the running tab until somebody does, because the task it handed back is one nobody is carrying; this moves it onto the history. Who said it — a person or their AI — is kept with it, and `automation run-show` prints both. Only a failed run is acknowledged: any other is refused as invalid. Saying it twice keeps the first time and whoever said it first.",
             json!([{ "name": "<run>", "help": "run id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),

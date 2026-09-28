@@ -728,7 +728,7 @@ fn a_picture(cli: &Cli, with_task: bool) -> (String, String, String, String) {
 /// says nothing about it rather than refusing a launch the reader can see perfectly well — and the run
 /// waits for whatever opens its first step.
 #[test]
-fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
+fn a_launch_makes_a_run_and_the_run_is_what_pause_and_cancel_name() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _) = a_launchable(&cli);
@@ -737,14 +737,21 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_stop_name() {
     assert_eq!(started["automation_run"]["status"].as_str(), Some("running"));
     let run = id_of(&started, "automation_run");
 
-    // A running run pauses at the end of the step under way, so what comes back is the asking rather
+    // A running run pauses at the end of the action under way, so what comes back is the asking rather
     // than the pause.
     let paused = cli.json(&["automation", "pause", &run, "--json"]);
     assert_eq!(paused["automation_run"]["state"].as_str(), Some("asked"));
 
-    let stopped = cli.json(&["automation", "stop", &run, "--json"]);
-    assert_eq!(stopped["automation_run"]["status"].as_str(), Some("canceled"));
-    assert!(stopped["automation_run"]["stopped_reason"].is_null(), "a cancel carries no reason");
+    // Still going, so a plain cancel is refused (`AMB-D-1002`), naming both ways on.
+    let (refused, code) = cli.run_err(&["automation", "cancel", &run, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("only a paused run is canceled"), "{refused}");
+    assert!(refused.contains(&format!("automation pause {run}")), "{refused}");
+    assert!(refused.contains(&format!("automation cancel {run} --force")), "{refused}");
+
+    let canceled = cli.json(&["automation", "cancel", &run, "--force", "--json"]);
+    assert_eq!(canceled["automation_run"]["status"].as_str(), Some("canceled"));
+    assert!(canceled["automation_run"]["stopped_reason"].is_null(), "a cancel carries no reason");
 }
 
 /// **Only a failure is waiting to be seen** (`AMB-D-989`): a run a person stopped needs nobody, so
@@ -757,7 +764,7 @@ fn only_a_failed_run_is_acknowledged() {
     let _app = cli.the_app_up();
     let (a, _, _) = a_launchable(&cli);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
-    cli.json(&["automation", "stop", &run, "--json"]);
+    cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 
     let (refused, code) = cli.run_err(&["automation", "acknowledge", &run, "--json"]);
     assert_ne!(code, 0, "{refused}");
@@ -788,7 +795,7 @@ fn run_show_says_when_a_run_is_waiting_for_a_task() {
     let (text, _) = cli.run(&["automation", "run-show", &run]);
     assert!(text.contains("waiting: for a task"), "{text}");
 
-    cli.json(&["automation", "stop", &run, "--json"]);
+    cli.json(&["automation", "cancel", &run, "--force", "--json"]);
     let shown = cli.json(&["automation", "run-show", &run, "--json"]);
     assert_eq!(shown["waiting"].as_bool(), Some(false), "{shown}");
     let (text, _) = cli.run(&["automation", "run-show", &run]);

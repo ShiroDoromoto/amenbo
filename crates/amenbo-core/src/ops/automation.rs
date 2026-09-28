@@ -170,7 +170,8 @@ fn not_under_a_run(tx: &WriteTx<'_>, def: Def) -> Result<()> {
     let named = runs.iter().map(i64::to_string).collect::<Vec<_>>().join(", ");
     Err(Error::conflict(format!(
         "{what} is in use by run {named}, which is running or paused — its definition cannot change \
-         until the run ends. Stop it with `automation stop <run>`, or let it finish, then edit."
+         until the run ends. Cancel it with `automation cancel <run>` once it is paused, or \
+         `automation cancel <run> --force` now, or let it finish, then edit."
     )))
 }
 

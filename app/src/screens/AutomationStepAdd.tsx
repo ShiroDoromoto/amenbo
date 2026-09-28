@@ -24,6 +24,10 @@
 // **Only its two buttons close it** (`AMB-T-5363`). A press on the backdrop or Escape would throw away
 // a prompt half written, and nothing here keeps it — so neither is a way out, and the reader leaves
 // by putting the step in or by giving it up.
+//
+// **A refusal keeps it open** (`AMB-T-5809`). It closes once the step is written; a write core turns
+// down is said on the dialog, over the name and prompt the reader typed, rather than closing on a
+// step the picture then does not have.
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { WhereMark, type WhereTo } from "./automationParts";
@@ -32,7 +36,8 @@ import {
   insertAutomationActionStep,
   insertAutomationActionStepAtExit,
 } from "../core/automations";
-import { t } from "../core/i18n";
+import { errText, t } from "../core/i18n";
+import { ErrorNote } from "../components/ErrorNote";
 
 /**
  * Where the new step goes: onto a line inside the action, after a way out that says nothing yet, or
@@ -58,16 +63,26 @@ export function AutomationStepAdd({
   // After a way out the step goes somewhere as well, so the dialog draws where as it does on a line.
   const onLine = !("actionId" in into);
 
-  const ready = name.trim() !== "" && prompt.trim() !== "";
-  const put = () => {
+  const [putting, setPutting] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+
+  const ready = name.trim() !== "" && prompt.trim() !== "" && !putting;
+  const put = async () => {
     if (!ready) return;
+    setPutting(true);
+    setRefused(null);
     const step = { name: name.trim(), prompt: prompt.trim() };
-    void ("edgeId" in into
-      ? insertAutomationActionStep(into.edgeId, step)
-      : "fromId" in into
-        ? insertAutomationActionStepAtExit({ boxId: into.fromId, exitName: into.exitName }, step)
-        : addAutomationStep(into.actionId, step));
-    onClose();
+    try {
+      await ("edgeId" in into
+        ? insertAutomationActionStep(into.edgeId, step)
+        : "fromId" in into
+          ? insertAutomationActionStepAtExit({ boxId: into.fromId, exitName: into.exitName }, step)
+          : addAutomationStep(into.actionId, step));
+      onClose();
+    } catch (e) {
+      setRefused(errText(e));
+      setPutting(false);
+    }
   };
 
   return createPortal(
@@ -81,6 +96,8 @@ export function AutomationStepAdd({
         <h2 className="autodlg__title" id="auto-add-title">
           {"edgeId" in into ? t("auto.act.insertTitle") : t("auto.act.addTitle")}
         </h2>
+
+        {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
         {onLine && <WhereMark where={where} />}
 
@@ -100,7 +117,7 @@ export function AutomationStepAdd({
         </label>
 
         <div className="buttonrow">
-          <button type="button" className="btn btn--primary" disabled={!ready} onClick={put}>
+          <button type="button" className="btn btn--primary" disabled={!ready} onClick={() => void put()}>
             {"edgeId" in into ? t("auto.act.insertPut") : t("auto.act.addPut")}
           </button>
           <button type="button" className="btn" onClick={onClose}>

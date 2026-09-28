@@ -7,7 +7,8 @@
 // goes through that picture's own door — the line it was opened from, or the action itself where
 // there is no line yet (`AMB-T-5315`); **the two roads are named apart**, and only the one on a line
 // draws where it goes (`AMB-T-5526`); **what the dialog took — a name and a prompt — is what is
-// sent**; **nothing is sent until the dialog has what a step cannot be made without**; **an action
+// sent**; **nothing is sent until the dialog has what a step cannot be made without**, and **a step
+// refused is said on the dialog, which stays open with what was typed** (`AMB-T-5809`); **an action
 // made on the spot is asked a name and a library and nothing else**, under a small picture of where
 // it goes and starting from the name the library was searched with, lands where it was asked for,
 // and hands its id on so the screen can go and build it; and, for what a way out hands on, **the name
@@ -66,6 +67,7 @@ beforeEach(() => {
   root = createRoot(host);
   hoisted.make.mockClear();
   hoisted.insertInside.mockReset();
+  hoisted.insertAtExit.mockReset();
   hoisted.add.mockReset();
   hoisted.output.mockReset();
 });
@@ -76,13 +78,15 @@ afterEach(() => {
 });
 
 describe("putting a step in inside an action", () => {
+  const closed = vi.fn();
   async function open(into: AddTarget) {
+    closed.mockClear();
     await act(async () => {
       root.render(
         createElement(AutomationStepAdd, {
           into,
           where: "actionId" in into ? null : { box: "書く", exit: "書けた", next: "見直す" },
-          onClose: () => undefined,
+          onClose: closed,
         }),
       );
     });
@@ -141,6 +145,31 @@ describe("putting a step in inside an action", () => {
     await typeInto(document.body.querySelector("textarea")!, "やる");
     await act(async () => button(t("auto.act.addPut")).click());
     expect(hoisted.add).toHaveBeenCalledWith(4, { name: "取る", prompt: "やる" });
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws a refusal and stays open with what was typed, on every road (AMB-T-5809)", async () => {
+    const no = { code: "invalid", message_en: "that line is gone" };
+    const roads: [AddTarget, ReturnType<typeof vi.fn>, string][] = [
+      [{ picture: "action", edgeId: 9 }, hoisted.insertInside, t("auto.act.insertPut")],
+      [{ picture: "action", fromId: 3, exitName: "完了" }, hoisted.insertAtExit, t("auto.act.addPut")],
+      [{ picture: "action", actionId: 4 }, hoisted.add, t("auto.act.addPut")],
+    ];
+    for (const [into, door, put] of roads) {
+      door.mockRejectedValueOnce(no);
+      await open(into);
+      await typeInto(boxes()[0]!, "直す");
+      await typeInto(document.body.querySelector("textarea")!, "やる");
+      await act(async () => button(put).click());
+      expect(document.body.textContent).toContain("that line is gone");
+      expect(closed).not.toHaveBeenCalled();
+      expect(boxes()[0]!.value).toBe("直す");
+      expect(document.body.querySelector("textarea")!.value).toBe("やる");
+      // Pressed again once the refusal is drawn, the write goes through and the dialog closes.
+      await act(async () => button(put).click());
+      expect(closed).toHaveBeenCalledTimes(1);
+      await act(async () => root.render(null));
+    }
   });
 });
 

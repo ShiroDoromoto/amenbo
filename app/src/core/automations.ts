@@ -28,6 +28,7 @@ import { invoke } from "./ipc";
 import { confirmDialog } from "./dialog";
 import { t } from "./i18n";
 import { invokeAck, invokeForAck } from "./mutations";
+import { told } from "./automationSave";
 import type {
   AutomationActionCardDto,
   AutomationActionDetailDto,
@@ -48,6 +49,15 @@ import type {
   EveryAutomationCardDto,
   WakeDto,
 } from "../bindings/bindings";
+
+/** Every write on a definition goes through these two rather than `mutations` directly, so the build
+ *  screens hear what became of it (`./automationSave`). */
+function ack(cmd: string, args: Record<string, unknown>): Promise<void> {
+  return told(() => invokeAck(cmd, args));
+}
+function forAck(cmd: string, args: Record<string, unknown>) {
+  return told(() => invokeForAck(cmd, args));
+}
 
 /** What kind of answer a setting takes, as the definition declares it. */
 export type CfgKind = AutomationCfgDto["kind"];
@@ -95,7 +105,7 @@ export function useEveryAutomation(): EveryAutomationCardDto[] {
  */
 export async function addAutomation(projectId: number, name: string): Promise<number | null> {
   if (!inTauri()) return null;
-  const ack = await invokeForAck("automation_add", { projectId, name });
+  const ack = await forAck("automation_add", { projectId, name });
   return ack.automations[0] ?? null;
 }
 
@@ -112,7 +122,7 @@ export async function editAutomation(
   patch: { name?: string; notes?: string; archived?: boolean },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_edit", {
+  return ack("automation_edit", {
     id,
     name: patch.name ?? null,
     notes: patch.notes ?? null,
@@ -130,7 +140,7 @@ export async function editAutomation(
  */
 export async function deleteAutomation(id: number): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_remove", { id });
+  return ack("automation_remove", { id });
 }
 
 /**
@@ -200,7 +210,7 @@ export async function placeAutomationBuiltin(
   axis: number | null = null,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_builtin_place", { automationId, key, axis });
+  return ack("automation_builtin_place", { automationId, key, axis });
 }
 
 /**
@@ -214,7 +224,7 @@ export async function insertAutomationBuiltin(
   axis: number | null = null,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_builtin_insert", { edgeId, key, axis });
+  return ack("automation_builtin_insert", { edgeId, key, axis });
 }
 
 /**
@@ -226,7 +236,7 @@ export async function insertAutomationBuiltin(
  */
 export async function addAutomationAction(name: string, project: number | null): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_add", { name, project });
+  return ack("automation_action_add", { name, project });
 }
 
 /**
@@ -237,7 +247,7 @@ export async function addAutomationAction(name: string, project: number | null):
  */
 export async function setAutomationActionScope(id: number, projectId: number | null): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_set_scope", { id, projectId });
+  return ack("automation_action_set_scope", { id, projectId });
 }
 
 /**
@@ -247,7 +257,7 @@ export async function setAutomationActionScope(id: number, projectId: number | n
  */
 export async function removeAutomationAction(id: number): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_remove", { id });
+  return ack("automation_action_remove", { id });
 }
 
 /**
@@ -263,7 +273,7 @@ export async function editAutomationAction(
   patch: { name?: string; note?: string },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_edit", {
+  return ack("automation_action_edit", {
     id,
     name: patch.name ?? null,
     note: patch.note ?? null,
@@ -276,7 +286,7 @@ export async function editAutomationAction(
  */
 export async function removeAutomationPlacement(id: number): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_placement_remove", { id });
+  return ack("automation_placement_remove", { id });
 }
 
 /**
@@ -293,7 +303,7 @@ export const ENTRY_BUILTINS: readonly string[] = ["take_task", "make_task", "fet
  */
 export async function replaceAutomationEntry(automationId: number, key: string): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_entry_replace", { automationId, key });
+  return ack("automation_entry_replace", { automationId, key });
 }
 
 /** What a way out is said to do: open a placement, close the task, or stop the run. */
@@ -320,7 +330,7 @@ export async function addAutomationEdge(
   target: { ends: EdgeEnds; to?: number; exitTo?: string },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_edge_add", {
+  return ack("automation_edge_add", {
     picture,
     fromId: from.boxId,
     exitName: from.exitName,
@@ -342,7 +352,7 @@ export async function editAutomationEdge(
   patch: { ends?: EdgeEnds; to?: number; exitTo?: string; maxTimes?: number | null },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_edge_edit", {
+  return ack("automation_edge_edit", {
     id,
     ends: patch.ends ?? null,
     toId: patch.to ?? null,
@@ -359,7 +369,7 @@ export async function editAutomationEdge(
  */
 export async function removeAutomationEdge(id: number): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_edge_remove", { id });
+  return ack("automation_edge_remove", { id });
 }
 
 /** One automation's whole definition, or nothing where that id names none. */
@@ -412,7 +422,7 @@ export async function addAutomationStep(
   },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_step_add", {
+  return ack("automation_step_add", {
     actionId,
     name: step.name,
     prompt: step.prompt,
@@ -440,7 +450,7 @@ export async function insertAutomationActionStep(
   },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_step_insert", {
+  return ack("automation_action_step_insert", {
     edgeId,
     name: step.name,
     prompt: step.prompt,
@@ -458,7 +468,7 @@ export async function insertAutomationActionStep(
  */
 export async function removeAutomationStep(id: number): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_step_remove", { id });
+  return ack("automation_step_remove", { id });
 }
 
 /** **Name the step a placement of this action opens first**, or clear it with `null`. */
@@ -467,7 +477,7 @@ export async function setAutomationActionEntry(
   step: number | null,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_entry_set", { actionId, step });
+  return ack("automation_action_entry_set", { actionId, step });
 }
 
 /**
@@ -497,7 +507,7 @@ export async function editAutomationStep(
   },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_step_edit", {
+  return ack("automation_step_edit", {
     id,
     name: patch.name ?? null,
     prompt: patch.prompt ?? null,
@@ -524,7 +534,7 @@ export async function answerAutomationCfg(
   value: string | null,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_cfg_answer", { placementId, name, value });
+  return ack("automation_cfg_answer", { placementId, name, value });
 }
 
 /**
@@ -539,7 +549,7 @@ export async function chooseAutomationAgent(
   model: string | null,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_placement_step_set", { placementId, stepId, agent, model });
+  return ack("automation_placement_step_set", { placementId, stepId, agent, model });
 }
 
 /** Which of the two declares a way out or an input: the library action, or one step inside it. */
@@ -562,7 +572,7 @@ export async function declareAutomationExit(
   name: string,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_exit_declare", { owner, ownerId, name });
+  return ack("automation_exit_declare", { owner, ownerId, name });
 }
 
 /**
@@ -578,7 +588,7 @@ export async function renameAutomationExit(
   to: string,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_exit_rename", { owner, ownerId, from, to });
+  return ack("automation_exit_rename", { owner, ownerId, from, to });
 }
 
 /** **Take one way out away**, with the outputs declared on it. The error one is refused. */
@@ -588,7 +598,7 @@ export async function removeAutomationExit(
   name: string,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_exit_remove", { owner, ownerId, name });
+  return ack("automation_exit_remove", { owner, ownerId, name });
 }
 
 /**
@@ -601,7 +611,7 @@ export async function declareAutomationCfg(
   decl: { name: string; kind: CfgKind; required?: boolean; options?: string },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_cfg_declare", {
+  return ack("automation_cfg_declare", {
     actionId,
     name: decl.name,
     kind: decl.kind,
@@ -624,7 +634,7 @@ export async function editAutomationCfg(
   patch: { name?: string; kind?: CfgKind; required?: boolean; options?: string | null },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_cfg_edit", {
+  return ack("automation_cfg_edit", {
     actionId,
     name,
     rename: patch.name ?? null,
@@ -638,7 +648,7 @@ export async function editAutomationCfg(
 /** **Take a setting away**, leaving the answers written for it on the placements. */
 export async function removeAutomationCfg(actionId: number, name: string): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_cfg_remove", { actionId, name });
+  return ack("automation_cfg_remove", { actionId, name });
 }
 
 /**
@@ -652,7 +662,7 @@ export async function declareAutomationInput(
   decl: { name: string; kind: AutomationPortDto["kind"]; required?: boolean },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_input_declare", {
+  return ack("automation_input_declare", {
     owner,
     ownerId,
     name: decl.name,
@@ -672,7 +682,7 @@ export async function editAutomationInput(
   patch: { name?: string; kind?: AutomationPortDto["kind"]; required?: boolean },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_input_edit", {
+  return ack("automation_input_edit", {
     owner,
     ownerId,
     name,
@@ -689,7 +699,7 @@ export async function removeAutomationInput(
   name: string,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_input_remove", { owner, ownerId, name });
+  return ack("automation_input_remove", { owner, ownerId, name });
 }
 
 /**
@@ -703,7 +713,7 @@ export async function setAutomationWire(
   to: { boxId: number; portName: string },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_wire_set", {
+  return ack("automation_wire_set", {
     picture,
     fromId: from.boxId,
     fromExitName: from.exitName ?? null,
@@ -723,7 +733,7 @@ export type ActionShelf = "device" | "project";
  */
 export async function insertAutomationAction(edgeId: number, actionId: number): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_step_insert", { edgeId, action: actionId });
+  return ack("automation_step_insert", { edgeId, action: actionId });
 }
 
 /**
@@ -741,7 +751,7 @@ export async function makeAutomationAction(
   shelf: ActionShelf,
 ): Promise<number | null> {
   if (!inTauri()) return null;
-  const ack = await invokeForAck("automation_placement_insert_new", { edgeId, name, shelf });
+  const ack = await forAck("automation_placement_insert_new", { edgeId, name, shelf });
   return ack.actions[0] ?? null;
 }
 
@@ -751,13 +761,13 @@ export async function addAutomationOutput(
   port: { name: string; kind: string; required: boolean },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_output_add", { exitId, ...port });
+  return ack("automation_output_add", { exitId, ...port });
 }
 
 /** **Take a wire away**, leaving the input it fed with nothing reaching it. */
 export async function clearAutomationWire(id: number): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_wire_clear", { id });
+  return ack("automation_wire_clear", { id });
 }
 
 /**

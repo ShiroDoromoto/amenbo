@@ -285,3 +285,44 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     assert!(version_of(&store, mine) > mine_before, "the project the run was in heard about it");
     assert_eq!(version_of(&store, other), other_before, "and the one next door did not");
 }
+
+/// **A test run keeps nothing** (`AMB-T-5803`). It launches, opens every step and files a task to hand
+/// on, all in one transaction that is never committed — so the version of the project it walked in does
+/// not move, and the task it would have taken is still there to be taken.
+#[test]
+fn a_test_run_moves_no_version_and_takes_no_task() {
+    use amenbo_core::model::{AutomationPictureOwner, AutomationRunStatus};
+    use amenbo_core::ops::automation::{EdgeTarget, NewAutomation};
+    use amenbo_core::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use amenbo_core::ops::automation_run::Launcher;
+
+    let mut store = temp_store();
+    let mine = store.project_add(new_project("走らせる側")).unwrap().id;
+    let waiting = filed(&mut store, new_task("取られるはずの1件", mine));
+    let automation = store
+        .automation_add(mine, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
+        .unwrap();
+    let take = store.automation_builtin_place(automation.id, "take_task", None).unwrap();
+    let on = AutomationPictureOwner::Automation;
+    let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
+    store.automation_edge_add(on, take.id, Some(TAKEN), EdgeTarget::Go(close.id), None).unwrap();
+    store.automation_edge_add(on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).unwrap();
+    store.automation_edge_add(on, close.id, None, EdgeTarget::Done, None).unwrap();
+
+    let startable = ["claude".to_string()];
+    let by = Launcher {
+        startable: Some(&startable),
+        models: amenbo_core::ops::automation_run::nothing_asked(),
+        workspace_open: None,
+        by: Some(ActorKind::Ai),
+    };
+    let before = version_of(&store, mine);
+    let walked = store.automation_rehearse(automation.id, &by, &Default::default()).unwrap();
+
+    let exits: Vec<&str> = walked.steps.iter().map(|s| s.exit.as_str()).collect();
+    assert_eq!(exits, vec![TAKEN, "完了"], "{walked:?}");
+    assert_eq!(walked.status, AutomationRunStatus::Completed);
+    assert_eq!(version_of(&store, mine), before, "nothing it wrote was kept");
+    let task = store.task(waiting).unwrap().expect("the task");
+    assert_eq!(task.status, amenbo_core::model::TaskStatus::Todo, "and the task it would have taken is still there");
+}

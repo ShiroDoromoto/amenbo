@@ -2028,6 +2028,30 @@ impl Store {
         )
     }
 
+    /// **Walk an automation through as a test run** ([`crate::ops::automation_rehearse`]): the launch
+    /// and every step opened and reported on the road a run takes, with no agent started and no
+    /// built-in carried out.
+    ///
+    /// **The transaction is never committed.** The run, its steps and the placeholder tasks it filed
+    /// are there only for the next step to read, and dropping the transaction takes them all away —
+    /// nothing reaches the change feed, and no project's version moves. The reach is still guarded, as
+    /// the launch's is: reading an automation out of reach through here would be reading it.
+    pub fn automation_rehearse(
+        &mut self,
+        automation_id: i64,
+        by: &crate::ops::automation_run::Launcher<'_>,
+        handed: &crate::ops::automation_run::HandedAtLaunch,
+    ) -> Result<crate::ops::automation_rehearse::Rehearsal> {
+        let mut tx = self.engine.write()?;
+        tx.write_in(self.config.language.as_deref().unwrap_or("en"));
+        write_reach::guard(
+            tx.conn(),
+            self.reach,
+            &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
+        )?;
+        crate::ops::automation_rehearse::rehearse(&tx, automation_id, by, handed)
+    }
+
     /// **Put down one thing a step produced**, on the output its id names.
     pub fn automation_out(
         &mut self,

@@ -761,17 +761,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 return Err(CliError::app_not_running());
             }
             let notes = crate::cmd::arg::body_arg_opt(notes)?;
-            // Split here and looked up by the launch, which answers for the axes against where the
-            // entry is placed (`amenbo_core::ops::automation_builtin_make`).
-            let classification = dim
-                .iter()
-                .map(|pair| match pair.split_once('=') {
-                    Some((axis, value)) => Ok((axis.trim().to_string(), value.trim().to_string())),
-                    None => Err(CliError::from(amenbo_core::Error::invalid(format!(
-                        "--dim takes <axis>=<value> (e.g. --dim \"Category=bug\"), got `{pair}`"
-                    )))),
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let classification = classification_of(&dim)?;
             // Every file is read and held to its limit before any is ingested, so a refusal of the last
             // strands none of the ones before it. A launch refused after the ingest leaves its bytes to
             // `doctor --fix`, as an attach refused after it does (`crate::cmd::attach::attach_add`).
@@ -806,6 +796,25 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let r = store.automation_launch(id, &by, &handed).map_err(CliError::from)?;
             let line = format!("✓ Run {} started", r.id);
             write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
+        }
+        AutomationCmd::TestRun { id, title, notes, dim } => {
+            // Nothing is started, so the app need not be running, and nothing is kept, so there is no
+            // file to ingest: a test run is handed the text a launch is.
+            let notes = crate::cmd::arg::body_arg_opt(notes)?;
+            let handed = HandedAtLaunch { title, notes, classification: classification_of(&dim)?, ..Default::default() };
+            let known = startable(store);
+            let by = Launcher {
+                startable: known.as_deref(),
+                models: amenbo_core::ops::automation_run::nothing_asked(),
+                workspace_open: None,
+                by: Some(flags.facet()?),
+            };
+            let walked = store.automation_rehearse(id, &by, &handed).map_err(CliError::from)?;
+            if flags.json {
+                print_json(&json!({ "test_run": serde_json::to_value(&walked).unwrap() }));
+            } else {
+                render_rehearsal(flags, &walked);
+            }
         }
         AutomationCmd::Pause { run } => {
             let paused = store.automation_pause(run).map_err(CliError::from)?;
@@ -909,6 +918,54 @@ fn speaking_for() -> Result<i64, CliError> {
 ///
 /// `None` reaches the launch check as "not asked", which leaves the agent check unmade rather than
 /// failing every step on a machine nobody has probed.
+/// `--dim <axis>=<value>`, split here and looked up by the launch, which answers for the axes against
+/// where the entry is placed (`amenbo_core::ops::automation_builtin_make`).
+fn classification_of(dim: &[String]) -> Result<Vec<(String, String)>, CliError> {
+    dim.iter()
+        .map(|pair| match pair.split_once('=') {
+            Some((axis, value)) => Ok((axis.trim().to_string(), value.trim().to_string())),
+            None => Err(CliError::from(amenbo_core::Error::invalid(format!(
+                "--dim takes <axis>=<value> (e.g. --dim \"Category=bug\"), got `{pair}`"
+            )))),
+        })
+        .collect()
+}
+
+/// **A test run, as a terminal reads it**: each step it opened, the way out it was taken to leave by,
+/// and — for an agent's step — the whole prompt, indented under it. The last line says how it ended.
+fn render_rehearsal(flags: &Flags, walked: &amenbo_core::ops::automation_rehearse::Rehearsal) {
+    use amenbo_core::ops::automation_rehearse::Cut;
+    human(flags, "Test run — no agent was started, and nothing was kept");
+    for (n, step) in walked.steps.iter().enumerate() {
+        let who = match (&step.builtin, &step.agent) {
+            (Some(key), _) => format!("built-in {key}"),
+            (None, Some(agent)) => match &step.model {
+                Some(model) => format!("{agent} {model}"),
+                None => agent.clone(),
+            },
+            (None, None) => String::new(),
+        };
+        human(flags, format!("\n{}. {} [{who}] → {}", n + 1, step.name, step.exit));
+        if let Some(folder) = &step.folder {
+            human(flags, format!("   in {folder}"));
+        }
+        if let Some(prompt) = &step.prompt {
+            for line in prompt.lines() {
+                human(flags, format!("   │ {line}"));
+            }
+        }
+    }
+    let ended = match (walked.cut, walked.missing.is_empty(), &walked.no_agent, walked.stopped_reason) {
+        (Some(Cut::Looped), ..) => "cut short: a step was reached again with no way out left to try".to_string(),
+        (Some(Cut::TooLong), ..) => "cut short: too many steps".to_string(),
+        (None, false, ..) => format!("stopped: nothing is wired into {}", walked.missing.join(", ")),
+        (None, true, Some(agent), _) => format!("stopped: this machine cannot start {agent}"),
+        (None, true, None, Some(reason)) => format!("failed: {}", reason.as_str()),
+        (None, true, None, None) => walked.status.as_str().to_string(),
+    };
+    human(flags, format!("\n✓ Test run ended — {ended}"));
+}
+
 fn startable(store: &Store) -> Option<Vec<String>> {
     amenbo_core::wake::startable_ids(&store.config)
 }

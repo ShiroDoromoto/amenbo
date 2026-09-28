@@ -2320,6 +2320,25 @@ pub enum AutomationCmd {
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },
+
+    /// Walk an automation from its entry to its end without running anything: the launch check, what
+    /// each step is handed and the whole prompt each agent would be started on — with no agent started,
+    /// no built-in carried out and nothing kept. Each step leaves by its first way out, and by the next
+    /// one each time it is reached again; what it would have handed on is a placeholder. Takes what
+    /// `automation start` takes, bar the files
+    TestRun {
+        /// automation id
+        id: i64,
+        /// the title of the task an entry that files one (make_task) files — required there
+        #[arg(long, value_name = "TITLE")]
+        title: Option<String>,
+        /// that task's notes, as Markdown. Pass `-` to read them from stdin
+        #[arg(long, value_name = "NOTES")]
+        notes: Option<String>,
+        /// classify that task as `<axis>=<value>`, by name (repeat for several axes)
+        #[arg(long = "dim", value_name = "AXIS=VALUE")]
+        dim: Vec<String>,
+    },
     /// Ask a run to pause. The action under way finishes first and the run pauses at the end of it,
     /// keeping the task it is working
     Pause {

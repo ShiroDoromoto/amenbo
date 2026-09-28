@@ -54,6 +54,15 @@ pub fn builtin(language: &str, key: &str, slots: &[(&str, &str)]) -> String {
     })
 }
 
+/// **What a test run puts where the work would have been** ([`crate::ops::automation_rehearse`]) — the
+/// sentence under `auto.say.test.<key>`, with each `{slot}` filled from `slots` as [`builtin`] fills its.
+pub fn rehearsal(language: &str, key: &str, slots: &[(&str, &str)]) -> String {
+    let key = format!("test.{key}");
+    slots.iter().fold(say(language, &key).to_string(), |said, (slot, value)| {
+        said.replace(&format!("{{{slot}}}"), value)
+    })
+}
+
 /// **A refusal a built-in was turned away by, in the reader's language** — the screen's template for its
 /// code (`err`, the one `errLabel` writes a refusal from) with its fields filled, and its parts, where it
 /// was composed of some, each from its own template and joined with `reasonSep`. A refusal whose code

@@ -130,6 +130,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "Er kam bis „{step}“."),
             ("reachedGone", "Er kam bis zu einem Schritt, den es nicht mehr gibt."),
             ("reachedNothing", "Er hielt an, bevor ein Schritt geöffnet wurde."),
+            ("test.report", "Testlauf: über „{exit}“ gegangen, ohne die Arbeit zu tun"),
+            ("test.task", "Aufgabe des Testlaufs"),
+            ("test.value", "(Testlauf-Wert für {port})"),
         ],
         statuses: &[
             ("blocked", "Blockiert"),
@@ -379,6 +382,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "It got as far as \"{step}\"."),
             ("reachedGone", "It got as far as a step that is no longer there."),
             ("reachedNothing", "It stopped before opening a step."),
+            ("test.report", "test run: left by {exit} without doing the work"),
+            ("test.task", "Test run task"),
+            ("test.value", "(test run value for {port})"),
         ],
         statuses: &[
             ("blocked", "Blocked"),
@@ -628,6 +634,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "Llegó hasta «{step}»."),
             ("reachedGone", "Llegó hasta un paso que ya no existe."),
             ("reachedNothing", "Se detuvo antes de abrir un paso."),
+            ("test.report", "prueba: salió por «{exit}» sin hacer el trabajo"),
+            ("test.task", "Tarea de la prueba"),
+            ("test.value", "(valor de prueba para {port})"),
         ],
         statuses: &[
             ("blocked", "Bloqueado"),
@@ -877,6 +886,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "Elle est allée jusqu'à « {step} »."),
             ("reachedGone", "Elle est allée jusqu'à une étape qui n'existe plus."),
             ("reachedNothing", "Elle s'est arrêtée avant d'ouvrir une étape."),
+            ("test.report", "essai : sortie par « {exit} » sans faire le travail"),
+            ("test.task", "Tâche de l’essai"),
+            ("test.value", "(valeur d’essai pour {port})"),
         ],
         statuses: &[
             ("blocked", "Bloquée"),
@@ -1126,6 +1138,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "यह \"{step}\" तक पहुँचा।"),
             ("reachedGone", "यह एक ऐसे चरण तक पहुँचा जो अब मौजूद नहीं है।"),
             ("reachedNothing", "यह कोई चरण खोलने से पहले रुक गया।"),
+            ("test.report", "परीक्षण रन: काम किए बिना “{exit}” से निकला"),
+            ("test.task", "परीक्षण रन का कार्य"),
+            ("test.value", "({port} के लिए परीक्षण मान)"),
         ],
         statuses: &[
             ("blocked", "रुका हुआ"),
@@ -1375,6 +1390,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "Eksekusi itu sampai di \"{step}\"."),
             ("reachedGone", "Eksekusi itu sampai di langkah yang sudah tidak ada."),
             ("reachedNothing", "Eksekusi itu berhenti sebelum membuka satu langkah pun."),
+            ("test.report", "uji jalan: keluar lewat “{exit}” tanpa mengerjakan apa pun"),
+            ("test.task", "Tugas uji jalan"),
+            ("test.value", "(nilai uji untuk {port})"),
         ],
         statuses: &[
             ("blocked", "Terhambat"),
@@ -1624,6 +1642,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "È arrivata fino a «{step}»."),
             ("reachedGone", "È arrivata fino a un passo che non esiste più."),
             ("reachedNothing", "Si è fermata prima di aprire un passo."),
+            ("test.report", "prova: uscito da «{exit}» senza fare il lavoro"),
+            ("test.task", "Attività della prova"),
+            ("test.value", "(valore di prova per {port})"),
         ],
         statuses: &[
             ("blocked", "Bloccata"),
@@ -1873,6 +1894,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "「{step}」まで進みました。"),
             ("reachedGone", "今はもう無いステップまで進みました。"),
             ("reachedNothing", "ステップを1つも開かずに止まりました。"),
+            ("test.report", "テスト実行：何もせずに出口「{exit}」から出ました"),
+            ("test.task", "テスト実行の仮のタスク"),
+            ("test.value", "（テスト実行の仮の値：{port}）"),
         ],
         statuses: &[
             ("blocked", "ブロック"),
@@ -2122,6 +2146,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "\"{step}\"까지 진행했습니다."),
             ("reachedGone", "지금은 없는 단계까지 진행했습니다."),
             ("reachedNothing", "단계를 하나도 열지 않고 멈췄습니다."),
+            ("test.report", "테스트 실행: 작업 없이 「{exit}」로 나갔습니다"),
+            ("test.task", "테스트 실행 작업"),
+            ("test.value", "({port}의 테스트 값)"),
         ],
         statuses: &[
             ("blocked", "막힘"),
@@ -2371,6 +2398,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "De run kwam tot „{step}”."),
             ("reachedGone", "De run kwam tot een stap die niet meer bestaat."),
             ("reachedNothing", "De run stopte voordat er een stap werd geopend."),
+            ("test.report", "testrun: via ‘{exit}’ weggegaan zonder het werk te doen"),
+            ("test.task", "Taak van de testrun"),
+            ("test.value", "(testwaarde voor {port})"),
         ],
         statuses: &[
             ("blocked", "Geblokkeerd"),
@@ -2620,6 +2650,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "Doszło do „{step}”."),
             ("reachedGone", "Doszło do kroku, którego już nie ma."),
             ("reachedNothing", "Zatrzymało się przed otwarciem jakiegokolwiek kroku."),
+            ("test.report", "przebieg testowy: wyszedł przez „{exit}” bez wykonania pracy"),
+            ("test.task", "Zadanie przebiegu testowego"),
+            ("test.value", "(wartość testowa dla {port})"),
         ],
         statuses: &[
             ("blocked", "Zablokowane"),
@@ -2869,6 +2902,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "Ela chegou até \"{step}\"."),
             ("reachedGone", "Ela chegou até um passo que não existe mais."),
             ("reachedNothing", "Ela parou antes de abrir um passo."),
+            ("test.report", "execução de teste: saiu por “{exit}” sem fazer o trabalho"),
+            ("test.task", "Tarefa da execução de teste"),
+            ("test.value", "(valor de teste para {port})"),
         ],
         statuses: &[
             ("blocked", "Bloqueada"),
@@ -3118,6 +3154,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "Он дошёл до «{step}»."),
             ("reachedGone", "Он дошёл до шага, которого больше нет."),
             ("reachedNothing", "Он остановился, не открыв ни одного шага."),
+            ("test.report", "тестовый запуск: вышел через «{exit}», не выполняя работу"),
+            ("test.task", "Задача тестового запуска"),
+            ("test.value", "(тестовое значение для {port})"),
         ],
         statuses: &[
             ("blocked", "Заблокировано"),
@@ -3367,6 +3406,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "ทำไปถึง \"{step}\""),
             ("reachedGone", "ทำไปถึงขั้นตอนที่ไม่มีอยู่แล้ว"),
             ("reachedNothing", "หยุดก่อนเปิดขั้นตอนใด ๆ"),
+            ("test.report", "ทดสอบรัน: ออกทาง “{exit}” โดยไม่ได้ทำงาน"),
+            ("test.task", "งานของการทดสอบรัน"),
+            ("test.value", "(ค่าทดสอบสำหรับ {port})"),
         ],
         statuses: &[
             ("blocked", "ติดขัด"),
@@ -3616,6 +3658,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "\"{step}\" adımına kadar geldi."),
             ("reachedGone", "Artık var olmayan bir adıma kadar geldi."),
             ("reachedNothing", "Hiçbir adım açmadan durdu."),
+            ("test.report", "deneme çalıştırması: işi yapmadan “{exit}” çıkışından çıktı"),
+            ("test.task", "Deneme çalıştırması görevi"),
+            ("test.value", "({port} için deneme değeri)"),
         ],
         statuses: &[
             ("blocked", "Engelli"),
@@ -3865,6 +3910,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "Він дійшов до «{step}»."),
             ("reachedGone", "Він дійшов до кроку, якого більше немає."),
             ("reachedNothing", "Він зупинився, не відкривши жодного кроку."),
+            ("test.report", "тестовий запуск: вийшов через «{exit}», не виконуючи роботу"),
+            ("test.task", "Завдання тестового запуску"),
+            ("test.value", "(тестове значення для {port})"),
         ],
         statuses: &[
             ("blocked", "Заблоковано"),
@@ -4114,6 +4162,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "Nó đã đi đến \"{step}\"."),
             ("reachedGone", "Nó đã đi đến một bước không còn tồn tại."),
             ("reachedNothing", "Nó đã dừng trước khi mở bước nào."),
+            ("test.report", "chạy thử: đã đi ra bằng “{exit}” mà không làm việc"),
+            ("test.task", "Việc của lần chạy thử"),
+            ("test.value", "(giá trị chạy thử cho {port})"),
         ],
         statuses: &[
             ("blocked", "Bị chặn"),
@@ -4363,6 +4414,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "进行到了“{step}”。"),
             ("reachedGone", "进行到了一个已不存在的步骤。"),
             ("reachedNothing", "在打开任何步骤之前就停下了。"),
+            ("test.report", "测试运行：未执行工作，从出口“{exit}”离开"),
+            ("test.task", "测试运行的任务"),
+            ("test.value", "（{port} 的测试值）"),
         ],
         statuses: &[
             ("blocked", "受阻"),
@@ -4612,6 +4666,9 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("reached", "進行到了「{step}」。"),
             ("reachedGone", "進行到了一個已不存在的步驟。"),
             ("reachedNothing", "在開啟任何步驟之前就停下了。"),
+            ("test.report", "測試執行：未執行工作，從出口「{exit}」離開"),
+            ("test.task", "測試執行的任務"),
+            ("test.value", "（{port} 的測試值）"),
         ],
         statuses: &[
             ("blocked", "受阻"),

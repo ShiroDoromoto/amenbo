@@ -35,7 +35,8 @@ vi.mock("../core/automations", () => ({
   useAutomation: (id: number | null) => (id === null ? null : hoisted.detail),
   pauseRun: (run: number) => move(`pause ${run}`),
   resumeRun: (run: number) => move(`resume ${run}`),
-  stopRun: (run: number) => move(`stop ${run}`),
+  forceCancelRun: (run: number) => move(`force-cancel ${run}`),
+  cancelRun: (run: number) => move(`cancel ${run}`),
   acknowledgeRun: (run: number) => move(`acknowledge ${run}`),
 }));
 
@@ -185,15 +186,22 @@ describe("the running tab", () => {
   });
 
   it("offers the move the state has, and to a failure only the press that acknowledges it", async () => {
+    // A run going is paused or force-cancelled, a paused one picked up again or cancelled
+    // (`AMB-D-1002`).
     await render([run({ status: "paused" })]);
     expect(labels()).toContain(t("auto.run.resume"));
+    expect(labels()).toContain(t("auto.run.cancel"));
     expect(labels()).not.toContain(t("auto.run.pause"));
+    expect(labels()).not.toContain(t("auto.run.forceCancel"));
 
     await render([run({ status: "running" })]);
     expect(labels()).toContain(t("auto.run.pause"));
+    expect(labels()).toContain(t("auto.run.forceCancel"));
+    expect(labels()).not.toContain(t("auto.run.cancel"));
 
     await render([run({ status: "failed", stoppedReason: "crashed" })]);
-    expect(labels()).not.toContain(t("auto.run.stop"));
+    expect(labels()).not.toContain(t("auto.run.forceCancel"));
+    expect(labels()).not.toContain(t("auto.run.cancel"));
     expect(labels()).not.toContain(t("auto.run.pause"));
     // Not acknowledged yet: the row is painted rather than chipped, and says why.
     expect(container.querySelector(".autorun--failed")).not.toBeNull();
@@ -226,8 +234,8 @@ describe("the running tab", () => {
     expect(went).toEqual([{ project: 3, run: 9 }]);
     expect(hoisted.moved).toEqual([]);
 
-    await act(async () => { button(t("auto.run.stop")).click(); });
-    expect(hoisted.moved).toEqual(["stop 9"]);
+    await act(async () => { button(t("auto.run.forceCancel")).click(); });
+    expect(hoisted.moved).toEqual(["force-cancel 9"]);
     // The press that moves the run is not also a press on the row it stands in.
     expect(went).toEqual([{ project: 3, run: 9 }]);
   });

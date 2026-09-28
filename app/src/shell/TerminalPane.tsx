@@ -17,7 +17,7 @@ import {
 } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row, Say } from "../talk/nameplate";
-import { acknowledgeRun, pauseRun, resumeRun, stopRun } from "../core/automations";
+import { acknowledgeRun, cancelRun, forceCancelRun, pauseRun, resumeRun } from "../core/automations";
 import { FacetAvatar, facetActor } from "../components/atoms";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
@@ -921,13 +921,14 @@ export function TerminalPane({
               is a place there is nothing to call. */}
           {/* The size, beside the menu rather than in it: it is about the place and not the terminal,
               so it is there whether or not anything is running — the way the corner is. */}
-          {/* **The run's own moves, on the pane it is drawn in** (`AMB-T-5507`): held, picked up again,
-              or stopped, the same three the "running" tab's row carries (`../screens/RunningTab`). A
-              reader watching a run is in its pane, and had to go to the tab to act on what they were
-              watching. They are drawn while the run is going or held, and gone once it is over — the
+          {/* **The run's own moves, on the pane it is drawn in** (`AMB-T-5507`): the same two the
+              "running" tab's row carries (`../screens/RunningTab`) — a run going is paused or
+              force-cancelled, a paused one picked up again or cancelled (`AMB-D-1002`). A reader
+              watching a run is in its pane, and had to go to the tab to act on what they were
+              watching. They are drawn while the run is going or paused, and gone once it is over — the
               row says how it ended. **They are marks and not words** (`AMB-T-5529`), standing straight
               after the state they act on, so the row's words are left to the automation's name; each
-              is named for a reader who cannot see it. Stopping keeps the pane. */}
+              is named for a reader who cannot see it. Cancelling keeps the pane. */}
           {/* **The picture or the terminal** (`AMB-T-5775`), on a run's pane only. Two presses, one
               pressed, rather than one that flips: what the reader needs to see is which face is up. */}
           {run !== null && (
@@ -948,38 +949,52 @@ export function TerminalPane({
           {runLive && run !== null && (
             <span className="slot__runacts">
               {run.state?.status === "paused" ? (
-                <button
-                  type="button"
-                  className="slot__runact"
-                  disabled={pressing}
-                  title={t("auto.run.resume")}
-                  aria-label={t("auto.run.resume")}
-                  onClick={() => void press(() => resumeRun(run.run))}
-                >
-                  <Icon name="play" />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="slot__runact"
+                    disabled={pressing}
+                    title={t("auto.run.resume")}
+                    aria-label={t("auto.run.resume")}
+                    onClick={() => void press(() => resumeRun(run.run))}
+                  >
+                    <Icon name="play" />
+                  </button>
+                  <button
+                    type="button"
+                    className="slot__runact slot__runact--stop"
+                    disabled={pressing}
+                    title={t("auto.run.cancel")}
+                    aria-label={t("auto.run.cancel")}
+                    onClick={() => void press(() => cancelRun(run.run))}
+                  >
+                    <Icon name="close" />
+                  </button>
+                </>
               ) : (
-                <button
-                  type="button"
-                  className="slot__runact"
-                  disabled={pressing || run.state?.pauseRequested}
-                  title={t("auto.run.pause")}
-                  aria-label={t("auto.run.pause")}
-                  onClick={() => void press(() => pauseRun(run.run))}
-                >
-                  <Icon name="pause" />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="slot__runact"
+                    disabled={pressing || run.state?.pauseRequested}
+                    title={t("auto.run.pause")}
+                    aria-label={t("auto.run.pause")}
+                    onClick={() => void press(() => pauseRun(run.run))}
+                  >
+                    <Icon name="pause" />
+                  </button>
+                  <button
+                    type="button"
+                    className="slot__runact slot__runact--stop"
+                    disabled={pressing}
+                    title={t("auto.run.forceCancel")}
+                    aria-label={t("auto.run.forceCancel")}
+                    onClick={() => void press(() => forceCancelRun(run.run))}
+                  >
+                    <Icon name="stop" />
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                className="slot__runact slot__runact--stop"
-                disabled={pressing}
-                title={t("auto.run.stop")}
-                aria-label={t("auto.run.stop")}
-                onClick={() => void press(() => stopRun(run.run))}
-              >
-                <Icon name="stop" />
-              </button>
             </span>
           )}
           {/* **Where a finished run is read from now** (`AMB-T-5539`), on the ledger. The run's moves

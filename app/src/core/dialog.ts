@@ -16,14 +16,22 @@ let asking = false;
 // the first sheet itself, and once both are answered that sheet comes back as a dialog of its own
 // that neither button closes. Clicks that pile up while the app is busy are what stack them.
 //
-// The buttons are named in the app's language: left to itself the dialog says OK and Cancel.
-export async function confirmDialog(message: string): Promise<boolean> {
+// The buttons are named in the app's language: left to itself the dialog says OK and Cancel. A
+// question whose own move is called cancel names both of its buttons instead (`labels`), since a
+// "cancel" button that means "don't cancel" reads the wrong way round.
+export async function confirmDialog(
+  message: string,
+  labels?: { ok: string; cancel: string },
+): Promise<boolean> {
   if (!inTauri()) return window.confirm(message);
   if (asking) return false;
   asking = true;
   try {
     const { confirm } = await import("@tauri-apps/plugin-dialog");
-    return await confirm(message, { okLabel: t("dialog.ok"), cancelLabel: t("dialog.cancel") });
+    return await confirm(message, {
+      okLabel: labels?.ok ?? t("dialog.ok"),
+      cancelLabel: labels?.cancel ?? t("dialog.cancel"),
+    });
   } finally {
     asking = false;
   }

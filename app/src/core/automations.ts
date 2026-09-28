@@ -1,6 +1,7 @@
 // The automations screen's own seam: a project's definitions, one definition whole, whether that one
 // could be started, the library the actions on it are placed from, one library action whole — and the
-// one write that is not the screen's at all, a run being stopped from the pane it is drawn in.
+// writes that are not the screen's at all, a run being paused, picked up or cancelled from the pane it
+// is drawn in.
 //
 // **Three layers, and each write names the one the field lives on** (`AMB-D-949`): a placement is a
 // spot on the picture, what it declares is its action's, and what it runs on is that action's step.
@@ -14,8 +15,8 @@
 // **The writes here sit beside their reads** rather than in `core/mutations`, because what they are
 // about is this screen and nothing else. What the screen's own write does not do for itself is the
 // invalidation — the ack goes through `mutations.invokeAck`, the same road every other write takes.
-// The second one is pressed from a pane rather than from this screen, and is no ack at all
-// (`stopRun`).
+// The run's moves are pressed from a pane rather than from this screen, and are no ack at all
+// (`forceCancelRun`).
 //
 // **The launch check is read, not worked out here.** The rules live in core, where the launch itself
 // reads them (`amenbo_core::ops::automation_run::check`), so what a screen says is in the way and
@@ -24,6 +25,8 @@
 import { useQuery } from "./query";
 import { inTauri } from "./snapshot";
 import { invoke } from "./ipc";
+import { confirmDialog } from "./dialog";
+import { t } from "./i18n";
 import { invokeAck, invokeForAck } from "./mutations";
 import type {
   AutomationActionCardDto,
@@ -999,7 +1002,7 @@ export function useRunHistory(
 /**
  * **Say a failed run has been seen** — pressed on its row of the "running" tab, which it then leaves
  * for the "history" tab (`amenbo_core::ops::automation_stop::acknowledge`). Not a `WriteAck` write,
- * for `stopRun`'s reason.
+ * for `forceCancelRun`'s reason.
  */
 export async function acknowledgeRun(run: number): Promise<void> {
   if (!inTauri()) return;
@@ -1007,7 +1010,9 @@ export async function acknowledgeRun(run: number): Promise<void> {
 }
 
 /**
- * **Stop a run now** — what closing the pane a run is drawn in means (`../shell/TerminalPane`).
+ * **Force-cancel a run** — stop it now, whatever its step is in the middle of (`AMB-D-1002`). It asks
+ * first, saying what may be left behind: an agent cut off mid-edit leaves its changes, and the
+ * worktree it was working in, where they were.
  *
  * The cleanup is core's and is the same one every other stop goes through: the task the run reserved
  * goes to `todo`, and a line on that task says the run is not coming back
@@ -1017,20 +1022,33 @@ export async function acknowledgeRun(run: number): Promise<void> {
  * that draws one of those is already following the change feed — which is how a run started in
  * another project reaches this window in the first place (`./changes`).
  *
- * Answers whether this press was the one that stopped it: a run that had already finished is `false`
- * and not a refusal, the press having been about the pane.
+ * Answers whether this press was the one that stopped it: a run that had already finished, or a
+ * person who said no, is `false` and not a refusal.
  */
-export async function stopRun(run: number): Promise<boolean> {
+export async function forceCancelRun(run: number): Promise<boolean> {
   if (!inTauri()) return false;
+  const labels = { ok: t("auto.run.forceCancel"), cancel: t("auto.run.keepRunning") };
+  if (!(await confirmDialog(t("auto.run.forceCancelConfirm"), labels))) return false;
   return invoke<boolean>("automation_run_stop", { runId: run });
+}
+
+/**
+ * **Cancel a paused run** (`AMB-D-1002`). Nothing is under way in it, so it ends on the spot and
+ * asks nothing (`amenbo_core::ops::automation_stop::cancel`). Refused for a run that is not paused —
+ * the row pressed was drawn from a picture that has since moved. Not a `WriteAck` write, for
+ * `forceCancelRun`'s reason.
+ */
+export async function cancelRun(run: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_run_cancel", { runId: run });
 }
 
 /**
  * **Ask a run to pause** — pressed on a row of the "running" tab (`../screens/RunningTab`).
  *
- * A step under way cannot be cut in half, so the run goes on until that step reports and settles
- * there; a run with nothing under way pauses on the spot
- * (`amenbo_core::ops::automation_stop::pause`). Not a `WriteAck` write, for `stopRun`'s reason.
+ * An action under way is not cut in half, so the run goes on until the action it is in ends and
+ * settles there (`AMB-D-1002`); a run with nothing under way pauses on the spot
+ * (`amenbo_core::ops::automation_stop::pause`). Not a `WriteAck` write, for `forceCancelRun`'s reason.
  */
 export async function pauseRun(run: number): Promise<void> {
   if (!inTauri()) return;

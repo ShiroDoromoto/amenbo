@@ -18,7 +18,8 @@ const ERROR_EXIT = "*";
  *
  * A pause that has been asked for and not settled is its own line rather than either of the two it
  * sits between: the run is still `running` and a reader told only that would press pause again, and
- * told "paused" would believe the step had already stopped (`amenbo_core::ops::automation_stop`).
+ * told "paused" would believe the action under way had already ended (`AMB-D-1002`,
+ * `amenbo_core::ops::automation_stop`).
  */
 export function runStatusWord(run: Pick<AutomationRunCardDto, "status" | "pauseRequested">): string {
   if (run.status === "running" && run.pauseRequested) return t("auto.run.pausing");

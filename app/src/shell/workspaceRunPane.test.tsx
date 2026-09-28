@@ -28,8 +28,10 @@ const hoisted = vi.hoisted(() => ({
   ended: [] as string[],
   /** Whoever the face handed to `onStep`, so a test can put a step through it. */
   heard: null as ((one: StepOpened) => void) | null,
-  /** The runs the pane asked to be stopped, in order. */
+  /** The runs the pane asked to be force-cancelled, in order. */
   stopped: [] as number[],
+  /** The paused runs the pane asked to be cancelled, in order. */
+  canceled: [] as number[],
   /** The runs the pane asked to be paused, in order. */
   paused: [] as number[],
   /** The runs the pane asked to be picked up again, in order. */
@@ -84,9 +86,13 @@ vi.mock("../talk/frames", async (importOriginal) => ({
 vi.mock("../core/automations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../core/automations")>()),
   useRunCards: () => hoisted.cards,
-  stopRun: (run: number) => {
+  forceCancelRun: (run: number) => {
     hoisted.stopped.push(run);
     return Promise.resolve(true);
+  },
+  cancelRun: (run: number) => {
+    hoisted.canceled.push(run);
+    return Promise.resolve();
   },
   pauseRun: (run: number) => {
     hoisted.paused.push(run);
@@ -215,6 +221,7 @@ beforeEach(() => {
   hoisted.ended = [];
   hoisted.heard = null;
   hoisted.stopped = [];
+  hoisted.canceled = [];
   hoisted.paused = [];
   hoisted.resumed = [];
   hoisted.acknowledged = [];
@@ -453,15 +460,15 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     expect(q(".slot__exit")).toHaveLength(0);
   });
 
-  it("holds and stops a going run from its pane, named in the running tab's words", async () => {
+  it("pauses and force-cancels a going run from its pane, named in the running tab's words", async () => {
     // A reader watching a run is in its pane, and had to go to the running tab to act on it
-    // (`AMB-T-5507`). They are marks, named for a reader who cannot see them (`AMB-T-5529`).
-    // Stopping from here keeps the pane.
+    // (`AMB-T-5507`). They are marks, named for a reader who cannot see them (`AMB-T-5529`). A run
+    // going is paused or force-cancelled (`AMB-D-1002`), and force-cancelling keeps the pane.
     hoisted.cards = [runCard()];
     await mount();
     await arrive();
     const acts = () => q(".slot__runact");
-    expect(acts().map((b) => b.getAttribute("aria-label"))).toEqual([t("auto.run.pause"), t("auto.run.stop")]);
+    expect(acts().map((b) => b.getAttribute("aria-label"))).toEqual([t("auto.run.pause"), t("auto.run.forceCancel")]);
 
     await act(async () => {
       acts()[0]!.click();
@@ -486,17 +493,26 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     expect((q(".slot__runact")[1] as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("picks a held run up again from its pane", async () => {
+  it("picks a held run up again, or cancels it, from its pane", async () => {
+    // A paused run has nothing under way, so it is cancelled rather than force-cancelled
+    // (`AMB-D-1002`).
     hoisted.cards = [runCard({ status: "paused" })];
     await mount();
     await arrive();
-    expect(q(".slot__runact").map((b) => b.getAttribute("aria-label"))).toEqual([t("auto.run.resume"), t("auto.run.stop")]);
+    expect(q(".slot__runact").map((b) => b.getAttribute("aria-label"))).toEqual([t("auto.run.resume"), t("auto.run.cancel")]);
 
     await act(async () => {
       q(".slot__runact")[0]!.click();
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(hoisted.resumed).toEqual([7]);
+
+    await act(async () => {
+      q(".slot__runact")[1]!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.canceled).toEqual([7]);
+    expect(hoisted.stopped).toEqual([]);
   });
 
   it("offers no moves on a run that is over, or not read yet", async () => {

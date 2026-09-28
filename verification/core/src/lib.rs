@@ -4575,13 +4575,14 @@ const REGISTRY: &[OpSpec] = &[
     // here, since the person who stopped it knows already; a failure only once it is acknowledged.
     // `reason` is the failed row's line, as on `run-row`.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "history-row", required: &["state"], refs: &["target", "project"], strings: &["state", "reason"], binds: false },
-    // What the row's own controls do: open the pane it is drawn in, hold the run, pick it up again, or
-    // stop it.
+    // What the row's own controls do: open the pane it is drawn in, hold the run, pick it up again,
+    // force-cancel a run going (`stop`, through the question it asks first), or cancel a held one
+    // (`cancel`).
     //
-    // `on: pane` presses the same three — hold, pick up again, stop — on the line over the pane the
-    // run is drawn in rather than on the tab's row: a reader watching a run is in its pane. Left off,
-    // or `on: row`, it is the row. `open` is the row's alone, the pane being where it leads; `picture`
-    // and `terminal` are the pane's alone — the two faces its body is turned to (`run-picture`).
+    // `on: pane` presses the same moves on the line over the pane the run is drawn in rather than on
+    // the tab's row: a reader watching a run is in its pane. Left off, or `on: row`, it is the row.
+    // `open` is the row's alone, the pane being where it leads; `picture` and `terminal` are the
+    // pane's alone — the two faces its body is turned to (`run-picture`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press", "on"], binds: false },
     //
     // **The automations the sidebar opens**, every project's on one list (`open-view` with

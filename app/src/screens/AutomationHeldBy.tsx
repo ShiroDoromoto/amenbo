@@ -6,12 +6,14 @@
 // (`./AutomationBuildScreen`, `./AutomationActionBuildScreen`).
 //
 // **Held shut is a mark, and the way out is a button.** Each run is one band: the lock, which run —
-// of which automation, over an action — and on which step, and the two moves that end the hold where
-// it is read: go to the pane the run is drawn in, or stop it here. A sentence explaining that
-// stopping the run frees the definition is what the stop button already says.
+// of which automation, over an action — and on which step, and the moves that end the hold where it
+// is read: go to the pane the run is drawn in, or act on the run here with the two moves its state
+// has (`AMB-D-1002`) — a run going is paused or force-cancelled, a paused one picked up again or
+// cancelled. A sentence explaining that cancelling the run frees the definition is what the cancel
+// button already says.
 import { useState } from "react";
 import { LockMark } from "./automationParts";
-import { stopRun } from "../core/automations";
+import { cancelRun, forceCancelRun, pauseRun, resumeRun } from "../core/automations";
 import { builtinWord } from "../core/builtinWords";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
@@ -30,16 +32,16 @@ export function AutomationHeldBy({
   onGoToRun?: (project: number, run: number) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
-  // One press at a time: the stop moves the list this band is drawn from.
+  // One press at a time: a cancel moves the list this band is drawn from.
   const [pressing, setPressing] = useState(false);
 
   if (runs.length === 0) return null;
 
-  const stop = async (run: number) => {
+  const press = async (move: () => Promise<unknown>) => {
     setError(null);
     setPressing(true);
     try {
-      await stopRun(run);
+      await move();
     } catch (err) {
       setError(errText(err));
     } finally {
@@ -66,14 +68,40 @@ export function AutomationHeldBy({
                 {t("auto.held.openPane")}
               </button>
             )}
-            <button
-              type="button"
-              className="btn btn--danger"
-              disabled={pressing}
-              onClick={() => void stop(run.run)}
-            >
-              {t("auto.run.stop")}
-            </button>
+            {run.status === "paused" ? (
+              <>
+                <button type="button" className="btn" disabled={pressing} onClick={() => void press(() => resumeRun(run.run))}>
+                  {t("auto.run.resume")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--danger"
+                  disabled={pressing}
+                  onClick={() => void press(() => cancelRun(run.run))}
+                >
+                  {t("auto.run.cancel")}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={pressing || run.pauseRequested}
+                  onClick={() => void press(() => pauseRun(run.run))}
+                >
+                  {t("auto.run.pause")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--danger"
+                  disabled={pressing}
+                  onClick={() => void press(() => forceCancelRun(run.run))}
+                >
+                  {t("auto.run.forceCancel")}
+                </button>
+              </>
+            )}
           </li>
         ))}
       </ul>

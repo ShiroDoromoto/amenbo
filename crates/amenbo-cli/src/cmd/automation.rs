@@ -706,6 +706,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let defs = store.automation_run_defs(id).map_err(CliError::from)?;
             let stretches = store.automation_run_tasks(id).map_err(CliError::from)?;
             let moves = store.automation_run_steps(id).map_err(CliError::from)?;
+            let waiting = store.automation_run_waiting(id).map_err(CliError::from)?;
             if flags.json {
                 let mut walked = Vec::with_capacity(moves.len());
                 for m in &moves {
@@ -720,11 +721,12 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
                 print_json(&json!({
                     "run": serde_json::to_value(&run).unwrap(),
+                    "waiting": waiting,
                     "tasks": serde_json::to_value(&stretches).unwrap(),
                     "steps": walked,
                 }));
             } else {
-                render_run(store, flags, &run, &defs, &stretches, &moves)?;
+                render_run(store, flags, &run, waiting, &defs, &stretches, &moves)?;
             }
         }
 
@@ -1259,10 +1261,14 @@ fn one_edge(
 /// A run's whole story on the terminal: the run's own line, then each task it worked with the steps it
 /// spent on that task under it. The order is the order it happened in, which is the only order a run
 /// reads in.
+///
+/// **A run waiting for a task says so**, as its pane does. The stretch it last worked stays open until
+/// the next task is taken, but every step of it has ended — so it is written as over, not as still going.
 fn render_run(
     store: &mut Store,
     flags: &Flags,
     run: &AutomationRun,
+    waiting: bool,
     defs: &[AutomationRunDef],
     stretches: &[AutomationRunTask],
     moves: &[AutomationRunStep],
@@ -1286,15 +1292,30 @@ fn render_run(
         };
         human(flags, format!("acknowledged: {seen}"));
     }
+    if waiting {
+        human(flags, "waiting: for a task — the next step opens once one turns up");
+    }
+    let last = stretches.last().map(|s| s.id);
     for stretch in stretches {
         let about = match stretch.task_id {
             Some(task_id) => task_label(task_id),
             None => "no task".to_string(),
         };
-        human(
-            flags,
-            format!("\ntask {} — {about}  {}", stretch.seq, span(stretch.started_at, stretch.ended_at)),
-        );
+        let stood = if waiting && Some(stretch.id) == last && stretch.ended_at.is_none() {
+            let ended = moves
+                .iter()
+                .filter(|m| m.run_task_id == Some(stretch.id))
+                .filter_map(|m| m.ended_at)
+                .max();
+            match (stretch.started_at, ended) {
+                (Some(from), Some(to)) => format!("{} → {}  (over)", from.to_rfc3339_z(), to.to_rfc3339_z()),
+                (Some(from), None) => format!("{} → over", from.to_rfc3339_z()),
+                (None, _) => "over".to_string(),
+            }
+        } else {
+            span(stretch.started_at, stretch.ended_at)
+        };
+        human(flags, format!("\ntask {} — {about}  {stood}", stretch.seq));
         for m in moves.iter().filter(|m| m.run_task_id == Some(stretch.id)) {
             render_move(store, flags, defs, m)?;
         }

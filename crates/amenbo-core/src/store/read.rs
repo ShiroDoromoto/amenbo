@@ -923,6 +923,16 @@ impl Store {
         Ok(out)
     }
 
+    /// **Whether a run is waiting for a task**: still running, and standing before a built-in set to
+    /// wait that has nothing yet to act on. The same answer the run's pane is drawn from.
+    pub fn automation_run_waiting(&self, run_id: i64) -> Result<bool> {
+        let Some(run) = self.automation_run(run_id)? else { return Ok(false) };
+        if run.status != crate::model::AutomationRunStatus::Running {
+            return Ok(false);
+        }
+        crate::ops::automation_run::is_waiting(self.engine.conn(), run_id)
+    }
+
     /// The stretches one run walked, in order — each one a task it worked.
     pub fn automation_run_tasks(&self, run_id: i64) -> Result<Vec<crate::model::AutomationRunTask>> {
         self.reachable(&format!("automation run #{run_id}"), |c| {

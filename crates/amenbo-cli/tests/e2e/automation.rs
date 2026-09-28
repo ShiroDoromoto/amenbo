@@ -684,10 +684,19 @@ fn a_definition_that_does_not_exist_is_said_to_be_missing() {
 /// out decided and an agent chosen for the step where it is placed. Answers the automation's id, the
 /// action's placement and the step's.
 fn a_launchable(cli: &Cli) -> (String, String, String) {
+    let (a, placement, step, _) = a_picture(cli, true);
+    (a, placement, step)
+}
+
+/// [`a_launchable`], with the placement of its entry handed back too, and a task for it to take only
+/// where one is asked for.
+fn a_picture(cli: &Cli, with_task: bool) -> (String, String, String, String) {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--json"]), "automation");
-    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
-    cli.finish_creating(&t);
+    if with_task {
+        let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
+        cli.finish_creating(&t);
+    }
     // The first thing placed is where a run starts (`AMB-D-977`), set to take any task that is ready.
     let take = an_entry(cli, &a, "take_task");
     cli.json(&["automation", "cfg-set", &take, "--name", "絞り込み", "--status", "todo", "--json"]);
@@ -710,7 +719,7 @@ fn a_launchable(cli: &Cli) -> (String, String, String) {
     cli.json(&["automation", "edge-add", "--from", &format!("{take}:着手できるタスクが無い"), "--done", "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{placement}:"), "--to", &close, "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{close}:"), "--done", "--json"]);
-    (a, placement, step)
+    (a, placement, step, take)
 }
 
 /// A launch makes a run, and the run is the record every later command names.
@@ -757,6 +766,33 @@ fn only_a_failed_run_is_acknowledged() {
     let (shown, _) = cli.run(&["automation", "run-show", &run]);
     assert!(shown.contains("status: canceled"), "{shown}");
     assert!(!shown.contains("acknowledged:"), "a cancel is not waiting on anyone: {shown}");
+}
+
+/// **A run waiting for a task says so** on `run-show`, in the same answer its pane is drawn from: an
+/// entry set to wait, with nothing to take, leaves the run running and waiting. A run that is no longer
+/// running waits for nothing.
+#[test]
+fn run_show_says_when_a_run_is_waiting_for_a_task() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _, take) = a_picture(&cli, false);
+    cli.json(&[
+        "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
+        "--choice", "着手できるタスクが出るまで待つ", "--json",
+    ]);
+    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    assert_eq!(shown["run"]["status"].as_str(), Some("running"), "{shown}");
+    assert_eq!(shown["waiting"].as_bool(), Some(true), "{shown}");
+    let (text, _) = cli.run(&["automation", "run-show", &run]);
+    assert!(text.contains("waiting: for a task"), "{text}");
+
+    cli.json(&["automation", "stop", &run, "--json"]);
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    assert_eq!(shown["waiting"].as_bool(), Some(false), "{shown}");
+    let (text, _) = cli.run(&["automation", "run-show", &run]);
+    assert!(!text.contains("waiting:"), "{text}");
 }
 
 /// **What a person hands over comes in on the launch itself** (`AMB-D-981`): for a run that starts by

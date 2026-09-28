@@ -6957,7 +6957,10 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
     BuiltinWords {
         key: "close_task",
         called: "the built-in that closes the task",
-        words: &[("コミット", "the input for the commit it records")],
+        words: &[
+            ("コミット", "the input for the commit it records"),
+            ("完了", "the way out for having closed the task"),
+        ],
     },
     BuiltinWords {
         key: "fetch",

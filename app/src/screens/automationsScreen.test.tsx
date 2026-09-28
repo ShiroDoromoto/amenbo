@@ -42,7 +42,7 @@ vi.mock("../core/automations", () => ({
   useAutomationActions: () => [],
   useAutomationBuiltins: () => [],
   useAutomationAction: () => null,
-  insertAutomationAction: () => Promise.resolve(),
+  insertAutomationAction: () => Promise.resolve([]),
   ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
   launchAutomation: hoisted.launch,
   // An agent's step as the entry: the dialog every start opens asks for a text and files.

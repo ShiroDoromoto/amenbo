@@ -952,6 +952,8 @@ export const zhHant: Translation = {
     "auto.pic.endsHalt": "停下來叫人",
     "auto.pic.unfed": "沒有東西送到 {names}",
     "auto.pic.entry": "起點",
+    "auto.pic.placedForYou": "自動放置",
+    "auto.pic.placedForYouWhy": "在執行結束時將任務標為完成",
     "auto.pic.legendNext": "下一步",
     "auto.pic.legendBack": "返回",
     "auto.pic.legendBranch": "分岔",

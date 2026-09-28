@@ -157,6 +157,7 @@ export function AutomationPicture({
   graph,
   insertLabel,
   selectedBoxId,
+  placedForYou,
   onPickBox,
   onInsert,
   onOpenExit,
@@ -173,6 +174,9 @@ export function AutomationPicture({
   insertLabel?: string;
   /** The box whose contents the panel beside this is showing (`AMB-T-5256`). */
   selectedBoxId?: number;
+  /** Boxes Amenbo put on for the reader rather than the reader themselves (`AMB-T-5797`) — marked,
+   *  with what they are there for on their second line. */
+  placedForYou?: ReadonlySet<number>;
   onPickBox?: (boxId: number) => void;
   /**
    * Put a box in on this edge. Absent while the dialog that asks what goes there is still being
@@ -488,11 +492,18 @@ export function AutomationPicture({
                 )}
                 {node.empty === true && <span className="autopic__emptymark">{t("auto.pic.emptyMark")}</span>}
                 {node.draft === true && <span className="autopic__draftmark">{t("chip.draft")}</span>}
+                {placedForYou?.has(node.boxId) === true && (
+                  <span className="autopic__formark">{t("auto.pic.placedForYou")}</span>
+                )}
               </span>
               {graph?.boundary !== undefined && <CardIo words={ioWords(node.boxId)} />}
               {/* Which library the action standing here comes from, on an automation's picture — a
                   built-in's is Amenbo's own, though it is kept on the device's shelf. */}
-              {node.global !== undefined && (
+              {node.global !== undefined && placedForYou?.has(node.boxId) === true ? (
+                <span className="autopic__nodesub" title={t("auto.pic.placedForYouWhy")}>
+                  {t("auto.pic.placedForYouWhy")}
+                </span>
+              ) : node.global !== undefined && (
                 <span className="autopic__nodesub">
                   <span className="autopic__lib">
                     {node.builtin !== undefined

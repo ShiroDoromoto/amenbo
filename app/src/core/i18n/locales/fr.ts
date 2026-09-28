@@ -962,6 +962,8 @@ export const fr: Translation = {
     "auto.pic.endsHalt": "s'arrêter et appeler quelqu'un",
     "auto.pic.unfed": "rien n'atteint {names}",
     "auto.pic.entry": "Départ",
+    "auto.pic.placedForYou": "Placé automatiquement",
+    "auto.pic.placedForYouWhy": "Termine la tâche à la fin de l'exécution",
     "auto.pic.legendNext": "Suivant",
     "auto.pic.legendBack": "Retour",
     "auto.pic.legendBranch": "Bifurque",

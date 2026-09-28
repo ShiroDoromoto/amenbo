@@ -59,8 +59,9 @@ export function AutomationActionMake({
   /** Where the new action goes, drawn over the fields. */
   where: WhereTo;
   projectId: number | null;
-  /** The action is placed — go and build it. */
-  onMade: (actionId: number) => void;
+  /** The action is placed — go and build it. `placed` is what core put on beside it for the reader
+   *  (`AMB-T-5797`). */
+  onMade: (actionId: number, placed: number[]) => void;
   onClose: () => void;
 }) {
   const [name, setName] = useState(typed);
@@ -75,7 +76,7 @@ export function AutomationActionMake({
     setMaking(true);
     setRefused(null);
     try {
-      const id =
+      const made =
         "edgeId" in into
           ? await makeAutomationAction(into.edgeId, name.trim(), shelfPicked)
           : await makeAutomationActionAtExit(
@@ -84,7 +85,7 @@ export function AutomationActionMake({
               shelfPicked,
             );
       onClose();
-      if (id !== null) onMade(id);
+      if (made !== null) onMade(made.action, made.placed);
     } catch (e) {
       setRefused(errText(e));
       setMaking(false);

@@ -1,0 +1,103 @@
+# A run that starts by filing a task holds that task, and a picture that lets it end without closing
+# the task is refused at the launch. The reader who puts one action after that entry has nearly always
+# said the whole of what the run does, so the built-in that closes the task comes on after the
+# action's done way out by itself, ending the run. A build where it did not would send every reader
+# of this road to the launch's refusal first, to learn a box they never asked about.
+id: close-the-filed-task-without-placing-the-close-yourself
+title: The first action put after an entry that files a task brings the built-in that closes it
+description: >
+  Start an automation at the built-in that files a task, and put a library action on after its way
+  out that says nothing yet. The built-in that closes the task stands after the action's done way
+  out, marked as put on for the reader, and leaving it ends the run. It is an ordinary placement:
+  take it off, and the action's done way out says nothing again.
+given:
+  - { type: action, domain: automation, op: action-add, with: { name: draft }, as: draft }
+  - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, prompt: write the draft }, as: write }
+  - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: write, exit_to: "" } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a task filed and closed" }, as: auto }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: place-action
+    with:
+      builtin: make_task
+
+  # The entry files the task and takes it, so that is the way out the run goes on by.
+  - type: action
+    domain: automation
+    op: insert-box
+    with:
+      after_builtin: make_task
+      exit: 起票して着手した
+      undecided: true
+      action: draft
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      name: draft
+      present: true
+
+  # Put on by itself, after the action's done way out, and ending the run.
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      builtin: close_task
+      present: true
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      to_builtin: close_task
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from_builtin: close_task
+      exit: 完了
+      ends: done
+
+  # An ordinary placement, taken off the way any other is.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      builtin: close_task
+
+  - type: action
+    domain: automation
+    op: remove-placement
+
+  - type: assert
+    domain: automation
+    op: pictured
+    with:
+      builtin: close_task
+      present: false
+
+  - type: assert
+    domain: automation
+    op: line-pictured
+    with:
+      from: draft
+      present: false

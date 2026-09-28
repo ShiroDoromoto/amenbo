@@ -950,6 +950,8 @@ export const nl: Translation = {
     "auto.pic.endsHalt": "stoppen en iemand erbij halen",
     "auto.pic.unfed": "er bereikt niets {names}",
     "auto.pic.entry": "Start",
+    "auto.pic.placedForYou": "Automatisch geplaatst",
+    "auto.pic.placedForYouWhy": "Zet de taak aan het eind van de run op klaar",
     "auto.pic.legendNext": "Volgende",
     "auto.pic.legendBack": "Gaat terug",
     "auto.pic.legendBranch": "Vertakt",

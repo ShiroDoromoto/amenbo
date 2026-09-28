@@ -1192,6 +1192,8 @@ const ui = {
   "auto.pic.endsHalt": "stop and call a person",
   "auto.pic.unfed": "nothing reaches {names}",
   "auto.pic.entry": "Start",
+  "auto.pic.placedForYou": "Placed for you",
+  "auto.pic.placedForYouWhy": "Marks the task done at the end of the run",
   "auto.pic.legendNext": "Next",
   "auto.pic.legendBack": "Goes back",
   "auto.pic.legendBranch": "Branches",

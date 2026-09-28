@@ -967,6 +967,8 @@ export const ru: Translation = {
     "auto.pic.endsHalt": "остановиться и позвать человека",
     "auto.pic.unfed": "ничего не доходит до {names}",
     "auto.pic.entry": "Старт",
+    "auto.pic.placedForYou": "Поставлено автоматически",
+    "auto.pic.placedForYouWhy": "В конце запуска отмечает задачу выполненной",
     "auto.pic.legendNext": "Далее",
     "auto.pic.legendBack": "Возвращается",
     "auto.pic.legendBranch": "Ветвится",

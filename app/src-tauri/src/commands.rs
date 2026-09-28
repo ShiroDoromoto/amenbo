@@ -538,6 +538,12 @@ impl WriteAck {
         self.actions.push(id);
         self
     }
+    /// Name a placement the write put on beside the one asked for, where there is one
+    /// ([`crate::dto::WriteAck::placements`]).
+    pub(crate) fn placed(mut self, closer: Option<&amenbo_core::model::AutomationPlacement>) -> WriteAck {
+        self.placements.extend(closer.map(|one| one.id));
+        self
+    }
 }
 
 /// The store file being watched (there is only one store). `None` when the path cannot be resolved.

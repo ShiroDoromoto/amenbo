@@ -760,6 +760,9 @@ pub struct WriteAck {
     /// Library action ids the write made — [`Self::automations`] one layer down, for a build screen
     /// that has just made an action on the spot and goes on to build it (`AMB-D-956`).
     pub(crate) actions: Vec<i64>,
+    /// Placements the write put on for the reader, beside the one they asked for — the built-in that
+    /// closes a filed task, put on after the first action (`AMB-T-5797`), so the picture can say so.
+    pub(crate) placements: Vec<i64>,
     /// Coarse-grained scopes to invalidate ("tasks"/"decisions"). Empty means there is no query to
     /// invalidate — as with a roster write, where refetching the snapshot in `loadSnapshot` is
     /// enough to show the change.

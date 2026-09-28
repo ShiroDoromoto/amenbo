@@ -951,6 +951,8 @@ export const id: Translation = {
     "auto.pic.endsHalt": "berhenti dan panggil orang",
     "auto.pic.unfed": "tidak ada yang sampai ke {names}",
     "auto.pic.entry": "Awal",
+    "auto.pic.placedForYou": "Ditempatkan otomatis",
+    "auto.pic.placedForYouWhy": "Menyelesaikan tugas di akhir eksekusi",
     "auto.pic.legendNext": "Berikutnya",
     "auto.pic.legendBack": "Kembali",
     "auto.pic.legendBranch": "Bercabang",

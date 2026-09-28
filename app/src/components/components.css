@@ -1406,6 +1406,7 @@ button.feed__target:hover { color: var(--c-accent); }
    under way rather than missing something. */
 .autopic__node--draft { border-color: var(--c-accent); border-style: dashed; }
 .autopic__draftmark { flex: none; font-size: var(--fs-xs); color: var(--c-accent); }
+.autopic__formark { flex: none; font-size: var(--fs-xs); color: var(--c-accent-text); background: var(--c-accent-weak); border-radius: var(--r-sm); padding: 0 var(--s-1); }
 .autopic__node--on { background: var(--c-accent-faint); border-color: var(--c-accent); }
 /* Two lines: the number and the name, and under them where the action comes from — or what it is
    missing, which takes that line's place. */

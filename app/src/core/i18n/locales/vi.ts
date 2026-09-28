@@ -951,6 +951,8 @@ export const vi: Translation = {
     "auto.pic.endsHalt": "dừng lại và gọi người",
     "auto.pic.unfed": "không có gì đến được {names}",
     "auto.pic.entry": "Điểm bắt đầu",
+    "auto.pic.placedForYou": "Đã tự động đặt",
+    "auto.pic.placedForYouWhy": "Đánh dấu công việc hoàn thành khi kết thúc lượt chạy",
     "auto.pic.legendNext": "Tiếp theo",
     "auto.pic.legendBack": "Quay lại",
     "auto.pic.legendBranch": "Rẽ nhánh",

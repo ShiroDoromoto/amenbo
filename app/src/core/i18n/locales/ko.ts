@@ -947,6 +947,8 @@ export const ko: Translation = {
     "auto.pic.endsHalt": "멈추고 사람을 부릅니다",
     "auto.pic.unfed": "{names}에 아무것도 닿지 않습니다",
     "auto.pic.entry": "시작점",
+    "auto.pic.placedForYou": "자동으로 놓음",
+    "auto.pic.placedForYouWhy": "실행이 끝날 때 작업을 완료로 바꿈",
     "auto.pic.legendNext": "다음",
     "auto.pic.legendBack": "되돌아감",
     "auto.pic.legendBranch": "갈라짐",

@@ -793,11 +793,24 @@ export type ActionShelf = "device" | "project";
 /**
  * **Put a library action in on a line.** The way out that was pressed comes to point at the new
  * spot, and the new spot goes on to whatever that way out used to reach — one act, one transaction.
- * It is what the library in the build screen's panel places.
+ * It is what the library in the build screen's panel places. It answers with what core put on beside
+ * it for the reader — the built-in that closes a filed task (`AMB-T-5797`).
  */
-export async function insertAutomationAction(edgeId: number, actionId: number): Promise<void> {
-  if (!inTauri()) return;
-  return ack("automation_step_insert", { edgeId, action: actionId });
+export async function insertAutomationAction(edgeId: number, actionId: number): Promise<number[]> {
+  if (!inTauri()) return [];
+  const ack = await forAck("automation_step_insert", { edgeId, action: actionId });
+  return ack.placements;
+}
+
+/**
+ * An action made on the spot and put on: its id, for the screen to go and build it, and the
+ * placements put on beside it for the reader — the built-in that closes a filed task (`AMB-T-5797`).
+ */
+export type Made = { action: number; placed: number[] };
+
+function made(ack: { actions: number[]; placements: number[] }): Made | null {
+  const action = ack.actions[0];
+  return action === undefined ? null : { action, placed: ack.placements };
 }
 
 /**
@@ -813,27 +826,28 @@ export async function makeAutomationAction(
   edgeId: number,
   name: string,
   shelf: ActionShelf,
-): Promise<number | null> {
+): Promise<Made | null> {
   if (!inTauri()) return null;
-  const ack = await forAck("automation_placement_insert_new", { edgeId, name, shelf });
-  return ack.actions[0] ?? null;
+  return made(await forAck("automation_placement_insert_new", { edgeId, name, shelf }));
 }
 
 /**
  * **Put a library action on after a way out that says nothing yet.** The way out comes to point at
  * the new spot, and the new spot's own ways out are left saying nothing — what
- * `insertAutomationAction` does for a way out with no line to press (`AMB-D-1003`).
+ * `insertAutomationAction` does for a way out with no line to press (`AMB-D-1003`), and answering as
+ * that one does.
  */
 export async function insertAutomationActionAtExit(
   from: { boxId: number; exitName: string | null },
   actionId: number,
-): Promise<void> {
-  if (!inTauri()) return;
-  return ack("automation_step_insert_at_exit", {
+): Promise<number[]> {
+  if (!inTauri()) return [];
+  const ack = await forAck("automation_step_insert_at_exit", {
     fromId: from.boxId,
     exitName: from.exitName,
     action: actionId,
   });
+  return ack.placements;
 }
 
 /**
@@ -844,15 +858,16 @@ export async function makeAutomationActionAtExit(
   from: { boxId: number; exitName: string | null },
   name: string,
   shelf: ActionShelf,
-): Promise<number | null> {
+): Promise<Made | null> {
   if (!inTauri()) return null;
-  const ack = await forAck("automation_placement_insert_new_at_exit", {
-    fromId: from.boxId,
-    exitName: from.exitName,
-    name,
-    shelf,
-  });
-  return ack.actions[0] ?? null;
+  return made(
+    await forAck("automation_placement_insert_new_at_exit", {
+      fromId: from.boxId,
+      exitName: from.exitName,
+      name,
+      shelf,
+    }),
+  );
 }
 
 /** **Declare what a way out hands on.** It belongs to the way out, not to the step. */

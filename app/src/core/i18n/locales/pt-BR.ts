@@ -963,6 +963,8 @@ export const ptBR: Translation = {
     "auto.pic.endsHalt": "parar e chamar uma pessoa",
     "auto.pic.unfed": "nada chega a {names}",
     "auto.pic.entry": "Início",
+    "auto.pic.placedForYou": "Colocado automaticamente",
+    "auto.pic.placedForYouWhy": "Marca a tarefa como concluída no fim da execução",
     "auto.pic.legendNext": "Próximo",
     "auto.pic.legendBack": "Volta",
     "auto.pic.legendBranch": "Ramifica",

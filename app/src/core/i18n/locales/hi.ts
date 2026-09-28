@@ -284,6 +284,7 @@ export const hi: Translation = {
     "detail.project": "प्रोजेक्ट", "detail.none": "कोई नहीं",
     "detail.blockedBy": "इसकी प्रतीक्षा", "detail.blockedByHint": "रुका हुआ (निर्भरता)",
     "detail.notStarted": "आरंभ",
+    "detail.waitingOnValues": "पहले के मानों की प्रतीक्षा", "detail.waitingOnValuesHint": "यह मान बंद होने तक शुरू नहीं हो सकता — उस वर्गीकरण को खोलने के लिए दबाएँ जहाँ इसे बंद किया जाता है",
     "detail.draft": "निर्माण", "detail.finishCreating": "बनाना पूरा करें",
     "detail.finishCreatingBlocked": "पहले {names} भरें",
     "detail.linkedDecisions": "किस कारण",

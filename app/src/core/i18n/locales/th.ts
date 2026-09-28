@@ -286,6 +286,7 @@ export const th: Translation = {
     "detail.project": "โปรเจกต์", "detail.none": "ไม่มี",
     "detail.blockedBy": "กำลังรอ", "detail.blockedByHint": "ติดขัด (การพึ่งพา)",
     "detail.notStarted": "เริ่มวันที่",
+    "detail.waitingOnValues": "รอค่าก่อนหน้า", "detail.waitingOnValuesHint": "ยังเริ่มไม่ได้จนกว่าค่านี้จะถูกปิด — กดเพื่อเปิดการจัดหมวดหมู่ที่ใช้ปิดค่านี้",
     "detail.draft": "การสร้าง", "detail.finishCreating": "สร้างให้เสร็จ",
     "detail.finishCreatingBlocked": "กรุณาเลือก {names} ก่อน",
     "detail.linkedDecisions": "มาจาก",

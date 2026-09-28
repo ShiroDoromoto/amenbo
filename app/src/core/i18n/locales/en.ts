@@ -304,6 +304,7 @@ const ui = {
   "detail.project": "Project", "detail.none": "None",
   "detail.blockedBy": "Waiting on", "detail.blockedByHint": "blocked (dependency)",
   "detail.notStarted": "Starts on",
+  "detail.waitingOnValues": "Waiting for earlier values", "detail.waitingOnValuesHint": "Cannot start until this value is closed — press to open the classification it is closed in",
   // The fourth premise, and the move that ends it. Never "publish" or "approve": the one who created the
   // task is the one who ends the creation, and there is nobody to ask (`AMB-D-558`).
   "detail.draft": "Creation", "detail.finishCreating": "Finish creating",

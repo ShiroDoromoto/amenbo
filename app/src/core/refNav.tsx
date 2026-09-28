@@ -23,6 +23,10 @@ export interface RefNav {
   /** Bring the workspace forward — from a launch refused because it is closed (`AMB-T-5590`). The
    *  press lands wherever the workspace is: this window's face, or the window it was split out into. */
   openWorkspace?: () => void;
+  /** Open one axis where its values are closed and opened — the board's classification panel, on the
+   *  task's project — from a task waiting for a value ordered before its own (`AMB-D-990`). Closing
+   *  the value is the only thing that lets such a task start, and it is done there. */
+  openDimension?: (project: number, dimension: number) => void;
 }
 
 const RefNavContext = createContext<RefNav>({});

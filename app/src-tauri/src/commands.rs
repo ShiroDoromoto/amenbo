@@ -221,7 +221,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
     let waiting_on_values: Vec<WaitingOnValueDto> = row
         .waiting_on_values
         .into_iter()
-        .map(|w| WaitingOnValueDto { axis: w.axis, value: w.value })
+        .map(|w| WaitingOnValueDto { dimension_id: w.dimension_id, axis: w.axis, value: w.value })
         .collect();
     let blocked_by: Vec<TaskRefDto> = row
         .blocked_by
@@ -308,7 +308,7 @@ fn premise_change_dto(store: &Store, task_id: i64, status: TaskStatus) -> Option
         reopened_values: change
             .reopened_values
             .into_iter()
-            .map(|w| WaitingOnValueDto { axis: w.axis, value: w.value })
+            .map(|w| WaitingOnValueDto { dimension_id: w.dimension_id, axis: w.axis, value: w.value })
             .collect(),
     })
 }

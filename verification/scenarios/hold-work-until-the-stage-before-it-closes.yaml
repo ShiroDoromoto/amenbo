@@ -16,7 +16,8 @@
 # already taken where it is, so its holder is told instead: the value comes back among the premises
 # that moved since the reserve, named by its category and its own name. The screen tells it twice:
 # the card rings its bell, and the detail pane names the value in the field for what changed since the
-# reserve.
+# reserve. Before the reserve, the screen names the wait the same two ways — the card's tag and a field
+# in the detail pane — and each is a way to the category the value is closed in.
 id: hold-work-until-the-stage-before-it-closes
 title: A task on a category that waits along its order is held back until the value before its own is closed, that value does not close while its own work is unfinished, and opening it again is told to whoever took the task
 description: >

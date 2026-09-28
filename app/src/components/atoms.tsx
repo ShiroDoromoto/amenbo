@@ -11,6 +11,7 @@ import { getSnapshot } from "../core/snapshot";
 import { pushNotice } from "../core/notice";
 import { STATUS_ALL } from "../core/status";
 import { taskRef } from "../core/idref";
+import { useRefNav } from "../core/refNav";
 import { useShrunkImage } from "../core/shrinkImage";
 import { Identicon } from "./identicon";
 import { Icon } from "./Icon";
@@ -346,6 +347,7 @@ export function DateField({ label, value, onChange }: {
  * what is blocking).
  */
 export function BlockedChips({ task, compact = false }: { task: TaskCard; compact?: boolean }) {
+  const { openDimension } = useRefNav();
   const deps = task.blockedBy ?? [];
   const decisions = task.blockedByDecisions ?? [];
   const waiting = task.waitingOnValues ?? [];
@@ -353,6 +355,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
   const names = deps.map((b) => `${taskRef(b.id)} ${b.name}`).join(", ");
   const refs = decisions.map((d) => `${d.ref ?? ""} ${d.name}`.trim()).join(", ");
   const values = waiting.map((w) => `${w.value} (${w.axis})`).join(", ");
+  const waitProject = taskProjectId(task);
   const shape = compact ? "chip--blockglyph" : "chip chip--block";
   const stop = `${shape} step-stop`;
   const heed = `${shape} step-heed`;
@@ -379,8 +382,10 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
         </span>
       )}
       {/* The fifth premise (`AMB-D-990`): values ordered before the task's own that nobody has closed
-          yet. Only a person closing them clears it, so it stops like a blocker rather than waiting. */}
-      {waiting.length > 0 && (
+          yet. Only a person closing them clears it, so it stops like a blocker rather than waiting — and
+          on the full chip it is a way to where that is done: the axis of the first value it waits on.
+          The dense surfaces keep the glyph alone; their rows are presses of their own. */}
+      {waiting.length > 0 && (compact || !openDimension || waitProject === null ? (
         <span
           className={stop}
           role="img"
@@ -389,7 +394,19 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
         >
           <Icon name="tag" />{compact ? null : ` ${formatNumber(waiting.length)}`}
         </span>
-      )}
+      ) : (
+        <button
+          type="button"
+          className={`${stop} chip--press`}
+          title={tf("block.waitingOnValues", { values })}
+          aria-label={tf("block.waitingOnValues", { values })}
+          // The card is a press and a drag of its own; this one is neither.
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); openDimension(waitProject, waiting[0].dimensionId); }}
+        >
+          <Icon name="tag" /> {formatNumber(waiting.length)}
+        </button>
+      ))}
       {task.notStartedUntil && (
         <span
           className={heed}
@@ -413,6 +430,11 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
       )}
     </>
   );
+}
+
+/** The project a task sits in — the placement the Tauri DTO carries, or the mock's bare id. */
+export function taskProjectId(task: TaskCard): number | null {
+  return task.placement?.project.id ?? task.projectId ?? null;
 }
 
 /** How a decision is named where a premise change lists one: the ref plus its title. */

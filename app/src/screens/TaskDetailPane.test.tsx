@@ -10,7 +10,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { TaskDetailPane } from "./TaskDetailPane";
 import { StoreProvider } from "../store/store";
-import { loadSnapshot } from "../core/snapshot";
+import { getSnapshot, loadSnapshot } from "../core/snapshot";
+import { RefNavProvider, type RefNav } from "../core/refNav";
 import { addTask } from "../core/mutations";
 import { t } from "../core/i18n";
 
@@ -158,5 +159,35 @@ describe("TaskDetailPane targeted edit", () => {
     const drafts = Array.from(container.querySelectorAll<HTMLTextAreaElement>("textarea.writebox__input"))
       .filter((el) => el.value !== "");
     expect(drafts).toHaveLength(0);
+  });
+});
+
+describe("TaskDetailPane waiting on values", () => {
+  // The fifth premise (`AMB-D-990`) sits with the other things a task waits on — without it the pane
+  // reads as though the task could start — and each value is a way to the axis it is closed in.
+  it("names each value it waits on, and a press opens the task's project on that value's axis", async () => {
+    const id = await addTask(null, "後ろの段");
+    const task = getSnapshot().tasks.find((x) => x.id === id)!;
+    Object.assign(task, {
+      ready: false,
+      projectId: 1,
+      waitingOnValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }],
+    });
+    const opened: string[] = [];
+    const nav: RefNav = { openDimension: (project, dimension) => opened.push(`${project}:${dimension}`) };
+    act(() => root.render(
+      createElement(RefNavProvider, {
+        value: nav,
+        children: createElement(StoreProvider, null, createElement(TaskDetailPane, { taskId: id! })),
+      }),
+    ));
+    await settle();
+
+    expect(container.textContent).toContain(t("detail.waitingOnValues"));
+    const value = Array.from(container.querySelectorAll("button"))
+      .find((b) => b.getAttribute("title") === t("detail.waitingOnValuesHint"));
+    expect(value?.textContent).toContain("v1 (リリース)");
+    act(() => value!.click());
+    expect(opened).toEqual(["1:7"]);
   });
 });

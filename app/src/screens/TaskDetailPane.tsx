@@ -12,7 +12,7 @@ import { addComment as mutAddComment, editComment as mutEditComment, removeComme
 import { activityRowKey, loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
-  DateField, DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip, When,
+  DateField, DueChip, FacetAvatar, PremiseChangedField, taskProjectId, PriorityDot, StatusSelect, TaskIdChip, When,
 } from "../components/atoms";
 import { errText, eventText, exactLabel, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
@@ -359,6 +359,31 @@ export function TaskDetailPane({
                     <Icon name="blocked" /> {b.name}
                   </button>
                 ))}
+              </span>
+            </div>
+          )}
+          {/* The fifth premise (`AMB-D-990`), beside the other things it waits on. Each value is a way to the
+              axis it is closed in, since a person closing it is the only thing that clears it. */}
+          {task.waitingOnValues && task.waitingOnValues.length > 0 && (
+            <div className="detail__field">
+              <span className="detail__flabel">{t("detail.waitingOnValues")}</span>
+              <span>
+                {task.waitingOnValues.map((w) => {
+                  const project = taskProjectId(task);
+                  return (
+                    <button
+                      type="button"
+                      className="feed__target"
+                      key={`${w.dimensionId}=${w.value}`}
+                      style={{ marginRight: 4 }}
+                      title={t("detail.waitingOnValuesHint")}
+                      disabled={project === null || !refNav.openDimension}
+                      onClick={() => { if (project !== null) refNav.openDimension?.(project, w.dimensionId); }}
+                    >
+                      <Icon name="tag" /> {w.value} ({w.axis})
+                    </button>
+                  );
+                })}
               </span>
             </div>
           )}

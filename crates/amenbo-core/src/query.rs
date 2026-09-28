@@ -2194,7 +2194,7 @@ pub fn premise_change_since(
         reopened_values: row
             .reopened_values
             .into_iter()
-            .map(|(axis, value)| crate::view::WaitingOnValue { axis, value })
+            .map(|(dimension_id, axis, value)| crate::view::WaitingOnValue { dimension_id, axis, value })
             .collect(),
     })
 }

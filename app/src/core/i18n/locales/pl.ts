@@ -289,6 +289,7 @@ export const pl: Translation = {
     "detail.project": "Projekt", "detail.none": "Brak",
     "detail.blockedBy": "Czeka na", "detail.blockedByHint": "zablokowane (zależność)",
     "detail.notStarted": "Start",
+    "detail.waitingOnValues": "Czeka na wcześniejsze wartości", "detail.waitingOnValuesHint": "Nie może ruszyć, dopóki ta wartość nie zostanie zamknięta — naciśnij, aby otworzyć klasyfikację, w której się ją zamyka",
     "detail.draft": "Tworzenie", "detail.finishCreating": "Zakończ tworzenie",
     "detail.finishCreatingBlocked": "Najpierw uzupełnij {names}",
     "detail.linkedDecisions": "Wynika z",

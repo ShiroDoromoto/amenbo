@@ -289,6 +289,7 @@ export const ru: Translation = {
     "detail.project": "Проект", "detail.none": "Нет",
     "detail.blockedBy": "Ждёт", "detail.blockedByHint": "заблокировано (зависимость)",
     "detail.notStarted": "Начинается",
+    "detail.waitingOnValues": "Ждёт предыдущих значений", "detail.waitingOnValuesHint": "Нельзя начать, пока это значение не закрыто — нажмите, чтобы открыть классификацию, где его закрывают",
     "detail.draft": "Создание", "detail.finishCreating": "Завершить создание",
     "detail.finishCreatingBlocked": "Сначала заполните {names}",
     "detail.linkedDecisions": "Обосновано",

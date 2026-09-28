@@ -118,11 +118,12 @@ async function settle() {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
 
-function open() {
+function open(focusDimensionId: number | null = null) {
   act(() => root.render(createElement(
     StoreProvider, null,
     createElement(DimensionManager, {
       projectId: 1,
+      focusDimensionId,
       onClose: () => {},
       onShowUnfinished: (dimensionId: number, valueId: number) => hoisted.shown.push(`${dimensionId}:${valueId}`),
     }),
@@ -210,5 +211,23 @@ describe("DimensionManager making tasks wait along the order", () => {
     await act(async () => { button(t("dimmgr.showUnfinished"))!.click(); });
 
     expect(hoisted.shown).toEqual(["900:901"]);
+  });
+});
+
+describe("DimensionManager opened on an axis", () => {
+  // A task waiting on a value opens the panel here (`RefNav.openDimension`): the axis it waits on is
+  // the one row its reader came for, so it is scrolled to and marked; opened from the board, none is.
+  it("marks the axis it was opened on and scrolls it into view, and marks none otherwise", () => {
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this); };
+    open(900);
+    const axis = container.querySelector(".dimmgr__dim");
+    expect(axis?.classList.contains("dimmgr__dim--focus")).toBe(true);
+    expect(scrolled).toEqual([axis]);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    open();
+    expect(container.querySelector(".dimmgr__dim--focus")).toBeNull();
   });
 });

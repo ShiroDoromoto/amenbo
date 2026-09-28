@@ -289,6 +289,7 @@ export const ptBR: Translation = {
     "detail.project": "Projeto", "detail.none": "Nenhum",
     "detail.blockedBy": "Esperando", "detail.blockedByHint": "bloqueada (dependência)",
     "detail.notStarted": "Começa em",
+    "detail.waitingOnValues": "Esperando valores anteriores", "detail.waitingOnValuesHint": "Não pode começar até este valor ser fechado — pressione para abrir a classificação onde ele é fechado",
     "detail.draft": "Criação", "detail.finishCreating": "Terminar a criação",
     "detail.finishCreatingBlocked": "Preencha antes {names}",
     "detail.linkedDecisions": "Motivada por",

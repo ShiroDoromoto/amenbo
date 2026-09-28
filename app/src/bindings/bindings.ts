@@ -3864,9 +3864,10 @@ keys: "kept" | "generated", };
 
 /**
  * One value a task waits on (`AMB-D-990`): the axis and the value, by name — what a person closes to
- * let the task be picked up.
+ * let the task be picked up — and the axis's id, which is where the press on it goes: the axis's names
+ * are not unique in a project, so the name alone cannot find it again.
  */
-export type WaitingOnValueDto = { axis: string, value: string, };
+export type WaitingOnValueDto = { dimensionId: number, axis: string, value: string, };
 
 /**
  * One agent a folder's pane could be opened with, and what the folder and this machine say about

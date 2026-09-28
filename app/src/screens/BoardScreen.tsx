@@ -97,7 +97,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
-  onStartTerminal, onOpenAutomations,
+  onStartTerminal, onOpenAutomations, openDimensionAt,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -114,6 +114,9 @@ export function BoardScreen({
   onStartTerminal: (project: number, dir: string) => void;
   /** Open the automations screen with this project picked (`./AutomationsScreen`, `AMB-D-992`). */
   onOpenAutomations: () => void;
+  /** Arrive with the classification panel open on this axis (`RefNav.openDimension`). `nth` tells one
+   *  arrival from the next, so pressing the same axis again opens the panel again. */
+  openDimensionAt?: { dimension: number; nth: number };
 }) {
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
@@ -124,6 +127,14 @@ export function BoardScreen({
   // line, and a reader who is not narrowing anything should be given that room for the tasks (`AMB-D-654`).
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [dimMgrOpen, setDimMgrOpen] = useState(false);
+  // The axis the panel was opened on from outside, which it scrolls to and marks. A press on the board's
+  // own button opens it on none.
+  const [dimMgrFocus, setDimMgrFocus] = useState<number | null>(null);
+  useEffect(() => {
+    if (!openDimensionAt) return;
+    setDimMgrFocus(openDimensionAt.dimension);
+    setDimMgrOpen(true);
+  }, [openDimensionAt?.nth, openDimensionAt?.dimension]);
   // Free-word search, run by core over every face the word index carries (see the doc comment above).
   // Incremental, and ANDs with the filter chips.
   const [search, setSearch] = useState("");
@@ -369,7 +380,7 @@ export function BoardScreen({
           <div className="dimbar">
             <AddDimension onAdd={(name) => store.addDimension(projectId, name)} />
             {projectDims.length >= 1 && (
-              <button className="filterchip" onClick={() => setDimMgrOpen(true)}><Icon name="gear" /> {t("board.manageDimensions")}</button>
+              <button className="filterchip" onClick={() => { setDimMgrFocus(null); setDimMgrOpen(true); }}><Icon name="gear" /> {t("board.manageDimensions")}</button>
             )}
           </div>
         )}
@@ -496,6 +507,7 @@ export function BoardScreen({
       {dimMgrOpen && (
         <DimensionManager
           projectId={projectId}
+          focusDimensionId={dimMgrFocus}
           onClose={() => setDimMgrOpen(false)}
           // A value that would not close for its unfinished tasks (`AMB-D-990`): the board narrows to
           // exactly those — the value, and every status that is not finished — the filter core's refusal names.

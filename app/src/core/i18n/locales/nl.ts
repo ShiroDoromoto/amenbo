@@ -284,6 +284,7 @@ export const nl: Translation = {
     "detail.project": "Project", "detail.none": "Geen",
     "detail.blockedBy": "Wacht op", "detail.blockedByHint": "geblokkeerd (afhankelijkheid)",
     "detail.notStarted": "Begint op",
+    "detail.waitingOnValues": "Wacht op eerdere waarden", "detail.waitingOnValuesHint": "Kan pas beginnen als deze waarde gesloten is — druk om de classificatie te openen waarin je hem sluit",
     "detail.draft": "Aanmaken", "detail.finishCreating": "Aanmaken afronden",
     "detail.finishCreatingBlocked": "Vul eerst {names} in",
     "detail.linkedDecisions": "Komt voort uit",

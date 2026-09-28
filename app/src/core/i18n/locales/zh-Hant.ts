@@ -284,6 +284,7 @@ export const zhHant: Translation = {
     "detail.project": "專案", "detail.none": "無",
     "detail.blockedBy": "等待", "detail.blockedByHint": "受阻（相依）",
     "detail.notStarted": "開始於",
+    "detail.waitingOnValues": "在等之前的值", "detail.waitingOnValuesHint": "此值關閉前無法開始——按下即可開啟關閉它的分類",
     "detail.draft": "建立", "detail.finishCreating": "完成建立",
     "detail.finishCreatingBlocked": "請先填寫{names}",
     "detail.linkedDecisions": "依據",

@@ -785,7 +785,8 @@ pub fn waiting_on_values(
 ) -> Result<HashMap<i64, Vec<crate::view::WaitingOnValue>>> {
     let (link, axis, own, before) = WAITING_ON_ORDER;
     let mut sel = Select::new();
-    let (task, axis_name, value_name) = (sel.col(link.task_id), sel.col(axis.name), sel.col(before.name));
+    let (task, axis_id, axis_name, value_name) =
+        (sel.col(link.task_id), sel.col(axis.id), sel.col(axis.name), sel.col(before.name));
     let mut sql = Sql::from(&sel, link.table);
     sql.join(axis.table, same(axis.id, link.dimension_id))
         .join(own.table, same(own.id, link.value_id))
@@ -798,7 +799,11 @@ pub fn waiting_on_values(
     while let Some(r) = rows.next().map_err(StoreEngineError::from)? {
         out.entry(task.get(r)?)
             .or_default()
-            .push(crate::view::WaitingOnValue { axis: axis_name.get(r)?, value: value_name.get(r)? });
+            .push(crate::view::WaitingOnValue {
+                dimension_id: axis_id.get(r)?,
+                axis: axis_name.get(r)?,
+                value: value_name.get(r)?,
+            });
     }
     Ok(out)
 }
@@ -3554,7 +3559,7 @@ pub struct PremiseChangeRow {
     /// project's order and value in the axis's own. A reservation is never taken back for one, so this is
     /// how its holder learns the stage before theirs is not over after all. Dated by the value's own
     /// [`closed_changed_at`](crate::model::DimensionValue::closed_changed_at).
-    pub reopened_values: Vec<(String, String)>,
+    pub reopened_values: Vec<(i64, String, String)>,
 }
 
 impl PremiseChangeRow {
@@ -3673,7 +3678,7 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
     let reopened_values = {
         let (link, axis, own, before) = WAITING_ON_ORDER;
         let mut sel = Select::new();
-        let (axis_name, value_name) = (sel.col(axis.name), sel.col(before.name));
+        let (axis_id, axis_name, value_name) = (sel.col(axis.id), sel.col(axis.name), sel.col(before.name));
         let pred = Pred::eq(link.task_id, task_id)
             .and(waits_on_order(axis, own, before))
             .and(Pred::cmp(before.closed_changed_at, ">=", since));
@@ -3685,9 +3690,11 @@ pub fn premise_change_since(conn: &Connection, task_id: i64) -> Result<Option<Pr
             .order_by([Sort::by(axis.order_key), Sort::by(before.order_key)]);
         let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
         let rows = stmt
-            .query_map(rusqlite::params_from_iter(sql.params()), |r| Ok((axis_name.get(r)?, value_name.get(r)?)))
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+                Ok((axis_id.get(r)?, axis_name.get(r)?, value_name.get(r)?))
+            })
             .map_err(StoreEngineError::from)?
-            .collect::<rusqlite::Result<Vec<(String, String)>>>()
+            .collect::<rusqlite::Result<Vec<(i64, String, String)>>>()
             .map_err(StoreEngineError::from)?;
         rows
     };

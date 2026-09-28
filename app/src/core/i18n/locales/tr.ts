@@ -284,6 +284,7 @@ export const tr: Translation = {
     "detail.project": "Proje", "detail.none": "Yok",
     "detail.blockedBy": "Şunu bekliyor", "detail.blockedByHint": "engelli (bağımlılık)",
     "detail.notStarted": "Başlangıç günü",
+    "detail.waitingOnValues": "Önceki değerleri bekliyor", "detail.waitingOnValuesHint": "Bu değer kapanana kadar başlayamaz — kapatıldığı sınıflandırmayı açmak için basın",
     "detail.draft": "Oluşturma", "detail.finishCreating": "Oluşturmayı bitir",
     "detail.finishCreatingBlocked": "Önce {names} alanını doldurun",
     "detail.linkedDecisions": "Şundan doğdu",

@@ -41,6 +41,8 @@
 // few, and each is one somebody has to fill before a launch, so the press stands there all the time.
 // The row under a box with one stands lower, by as much as they hang, and the lines down to it turn
 // under them — only there, so a picture with none keeps every box where it was (`AMB-T-5789`).
+// Where the press beside a long name runs past its box, the next box in the row stands further right,
+// so the press does not lie over the lines that box sends down (`AMB-T-5790`).
 // The error way out is not one of them: a box leaves by it to a person without any line (below).
 //
 // **The error way out is drawn only where somebody drew a line from it.** Every box is born carrying
@@ -609,8 +611,8 @@ export function readAtLaunch(
 }
 
 /** Where one row's boxes start, so that every row is centred on the same column of the picture. */
-function rowStart(contentW: number, count: number): number {
-  return Math.round((contentW - (count * NODE_W + (count - 1) * COL_GAP)) / 2);
+function rowStart(contentW: number, rowW: number): number {
+  return Math.round((contentW - rowW) / 2);
 }
 
 /**
@@ -709,13 +711,6 @@ export function layOut(graph: PicGraph | null): Picture {
   const outs = [...(graph.boundary?.exits ?? [])].sort(
     (a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT),
   );
-  const contentW = Math.max(
-    NODE_W,
-    IN_W,
-    outs.length * OUT_W + Math.max(0, outs.length - 1) * OUT_GAP + FRAME_PAD * 2,
-    ...laps.flatMap((lap) => lap.rows.map((row) => row.length * NODE_W + (row.length - 1) * COL_GAP)),
-  );
-
   // How many of each box's ways out say nothing yet (`AMB-D-1003`) — each hangs a row lower than the
   // one to its right, and under the row they hang from they need the room.
   const undecidedOf = (box: PicBox): readonly AutomationExitDto[] =>
@@ -741,6 +736,43 @@ export function layOut(graph: PicGraph | null): Picture {
     const press = STUB + (undecided - 1) * OPEN_H + OVER - 4 + PRESS_H / 2;
     return nowhere === 0 ? press : Math.max(press, STUB + undecided * OPEN_H + (nowhere - 1) * WORD_H + OVER + 4);
   };
+  // How much room a box leaves on its right before the next box in its row. A press beside a long
+  // name runs past the box's right edge, and under the next box it lay over the lines that one sends
+  // down: the next box stands as much further right, so the press ends short of its first line
+  // (`AMB-T-5790`). Where the lines of the box stand along its bottom is not known yet, so each press
+  // is put after every line the box has — never further left than it will be drawn.
+  const pressW = wordW(openWord(graph.boundary !== undefined)) + 28;
+  const gapAfter = (box: PicBox): number => {
+    const lines = graph.edges.filter((edge) => edge.fromId === box.id).length;
+    const reach = Math.max(
+      0,
+      ...undecidedOf(box).map(
+        (exit, nth) =>
+          Math.min(ATTACH + (lines + nth) * EXIT_GAP, NODE_W - ATTACH) -
+          6 +
+          wordW(exitWord({ exitName: exit.name, builtin: box.builtin })) +
+          BESIDE / 2 +
+          pressW,
+      ),
+    );
+    return Math.max(COL_GAP, reach + BESIDE - NODE_W - ATTACH);
+  };
+  /** Where each box of a row stands from the row's left edge, and how wide the row is. */
+  const columnsOf = (row: readonly number[]): { xs: number[]; w: number } => {
+    const xs: number[] = [];
+    let x = 0;
+    row.forEach((_, column) => {
+      if (column > 0) x += NODE_W + gapAfter(boxes.get(row[column - 1])!);
+      xs.push(x);
+    });
+    return { xs, w: row.length === 0 ? 0 : x + NODE_W };
+  };
+  const contentW = Math.max(
+    NODE_W,
+    IN_W,
+    outs.length * OUT_W + Math.max(0, outs.length - 1) * OUT_GAP + FRAME_PAD * 2,
+    ...laps.flatMap((lap) => lap.rows.map((row) => columnsOf(row).w)),
+  );
 
   // Which row of which stretch each box landed in — what says whether two boxes are neighbours.
   const at = new Map<number, { lap: number; row: number }>();
@@ -764,7 +796,8 @@ export function layOut(graph: PicGraph | null): Picture {
       // row nor the lines down to it run through the press (`AMB-T-5789`). Every other row keeps its room.
       if (depth > 0) rowY += NODE_H + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2));
       hang = Math.max(0, ...row.map((boxId) => hangOf(boxes.get(boxId)!)));
-      const startX = rowStart(contentW, row.length);
+      const columns = columnsOf(row);
+      const startX = rowStart(contentW, columns.w);
       row.forEach((boxId, column) => {
         const box = boxes.get(boxId)!;
         at.set(boxId, { lap: nth, row: depth });
@@ -773,7 +806,7 @@ export function layOut(graph: PicGraph | null): Picture {
           boxId,
           // A built-in's words are drawn in the screen's language; the box's own name stays the store's.
           name: builtinWord(box.builtin, box.name),
-          x: startX + column * (NODE_W + COL_GAP),
+          x: startX + columns.xs[column],
           y: rowY,
           w: NODE_W,
           h: NODE_H,
@@ -1035,7 +1068,6 @@ export function layOut(graph: PicGraph | null): Picture {
   // and the press beside the name. Drawn after the edges, so they keep their order.
   const pressed: PicOpen[] = [];
   const undecidedLines: PicLine[] = [];
-  const pressW = wordW(openWord(graph.boundary !== undefined)) + 28;
   for (const open of opens) {
     const from = node.get(open.boxId)!;
     const { nth, below } = openSlot.get(open.key)!;

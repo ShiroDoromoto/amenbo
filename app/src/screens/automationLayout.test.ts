@@ -7,7 +7,7 @@
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
-import { automationGraph, edgeWord, layOut, type PicGraph } from "./automationLayout";
+import { automationGraph, edgeWord, layOut, openWord, type PicGraph } from "./automationLayout";
 import type {
   AutomationDetailDto,
   AutomationEdgeDto,
@@ -1123,6 +1123,75 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
       // The line down still turns half a row over the box it goes into, as every other does.
       expect(next.y - turn).toBe(28);
     }
+  });
+
+  it("stands the next box in its row further right, so a press beside a long name ends short of its lines", () => {
+    // How wide the layout reckons a word, as it has no screen to measure on.
+    const guess = (word: string) => [...word].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          step({
+            id: 1,
+            name: "triage",
+            exits: [
+              { id: 80, name: "ok", outputs: [] },
+              { id: 81, name: "fix", outputs: [] },
+              { id: 82, name: "*", outputs: [] },
+            ],
+          }),
+          step({
+            id: 2,
+            name: "pick",
+            exits: [
+              { id: 83, name: "着手できるタスクが無い", outputs: [] },
+              { id: 84, name: "*", outputs: [] },
+            ],
+          }),
+          step({ id: 3, name: "ship" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "fix", toId: 3 }),
+          edge({ id: 3, fromId: 3, ends: "done" }),
+        ],
+      }),
+    );
+    const [left, right] = [at(picture, 2), at(picture, 3)];
+    expect(left.y).toBe(right.y);
+    const press = picture.opens.find((one) => one.boxId === 2)!;
+    const down = picture.lines.find((one) => one.key === "edge-3")!;
+    expect(press.x + guess(openWord(false)) + 28).toBeLessThan(down.points[0]!.x);
+    expect(right.x - (left.x + left.w)).toBeGreaterThan(24);
+  });
+
+  it("keeps two boxes side by side 24px apart where no press runs past the one on the left", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          step({
+            id: 1,
+            name: "triage",
+            exits: [
+              { id: 80, name: "ok", outputs: [] },
+              { id: 81, name: "fix", outputs: [] },
+              { id: 82, name: "*", outputs: [] },
+            ],
+          }),
+          step({ id: 2, name: "pick" }),
+          step({ id: 3, name: "ship" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "fix", toId: 3 }),
+        ],
+      }),
+    );
+    const [left, right] = [at(picture, 2), at(picture, 3)];
+    expect(picture.opens.filter((one) => one.boxId === 2)).toHaveLength(1);
+    expect(right.x - (left.x + left.w)).toBe(24);
   });
 
   it("leaves the room between rows as it was where every way out says something", () => {

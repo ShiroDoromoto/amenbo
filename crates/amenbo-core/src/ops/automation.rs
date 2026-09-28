@@ -1012,7 +1012,7 @@ fn name_entry(tx: &WriteTx<'_>, automation_id: i64, placement_id: Option<i64>) -
 /// there. What belonged to the one it replaces goes with it — the lines out of its ways out, the
 /// wires to and from its ports, and the answers written for its settings — because the new one declares
 /// ways out, ports and settings of its own. The placements after it stay on the picture, for the reader
-/// to join up again.
+/// to join up again. The new one comes with what a built-in standing first answers ([`answer_as_entry`]).
 ///
 /// **An automation with placements and no entry** — kept from a store written before the entry was
 /// the first placement — takes the built-in as a new placement, standing alone, and starts at it.
@@ -1036,6 +1036,7 @@ pub fn entry_replace(tx: &WriteTx<'_>, automation_id: i64, key: &str) -> Result<
         let action = automation_builtin::action(tx, key)?;
         let placement = put_placement(tx, &automation, action.id)?;
         name_entry(tx, automation_id, Some(placement.id))?;
+        answer_as_entry(tx, &placement, Some(key))?;
         return Ok(placement);
     };
     let before = live_placement(tx, entry_id)?;
@@ -1058,6 +1059,7 @@ pub fn entry_replace(tx: &WriteTx<'_>, automation_id: i64, key: &str) -> Result<
     after.action_id = action.id;
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation_placement(&before), record::automation_placement(&after))?;
+    answer_as_entry(tx, &after, Some(key))?;
     Ok(after)
 }
 
@@ -1159,7 +1161,8 @@ pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 /// **The first thing put on an automation is what a run starts at** (`AMB-D-977`): it has to be one of
 /// the built-ins a run can start at ([`automation_builtin::entries`]), and it is named the entry as it
 /// is put down. Any other is refused there, naming the ones there are — a run could not start at it, and
-/// the picture would only find out at launch.
+/// the picture would only find out at launch. It comes with what a built-in standing first answers
+/// ([`answer_as_entry`]).
 pub fn placement_add(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -1185,7 +1188,24 @@ pub fn placement_add(
     }
     let placement = put_placement(tx, &automation, action_id)?;
     name_entry(tx, automation_id, Some(placement.id))?;
+    answer_as_entry(tx, &placement, action.builtin.as_deref())?;
     Ok(placement)
+}
+
+/// **What a built-in answers when it comes to stand first**, before anyone has answered it (`AMB-T-5795`).
+///
+/// The built-in that files a task leaves it not started unless told otherwise, and a run that starts
+/// there with the task left not started works no task — the launch check refuses exactly that
+/// (`not_ready_automation_entry_takes_no_task`). So standing first, it is answered the one way a run can
+/// start from: take the task it files. The answer is an ordinary one, to be changed like any other.
+fn answer_as_entry(tx: &WriteTx<'_>, placement: &AutomationPlacement, key: Option<&str>) -> Result<()> {
+    use crate::ops::automation_builtin_make::{KEY, TAKE_IT, WHAT_THEN};
+    if key != Some(KEY) {
+        return Ok(());
+    }
+    let take = serde_json::to_string(TAKE_IT).map_err(Error::from)?;
+    cfg_set(tx, placement.id, WHAT_THEN, Some(&take))?;
+    Ok(())
 }
 
 /// **Put an action on an automation, for a test, whatever stands on it already.** [`placement_add`]
@@ -4489,6 +4509,42 @@ mod tests {
             let empty = add(tx, automation.project_id, NewAutomation { name: "空".into(), ..Default::default() })
                 .expect("add automation");
             assert!(entry_replace(tx, empty.id, "take_task").is_err(), "the first placement chooses it");
+        });
+    }
+
+    /// **The built-in that files a task, standing first, takes the task it files** (`AMB-T-5795`): left
+    /// not started, the run would work no task and the launch check would refuse it. Placed first or
+    /// replaced in, it comes answered that way; anywhere else it is left unanswered, and so is any
+    /// other entry.
+    #[test]
+    fn filing_a_task_as_the_entry_takes_the_task_it_files() {
+        use crate::ops::automation_builtin_make::{TAKE_IT, WHAT_THEN};
+        let answer = |tx: &WriteTx<'_>, placement: i64| {
+            read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement, WHAT_THEN)
+                .unwrap()
+                .and_then(|cfg| cfg.value)
+        };
+        let take = Some(serde_json::to_string(TAKE_IT).unwrap());
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let entry = entry_placed(tx, &automation, "make_task");
+            assert_eq!(answer(tx, entry.id), take, "placed first");
+
+            let make = automation_builtin::action(tx, "make_task").expect("built-in");
+            let later = placement_add(tx, automation.id, make.id).expect("place it again");
+            assert_eq!(answer(tx, later.id), None, "not first, so not answered");
+
+            let other = add(tx, automation.project_id, NewAutomation { name: "差し替え".into(), ..Default::default() })
+                .expect("add automation");
+            let fetch = entry_placed(tx, &other, "fetch");
+            let replaced = entry_replace(tx, other.id, "make_task").expect("replace");
+            assert_eq!(replaced.id, fetch.id);
+            assert_eq!(answer(tx, replaced.id), take, "replaced in");
+            entry_replace(tx, other.id, "take_task").expect("replace again");
+            assert!(
+                read::automation_cfg_ids(tx.conn(), AutomationCfgOwner::Placement, fetch.id).unwrap().is_empty(),
+                "the answer goes with it",
+            );
         });
     }
 

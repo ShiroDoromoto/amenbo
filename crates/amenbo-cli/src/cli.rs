@@ -1848,7 +1848,8 @@ pub enum AutomationCmd {
     EntryReplace {
         /// automation id
         id: i64,
-        /// the built-in to start at: take_task, make_task or fetch
+        /// the built-in to start at: take_task, make_task or fetch. make_task comes set to take the
+        /// task it files, the one way a run can start from it
         #[arg(long, value_name = "KEY")]
         builtin: String,
     },
@@ -1861,7 +1862,8 @@ pub enum AutomationCmd {
         /// the project's, else the one a pane was last opened with — and `agent-set` changes it
         #[arg(long, value_name = "ID", required_unless_present = "builtin", conflicts_with = "builtin")]
         action: Option<i64>,
-        /// place one of Amenbo's built-ins instead (`automation builtin-list` names them)
+        /// place one of Amenbo's built-ins instead (`automation builtin-list` names them). Placed first,
+        /// make_task comes set to take the task it files, the one way a run can start from it
         #[arg(long, value_name = "KEY")]
         builtin: Option<String>,
         /// the axis `split_by_dim` splits by (name or ID) — one a task holds one value of. Its ways out

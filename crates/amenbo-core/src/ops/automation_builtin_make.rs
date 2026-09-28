@@ -1286,6 +1286,8 @@ mod tests {
                     .expect("automation");
             let written = action(tx, "make_task").expect("the built-in's action");
             let make = automation::placement_add(tx, automation.id, written.id).expect("place it");
+            // Placed first it comes set to take the task it files; a person can set it back.
+            automation::cfg_set(tx, make.id, WHAT_THEN, None).expect("leave it unanswered");
             let on = AutomationPictureOwner::Automation;
             let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
             automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(work.id), None)

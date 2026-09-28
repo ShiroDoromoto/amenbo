@@ -4493,7 +4493,8 @@ const REGISTRY: &[OpSpec] = &[
     // what on it is named.
     //
     // `pressable` is whether that reason's line is a press. A reason about one box is: pressing it
-    // picks that box out on the picture and opens its panel (`press-reason`). The two about the
+    // picks that box out on the picture and opens its panel, or opens the action the gap is inside
+    // (`press-reason`). The two about the
     // automation as a whole name no box and are a line to read, which is what `pressable: false`
     // reads — a build that drew every line as a press would open nothing for those two.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch", required: &["ready"], refs: &[], strings: &["reason", "box", "at"], binds: false },
@@ -4501,7 +4502,19 @@ const REGISTRY: &[OpSpec] = &[
     // `launch` reads it. What the press does is the picture's: that box is picked out and its panel
     // opens beside it, as pressing the box itself would — so a road goes on from here the way it
     // goes on from `pick-box`.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-reason", required: &["reason", "box"], refs: &[], strings: &["reason", "box"], binds: false },
+    //
+    // **A reason whose gap is inside an action** is mended there, so its line says it opens the
+    // action to fix it, and the press opens that action's build screen over the automation's. A way
+    // out or an input of a step inside (`open_exit`, `unwired_input`) names that step in `box`, and
+    // `opens` is the action the step sits in: the screen opens with the step picked out and its panel
+    // beside it. An action with no step (`action_empty`) names the action itself, and it opens with
+    // nothing picked. A road goes on from there the way it goes on inside an action, and comes back
+    // with `action-back`.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-reason", required: &["reason", "box"], refs: &[], strings: &["reason", "box", "opens"], binds: false },
+    // Going back from an action's build screen standing over its automation, by the button named
+    // after the automation. The automation's build screen is in front again, so a road reads its
+    // picture and the reasons under its head next.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-back", required: &[], refs: &[], strings: &[], binds: false },
     //
     // The pane a run is drawn in, and what its header carries: the run's own number on the name's
     // line, which step on the line under it, and the task it is on with how many tasks in on the

@@ -4521,12 +4521,39 @@ impl Instructor {
             // Pressing a reason under the head. What it does is the picture's own press: the box it
             // names is picked out and its panel opens, so the step says so and a road reads the panel
             // next the way it would after `pick-box`.
-            (Domain::Automation, "press-reason") => format!(
-                "On the build screen's head, press the reason listed under it that is {}, naming \"{}\". Confirm the box \"{}\" is picked out on the picture and its panel opens beside it.",
-                launch_reason(req(with, "reason")?)?,
-                req(with, "box")?,
-                req(with, "box")?
-            ),
+            //
+            // A reason whose gap is inside an action opens that action instead, since the box's panel
+            // cannot mend it. Its line says so before it is pressed, in the interface's words, and the
+            // press lands on the action's build screen standing over the automation's — on the step it
+            // names (`opens` the action it sits in), or on nothing for an action with no step.
+            (Domain::Automation, "press-reason") => {
+                let reason = req(with, "reason")?;
+                let named = req(with, "box")?;
+                let press = format!(
+                    "On the build screen's head, find the reason listed under it that is {}, naming \"{named}\".",
+                    launch_reason(reason)?
+                );
+                let fix = "Confirm its line says it opens the action to fix it — its words are written in the interface's language — then press it.";
+                match (reason, arg_str(with, "opens")) {
+                    ("action_empty", None) => format!(
+                        "{press} {fix} Confirm the action build screen for \"{named}\" opens over the automation's, with no step picked out on its picture."
+                    ),
+                    ("open_exit" | "unwired_input", Some(action)) => format!(
+                        "{press} {fix} Confirm the action build screen for \"{action}\" opens over the automation's, with the step \"{named}\" picked out on its picture and its panel open beside it."
+                    ),
+                    (_, Some(_)) => {
+                        return Err(format!(
+                            "`opens` is the action a step's gap is inside — `{reason}` names no step inside one; it is open_exit or unwired_input"
+                        ))
+                    }
+                    (_, None) => format!(
+                        "{press} Press it. Confirm the box \"{named}\" is picked out on the picture and its panel opens beside it."
+                    ),
+                }
+            }
+            // Going back from the action standing over its automation, by the button on its head
+            // named after the automation.
+            (Domain::Automation, "action-back") => "On the action build screen standing over the automation's, press the button going back to the automation, named after it. Confirm the automation's build screen is in front again.".to_string(),
             // Taking away the pane a run is drawn in, once the run is over. While the run is going or
             // held the control cannot be pressed (`pane_state`), so this stops nothing.
             (Domain::Automation, "close-run-pane") => {
@@ -9204,9 +9231,46 @@ steps_gui:
         let mut ins = Instructor::new();
         let lines: Vec<String> =
             s.steps(Driver::Gui).iter().map(|st| ins.render(st).expect("every step renders")).collect();
-        assert!(lines[0].contains("press the reason") && lines[0].contains("\"work\" is picked out"), "{}", lines[0]);
+        assert!(lines[0].contains("find the reason") && lines[0].contains("\"work\" is picked out"), "{}", lines[0]);
         assert!(lines[1].contains("its line is a press"), "{}", lines[1]);
         assert!(lines[2].contains("not a press") && lines[2].contains("opens nothing"), "{}", lines[2]);
+    }
+
+    /// A reason whose gap is inside an action says it opens the action to fix it, and the press lands
+    /// on that action's build screen — on the step it names, or on nothing for an action with no step.
+    /// `opens` is refused on a reason that names no step inside one.
+    #[test]
+    fn a_launch_reason_inside_an_action_opens_the_action_on_its_step() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: open_exit, box: write, opens: draft }
+  - type: action
+    domain: automation
+    op: action-back
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: action_empty, box: draft }
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: unanswered_cfg, box: take, opens: take }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let inside = ins.render(&steps[0]).expect("renders");
+        assert!(inside.contains("opens the action to fix it") && inside.contains("\"draft\" opens over"), "{inside}");
+        assert!(inside.contains("the step \"write\" picked out"), "{inside}");
+        let back = ins.render(&steps[1]).expect("renders");
+        assert!(back.contains("going back to the automation") && back.contains("in front again"), "{back}");
+        let empty = ins.render(&steps[2]).expect("renders");
+        assert!(empty.contains("\"draft\" opens over") && empty.contains("no step picked out"), "{empty}");
+        assert!(ins.render(&steps[3]).is_err(), "a setting on the placement is not inside the action");
     }
 
     /// A run's pane goes to the ledger two ways, and the picture's says which box it

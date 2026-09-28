@@ -1442,8 +1442,8 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autopic__plus:disabled { cursor: default; opacity: 0.5; }
 .autopic__plus:enabled:hover { color: var(--c-text); border-color: var(--c-edge); }
-/* Shown while its line is pointed at, while it is itself, and while it holds the focus — hidden, not
-   removed, so Tab still reaches it (`AutomationPicture.tsx`). */
+/* Shown while its line is pointed at or goes into or out of the picked box, while it is itself, and
+   while it holds the focus — hidden, not removed, so Tab still reaches it (`AutomationPicture.tsx`). */
 .autopic__plus:not(.autopic__plus--near):not(:hover):not(:focus-visible) { opacity: 0; }
 /* The wider stroke an edge is pointed at by. Only its stroke takes the pointer: the lines' drawing
    takes none, and a fill would catch the pointer across the whole bend of the line. */
@@ -1989,6 +1989,19 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
    The action build screen's frame (`.actbuild`). "Edit" and the start press stand at the far end of
    the head, and what keeps the press from being pressed is listed under the head. */
 .actbuild__edit { margin-inline-start: auto; }
+/* Whether the last write was saved, at the far end of a build screen's head, before "Edit"
+   (`../screens/AutomationSaved`). It takes the far end's space, so "Edit" stands right after it. */
+.actsaved { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.actsaved + .actbuild__edit { margin-inline-start: 0; }
+.actsaved--failed { color: var(--c-stop); font-weight: var(--fw-bold); }
+/* "Saved" beside the field a write came from, for two seconds. It stands over the page, not in the
+   field's row, so its coming and going moves nothing. */
+.actsaved__mark {
+  position: fixed; z-index: 50; transform: translateY(-50%); pointer-events: none; white-space: nowrap;
+  padding: 0 var(--s-1); border-radius: var(--r-md); font-size: var(--fs-xs);
+  color: var(--c-accent); background: var(--c-accent-weak);
+}
+.actsaved__mark--inside { transform: translate(-100%, -50%); }
 /* Which action stands on the pressed spot, as one card at the head of its panel: a mark, the name with
    its reach and how many automations use it, and the one press — to where it is built — at the far
    end. Nothing on it takes a value, which is what says it is not changed here. */

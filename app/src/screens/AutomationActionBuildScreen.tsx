@@ -44,12 +44,16 @@
 // **Which step is pressed is the screen's, not the picture's**, for the automation screen's reason:
 // the picture marks that box and the panel draws that step, so it is held where both can see it. A
 // step that is deleted takes the panel's selection with it.
+//
+// **The head says whether the last write was saved** (`./AutomationSaved`, `AMB-D-1005`). Nothing
+// here has a Save press, so the head says when a write landed and "Saved" stands beside its field.
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AutomationActionDeclaresPanel } from "./AutomationActionDeclaresPanel";
 import { AutomationActionStepPanel } from "./AutomationActionStepPanel";
 import { AutomationBuiltinScreen } from "./AutomationBuiltinScreen";
 import { AutomationHeldBy } from "./AutomationHeldBy";
+import { useSaved } from "./AutomationSaved";
 import { ReachChip, usedCount } from "./automationParts";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
@@ -237,6 +241,7 @@ export function AutomationActionBuildScreen({
   const [adding, setAdding] = useState<AddTarget | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
   const [note, setNote] = useDraft(action?.note ?? "");
+  const saved = useSaved();
 
   const run: Run = (write) => {
     setRefused(null);
@@ -276,7 +281,7 @@ export function AutomationActionBuildScreen({
   }
 
   return (
-    <div className="actbuild">
+    <div className="actbuild" {...saved.capture}>
       <div className="actbuild__head">
         <button type="button" className="btn" onClick={onBack}>
           <Icon name="chevronLeft" /> {backLabel ?? t("auto.build.back")}
@@ -287,6 +292,7 @@ export function AutomationActionBuildScreen({
           <>
             <ReachChip global={action.global} />
             <span className="actdecl__used">{usedCount(action.usedBy)}</span>
+            {saved.head}
             {/* "Edit" whether or not a run holds it: held, the panel it opens is shut, which is where
                 a reader finds out — the head does not change its word for it. */}
             <button
@@ -406,6 +412,7 @@ export function AutomationActionBuildScreen({
           onClose={() => setAdding(null)}
         />
       )}
+      {saved.marks}
     </div>
   );
 }

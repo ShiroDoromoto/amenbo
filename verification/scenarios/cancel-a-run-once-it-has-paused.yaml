@@ -1,0 +1,186 @@
+# Cancelling a run cuts nothing off: only a paused run is cancelled, and nothing is under way in one.
+# A run still going is turned away, with the two ways on — pause it and cancel it once it has
+# stopped, or force-cancel it where it stands, which asks first since what it cuts off can leave
+# changes half made.
+#
+# The two roads walk different halves, because a pause settles only where the app is carrying the run.
+# A run started at a terminal opens nothing, so its pause stays asked for and the run stays running:
+# the terminal road reads the refusal, and that the refusal still stands while the pause is only
+# asked for, and ends the run with the force-cancel. The screen road starts a run whose built-in
+# waits for a task that never comes — nothing is under way in it, so the pause settles on the next
+# look — and cancels it once it is paused.
+id: cancel-a-run-once-it-has-paused
+title: Only a paused run is cancelled; a run still going is paused first, or force-cancelled
+description: >
+  Start a run whose first box waits for a task, with none to take. At the terminal, cancelling it is
+  turned away while it is running, and still turned away once a pause has only been asked for; the
+  force-cancel ends it canceled. On the screen, pause it from the running tab, read its row paused
+  with the resume and cancel it now carries, cancel it, and read it on the history tab as canceled.
+given:
+  # The built-in that takes a task. Nothing is handed to the AI, so its filter finds no task. The
+  # screen road sets it to wait, so the run waits with nothing under way; the terminal road carries no
+  # built-in out at all, so the way out for no task is drawn for its launch.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that waits and is cancelled" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+steps_cli:
+  # A run's steps are opened by the app, so a run is started with one up on the store.
+  - { type: action, domain: store, op: app-up }
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # Running, so there is something under way to cut off: turned away.
+  - type: action
+    domain: automation
+    op: cancel
+    with:
+      target: run
+      refused: invalid_value
+
+  - type: action
+    domain: automation
+    op: pause
+    with:
+      target: run
+
+  # A pause asked for is not a pause: the run is still going until it settles, so the cancel is
+  # still turned away.
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: running
+      pause_requested: true
+
+  - type: action
+    domain: automation
+    op: cancel
+    with:
+      target: run
+      refused: invalid_value
+
+  # The force-cancel ends it where it stands.
+  - type: action
+    domain: automation
+    op: stop
+    with:
+      target: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: canceled
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # Set to wait, on the placement, off the pulldown under the setting.
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      builtin: take_task
+
+  - type: action
+    domain: automation
+    op: answer-choice
+    with:
+      builtin: take_task
+      setting: 着手できるタスクが無いとき
+      value: 着手できるタスクが出るまで待つ
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: running
+
+  # Nothing is under way in a run waiting for a task, so the pause settles on the run's next look.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: pause
+
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: paused
+
+  # A paused run is cancelled with no question: there is nothing to cut off.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: cancel
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: history
+
+  - type: assert
+    domain: automation
+    op: history-row
+    with:
+      target: run
+      state: canceled

@@ -150,7 +150,7 @@ function ExitCard({
       edit={<ExitEdit owner="action" ownerId={action.id} exit={exit} run={run} />}
       below={
         <>
-          {adding && <AutomationOutputAdd exit={exit} onClose={onAdded} />}
+          {adding && <AutomationOutputAdd exit={exit} run={run} onClose={onAdded} />}
           {exit.outputs.map((port) => (
             <OutputRow key={port.name} action={action} exitName={exit.name} port={port} run={run} />
           ))}

@@ -1240,7 +1240,7 @@ pub fn automation_output_add(
         )?;
         Ok(())
     })?;
-    Ok(WriteAck::new(&["automations"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 // ───────────────────────── the two pictures ─────────────────────────

@@ -1788,6 +1788,15 @@ impl Instructor {
                 req(with, "value")?,
                 req(with, "dimension")?
             ),
+            // Following a task's wait to where it is cleared. The field is named by what it says, since
+            // the pane has several fields of premises and this one is the only one whose entries open
+            // another screen.
+            (Domain::Task, "open-waiting-value") => format!(
+                "Open the task \"{}\", and in the field of its pane headed with the values it waits for, press \"{} ({})\".",
+                self.target_label(with),
+                req(with, "value")?,
+                req(with, "dimension")?
+            ),
             // The window one value covers, written where a reader writes it: a pair of date controls on
             // the value's own row in that same manager, drawn only under an axis carrying the time-axis
             // role. An end nobody has written yet is a button saying so rather than an empty date field
@@ -5109,6 +5118,12 @@ impl Instructor {
                     ),
                 }
             }
+            // Where that press lands. An eye closes it: the axis is marked by a frame round its row, and
+            // the panel standing open at all is the half a shot would show either way.
+            (Domain::Dimension, "focused") => format!(
+                "Confirm the panel managing the project's categories is open, scrolled so the category \"{}\" is in view, with its row marked by a frame the other categories do not carry.",
+                req(with, "dimension")?
+            ),
             // The same reading, one level up: a field a project keeps for itself, read off the face it
             // keeps it on. It is a `Review` like the task's own — what stands on that face is a
             // pull-down, and which of four is standing in it is a thing an eye settles and OCR does not.

@@ -679,6 +679,14 @@ const REGISTRY: &[OpSpec] = &[
     // on any axis, so an axis that gave the role up strands nothing.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-close", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-reopen", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value"], binds: false },
+    // Following a task's wait to where it is cleared: the value a task waits on, pressed in the field
+    // its detail pane names such values in, which opens the classification panel on that value's axis.
+    // Closing the value there is the only thing that lets the task start, and this is the one way the
+    // task itself points at it. `dimension` and `value` name which of the values it waits on is pressed.
+    //
+    // A screen road alone. The terminal names the wait in a listing and a refusal, and has no panel to
+    // arrive at.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-waiting-value", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     // Renaming that key afterwards — the axis's own, or one of its values' where `value` names one.
     // It is a move of its own rather than an arg on the ops above, because naming a key at birth and
     // renaming one are two different doors: the screen has only the second, so a road that wrote the
@@ -1735,6 +1743,12 @@ const REGISTRY: &[OpSpec] = &[
     // The value has to be on the axis: one that is not there is a step naming the wrong value, not a
     // value that is open, and it is called that rather than answered — the line `key` draws too.
     OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "closed", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value"], binds: false },
+    // Where that press lands: the classification panel open, scrolled to the axis named and marking its
+    // row, so a reader who came from the task finds the value to close without hunting the panel for it.
+    //
+    // A screen road alone, and a `Review`: the mark is a frame drawn round the row, a style rather than
+    // a word on a shot.
+    OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "focused", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
     // The key an axis answers to, or one of its values where `value` names one. Read apart from
     // `listed` because it is a different question: that one asks whether the axis is defined at all,
     // and a row whose key was quietly left as its id-derived default is defined exactly as much as one

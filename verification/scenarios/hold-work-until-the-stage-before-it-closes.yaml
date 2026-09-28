@@ -251,6 +251,22 @@ steps_gui:
       field: ready
       equals: false
 
+  # The wait read where the task is opened, and followed to where it is cleared: the value is pressed
+  # in the detail pane, and the classification panel opens on its axis.
+  - type: action
+    domain: task
+    op: open-waiting-value
+    with:
+      target: later
+      dimension: Release
+      value: v1
+
+  - type: assert
+    domain: dimension
+    op: focused
+    with:
+      dimension: Release
+
   - type: action
     domain: dimension
     op: value-close

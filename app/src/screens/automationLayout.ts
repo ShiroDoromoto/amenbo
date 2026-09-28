@@ -39,6 +39,8 @@
 // it at its end** (`AMB-D-1003`). Without it a box's ways out had no line until one was decided, so
 // no `+` stood anywhere to add the next box by, and a reader could not find how to go on. They are
 // few, and each is one somebody has to fill before a launch, so the press stands there all the time.
+// The row under a box with one stands lower, by as much as they hang, and the lines down to it turn
+// under them — only there, so a picture with none keeps every box where it was (`AMB-T-5789`).
 // The error way out is not one of them: a box leaves by it to a person without any line (below).
 //
 // **The error way out is drawn only where somebody drew a line from it.** Every box is born carrying
@@ -170,6 +172,10 @@ const OVER = 12;
 /** How much lower each way out with nothing decided sits than the one to its right — the height of
  *  the press at its end, so one row of words and a press never lie over the next. */
 const OPEN_H = 26;
+/** How tall that press stands, and how far over what hangs lowest from a row the line down to the
+ *  next row turns — the room its name is written in, over the turn. */
+const PRESS_H = 24;
+const LEG_CLEAR = 26;
 
 /** How much lower a line's `+` sits on its lane for each lane further out. */
 const LANE_PLUS = 24;
@@ -717,7 +723,7 @@ export function layOut(graph: PicGraph | null): Picture {
   );
 
   // How many of each box's ways out say nothing yet (`AMB-D-1003`) — each hangs a row lower than the
-  // one to its right, and under the last row of a stretch they need the room.
+  // one to its right, and under the row they hang from they need the room.
   const undecidedOf = (box: PicBox): readonly AutomationExitDto[] =>
     box.exits.filter(
       (exit) =>
@@ -725,11 +731,30 @@ export function layOut(graph: PicGraph | null): Picture {
         exit.name !== box.neverLeavesBy &&
         !graph.edges.some((edge) => edge.fromId === box.id && edge.exitName === exit.name),
     );
+  // How far under a box what hangs from its ways out with nothing decided reaches: its lowest press,
+  // or the name of a line of its that goes nowhere, which hangs under every press (below). Nothing
+  // where every way out says something — and a row of those keeps the room it always had.
+  const hangOf = (box: PicBox): number => {
+    const undecided = undecidedOf(box).length;
+    if (undecided === 0) return 0;
+    const nowhere = graph.edges.filter(
+      (edge) =>
+        edge.fromId === box.id &&
+        (edge.ends === "done" ||
+          edge.ends === "halt" ||
+          (edge.ends === "exit" && !outs.some((out) => out.name === edge.exitTo))),
+    ).length;
+    const press = STUB + (undecided - 1) * OPEN_H + OVER - 4 + PRESS_H / 2;
+    return nowhere === 0 ? press : Math.max(press, STUB + undecided * OPEN_H + (nowhere - 1) * WORD_H + OVER + 4);
+  };
 
   // Which row of which stretch each box landed in — what says whether two boxes are neighbours.
   const at = new Map<number, { lap: number; row: number }>();
   const nodes: PicNode[] = [];
   const outlines: PicLap[] = [];
+  // How far under each box's row the lowest thing hanging from that row reaches — what the line down
+  // to the next row turns under.
+  const hangUnder = new Map<number, number>();
   // The mark a placement comes in by stands over everything, with a row's room under it.
   const over = graph.boundary === undefined ? 0 : IN_H + ROW_GAP;
   let y = PAD + over;
@@ -738,12 +763,18 @@ export function layOut(graph: PicGraph | null): Picture {
     // Over the first row the outline stands higher, for the word over the box that takes the task.
     const over = lap.head === null ? 0 : LAP_TOP;
     const top = y;
+    let rowY = top + over;
+    let hang = 0;
     lap.rows.forEach((row, depth) => {
-      const rowY = top + over + depth * (NODE_H + ROW_GAP);
+      // Under a row a press hangs from, the next row stands as much lower as it hangs, so neither that
+      // row nor the lines down to it run through the press (`AMB-T-5789`). Every other row keeps its room.
+      if (depth > 0) rowY += NODE_H + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2));
+      hang = Math.max(0, ...row.map((boxId) => hangOf(boxes.get(boxId)!)));
       const startX = rowStart(contentW, row.length);
       row.forEach((boxId, column) => {
         const box = boxes.get(boxId)!;
         at.set(boxId, { lap: nth, row: depth });
+        hangUnder.set(boxId, hang);
         nodes.push({
           boxId,
           // A built-in's words are drawn in the screen's language; the box's own name stays the store's.
@@ -767,11 +798,9 @@ export function layOut(graph: PicGraph | null): Picture {
         });
       });
     });
-    // Under the last row, room for the lowest press of a way out that says nothing yet.
-    const lastRow = lap.rows[lap.rows.length - 1] ?? [];
-    const pressing = Math.max(0, ...lastRow.map((boxId) => undecidedOf(boxes.get(boxId)!).length));
-    const endRoom = pressing === 0 ? END_ROOM : Math.max(END_ROOM, STUB + (pressing - 1) * OPEN_H + OVER + 20);
-    const inner = lap.rows.length * NODE_H + (lap.rows.length - 1) * ROW_GAP + endRoom;
+    // Under the last row, room for what hangs lowest from it.
+    const endRoom = hang === 0 ? END_ROOM : Math.max(END_ROOM, hang + 12);
+    const inner = rowY + NODE_H - (top + over) + endRoom;
     const height = inner + over + pad;
     if (lap.head !== null) {
       outlines.push({ headBoxId: lap.head, x: -LAP_PAD, y: top, w: contentW + LAP_PAD * 2, h: height });
@@ -1065,7 +1094,9 @@ export function layOut(graph: PicGraph | null): Picture {
     const ty = to.y;
     if (neighbours(edge.fromId, toId)) {
       const tx = fromAbove(to);
-      const mid = Math.round((sy + ty) / 2);
+      // Under a row a press hangs from, it turns past the lowest of them.
+      const hang = hangUnder.get(edge.fromId) ?? 0;
+      const mid = Math.max(Math.round((sy + ty) / 2), hang === 0 ? 0 : sy + hang + LEG_CLEAR);
       const across = Math.round((sx + tx) / 2);
       inserts.push({ edgeId: edge.id, x: across, y: mid });
       // A leg across shorter than the name has no room to write it over: centred there, it runs over

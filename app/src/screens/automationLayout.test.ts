@@ -1087,6 +1087,56 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
     }
   });
 
+  it("pushes the row under its box down, so neither the next box nor the line down to it runs through a press", () => {
+    const review = (id: number) =>
+      step({
+        id,
+        name: "review",
+        exits: [
+          { id: 70 + id * 3, name: "ok", outputs: [] },
+          { id: 71 + id * 3, name: "fix", outputs: [] },
+          { id: 72 + id * 3, name: "*", outputs: [] },
+        ],
+      });
+    const shipped = edge({ id: 9, fromId: 2, ends: "done" });
+    // One way out says nothing, and two: the one further left hangs lower, and the row under it with it.
+    for (const open of [["fix"], ["fix", "done"]]) {
+      const first = review(1);
+      first.exits = [...first.exits, ...open.slice(1).map((name) => ({ id: 99, name, outputs: [] }))];
+      const picture = layOut(
+        detail({
+          entryPlacementId: 1,
+          placements: [first, step({ id: 2, name: "ship" })],
+          edges: [edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 }), shipped],
+        }),
+      );
+      const next = at(picture, 2);
+      const down = picture.lines.find((one) => one.key === "edge-1")!;
+      const turn = down.points[1]!.y;
+      expect(picture.opens.filter((one) => one.boxId === 1)).toHaveLength(open.length);
+      for (const press of picture.opens.filter((one) => one.boxId === 1)) {
+        // Under the press (half of it stands under its middle): the name over the turn, then the next box.
+        expect(press.y + 12).toBeLessThan(down.at.y - 12);
+        expect(press.y + 12).toBeLessThan(turn);
+        expect(press.y + 12).toBeLessThan(next.y);
+      }
+      // The line down still turns half a row over the box it goes into, as every other does.
+      expect(next.y - turn).toBe(28);
+    }
+  });
+
+  it("leaves the room between rows as it was where every way out says something", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [step({ id: 1, name: "write" }), step({ id: 2, name: "ship" })],
+        edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, ends: "done" })],
+      }),
+    );
+    expect(picture.opens).toEqual([]);
+    expect(at(picture, 2).y - (at(picture, 1).y + at(picture, 1).h)).toBe(56);
+  });
+
   it("is not drawn for the way out a built-in never leaves by", () => {
     const picture = layOut(
       detail({

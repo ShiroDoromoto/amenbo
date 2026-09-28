@@ -1058,6 +1058,7 @@ export const ru: Translation = {
     "auto.kind.taskMake": "Задача (создать)",
     "auto.add.namePh": "Как называется",
     "auto.add.cancel": "Отмена",
+    "auto.out.head": "Что передаётся следующему шагу",
     "auto.out.kind": "Что он несёт",
     "auto.out.add": "Добавить",
     "auto.step.add": "Добавить",

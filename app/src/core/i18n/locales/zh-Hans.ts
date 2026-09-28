@@ -1043,6 +1043,7 @@ export const zhHans: Translation = {
     "auto.kind.taskMake": "任务（创建）",
     "auto.add.namePh": "名称",
     "auto.add.cancel": "取消",
+    "auto.out.head": "交给下一步的内容",
     "auto.out.kind": "它携带什么",
     "auto.out.add": "添加",
     "auto.step.add": "添加",

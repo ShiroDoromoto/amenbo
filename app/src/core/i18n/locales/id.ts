@@ -1042,6 +1042,7 @@ export const id: Translation = {
     "auto.kind.taskMake": "Tugas (buat)",
     "auto.add.namePh": "Namanya",
     "auto.add.cancel": "Batal",
+    "auto.out.head": "Yang diteruskan ke langkah berikutnya",
     "auto.out.kind": "Apa yang dibawanya",
     "auto.out.add": "Tambah",
     "auto.step.add": "Tambah",

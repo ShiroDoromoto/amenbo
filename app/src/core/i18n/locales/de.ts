@@ -1045,6 +1045,7 @@ export const de: Translation = {
     "auto.kind.taskMake": "Aufgabe (anlegen)",
     "auto.add.namePh": "Wie es heißt",
     "auto.add.cancel": "Abbrechen",
+    "auto.out.head": "Was an den nächsten Schritt geht",
     "auto.out.kind": "Was es trägt",
     "auto.out.add": "Hinzufügen",
     "auto.step.add": "Hinzufügen",

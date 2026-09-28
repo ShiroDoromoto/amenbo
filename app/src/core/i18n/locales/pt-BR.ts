@@ -1054,6 +1054,7 @@ export const ptBR: Translation = {
     "auto.kind.taskMake": "Tarefa (criar)",
     "auto.add.namePh": "Como se chama",
     "auto.add.cancel": "Cancelar",
+    "auto.out.head": "O que vai para o próximo passo",
     "auto.out.kind": "O que ele carrega",
     "auto.out.add": "Adicionar",
     "auto.step.add": "Adicionar",

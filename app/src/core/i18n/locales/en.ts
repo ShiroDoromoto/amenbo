@@ -1288,6 +1288,7 @@ const ui = {
   "auto.kind.taskMake": "Task (file)",
   "auto.add.namePh": "What it is called",
   "auto.add.cancel": "Cancel",
+  "auto.out.head": "What goes to the next step",
   "auto.out.kind": "What it carries",
   "auto.out.add": "Add",
   "auto.step.add": "Add",

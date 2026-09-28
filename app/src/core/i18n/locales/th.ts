@@ -1042,6 +1042,7 @@ export const th: Translation = {
     "auto.kind.taskMake": "งาน (สร้าง)",
     "auto.add.namePh": "ชื่อ",
     "auto.add.cancel": "ยกเลิก",
+    "auto.out.head": "สิ่งที่ส่งต่อให้ขั้นตอนถัดไป",
     "auto.out.kind": "มันพาอะไรไป",
     "auto.out.add": "เพิ่ม",
     "auto.step.add": "เพิ่ม",

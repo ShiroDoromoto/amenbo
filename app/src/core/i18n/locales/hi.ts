@@ -1041,6 +1041,7 @@ export const hi: Translation = {
     "auto.kind.taskMake": "कार्य (बनाना)",
     "auto.add.namePh": "नाम",
     "auto.add.cancel": "रद्द करें",
+    "auto.out.head": "अगले चरण को क्या दिया जाता है",
     "auto.out.kind": "यह क्या ले जाता है",
     "auto.out.add": "जोड़ें",
     "auto.step.add": "जोड़ें",

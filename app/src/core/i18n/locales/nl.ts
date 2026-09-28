@@ -1041,6 +1041,7 @@ export const nl: Translation = {
     "auto.kind.taskMake": "Taak (aanmaken)",
     "auto.add.namePh": "Hoe het heet",
     "auto.add.cancel": "Annuleren",
+    "auto.out.head": "Wat naar de volgende stap gaat",
     "auto.out.kind": "Wat het draagt",
     "auto.out.add": "Toevoegen",
     "auto.step.add": "Toevoegen",

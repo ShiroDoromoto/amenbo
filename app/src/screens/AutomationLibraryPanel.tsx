@@ -40,6 +40,11 @@
 // placement is where a run begins, and core refuses anything else there. So the panel holds the three
 // of them in the order core offers them, and nothing else — no actions of one's own, no search, and no
 // row that makes a new action.
+//
+// **There, a row is named by the reader's situation, and the built-in's own name sits under it**
+// (`AMB-T-5794`): "take a task", "file a task" and "fetch" say what the built-in does, not which of
+// them is the one that starts from something typed at launch. The built-in's name stays, small, since
+// it is what the picture calls the placement once it is there.
 import { useState } from "react";
 import {
   ENTRY_BUILTINS,
@@ -69,6 +74,14 @@ import type {
 
 /** The built-in that splits by an axis (`amenbo_core::ops::automation_builtin_split::SPLIT_BY_DIM`). */
 const SPLIT_BY_DIM = "split_by_dim";
+
+/** What an entry built-in is picked for, in the reader's words — the row's name on an empty picture. */
+function situation(key: string): string | undefined {
+  if (key === "take_task") return t("auto.lib.entry.takeTask");
+  if (key === "make_task") return t("auto.lib.entry.makeTask");
+  if (key === "fetch") return t("auto.lib.entry.fetch");
+  return undefined;
+}
 
 /**
  * **Which axis the built-in that splits by one splits by** — a pulldown of the axes a task holds one
@@ -279,7 +292,14 @@ export function AutomationLibraryPanel({
           aria-expanded={picked === one.key}
           onClick={() => setPicked(picked === one.key ? null : one.key)}
         >
-          <span className="autolib__name">{one.name}</span>
+          {first && situation(one.key) !== undefined ? (
+            <span className="autolib__name">
+              {situation(one.key)}
+              <span className="autolib__sub">{one.name}</span>
+            </span>
+          ) : (
+            <span className="autolib__name">{one.name}</span>
+          )}
           <span className="autolib__meta">
             {usedCount(one.usedBy)}
           </span>

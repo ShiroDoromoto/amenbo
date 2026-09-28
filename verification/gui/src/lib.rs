@@ -4284,11 +4284,12 @@ impl Instructor {
             // The first action on an automation's picture, which is where a run starts. A picture with
             // nothing on it has no line to press a `+` on, so the press in the empty picture opens the
             // panel, which offers the built-ins a run can start at and nothing else —
-            // no library action, no search box and no press that makes one. There is no press for a
+            // no library action, no search box and no press that makes one. Each row leads with the
+            // situation it starts from and keeps the built-in's name under it. There is no press for a
             // second one on its own: a box nothing points at is never reached, so every later one goes
             // in on a line.
             (Domain::Automation, "place-action") => format!(
-                "On the automation build screen, whose picture has nothing on it, press the button in the picture that places the first action. Confirm the panel that opens beside the picture lists {} and nothing else — no library action, no search box and no button that makes a new action. Press the row for {} — its name is written in the interface's language. Confirm what it does opens under the row, then press the button under it that places it.",
+                "On the automation build screen, whose picture has nothing on it, press the button in the picture that places the first action. Confirm the panel that opens beside the picture lists {} and nothing else — no library action, no search box and no button that makes a new action. Press the row for {} — the row is named by the situation it starts from, with the built-in's own name small under it, both written in the interface's language. Confirm what it does opens under the row, then press the button under it that places it.",
                 entry_builtins_called(),
                 entry_builtin(req(with, "builtin")?)?.called
             ),

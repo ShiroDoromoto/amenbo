@@ -2212,6 +2212,7 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 .autolib__row:hover, .autolib__row--on { background: var(--c-accent-weak); }
 .autolib__row--on { box-shadow: inset 3px 0 0 var(--c-accent); }
 .autolib__name { flex: 1 1 auto; min-width: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); overflow-wrap: anywhere; }
+.autolib__sub { display: block; font-size: var(--fs-xs); font-weight: var(--fw-normal); color: var(--c-text-muted); }
 .autolib__meta { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* Where the pick goes, as the line it goes on: the box before it, the way out it hangs on, and a
    dashed "here" (`../screens/automationParts`). */

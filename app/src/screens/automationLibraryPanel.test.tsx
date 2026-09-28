@@ -333,6 +333,21 @@ describe("the empty picture", () => {
     expect(container.querySelector("input[type=search]")).toBeNull();
     expect(container.querySelector(".autolib__make")).toBeNull();
   });
+
+  it("names each row by the reader's situation, with the built-in's own name under it", async () => {
+    await render({ automationId: 7 });
+    const names = [...container.querySelectorAll(".autolib__row .autolib__name")];
+    expect(names.map((one) => one.firstChild?.textContent)).toEqual([
+      t("auto.lib.entry.takeTask"),
+      t("auto.lib.entry.makeTask"),
+      t("auto.lib.entry.fetch"),
+    ]);
+    expect(names.map((one) => one.querySelector(".autolib__sub")?.textContent)).toEqual([
+      "Take a task",
+      "File a task",
+      "Fetch",
+    ]);
+  });
 });
 
 describe("the built-in that splits by an axis", () => {

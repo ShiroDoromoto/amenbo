@@ -31,7 +31,7 @@ vi.mock("../talk/plate", () => ({
 
 /** A run that failed at its second step, as a pane come back with the app is handed it. */
 const FAILED: Say = {
-  automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false,
+  automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false, interactive: false,
   action: null, task: null,
   state: { status: "failed", word: "Failed", pauseRequested: false, why: null, exit: null, errorExit: false, acknowledged: false },
 };

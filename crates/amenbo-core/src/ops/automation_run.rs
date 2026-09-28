@@ -84,10 +84,15 @@ pub enum Unmet {
     EntryTakesNoTask { step: String, builtin: Option<String>, placement: i64 },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
-    OpenExit { step: String, exit: String, builtin: Option<String>, placement: i64 },
+    ///
+    /// `inside` is the step inside the placed action whose way out it is, or `None` for the action's
+    /// own way out on the automation's picture. The two read alike, and are mended in different places:
+    /// the one inside only on the action's own picture.
+    OpenExit { step: String, exit: String, builtin: Option<String>, placement: i64, inside: Option<i64> },
     /// A required input with nothing reaching it — no wire at all, or none whose far end is both
-    /// declared and reachable from the entry before this placement is.
-    UnwiredInput { step: String, port: String, builtin: Option<String>, placement: i64 },
+    /// declared and reachable from the entry before this placement is. `inside` as for
+    /// [`Unmet::OpenExit`].
+    UnwiredInput { step: String, port: String, builtin: Option<String>, placement: i64, inside: Option<i64> },
     /// A required setting nobody answered while building.
     UnansweredCfg { step: String, cfg: String, builtin: Option<String>, placement: i64 },
     /// A setting answered with something its kind does not take — a task filter that is not its parts, a
@@ -121,7 +126,8 @@ pub enum Unmet {
     /// called on the way (`AMB-D-967`). The task would be left in progress with no run holding it.
     ///
     /// `step` and `exit` name the way out the line leaves by. Lines inside one task — a review sending
-    /// the work back, say — are not asked about: only the ones leading out of it.
+    /// the work back, say — are not asked about: only the ones leading out of it. `inside` as for
+    /// [`Unmet::OpenExit`]: the step inside the action whose line ends the run there.
     LeavesTaskOpen {
         step: String,
         exit: String,
@@ -129,6 +135,7 @@ pub enum Unmet {
         builtin: Option<String>,
         to_builtin: Option<String>,
         placement: i64,
+        inside: Option<i64>,
     },
     /// A way out of a person's own action — or of a step inside it — that declares a `task_take` output
     /// (`AMB-D-964`). Only a built-in takes the task a run works, and a step has no command to hand it
@@ -270,6 +277,10 @@ impl Unmet {
             Some(id) => msg.with("placement", id),
             None => msg,
         };
+        let msg = match self.inside() {
+            Some(id) => msg.with("inside_step", id),
+            None => msg,
+        };
         match self {
             Unmet::NoSteps | Unmet::NoEntry => msg,
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
@@ -320,6 +331,17 @@ impl Unmet {
             | Unmet::LeavesTaskOpen { placement, .. }
             | Unmet::HandsOnTaskTaken { placement, .. }
             | Unmet::SplitAxisGone { placement, .. } => Some(*placement),
+        }
+    }
+
+    /// The step inside the placed action this reason is about, or `None` for one the automation's own
+    /// picture answers — what lets a screen open the action on that step rather than the box.
+    pub fn inside(&self) -> Option<i64> {
+        match self {
+            Unmet::OpenExit { inside, .. }
+            | Unmet::UnwiredInput { inside, .. }
+            | Unmet::LeavesTaskOpen { inside, .. } => *inside,
+            _ => None,
         }
     }
 
@@ -544,6 +566,7 @@ pub fn check(
                     exit: exit.name.clone(),
                     builtin: builtin.clone(),
                     placement: placement.id,
+                    inside: None,
                 });
             }
         }
@@ -559,6 +582,7 @@ pub fn check(
                     port: port.name,
                     builtin: builtin.clone(),
                     placement: placement.id,
+                    inside: None,
                 });
             }
         }
@@ -706,6 +730,7 @@ fn leaves_task_open(
                             builtin: action_builtin(conn, from.action_id)?,
                             to_builtin: None,
                             placement: from.id,
+                            inside: None,
                         }],
                     );
                     continue;
@@ -728,6 +753,7 @@ fn leaves_task_open(
                         builtin: action_builtin(conn, from.action_id)?,
                         to_builtin: action_builtin(conn, to.action_id)?,
                         placement: from.id,
+                        inside: None,
                     }],
                 );
                 continue;
@@ -791,6 +817,7 @@ fn ends_inside(conn: &Connection, placement: &AutomationPlacement) -> Result<Vec
                     builtin: step.builtin.clone(),
                     to_builtin: None,
                     placement: placement.id,
+                    inside: Some(step.id),
                 });
             }
         }
@@ -860,6 +887,7 @@ fn inside(
                     exit: exit.name.clone(),
                     builtin: step.builtin.clone(),
                     placement: placement.id,
+                    inside: Some(step.id),
                 });
             }
         }
@@ -915,6 +943,7 @@ fn inside(
                     port: port.name,
                     builtin: step.builtin.clone(),
                     placement: placement.id,
+                    inside: Some(step.id),
                 });
             }
         }
@@ -2205,6 +2234,7 @@ mod tests {
                     builtin: None,
                     to_builtin: None,
                     placement: working.id,
+                    inside: None,
                 }],
             );
         });
@@ -2234,6 +2264,7 @@ mod tests {
                     builtin: None,
                     to_builtin: Some("take_task".into()),
                     placement: working.id,
+                    inside: None,
                 }],
             );
         });
@@ -2359,6 +2390,7 @@ mod tests {
                     exit: exit.name.clone(),
                     builtin: None,
                     placement: placement.id,
+                    inside: None,
                 }],
                 "it saves while building, and is refused at launch",
             );
@@ -2398,6 +2430,7 @@ mod tests {
                     port: "下書き".into(),
                     builtin: None,
                     placement: placement.id,
+                    inside: None,
                 }],
             );
         });
@@ -2450,6 +2483,7 @@ mod tests {
                     port: "下書き".into(),
                     builtin: None,
                     placement: placement.id,
+                    inside: None,
                 }],
                 "the only wire into it comes back from its own way out",
             );
@@ -2508,6 +2542,7 @@ mod tests {
                     port: "下書き".into(),
                     builtin: None,
                     placement: placement.id,
+                    inside: None,
                 }],
                 "and the orphan's own ways out are not checked either — no run reaches them",
             );
@@ -3276,7 +3311,7 @@ mod tests {
     fn a_way_out_inside_an_action_with_nothing_after_it_is_refused() {
         with_tx(|tx| {
             let (automation, action, placement) = launchable(tx);
-            a_second_step(tx, &action, &placement);
+            let second = a_second_step(tx, &action, &placement);
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::OpenExit {
@@ -3284,6 +3319,7 @@ mod tests {
                     exit: crate::model::DONE_EXIT.into(),
                     builtin: None,
                     placement: placement.id,
+                    inside: Some(second.id),
                 }],
                 "the second step's done way out leads nowhere inside the action",
             );
@@ -3332,6 +3368,7 @@ mod tests {
                     exit: crate::model::DONE_EXIT.into(),
                     builtin: None,
                     placement: placement.id,
+                    inside: Some(second.id),
                 }),
                 "the line returning to it went with it: {unmet:?}",
             );
@@ -3362,6 +3399,7 @@ mod tests {
                     port: "下書き".into(),
                     builtin: None,
                     placement: placement.id,
+                    inside: Some(second.id),
                 }],
             );
 
@@ -3433,6 +3471,7 @@ mod tests {
                     port: "下書き".into(),
                     builtin: None,
                     placement: placement.id,
+                    inside: Some(second.id),
                 }],
                 "the only wire into it comes back from its own way out",
             );
@@ -3464,6 +3503,7 @@ mod tests {
                     port: "下書き".into(),
                     builtin: None,
                     placement: placement.id,
+                    inside: Some(step.id),
                 }],
                 "the wire from the action carries nothing while nothing reaches the action",
             );
@@ -3478,7 +3518,7 @@ mod tests {
         with_tx(|tx| {
             let automation = mk_automation(tx, "二度置く");
             let (action, first) = mk_placed(tx, &automation, "直す", "fix it", "claude");
-            a_second_step(tx, &action, &first);
+            let second = a_second_step(tx, &action, &first);
             let again = automation::placement_add(tx, automation.id, action.id).expect("place it again");
             automation::edge_add(
                 tx,
@@ -3496,11 +3536,13 @@ mod tests {
                 exit: crate::model::DONE_EXIT.into(),
                 builtin: None,
                 placement: at,
+                inside: Some(second.id),
             };
             assert!(unmet.contains(&about(first.id)), "{unmet:?}");
             assert!(unmet.contains(&about(again.id)), "{unmet:?}");
             let fields = about(again.id).msg().fields().iter().map(|(k, v)| (k, v.to_string())).collect::<Vec<_>>();
             assert!(fields.contains(&("placement", again.id.to_string())), "{fields:?}");
+            assert!(fields.contains(&("inside_step", second.id.to_string())), "{fields:?}");
             assert_eq!(Unmet::NoEntry.placement(), None);
         });
     }

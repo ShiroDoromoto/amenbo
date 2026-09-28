@@ -37,6 +37,7 @@ import { ErrorNote } from "../components/ErrorNote";
 
 export function AutomationActionOver({
   actionId,
+  openingStep,
   automationName,
   boxNo,
   onBack,
@@ -44,6 +45,8 @@ export function AutomationActionOver({
   onAbandoned,
 }: {
   actionId: number;
+  /** The step inside it to arrive with pressed, where the reader came to mend that step. */
+  openingStep?: number;
   /** The automation under it — what its back is named after. */
   automationName: string;
   /** The number the automation's picture gives the box this action is placed in, once it is there. */
@@ -98,6 +101,7 @@ export function AutomationActionOver({
           <div className="actover__main">
             <AutomationActionBuildScreen
               id={actionId}
+              openingStep={openingStep}
               onBack={draft ? undefined : onBack}
               backLabel={tf("auto.over.back", { name: automationName })}
               headLead={

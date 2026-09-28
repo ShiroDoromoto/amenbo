@@ -629,6 +629,47 @@ describe("the start press on the build screen's head", () => {
     expect(container.querySelector(".actpanel")).not.toBeNull();
   });
 
+  it("opens the action over the picture for a reason whose gap is inside it", async () => {
+    const write: AutomationPlacementDto = {
+      id: 4,
+      name: "Write",
+      actionId: 904,
+      global: false,
+      prompt: "",
+      interactive: false,
+      reportToTask: false,
+      showHistory: true,
+      showNotes: true,
+      showDecisions: true,
+      showComments: true,
+      exits: [],
+      inputs: [],
+      settings: [],
+      steps: [],
+    };
+    hoisted.automations = [card()];
+    hoisted.detail = detail({ placements: [write] });
+    hoisted.check = {
+      ready: false,
+      blocks: [
+        reason("not_ready_automation_open_exit", { step: "Review", exit: "完了", placement: "4", inside_step: "12" }),
+        reason("not_ready_automation_open_exit", { step: "Write", exit: "完了", placement: "4" }),
+      ],
+    };
+    await render();
+    await act(async () => { button("Morning round").click(); });
+
+    const lines = [...container.querySelectorAll(".autolaunch__blocks li")];
+    // The same way out of the box itself is mended on the picture, and says so.
+    expect(lines[1].querySelector<HTMLButtonElement>(".autolaunch__go")!.dataset.see).toBe(t("auto.launch.see"));
+    const fix = lines[0].querySelector<HTMLButtonElement>(".autolaunch__go")!;
+    expect(fix.dataset.see).toBe(t("auto.launch.fix"));
+
+    expect(document.body.querySelector(".actover")).toBeNull();
+    await act(async () => { fix.click(); });
+    expect(document.body.querySelector(".actover")).not.toBeNull();
+  });
+
   it("holds the button shut while anything is in the way", async () => {
     await open({ ready: false, blocks: [reason("not_ready_automation_no_steps")] });
     expect(button(t("auto.start")).disabled).toBe(true);

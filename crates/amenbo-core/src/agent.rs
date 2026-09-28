@@ -447,6 +447,8 @@ commands! {
     AutomationActionEntrySet => "automation action-entry-set",
     AutomationActionScopeSet => "automation action-scope-set",
     AutomationActionRm => "automation action-rm",
+    AutomationActionFinishCreating => "automation action-finish-creating",
+    AutomationActionAbandon => "automation action-abandon",
     AutomationStepAdd => "automation step-add",
     AutomationStepUpdate => "automation step-update",
     AutomationStepRm => "automation step-rm",
@@ -678,6 +680,8 @@ impl Cmd {
             | Cmd::AutomationActionEntrySet
             | Cmd::AutomationActionScopeSet
             | Cmd::AutomationActionRm
+            | Cmd::AutomationActionFinishCreating
+            | Cmd::AutomationActionAbandon
             | Cmd::AutomationStepAdd
             | Cmd::AutomationStepUpdate
             | Cmd::AutomationStepRm
@@ -1499,6 +1503,7 @@ fn capabilities() -> Value {
                 "automation place-add", "automation place-rm",
                 "automation action-add", "automation action-update", "automation action-entry-set",
                 "automation action-scope-set", "automation action-rm",
+                "automation action-finish-creating", "automation action-abandon",
                 "automation step-add", "automation step-update", "automation step-rm",
                 "automation cfg-add", "automation cfg-update", "automation cfg-set", "automation cfg-rm",
                 "automation agent-set",
@@ -2312,6 +2317,13 @@ fn all_commands() -> Value {
             json!([{ "name": "<id>", "help": "action id", "required": true },
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation action-rm 7 --yes"])),
+        cmd("automation action-finish-creating", "Says an action made on the spot where it was placed is written, and keeps it. Such an action is born still being created (`draft` in `automation action-show --json`), and the launch check refuses an automation standing on one. It is taken with nothing inside the action too — an action with no step is refused at the launch check for that reason instead. An action that is not being created is handed back unchanged.",
+            json!([{ "name": "<id>", "help": "action id", "required": true }]),
+            json!(["amenbo automation action-finish-creating 7"])),
+        cmd("automation action-abandon", "Gives up an action made on the spot where it was placed. The action goes with every placement standing on it, in one act, and each line that ran into a placement is pointed back to where it went before the action was put in on it; a way out that said nothing before says nothing again. Refused for an action that is not being created — `automation action-rm` deletes that one. There is no undo. Confirms unless --yes.",
+            json!([{ "name": "<id>", "help": "action id", "required": true },
+                   { "name": "--yes/-y", "help": "skip the confirmation" }]),
+            json!(["amenbo automation action-abandon 7 --yes"])),
 
         cmd("automation step-add", "Adds a step to a library action — one step is one terminal, and it carries its own prompt. Who carries it out is not the step's: it is chosen where the action is placed (`automation agent-set`), so the same action can be run by different agents on two automations. It is born with the done way out and the error one (`*`), and the first step of an action is the one the action opens first. --work-dir names the setting or the input the working folder is taken from: a name, not a path, and the name is one the action declares. A built-in is not put in here: it stands on a picture only as Amenbo's own action (`automation place-add --builtin`). Prints the id the action's own edge and wire commands take.",
             json!([{ "name": "<action>", "help": "action id", "required": true },

@@ -1944,6 +1944,17 @@ pub enum AutomationCmd {
         /// action id
         id: i64,
     },
+    /// Say an action made on the spot is written, and keep it — even with nothing inside it
+    ActionFinishCreating {
+        /// action id
+        id: i64,
+    },
+    /// Give up an action made on the spot: it goes with every placement standing on it, and the lines
+    /// into them go back to where they went before — refused for one not being created; confirms unless -y
+    ActionAbandon {
+        /// action id
+        id: i64,
+    },
     /// Add a step to a library action. One step is one terminal, and it carries its own prompt; who
     /// carries it out is chosen where the action is placed (`agent-set`). Where the action is placed
     /// already, the new step starts out there with the default agent, as a placed step does

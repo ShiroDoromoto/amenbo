@@ -1,0 +1,83 @@
+# A folder setting is often answered with a folder the project was never bound to — where a finished
+# draft is saved, say, which is somewhere of the reader's own and not where the project's code lives.
+# The pulldown under the setting offers the project's folders and nothing else, so the control beside
+# it that opens the machine's folder picker is the only way to such a folder from the screen. A reader
+# sent back to the terminal to type a path is the failure this road is written against.
+id: answer-a-folder-setting-with-a-folder-the-project-does-not-keep
+title: A folder setting is answered from the machine's folder picker with a folder the project is not bound to
+description: >
+  Declare a required folder setting on an action and place it, leaving the setting unanswered. Press
+  the reason that names it, open the machine's folder picker from beside the setting, and choose a
+  folder the project is not bound to. The setting is answered with that folder, and the reason that
+  named it goes from the launch place.
+given:
+  # The folder the setting is answered with. It is written into and never bound, so it is somewhere
+  # on the machine and not one of the project's folders.
+  - { type: action, domain: repo, op: write-file, with: { dir: potting-shed, path: notes.txt, content: SCENARIO somewhere of the reader's own } }
+
+  # The action whose setting is answered: one step, and a required folder setting nobody answered.
+  - { type: action, domain: automation, op: action-add, with: { name: write }, as: write }
+  - { type: action, domain: automation, op: step-add, with: { target: write, name: draft, prompt: write the draft }, as: draft }
+  - { type: action, domain: automation, op: action-entry, with: { target: write, step: draft } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: draft, exit_to: "" } }
+  - { type: action, domain: automation, op: cfg-add, with: { action: write, name: save to, kind: folder, required: true } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a folder to answer" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: write }, as: at_write }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_write, step: draft, agent: claude-code } }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_write } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_write, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # The hole, named on the launch place before anything is done about it.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      box: write
+      at: save to
+      pressable: true
+      present: true
+
+  - type: action
+    domain: automation
+    op: press-reason
+    with:
+      reason: unanswered_cfg
+      box: write
+
+  # Answered from the picker, with a folder the pulldown under the setting would never offer.
+  - type: action
+    domain: automation
+    op: answer-folder
+    with:
+      setting: save to
+      dir: potting-shed
+
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: unanswered_cfg
+      box: write
+      at: save to
+      present: false

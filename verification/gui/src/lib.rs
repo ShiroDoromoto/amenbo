@@ -4390,6 +4390,17 @@ impl Instructor {
                     )
                 }
             },
+            // A `folder` is answered from the machine's picker, opened by the control beside the
+            // setting — the pulldown under it offers only the project's own folders, and the folder
+            // this step names is not one of them. The control is named by what it opens rather than
+            // by its words, which are the interface's and in the run's language. The folder is found
+            // by its name at the end of the path, as `pick-folder` finds one: a road knows what it
+            // calls a folder and not where the run put it.
+            (Domain::Automation, "answer-folder") => format!(
+                "In the panel showing what the pressed box holds, under the setting \"{}\", press the control beside it that opens the machine's folder picker, and in the picker choose the folder the road calls \"{}\" — one the project is not bound to. Confirm the setting now names the folder whose path ends in that name.",
+                req(with, "setting")?,
+                req(with, "dir")?
+            ),
             // **Declaring on the panel.** What is declared is an action's or a step's, so the panel
             // is one on the action build screen: the action's input or output, opened with
             // `open-part`, or a pressed step. A spot on an automation declares nothing (it reads what
@@ -12217,6 +12228,29 @@ steps_gui:
         assert!(said.contains("greenhouse-benches"), "got: {said}");
         assert!(said.contains("path ends in"), "a road names a folder, not a place: {said}");
         assert!(said.contains("no picker"), "the list is the goal: {said}");
+    }
+
+    /// A folder setting answered from the machine's picker. The folder is named, not placed, and the
+    /// operator is told it lies outside the project — the pulldown under the setting would never offer it.
+    #[test]
+    fn a_folder_setting_is_answered_from_the_machines_picker() {
+        let step = Step::Action {
+            domain: Domain::Automation,
+            op: "answer-folder".to_string(),
+            with: [
+                ("setting".to_string(), serde_yaml::Value::from("save to")),
+                ("dir".to_string(), serde_yaml::Value::from("potting-shed")),
+            ]
+            .into_iter()
+            .collect(),
+            bind: None,
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("\"save to\""), "got: {said}");
+        assert!(said.contains("potting-shed"), "got: {said}");
+        assert!(said.contains("folder picker"), "the picker, not the pulldown: {said}");
+        assert!(said.contains("not bound to"), "a folder outside the project: {said}");
     }
 
     /// Going to a project. What the step says is where the screen is afterwards rather than that it

@@ -12,7 +12,7 @@
 // Where each word sits in the dictionary is `./i18n/builtinKeys`.
 import type { AutomationBuiltinDto } from "../bindings/bindings";
 import { t } from "./i18n";
-import { builtinDictKey } from "./i18n/builtinKeys";
+import { builtinDictKey, builtinDoesKey } from "./i18n/builtinKeys";
 
 /**
  * The screen's word for `word`, where `builtin` is the key of the built-in it was written by. Absent
@@ -21,6 +21,13 @@ import { builtinDictKey } from "./i18n/builtinKeys";
 export function builtinWord(builtin: string | null | undefined, word: string): string {
   const dictKey = builtinDictKey(builtin, word);
   return dictKey === undefined ? word : t(dictKey);
+}
+
+/** What the built-in `builtin` does, in the screen's language — or null for a key this build does not
+ *  know, where there is nothing to say rather than the key itself. */
+export function builtinDoes(builtin: string): string | null {
+  const dictKey = builtinDoesKey(builtin);
+  return dictKey === undefined ? null : t(dictKey);
 }
 
 /**

@@ -37,6 +37,7 @@ import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
 import { BuiltinCard } from "./BuiltinCard";
+import { RunOverCard, RunPausedCard } from "./RunBody";
 import { useBoxNumber } from "../screens/boxNumber";
 import type { BuiltinRun } from "../talk/automationStep";
 import type { Size } from "../talk/layout";
@@ -1080,7 +1081,15 @@ export function TerminalPane({
             onPointerDown={onStretch}
           />
         )}
-        {builtin !== null ? <BuiltinCard builtin={builtin} /> : running
+        {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
+            of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}
+        {run !== null && over && !running ? (
+          <RunOverCard
+            run={run}
+            see={t(runsTab === "running" ? "auto.run.seeRunning" : "auto.run.seeHistory")}
+            onSee={ledger.openRuns === undefined ? undefined : () => ledger.openRuns?.(project, runsTab)}
+          />
+        ) : builtin !== null ? <BuiltinCard builtin={builtin} /> : running
           ? (
             <>
               {/* Not on a run's pane: a step's program ending is the run moving on, and the row
@@ -1096,11 +1105,13 @@ export function TerminalPane({
           )
           // Not on a run's pane (`AMB-T-5667`): a terminal opened there would be an ordinary session
           // that has nothing to do with the run, under a row that goes on naming the run's step.
-          : run === null && (
+          : run === null ? (
             <button className="slot__open" onClick={() => setRunning(true)}>
               {t("face.open")}
             </button>
-          )}
+          )
+          // A run held with no step up — come back with the app paused (`AMB-T-5635`).
+          : run.state?.status === "paused" && <RunPausedCard />}
         {/* Where a person writes a line for whatever is running in this pane (`AMB-D-864`). It is the
             app's own box rather than the program's, which is what buys undo, redo and select-all in a
             pane whatever CLI is in it — the keys for those differ per CLI and one of them has no undo

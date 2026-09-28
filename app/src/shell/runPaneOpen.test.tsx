@@ -10,6 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Say } from "../talk/nameplate";
 import { TerminalPane } from "./TerminalPane";
+import { t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -88,5 +89,15 @@ describe("opening a terminal in a pane with none in it", () => {
   it("is not offered on a run's pane", async () => {
     await pane(FAILED);
     expect(openHere(), "a run's pane offered a session that has nothing to do with the run").toBeNull();
+  });
+
+  it("says in its body how a run come back failed ended, and how a held one goes on (AMB-T-5753)", async () => {
+    await pane(FAILED);
+    expect(container.querySelector(".slot__runbody-line")?.textContent).toBe(
+      tf("auto.run.body.failed", { step: "check" }),
+    );
+
+    await pane({ ...FAILED, state: { ...FAILED.state!, status: "paused", word: "Paused" } });
+    expect(container.querySelector(".slot__runbody-line")?.textContent).toBe(t("auto.run.body.paused"));
   });
 });

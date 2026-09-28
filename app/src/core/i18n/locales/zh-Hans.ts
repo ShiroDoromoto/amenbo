@@ -1272,6 +1272,12 @@ export const zhHans: Translation = {
     "auto.run.reportWithheld": "任务已关闭，未留下报告：{steps}",
     "auto.run.taskWait": "等待任务",
     "auto.run.heldUntil": "等待至 {at}",
+    "auto.run.body.taskWait": "正在等待可以着手的任务",
+    "auto.run.body.taskWaitNext": "有符合条件且可以着手的任务时，会自动着手并继续。要停止等待，请按上方的暂停或停止。",
+    "auto.run.body.paused": "已暂停。继续后，从下一步开始。",
+    "auto.run.body.completed": "已走到图的末尾。最后一步是“{step}”。",
+    "auto.run.body.canceled": "在“{step}”处停止了。此次运行不会继续。",
+    "auto.run.body.failed": "在“{step}”处失败。原因见上方的横条。",
 
     "mcp.title": "通过 MCP 连接",
     "mcp.setupTitle": "让 AI 可以使用你的项目",

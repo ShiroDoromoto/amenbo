@@ -1287,6 +1287,12 @@ export const pl: Translation = {
     "auto.run.reportWithheld": "Raport nie został zostawiony w zadaniu, bo było zamknięte: {steps}",
     "auto.run.taskWait": "Czeka na zadanie",
     "auto.run.heldUntil": "Czeka do {at}",
+    "auto.run.body.taskWait": "Czeka na zadanie, które można podjąć",
+    "auto.run.body.taskWaitNext": "Gdy pasujące zadanie będzie można podjąć, przebieg je podejmie i pójdzie dalej sam. Aby przestać czekać, naciśnij u góry pauzę lub zatrzymaj.",
+    "auto.run.body.paused": "Wstrzymano. Po wznowieniu przebieg pójdzie dalej od następnego kroku.",
+    "auto.run.body.completed": "Osiągnięto koniec diagramu. Ostatnim krokiem był „{step}”.",
+    "auto.run.body.canceled": "Zatrzymano na „{step}”. Ten przebieg nie pójdzie dalej.",
+    "auto.run.body.failed": "Niepowodzenie na „{step}”. Powód jest na pasku powyżej.",
 
     "mcp.title": "Połącz przez MCP",
     "mcp.setupTitle": "Korzystaj ze swoich projektów z poziomu AI",

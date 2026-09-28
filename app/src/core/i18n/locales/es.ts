@@ -1282,6 +1282,12 @@ export const es: Translation = {
     "auto.run.reportWithheld": "Informe no dejado en la tarea porque estaba cerrada: {steps}",
     "auto.run.taskWait": "Esperando tarea",
     "auto.run.heldUntil": "Esperando hasta {at}",
+    "auto.run.body.taskWait": "Esperando una tarea que pueda tomar",
+    "auto.run.body.taskWaitNext": "Cuando una tarea que coincida pueda tomarse, la toma y sigue por sí sola. Para dejar de esperar, pulsa pausa o detener arriba.",
+    "auto.run.body.paused": "En pausa. Al reanudar, sigue desde el paso siguiente.",
+    "auto.run.body.completed": "Llegó al final del diagrama. El último paso fue «{step}».",
+    "auto.run.body.canceled": "Detenida en «{step}». Esta ejecución no continúa.",
+    "auto.run.body.failed": "Falló en «{step}». La banda de arriba dice por qué.",
 
     "mcp.title": "Conectar por MCP",
     "mcp.setupTitle": "Usar tus proyectos desde una IA",

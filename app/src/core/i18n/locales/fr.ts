@@ -1282,6 +1282,12 @@ export const fr: Translation = {
     "auto.run.reportWithheld": "Rapport non laissé sur la tâche, qui était fermée : {steps}",
     "auto.run.taskWait": "En attente de tâche",
     "auto.run.heldUntil": "En attente jusqu'à {at}",
+    "auto.run.body.taskWait": "En attente d'une tâche à prendre",
+    "auto.run.body.taskWaitNext": "Dès qu'une tâche correspondante peut être prise, elle la prend et continue d'elle-même. Pour arrêter d'attendre, appuyez sur pause ou arrêter en haut.",
+    "auto.run.body.paused": "En pause. À la reprise, elle continue à partir de l'étape suivante.",
+    "auto.run.body.completed": "Fin du diagramme atteinte. La dernière étape était « {step} ».",
+    "auto.run.body.canceled": "Arrêtée à « {step} ». Cette exécution ne continue pas.",
+    "auto.run.body.failed": "Échec à « {step} ». Le bandeau ci-dessus en donne la raison.",
 
     "mcp.title": "Se connecter en MCP",
     "mcp.setupTitle": "Utiliser vos projets depuis une IA",

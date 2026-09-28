@@ -42,3 +42,12 @@ export function builtinDictKey(builtin: string | null | undefined, word: string)
   if (builtin === null || builtin === undefined) return undefined;
   return WORDS.get(builtin)?.get(word);
 }
+
+/**
+ * The dictionary key of what a built-in does, the line a run's pane says while Amenbo carries it out
+ * (`../../shell/BuiltinCard`). Absent a key this build does not know, there is none.
+ */
+export function builtinDoesKey(builtin: string): string | undefined {
+  const section = SECTIONS[builtin];
+  return section === undefined ? undefined : `auto.bi.${section}.does`;
+}

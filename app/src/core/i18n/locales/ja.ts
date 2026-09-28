@@ -1276,6 +1276,12 @@ export const ja: Translation = {
     "auto.run.reportWithheld": "タスクが閉じていたので、報告を残さなかった：{steps}",
     "auto.run.taskWait": "タスク待ち",
     "auto.run.heldUntil": "{at} まで待つ",
+    "auto.run.body.taskWait": "着手できるタスクを待っています",
+    "auto.run.body.taskWaitNext": "条件に合うタスクが着手できるようになると、自動で着手して進みます。待つのをやめるときは、上の一時停止か止めるを押します。",
+    "auto.run.body.paused": "一時停止しています。再開すると、次のステップから続けます。",
+    "auto.run.body.completed": "図の終わりまで進みました。最後のステップは「{step}」です。",
+    "auto.run.body.canceled": "「{step}」のところで止めました。この実行は続きません。",
+    "auto.run.body.failed": "「{step}」で失敗しました。理由は上の帯に出ています。",
 
     "mcp.title": "MCP でつなぐ",
     "mcp.setupTitle": "プロジェクトを AI から使えるようにする",

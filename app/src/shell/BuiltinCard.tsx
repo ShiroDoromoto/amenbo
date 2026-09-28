@@ -9,9 +9,14 @@
 // (`./WorkspaceFace`). What was done is kept on the run and read on the "running" and "history" tabs,
 // not here.
 //
-// **A built-in set to wait shows what it waits for** (`AMB-D-969`), as the chips the placement's panel
-// answered it with. What would match is not listed or counted — it is asked again every second, and a
-// list would be asked of every task there is.
+// **A built-in set to wait says so, and what it waits for** (`AMB-D-969`): the line, the chips the
+// placement's panel answered it with, and what the reader can do about it (`AMB-T-5753`) — it goes on
+// by itself, and the row's pause and stop are the way to have it stop waiting. What would match is not
+// listed or counted here; how many are held back, and by what, is counted apart from the look it
+// repeats every second (`AMB-D-999`).
+//
+// **A built-in being carried out says what it does** (`AMB-T-5753`), in the words the library reads
+// it with. It has no terminal, and a turning mark alone says only that something is happening.
 //
 // **A built-in that has been carried out shows the way out it left by** (`AMB-T-5506`), as the mark the
 // picture draws that way out with: the run goes on from there, and which way it went is what a reader
@@ -21,10 +26,12 @@
 // terminal, and the moment it goes on is the one thing a reader watching it wants to know.
 import type { BuiltinRun } from "../talk/automationStep";
 import { exactLabel, t, tf } from "../core/i18n";
+import { builtinDoes } from "../core/builtinWords";
 import { ExitMark, FilterChips } from "../screens/automationParts";
 
 export function BuiltinCard({ builtin }: { builtin: BuiltinRun }) {
   const word = t(builtin.finished ? "auto.run.completed" : builtin.waiting ? "auto.run.taskWait" : "auto.run.running");
+  const does = builtin.finished || builtin.waiting ? null : builtinDoes(builtin.key);
   return (
     // A status and not an alert: it changes by itself as the run goes on, and each change is worth
     // hearing without taking the reader away from what they were doing.
@@ -34,7 +41,10 @@ export function BuiltinCard({ builtin }: { builtin: BuiltinRun }) {
       ) : (
         <span className="slot__builtin-spin" role="img" aria-label={word} />
       )}
+      {builtin.waiting && <p className="slot__builtin-word">{t("auto.run.body.taskWait")}</p>}
       {builtin.waiting && builtin.looksFor !== undefined && <FilterChips expression={builtin.looksFor} />}
+      {builtin.waiting && <p className="slot__builtin-next">{t("auto.run.body.taskWaitNext")}</p>}
+      {does !== null && <p className="slot__builtin-does">{does}</p>}
       {!builtin.finished && builtin.heldUntil !== undefined && (
         <span className="slot__builtin-until">{tf("auto.run.heldUntil", { at: exactLabel(builtin.heldUntil) })}</span>
       )}

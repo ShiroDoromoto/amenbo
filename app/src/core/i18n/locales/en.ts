@@ -1517,6 +1517,12 @@ const ui = {
   "auto.run.reportWithheld": "Report kept off the task, which was closed: {steps}",
   "auto.run.taskWait": "Waiting for a task",
   "auto.run.heldUntil": "Waiting until {at}",
+  "auto.run.body.taskWait": "Waiting for a task it can take",
+  "auto.run.body.taskWaitNext": "When a task that matches can be taken, it takes it and goes on by itself. To stop waiting, press pause or stop above.",
+  "auto.run.body.paused": "Paused. Resume it to go on from the next step.",
+  "auto.run.body.completed": "Reached the end of the picture. The last step was “{step}”.",
+  "auto.run.body.canceled": "Stopped at “{step}”. This run does not go on.",
+  "auto.run.body.failed": "Failed at “{step}”. The band above says why.",
 
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,

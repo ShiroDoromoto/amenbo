@@ -883,6 +883,14 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) { .slot__builtin-spin { animation: none; } }
 .slot__builtin-done { color: var(--c-done); font-size: var(--fs-xl); font-weight: 700; line-height: 1; }
 .slot__builtin-until { color: var(--c-text-muted); font-variant-numeric: tabular-nums; }
+/* The words on a run's pane with no terminal (`../shell/BuiltinCard`, `../shell/RunBody`): the state
+   first, then what it waits for or does, then what the reader can do — each a line of its own, kept to
+   a width a sentence reads at. */
+.slot__builtin-word, .slot__runbody-line { margin: 0; max-width: 40em; font-weight: 600; }
+.slot__builtin-does, .slot__builtin-next { margin: 0; max-width: 40em; color: var(--c-text-muted); }
+.slot__runbody-mark { font-size: var(--fs-xl); font-weight: 700; line-height: 1; color: var(--c-text-muted); }
+.slot__runbody[data-status="completed"] .slot__runbody-mark { color: var(--c-done); }
+.slot__runbody[data-status="failed"] .slot__runbody-mark { color: var(--c-stop); }
 .filterchips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-1); max-width: 100%; }
 
 /* The question and the row under it, kept together: the words are what say the pills are an offer, so

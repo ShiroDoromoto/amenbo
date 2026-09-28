@@ -18,6 +18,7 @@
 // what tell a reader nothing here is theirs to change, and a screen with no field in it bears that
 // out. The way back is "back", because this screen is opened from the list and from an action's build
 // screen alike, and a label naming one of them would be wrong for the other.
+import type { ReactNode } from "react";
 import { useAutomationBuiltins } from "../core/automations";
 import { builtinShown } from "../core/builtinWords";
 import { t } from "../core/i18n";
@@ -81,10 +82,19 @@ export function BuiltinDecl({ builtin }: { builtin: AutomationBuiltinDto }) {
 export function AutomationBuiltinScreen({
   builtinKey,
   onBack,
+  backLabel,
+  headLead,
+  headEnd,
 }: {
   /** Which built-in, by the key its definition carries. */
   builtinKey: string;
   onBack: () => void;
+  /** What the back is called, where it is not the list it goes back to (`./AutomationActionOver`). */
+  backLabel?: string;
+  /** What stands between the back and the name. */
+  headLead?: ReactNode;
+  /** A press at the far end of the head. */
+  headEnd?: ReactNode;
 }) {
   const found = useAutomationBuiltins().find((one) => one.key === builtinKey);
   const builtin = found === undefined ? null : builtinShown(found);
@@ -92,8 +102,9 @@ export function AutomationBuiltinScreen({
     <div className="actbuild">
       <div className="actbuild__head">
         <button type="button" className="btn" onClick={onBack}>
-          <Icon name="chevronLeft" /> {t("auto.builtin.back")}
+          <Icon name="chevronLeft" /> {backLabel ?? t("auto.builtin.back")}
         </button>
+        {headLead}
         <span className="actbuild__name">{builtin?.name ?? ""}</span>
         {builtin !== null && (
           <>
@@ -103,6 +114,7 @@ export function AutomationBuiltinScreen({
             <span className="actdecl__used">{usedCount(builtin.usedBy)}</span>
           </>
         )}
+        {headEnd}
       </div>
       {builtin !== null && (
         <div className="actdecl">

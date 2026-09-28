@@ -2318,12 +2318,17 @@ pub enum AutomationCmd {
         /// run id
         run: i64,
     },
-    /// Stop a run, which ends it canceled: hand the task it was working back to `todo` and to the
-    /// person, and leave a comment on the task saying how far it got — unless the task is closed (done
-    /// or rejected), which gets none
-    Stop {
+    /// Cancel a paused run, which ends it canceled: hand the task it was working back to `todo` and to
+    /// the person, and leave a comment on the task saying how far it got — unless the task is closed
+    /// (done or rejected), which gets none. A run still going is refused: `pause` it first, or pass
+    /// `--force`
+    Cancel {
         /// run id
         run: i64,
+        /// force-cancel a run still going: end it where it stands, closing the terminal of the step
+        /// under way, which may leave that step's work half done
+        #[arg(long)]
+        force: bool,
     },
     /// Say a failed run has been seen, which moves it off the running tab onto the history. Who said
     /// it — a person or their AI — is kept with it

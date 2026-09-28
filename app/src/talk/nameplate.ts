@@ -120,6 +120,10 @@ export type Say = {
    *  every screen marks one with — its name is said here and nowhere else on the pane
    *  (`../shell/BuiltinCard`). */
   readonly builtin: boolean;
+  /** **The step running now may stop and wait for a person** (`automation_action_step.interactive`). A
+   *  run's pane turns to its terminal while one is running, so the question it asks is in front of the
+   *  reader (`AMB-T-5776`). False for a built-in, and for a pane no step has arrived in. */
+  readonly interactive: boolean;
   /** The action the spot this step was opened from stands on, or null where that spot has been taken
    *  off the picture since — and then the row says the step alone, as it does where the action is
    *  named after the step. */

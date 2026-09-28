@@ -441,8 +441,9 @@ pub fn cancel(tx: &WriteTx<'_>, run_id: i64) -> Result<Ended> {
     match before.status {
         AutomationRunStatus::Paused => ended(tx, before, Ending::Canceled),
         AutomationRunStatus::Running => Err(Error::invalid(format!(
-            "run '{run_id}' is running, and only a paused run is canceled. Pause it first and cancel \
-             it once it has stopped, or force-cancel it to end it where it stands"
+            "run '{run_id}' is running, and only a paused run is canceled. Pause it first \
+             (`automation pause {run_id}`) and cancel it once it has stopped, or force-cancel it to \
+             end it where it stands (`automation cancel {run_id} --force`)"
         ))),
         other => Err(Error::invalid(format!(
             "run '{run_id}' is {} — it is over already",

@@ -410,7 +410,8 @@ amenbo automation action-show 7                        # one action, and the pic
 amenbo automation start 3                              # away it goes (with the app up: it opens the steps, so with none running this is refused)
 amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand a make_task entry the task it files: title, notes, classification and attachments
 amenbo automation pause 7                              # ...at the end of the action under way (a wait under way included: the run pauses once its time is up)
-amenbo automation stop 7                               # ...now, handing the task back to todo and to the person
+amenbo automation cancel 7                             # a paused run ends canceled, handing the task back to todo and to the person
+amenbo automation cancel 7 --force                     # ...or one still going, now: the step under way is cut off where it stands
 amenbo automation acknowledge 7                        # a failed run has been seen: off the running tab, onto the history (whoever says it is kept)
 # Inside a step's own terminal, the agent carrying it out reports through two more: `automation
 # step-out` (each thing it hands on) and `automation step-done` (the way out taken — by the id the

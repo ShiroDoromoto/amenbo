@@ -82,6 +82,7 @@ describe("the row above a run's pane", () => {
     placement: 11,
     box: null,
     builtin: false,
+    interactive: false,
     action: "下ごしらえ",
     task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 2 },
     state: null,

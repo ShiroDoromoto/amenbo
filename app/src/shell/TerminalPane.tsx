@@ -319,9 +319,18 @@ export function TerminalPane({
   // Which face a run's pane is turned to. An ordinary pane has the terminal and nothing else.
   const [face, setFace] = useState<Face>(() => (run === null ? "terminal" : faces.get(run.run) ?? "picture"));
   const runId = run?.run ?? null;
+  // **A step that may wait for a person turns the pane to its terminal** (`AMB-T-5776`), so a question
+  // it asks is not left behind a picture nobody reads for it. Whether the agent is waiting is not
+  // something the app reads (`AMB-D-858`); the step's own `interactive` is what it goes by. The turn is
+  // the step's, not the reader's: it is not kept, and once the step is over the pane goes back to the
+  // face the reader last chose — the terminal, where that is what they chose. A press while the step
+  // runs is the reader's choice, and is kept like any other.
+  const asks = run !== null && run.interactive && (run.state === null || run.state.status === "running");
+  const stepAt = run === null ? null : `${run.placement ?? ""}:${run.step}`;
   useEffect(() => {
-    if (runId !== null) setFace(faces.get(runId) ?? "picture");
-  }, [runId]);
+    if (runId === null) return;
+    setFace(asks ? "terminal" : faces.get(runId) ?? "picture");
+  }, [runId, asks, stepAt]);
   const turn = (to: Face) => {
     if (runId !== null) faces.set(runId, to);
     setFace(to);

@@ -478,10 +478,16 @@ impl Driver<'_> {
                 let id = self.bound_id(&args, "automation_run", bind)?;
                 Ok(Outcome::action(format!("started automation {automation} as run {id}")))
             }
-            verb @ ("pause" | "resume" | "stop") => {
+            verb @ ("pause" | "resume") => {
                 let run = self.resolve(with)?;
                 self.run_json(&["automation", verb, &run.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("{verb}d run {run}")))
+            }
+            // Stopping a run now is the force-cancel: `cancel` alone takes a paused run only.
+            "stop" => {
+                let run = self.resolve(with)?;
+                self.run_json(&["automation", "cancel", &run.to_string(), "--force", "--json"])?;
+                Ok(Outcome::action(format!("force-canceled run {run}")))
             }
             _ => Err(unmapped(Domain::Automation, op)),
         }

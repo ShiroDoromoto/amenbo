@@ -23,8 +23,12 @@
 // **A dialog opens for one thing only: making an action on the spot** (`./AutomationActionMake`).
 // Picking one off the shelf is done beside the picture, where the line it goes on can still be seen.
 // The dialog asks a name and a library under the same small picture of where it goes, puts the
-// empty action there, and the screen goes on to that action's own build screen, where its inside is
+// empty action there, and that action's own build screen opens over this one, where its inside is
 // built (`AMB-D-956`). The name the library's box was searched with comes along as the name typed.
+//
+// **An action opened from here stands over the automation** (`./AutomationActionOver`, `AMB-D-1004`)
+// — made on the spot, or opened from a box's panel. Its back lands here with the box holding it
+// pressed, and its "open full screen" is the one press that goes to the action's own screen.
 //
 // **What stands on the picture is a placement of a library action** (`AMB-D-949`). Nothing here
 // writes a step: a step is inside the action, and the screen that draws those is the action's own.
@@ -68,13 +72,14 @@
 //
 // **The head says whether the last write was saved** (`./AutomationSaved`, `AMB-D-1005`). Nothing
 // here has a Save press, so the head says when a write landed and "Saved" stands beside its field.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPanel";
 import { Panel } from "./AutomationActionBuildScreen";
 import { AutomationLibraryPanel, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
-import { automationGraph } from "./automationLayout";
+import { automationGraph, pictureOrder } from "./automationLayout";
 import { AutomationActionMake } from "./AutomationActionMake";
+import { AutomationActionOver } from "./AutomationActionOver";
 import { AutomationHeldBy } from "./AutomationHeldBy";
 import { useSaved } from "./AutomationSaved";
 import { AutomationStepPanel } from "./AutomationStepPanel";
@@ -120,7 +125,7 @@ export function AutomationBuildScreen({
    *  (`AMB-T-5539`). */
   openingBox?: number;
   onBack: () => void;
-  /** Go to one library action's own build screen — where an action made here is built. */
+  /** Go to one library action's own build screen, full screen — the press over the one opened here. */
   onOpenAction: (actionId: number) => void;
   /** Go to the pane a run holding this automation is drawn in. */
   onGoToRun?: (project: number, run: number) => void;
@@ -136,6 +141,8 @@ export function AutomationBuildScreen({
   // Where the dialog that makes an action on the spot is about to put it, while it is open.
   // The dialog's target, and the name the library's search box held when it was pressed.
   const [making, setMaking] = useState<{ target: { edgeId: number }; name: string } | null>(null);
+  // The action standing over the picture, while one does.
+  const [over, setOver] = useState<number | null>(null);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
@@ -149,7 +156,26 @@ export function AutomationBuildScreen({
   const close = () => setShowing(null);
   const saved = useSaved();
 
+  // The box holding the action over the picture: the one pressed to open it, or the one just made to
+  // hold it, which nobody has pressed yet. Back lands on it pressed, and the head over the action
+  // names it by its number on the picture.
+  const holding =
+    over === null
+      ? undefined
+      : pressed?.actionId === over
+        ? pressed
+        : automation?.placements.find((one) => one.actionId === over);
+  const holdingNo = useMemo(() => {
+    const graph = automationGraph(automation);
+    return holding === undefined || graph === null ? undefined : pictureOrder(graph).numberOf.get(holding.id);
+  }, [automation, holding]);
+  const backFromOver = () => {
+    if (holding !== undefined) setShowing({ kind: "box", id: holding.id });
+    setOver(null);
+  };
+
   return (
+    <>
     <div className="actbuild" {...saved.capture}>
       <div className="actbuild__head">
         <button type="button" className="btn" onClick={onBack}>
@@ -286,7 +312,7 @@ export function AutomationBuildScreen({
             automation={automation}
             placementId={pressed.id}
             onRemoved={close}
-            onOpenAction={onOpenAction}
+            onOpenAction={setOver}
             readOnly={held}
           />
         </Panel>
@@ -300,12 +326,25 @@ export function AutomationBuildScreen({
           projectId={projectId}
           onMade={(actionId) => {
             close();
-            onOpenAction(actionId);
+            setOver(actionId);
           }}
           onClose={() => setMaking(null)}
         />
       )}
+
       {saved.marks}
     </div>
+    {/* Beside the screen's root rather than in it: React carries an event up its own tree through a
+        portal, and one in the action over the picture would be read as this screen's field saving. */}
+    {over !== null && (
+      <AutomationActionOver
+        actionId={over}
+        automationName={automation?.name ?? ""}
+        boxNo={holdingNo}
+        onBack={backFromOver}
+        onFull={() => onOpenAction(over)}
+      />
+    )}
+    </>
   );
 }

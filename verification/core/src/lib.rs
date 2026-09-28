@@ -4139,7 +4139,9 @@ const REGISTRY: &[OpSpec] = &[
     // `false` for the one it means to leave out, and names none for the step every other road builds.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-add", required: &["target", "name", "prompt"], refs: &["target"], strings: &["name", "prompt", "work_dir_ref"], binds: true },
     // Turning any of those four back on or off on a step already there (`target`), the rest of it
-    // left alone. A road names at least one of them, since a rewrite naming none writes nothing.
+    // left alone — or whether it may stop and wait for a person (`interactive`), which is what turns a
+    // run's pane to its terminal while it runs. A road names at least one of them, since a rewrite
+    // naming none writes nothing.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-update", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The step a placement of this action opens first. An action with none is one the launch check
     // names, the way it names an automation with no entry.
@@ -4473,6 +4475,14 @@ const REGISTRY: &[OpSpec] = &[
     // screen is drawn. The pane outlives the step it was opened for, which is why a run that is over
     // is read here at all.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "action", "state", "reason"], binds: false },
+    // **Which face that pane's body is turned to** (`face`): the automation's picture, or the
+    // terminal. A run's pane opens on its picture, and is turned to its terminal while a step that may
+    // wait for a person runs. On the picture, the box the run is on blinks, stands picked and is
+    // brought to the middle — named the way `pick-box` names one, by `box` or, for a built-in, by its
+    // key (`builtin`) — and what it has passed on the task it is working is lit: the boxes listed under
+    // `passed` (by name) and `passed_builtins` (by key), with the lines between them. A box is read
+    // off the picture as drawn, so a road names what it is sure of and leaves the rest out.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-picture", required: &["face"], refs: &["target"], strings: &["face", "box", "builtin"], binds: false },
     // **Whether the program in that pane has ended**, once its run is over. The pane outlives the
     // run, and its last lines stay on the screen either way, so words on it cannot say whether the
     // terminal is still taking lines — a line typed at it is what does. A run that is over leaves no
@@ -4570,7 +4580,8 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `on: pane` presses the same three — hold, pick up again, stop — on the line over the pane the
     // run is drawn in rather than on the tab's row: a reader watching a run is in its pane. Left off,
-    // or `on: row`, it is the row. `open` is the row's alone, the pane being where it leads.
+    // or `on: row`, it is the row. `open` is the row's alone, the pane being where it leads; `picture`
+    // and `terminal` are the pane's alone — the two faces its body is turned to (`run-picture`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press", "on"], binds: false },
     //
     // **The automations the sidebar opens**, every project's on one list (`open-view` with
@@ -4803,6 +4814,9 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // and a world whose automations in two projects place one action needs it global first.
     (Domain::Automation, "action-scope"),
     (Domain::Automation, "step-add"),
+    // A step made one that may wait for a person, which a world a screen road watches the pane of
+    // needs standing before the run starts.
+    (Domain::Automation, "step-update"),
     (Domain::Automation, "action-entry"),
     (Domain::Automation, "place-add"),
     (Domain::Automation, "agent-set"),
@@ -5170,6 +5184,7 @@ impl Scenario {
                 "task_decisions",
                 "task_comments",
                 "history",
+                "interactive",
                 "pressable",
             ] {
                 if let Some(v) = step.with().get(key) {

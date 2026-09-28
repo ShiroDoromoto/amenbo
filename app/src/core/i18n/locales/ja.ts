@@ -1047,6 +1047,7 @@ export const ja: Translation = {
     "auto.kind.taskMake": "タスク（起票する）",
     "auto.add.namePh": "名前",
     "auto.add.cancel": "取消",
+    "auto.out.head": "次のステップに渡すもの",
     "auto.out.kind": "何を渡すか",
     "auto.out.add": "足す",
     "auto.step.add": "足す",

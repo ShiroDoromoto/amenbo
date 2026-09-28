@@ -1041,6 +1041,7 @@ export const tr: Translation = {
     "auto.kind.taskMake": "Görev (oluştur)",
     "auto.add.namePh": "Adı",
     "auto.add.cancel": "Vazgeç",
+    "auto.out.head": "Sonraki adıma geçen",
     "auto.out.kind": "Ne taşıdığı",
     "auto.out.add": "Ekle",
     "auto.step.add": "Ekle",

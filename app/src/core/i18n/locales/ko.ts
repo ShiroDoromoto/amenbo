@@ -1038,6 +1038,7 @@ export const ko: Translation = {
     "auto.kind.taskMake": "작업(만들기)",
     "auto.add.namePh": "이름",
     "auto.add.cancel": "취소",
+    "auto.out.head": "다음 단계에 넘기는 것",
     "auto.out.kind": "무엇을 넘기는지",
     "auto.out.add": "추가",
     "auto.step.add": "추가",

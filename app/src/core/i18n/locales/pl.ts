@@ -1058,6 +1058,7 @@ export const pl: Translation = {
     "auto.kind.taskMake": "Zadanie (utwórz)",
     "auto.add.namePh": "Jak się nazywa",
     "auto.add.cancel": "Anuluj",
+    "auto.out.head": "Co trafia do następnego kroku",
     "auto.out.kind": "Co niesie",
     "auto.out.add": "Dodaj",
     "auto.step.add": "Dodaj",

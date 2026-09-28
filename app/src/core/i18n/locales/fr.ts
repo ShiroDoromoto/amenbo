@@ -1053,6 +1053,7 @@ export const fr: Translation = {
     "auto.kind.taskMake": "Tâche (créer)",
     "auto.add.namePh": "Nom",
     "auto.add.cancel": "Annuler",
+    "auto.out.head": "Ce qui passe à l'étape suivante",
     "auto.out.kind": "Ce qu'il transporte",
     "auto.out.add": "Ajouter",
     "auto.step.add": "Ajouter",

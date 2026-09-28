@@ -6,11 +6,16 @@
 // is refused without it is one toggle on the row, starting at "required": nothing changes it once the
 // output is declared, so it is said here or not at all.
 //
+// **A heading says what the row is for** (`AMB-T-5800`): "what goes to the next step". Without it
+// the box, filled with the way out's name, read as the way out's own name rather than as the name of
+// the thing it hands on.
+//
 // **The name follows the way out until somebody writes their own.** A way out that hands on one
 // thing is named for what it hands on nine times out of ten — "the draft" leaving by "drafted" — so
 // the box starts on the way out's own name and stops following the moment a reader touches it. It
 // only starts there where the way out hands on nothing yet: a second output named after the way out
-// would be the first one's name again.
+// would be the first one's name again. Nor does it start there on the way out every step is born
+// with (core's `DONE_EXIT`): that name says how the step ended, never what it hands on.
 //
 // **Escape or the × puts it away**, unlike the dialog that writes a step: there is a name and a kind
 // here and no prompt half written, so nothing is lost by closing it.
@@ -23,6 +28,7 @@ import { addAutomationOutput } from "../core/automations";
 import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { Icon } from "../components/Icon";
+import { DONE_EXIT } from "./automationLayout";
 import { OUTPUT_KINDS } from "./automationPortKinds";
 import type { Run } from "./automationPanel";
 import type { AutomationExitDto } from "../bindings/bindings";
@@ -40,7 +46,7 @@ export function AutomationOutputAdd({
   const [own, setOwn] = useState<string | null>(null);
   const [kind, setKind] = useState<string>("value");
   const [required, setRequired] = useState(true);
-  const name = own ?? (exit.outputs.length === 0 ? exit.name : "");
+  const name = own ?? (exit.outputs.length === 0 && exit.name !== DONE_EXIT ? exit.name : "");
 
   const add = async () => {
     if (name.trim() === "") return;
@@ -49,6 +55,7 @@ export function AutomationOutputAdd({
 
   return (
     <div className="autoout">
+      <span className="autoout__head">{t("auto.out.head")}</span>
       <input
         {...asTyped}
         autoFocus

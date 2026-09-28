@@ -223,11 +223,12 @@ describe("declaring what a way out hands on", () => {
   async function open(
     outputs: { name: string; kind: "value"; required: boolean }[],
     onClose: () => void = () => undefined,
+    exitName = "drafted",
   ) {
     await act(async () => {
       root.render(
         createElement(AutomationOutputAdd, {
-          exit: { id: 3, name: "drafted", outputs },
+          exit: { id: 3, name: exitName, outputs },
           run,
           onClose,
         }),
@@ -238,6 +239,16 @@ describe("declaring what a way out hands on", () => {
   it("starts the name on the way out's own where it hands on nothing yet", async () => {
     await open([]);
     expect(boxes()[0]!.value).toBe("drafted");
+  });
+
+  it("says above the box that what it names goes to the next step", async () => {
+    await open([]);
+    expect(document.body.querySelector(".autoout__head")!.textContent).toBe(t("auto.out.head"));
+  });
+
+  it("starts empty on the done way out, whose name is how the step ended", async () => {
+    await open([], undefined, "完了");
+    expect(boxes()[0]!.value).toBe("");
   });
 
   it("does not, where the way out already hands something on", async () => {

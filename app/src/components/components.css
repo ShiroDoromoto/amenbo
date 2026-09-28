@@ -1739,8 +1739,9 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
   font: inherit; font-size: var(--fs-xs); color: var(--c-accent-text);
 }
 /* The row that declares one more output, opened in a way out's card by its "＋"
-   (`../screens/AutomationOutputAdd`): a name, the kind as one of four, and the press. */
+   (`../screens/AutomationOutputAdd`): a heading, a name, the kind as one of four, and the press. */
 .autoout { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); margin-block-start: var(--s-1); }
+.autoout__head { flex: 1 0 100%; font-size: var(--fs-xs); font-weight: 600; color: var(--c-text-muted); }
 .autoout__name { flex: 1 1 8rem; min-width: 0; }
 .autoout__kinds { display: inline-flex; border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm); overflow: hidden; }
 .autoout__kind {

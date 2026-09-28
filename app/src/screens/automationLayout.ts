@@ -126,6 +126,9 @@ export const ACTION_BOUNDARY = 0;
 /** The name core gives the error way out — the one every box of either picture is born with. */
 export const ERROR_EXIT = "*";
 
+/** The name core gives the way out every step and action is born with — core's `DONE_EXIT`. */
+export const DONE_EXIT = "完了";
+
 /** How big a box is, and how much room is left around it. All of it fixed. Two lines tall — the
  *  name, and under it where the action comes from or what it is missing — as the mock draws it. */
 const NODE_W = 220;

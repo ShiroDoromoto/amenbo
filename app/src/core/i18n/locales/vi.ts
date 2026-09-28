@@ -1042,6 +1042,7 @@ export const vi: Translation = {
     "auto.kind.taskMake": "Công việc (tạo)",
     "auto.add.namePh": "Tên",
     "auto.add.cancel": "Hủy",
+    "auto.out.head": "Những gì chuyển sang bước tiếp theo",
     "auto.out.kind": "Nó mang gì",
     "auto.out.add": "Thêm",
     "auto.step.add": "Thêm",

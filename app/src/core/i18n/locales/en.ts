@@ -1400,6 +1400,9 @@ const ui = {
   "auto.actions.colProject": "Project",
   "auto.act.none": "None",
   "auto.act.close": "Close",
+  "auto.over.back": "Back to {name}",
+  "auto.over.full": "Open full screen",
+  "auto.over.placed": "Action placed here",
   "auto.saved.onTheSpot": "Edits save as you make them",
   "auto.saved.at": "Saved · {time}",
   "auto.saved.failed": "Not saved: {reason}",
@@ -1790,6 +1793,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation: "“{automation}” is not ready to start: {reasons}",
   not_ready_automation_no_steps: "no action is placed on it",
   not_ready_automation_no_entry: "no placement is the start",
+  not_ready_automation_action_draft: "the action “{action}” placed on it is still being created",
   not_ready_automation_action_empty: "the action “{action}” placed on it has no start step",
   not_ready_automation_entry_takes_no_task:
     "{step}: the start step takes no task, so every step after it would be about nothing",

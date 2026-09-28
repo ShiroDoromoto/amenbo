@@ -1935,6 +1935,35 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 .actbuild__canvas > .btn:only-child { margin-block: var(--s-6); }
 /* The panel fills the right pane (`.rightpane`), which holds the border, the ground and the one scroll.
    The head stays at the top of that scroll, so the close is in reach under a long body. */
+/* An action's build screen over the automation it was opened from (`../screens/AutomationActionOver`).
+   The card is as big as the window lets it be and is laid out as the shell is: the screen in a column
+   that scrolls, and its panel in a column of its own to the right, there only while a panel is. */
+.actover {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  width: min(1280px, 100%); height: 100%;
+  background: var(--c-bg-pic) var(--c-bg); border: var(--border-w) var(--border-style) var(--c-rule);
+  border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); overflow: hidden;
+}
+.actover__main { min-height: 0; overflow-y: auto; }
+/* The card is the screen's frame here, so the screen does not draw a second one inside it. */
+.actover .actbuild { margin: 0; border: 0; border-radius: 0; }
+.actover__pane {
+  width: min(380px, 40vw); min-height: 0; overflow-y: auto;
+  background: var(--c-surface-pic) var(--c-surface); border-inline-start: var(--border-w) var(--border-style) var(--c-rule);
+}
+/* `[hidden]` loses to any author `display`, as the shell's own column's does. */
+.actover__pane[hidden] { display: none; }
+/* The head carries a longer back and a press more than the screen's own, beside a panel that narrows
+   it. Its presses keep their words on one line and their places, and what gives way is what is read —
+   the action's name, which is on the box the reader opened it from, and the line saying when it was
+   saved — each cut short rather than pushing a press out of the card. */
+.actover .actbuild__head > * { flex: none; white-space: nowrap; }
+.actover .actbuild__head > .actbuild__name,
+.actover .actbuild__head > .actsaved { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Which box of the automation the action is placed in, read before its name. */
+.actover__where { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-md); color: var(--c-text-muted); white-space: nowrap; }
+/* A built-in's head ends on how many use it, so the press after it is what goes to the far end. */
+.actdecl__used + .actover__full { margin-inline-start: auto; }
 .actpanel { display: flex; flex-direction: column; min-width: 0; }
 .actpanel__head {
   position: sticky; inset-block-start: 0; z-index: 1; display: flex; align-items: baseline; gap: var(--s-2);

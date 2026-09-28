@@ -215,9 +215,19 @@ export function AutomationActionBuildScreen({
   onBack,
   onGoToRun,
   onGoToAutomation,
+  backLabel,
+  headLead,
+  headEnd,
 }: {
   id: number;
   onBack: () => void;
+  /** What the back is called — the list's by default, the automation's where it is opened over one
+   *  (`./AutomationActionOver`). */
+  backLabel?: string;
+  /** What stands between the back and the name — where the action is opened from. */
+  headLead?: ReactNode;
+  /** A press at the far end of the head, after "Edit". */
+  headEnd?: ReactNode;
   /** Go to the pane a run holding this action is drawn in. */
   onGoToRun?: (project: number, run: number) => void;
   /** Go to the build screen of an automation this action is placed on. Absent, the names are read
@@ -263,15 +273,24 @@ export function AutomationActionBuildScreen({
   };
 
   if (action?.builtin !== undefined) {
-    return <AutomationBuiltinScreen builtinKey={action.builtin} onBack={onBack} />;
+    return (
+      <AutomationBuiltinScreen
+        builtinKey={action.builtin}
+        onBack={onBack}
+        backLabel={backLabel}
+        headLead={headLead}
+        headEnd={headEnd}
+      />
+    );
   }
 
   return (
     <div className="actbuild" {...saved.capture}>
       <div className="actbuild__head">
         <button type="button" className="btn" onClick={onBack}>
-          <Icon name="chevronLeft" /> {t("auto.build.back")}
+          <Icon name="chevronLeft" /> {backLabel ?? t("auto.build.back")}
         </button>
+        {headLead}
         <span className="actbuild__name">{action?.name ?? ""}</span>
         {action !== null && (
           <>
@@ -290,6 +309,7 @@ export function AutomationActionBuildScreen({
             </button>
           </>
         )}
+        {headEnd}
       </div>
 
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}

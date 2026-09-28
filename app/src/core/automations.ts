@@ -279,6 +279,25 @@ export async function removeAutomationAction(id: number): Promise<void> {
 }
 
 /**
+ * **Say an action made on the spot is written** (`AMB-D-1005`) — one of the two ways out of being
+ * still written, taken with nothing inside the action too.
+ */
+export async function finishCreatingAutomationAction(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_finish_creating", { id });
+}
+
+/**
+ * **Give up an action made on the spot** (`AMB-D-1005`): the action and the placement standing on it
+ * go in one act, and the lines into the placement go back to how they were before it was placed.
+ * There is no undo, so the screen asks first.
+ */
+export async function abandonAutomationAction(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_abandon", { id });
+}
+
+/**
  * Rename a library action, or rewrite what it is for. The name and the note are all that is the
  * action's own: the prompt and the flags belong to its steps (`editAutomationStep`), and who carries
  * each step out to where the action is placed (`chooseAutomationAgent`).

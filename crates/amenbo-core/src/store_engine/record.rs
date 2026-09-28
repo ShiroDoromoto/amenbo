@@ -518,6 +518,7 @@ pub fn automation_action(a: &AutomationAction) -> Record {
                 ("builtin", ov(&a.builtin)),
                 ("builtin_dimension_id", kv_opt(&a.builtin_dimension_id)),
                 ("builtin_version", a.builtin_version.map(iv).unwrap_or(Value::Null)),
+                ("draft", bv(a.draft)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,

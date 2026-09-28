@@ -74,6 +74,11 @@ pub enum Unmet {
     /// An action standing on the picture has no step to open — none written yet, or none named as its
     /// entry. A run reaching that spot would have no terminal to put up.
     ActionEmpty { action: String, placement: i64 },
+    /// An action standing on the picture that is still being written (`AMB-D-1005`) — made on the spot
+    /// where it was placed, and neither finished nor given up. Its author has not said it is what they
+    /// meant, so a run is not sent through it. Raised wherever it stands, reached from the entry or not:
+    /// it is a decision left open, not a gap a run would fall into.
+    ActionDraft { action: String, placement: i64 },
     /// The entry declares no `task_take` output, so no step of the run would ever come to hold a task
     /// and every step after it would be about nothing.
     EntryTakesNoTask { step: String, builtin: Option<String>, placement: i64 },
@@ -153,6 +158,12 @@ impl Unmet {
             Unmet::ActionEmpty { action, .. } => {
                 format!("the action '{action}' placed on it has no step to start at")
             }
+            Unmet::ActionDraft { action, .. } => {
+                format!(
+                    "the action '{action}' placed on it is still being written — finish creating it, or give \
+                     it up"
+                )
+            }
             Unmet::EntryTakesNoTask { step, .. } => {
                 format!(
                     "the entry '{step}' takes no task — draw every line out of it on to a step that takes one, \
@@ -225,6 +236,7 @@ impl Unmet {
             Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
             Unmet::NoEntry => ErrorCode::NotReadyAutomationNoEntry,
             Unmet::ActionEmpty { .. } => ErrorCode::NotReadyAutomationActionEmpty,
+            Unmet::ActionDraft { .. } => ErrorCode::NotReadyAutomationActionDraft,
             Unmet::EntryTakesNoTask { .. } => ErrorCode::NotReadyAutomationEntryTakesNoTask,
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
@@ -260,7 +272,7 @@ impl Unmet {
         };
         match self {
             Unmet::NoSteps | Unmet::NoEntry => msg,
-            Unmet::ActionEmpty { action, .. } => msg.with("action", action),
+            Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
             Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
@@ -294,6 +306,7 @@ impl Unmet {
         match self {
             Unmet::NoSteps | Unmet::NoEntry => None,
             Unmet::ActionEmpty { placement, .. }
+            | Unmet::ActionDraft { placement, .. }
             | Unmet::EntryTakesNoTask { placement, .. }
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. }
@@ -492,6 +505,11 @@ pub fn check(
     let live = reachable(conn, entry_id, &by_id)?;
 
     let mut unmet = Vec::new();
+    for placement in &placements {
+        if let Some(action) = read::automation_action(conn, placement.action_id)?.filter(|a| a.draft) {
+            unmet.push(Unmet::ActionDraft { action: action.name, placement: placement.id });
+        }
+    }
     if let Some(entry) = by_id.get(&entry_id) {
         if !takes_a_task(conn, entry)? && !takes_one_first(conn, entry, &by_id)? {
             unmet.push(Unmet::EntryTakesNoTask {
@@ -2087,6 +2105,33 @@ mod tests {
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![Unmet::NoEntry],
                 "with no entry nothing is reachable, so every other check is asked of nothing",
+            );
+        });
+    }
+
+    /// **An action still being written is refused** (`AMB-D-1005`), and finishing it is what lets the
+    /// automation go.
+    #[test]
+    fn a_placement_standing_on_an_action_still_being_written_is_refused_until_it_is_finished() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let before = automation::action_finish_creating(tx, action.id).expect("read it");
+            let draft = crate::model::AutomationAction { draft: true, ..before.clone() };
+            crate::ops::emit_update(
+                tx,
+                crate::store_engine::record::automation_action(&before),
+                crate::store_engine::record::automation_action(&draft),
+            )
+            .expect("mark it as still being written");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::ActionDraft { action: "直す".into(), placement: placement.id }],
+            );
+
+            automation::action_finish_creating(tx, action.id).expect("finish it");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![],
             );
         });
     }

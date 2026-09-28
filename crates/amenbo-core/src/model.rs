@@ -1685,6 +1685,14 @@ pub struct AutomationAction {
     /// the one it points at.
     #[serde(default)]
     pub builtin_version: Option<i64>,
+    /// **Still being written** (`AMB-D-1005`): an action made on the spot where it was placed, whose
+    /// author has not yet said they are done with it or that they no longer want it. The launch check
+    /// refuses an automation standing on one. Only an action made on the spot is born this way — one
+    /// added to the library by itself, and a built-in, never are.
+    ///
+    /// The flag, and the word, are [`Task::draft`]'s (`AMB-D-552`, `AMB-D-558`).
+    #[serde(default)]
+    pub draft: bool,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,

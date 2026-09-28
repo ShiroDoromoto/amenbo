@@ -293,6 +293,11 @@ global: boolean,
  */
 builtin?: string, 
 /**
+ * **Still being written** (`AMB-D-1005`): made on the spot where it was placed, and neither
+ * finished nor given up yet. Absent on every other action.
+ */
+draft?: boolean, 
+/**
  * How many automations place it: what a rewrite here reaches.
  */
 usedBy: number, 
@@ -649,6 +654,11 @@ global: boolean,
  * its name in place of the reach, and what opening it reads instead of an action to build.
  */
 builtin?: string, 
+/**
+ * **The action standing here is still being written** (`AMB-D-1005`) — what the box is marked
+ * with. Absent on every other spot.
+ */
+draft?: boolean, 
 /**
  * **The way out this spot never leaves by**, as its settings stand — a built-in that leaves by one
  * of two ways out as a setting chooses, or that waits instead of leaving by one

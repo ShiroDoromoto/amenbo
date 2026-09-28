@@ -20,6 +20,10 @@
 //
 // **A file is named by its path**, picked in the machine's own panel, the way an attachment is: the
 // host reads it at the press, checks it against the per-file cap and keeps it (`crate::automation`).
+//
+// **A test run is asked in the same dialog** (`AMB-T-5804`): it is walked from what a launch would be
+// handed, so it asks the same fields, and a reader who tried one knows the other. Only the files are
+// not asked — nothing a test run writes is kept, so there is no task for them to go onto.
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { AutomationLaunchAsksDto } from "../bindings/bindings";
@@ -37,6 +41,7 @@ function baseName(path: string): string {
 export function LaunchHanding({
   id,
   name,
+  testing = false,
   onStart,
   onClose,
 }: {
@@ -44,6 +49,8 @@ export function LaunchHanding({
   id: number;
   /** Its name, as its row names it. */
   name: string;
+  /** Asking for a test run rather than a launch: no files, and the press says which it is. */
+  testing?: boolean;
   onStart: (handed: Handed) => void;
   onClose: () => void;
 }) {
@@ -91,8 +98,9 @@ export function LaunchHanding({
         }}
       >
         <h2 className="autodlg__title" id="launch-hand-title">
-          {tf("auto.hand.title", { name })}
+          {tf(testing ? "auto.test.title" : "auto.hand.title", { name })}
         </h2>
+        {testing && <p className="autostep__said">{t("auto.test.about")}</p>}
 
         {asks?.reads === "task" && (
           <>
@@ -145,7 +153,7 @@ export function LaunchHanding({
               </label>
             ))}
 
-            <div className="autostep__field">
+            {!testing && <div className="autostep__field">
               <span className="autostep__label">{t("auto.hand.files")}</span>
               {files.length > 0 && (
                 <ul className="launchhand__files">
@@ -168,7 +176,7 @@ export function LaunchHanding({
               <button type="button" className="btn launchhand__add" onClick={() => void add()}>
                 {t("auto.hand.fileAdd")}
               </button>
-            </div>
+            </div>}
           </>
         )}
 
@@ -183,7 +191,7 @@ export function LaunchHanding({
               if (asks !== null) onStart(handed(asks.reads));
             }}
           >
-            {t("auto.start")}
+            {t(testing ? "auto.test.run" : "auto.start")}
           </button>
           <button type="button" className="btn" onClick={onClose}>
             {t("auto.add.cancel")}

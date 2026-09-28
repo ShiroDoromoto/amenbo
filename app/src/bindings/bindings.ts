@@ -1010,6 +1010,60 @@ folder?: string,
 interactive: boolean, };
 
 /**
+ * **What a test run found** ([`amenbo_core::ops::automation_rehearse::Rehearsal`]) — every step it
+ * opened, in order, and how it ended. Nothing it walked through was kept, so there is no run to go
+ * to: this is the whole of what the build screen's test pane draws.
+ */
+export type AutomationTestRunDto = { steps: Array<AutomationTestStepDto>, 
+/**
+ * Where the run stood when the walk ended: `completed` where the picture ran out, `failed` where
+ * a real run would have been stopped, `running` where the walk was cut short (`cut`).
+ */
+status: "running" | "paused" | "completed" | "failed" | "canceled", stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | null, 
+/**
+ * The required inputs the last step found nothing wired into. Empty otherwise.
+ */
+missing: Array<string>, 
+/**
+ * The agent the last step asked for that this machine cannot start.
+ */
+noAgent?: string, 
+/**
+ * Why the walk ended before the run did: a step reached again with no way out left to try, or
+ * too many steps. Absent where the run ended on its own.
+ */
+cut?: "looped" | "too_long" | null, };
+
+/**
+ * **One step a test run opened** ([`amenbo_core::ops::automation_rehearse::Rehearsed`]).
+ */
+export type AutomationTestStepDto = { 
+/**
+ * The box on the automation's picture it was opened from — the one the picture marks.
+ */
+placement?: number, name: string, 
+/**
+ * The built-in it is, by its key. Absent for an agent's step.
+ */
+builtin?: string, 
+/**
+ * The agent that would have been started, and its model. Absent for a built-in.
+ */
+agent?: string, model?: string, 
+/**
+ * The whole text the agent would have been started on. Absent for a built-in.
+ */
+prompt?: string, 
+/**
+ * The folder its terminal would have been opened in, where the step names one.
+ */
+folder?: string, 
+/**
+ * The way out it was taken to leave by, as the run's copy names it.
+ */
+exit: string, };
+
+/**
  * **What is handed from one box to the next**, on whichever picture it is drawn on —
  * [`AutomationEdgeDto`]'s two ends, read the same way.
  */

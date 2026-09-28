@@ -2127,6 +2127,22 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 .autolaunch__go::after { content: " → " attr(data-see); color: var(--c-accent-text); }
 .autolaunch__go:hover, .autolaunch__go:focus-visible { text-decoration: underline; }
 .autolaunch__refused { font-size: var(--fs-md); color: var(--c-stop); }
+/* A test run stepped through in the build screen's panel (`../screens/AutomationTestPane`): where it
+   stands, the step it stands on, and the prompt an agent would get, in a box of its own that scrolls. */
+.autotest { display: flex; flex-direction: column; gap: var(--s-2); }
+.autotest__at { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autotest__name { font-weight: 700; }
+.autotest__facts { display: grid; grid-template-columns: auto 1fr; gap: var(--s-1) var(--s-2); margin: 0; font-size: var(--fs-md); }
+.autotest__facts dt { color: var(--c-text-muted); }
+.autotest__facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.autotest__folder { font-family: var(--font-mono); font-size: var(--fs-xs); }
+.autotest__prompt { display: flex; flex-direction: column; gap: var(--s-1); }
+.autotest__prompt pre {
+  max-height: 24em; overflow: auto; margin: 0; padding: var(--s-2);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm); background: var(--c-sunken-pic) var(--c-sunken);
+  font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap;
+}
+.autotest__end { display: flex; flex-direction: column; gap: var(--s-1); }
 
 /* The list of definitions: one bordered stack of rows, each the press that opens one. */
 .autolist__head { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-2); }

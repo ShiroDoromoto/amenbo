@@ -44,6 +44,7 @@ import type {
   AutomationRunCardDto,
   AutomationRunHistoryDto,
   AutomationRunStartedDto,
+  AutomationTestRunDto,
   AutomationRunTrailDto,
   EveryAutomationActionCardDto,
   EveryAutomationCardDto,
@@ -963,6 +964,31 @@ export async function launchAutomation(
     agents,
     workspaceOpen,
     files: handed.files.length === 0 ? null : [...handed.files],
+    title: handed.title === "" ? null : handed.title,
+    notes: handed.notes === "" ? null : handed.notes,
+    classification: handed.classification.length === 0 ? null : [...handed.classification],
+  });
+}
+
+/**
+ * **Walk this automation through as a test run** (`amenbo_core::ops::automation_rehearse`): every
+ * step opened on the road a run takes, with no agent started, no built-in carried out and nothing
+ * kept. Answers every step it opened and how it ended; a launch the check would refuse is refused.
+ *
+ * It is handed what a launch is, less the files — nothing is kept, so there is no task for a file to
+ * go onto — and the machine is asked what it can start the way the launch asks it.
+ */
+export async function testRunAutomation(
+  id: number,
+  projectId: number,
+  folders: readonly string[],
+  handed: Handed = NOTHING_HANDED,
+): Promise<AutomationTestRunDto | null> {
+  if (!inTauri()) return null;
+  const agents = await startableAgents(projectId, folders);
+  return invoke<AutomationTestRunDto>("automation_test_run", {
+    id,
+    agents,
     title: handed.title === "" ? null : handed.title,
     notes: handed.notes === "" ? null : handed.notes,
     classification: handed.classification.length === 0 ? null : [...handed.classification],

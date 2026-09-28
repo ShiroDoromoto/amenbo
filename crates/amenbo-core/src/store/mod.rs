@@ -563,9 +563,15 @@ impl Store {
         crate::viewer::carried::waiting(&self.engine)
     }
 
-    /// Put records at the back of that queue, in the order they were read out.
+    /// Put records at the back of that queue, in the order they were read out, taking off what already
+    /// waited under the same key.
     pub fn enqueue_viewer(&self, records: &[crate::viewer::carried::Waiting]) -> Result<()> {
         crate::viewer::carried::enqueue(&self.engine, records)
+    }
+
+    /// Take every version off that queue that a newer one of the same key waits behind.
+    pub fn fold_viewer(&self) -> Result<()> {
+        crate::viewer::carried::fold(&self.engine)
     }
 
     /// The first `how_many` records waiting, oldest first — what one turn takes.

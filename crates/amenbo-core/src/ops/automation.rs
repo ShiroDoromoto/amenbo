@@ -1365,6 +1365,71 @@ pub fn placement_insert_new_at_exit(
     Ok(placement)
 }
 
+/// **An action put on straight after the entry that files a task, and the built-in Amenbo put on after
+/// it** (`AMB-T-5797`) — what the build screen's four ways of putting an action on answer with.
+#[derive(Clone, Debug)]
+pub struct Placed {
+    /// The placement the reader put on.
+    pub placement: AutomationPlacement,
+    /// The built-in that closes the task, put on after it by [`close_after_filed`] — `None` where
+    /// nothing was put on.
+    pub closer: Option<AutomationPlacement>,
+}
+
+/// **Close the task a run files, after the first action that works on it** (`AMB-T-5797`).
+///
+/// A run that starts by filing a task holds that task, and a picture that lets it go on without
+/// closing it is refused at the launch (`AMB-D-967`). The reader who put one action after the entry
+/// has nearly always said the whole of what the run does, so the built-in that closes the task is put
+/// on after the action's done way out, and that one ends the run. It is an ordinary placement: the
+/// reader takes it off or moves it like any other.
+///
+/// It is put on only where nothing has been decided that it would undo: the placement stands straight
+/// after an entry that files a task (not after its error way out), its done way out still says
+/// nothing, and no placement on the picture closes the task already.
+pub fn close_after_filed(
+    tx: &WriteTx<'_>,
+    from_id: i64,
+    exit_name: Option<&str>,
+    placed: &AutomationPlacement,
+) -> Result<Option<AutomationPlacement>> {
+    if exit_name == Some(ERROR_EXIT) {
+        return Ok(None);
+    }
+    let automation = live_automation(tx, placed.automation_id)?;
+    if automation.entry_placement_id != Some(from_id) {
+        return Ok(None);
+    }
+    let builtin_of = |action_id: i64| -> Result<Option<String>> {
+        Ok(read::automation_action(tx.conn(), action_id)?.and_then(|a| a.builtin))
+    };
+    let entry = live_placement(tx, from_id)?;
+    if builtin_of(entry.action_id)?.as_deref() != Some(super::automation_builtin_make::MAKE_TASK.key) {
+        return Ok(None);
+    }
+    let close_key = super::automation_builtin_close::CLOSE_TASK.key;
+    for one in read::automation_placements_of(tx.conn(), automation.id)? {
+        if builtin_of(one.action_id)?.as_deref() == Some(close_key) {
+            return Ok(None);
+        }
+    }
+    // A done way out renamed away, or one that already goes somewhere, is the reader's decision.
+    let Some(done) =
+        read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, placed.action_id, None)?
+    else {
+        return Ok(None);
+    };
+    if read::automation_edge_for_exit(tx.conn(), AutomationPictureOwner::Automation, placed.id, done.id)?
+        .is_some()
+    {
+        return Ok(None);
+    }
+    let close = automation_builtin::action(tx, close_key)?;
+    let closer = placement_insert_at_exit(tx, placed.id, None, close.id)?;
+    edge_add(tx, AutomationPictureOwner::Automation, closer.id, None, EdgeTarget::Done, None)?;
+    Ok(Some(closer))
+}
+
 /// **The way out a box is to be followed on from**, refused when it already says what happens after
 /// it: that one has a line, and a box goes in on the line ([`placement_insert`], [`step_insert`]).
 /// Asked before anything is written, so the refusal names the way out rather than an edge.
@@ -4656,6 +4721,72 @@ mod tests {
         });
     }
 
+    /// **The first action after an entry that files a task brings the built-in that closes it**
+    /// (`AMB-T-5797`): put on after the action's done way out, ending the run — and only where nothing
+    /// the reader decided would be undone by it.
+    #[test]
+    fn the_first_action_after_filing_a_task_brings_the_one_that_closes_it() {
+        use crate::ops::automation_builtin_make::MADE_AND_TAKEN;
+        let on = AutomationPictureOwner::Automation;
+        let action = |tx: &WriteTx<'_>, automation: &Automation| {
+            action_from_prompt(tx, Some(automation.project_id), NewStep::new("書く", "write it"), &[], &[])
+                .expect("write the action")
+        };
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let entry = entry_placed(tx, &automation, "make_task");
+            let write = action(tx, &automation);
+            let placed = placement_insert_at_exit(tx, entry.id, Some(MADE_AND_TAKEN), write.id).expect("place");
+            let closer = close_after_filed(tx, entry.id, Some(MADE_AND_TAKEN), &placed)
+                .expect("close")
+                .expect("put on");
+            let close = automation_builtin::action(tx, "close_task").expect("built-in");
+            assert_eq!(closer.action_id, close.id);
+            let out = read::automation_edges_from(tx.conn(), on, placed.id).unwrap();
+            assert_eq!(out.len(), 1);
+            assert_eq!(out[0].to_id, Some(closer.id), "the action's done way out goes to it");
+            let end = read::automation_edges_from(tx.conn(), on, closer.id).unwrap();
+            assert_eq!(end.len(), 1);
+            assert_eq!(end[0].ends, AutomationEnds::Done, "and it ends the run");
+
+            // A second action after the entry finds the task already closed on the picture.
+            let again = action(tx, &automation);
+            let other = placement_add(tx, automation.id, again.id).expect("place");
+            assert!(close_after_filed(tx, entry.id, Some(MADE_AND_TAKEN), &other).unwrap().is_none());
+        });
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let entry = entry_placed(tx, &automation, "make_task");
+            let write = action(tx, &automation);
+            let placed = placement_insert_at_exit(tx, entry.id, Some(ERROR_EXIT), write.id).expect("place");
+            assert!(
+                close_after_filed(tx, entry.id, Some(ERROR_EXIT), &placed).unwrap().is_none(),
+                "not after the entry's error way out",
+            );
+        });
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let entry = entry_placed(tx, &automation, "take_task");
+            let write = action(tx, &automation);
+            let placed = placement_insert_at_exit(tx, entry.id, Some("着手した"), write.id).expect("place");
+            assert!(
+                close_after_filed(tx, entry.id, Some("着手した"), &placed).unwrap().is_none(),
+                "an entry that takes a task is left to the reader",
+            );
+        });
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let entry = entry_placed(tx, &automation, "make_task");
+            let write = action(tx, &automation);
+            let placed = placement_insert_at_exit(tx, entry.id, Some(MADE_AND_TAKEN), write.id).expect("place");
+            edge_add(tx, on, placed.id, None, EdgeTarget::Halt, None).expect("decided");
+            assert!(
+                close_after_filed(tx, entry.id, Some(MADE_AND_TAKEN), &placed).unwrap().is_none(),
+                "a done way out the reader decided is left alone",
+            );
+        });
+    }
+
     /// **The built-in that files a task, standing first, takes the task it files** (`AMB-T-5795`): left
     /// not started, the run would work no task and the launch check would refuse it. Placed first or
     /// replaced in, it comes answered that way; anywhere else it is left unanswered, and so is any
@@ -5267,6 +5398,8 @@ mod held_by_a_run {
             "placement_step_default",
             "step_insert",
             "step_insert_at_exit",
+            // Only through `placement_insert_at_exit` and `edge_add`, which ask.
+            "close_after_filed",
             // Only through `declare_port`, which asks.
             "port_add",
             // Only through `draw_wire`, which asks.

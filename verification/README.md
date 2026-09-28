@@ -736,7 +736,9 @@ One domain reads the same thing two ways. **`automation`'s definition is read ba
 terminal in the three layers it is built in**: the placements on an automation off
 `automation show` (`placement-read`), the steps inside a library action off `automation action-show`
 (`step-read`), and what joins the boxes on either picture (`edge-read`, with `in_action` for an
-action's) — which is how a road that built one at the terminal proves what it built. **The pictures
+action's) — which is how a road that built one at the terminal proves what it built. A test run of
+one (`test-run`) is read the same way, off what it answered (`test-run-walked`): it keeps nothing in
+the store, so its answer is the one thing there is to read. **The pictures
 are the screen's** (`pictured`, `line-pictured`, `lap-pictured`, `panel-shows`, `launch`, and the
 rest of the screen half): an automation's build screen draws its placements and an action's its
 steps, the ops are named for the box and the panel so one set reads either, and boxes, the lines

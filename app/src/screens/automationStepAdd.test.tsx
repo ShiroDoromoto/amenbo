@@ -21,7 +21,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
-  make: vi.fn((..._args: unknown[]) => Promise.resolve(21 as number | null)),
+  make: vi.fn((..._args: unknown[]) =>
+    Promise.resolve({ action: 21, placed: [] as number[] } as { action: number; placed: number[] } | null),
+  ),
   insertInside: vi.fn(),
   insertAtExit: vi.fn(),
   add: vi.fn(),
@@ -221,7 +223,7 @@ describe("making an action on the spot", () => {
     await act(async () => button(t("auto.actions.reachGlobal")).click());
     await act(async () => button(t("auto.make.go")).click());
     expect(hoisted.make).toHaveBeenCalledWith(9, "書く", "device");
-    expect(made).toHaveBeenCalledWith(21);
+    expect(made).toHaveBeenCalledWith(21, []);
   });
 
   it("draws a refusal and stays where it is", async () => {

@@ -30,6 +30,8 @@ export interface WriteAck {
   automations: number[];
   /** The library actions the write made, the same way — where an action made on the spot comes back. */
   actions: number[];
+  /** Placements the write put on beside the one asked for — the built-in that closes a filed task. */
+  placements: number[];
   scopes: string[]; // "tasks" / "decisions" (empty = nothing to invalidate)
 }
 

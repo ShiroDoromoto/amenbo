@@ -4225,6 +4225,19 @@ const REGISTRY: &[OpSpec] = &[
     // The runs one automation has behind it, or the ones that worked one task — the two doors a run
     // is reached by, and the whole of what a listing of runs is (there is no listing of every run).
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "runs-listed", required: &[], refs: &["target", "automation", "task"], strings: &[], binds: false },
+    //
+    // **A test run** (`automation test-run`): the automation walked from its entry to its end with no
+    // agent started, no built-in carried out and nothing kept. It takes what `start` takes bar the file,
+    // and binds nothing — a test run leaves no run behind to name. What it answered is kept on the
+    // driver for `test-run-walked`, since afterwards the store holds nothing of it to read back.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "test-run", required: &[], refs: &["target"], strings: &["title", "notes", "dim"], binds: false },
+    // What the test run just before this one walked. `walked` is **every** step it opened, in order,
+    // each as `[name, way out]` — the way out being the one it was taken to leave by, which is what says
+    // a picture that goes round was walked once round and then out. `status` is how it ended, spelled
+    // as a run's is. `runs` and `tasks` are counted afterwards off the store: how many runs the
+    // automation has behind it and how many tasks the project holds, which is where anything a test run
+    // wrongly kept would be found.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "test-run-walked", required: &["walked", "status"], refs: &["target"], strings: &["status"], binds: false },
     // ---- reading a definition back --------------------------------------------------------------
     // **The two listings are read on both faces**, which is why they stand here rather than under the
     // screen's heading below: the automations tab draws a row per definition and the actions tab one
@@ -4507,9 +4520,13 @@ const REGISTRY: &[OpSpec] = &[
     // action to fix it, and the press opens that action's build screen over the automation's. A way
     // out or an input of a step inside (`open_exit`, `unwired_input`) names that step in `box`, and
     // `opens` is the action the step sits in: the screen opens with the step picked out and its panel
-    // beside it. An action with no step (`action_empty`) names the action itself, and it opens with
-    // nothing picked. A road goes on from there the way it goes on inside an action, and comes back
-    // with `action-back`.
+    // beside it. A line inside ending the run with the task still open (`task_left_open_at_end`) is
+    // pressed the same way, where `opens` says it is inside; without it, it is the placement's own
+    // way out and picks the box. An action with no step (`action_empty`) or still being created
+    // (`action_draft`) names the action itself, and it opens with nothing picked. So does one handing
+    // on the task (`hands_on_task_taken`), which may name a step inside — `opens` then names the
+    // action. A road goes on from there the way it goes on inside an action, and comes back with
+    // `action-back`.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-reason", required: &["reason", "box"], refs: &[], strings: &["reason", "box", "opens"], binds: false },
     // Going back from an action's build screen standing over its automation, by the button named
     // after the automation. The automation's build screen is in front again, so a road reads its

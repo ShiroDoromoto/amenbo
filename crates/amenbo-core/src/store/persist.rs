@@ -25,6 +25,15 @@ fn device_shelf(shelf: crate::ops::automation::ActionShelf) -> Option<WriteTarge
     }
 }
 
+/// The name of the way out a line hangs on, read before the line is spliced — which way out of the
+/// box it leaves is what [`crate::ops::automation::close_after_filed`] asks.
+fn exit_name_of(
+    tx: &crate::store_engine::WriteTx<'_>,
+    edge: &crate::model::AutomationEdge,
+) -> Result<Option<String>> {
+    Ok(crate::store_engine::read::automation_exit(tx.conn(), edge.exit_id)?.map(|exit| exit.name))
+}
+
 /// Write the default agent onto a placement just made, reading the default for the project its
 /// automation belongs to ([`crate::wake::step_agent`]). Both the GUI's placing and `automation
 /// place-add` come through the wrappers that call this, so this is where the default takes effect.
@@ -1811,17 +1820,28 @@ impl Store {
 
     /// Put an action in on a line (one operation = one transaction): the placement and the two edges
     /// that leave nothing pointing at nothing, with the default agent written onto each of its steps
-    /// as [`Self::automation_placement_add`] writes it.
+    /// as [`Self::automation_placement_add`] writes it — and, straight after an entry that files a
+    /// task, the built-in that closes it ([`crate::ops::automation::close_after_filed`]).
     pub fn automation_placement_insert(
         &mut self,
         edge_id: i64,
         action_id: i64,
-    ) -> Result<crate::model::AutomationPlacement> {
+    ) -> Result<crate::ops::automation::Placed> {
         let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
+            let from = crate::store_engine::read::automation_edge(tx.conn(), edge_id)?;
             let placement = crate::ops::automation::placement_insert(tx, edge_id, action_id)?;
             steps_default(tx, &config, &placement)?;
-            Ok(placement)
+            let closer = match from {
+                Some(edge) => crate::ops::automation::close_after_filed(
+                    tx,
+                    edge.from_id,
+                    exit_name_of(tx, &edge)?.as_deref(),
+                    &placement,
+                )?,
+                None => None,
+            };
+            Ok(crate::ops::automation::Placed { placement, closer })
         })
     }
 
@@ -1835,30 +1855,43 @@ impl Store {
         edge_id: i64,
         shelf: crate::ops::automation::ActionShelf,
         name: &str,
-    ) -> Result<crate::model::AutomationPlacement> {
+    ) -> Result<crate::ops::automation::Placed> {
         let mut targets = vec![WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)];
         targets.extend(device_shelf(shelf));
         self.write_one(&targets, |tx| {
-            crate::ops::automation::placement_insert_new(tx, edge_id, shelf, name)
+            let from = crate::store_engine::read::automation_edge(tx.conn(), edge_id)?;
+            let placement = crate::ops::automation::placement_insert_new(tx, edge_id, shelf, name)?;
+            let closer = match from {
+                Some(edge) => crate::ops::automation::close_after_filed(
+                    tx,
+                    edge.from_id,
+                    exit_name_of(tx, &edge)?.as_deref(),
+                    &placement,
+                )?,
+                None => None,
+            };
+            Ok(crate::ops::automation::Placed { placement, closer })
         })
     }
 
     /// Put an action on after a way out that says nothing yet (one operation = one transaction): the
     /// placement and the one line from that way out to it, with the default agent written onto each
-    /// of its steps as [`Self::automation_placement_add`] writes it.
+    /// of its steps as [`Self::automation_placement_add`] writes it — and, straight after an entry
+    /// that files a task, the built-in that closes it ([`crate::ops::automation::close_after_filed`]).
     pub fn automation_placement_insert_at_exit(
         &mut self,
         from_id: i64,
         exit_name: Option<&str>,
         action_id: i64,
-    ) -> Result<crate::model::AutomationPlacement> {
+    ) -> Result<crate::ops::automation::Placed> {
         let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, from_id)], |tx| {
             let placement = crate::ops::automation::placement_insert_at_exit(
                 tx, from_id, exit_name, action_id,
             )?;
             steps_default(tx, &config, &placement)?;
-            Ok(placement)
+            let closer = crate::ops::automation::close_after_filed(tx, from_id, exit_name, &placement)?;
+            Ok(crate::ops::automation::Placed { placement, closer })
         })
     }
 
@@ -1870,11 +1903,15 @@ impl Store {
         exit_name: Option<&str>,
         shelf: crate::ops::automation::ActionShelf,
         name: &str,
-    ) -> Result<crate::model::AutomationPlacement> {
+    ) -> Result<crate::ops::automation::Placed> {
         let mut targets = vec![WriteTarget::AutomationPart(AutomationPart::Placement, from_id)];
         targets.extend(device_shelf(shelf));
         self.write_one(&targets, |tx| {
-            crate::ops::automation::placement_insert_new_at_exit(tx, from_id, exit_name, shelf, name)
+            let placement = crate::ops::automation::placement_insert_new_at_exit(
+                tx, from_id, exit_name, shelf, name,
+            )?;
+            let closer = crate::ops::automation::close_after_filed(tx, from_id, exit_name, &placement)?;
+            Ok(crate::ops::automation::Placed { placement, closer })
         })
     }
 

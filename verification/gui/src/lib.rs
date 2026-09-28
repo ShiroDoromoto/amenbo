@@ -4525,7 +4525,10 @@ impl Instructor {
             // A reason whose gap is inside an action opens that action instead, since the box's panel
             // cannot mend it. Its line says so before it is pressed, in the interface's words, and the
             // press lands on the action's build screen standing over the automation's — on the step it
-            // names (`opens` the action it sits in), or on nothing for an action with no step.
+            // names (`opens` the action it sits in), or on nothing for a gap in the action as a whole —
+            // one with no step, one still being created, or one handing on the task. That last may be
+            // named by a step inside, so `opens` names the action there too; left out, the action is
+            // the box it names.
             (Domain::Automation, "press-reason") => {
                 let reason = req(with, "reason")?;
                 let named = req(with, "box")?;
@@ -4535,15 +4538,16 @@ impl Instructor {
                 );
                 let fix = "Confirm its line says it opens the action to fix it — its words are written in the interface's language — then press it.";
                 match (reason, arg_str(with, "opens")) {
-                    ("action_empty", None) => format!(
-                        "{press} {fix} Confirm the action build screen for \"{named}\" opens over the automation's, with no step picked out on its picture."
+                    ("action_empty" | "action_draft", None) | ("hands_on_task_taken", _) => format!(
+                        "{press} {fix} Confirm the action build screen for \"{}\" opens over the automation's, with no step picked out on its picture.",
+                        arg_str(with, "opens").unwrap_or(named)
                     ),
-                    ("open_exit" | "unwired_input", Some(action)) => format!(
+                    ("open_exit" | "unwired_input" | "task_left_open_at_end", Some(action)) => format!(
                         "{press} {fix} Confirm the action build screen for \"{action}\" opens over the automation's, with the step \"{named}\" picked out on its picture and its panel open beside it."
                     ),
                     (_, Some(_)) => {
                         return Err(format!(
-                            "`opens` is the action a step's gap is inside — `{reason}` names no step inside one; it is open_exit or unwired_input"
+                            "`opens` is the action a step's gap is inside — `{reason}` names no step inside one; it is open_exit, unwired_input, task_left_open_at_end or hands_on_task_taken"
                         ))
                     }
                     (_, None) => format!(
@@ -6984,7 +6988,10 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
     BuiltinWords {
         key: "close_task",
         called: "the built-in that closes the task",
-        words: &[("コミット", "the input for the commit it records")],
+        words: &[
+            ("コミット", "the input for the commit it records"),
+            ("完了", "the way out for having closed the task"),
+        ],
     },
     BuiltinWords {
         key: "fetch",
@@ -7298,12 +7305,16 @@ fn launch_reason(reason: &str) -> Result<&'static str, String> {
         "no_steps" => "that no action is placed on it",
         "no_entry" => "that no placement is named as the one a run starts on",
         "action_empty" => "that an action placed on it has no step to start at",
+        "action_draft" => "that an action placed on it is still being created",
         "entry_takes_no_task" => "that the action a run starts on takes no task",
         "open_exit" => "that nothing is set to happen after one of a box's ways out",
         "unwired_input" => "that nothing reaches one of a box's required inputs",
         "unanswered_cfg" => "that one of a placement's required settings is unanswered",
         "agent_missing" => "that this machine cannot start what a step is carried out by",
         "model_missing" => "that this machine's agent does not offer the model a step names",
+        "task_left_open" => "that a way out goes on to a box that takes another task with this one still open",
+        "task_left_open_at_end" => "that a way out ends the run with the task still open",
+        "hands_on_task_taken" => "that a way out hands on the task the run works, which only a built-in takes",
         other => {
             return Err(format!(
                 "`reason` does not know `{other}` — it is one of the codes the launch check answers with"
@@ -9271,6 +9282,66 @@ steps_gui:
         let empty = ins.render(&steps[2]).expect("renders");
         assert!(empty.contains("\"draft\" opens over") && empty.contains("no step picked out"), "{empty}");
         assert!(ins.render(&steps[3]).is_err(), "a setting on the placement is not inside the action");
+    }
+
+    /// The rest of the reasons mended inside an action: one still being created and one handing on the
+    /// task open it with nothing picked, and a line inside ending the run with the task open opens it
+    /// on that step. The same line ending the run from the placement's own way out, and a way out going
+    /// on to a box that takes another task, are the placement's, so their press picks the box.
+    #[test]
+    fn the_rest_of_the_launch_reasons_inside_an_action_open_it() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: action_draft, box: draft }
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: hands_on_task_taken, box: write, opens: draft }
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: hands_on_task_taken, box: draft }
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: task_left_open_at_end, box: write, opens: draft }
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: task_left_open_at_end, box: draft }
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: task_left_open, box: draft }
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: task_left_open, box: draft, opens: draft }
+  - type: action
+    domain: automation
+    op: press-reason
+    with: { reason: action_draft, box: write, opens: draft }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        for step in &steps[0..3] {
+            let line = ins.render(step).expect("renders");
+            assert!(line.contains("opens the action to fix it") && line.contains("\"draft\" opens over"), "{line}");
+            assert!(line.contains("no step picked out"), "{line}");
+        }
+        let inside = ins.render(&steps[3]).expect("renders");
+        assert!(inside.contains("\"draft\" opens over") && inside.contains("the step \"write\" picked out"), "{inside}");
+        for step in &steps[4..6] {
+            let line = ins.render(step).expect("renders");
+            assert!(!line.contains("opens the action") && line.contains("\"draft\" is picked out"), "{line}");
+        }
+        assert!(ins.render(&steps[6]).is_err(), "a way out onto a box taking a task is the placement's");
+        assert!(ins.render(&steps[7]).is_err(), "an action still being created names the action, not a step");
     }
 
     /// A run's pane goes to the ledger two ways, and the picture's says which box it

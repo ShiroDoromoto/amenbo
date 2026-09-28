@@ -19,7 +19,7 @@ use crate::error::Result;
 use crate::store_engine::schema::col;
 use rusqlite::OptionalExtension as _;
 
-use crate::store_engine::sql::{Delete, Insert, Pred, Select, Sort, Sql};
+use crate::store_engine::sql::{Delete, Expr as _, Insert, Pred, Select, Sort, Sql};
 use crate::store_engine::{StoreEngine, StoreEngineError};
 
 const VS: col::viewer_send::Cols = col::viewer_send::ALL;
@@ -239,13 +239,46 @@ pub fn waiting(engine: &StoreEngine) -> Result<i64> {
     Ok(count)
 }
 
-/// Put records at the back of the queue, in the order they were read out.
+/// How many keys one statement takes off the queue — well under SQLite's cap on the values one
+/// statement may carry.
+const KEYS_PER_DROP: usize = 500;
+
+/// Put records at the back of the queue, in the order they were read out, **taking off whatever was
+/// already waiting under the same key** (`AMB-T-5812`).
+///
+/// **Only the last version of a record is worth a row on the server.** A version queued behind a newer
+/// one is written there and then written over, and a day that cannot send piles those up: one reading
+/// already folds the versions it read (`super::send`), but versions read on different turns only meet
+/// here. So the older row goes, and the newer one takes its place at the back.
+///
+/// **The back and not the older row's place**, so that what was read out later still arrives later. A
+/// record's newer version can name one read out between the two, and a delete waiting in the queue stays
+/// in front of a picture that does not name the record — the picture only takes it off if it holds the
+/// record again, which is then the newer word on it.
+///
+/// Nothing is sending while this runs: the queue is filled and drained within one turn, filled first
+/// (`super::lock`), so no front a send has read can move under it.
 pub fn enqueue(engine: &StoreEngine, records: &[Waiting]) -> Result<()> {
     if records.is_empty() {
         return Ok(());
     }
     let tx = engine.transaction()?;
-    for record in records {
+    let keys: std::collections::BTreeSet<&str> = records.iter().map(|r| r.record_key.as_str()).collect();
+    let keys: Vec<&str> = keys.into_iter().collect();
+    for chunk in keys.chunks(KEYS_PER_DROP) {
+        Delete::from(VP.table)
+            .filter(Pred::is_in(VP.record_key, chunk.iter().copied()))
+            .sql()
+            .execute(&tx)
+            .map_err(StoreEngineError::from)?;
+    }
+    // Within what is handed in, the last word on a key is the one kept, at the place it was handed in.
+    let last: std::collections::BTreeMap<&str, usize> =
+        records.iter().enumerate().map(|(at, r)| (r.record_key.as_str(), at)).collect();
+    for (at, record) in records.iter().enumerate() {
+        if last.get(record.record_key.as_str()) != Some(&at) {
+            continue;
+        }
         Insert::into(VP.table)
             .set(VP.record_key, record.record_key.as_str())
             .set(VP.op, record.op.as_str())
@@ -255,6 +288,21 @@ pub fn enqueue(engine: &StoreEngine, records: &[Waiting]) -> Result<()> {
             .map_err(StoreEngineError::from)?;
     }
     tx.commit().map_err(StoreEngineError::from)?;
+    Ok(())
+}
+
+/// Take every version off the queue that a newer one of the same key waits behind — what [`enqueue`]
+/// does for the keys it is handed, done for the whole queue.
+///
+/// **It is for a queue filled before [`enqueue`] folded**, which can hold a key many times over and would
+/// otherwise send each of them until that key moved again. Run before a send reads the front, it leaves a
+/// queue already folded as it was.
+pub fn fold(engine: &StoreEngine) -> Result<()> {
+    let (table, id, key) = (VP.table.to_sql(), VP.id.to_sql(), VP.record_key.to_sql());
+    let sql = Sql::new(format!(
+        "DELETE FROM {table} WHERE {id} NOT IN (SELECT MAX({id}) FROM {table} GROUP BY {key})"
+    ));
+    sql.execute(engine.conn()).map_err(StoreEngineError::from)?;
     Ok(())
 }
 
@@ -397,6 +445,60 @@ mod tests {
         assert_eq!(rest.len(), 1);
         assert_eq!(rest[0].op, Op::Deleted, "a deletion is the key and the word, and carries no row");
         assert_eq!(rest[0].body, None);
+    }
+
+    /// **A key waits once, as its last version** (`AMB-T-5812`): a version read out on a later turn takes
+    /// the older one off and goes to the back, a delete included, and within one handing the last word on
+    /// a key is the one kept.
+    #[test]
+    fn a_key_waits_once_as_the_last_version_read_out() {
+        let store = store_at("fold");
+        let put = |key: &str, body: &str| Waiting { record_key: key.into(), op: Op::Placed, body: Some(body.into()) };
+        store.enqueue_viewer(&[put("task/1", "v1"), put("task/2", "v1"), put("task/3", "v1")]).unwrap();
+        store.enqueue_viewer(&[put("task/1", "v2")]).unwrap();
+        store
+            .enqueue_viewer(&[
+                Waiting { record_key: "task/2".into(), op: Op::Deleted, body: None },
+                put("task/4", "v1"),
+                put("task/4", "v2"),
+            ])
+            .unwrap();
+
+        let waiting = store.viewer_front(10).unwrap();
+        let read: Vec<(&str, Op, Option<&str>)> =
+            waiting.iter().map(|w| (w.record_key.as_str(), w.op, w.body.as_deref())).collect();
+        assert_eq!(read, [
+            ("task/3", Op::Placed, Some("v1")),
+            ("task/1", Op::Placed, Some("v2")),
+            ("task/2", Op::Deleted, None),
+            ("task/4", Op::Placed, Some("v2")),
+        ]);
+    }
+
+    /// **A queue filled before folding folds whole** (`AMB-T-5812`): each key keeps its last version, where
+    /// that version waits, and a queue with nothing twice is left as it was.
+    #[test]
+    fn a_queue_filled_before_folding_keeps_each_keys_last_version() {
+        let store = store_at("fold-whole");
+        let put = |key: &str, body: &str| Waiting { record_key: key.into(), op: Op::Placed, body: Some(body.into()) };
+        for record in [put("task/1", "v1"), put("task/2", "v1"), put("task/1", "v2"), put("task/3", "v1")] {
+            // One row at a time, the way a queue from before folding was written.
+            Insert::into(VP.table)
+                .set(VP.record_key, record.record_key.as_str())
+                .set(VP.op, record.op.as_str())
+                .set_opt(VP.body, record.body.as_deref())
+                .sql()
+                .execute(store.engine.conn())
+                .unwrap();
+        }
+        assert_eq!(store.viewer_waiting().unwrap(), 4);
+
+        fold(&store.engine).unwrap();
+        fold(&store.engine).unwrap();
+        let waiting = store.viewer_front(10).unwrap();
+        let read: Vec<(&str, Option<&str>)> =
+            waiting.iter().map(|w| (w.record_key.as_str(), w.body.as_deref())).collect();
+        assert_eq!(read, [("task/2", Some("v1")), ("task/1", Some("v2")), ("task/3", Some("v1"))]);
     }
 
     /// Records added later go behind the ones already waiting, however many turns apart they were read

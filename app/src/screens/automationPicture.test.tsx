@@ -365,6 +365,19 @@ describe("the picture of the steps", () => {
     expect(box("hollow").className).not.toContain("autopic__node--draft");
   });
 
+  /// A box Amenbo put on for the reader says so, and what it is there for, so it is not taken for one
+  /// the reader put there themselves (`AMB-T-5797`).
+  it("marks a box put on for the reader, and says what it is there for", async () => {
+    const one = detail({
+      placements: [step({ id: 1, name: "write" }), step({ id: 2, name: "close" })],
+    });
+    await render({ graph: one, placedForYou: new Set([2]) });
+    const box = (name: string) => nodes().find((node) => node.textContent?.includes(name))!;
+    expect(box("close").textContent).toContain(t("auto.pic.placedForYou"));
+    expect(box("close").textContent).toContain(t("auto.pic.placedForYouWhy"));
+    expect(box("write").textContent).not.toContain(t("auto.pic.placedForYou"));
+  });
+
   /// Which box a launch enters by cannot be read off the lines: two stretches nothing joins are
   /// drawn the same, so the box says it.
   it("marks the placement a run opens, and only that one", async () => {

@@ -36,6 +36,10 @@
 // **On a line, the pressed way out comes to point at the new placement** and the new placement goes
 // on to where that way out used to (`insertAutomationAction`).
 //
+// **An action put straight after an entry that files a task brings the built-in that closes it**
+// (`AMB-T-5797`): core puts it on after the action's done way out, and the placements it put on come
+// back through `onPlaced` for the picture to mark.
+//
 // **On an empty picture only the built-ins a run starts at are offered** (`AMB-D-977`): the first
 // placement is where a run begins, and core refuses anything else there. So the panel holds the three
 // of them in the order core offers them, and nothing else — no actions of one's own, no search, and no
@@ -207,8 +211,9 @@ export function AutomationLibraryPanel({
   projectId: number | null;
   /** Where the placement will go: after which way out of which box, or first of all. */
   where: WhereTo;
-  /** The action is on the picture; the panel has nothing left to show. */
-  onPlaced: () => void;
+  /** The action is on the picture; the panel has nothing left to show. `placed` is what core put on
+   *  beside it for the reader. */
+  onPlaced: (placed: number[]) => void;
   /** Make an action here instead — the dialog, opened on this same target with the name typed. */
   onMake: (name: string) => void;
 }) {
@@ -237,7 +242,7 @@ export function AutomationLibraryPanel({
       "edgeId" in target
         ? insertAutomationAction(target.edgeId, actionId)
         : insertAutomationActionAtExit({ boxId: target.fromId, exitName: target.exitName }, actionId);
-    void write.then(onPlaced, (e: unknown) => setRefused(errText(e)));
+    void write.then((placed) => onPlaced(placed), (e: unknown) => setRefused(errText(e)));
   };
   const placeBuiltin = (key: string) => {
     setRefused(null);
@@ -248,7 +253,7 @@ export function AutomationLibraryPanel({
         : "fromId" in target
           ? insertAutomationBuiltinAtExit({ boxId: target.fromId, exitName: target.exitName }, key, on)
           : placeAutomationBuiltin(target.automationId, key, on);
-    void write.then(onPlaced, (e: unknown) => setRefused(errText(e)));
+    void write.then(() => onPlaced([]), (e: unknown) => setRefused(errText(e)));
   };
 
   const w = words.trim().toLowerCase();

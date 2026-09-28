@@ -973,6 +973,8 @@ export const zhHans: Translation = {
     "auto.pic.endsHalt": "停下来叫人",
     "auto.pic.unfed": "没有东西送到 {names}",
     "auto.pic.entry": "起点",
+    "auto.pic.placedForYou": "自动放置",
+    "auto.pic.placedForYouWhy": "在运行结束时将任务标为完成",
     "auto.pic.legendNext": "下一步",
     "auto.pic.legendBack": "返回",
     "auto.pic.legendBranch": "分岔",

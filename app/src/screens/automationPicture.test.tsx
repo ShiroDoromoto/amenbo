@@ -395,6 +395,64 @@ describe("the picture of the steps", () => {
   });
 });
 
+describe("what a step's card says it takes in and hands on (AMB-T-5798)", () => {
+  // Two steps: the first reads what the action was handed and hands on a theme, which the second reads.
+  function action(): PicGraph {
+    return {
+      ...detail({
+        placements: [
+          step({
+            id: 1,
+            name: "Ask for a theme",
+            inputs: [{ name: "topic", kind: "value", required: true }],
+            exits: [{ id: 10, name: "完了", outputs: [{ name: "theme", kind: "value", required: true }] }],
+          }),
+          step({
+            id: 2,
+            name: "Write it up",
+            inputs: [{ name: "theme", kind: "value", required: true }],
+            exits: [{ id: 20, name: "完了", outputs: [] }],
+          }),
+        ],
+        edges: [{ id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" }],
+        wires: [
+          { id: 1, fromId: 0, fromPortName: "topic", toId: 1, toPortName: "topic" },
+          { id: 2, fromId: 1, fromExitName: "完了", fromPortName: "theme", toId: 2, toPortName: "theme" },
+        ],
+      }),
+      boundary: { inputs: [{ name: "topic", kind: "value", required: true }], exits: [] },
+    };
+  }
+  const io = (at: number) => [...nodes()[at]!.querySelectorAll(".autopic__iopart")].map((one) => one.textContent);
+
+  it("names each input with where it comes from, and each output, on an action's picture", async () => {
+    await render({ graph: action() });
+    expect(io(0)).toEqual([
+      tf("auto.pic.ioIn", { names: tf("auto.pic.ioFromAction", { name: "topic" }) }),
+      tf("auto.pic.ioOut", { names: "theme" }),
+    ]);
+    expect(io(1)).toEqual([tf("auto.pic.ioIn", { names: tf("auto.pic.ioFrom", { name: "theme", no: 1 }) })]);
+  });
+
+  it("names an input nothing reaches by its name alone, and says nothing for a step with neither", async () => {
+    const graph = action();
+    await render({ graph: { ...graph, wires: [] } });
+    expect(io(1)).toEqual([tf("auto.pic.ioIn", { names: "theme" })]);
+    const bare = { ...graph, boxes: graph.boxes.map((box) => ({ ...box, inputs: [], exits: [] })) };
+    await render({ graph: bare });
+    expect(container.querySelector(".autopic__io")).toBeNull();
+  });
+
+  it("says none of it on an automation's picture, whose second line is the library, and keeps its boxes a line shorter", async () => {
+    await render({ graph: action() });
+    const tall = parseFloat(nodes()[0]!.style.height);
+    const { boundary: _, ...graph } = action();
+    await render({ graph });
+    expect(container.querySelector(".autopic__io")).toBeNull();
+    expect(parseFloat(nodes()[0]!.style.height)).toBeLessThan(tall);
+  });
+});
+
 describe("what the picture marks, as the mock draws it", () => {
   /** Take a task, then check it, which either sends it back to be fixed or on to be shipped. */
   const branching = () =>

@@ -130,6 +130,9 @@ export const ERROR_EXIT = "*";
  *  name, and under it where the action comes from or what it is missing — as the mock draws it. */
 const NODE_W = 220;
 const NODE_H = 46;
+/** A step's box on an action's picture, one line taller: what it takes in and what it hands on have a
+ *  line each under its name (`AMB-T-5798`), so neither cuts the other short. */
+const STEP_H = 62;
 /** Between two boxes standing side by side at the same depth. */
 const COL_GAP = 24;
 /** Between one depth and the next — the room a line and its `+` are drawn in. */
@@ -712,6 +715,7 @@ export function layOut(graph: PicGraph | null): Picture {
   if (graph === null || graph.boxes.length === 0) return empty;
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
+  const nodeH = graph.boundary !== undefined ? STEP_H : NODE_H;
   const { laps, live, back: goesBack } = walk(graph);
   // The action's ways out, the error one last — the order the declaration lists them in.
   const outs = [...(graph.boundary?.exits ?? [])].sort(
@@ -800,7 +804,7 @@ export function layOut(graph: PicGraph | null): Picture {
     lap.rows.forEach((row, depth) => {
       // Under a row a press hangs from, the next row stands as much lower as it hangs, so neither that
       // row nor the lines down to it run through the press (`AMB-T-5789`). Every other row keeps its room.
-      if (depth > 0) rowY += NODE_H + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2));
+      if (depth > 0) rowY += nodeH + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2));
       hang = Math.max(0, ...row.map((boxId) => hangOf(boxes.get(boxId)!)));
       const columns = columnsOf(row);
       const startX = rowStart(contentW, columns.w);
@@ -815,7 +819,7 @@ export function layOut(graph: PicGraph | null): Picture {
           x: startX + columns.xs[column],
           y: rowY,
           w: NODE_W,
-          h: NODE_H,
+          h: nodeH,
           no: nodes.length + 1,
           takes: takesTask(box),
           global: box.global,
@@ -833,7 +837,7 @@ export function layOut(graph: PicGraph | null): Picture {
     });
     // Under the last row, room for what hangs lowest from it.
     const endRoom = hang === 0 ? END_ROOM : Math.max(END_ROOM, hang + 12);
-    const inner = rowY + NODE_H - (top + over) + endRoom;
+    const inner = rowY + nodeH - (top + over) + endRoom;
     const height = inner + over + pad;
     if (lap.head !== null) {
       outlines.push({ headBoxId: lap.head, x: -LAP_PAD, y: top, w: contentW + LAP_PAD * 2, h: height });
@@ -965,7 +969,7 @@ export function layOut(graph: PicGraph | null): Picture {
       const from = node.get(edge.fromId);
       if (toId === undefined || from === undefined || neighbours(edge.fromId, toId)) return [];
       const to = node.get(toId)!;
-      const out = from.y + NODE_H + DROP;
+      const out = from.y + nodeH + DROP;
       const into = to.y - DROP;
       return [{ id: edge.id, from, to, top: Math.min(out, into), bottom: Math.max(out, into) }];
     });
@@ -1080,7 +1084,7 @@ export function layOut(graph: PicGraph | null): Picture {
     const from = node.get(open.boxId)!;
     const { nth, below } = openSlot.get(open.key)!;
     const sx = attach(from, nth);
-    const sy = from.y + NODE_H;
+    const sy = from.y + nodeH;
     const foot = sy + STUB + below;
     const word = exitWord({ exitName: open.exitName, builtin: from.builtin });
     undecidedLines.push({
@@ -1101,7 +1105,7 @@ export function layOut(graph: PicGraph | null): Picture {
     if (from === undefined) continue;
     const { nth, below } = slot.get(edge.id)!;
     const sx = attach(from, nth);
-    const sy = from.y + NODE_H;
+    const sy = from.y + nodeH;
     const key = lineKey(edge.id);
 
     const toId = toOf(edge);
@@ -1215,7 +1219,7 @@ export function layOut(graph: PicGraph | null): Picture {
     const stair = outStair.get(line.key)!;
     return attach(line.from, line.side === "left" ? stair : (slots.get(line.from.boxId) ?? 1) - 1 - stair);
   };
-  const outY = (line: Aside): number => line.from.y + NODE_H + DROP + Math.min(outStair.get(line.key)!, STAIRS) * STAIR;
+  const outY = (line: Aside): number => line.from.y + nodeH + DROP + Math.min(outStair.get(line.key)!, STAIRS) * STAIR;
 
   // `wordsAt`: where the name of each line in a margin is written — over the leg it leaves its box
   // by, just beside that box on the side the line goes, so it reads as that box's way out. Past the
@@ -1242,7 +1246,7 @@ export function layOut(graph: PicGraph | null): Picture {
       return [left, left + wide];
     };
     for (const [y, row] of rows) {
-      const top = y + NODE_H;
+      const top = y + nodeH;
       const bottom = top + DROP;
       // What already stands under the row: every line coming down out of it, and every name there.
       const taken: [number, number][] = [];
@@ -1347,7 +1351,7 @@ export function layOut(graph: PicGraph | null): Picture {
     }
     for (const line of group) {
       const sx = outX(line);
-      const sy = line.from.y + NODE_H;
+      const sy = line.from.y + nodeH;
       const oy = outY(line);
       const stop = stops.get(line.key)!;
       const stair = outStair.get(line.key)!;

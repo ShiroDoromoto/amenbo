@@ -19,7 +19,8 @@
 // **What a box is missing is a mark, not a sentence** (`AMB-T-5527`). A required input nothing reaches
 // is a "⚠ n" at the box's top right, the names it is missing said on hover; an action with nothing in
 // it is a dashed box marked "empty". Neither takes the second line, which keeps saying where the
-// action comes from. An empty picture draws nothing: the screen puts its "+ first …" in the middle.
+// action comes from — or, on an action's picture, what the step takes in and hands on, a line each
+// (below). An empty picture draws nothing: the screen puts its "+ first …" in the middle.
 //
 // **A line's `+` shows when the line is pointed at, and not before** (`AMB-T-5697`). One on every line
 // all the time put a ring beside every name on the picture, and what a reader opens it for first is
@@ -35,6 +36,9 @@
 // **What a box hands on is not drawn** (`AMB-D-1001`). The dotted wires took the right of the
 // picture and crossed the tops of the boxes, and nobody makes or drops one on it: the panel beside it
 // does both, and says where each goes. What stays on a box is its "⚠" for an input nothing reaches.
+// A step's card on an action's picture says it in words instead (`AMB-T-5798`): its inputs, each with
+// the number of the step it comes from, and its outputs — so what flows through a step is read without
+// opening its panel, and still no line crosses the picture.
 //
 // **It scrolls, and it does nothing else.** No zoom, no folding a stretch away: an automation is
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
@@ -49,10 +53,27 @@
 // brought to the middle. Nothing is put in there, so no `+` is drawn, and the legend is left to the
 // build screen: what a line means is read where the picture is made.
 import { useEffect, useId, useRef, useState } from "react";
-import { edgeWord, layOut, openWord, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
+import { edgeWord, layOut, openWord, ACTION_BOUNDARY, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
+import { cardIo } from "./automationWires";
 import { Icon } from "../components/Icon";
+
+/** Under a step's name on an action's picture: what it takes in, then what it hands on — a line each,
+ *  cut short where it runs out, and read in full on hover. Nothing at all where it has neither. */
+function CardIo({ words }: { words: { takes?: string; hands?: string } }) {
+  const all = [words.takes, words.hands].filter((one) => one !== undefined);
+  if (all.length === 0) return null;
+  return (
+    <span className="autopic__nodesub autopic__io" title={all.join("\n")}>
+      {all.map((one) => (
+        <span key={one} className="autopic__iopart">
+          {one}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /** One way out of the action, in words: by its name, the error one in the screen's words. Only an
  *  `out` mark is written this way, and it always has one. */
@@ -176,6 +197,22 @@ export function AutomationPicture({
   const ids = useId();
   const head = (kind: Head) => `url(#${ids}-${kind})`;
   const picture = layOut(graph);
+  // What a step's card says it takes in and hands on, on an action's picture — each input with the
+  // number of the step that hands it its value, or the action's own input.
+  const ioWords = (boxId: number): { takes?: string; hands?: string } => {
+    if (graph === null) return {};
+    const io = cardIo(graph, boxId);
+    const from = (one: { name: string; from?: number }) => {
+      if (one.from === undefined) return one.name;
+      if (one.from === ACTION_BOUNDARY) return tf("auto.pic.ioFromAction", { name: one.name });
+      const no = picture.nodes.find((node) => node.boxId === one.from)?.no;
+      return no === undefined ? one.name : tf("auto.pic.ioFrom", { name: one.name, no });
+    };
+    return {
+      takes: io.inputs.length > 0 ? tf("auto.pic.ioIn", { names: listLabel(io.inputs.map(from)) }) : undefined,
+      hands: io.outputs.length > 0 ? tf("auto.pic.ioOut", { names: listLabel(io.outputs) }) : undefined,
+    };
+  };
   const pickedRef = useRef<HTMLButtonElement | null>(null);
   // The edge the pointer is on, whose `+` is shown.
   const [near, setNear] = useState<number | null>(null);
@@ -452,6 +489,7 @@ export function AutomationPicture({
                 {node.empty === true && <span className="autopic__emptymark">{t("auto.pic.emptyMark")}</span>}
                 {node.draft === true && <span className="autopic__draftmark">{t("chip.draft")}</span>}
               </span>
+              {graph?.boundary !== undefined && <CardIo words={ioWords(node.boxId)} />}
               {/* Which library the action standing here comes from, on an automation's picture — a
                   built-in's is Amenbo's own, though it is kept on the device's shelf. */}
               {node.global !== undefined && (

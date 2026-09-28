@@ -957,6 +957,8 @@ export const ja: Translation = {
     "auto.pic.endsHalt": "止めて人を呼ぶ",
     "auto.pic.unfed": "{names} に何も届かない",
     "auto.pic.entry": "起点",
+    "auto.pic.placedForYou": "自動で置いた",
+    "auto.pic.placedForYouWhy": "実行の最後にタスクを完了にする",
     "auto.pic.legendNext": "次へ",
     "auto.pic.legendBack": "戻る",
     "auto.pic.legendBranch": "分かれる",

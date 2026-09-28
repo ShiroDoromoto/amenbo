@@ -951,6 +951,8 @@ export const tr: Translation = {
     "auto.pic.endsHalt": "dur ve birini çağır",
     "auto.pic.unfed": "{names} girdisine hiçbir şey ulaşmıyor",
     "auto.pic.entry": "Başlangıç",
+    "auto.pic.placedForYou": "Otomatik yerleştirildi",
+    "auto.pic.placedForYouWhy": "Çalıştırmanın sonunda görevi tamamlandı yapar",
     "auto.pic.legendNext": "Sonraki",
     "auto.pic.legendBack": "Geri döner",
     "auto.pic.legendBranch": "Dallanır",

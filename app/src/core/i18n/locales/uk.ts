@@ -968,6 +968,8 @@ export const uk: Translation = {
     "auto.pic.endsHalt": "зупинитися й покликати людину",
     "auto.pic.unfed": "нічого не доходить до {names}",
     "auto.pic.entry": "Старт",
+    "auto.pic.placedForYou": "Поставлено автоматично",
+    "auto.pic.placedForYouWhy": "Наприкінці запуску позначає завдання виконаним",
     "auto.pic.legendNext": "Далі",
     "auto.pic.legendBack": "Повертається",
     "auto.pic.legendBranch": "Розгалужується",

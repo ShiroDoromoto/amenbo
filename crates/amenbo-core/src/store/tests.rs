@@ -1537,7 +1537,7 @@ fn placing_an_action_writes_the_default_agent_onto_its_steps() {
     let edge = s
         .automation_edge_add(AutomationPictureOwner::Automation, placed.id, None, EdgeTarget::Done, None)
         .unwrap();
-    let inserted = s.automation_placement_insert(edge.id, action.id).unwrap();
+    let inserted = s.automation_placement_insert(edge.id, action.id).unwrap().placement;
     assert_eq!(chosen(&s, inserted.id).as_deref(), Some("codex-cli"), "else the person's");
     assert_eq!(
         chosen(&s, placed.id).as_deref(),

@@ -952,6 +952,8 @@ export const th: Translation = {
     "auto.pic.endsHalt": "หยุดแล้วเรียกคน",
     "auto.pic.unfed": "ไม่มีอะไรไปถึง {names}",
     "auto.pic.entry": "จุดเริ่ม",
+    "auto.pic.placedForYou": "วางให้อัตโนมัติ",
+    "auto.pic.placedForYouWhy": "ทำเครื่องหมายงานว่าเสร็จเมื่อจบการรัน",
     "auto.pic.legendNext": "ถัดไป",
     "auto.pic.legendBack": "ย้อนกลับ",
     "auto.pic.legendBranch": "แยกทาง",

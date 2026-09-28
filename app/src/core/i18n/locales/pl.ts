@@ -968,6 +968,8 @@ export const pl: Translation = {
     "auto.pic.endsHalt": "zatrzymaj się i zawołaj człowieka",
     "auto.pic.unfed": "nic nie dociera do {names}",
     "auto.pic.entry": "Start",
+    "auto.pic.placedForYou": "Umieszczone automatycznie",
+    "auto.pic.placedForYouWhy": "Oznacza zadanie jako wykonane na końcu przebiegu",
     "auto.pic.legendNext": "Dalej",
     "auto.pic.legendBack": "Wraca",
     "auto.pic.legendBranch": "Rozgałęzia się",

@@ -181,6 +181,13 @@ export function AutomationBuildScreen({
     setOverStep(step);
     setOver(actionId);
   };
+  // What core put on for the reader while this screen was open — the built-in that closes a filed
+  // task, after the first action (`AMB-T-5797`) — marked on the picture so it is not taken for the
+  // reader's own.
+  const [forYou, setForYou] = useState<ReadonlySet<number>>(new Set());
+  const putForYou = (placed: number[]) => {
+    if (placed.length > 0) setForYou((was) => new Set([...was, ...placed]));
+  };
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
@@ -309,6 +316,7 @@ export function AutomationBuildScreen({
         <AutomationPicture
           graph={automationGraph(automation)}
           selectedBoxId={pressed?.id}
+          placedForYou={forYou}
           onPickBox={(box) => setShowing({ kind: "box", id: box })}
           onInsert={held ? undefined : (edgeId) => setShowing({ kind: "library", target: { edgeId } })}
           onOpenExit={
@@ -343,7 +351,10 @@ export function AutomationBuildScreen({
             target={showing.target}
             projectId={projectId}
             where={whereTo(automation, showing.target)}
-            onPlaced={close}
+            onPlaced={(placed) => {
+              putForYou(placed);
+              close();
+            }}
             onMake={(name) => {
               // The library offers making one only after a box: a picture with nothing on it takes
               // one of the built-ins a run starts at (`AMB-D-977`).
@@ -386,7 +397,8 @@ export function AutomationBuildScreen({
           name={making.name}
           where={whereTo(automation, making.target)}
           projectId={projectId}
-          onMade={(actionId) => {
+          onMade={(actionId, placed) => {
+            putForYou(placed);
             close();
             openOver(actionId);
           }}

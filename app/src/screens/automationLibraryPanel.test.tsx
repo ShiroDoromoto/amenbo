@@ -28,9 +28,9 @@ const hoisted = vi.hoisted(() => ({
   actions: [] as AutomationActionCardDto[],
   detail: null as unknown,
   builtins: [] as AutomationBuiltinDto[],
-  insert: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  insert: vi.fn((..._args: unknown[]) => Promise.resolve([] as number[])),
   insertBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
-  insertAtExit: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  insertAtExit: vi.fn((..._args: unknown[]) => Promise.resolve([] as number[])),
   insertBuiltinAtExit: vi.fn((..._args: unknown[]) => Promise.resolve()),
   placeBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
   dimensions: [] as DimensionDto[],
@@ -106,7 +106,7 @@ beforeEach(() => {
   ];
   hoisted.detail = null;
   hoisted.insert.mockClear();
-  hoisted.insert.mockResolvedValue(undefined);
+  hoisted.insert.mockResolvedValue([]);
   placed.mockClear();
   make.mockClear();
 });
@@ -197,6 +197,14 @@ describe("the library in the panel", () => {
     expect(hoisted.insertAtExit).toHaveBeenCalledWith({ boxId: 3, exitName: "taken" }, 4);
     expect(hoisted.insert).not.toHaveBeenCalled();
     expect(placed).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands on what core put on beside the pick, so the picture can mark it (AMB-T-5797)", async () => {
+    hoisted.insertAtExit.mockResolvedValueOnce([12]);
+    await render({ fromId: 3, exitName: "taken" });
+    await act(async () => { button("Review").click(); });
+    await act(async () => { button(t("auto.pic.placeDo")).click(); });
+    expect(placed).toHaveBeenCalledWith([12]);
   });
 
   it("draws a refusal and stays open", async () => {

@@ -572,9 +572,11 @@ pub fn automation_placement_insert_new(
     shelf: String,
 ) -> Result<WriteAck, CmdError> {
     let shelf = action_shelf(&shelf)?;
-    let placement =
+    let placed =
         with_store_mut(|store| Ok(store.automation_placement_insert_new(edge_id, shelf, &name)?))?;
-    Ok(WriteAck::new(&["automations", "automationActions"]).action(placement.action_id))
+    Ok(WriteAck::new(&["automations", "automationActions"])
+        .action(placed.placement.action_id)
+        .placed(placed.closer.as_ref()))
 }
 
 /// **Make an empty action and put it on after a way out that says nothing yet**
@@ -589,10 +591,12 @@ pub fn automation_placement_insert_new_at_exit(
     shelf: String,
 ) -> Result<WriteAck, CmdError> {
     let shelf = action_shelf(&shelf)?;
-    let placement = with_store_mut(|store| {
+    let placed = with_store_mut(|store| {
         Ok(store.automation_placement_insert_new_at_exit(from_id, exit_name.as_deref(), shelf, &name)?)
     })?;
-    Ok(WriteAck::new(&["automations", "automationActions"]).action(placement.action_id))
+    Ok(WriteAck::new(&["automations", "automationActions"])
+        .action(placed.placement.action_id)
+        .placed(placed.closer.as_ref()))
 }
 
 /// Which library an action written at a picture lands in, as the screen sends it. An unknown word is
@@ -1087,11 +1091,8 @@ pub fn automation_placement_step_set(
 /// past it is a picture nobody asked for.
 #[tauri::command]
 pub fn automation_step_insert(edge_id: i64, action: i64) -> Result<WriteAck, CmdError> {
-    with_store_mut(|store| {
-        store.automation_placement_insert(edge_id, action)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["automations", "automationActions"]))
+    let placed = with_store_mut(|store| Ok(store.automation_placement_insert(edge_id, action)?))?;
+    Ok(WriteAck::new(&["automations", "automationActions"]).placed(placed.closer.as_ref()))
 }
 
 /// **Put a library action on after a way out that says nothing yet**
@@ -1104,11 +1105,10 @@ pub fn automation_step_insert_at_exit(
     exit_name: Option<String>,
     action: i64,
 ) -> Result<WriteAck, CmdError> {
-    with_store_mut(|store| {
-        store.automation_placement_insert_at_exit(from_id, exit_name.as_deref(), action)?;
-        Ok(())
+    let placed = with_store_mut(|store| {
+        Ok(store.automation_placement_insert_at_exit(from_id, exit_name.as_deref(), action)?)
     })?;
-    Ok(WriteAck::new(&["automations", "automationActions"]))
+    Ok(WriteAck::new(&["automations", "automationActions"]).placed(placed.closer.as_ref()))
 }
 
 // ───────────────────────── what happens after a way out ─────────────────────────

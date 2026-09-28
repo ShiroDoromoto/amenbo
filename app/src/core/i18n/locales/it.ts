@@ -963,6 +963,8 @@ export const it: Translation = {
     "auto.pic.endsHalt": "fermarsi e chiamare una persona",
     "auto.pic.unfed": "niente arriva a {names}",
     "auto.pic.entry": "Inizio",
+    "auto.pic.placedForYou": "Posizionato automaticamente",
+    "auto.pic.placedForYouWhy": "Segna il compito come fatto alla fine dell'esecuzione",
     "auto.pic.legendNext": "Avanti",
     "auto.pic.legendBack": "Torna indietro",
     "auto.pic.legendBranch": "Si dirama",

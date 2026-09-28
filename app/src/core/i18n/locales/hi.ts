@@ -951,6 +951,8 @@ export const hi: Translation = {
     "auto.pic.endsHalt": "रुककर किसी व्यक्ति को बुलाएँ",
     "auto.pic.unfed": "{names} तक कुछ नहीं पहुँचता",
     "auto.pic.entry": "शुरुआत",
+    "auto.pic.placedForYou": "अपने आप रखा गया",
+    "auto.pic.placedForYouWhy": "रन के अंत में कार्य को पूरा करता है",
     "auto.pic.legendNext": "अगला",
     "auto.pic.legendBack": "वापस जाता है",
     "auto.pic.legendBranch": "शाखाएँ बनती हैं",

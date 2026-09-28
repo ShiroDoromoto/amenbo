@@ -955,6 +955,8 @@ export const de: Translation = {
     "auto.pic.endsHalt": "anhalten und eine Person rufen",
     "auto.pic.unfed": "nichts erreicht {names}",
     "auto.pic.entry": "Start",
+    "auto.pic.placedForYou": "Automatisch gesetzt",
+    "auto.pic.placedForYouWhy": "Setzt die Aufgabe am Ende des Laufs auf erledigt",
     "auto.pic.legendNext": "Weiter",
     "auto.pic.legendBack": "Zurück",
     "auto.pic.legendBranch": "Verzweigt",

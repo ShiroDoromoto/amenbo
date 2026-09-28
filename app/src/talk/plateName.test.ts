@@ -75,6 +75,7 @@ describe("the row above a run's pane", () => {
     placement: null,
     box: null,
     builtin: false,
+    interactive: false,
     action: null,
     task: null,
     state: null,

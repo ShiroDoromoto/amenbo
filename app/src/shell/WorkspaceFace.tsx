@@ -1751,6 +1751,7 @@ export function WorkspaceFace({
                       placement: on.placement ?? null,
                       box: null,
                       builtin: builtin !== undefined,
+                      interactive: step?.interactive ?? false,
                       // Which spot of the picture this step was opened from, said by the action
                       // standing there (`AMB-D-949`). Null where that spot has since been taken off.
                       action: on.actionName === undefined ? null : builtinWord(builtin?.key, on.actionName),

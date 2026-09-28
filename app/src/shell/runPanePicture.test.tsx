@@ -3,8 +3,10 @@
 //
 // **A run's pane opens on its picture**, every run and every time, and the reader's turn is kept for
 // that run's pane alone: back up after a page turn it is as they left it, and the next run opens on
-// its picture again. **The terminal face stays mounted behind the picture**, out of the layout, so the
-// program in it is not ended by looking away. An ordinary pane has no picture and no control for one.
+// its picture again — save while a step that may wait for a person runs, when it is turned to its
+// terminal and turned back after (`AMB-T-5776`). **The terminal face stays mounted behind the
+// picture**, out of the layout, so the program in it is not ended by looking away. An ordinary pane
+// has no picture and no control for one.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,7 +33,7 @@ vi.mock("../talk/plate", () => ({
 
 /** A run that failed at its second step, as a pane come back with the app is handed it. */
 const FAILED: Say = {
-  automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false,
+  automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false, interactive: false,
   action: null, task: null,
   state: { status: "failed", word: "Failed", pauseRequested: false, why: null, exit: null, errorExit: false, acknowledged: false },
 };
@@ -119,5 +121,46 @@ describe("the face a run's pane is turned to", () => {
     expect(faces()).toHaveLength(0);
     expect(picture()).toBeNull();
     expect(away()).toBe(false);
+  });
+});
+
+/// A step that may wait for a person turns the pane to its terminal while it runs (`AMB-T-5776`).
+describe("a step that may wait for a person", () => {
+  const RUNNING: Say = {
+    ...FAILED,
+    run: 21,
+    step: "ask",
+    state: { ...FAILED.state!, status: "running", word: "Running" },
+  };
+  const ASKING: Say = { ...RUNNING, interactive: true };
+
+  it("turns the pane to its terminal while it runs, and back to the picture after it", async () => {
+    await pane(RUNNING);
+    expect(pressed()).toBe(t("auto.run.facePicture"));
+    await pane(ASKING);
+    expect(pressed(), "a step asking a person was left behind the picture").toBe(t("auto.run.faceTerminal"));
+    await pane({ ...RUNNING, step: "after" });
+    expect(pressed()).toBe(t("auto.run.facePicture"));
+  });
+
+  it("leaves the terminal up after it where the reader had chosen the terminal", async () => {
+    await pane({ ...RUNNING, run: 22 });
+    await act(async () => faces()[1]!.click());
+    await pane({ ...ASKING, run: 22 });
+    await pane({ ...RUNNING, run: 22, step: "after" });
+    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+  });
+
+  it("keeps a press made while it runs as the reader's choice", async () => {
+    await pane({ ...ASKING, run: 23 });
+    await act(async () => faces()[0]!.click());
+    expect(pressed()).toBe(t("auto.run.facePicture"));
+    await pane({ ...RUNNING, run: 23, step: "after" });
+    expect(pressed()).toBe(t("auto.run.facePicture"));
+  });
+
+  it("does not turn a run that is not going", async () => {
+    await pane({ ...ASKING, run: 24, state: { ...FAILED.state!, status: "paused", word: "Paused" } });
+    expect(pressed()).toBe(t("auto.run.facePicture"));
   });
 });

@@ -326,7 +326,7 @@ describe("the picture of an automation", () => {
     expect(Math.min(...across.points.map((p) => p.x))).toBeLessThan(leftmost);
   });
 
-  it("gives two lines crossing the same rows a lane each", () => {
+  it("joins two lines from one margin into the same box into one line, with one arrowhead", () => {
     const one = detail({
       entryPlacementId: 1,
       placements: [
@@ -344,9 +344,43 @@ describe("the picture of an automation", () => {
       ],
     });
     const picture = layOut(one);
-    const laneX = (key: string) =>
-      Math.min(...picture.lines.find((line) => line.key === key)!.points.map((p) => p.x));
-    expect(laneX("edge-4")).not.toBe(laneX("edge-5"));
+    const line = (key: string) => picture.lines.find((one) => one.key === key)!;
+    const laneX = (key: string) => Math.min(...line(key).points.map((p) => p.x));
+    const into = picture.lines.find((one) => one.key.startsWith("into-"))!;
+    // On one lane, each ending there without an arrowhead, and one line on from there into the box.
+    expect(laneX("edge-4")).toBe(laneX("edge-5"));
+    expect(line("edge-4").joins).toBe(true);
+    expect(line("edge-5").joins).toBe(true);
+    expect(into.joins).toBeUndefined();
+    expect(into.points[0]!.x).toBe(line("edge-4").points.slice(-1)[0]!.x);
+    const work = picture.nodes.find((one) => one.boxId === 2)!;
+    expect(into.points.slice(-1)[0]!.y).toBe(work.y);
+    // Neither lies over the other along the lane: the one further out stops where the nearer joins.
+    const [far, near] = [line("edge-4"), line("edge-5")].sort((a, b) => b.points[1]!.y - a.points[1]!.y);
+    expect(far!.points.slice(-1)[0]!.y).toBe(near!.points[2]!.y);
+    expect(near!.points.slice(-1)[0]!.y).toBe(into.points[0]!.y);
+  });
+
+  it("gives two lines crossing the same rows into different boxes a lane each, or a margin each", () => {
+    const one = detail({
+      entryPlacementId: 1,
+      placements: [
+        taker(1, "take"),
+        step({ id: 2, name: "work" }),
+        step({ id: 3, name: "check", exits: [{ id: 31, name: "again", outputs: [] }] }),
+        step({ id: 4, name: "close", exits: [{ id: 41, name: "again", outputs: [] }] }),
+      ],
+      edges: [
+        edge({ id: 1, fromId: 1, toId: 2 }),
+        edge({ id: 2, fromId: 2, toId: 3 }),
+        edge({ id: 3, fromId: 3, toId: 4 }),
+        edge({ id: 4, fromId: 3, exitName: "again", toId: 1 }),
+        edge({ id: 5, fromId: 4, exitName: "again", toId: 2 }),
+      ],
+    });
+    const picture = layOut(one);
+    const lane = (key: string) => picture.lines.find((line) => line.key === key)!.points[2]!.x;
+    expect(lane("edge-4")).not.toBe(lane("edge-5"));
   });
 
   it("keeps lines that go back apart, the longest outermost and each into its own place", () => {
@@ -381,22 +415,20 @@ describe("the picture of an automation", () => {
     });
     const picture = layOut(one);
     const line = (key: string) => picture.lines.find((one) => one.key === key)!;
-    const laneX = (key: string) => Math.min(...line(key).points.map((p) => p.x));
-    // The one past every row outside the two that run past fewer, so neither crosses it.
-    expect(laneX("edge-9")).toBeLessThan(laneX("edge-8"));
-    expect(laneX("edge-8")).toBeLessThan(laneX("edge-7"));
-    // Into the third step, three lines: the two back and the one from the row above. Each lands on
-    // a place of its own, and turns down at a height of its own.
-    const last = (key: string) => line(key).points.slice(-2);
-    const into = ["edge-7", "edge-8", "edge-2"].map(last);
-    expect(new Set(into.map(([, foot]) => foot!.x)).size).toBe(3);
-    expect(new Set(into.map(([turn]) => turn!.y)).size).toBe(3);
-    // Nearer the lanes, the one on the inner lane — so the outer one's last leg passes over it.
-    expect(last("edge-7")[1]!.x).toBeLessThan(last("edge-8")[1]!.x);
-    expect(last("edge-8")[0]!.y).toBeLessThan(last("edge-7")[0]!.y);
+    const lane = (key: string) => line(key).points[2]!.x;
+    // The two back into the third step share a lane; the one past every row stands outside it, so
+    // neither crosses it.
+    expect(lane("edge-7")).toBe(lane("edge-8"));
+    expect(lane("edge-9")).toBeLessThan(lane("edge-8"));
+    // Into the third step, two lines: the one the two back join into, and the one from the row
+    // above. Each lands on a place of its own, and turns down at a height of its own.
+    const joined = picture.lines.find((one) => one.key.startsWith("into-") && one.points.slice(-1)[0]!.y === picture.nodes.find((box) => box.boxId === 3)!.y)!;
+    const into = [joined, line("edge-2")].map((one) => one.points.slice(-2));
+    expect(new Set(into.map(([, foot]) => foot!.x)).size).toBe(2);
+    expect(new Set(into.map(([turn]) => turn!.y)).size).toBe(2);
   });
 
-  it("writes the name of a line in the margin past every lane, level with the leg it leaves its box by", () => {
+  it("writes the name of a line in the margin over the leg it leaves its box by, beside that box", () => {
     const one = detail({
       entryPlacementId: 1,
       placements: [
@@ -414,15 +446,92 @@ describe("the picture of an automation", () => {
     const picture = layOut(one);
     const line = (key: string) => picture.lines.find((one) => one.key === key)!;
     const laneX = (key: string) => Math.min(...line(key).points.map((p) => p.x));
-    // The inner line's name is written outside the outer line's lane, so that lane does not cross it.
-    expect(laneX("edge-3")).toBeGreaterThan(laneX("edge-4"));
-    expect(line("edge-3").at.x).toBeLessThan(laneX("edge-4"));
-    expect(line("edge-3").align).toBe("end");
-    // Level with the leg out of its box, and the picture keeps the room for it.
-    expect(line("edge-3").at.y - line("edge-3").points[1]!.y).toBe(4);
-    expect(line("edge-3").at.x - "again".length * 7).toBeGreaterThanOrEqual(0);
-    // Two lines leaving one box write their names a row apart.
-    expect(Math.abs(line("edge-3").at.y - line("edge-4").at.y)).toBeGreaterThanOrEqual(15);
+    const check = picture.nodes.find((one) => one.boxId === 3)!;
+    const [inner, outer] = [line("edge-3"), line("edge-4")];
+    expect(inner.align).toBe("end");
+    // Just left of the box it leaves, and over the leg that runs from there out to its lane.
+    expect(inner.at.x).toBeLessThan(check.x);
+    expect(check.x - inner.at.x).toBeLessThanOrEqual(14);
+    expect(inner.at.y).toBeGreaterThan(check.y + check.h);
+    expect(inner.at.y).toBeLessThan(inner.points[1]!.y);
+    // Side by side on one row, the inner line's name nearest the box, and neither over the other.
+    expect(outer.at.y).toBe(inner.at.y);
+    expect(outer.at.x).toBeLessThanOrEqual(inner.at.x - "again".length * 7);
+    // Every lane stands past both names, so none of them crosses one.
+    // As wide as the picture guesses the name is written: a wide character twelve points, any other seven.
+    const left = outer.at.x - [...edgeWord(outer)].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+    expect(laneX("edge-3")).toBeLessThan(left);
+    expect(laneX("edge-4")).toBeLessThan(left);
+    // The outline stands past the names too, and the picture keeps the room for them.
+    expect(picture.laps[0]!.x).toBeLessThan(left);
+    expect(picture.laps[0]!.x).toBeGreaterThan(laneX("edge-3"));
+    expect(Math.min(...picture.laps.map((lap) => lap.x))).toBe(Math.max(...picture.laps.map((lap) => lap.x)));
+    expect(laneX("edge-4")).toBeGreaterThanOrEqual(0);
+  });
+
+  it("writes the names of lines in the margin by their own rows, not in one column", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({ id: 2, name: "a", exits: [{ id: 21, name: "skip", outputs: [] }, { id: 22, name: "完了", outputs: [] }] }),
+          step({ id: 3, name: "b" }),
+          step({ id: 4, name: "c" }),
+          step({ id: 5, name: "d", exits: [{ id: 51, name: "again", outputs: [] }] }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, exitName: "完了", toId: 3 }),
+          edge({ id: 3, fromId: 3, toId: 4 }),
+          edge({ id: 4, fromId: 4, toId: 5 }),
+          edge({ id: 5, fromId: 2, exitName: "skip", toId: 4 }),
+          edge({ id: 6, fromId: 5, exitName: "again", toId: 2 }),
+        ],
+      }),
+    );
+    const line = (key: string) => picture.lines.find((one) => one.key === key)!;
+    const box = (id: number) => picture.nodes.find((one) => one.boxId === id)!;
+    for (const [key, id] of [["edge-5", 2], ["edge-6", 5]] as const) {
+      expect(line(key).at.y).toBeGreaterThan(box(id).y + box(id).h);
+      expect(line(key).at.y).toBeLessThan(box(id).y + box(id).h + 20);
+      expect(line(key).at.x).toBeLessThan(box(id).x);
+      expect(box(id).x - line(key).at.x).toBeLessThanOrEqual(14);
+    }
+  });
+
+  it("sends a line out of a box on the right of its row to the right margin, its name beside that box", () => {
+    const two = [{ id: 21, name: "a", outputs: [] }, { id: 22, name: "b", outputs: [] }];
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({ id: 2, name: "split", exits: two }),
+          step({ id: 3, name: "left", exits: [{ id: 31, name: "again", outputs: [] }] }),
+          step({ id: 4, name: "right", exits: [{ id: 41, name: "retry", outputs: [] }] }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, exitName: "a", toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "b", toId: 4 }),
+          edge({ id: 4, fromId: 3, exitName: "again", toId: 2 }),
+          edge({ id: 5, fromId: 4, exitName: "retry", toId: 1 }),
+        ],
+      }),
+    );
+    const line = (key: string) => picture.lines.find((one) => one.key === key)!;
+    const [left, right] = [3, 4].map((id) => picture.nodes.find((one) => one.boxId === id)!);
+    expect(left!.y).toBe(right!.y);
+    // The right box's line goes right, not under the box beside it, and its name stands just right
+    // of it.
+    expect(line("edge-5").points[2]!.x).toBeGreaterThan(right!.x + right!.w);
+    expect(line("edge-5").align).toBe("start");
+    expect(line("edge-5").at.x).toBeGreaterThan(right!.x + right!.w);
+    expect(line("edge-5").at.x - (right!.x + right!.w)).toBeLessThanOrEqual(14);
+    // The left box's stands just left of the row.
+    expect(line("edge-4").at.x).toBeLessThan(left!.x);
+    expect(left!.x - line("edge-4").at.x).toBeLessThanOrEqual(14);
   });
 
   it("writes the name of a line going back by the box it leaves, not halfway up its lane", () => {
@@ -653,9 +762,9 @@ describe("the picture of an automation", () => {
     expect(down.align).toBe("end");
     expect(down.at.x).toBeLessThan(down.points[0]!.x);
     expect(down.at.x - "next".length * 7).toBeGreaterThanOrEqual(0);
+    // The two join into one line into the top box, and each keeps a `+` of its own, a `+` apart.
     const plus = (id: number) => picture.inserts.find((one) => one.edgeId === id)!;
-    expect(plus(2).x).not.toBe(plus(3).x);
-    expect(Math.abs(plus(2).y - plus(3).y)).toBeGreaterThanOrEqual(20);
+    expect(Math.hypot(plus(2).x - plus(3).x, plus(2).y - plus(3).y)).toBeGreaterThanOrEqual(20);
   });
 
   it("puts the + on the line: over its leg across, or on its lane in the margin", () => {
@@ -678,10 +787,11 @@ describe("the picture of an automation", () => {
     expect(plus(3).x).toBe(turn!.x);
     expect(plus(3).y).toBeGreaterThan(Math.min(turn!.y, foot!.y));
     expect(plus(3).y).toBeLessThan(Math.max(turn!.y, foot!.y));
-    // The name is written outside the lane, where there are no steps, and the picture keeps room for it.
+    // The name is written between the lane and the box, where no lane crosses it, and the picture
+    // keeps room for it.
     expect(lane.align).toBe("end");
-    expect(lane.at.x).toBeLessThan(turn!.x);
-    expect(lane.at.x - "again".length * 7).toBeGreaterThanOrEqual(0);
+    expect(lane.at.x - "again".length * 7).toBeGreaterThan(turn!.x);
+    expect(turn!.x).toBeGreaterThanOrEqual(0);
   });
 
   /// A long lane's `+` halfway along it stood beside some other box, apart from its name (`AMB-T-5596`).

@@ -169,6 +169,15 @@ export function AutomationPicture({
   const pickedRef = useRef<HTMLButtonElement | null>(null);
   // The edge the pointer is on, whose `+` is shown.
   const [near, setNear] = useState<number | null>(null);
+  // The edges into and out of the picked box, whose `+` is shown without being pointed at: a `+` that
+  // only a pointer brings up is one nobody finds, and showing every one of them brings back the
+  // crowding `AMB-T-5697` took away. Around the box being looked at, they are where the eye is
+  // (`AMB-D-1003`).
+  const around = new Set(
+    (graph?.edges ?? [])
+      .filter((edge) => selectedBoxId !== undefined && (edge.fromId === selectedBoxId || (edge.ends === "go" && edge.toId === selectedBoxId)))
+      .map((edge) => edge.id),
+  );
   // A box picked before the definition has loaded has no element yet, so the move waits for the
   // render that draws it. Whether the box is in sight is asked of an observer rather than read at
   // once, and asked for as long as the screen is still settling: the panel the pick opens and the
@@ -448,7 +457,7 @@ export function AutomationPicture({
             <button
               key={insert.edgeId}
               type="button"
-              className={insert.edgeId === near ? "autopic__plus autopic__plus--near" : "autopic__plus"}
+              className={insert.edgeId === near || around.has(insert.edgeId) ? "autopic__plus autopic__plus--near" : "autopic__plus"}
               style={{ left: `${insert.x}px`, top: `${insert.y}px` }}
               aria-label={insertLabel ?? t("auto.pic.insert")}
               disabled={onInsert === undefined}

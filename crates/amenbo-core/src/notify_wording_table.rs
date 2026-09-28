@@ -1850,7 +1850,7 @@ pub(crate) const WORDINGS: &[Wording] = &[
             ("init_ambiguous_owners", "複数のプロジェクト（{candidates}）がこのフォルダを自分のものとして記録していて、どれの目印（.amenbo）を戻すか決められません: {path}"),
             ("init_pointer_exists", "このフォルダ（または上位）は既に Amenbo プロジェクトに紐付いています: {path}"),
             ("invalid_action_placed_elsewhere", "このアクションは、ほかのプロジェクトのオートメーション（{automations}）に置かれています。そこから外してから「{project}」へ移してください。"),
-            ("invalid_action_still_placed", "このアクションは図に置かれています（全部で {count} か所）。図から外してから消してください。"),
+            ("invalid_action_still_placed", "このアクションは図面に置かれています（全部で {count} か所）。図面から外してから消してください。"),
             ("invalid_attachment_too_large", "このファイルは {size} バイトで、この種類の上限 {max} バイトを超えています。"),
             ("invalid_automation_archived", "「{automation}」はアーカイブ済みです。戻してから起動してください。"),
             ("invalid_automation_has_runs", "このオートメーションからは {count} 件の実行が起動されていて、その記録がここに紐づいています。消せないので、代わりにアーカイブしてください。"),

@@ -1,0 +1,88 @@
+# A line inside an action can end the run on its own, and the task the run took is left open. Under the
+# automation's head it reads like the placement's own way out, named by the step it leaves — but what
+# happens after a step's way out is written on the action's own picture, and the box's panel cannot
+# change it. So the reason's line says it opens the action to fix it, and the press opens that action
+# over the automation, on the step it names. Sent out by the action's done way out instead, the line
+# goes on to the box that closes the task, and the reason is gone.
+id: close-the-task-a-line-inside-an-action-leaves-open
+title: A line inside an action that ends the run with the task open is mended on its step, from the reason that names it
+description: >
+  Stand a definition up whose only hole is inside an action: the step inside ends the run when it is
+  done, before the task it took is closed. Read the reason under the head naming the step, and press
+  it: the action's build screen opens over the automation's with that step picked out. Send its done way
+  out out by the action's own there, go back, and read the automation ready to start.
+given:
+  # The action whose step ends the run by its done way out.
+  - { type: action, domain: automation, op: action-add, with: { name: draft }, as: draft }
+  - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, prompt: write the draft }, as: write }
+  - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: write } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a line inside ends the run" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: draft }, as: at_draft }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_draft, step: write, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_draft } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_draft, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+steps_gui:
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  # The hole, named by the step inside, on the launch place.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: task_left_open_at_end
+      box: write
+      pressable: true
+      present: true
+
+  # Its line says it opens the action, and the press lands there, on the step.
+  - type: action
+    domain: automation
+    op: press-reason
+    with:
+      reason: task_left_open_at_end
+      box: write
+      opens: draft
+
+  - type: assert
+    domain: automation
+    op: action-over
+    with:
+      name: draft
+      draft: false
+
+  # Mended where it is written: the step's done way out leaves by the action's own, which goes on to
+  # the box that closes the task.
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      ends: exit
+
+  - type: action
+    domain: automation
+    op: action-back
+
+  # Back on the automation, nothing is in the way any more.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: true

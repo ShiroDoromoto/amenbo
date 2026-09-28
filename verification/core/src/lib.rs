@@ -4456,6 +4456,14 @@ const REGISTRY: &[OpSpec] = &[
     // box under it. It is written when the box is left, the way the panel writes one. `builtin` names a built-in's setting as for
     // `answer-choice`, and `setting` is then the word the store keeps it under.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-text", required: &["setting", "value"], refs: &[], strings: &["setting", "value", "builtin"], binds: false },
+    // A `folder` setting answered from the machine's folder picker, opened by the control beside the
+    // setting. It reaches past the folders the project is bound to, which is why it is an op of its
+    // own rather than a value on `answer-choice`: the pulldown offers the project's folders and
+    // nothing else, and this is the one way to a folder outside them. `dir` is a name and not a path,
+    // the way `pick-folder`'s is — where a run keeps its folders is the run's to decide. What a
+    // built-in's folder setting takes is checked against the project's folders before it starts, so
+    // no road answers one of those here.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "answer-folder", required: &["setting", "dir"], refs: &[], strings: &["setting", "dir"], binds: false },
     // What fills one of a box's inputs, picked from what fits rather than drawn.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pick-wire", required: &["input", "from"], refs: &[], strings: &["input", "from"], binds: false },
     //

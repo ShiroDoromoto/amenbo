@@ -738,7 +738,10 @@ terminal in the three layers it is built in**: the placements on an automation o
 (`step-read`), and what joins the boxes on either picture (`edge-read`, with `in_action` for an
 action's) — which is how a road that built one at the terminal proves what it built. A test run of
 one (`test-run`) is read the same way, off what it answered (`test-run-walked`): it keeps nothing in
-the store, so its answer is the one thing there is to read. **The pictures
+the store, so its answer is the one thing there is to read. On the screen the same press opens a
+pane beside the picture that steps through that answer (`test-move`, `test-pane`, `test-pane-ended`),
+and what it did not keep is read off the running and history tabs, which name no row for it
+(`rows-name`). **The pictures
 are the screen's** (`pictured`, `line-pictured`, `lap-pictured`, `panel-shows`, `launch`, and the
 rest of the screen half): an automation's build screen draws its placements and an action's its
 steps, the ops are named for the box and the panel so one set reads either, and boxes, the lines

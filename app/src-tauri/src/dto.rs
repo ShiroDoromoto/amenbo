@@ -3748,6 +3748,69 @@ pub struct AutomationRunStartedDto {
     pub(crate) run: i64,
 }
 
+/// **What a test run found** ([`amenbo_core::ops::automation_rehearse::Rehearsal`]) — every step it
+/// opened, in order, and how it ended. Nothing it walked through was kept, so there is no run to go
+/// to: this is the whole of what the build screen's test pane draws.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationTestRunDto {
+    pub(crate) steps: Vec<AutomationTestStepDto>,
+    /// Where the run stood when the walk ended: `completed` where the picture ran out, `failed` where
+    /// a real run would have been stopped, `running` where the walk was cut short (`cut`).
+    #[ts(type = "\"running\" | \"paused\" | \"completed\" | \"failed\" | \"canceled\"")]
+    pub(crate) status: &'static str,
+    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | null")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) stopped_reason: Option<&'static str>,
+    /// The required inputs the last step found nothing wired into. Empty otherwise.
+    pub(crate) missing: Vec<String>,
+    /// The agent the last step asked for that this machine cannot start.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) no_agent: Option<String>,
+    /// Why the walk ended before the run did: a step reached again with no way out left to try, or
+    /// too many steps. Absent where the run ended on its own.
+    #[ts(type = "\"looped\" | \"too_long\" | null")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) cut: Option<&'static str>,
+}
+
+/// **One step a test run opened** ([`amenbo_core::ops::automation_rehearse::Rehearsed`]).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationTestStepDto {
+    /// The box on the automation's picture it was opened from — the one the picture marks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) placement: Option<i64>,
+    pub(crate) name: String,
+    /// The built-in it is, by its key. Absent for an agent's step.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) builtin: Option<String>,
+    /// The agent that would have been started, and its model. Absent for a built-in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) agent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) model: Option<String>,
+    /// The whole text the agent would have been started on. Absent for a built-in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) prompt: Option<String>,
+    /// The folder its terminal would have been opened in, where the step names one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) folder: Option<String>,
+    /// The way out it was taken to leave by, as the run's copy names it.
+    pub(crate) exit: String,
+}
+
 /// **What a launch asks the person starting it for** — what the entry reads at launch
 /// ([`amenbo_core::ops::automation_run::LaunchAsks`]), so the dialog every press opens asks for that
 /// and nothing else (`AMB-D-970`).

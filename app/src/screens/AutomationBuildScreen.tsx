@@ -71,6 +71,11 @@
 // (`amenbo_core::ops::automation_run::launch`), for one that closes while the dialog is up. Whether it
 // is standing is handed down from the shell, which is the one place that knows which window holds it.
 //
+// **A test run is stepped through beside the picture** (`./AutomationTestPane`, `AMB-T-5804`). Its
+// press stands beside the start, held down by the same check, since core refuses a test run where it
+// would refuse a launch. While it is open the panel is the test's and the picture marks the box of the
+// step it stands on; pressing a box leaves it for that box's panel, as any other panel is left.
+//
 // **The head says whether the last write was saved** (`./AutomationSaved`, `AMB-D-1005`). Nothing
 // here has a Save press, so the head says when a write landed and "Saved" stands beside its field.
 import { useMemo, useState } from "react";
@@ -84,6 +89,7 @@ import { AutomationActionOver } from "./AutomationActionOver";
 import { AutomationHeldBy } from "./AutomationHeldBy";
 import { useSaved } from "./AutomationSaved";
 import { AutomationStepPanel } from "./AutomationStepPanel";
+import { AutomationTestPane, useAutomationTestRun } from "./AutomationTestPane";
 import type { WhereTo } from "./automationParts";
 import { useAutomationStart } from "../components/StartAutomation";
 import { useAutomation, useLaunchCheck } from "../core/automations";
@@ -137,7 +143,8 @@ function mendedIn(
 type Showing =
   | { kind: "box"; id: number }
   | { kind: "library"; target: PlaceTarget }
-  | { kind: "about" };
+  | { kind: "about" }
+  | { kind: "test" };
 
 export function AutomationBuildScreen({
   id, projectId, workspaceOpen, openingBox, onBack, onOpenAction, onGoToRun,
@@ -186,6 +193,8 @@ export function AutomationBuildScreen({
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
   // is where an automation is built, not a third place for a launch to behave differently.
   const { start, refused, starting, handing } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
+  const test = useAutomationTestRun(projectId, () => setShowing({ kind: "test" }));
+  const testing = showing?.kind === "test" ? test.testing : null;
 
   const pressed =
     showing?.kind === "box"
@@ -234,6 +243,18 @@ export function AutomationBuildScreen({
         >
           {t("auto.build.edit")}
         </button>
+        <button
+          type="button"
+          className={testing !== null ? "btn btn--on" : "btn"}
+          aria-pressed={testing !== null}
+          disabled={check?.ready !== true || test.walking || projectId === null}
+          onClick={() => {
+            setShowing(null);
+            test.test(id, automation?.name ?? "", folders.live.map((one) => one.path));
+          }}
+        >
+          {t("auto.test.run")}
+        </button>
         {/* Held down until the check answers: a press offered before it would be a guess the list
             under it may then contradict. */}
         <button
@@ -246,8 +267,9 @@ export function AutomationBuildScreen({
         </button>
       </div>
       {handing}
+      {test.handing}
 
-      {((check !== null && !check.ready) || refused !== null) && (
+      {((check !== null && !check.ready) || refused !== null || test.refused !== null) && (
         <div className="autolaunch">
           {check !== null && !check.ready && (
             <ul className="autolaunch__blocks">
@@ -297,6 +319,7 @@ export function AutomationBuildScreen({
             </ul>
           )}
           {refused !== null && <div className="autolaunch__refused">{refused}</div>}
+          {test.refused !== null && <div className="autolaunch__refused">{test.refused}</div>}
         </div>
       )}
 
@@ -308,7 +331,7 @@ export function AutomationBuildScreen({
       <div className="actbuild__canvas">
         <AutomationPicture
           graph={automationGraph(automation)}
-          selectedBoxId={pressed?.id}
+          selectedBoxId={testing !== null ? test.marked : pressed?.id}
           onPickBox={(box) => setShowing({ kind: "box", id: box })}
           onInsert={held ? undefined : (edgeId) => setShowing({ kind: "library", target: { edgeId } })}
           onOpenExit={
@@ -351,6 +374,19 @@ export function AutomationBuildScreen({
               if (!("automationId" in target)) setMaking({ target, name });
             }}
           />
+        </Panel>
+      )}
+
+      {testing !== null && (
+        <Panel
+          place={t("auto.test.place")}
+          title={t("auto.test.noAgent")}
+          onClose={() => {
+            close();
+            test.close();
+          }}
+        >
+          <AutomationTestPane testing={testing} onMove={test.move} />
         </Panel>
       )}
 

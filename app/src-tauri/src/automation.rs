@@ -50,6 +50,7 @@ use amenbo_core::model::{
 };
 use amenbo_core::ops::automation::{ActionShelf, EdgeTarget, NewAutomation, NewStep};
 use amenbo_core::ops::automation_builtin;
+use amenbo_core::ops::automation_rehearse::Cut;
 use amenbo_core::ops::automation_run::{self, Unmet};
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::ops::automation_stop::Ended;
@@ -68,7 +69,8 @@ use crate::dto::{
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunStartedDto, AutomationRunTaskDto,
     AutomationRunTrailDto, AutomationStepDto,
-    AutomationStepOpenDto, AutomationStepRunDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
+    AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
+    AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
 };
 use crate::error::CmdError;
@@ -1444,6 +1446,64 @@ pub fn automation_launch(
     })?;
     crate::automation_watch::wake();
     Ok(AutomationRunStartedDto { run: run.id })
+}
+
+/// **Walk this automation through as a test run** — the build screen's "test run"
+/// ([`amenbo_core::ops::automation_rehearse`]). The launch's own check refuses it where it would refuse
+/// a launch, and every step is opened on the road a run takes, with no agent started, no built-in
+/// carried out and nothing kept.
+///
+/// **It is handed what a launch is, less the files and the workspace.** Nothing is kept, so there is
+/// no task for a file to go onto; no pane is opened, so whether the workspace stands is nobody's
+/// concern. `agents` and the models are asked as the launch asks them, so a step the press would be
+/// refused over is one the test run stops at.
+#[tauri::command]
+pub fn automation_test_run(
+    id: i64,
+    agents: Option<Vec<String>>,
+    title: Option<String>,
+    notes: Option<String>,
+    classification: Option<Vec<(String, String)>>,
+) -> Result<AutomationTestRunDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_test_run");
+    let offered = crate::agent_models::offered_here();
+    let by = automation_run::Launcher {
+        startable: agents.as_deref(),
+        models: &offered,
+        workspace_open: None,
+        by: Some(ActorKind::Human),
+    };
+    let handed = automation_run::HandedAtLaunch {
+        title,
+        notes,
+        classification: classification.unwrap_or_default(),
+        ..Default::default()
+    };
+    let walked = with_store_mut(|store| Ok(store.automation_rehearse(id, &by, &handed)?))?;
+    Ok(AutomationTestRunDto {
+        steps: walked
+            .steps
+            .into_iter()
+            .map(|step| AutomationTestStepDto {
+                placement: step.placement_id,
+                name: step.name,
+                builtin: step.builtin,
+                agent: step.agent,
+                model: step.model,
+                prompt: step.prompt,
+                folder: step.folder,
+                exit: step.exit,
+            })
+            .collect(),
+        status: walked.status.as_str(),
+        stopped_reason: walked.stopped_reason.map(|one| one.as_str()),
+        missing: walked.missing,
+        no_agent: walked.no_agent,
+        cut: walked.cut.map(|cut| match cut {
+            Cut::Looped => "looped",
+            Cut::TooLong => "too_long",
+        }),
+    })
 }
 
 /// One file handed over at launch, taken in from where it is on this machine: a regular file, within

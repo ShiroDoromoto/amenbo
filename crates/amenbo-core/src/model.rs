@@ -1679,6 +1679,12 @@ pub struct AutomationAction {
     /// `None` on one of them is an axis deleted from under it.
     #[serde(default)]
     pub builtin_dimension_id: Option<i64>,
+    /// **Which version of the built-in's definition these rows were written from**, or `None` for an
+    /// action a person wrote (`AMB-D-1000`). A definition whose ways out, outputs or settings change
+    /// takes the next version, and is written as a new action beside the old one; a placement keeps
+    /// the one it points at.
+    #[serde(default)]
+    pub builtin_version: Option<i64>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -2066,6 +2072,10 @@ pub struct AutomationRunDef {
     /// it out in place rather than open a terminal. `agent` is empty on such a copy.
     #[serde(default)]
     pub builtin: Option<String>,
+    /// The version of the built-in the step was, copied with it (`AMB-D-1000`): what its code reads to
+    /// behave as the definition this copy's ways out were written from.
+    #[serde(default)]
+    pub builtin_version: Option<i64>,
     pub agent: String,
     #[serde(default)]
     pub model: Option<String>,

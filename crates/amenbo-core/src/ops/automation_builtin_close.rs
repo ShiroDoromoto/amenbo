@@ -29,6 +29,7 @@ pub const COMMIT: &str = "コミット";
 
 pub(crate) const CLOSE_TASK: Builtin = Builtin {
     key: "close_task",
+    version: 1,
     name: "タスクを閉じる",
     does: "いま扱っているタスクを完了にする。コミットを受け取ったら、その SHA も記録する",
     settings: &[],

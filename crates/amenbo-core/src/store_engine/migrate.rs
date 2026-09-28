@@ -1103,7 +1103,32 @@ pub const STEPS: &[Step] = &[
                  CHECK(closed_changed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
         ),
     },
+    Step {
+        to: 85,
+        name: "give a built-in's library action, and a run's copy of one, the version of the definition it was written from",
+        apply: Apply::Custom(give_the_builtins_a_version),
+    },
 ];
+
+/// v85: `automation_action.builtin_version` and `automation_run_def.builtin_version` — which version of a
+/// built-in's definition its rows were written from (`AMB-D-1000`).
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason. **Every built-in already
+/// written is version 1**: no build before this one gave a built-in a version, so each was written from
+/// the one definition there was — the one this build calls 1. An action a person wrote, and a copy of a
+/// step an agent carries out, are left with none.
+fn give_the_builtins_a_version(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for table in ["automation_action", "automation_run_def"] {
+        if !column_names(tx, table)?.iter().any(|c| c == "builtin_version") {
+            tx.execute_batch(&format!(
+                "ALTER TABLE {table} ADD COLUMN builtin_version BIGINT;
+                 UPDATE {table} SET builtin_version = 1 WHERE builtin IS NOT NULL;"
+            ))?;
+        }
+    }
+    Ok(())
+}
 
 /// v82: `automation_run.acknowledged_by_kind` — who said they had seen a failed run, a person or their
 /// AI (`AMB-D-989`).
@@ -9462,6 +9487,38 @@ mod tests {
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v85: every built-in an upgrade brings in, and every run's copy of one, is version 1 — the one
+    /// definition there was — and an action a person wrote is left with none.
+    #[test]
+    fn every_builtin_already_written_is_version_one() {
+        let dir = scratch("builtin-version");
+        let engine = store_at(&dir, 84);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, name, builtin) VALUES (1, 'worktree を切る', 'cut_worktree'), (2, 'mine', NULL);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'cut');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, name, prompt, builtin, cfg) VALUES
+                     (1, 1, 'worktree を切る', NULL, 'cut_worktree', '[]'),
+                     (2, 1, 'work', 'work on it', NULL, '[]');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let versions = |table: &str| -> Vec<Option<i64>> {
+            let mut stmt =
+                engine.conn().prepare(&format!("SELECT builtin_version FROM {table} ORDER BY id")).unwrap();
+            stmt.query_map([], |r| r.get::<_, Option<i64>>(0)).unwrap().map(|v| v.unwrap()).collect()
+        };
+        assert_eq!(versions("automation_action"), vec![Some(1), None], "a person's action has no version");
+        assert_eq!(versions("automation_run_def"), vec![Some(1), None], "nor does an agent's step");
         std::fs::remove_dir_all(&dir).ok();
     }
 

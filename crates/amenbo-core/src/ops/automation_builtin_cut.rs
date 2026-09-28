@@ -35,6 +35,7 @@ pub const WORKTREE: &str = "worktree";
 
 pub(super) const CUT_WORKTREE: Builtin = Builtin {
     key: "cut_worktree",
+    version: 1,
     name: "worktree を切る",
     does: "いま扱っているタスクの worktree を、リモートの既定ブランチの最新から切り、そのパスを渡す",
     settings: &[],

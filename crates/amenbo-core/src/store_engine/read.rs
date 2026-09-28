@@ -6514,21 +6514,23 @@ pub fn automation_action(conn: &Connection, id: i64) -> Result<Option<crate::mod
     super::hydrate::row_by_id(conn, "automation_action", id, super::hydrate::automation_action_row)
 }
 
-/// **The library action written for one built-in** (`AMB-D-964`), or `None` where nobody has placed
-/// that built-in on this store yet. There is one per key; the oldest is taken if a race ever wrote two.
+/// **The library action written for one version of one built-in** (`AMB-D-964`, `AMB-D-1000`), or
+/// `None` where nobody has placed that version on this store yet. There is one per key and version; the
+/// oldest is taken if a race ever wrote two.
 pub fn automation_action_builtin(
     conn: &Connection,
     key: &str,
+    version: i64,
 ) -> Result<Option<crate::model::AutomationAction>> {
     const A: col::automation_action::Cols = col::automation_action::ALL;
-    let pred = Pred::eq(A.builtin, key);
+    let pred = Pred::eq(A.builtin, key).and(Pred::eq(A.builtin_version, version));
     Ok(automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_action_row)?
         .into_iter()
         .next())
 }
 
-/// **Every library action written for a built-in**, oldest first — one for most, one per axis for the
-/// built-in that splits by one (`AMB-D-972`).
+/// **Every library action written for a built-in**, oldest first — one per version (`AMB-D-1000`), and
+/// for the built-in that splits by an axis, one per axis of each (`AMB-D-972`).
 pub fn automation_actions_builtin(conn: &Connection, key: &str) -> Result<Vec<crate::model::AutomationAction>> {
     const A: col::automation_action::Cols = col::automation_action::ALL;
     let pred = Pred::eq(A.builtin, key);
@@ -6542,9 +6544,12 @@ pub fn automation_action_builtin_on(
     conn: &Connection,
     key: &str,
     dimension_id: i64,
+    version: i64,
 ) -> Result<Option<crate::model::AutomationAction>> {
     const A: col::automation_action::Cols = col::automation_action::ALL;
-    let pred = Pred::eq(A.builtin, key).and(Pred::eq(A.builtin_dimension_id, dimension_id));
+    let pred = Pred::eq(A.builtin, key)
+        .and(Pred::eq(A.builtin_dimension_id, dimension_id))
+        .and(Pred::eq(A.builtin_version, version));
     Ok(automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_action_row)?
         .into_iter()
         .next())

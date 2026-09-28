@@ -69,6 +69,7 @@ const COUNT_PAGE: usize = 200;
 
 pub(super) const TAKE_TASK: Builtin = Builtin {
     key: "take_task",
+    version: 1,
     name: "タスクに着手する",
     does: "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする",
     settings: &[

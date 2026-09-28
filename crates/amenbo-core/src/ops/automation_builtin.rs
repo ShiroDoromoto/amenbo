@@ -63,6 +63,12 @@ use crate::time::Timestamp;
 pub struct Builtin {
     /// What names it — on a step's row, on the library's action, and on a run's copy.
     pub key: &'static str,
+    /// **Which version of it this build defines** (`AMB-D-1000`). Changing its ways out, their outputs,
+    /// its inputs or its settings takes the next number: the library then writes a new action for it
+    /// beside the old one, and a placement keeps the version it was placed with. Its code reads the
+    /// version a run's copy was made from ([`Outside::version`], [`Carry::version`]), so it can still
+    /// behave as an older one where that copy is older.
+    pub version: i64,
     /// The name its step and its library action are written with.
     pub name: &'static str,
     /// What it does, in a sentence a person building with it reads.
@@ -128,6 +134,8 @@ pub struct Outside<'a> {
     /// The language the report is written in ([`crate::run_wording::builtin`], `AMB-D-976`) — there is
     /// no transaction to read it off yet.
     pub language: &'a str,
+    /// The version of the built-in the run's copy was made from ([`Builtin::version`]).
+    pub version: i64,
 }
 
 /// **How a built-in working outside the store finished** — [`Carried`], with what it hands on through
@@ -157,6 +165,12 @@ pub struct DoneOutside {
 /// **The store may move before the step is opened**, since no transaction holds it. Where the run was
 /// stopped in between, the opening refuses and what the work did stays done without a record — a
 /// worktree cut and not written anywhere, which the next cut for that task is refused on.
+/// The version of the built-in a run's copy was made from. A copy that names none was made before
+/// built-ins had versions, from the first one.
+fn version_of(def: &AutomationRunDef) -> i64 {
+    def.builtin_version.unwrap_or(1)
+}
+
 pub fn work_outside(
     conn: &Connection,
     language: &str,
@@ -178,7 +192,8 @@ pub fn work_outside(
     // joins that one and opens none.
     let task_id = read::automation_run_task_last(conn, run_id)?.and_then(|s| s.task_id);
     let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
-    let worked = work(&Outside { conn, run: &run, task_id, cfg: &cfg, language });
+    let version = version_of(&def);
+    let worked = work(&Outside { conn, run: &run, task_id, cfg: &cfg, language, version });
     Ok(Some(DoneOutside { run_def_id, worked }))
 }
 
@@ -376,6 +391,8 @@ pub struct Carry<'a, 't> {
     pub exits: &'a [RunDefExit],
     ins: &'a [(String, Option<String>)],
     cfg: &'a [RunDefCfg],
+    /// The version of the built-in the run's copy was made from ([`Builtin::version`]).
+    pub version: i64,
 }
 
 impl Carry<'_, '_> {
@@ -530,7 +547,8 @@ fn step_of(tx: &WriteTx<'_>, action_id: i64, builtin: &Builtin) -> Result<crate:
 }
 
 /// **The library's action for a built-in**, written the first time it is asked for and found by its key
-/// after that. It is the device's (`project_id` `None`), so every project's automations reach it.
+/// and this build's version after that (`AMB-D-1000`). One written from an older version stays for the
+/// placements that point at it. It is the device's (`project_id` `None`), so every project's automations reach it.
 ///
 /// It is the built-in as one step, joined to the action's edge the way a whole action written from one
 /// prompt is ([`automation::action_from_prompt`]): each way out of the step returns by the action's way
@@ -543,7 +561,7 @@ pub fn action(tx: &WriteTx<'_>, key: &str) -> Result<AutomationAction> {
             "the built-in '{key}' splits by an axis, and there is one of it per axis — name the axis"
         )));
     }
-    if let Some(written) = read::automation_action_builtin(tx.conn(), key)? {
+    if let Some(written) = read::automation_action_builtin(tx.conn(), key, builtin.version)? {
         return Ok(written);
     }
     write_action(tx, builtin, None, None)
@@ -641,6 +659,7 @@ pub(crate) fn write_action(
     let mut marked = entered.clone();
     marked.builtin = Some(builtin.key.to_string());
     marked.builtin_dimension_id = axis;
+    marked.builtin_version = Some(builtin.version);
     marked.updated_at = Timestamp::now();
     emit_update(tx, record::automation_action(&entered), record::automation_action(&marked))?;
     Ok(marked)
@@ -693,7 +712,7 @@ pub(crate) fn carry_out(
     let key = def.builtin.as_deref().unwrap_or_default();
     let say = |what: &str| crate::run_wording::builtin(tx.language(), what, &[("builtin", key)]);
     let carried = known(key).and_then(|builtin| {
-        let carry = Carry { tx, run, run_step, task_id, exits, ins, cfg: &cfg };
+        let carry = Carry { tx, run, run_step, task_id, exits, ins, cfg: &cfg, version: version_of(def) };
         match &builtin.work {
             Work::InStore(work) => work(&carry).map(|c| (Cow::Borrowed(c.exit), c.report)),
             Work::Named(work) => work(&carry).map(|n| (Cow::Owned(n.exit), n.report)),
@@ -858,6 +877,7 @@ mod tests {
     /// A built-in that puts down the value it was handed, stamped — and leaves by "stamped".
     pub(super) const STAMP: Builtin = Builtin {
         key: "test_stamp",
+        version: 1,
         name: "Stamp",
         does: "hands on what it was given, stamped",
         settings: &[BuiltinSetting {
@@ -888,6 +908,7 @@ mod tests {
     /// A built-in that falls over every time.
     pub(super) const FALLS: Builtin = Builtin {
         key: "test_falls",
+        version: 1,
         name: "Falls",
         does: "never finishes",
         settings: &[],
@@ -997,7 +1018,7 @@ mod tests {
             let written = action(tx, "test_stamp").expect("write");
             assert_eq!(written.builtin.as_deref(), Some("test_stamp"));
             assert_eq!(written.project_id, None, "the device's library, reached from every project");
-            assert_eq!(action(tx, "test_stamp").expect("again").id, written.id, "one per key");
+            assert_eq!(action(tx, "test_stamp").expect("again").id, written.id, "one per key and version");
 
             let steps = read::automation_action_steps_of(tx.conn(), written.id).expect("steps");
             let [step]: [AutomationStep; 1] = steps.try_into().expect("one step");
@@ -1025,6 +1046,33 @@ mod tests {
             );
 
             assert!(action(tx, "no_such").is_err(), "a key this build does not carry is refused");
+        });
+    }
+
+    /// **One action per version** (`AMB-D-1000`): an action written from an older definition is left to
+    /// the placements that point at it, a new placement gets the one written from this build's, and a
+    /// run's copy says which of the two it was made from.
+    #[test]
+    fn a_newer_version_is_written_beside_the_older_and_a_placement_keeps_its_own() {
+        with_tx(|tx| {
+            let p = picture(tx, "test_stamp");
+            let older = p.builtin.action_id;
+            assert_eq!(read::automation_action(tx.conn(), older).expect("read").expect("row").builtin_version, Some(1));
+            // What a store looks like once this build's definition has moved past the one it was written from.
+            tx.conn()
+                .execute("UPDATE automation_action SET builtin_version = 0 WHERE id = ?1", [older])
+                .expect("an older version");
+
+            let newer = action(tx, "test_stamp").expect("this build's version");
+            assert_ne!(newer.id, older, "written beside it, not over it");
+            assert_eq!(newer.builtin_version, Some(STAMP.version));
+            assert_eq!(action(tx, "test_stamp").expect("again").id, newer.id, "one per version");
+            let placed = read::automation_placement(tx.conn(), p.builtin.id).expect("read").expect("row");
+            assert_eq!(placed.action_id, older, "the placement keeps the version it was placed with");
+
+            let run = launched(tx, &p.automation);
+            assert_eq!(def_of(tx, &run, &p.builtin).builtin_version, Some(0), "the copy says which it was made from");
+            assert_eq!(def_of(tx, &run, &p.first).builtin_version, None, "an agent's step has none");
         });
     }
 

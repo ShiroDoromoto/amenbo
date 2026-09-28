@@ -36,6 +36,7 @@ pub const UNSORTED: &str = "分類なし";
 
 pub(crate) const SPLIT_BY_DIM: Builtin = Builtin {
     key: "split_by_dim",
+    version: 1,
     name: "分類で分ける",
     does: "いま扱っているタスクを、選んだ軸の値で分ける。値ごとに出口があり、値が付いていないタスクは「分類なし」から出る",
     settings: &[],
@@ -66,7 +67,7 @@ pub(crate) fn action(tx: &WriteTx<'_>, axis: i64) -> Result<crate::model::Automa
             dimension.name
         )));
     }
-    if let Some(written) = read::automation_action_builtin_on(tx.conn(), SPLIT_BY_DIM.key, axis)? {
+    if let Some(written) = read::automation_action_builtin_on(tx.conn(), SPLIT_BY_DIM.key, axis, SPLIT_BY_DIM.version)? {
         return Ok(written);
     }
     let action = write_action(tx, &SPLIT_BY_DIM, Some(dimension.project_id), Some(axis))?;

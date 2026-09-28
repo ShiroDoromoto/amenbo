@@ -543,6 +543,7 @@ pub fn action_add(
         entry_step_id: None,
         builtin: None,
         builtin_dimension_id: None,
+        builtin_version: None,
         order_key,
         created_at: now,
         updated_at: now,

@@ -1,0 +1,95 @@
+# Who carries a step out, and on which model, is chosen where its action is placed, and the run's
+# pane names that model over the step. The terminal the step is opened in used to be started without
+# it: the app handed the step's agent over and dropped its model, so the agent came up on whatever it
+# was last chosen for — a step placed on a cheaper model ran on the dearest one while its pane said
+# otherwise (`app/src-tauri/src/pty.rs`, `model_to_open_on`).
+#
+# The pane's own header is Amenbo's account of the choice, drawn from the same definition, so it
+# stays right on a build that starts the program wrong. What says the choice arrived is the program
+# it arrived at: a stand-in prints every argument it was started with on a line of its own
+# (`amenbo_verify_cli::domain::workspace`), so the road reads back the model name it placed the step on.
+id: start-a-step-on-the-model-it-was-placed-on
+title: A step placed on a model has its agent started on that model, in the pane the run is drawn in
+description: >
+  Place an action on an automation with its one step carried out by Claude Code on a model named
+  there, and start a run. In the pane the run is drawn in, the agent the step opened was started
+  with that model's name — the program says so itself, and not just the pane's header.
+given:
+  # Two agents, each answering with two models it can be started on. The names are the harness's own
+  # — a road never writes a real model name — so the one the step is placed on is one this machine
+  # offers, and the launch check has nothing to say about it. `reads` keeps the stand-in standing, so
+  # the run is still on the step while its pane is read.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, models: 2, then: reads } }
+  # The task the built-in the run starts at takes, so the run goes on to the step after it.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run works }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: do, prompt: do the work and report }, as: do }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one whose step is placed on a model" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  # The second of the two, rather than the first: the first stands beside the agent's own default, and
+  # a road placed on it would pass on a build that started the step on the default.
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code, model: scenario-model-02 } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: open-folder
+    with:
+      dir: lantern
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: do
+      action: work
+      state: running
+      present: true
+
+  # What the program was started with, in its own words. The name is on a line of its own, so what is
+  # read is the whole of it and not a spelling that happens to carry it.
+  - type: assert
+    domain: workspace
+    op: pane
+    with:
+      shows: SCENARIO arg scenario-model-02

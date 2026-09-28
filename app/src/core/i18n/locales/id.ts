@@ -943,6 +943,7 @@ export const id: Translation = {
     "auto.hand.unchosen": "Tidak dipilih",
     "auto.hand.nothing": "Otomatisasi ini tidak menerima apa pun saat dimulai.",
     "auto.launch.see": "Lihat di gambar",
+    "auto.launch.fix": "Buka aksi untuk memperbaiki",
     "auto.launch.openWorkspace": "Buka ruang kerja",
     "auto.pic.lap": "Satu tugas",
     "auto.pic.insert": "Sisipkan aksi di sini",

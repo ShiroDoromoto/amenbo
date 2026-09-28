@@ -948,6 +948,7 @@ export const ja: Translation = {
     "auto.hand.unchosen": "選ばない",
     "auto.hand.nothing": "このオートメーションは、起動するときに何も受け取りません。",
     "auto.launch.see": "図面で見る",
+    "auto.launch.fix": "アクションを開いて直す",
     "auto.launch.openWorkspace": "ワークスペースを開く",
     "auto.pic.lap": "1件ぶん",
     "auto.pic.insert": "ここへアクションを挟む",

@@ -942,6 +942,7 @@ export const hi: Translation = {
     "auto.hand.unchosen": "नहीं चुना",
     "auto.hand.nothing": "यह ऑटोमेशन शुरू होते समय कुछ नहीं लेता।",
     "auto.launch.see": "चित्र में देखें",
+    "auto.launch.fix": "ऐक्शन खोलकर ठीक करें",
     "auto.launch.openWorkspace": "वर्कस्पेस खोलें",
     "auto.pic.lap": "एक कार्य",
     "auto.pic.insert": "यहाँ एक क्रिया जोड़ें",

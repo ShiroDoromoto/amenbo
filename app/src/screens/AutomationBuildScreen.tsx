@@ -91,7 +91,7 @@ import { useBoundFolders } from "../core/boundFolders";
 import { errSentence, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { Icon } from "../components/Icon";
-import type { AutomationDetailDto } from "../bindings/bindings";
+import type { AutomationDetailDto, AutomationLaunchBlockDto } from "../bindings/bindings";
 
 /** Where the library's pick will go: after which way out of which box, or first of all. */
 function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): WhereTo {
@@ -107,6 +107,30 @@ function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): W
   const box = from === undefined ? "" : builtinWord(from.builtin, from.name);
   const next = to === undefined ? undefined : builtinWord(to.builtin, to.name);
   return { box, exit: edge?.exitName, builtin: from?.builtin, next };
+}
+
+/** The reasons whose gap is inside the action a box holds whatever step they name: an action with no
+ *  step, one still being written, and a way out of it handing on the task. */
+const MENDED_IN_ACTION = new Set([
+  "not_ready_automation_action_empty",
+  "not_ready_automation_action_draft",
+  "not_ready_automation_hands_on_task_taken",
+]);
+
+/**
+ * **Where a reason the automation cannot start for is mended** — on the automation's own picture, by
+ * pressing its box, or inside the action the box holds, on the step core names (`inside_step`) if it
+ * names one. A way out or an input inside the action reads the same as one of the box's own, and the
+ * box's panel cannot mend it. A built-in's action is Amenbo's own and nobody edits inside it.
+ */
+function mendedIn(
+  block: AutomationLaunchBlockDto,
+  box: AutomationDetailDto["placements"][number],
+): { action: number; step?: number } | null {
+  if (box.builtin !== undefined) return null;
+  const inside = block.fields.inside_step as string | undefined;
+  if (inside !== undefined) return { action: box.actionId, step: Number(inside) };
+  return MENDED_IN_ACTION.has(block.code) ? { action: box.actionId } : null;
 }
 
 /** What the panel is showing, if anything. */
@@ -150,8 +174,13 @@ export function AutomationBuildScreen({
     target: Exclude<PlaceTarget, { automationId: number }>;
     name: string;
   } | null>(null);
-  // The action standing over the picture, while one does.
+  // The action standing over the picture, while one does, and the step inside it to open pressed.
   const [over, setOver] = useState<number | null>(null);
+  const [overStep, setOverStep] = useState<number | undefined>(undefined);
+  const openOver = (actionId: number, step?: number) => {
+    setOverStep(step);
+    setOver(actionId);
+  };
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
@@ -231,10 +260,26 @@ export function AutomationBuildScreen({
                 const box = automation?.placements.find(
                   (one) => String(one.id) === block.fields.placement,
                 );
+                // One whose gap is inside the action opens that action over the picture instead, on
+                // the step it names — the box's panel would only send the reader on again.
+                const mend = box === undefined ? null : mendedIn(block, box);
                 return (
                   <li key={`${block.code}-${nth}`}>
                     {box === undefined ? (
                       errSentence(block)
+                    ) : mend !== null ? (
+                      <button
+                        type="button"
+                        className="autolaunch__go"
+                        data-see={t("auto.launch.fix")}
+                        title={t("auto.launch.fix")}
+                        onClick={() => {
+                          setShowing({ kind: "box", id: box.id });
+                          openOver(mend.action, mend.step);
+                        }}
+                      >
+                        {errSentence(block)}
+                      </button>
                     ) : (
                       <button
                         type="button"
@@ -326,7 +371,7 @@ export function AutomationBuildScreen({
             automation={automation}
             placementId={pressed.id}
             onRemoved={close}
-            onOpenAction={setOver}
+            onOpenAction={(actionId) => openOver(actionId)}
             onPlaceNext={(exitName) =>
               setShowing({ kind: "library", target: { fromId: pressed.id, exitName } })
             }
@@ -343,7 +388,7 @@ export function AutomationBuildScreen({
           projectId={projectId}
           onMade={(actionId) => {
             close();
-            setOver(actionId);
+            openOver(actionId);
           }}
           onClose={() => setMaking(null)}
         />
@@ -356,6 +401,7 @@ export function AutomationBuildScreen({
     {over !== null && (
       <AutomationActionOver
         actionId={over}
+        openingStep={overStep}
         automationName={automation?.name ?? ""}
         boxNo={holdingNo}
         onBack={backFromOver}

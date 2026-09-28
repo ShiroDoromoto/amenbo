@@ -212,6 +212,7 @@ export function Panel({
 
 export function AutomationActionBuildScreen({
   id,
+  openingStep,
   onBack,
   onGoToRun,
   onGoToAutomation,
@@ -220,6 +221,9 @@ export function AutomationActionBuildScreen({
   headEnd,
 }: {
   id: number;
+  /** The step to arrive with pressed — the one a reason the automation cannot start for is about,
+   *  sent here from that automation's build screen (`./AutomationBuildScreen`). */
+  openingStep?: number;
   /** Go back. Absent, the head has no back: the screen is left by a way its caller draws
    *  (`./AutomationActionOver`, while the action is still being made). */
   onBack?: () => void;
@@ -240,8 +244,9 @@ export function AutomationActionBuildScreen({
   const readOnly = (action?.heldBy.length ?? 0) > 0;
   // What the panel is showing: a pressed step, the action itself, its input or its output — or
   // nothing, until one is pressed. An action opens on the picture, and a place picked for the reader
-  // would be one they did not choose.
-  const [step, setStep] = useState<number | null>(null);
+  // would be one they did not choose. The one exception is a step they chose elsewhere: the one a
+  // reason on the automation's build screen was about, pressed there.
+  const [step, setStep] = useState<number | null>(openingStep ?? null);
   const [part, setPart] = useState<"about" | "in" | "out" | null>(null);
   // Where the dialog that writes a step is about to put one, while it is open.
   const [adding, setAdding] = useState<AddTarget | null>(null);

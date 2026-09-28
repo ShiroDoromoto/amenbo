@@ -944,6 +944,7 @@ export const zhHans: Translation = {
     "auto.hand.unchosen": "不选择",
     "auto.hand.nothing": "此自动化启动时不接收任何内容。",
     "auto.launch.see": "在图中查看",
+    "auto.launch.fix": "打开动作进行修改",
     "auto.launch.openWorkspace": "打开工作区",
     "auto.pic.lap": "一件任务",
     "auto.pic.insert": "在这里插入一个动作",

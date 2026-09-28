@@ -943,6 +943,7 @@ export const vi: Translation = {
     "auto.hand.unchosen": "Không chọn",
     "auto.hand.nothing": "Tự động hóa này không nhận gì khi bắt đầu.",
     "auto.launch.see": "Xem trên sơ đồ",
+    "auto.launch.fix": "Mở hành động để sửa",
     "auto.launch.openWorkspace": "Mở không gian làm việc",
     "auto.pic.lap": "Một công việc",
     "auto.pic.insert": "Chèn một hành động vào đây",

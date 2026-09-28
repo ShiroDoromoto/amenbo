@@ -1271,6 +1271,12 @@ export const vi: Translation = {
     "auto.run.reportWithheld": "Không để lại báo cáo trên việc vì việc đã đóng: {steps}",
     "auto.run.taskWait": "Chờ việc",
     "auto.run.heldUntil": "Đang chờ đến {at}",
+    "auto.run.body.taskWait": "Đang chờ một tác vụ có thể nhận",
+    "auto.run.body.taskWaitNext": "Khi có tác vụ khớp điều kiện và nhận được, lượt chạy sẽ nhận nó và tự đi tiếp. Để thôi chờ, hãy nhấn tạm dừng hoặc dừng ở trên.",
+    "auto.run.body.paused": "Đang tạm dừng. Khi tiếp tục, lượt chạy đi tiếp từ bước sau.",
+    "auto.run.body.completed": "Đã đến cuối sơ đồ. Bước cuối là “{step}”.",
+    "auto.run.body.canceled": "Đã dừng ở “{step}”. Lượt chạy này không tiếp tục.",
+    "auto.run.body.failed": "Thất bại ở “{step}”. Lý do ở dải phía trên.",
 
     "mcp.title": "Kết nối qua MCP",
     "mcp.setupTitle": "Dùng các dự án của bạn từ AI",

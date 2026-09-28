@@ -1287,6 +1287,12 @@ export const uk: Translation = {
     "auto.run.reportWithheld": "Звіт не залишено в завданні, бо воно було закрите: {steps}",
     "auto.run.taskWait": "Чекає завдання",
     "auto.run.heldUntil": "Очікування до {at}",
+    "auto.run.body.taskWait": "Чекає на задачу, яку можна взяти",
+    "auto.run.body.taskWaitNext": "Коли відповідну задачу можна буде взяти, запуск візьме її й піде далі сам. Щоб перестати чекати, натисніть паузу або стоп угорі.",
+    "auto.run.body.paused": "Призупинено. Після відновлення продовжить з наступного кроку.",
+    "auto.run.body.completed": "Дійшов до кінця схеми. Останній крок — «{step}».",
+    "auto.run.body.canceled": "Зупинено на «{step}». Цей запуск не продовжиться.",
+    "auto.run.body.failed": "Збій на «{step}». Причину вказано на смузі вище.",
 
     "mcp.title": "Підключення через MCP",
     "mcp.setupTitle": "Працювати зі своїми проєктами із ШІ",

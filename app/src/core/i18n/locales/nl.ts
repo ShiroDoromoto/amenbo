@@ -1270,6 +1270,12 @@ export const nl: Translation = {
     "auto.run.reportWithheld": "Verslag niet bij de taak achtergelaten, want die was gesloten: {steps}",
     "auto.run.taskWait": "Wacht op taak",
     "auto.run.heldUntil": "Wacht tot {at}",
+    "auto.run.body.taskWait": "Wacht op een taak die opgepakt kan worden",
+    "auto.run.body.taskWaitNext": "Zodra een passende taak opgepakt kan worden, pakt de run die op en gaat vanzelf verder. Druk bovenaan op pauze of stop om te stoppen met wachten.",
+    "auto.run.body.paused": "Gepauzeerd. Bij hervatten gaat het verder vanaf de volgende stap.",
+    "auto.run.body.completed": "Het einde van het diagram is bereikt. De laatste stap was ‘{step}’.",
+    "auto.run.body.canceled": "Gestopt bij ‘{step}’. Deze run gaat niet verder.",
+    "auto.run.body.failed": "Mislukt bij ‘{step}’. De balk hierboven zegt waarom.",
 
     "mcp.title": "Verbinden via MCP",
     "mcp.setupTitle": "Je projecten vanuit een AI gebruiken",

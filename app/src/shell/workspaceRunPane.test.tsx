@@ -647,6 +647,71 @@ describe("a built-in on a run's pane", () => {
     expect(q(".plate-run")[0]?.textContent).toBe("");
   });
 
+  it("says in words that it waits, and that it goes on by itself or stops by the row (AMB-T-5753)", async () => {
+    await mount();
+    await arrive({
+      step: undefined,
+      builtin: builtin({ name: "タスクに着手する", key: "take_task", task: undefined, waiting: true, looksFor: "status:todo" }),
+    });
+
+    expect(q(".slot__builtin-word")[0]?.textContent).toBe(t("auto.run.body.taskWait"));
+    expect(q(".slot__builtin-next")[0]?.textContent).toBe(t("auto.run.body.taskWaitNext"));
+    // Waiting is not carrying out: what it would do once it finds one is not said as if it were.
+    expect(q(".slot__builtin-does")).toHaveLength(0);
+  });
+
+  it("says what a built-in does while Amenbo carries it out, and not once it is done (AMB-T-5753)", async () => {
+    await mount();
+    await arrive({ step: undefined, builtin: builtin({ key: "cut_worktree" }) });
+
+    expect(q(".slot__builtin-does")[0]?.textContent).toBe(t("auto.bi.cutWorktree.does"));
+
+    await arrive({ step: undefined, builtin: builtin({ key: "cut_worktree", finished: true }) });
+    expect(q(".slot__builtin-does")).toHaveLength(0);
+  });
+
+  it("stops saying it waits once the run waiting is stopped, and says where it stopped (AMB-T-5753)", async () => {
+    const went: unknown[][] = [];
+    const nav: RefNav = { openRuns: (...args) => went.push(["runs", ...args]) };
+    await act(async () => {
+      root.render(
+        createElement(RefNavProvider, {
+          value: nav,
+          children: createElement(WorkspaceFace, { onWindow: () => {}, note: null, projectId: 1 }),
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const waiting = builtin({ name: "タスクに着手する", key: "take_task", task: undefined, waiting: true, looksFor: "status:todo" });
+    await arrive({ step: undefined, builtin: waiting });
+
+    hoisted.cards = [runCard({ status: "canceled", waiting: true })];
+    await arrive({ step: undefined, builtin: waiting });
+
+    expect(q(".slot__builtin-spin")).toHaveLength(0);
+    expect(q(".filterchips")).toHaveLength(0);
+    expect(q(".slot__runbody-line")[0]?.textContent).toBe(
+      tf("auto.run.body.canceled", { step: builtinWord("take_task", "タスクに着手する") }),
+    );
+    const see = [...q(".slot__runbody-see")].find((one) => one.textContent === t("auto.run.seeHistory"))!;
+    await act(async () => see.click());
+    expect(went).toEqual([["runs", 1, "history"]]);
+  });
+
+  it("says a run completed reached the end, in place of the last built-in's tick (AMB-T-5753)", async () => {
+    await mount();
+    await arrive({ step: undefined, builtin: builtin({ key: "close_task", name: "タスクを閉じる", finished: true }) });
+
+    hoisted.cards = [runCard({ status: "completed" })];
+    await arrive({ step: undefined, builtin: builtin({ key: "close_task", name: "タスクを閉じる", finished: true }) });
+
+    expect(q(".slot__builtin-done")).toHaveLength(0);
+    expect(q(".slot__runbody")[0]?.getAttribute("data-status")).toBe("completed");
+    expect(q(".slot__runbody-line")[0]?.textContent).toBe(
+      tf("auto.run.body.completed", { step: builtinWord("close_task", "タスクを閉じる") }),
+    );
+  });
+
   it("says when its time comes while the built-in that waits holds its step (AMB-D-983)", async () => {
     await mount();
     const at = "2026-09-26T12:34:56Z";

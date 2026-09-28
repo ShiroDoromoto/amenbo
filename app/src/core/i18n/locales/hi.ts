@@ -1270,6 +1270,12 @@ export const hi: Translation = {
     "auto.run.reportWithheld": "कार्य बंद था, इसलिए रिपोर्ट उस पर नहीं छोड़ी गई: {steps}",
     "auto.run.taskWait": "कार्य की प्रतीक्षा",
     "auto.run.heldUntil": "{at} तक प्रतीक्षा",
+    "auto.run.body.taskWait": "लेने योग्य कार्य की प्रतीक्षा",
+    "auto.run.body.taskWaitNext": "जब कोई मेल खाता कार्य लिया जा सकेगा, यह उसे लेकर अपने आप आगे बढ़ेगा। प्रतीक्षा रोकने के लिए ऊपर रोकें या बंद करें दबाएँ।",
+    "auto.run.body.paused": "रुका हुआ है। फिर से शुरू करने पर अगले चरण से आगे बढ़ेगा।",
+    "auto.run.body.completed": "आरेख के अंत तक पहुँच गया। अंतिम चरण “{step}” था।",
+    "auto.run.body.canceled": "“{step}” पर रोका गया। यह रन आगे नहीं चलेगा।",
+    "auto.run.body.failed": "“{step}” पर विफल। कारण ऊपर की पट्टी में है।",
 
     "mcp.title": "MCP से जोड़ें",
     "mcp.setupTitle": "अपने प्रोजेक्ट AI से इस्तेमाल करें",

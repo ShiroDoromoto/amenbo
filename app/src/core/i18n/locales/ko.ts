@@ -1267,6 +1267,12 @@ export const ko: Translation = {
     "auto.run.reportWithheld": "작업이 닫혀 있어 보고를 남기지 않음: {steps}",
     "auto.run.taskWait": "작업 대기",
     "auto.run.heldUntil": "{at}까지 대기",
+    "auto.run.body.taskWait": "착수할 수 있는 작업을 기다리는 중",
+    "auto.run.body.taskWaitNext": "조건에 맞는 작업에 착수할 수 있게 되면 자동으로 착수하고 진행합니다. 기다리기를 그만하려면 위의 일시정지나 중지를 누르세요.",
+    "auto.run.body.paused": "일시정지 중입니다. 재개하면 다음 단계부터 이어갑니다.",
+    "auto.run.body.completed": "그림의 끝까지 진행했습니다. 마지막 단계는 “{step}”였습니다.",
+    "auto.run.body.canceled": "“{step}”에서 중지했습니다. 이 실행은 이어지지 않습니다.",
+    "auto.run.body.failed": "“{step}”에서 실패했습니다. 이유는 위의 띠에 나와 있습니다.",
 
     "mcp.title": "MCP로 연결",
     "mcp.setupTitle": "내 프로젝트를 AI에서 사용하기",

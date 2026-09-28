@@ -1272,6 +1272,12 @@ export const zhHant: Translation = {
     "auto.run.reportWithheld": "任務已關閉，未留下報告：{steps}",
     "auto.run.taskWait": "等待任務",
     "auto.run.heldUntil": "等待至 {at}",
+    "auto.run.body.taskWait": "正在等待可以著手的任務",
+    "auto.run.body.taskWaitNext": "有符合條件且可以著手的任務時，會自動著手並繼續。要停止等待，請按上方的暫停或停止。",
+    "auto.run.body.paused": "已暫停。繼續後，從下一步開始。",
+    "auto.run.body.completed": "已走到圖的末尾。最後一步是「{step}」。",
+    "auto.run.body.canceled": "在「{step}」處停止了。此次執行不會繼續。",
+    "auto.run.body.failed": "在「{step}」處失敗。原因見上方的橫條。",
 
     "mcp.title": "透過 MCP 連線",
     "mcp.setupTitle": "讓 AI 可以使用你的專案",

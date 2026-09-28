@@ -1282,6 +1282,12 @@ export const it: Translation = {
     "auto.run.reportWithheld": "Resoconto non lasciato sull’attività, che era chiusa: {steps}",
     "auto.run.taskWait": "In attesa di attività",
     "auto.run.heldUntil": "In attesa fino a {at}",
+    "auto.run.body.taskWait": "In attesa di un'attività da prendere",
+    "auto.run.body.taskWaitNext": "Appena un'attività corrispondente può essere presa, la prende e prosegue da sola. Per smettere di attendere, premi pausa o ferma in alto.",
+    "auto.run.body.paused": "In pausa. Alla ripresa, prosegue dal passo successivo.",
+    "auto.run.body.completed": "Raggiunta la fine del diagramma. L'ultimo passo era «{step}».",
+    "auto.run.body.canceled": "Fermata a «{step}». Questa esecuzione non prosegue.",
+    "auto.run.body.failed": "Non riuscita a «{step}». La fascia in alto dice perché.",
 
     "mcp.title": "Collegare via MCP",
     "mcp.setupTitle": "Usare i tuoi progetti da un'IA",

@@ -27,11 +27,9 @@
 // shows while it holds the focus. Each edge is traced by a wider stroke nobody sees, so the pointer
 // does not have to land on a line one and a half pixels wide.
 //
-// **A wire is named only where it touches what is picked** (`AMB-T-5698`). Every wire named at once
-// was a column of words down the right of the picture, most of them about boxes nobody was looking
-// at. With a box picked, the wires in and out of it keep their names and the rest are drawn fainter;
-// with the action's input or output picked, the wires out of or into the action itself do. With
-// nothing picked, no wire is named — where each one goes is still its `<title>`.
+// **What a box hands on is not drawn** (`AMB-D-1001`). The dotted wires took the right of the
+// picture and crossed the tops of the boxes, and nobody makes or drops one on it: the panel beside it
+// does both, and says where each goes. What stays on a box is its "⚠" for an input nothing reaches.
 //
 // **It scrolls, and it does nothing else.** No zoom, no folding a stretch away: an automation is
 // tens of steps, and a picture with a state of its own is one more thing to put back where it was
@@ -40,19 +38,10 @@
 // screen can push it out of view. It stops moving once the reader's own hand has moved the screen,
 // so a reader scrolling away from the box that stays picked is not pulled back.
 import { useEffect, useId, useRef, useState } from "react";
-import { ACTION_BOUNDARY, edgeWord, exitWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
+import { edgeWord, layOut, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { Icon } from "../components/Icon";
-
-/**
- * The name over a wire's trunk: what it hands on, and — where the box hands it on by a way out with
- * a name — that way out first, so two outputs of one name leaving one box by two ways out read apart.
- */
-function wireWord(line: PicLine): string {
-  const exit = exitWord(line);
-  return exit === "" ? (line.hands?.from ?? "") : `${exit} · ${line.hands?.from ?? ""}`;
-}
 
 /** One way out of the action, in words: by its name, the error one in the screen's words. Only an
  *  `out` mark is written this way, and it always has one. */
@@ -69,25 +58,13 @@ function inputsLine(mark: PicMark): string {
     .join("　");
 }
 
-/**
- * What a line is, in a sentence: the words written beside an edge, and the one thing a reader who
- * cannot see the drawing is left with.
- */
-function lineTitle(line: PicLine): string {
-  if (line.kind === "wire" && line.hands !== undefined) {
-    return tf("auto.pic.hands", { from: line.hands.from, to: listLabel([...line.hands.to]) });
-  }
-  return edgeWord(line);
-}
-
 /** Which arrowhead a line ends in — its colour, since a marker cannot take the line's own. */
-type Head = "next" | "branch" | "error" | "back" | "leaves" | "wire";
-const HEADS: readonly Head[] = ["next", "branch", "error", "back", "leaves", "wire"];
+type Head = "next" | "branch" | "error" | "back" | "leaves";
+const HEADS: readonly Head[] = ["next", "branch", "error", "back", "leaves"];
 
 function headOf(line: PicLine): Head {
   if (line.back) return "back";
   if (line.leaves) return "leaves";
-  if (line.kind === "wire") return "wire";
   return line.tone ?? "next";
 }
 
@@ -112,7 +89,6 @@ function Legend({ inAction }: { inAction: boolean }) {
       {one("back", t("auto.pic.legendBack"))}
       {one("branch", t("auto.pic.legendBranch"))}
       {one("error", t("auto.pic.legendError"))}
-      {one("wire", t("auto.pic.legendWire"))}
       {inAction && one("leaves", t("auto.pic.legendLeaves"))}
       {one("lap", t("auto.pic.lap"))}
       <span className="autopic__legenditem">
@@ -213,16 +189,6 @@ export function AutomationPicture({
     return stop;
   }, [selectedBoxId, drawn]);
   if (picture.nodes.length === 0) return null;
-  // Whether a wire touches what is picked — the box, or the action itself where its input (the wires
-  // out of it) or its output (the wires into it) is. None does while nothing is picked.
-  const somethingPicked = selectedBoxId !== undefined || selectedPart !== undefined;
-  const touches = (line: PicLine): boolean => {
-    const [from, ...to] = line.joins ?? [];
-    if (selectedBoxId !== undefined && (line.joins ?? []).includes(selectedBoxId)) return true;
-    if (selectedPart === "in") return from === ACTION_BOUNDARY;
-    if (selectedPart === "out") return to.includes(ACTION_BOUNDARY);
-    return false;
-  };
 
   return (
     <>
@@ -245,17 +211,13 @@ export function AutomationPicture({
                   viewBox="0 0 10 10"
                   refX={9}
                   refY={5}
-                  markerWidth={kind === "wire" ? 5 : 6}
-                  markerHeight={kind === "wire" ? 5 : 6}
+                  markerWidth={6}
+                  markerHeight={6}
                   orient="auto"
                 >
                   <path className={`autopic__arrow autopic__arrow--${kind}`} d="M0 0 L10 5 L0 10 z" />
                 </marker>
               ))}
-              {/* Where a wire leaves its box: a dot, as its arrowhead is where it lands. */}
-              <marker id={`${ids}-wire-out`} viewBox="0 0 10 10" refX={5} refY={5} markerWidth={4} markerHeight={4}>
-                <circle className="autopic__arrow autopic__arrow--wire" cx={5} cy={5} r={5} />
-              </marker>
             </defs>
             {picture.laps.map((lap) => (
               <rect
@@ -271,35 +233,23 @@ export function AutomationPicture({
             {picture.lines.map((line) => {
               const drawn = [
                 "autopic__line",
-                `autopic__line--${line.kind}`,
                 line.back ? "autopic__line--back" : "",
                 line.leaves ? "autopic__line--leaves" : "",
                 line.tone !== undefined ? `autopic__line--${line.tone}` : "",
-                line.kind === "wire" && somethingPicked && !touches(line) ? "autopic__line--aside" : "",
               ]
                 .filter((one) => one !== "")
                 .join(" ");
-              const edgeId = line.kind === "edge" ? Number(line.key.slice("edge-".length)) : undefined;
+              // The line in from the action's top mark is no edge, and puts no box in.
+              const edgeId = line.key.startsWith("edge-") ? Number(line.key.slice("edge-".length)) : undefined;
               return (
                 <g key={line.key}>
-                  <title>{lineTitle(line)}</title>
+                  <title>{edgeWord(line)}</title>
                   <polyline
                     className={drawn}
                     points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                    // Into the box it goes to. A wire's stem ends on its trunk and takes none — its
-                    // branches do — and a line that goes nowhere ends in its words instead.
-                    markerEnd={line.kind === "edge" && line.points.length > 2 ? head(headOf(line)) : undefined}
-                    markerStart={line.kind === "wire" ? `url(#${ids}-wire-out)` : undefined}
+                    // Into the box it goes to. A line that goes nowhere ends in its words instead.
+                    markerEnd={line.points.length > 2 ? head(headOf(line)) : undefined}
                   />
-                  {/* A wire's legs off its trunk, one into each input it lands in. */}
-                  {line.branches?.map((branch, nth) => (
-                    <polyline
-                      key={nth}
-                      className={drawn}
-                      points={branch.map((p) => `${p.x},${p.y}`).join(" ")}
-                      markerEnd={head("wire")}
-                    />
-                  ))}
                   {/* Last in the group, so it lies over the line it traces. */}
                   {edgeId !== undefined && (
                     <polyline
@@ -309,16 +259,9 @@ export function AutomationPicture({
                       onMouseLeave={() => setNear((was) => (was === edgeId ? null : was))}
                     />
                   )}
-                  {line.kind === "edge" && lineTitle(line) !== "" && (
+                  {edgeWord(line) !== "" && (
                     <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
-                      {lineTitle(line)}
-                    </text>
-                  )}
-                  {/* A wire is named by what it hands on, past the trunks: the sentence saying where it
-                      goes is the title, since the ends it lands in are drawn. */}
-                  {line.kind === "wire" && line.hands !== undefined && touches(line) && (
-                    <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
-                      {wireWord(line)}
+                      {edgeWord(line)}
                     </text>
                   )}
                 </g>

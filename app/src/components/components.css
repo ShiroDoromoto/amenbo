@@ -1355,28 +1355,21 @@ button.feed__target:hover { color: var(--c-accent); }
   position: absolute; transform: translateY(calc(-100% - 4px));
   font-size: var(--fs-xs); line-height: 1; color: var(--c-text-muted); white-space: nowrap;
 }
-/* What comes after a step runs down the left, what is handed on runs down the right. A wire is the
-   thinner, dotted, quieter of the two because it is read after the order of the steps, never before
-   it. The edges are coloured by what they are, as the legend under the picture says
-   (`AMB-T-5424`): on to the next box, one way of several out of a box that branches, or the error
-   way out and a stop. */
+/* The edges are coloured by what they are, as the legend under the picture says (`AMB-T-5424`): on
+   to the next box, one way of several out of a box that branches, or the error way out and a stop.
+   What a box hands on is not drawn (`AMB-D-1001`). */
 .autopic__line { fill: none; stroke: var(--c-text-muted); stroke-width: 1.5; }
 .autopic__line--branch { stroke: var(--c-heed); }
 .autopic__line--error { stroke: var(--c-stop); }
-.autopic__line--wire { stroke: var(--c-text-faint); stroke-width: 1.2; stroke-dasharray: 2 3; }
-/* A wire that touches nothing picked, while something is: still there, quieter than the ones that do. */
-.autopic__line--aside { opacity: 0.35; }
 /* It goes back to a row above the one it left. A step's line doing so is red as well as dashed: in
    grey it looked like one more outline, running down the margin beside the real ones. */
-.autopic__line--back { stroke-dasharray: 5 4; }
-.autopic__line--edge.autopic__line--back { stroke: var(--c-stop); }
+.autopic__line--back { stroke: var(--c-stop); stroke-dasharray: 5 4; }
 .autopic__word { font-size: var(--fs-xs); fill: var(--c-text-muted); }
 /* The arrowheads, one per colour a line can be in: a marker cannot take the stroke of the line it ends. */
 .autopic__arrow--next { fill: var(--c-text-muted); }
 .autopic__arrow--branch { fill: var(--c-heed); }
 .autopic__arrow--error, .autopic__arrow--back { fill: var(--c-stop); }
 .autopic__arrow--leaves { fill: var(--c-accent); }
-.autopic__arrow--wire { fill: var(--c-text-faint); }
 /* What the colours and dashes mean. Each swatch is a short line drawn as the line it stands for. */
 .autopic__legend {
   display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-1) var(--s-3);
@@ -1387,7 +1380,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__swatch--back { border-top-color: var(--c-stop); border-top-style: dashed; }
 .autopic__swatch--branch { border-top-color: var(--c-heed); }
 .autopic__swatch--error { border-top-color: var(--c-stop); }
-.autopic__swatch--wire { border-top-color: var(--c-text-faint); border-top-style: dotted; }
 .autopic__swatch--leaves { border-top-color: var(--c-accent); }
 /* The span of one task: a small dashed outline, as the picture draws it round the boxes. */
 .autopic__swatch--lap { width: 14px; height: 10px; border: 1px dashed var(--c-rule); border-radius: 3px; }

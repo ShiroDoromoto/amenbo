@@ -4238,6 +4238,28 @@ const REGISTRY: &[OpSpec] = &[
     // automation has behind it and how many tasks the project holds, which is where anything a test run
     // wrongly kept would be found.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "test-run-walked", required: &["walked", "status"], refs: &["target"], strings: &["status"], binds: false },
+    //
+    // **The same test run, stepped through on the build screen** — the screen's road alone. The press
+    // is `test-run` above, on the build screen's head: it asks what a launch asks, in the launch's own
+    // dialog bar the file, and opens a pane beside the picture whose head says no agent is running.
+    // The walk comes back whole, and the pane stands on one step of it at a time.
+    //
+    // Moving along it, by the pane's next (`press: next`) or the one before (`press: prev`).
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "test-move", required: &["press"], refs: &[], strings: &["press"], binds: false },
+    // The step the pane stands on: which of how many (`step` of `total`, counted from 1), the step's
+    // name — a road's word (`name`), or a built-in's key (`builtin`) — the way out it was taken to leave
+    // by (`exit`, as `pick-box` names one; left out, the done one), the prompt an agent would be started
+    // on (`prompt`), and the box the picture marks for it — a built-in's own, or for a step inside an
+    // action the box that action stands on, which `box` names.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "test-pane", required: &["step", "total"], refs: &[], strings: &["name", "builtin", "exit", "prompt", "box"], binds: false },
+    // Past the last step, the pane says how the walk ended: `completed` when it came out at an end,
+    // `looped` when a step was reached again with no way out left to try, `too_long` when it opened
+    // too many steps to go on.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "test-pane-ended", required: &["ended"], refs: &[], strings: &["ended"], binds: false },
+    // Whether a row on the tab the automations screen stands on (`screen`) names the automation
+    // (`target`). A test run keeps no run, so on the running tab and the history tab alike the answer
+    // after one is no — which is how the screen proves what `test-run-walked` counts as `runs`.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "rows-name", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // ---- reading a definition back --------------------------------------------------------------
     // **The two listings are read on both faces**, which is why they stand here rather than under the
     // screen's heading below: the automations tab draws a row per definition and the actions tab one

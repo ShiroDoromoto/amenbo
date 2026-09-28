@@ -11,11 +11,16 @@ id: walk-an-automation-through-as-a-test-run
 title: A test run walks an automation once round and out, and keeps nothing
 description: >
   Stand up an automation that takes a task, works on it, closes it and goes back to take the next,
-  with a task in the project it could take. Walk it as a test run from the terminal: the take leaves by
+  with a task in the project it could take. Walk it as a test run, from the terminal or from its build
+  screen, where a pane beside the picture steps through the walk one step at a time: the take leaves by
   the way out that took a task, the work and the close each by their done one, and the second take by
   the way out that found none, which ends the run completed. Afterwards the automation has no run
   behind it, the project holds the one task it held, and that task is still waiting to be taken.
 given:
+  # The agent the work step names is one this machine can start, so the walk goes past it rather than
+  # stopping where a run would — on whichever machine the screen road is walked.
+  - { type: action, domain: workspace, op: can-start, with: { count: 1 } }
+
   # The task a take could take, which the walk must leave alone.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task to take }, as: real }
   - { type: action, domain: task, op: assign, with: { target: real, assignee: me-ai } }
@@ -64,3 +69,42 @@ steps_cli:
     domain: task
     op: field
     with: { target: real, field: status, equals: todo }
+
+steps_gui:
+  - { type: action, domain: automation, op: screen, with: { tab: automations } }
+  - { type: action, domain: automation, op: open, with: { target: auto } }
+
+  # The entry takes a task rather than filing one, so the dialog asks for nothing to hand it.
+  - { type: action, domain: automation, op: test-run, with: { target: auto } }
+
+  # The same walk, a step at a time: the take by the way out that took a task, the step inside the
+  # action with the prompt an agent would be started on, the close, and the second take by the way
+  # out that found none.
+  - type: assert
+    domain: automation
+    op: test-pane
+    with: { step: 1, total: 4, builtin: take_task, exit: 着手した }
+  - { type: action, domain: automation, op: test-move, with: { press: next } }
+  - type: assert
+    domain: automation
+    op: test-pane
+    with: { step: 2, total: 4, name: fix, prompt: fix what the task asks for, box: work }
+  - { type: action, domain: automation, op: test-move, with: { press: next } }
+  - type: assert
+    domain: automation
+    op: test-pane
+    with: { step: 3, total: 4, builtin: close_task }
+  - { type: action, domain: automation, op: test-move, with: { press: next } }
+  - type: assert
+    domain: automation
+    op: test-pane
+    with: { step: 4, total: 4, builtin: take_task, exit: 着手できるタスクが無い }
+  - { type: action, domain: automation, op: test-move, with: { press: next } }
+  - { type: assert, domain: automation, op: test-pane-ended, with: { ended: completed } }
+
+  # Nothing kept: no run is going and none is over, and the task is still waiting to be taken.
+  - { type: action, domain: automation, op: screen, with: { tab: running } }
+  - { type: assert, domain: automation, op: rows-name, with: { target: auto, present: false } }
+  - { type: action, domain: automation, op: screen, with: { tab: history } }
+  - { type: assert, domain: automation, op: rows-name, with: { target: auto, present: false } }
+  - { type: assert, domain: task, op: field, with: { target: real, field: status, equals: todo } }

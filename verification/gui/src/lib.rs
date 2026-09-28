@@ -1252,6 +1252,15 @@ impl Instructor {
             (Domain::Automation, "launch") => {
                 Some(Expectation { text: arg_str(with, "at")?.to_string(), present: present(with) })
             }
+            // The test run's pane: the prompt is the road's own words and is written in the pane alone
+            // — the panel beside the picture is closed while it stands — so the reading is taken on it,
+            // and on the step's name where there is no prompt. A built-in has neither.
+            (Domain::Automation, "test-pane") => match (arg_str(with, "prompt"), arg_str(with, "name")) {
+                (Some(text), _) | (None, Some(text)) => Some(Expectation { text: text.to_string(), present: true }),
+                (None, None) => None,
+            },
+            // The automation's name is the road's, and a row is where the tab would draw it.
+            (Domain::Automation, "rows-name") => Some(Expectation { text: self.target_label(with), present: present(with) }),
             _ => None,
         }
     }
@@ -4518,6 +4527,22 @@ impl Instructor {
             (Domain::Automation, "start") => {
                 format!("On the build screen's head, press the button that starts a run. {}", handing(with))
             }
+            // **A test run**, pressed on the same head. It asks in the launch's own dialog, which says
+            // no agent is started and nothing is kept, and asks for no file — so the handing is said the
+            // way a start's is, bar that. What comes back opens beside the picture.
+            (Domain::Automation, "test-run") => format!(
+                "On the build screen's head, press the button that walks it as a test run. Confirm the dialog that opens says no agent is started and nothing is kept, and asks for no file. {} Confirm a pane opens beside the picture, its head saying no agent is running.",
+                handing(with).replace("press its start button", "press its test run button")
+            ),
+            // Moving along the walk, by the pane's own buttons.
+            (Domain::Automation, "test-move") => format!(
+                "In the test run's pane, press {}.",
+                match req(with, "press")? {
+                    "next" => "the button going to the next step",
+                    "prev" => "the button going back to the step before",
+                    other => return Err(format!("`press` does not know `{other}` — it is next / prev")),
+                }
+            ),
             // Pressing a reason under the head. What it does is the picture's own press: the box it
             // names is picked out and its panel opens, so the step says so and a road reads the panel
             // next the way it would after `pick-box`.
@@ -6862,6 +6887,54 @@ impl Instructor {
                 ),
                 false => "On the history tab, confirm no row for this run is listed.".to_string(),
             },
+            // The step the test run's pane stands on. Its head saying no agent is running, a built-in's
+            // name and every way out's word are the interface's own, so the line hands them to an eye;
+            // a road's word is what a reading is taken on (`expect`).
+            (Domain::Automation, "test-pane") => {
+                let at = with.get("step").and_then(|v| v.as_u64()).ok_or("`step` is which step, counted from 1")?;
+                let total = with.get("total").and_then(|v| v.as_u64()).ok_or("`total` is how many steps the walk opened")?;
+                let named = match (arg_str(with, "name"), arg_str(with, "builtin")) {
+                    (Some(name), None) => format!("the step \"{name}\""),
+                    (None, Some(key)) => builtin_words(key)?.called.to_string(),
+                    _ => return Err("a step is named by `name`, or by `builtin` for a built-in's key — one of the two".to_string()),
+                };
+                let exit = match (arg_str(with, "builtin"), arg_str(with, "exit")) {
+                    (Some(_), None) => format!("its way out \"{DONE_EXIT}\""),
+                    _ => way_out_of(with, "builtin")?,
+                };
+                let mut said = format!(
+                    "In the test run's pane, its head saying no agent is running, confirm it stands on step {at} of {total}, which is {named} and leaves by {exit}."
+                );
+                match arg_str(with, "prompt") {
+                    Some(prompt) => said.push_str(&format!(" Confirm the prompt an agent would be started on carries \"{prompt}\" among what it is handed.")),
+                    None => said.push_str(" Confirm it shows no prompt, since no agent would be started on it."),
+                }
+                // A built-in is its own box; a step inside an action is marked on the box the action
+                // stands on, which the road names.
+                match (arg_str(with, "builtin"), arg_str(with, "box")) {
+                    (Some(_), Some(_)) => return Err("a built-in is its own box — `box` names the one an action's step is marked on".to_string()),
+                    (Some(_), None) => said.push_str(" Confirm that built-in's box is the one picked out on the picture."),
+                    (None, Some(mark)) => said.push_str(&format!(" Confirm the box \"{mark}\" is the one picked out on the picture.")),
+                    (None, None) => {}
+                }
+                said
+            }
+            // Past the last step. How it ended is the interface's sentence, so it is an eye's.
+            (Domain::Automation, "test-pane-ended") => format!(
+                "In the test run's pane, past its last step, confirm it says the walk {}, and that the button going to the next step cannot be pressed.",
+                match req(with, "ended")? {
+                    "completed" => "went all the way to the end",
+                    "looped" => "stopped because a step was reached again with no way out left to try",
+                    "too_long" => "stopped partway because too many steps were opened",
+                    other => return Err(format!("`ended` does not know `{other}` — it is completed / looped / too_long")),
+                }
+            ),
+            // A row naming the automation, on the tab the screen stands on.
+            (Domain::Automation, "rows-name") => format!(
+                "On the tab the automations screen stands on, confirm {} row names \"{}\".",
+                if present(with) { "a" } else { "no" },
+                self.target_label(with)
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -9342,6 +9415,38 @@ steps_gui:
         }
         assert!(ins.render(&steps[6]).is_err(), "a way out onto a box taking a task is the placement's");
         assert!(ins.render(&steps[7]).is_err(), "an action still being created names the action, not a step");
+    }
+
+    /// A test run is pressed on the build screen's head and stepped through in its pane: each step is
+    /// said with which of how many, its way out and its prompt, the end with how the walk ended, and a
+    /// reading is taken on the road's own words alone. A built-in named with a `box` is refused.
+    #[test]
+    fn a_test_run_is_stepped_through_in_its_pane() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - { type: action, domain: automation, op: test-run }
+  - { type: assert, domain: automation, op: test-pane, with: { step: 1, total: 2, builtin: take_task, exit: 着手した } }
+  - { type: action, domain: automation, op: test-move, with: { press: next } }
+  - { type: assert, domain: automation, op: test-pane, with: { step: 2, total: 2, name: fix, prompt: fix it, box: work } }
+  - { type: assert, domain: automation, op: test-pane-ended, with: { ended: completed } }
+  - { type: assert, domain: automation, op: test-pane, with: { step: 1, total: 2, builtin: close_task, box: work } }
+  - { type: action, domain: automation, op: test-move, with: { press: up } }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let press = ins.render(&steps[0]).expect("renders");
+        assert!(press.contains("as a test run") && press.contains("asks for no file") && press.contains("test run button"), "{press}");
+        let take = ins.render(&steps[1]).expect("renders");
+        assert!(take.contains("step 1 of 2") && take.contains("the way out for having taken a task"), "{take}");
+        assert!(take.contains("shows no prompt") && take.contains("built-in's box"), "{take}");
+        assert!(ins.render(&steps[2]).expect("renders").contains("next step"));
+        let fix = ins.render(&steps[3]).expect("renders");
+        assert!(fix.contains("the step \"fix\"") && fix.contains("\"fix it\"") && fix.contains("box \"work\""), "{fix}");
+        assert!(ins.render(&steps[4]).expect("renders").contains("all the way to the end"));
+        assert!(ins.render(&steps[5]).is_err(), "a built-in is its own box");
+        assert!(ins.render(&steps[6]).is_err(), "next / prev only");
     }
 
     /// A run's pane goes to the ledger two ways, and the picture's says which box it

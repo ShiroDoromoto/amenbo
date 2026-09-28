@@ -4512,7 +4512,7 @@ impl Instructor {
             // it says, since the card lists a line for every thing stopping them and only a value's
             // opens the panel its axis is managed in.
             (Domain::Automation, "open-held-value") => format!(
-                "In the workspace, on the card the pane this run is drawn in stands on while it waits for a task, press the line \"{} ({})\" among the things keeping its tasks from being taken.",
+                "In the workspace, with the pane this run is drawn in turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), on the card it stands on while it waits for a task, press the line \"{} ({})\" among the things keeping its tasks from being taken.",
                 req(with, "value")?,
                 req(with, "dimension")?
             ),
@@ -4528,7 +4528,7 @@ impl Instructor {
             // is left as a gap, the store issuing the number, so a road can name the output but never
             // the characters the command takes.
             (Domain::Automation, "out-in-pane") => format!(
-                "In the pane this run is drawn in, type `amenbo automation step-out \"<id>={}\"` and run it, putting where the command says `<id>` the id the step's text lists in front of the output \"{}\". Confirm the line comes back saying it was handed on.",
+                "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo automation step-out \"<id>={}\"` and run it, putting where the command says `<id>` the id the step's text lists in front of the output \"{}\". Confirm the line comes back saying it was handed on.",
                 req(with, "value")?,
                 req(with, "name")?
             ),
@@ -4539,7 +4539,7 @@ impl Instructor {
             // The way out is typed as an id here, since what is refused is an id the step does not
             // carry — a road names one no row can have.
             (Domain::Automation, "done-in-pane") if with.contains_key("refused") => format!(
-                "In the pane this run is drawn in, type `amenbo automation step-done --report \"{}\" --exit {}` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — each as `--exit` and its id, the error one among them.",
+                "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{}\" --exit {}` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — each as `--exit` and its id, the error one among them.",
                 req(with, "report")?,
                 req(with, "exit")?
             ),
@@ -4552,10 +4552,10 @@ impl Instructor {
                 let report = req(with, "report")?;
                 match arg_str(with, "exit") {
                     Some(exit) => format!(
-                        "In the pane this run is drawn in, type `amenbo automation step-done --report \"{report}\" --exit <id>` and run it, putting the id the step's text in that pane lists for the way out \"{exit}\" where the command says `<id>`. Confirm the line comes back saying the step is done."
+                        "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\" --exit <id>` and run it, putting the id the step's text in that pane lists for the way out \"{exit}\" where the command says `<id>`. Confirm the line comes back saying the step is done."
                     ),
                     None => format!(
-                        "In the pane this run is drawn in, type `amenbo automation step-done --report \"{report}\"` and run it, and confirm the line comes back saying the step is done."
+                        "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\"` and run it, and confirm the line comes back saying the step is done."
                     ),
                 }
             }
@@ -4583,7 +4583,7 @@ impl Instructor {
                     false => format!(", putting {}", gaps.join(", and ")),
                 };
                 format!(
-                    "In the pane this run is drawn in, type `amenbo {command}` and run it{filling}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
+                    "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `amenbo {command}` and run it{filling}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
                 )
             }
             // The report made without the run's pane. The step's number is not on any screen — the
@@ -4614,7 +4614,7 @@ impl Instructor {
             // The program ending itself, in the run's own pane. The stand-in carries out the line it
             // is given, so `exit` ends it the way an agent that gives up ends: by its own doing.
             (Domain::Automation, "quit-in-pane") => {
-                "In the pane this run is drawn in, type `exit` and run it. Confirm the program in that pane has ended and takes no more lines."
+                "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), type `exit` and run it. Confirm the program in that pane has ended and takes no more lines."
                     .to_string()
             }
             (Domain::Automation, "press-run") => {
@@ -6683,7 +6683,7 @@ impl Instructor {
             // the count sits beside the line rather than in its words, and which line it belongs to is a
             // matter of where it is drawn.
             (Domain::Automation, "held-back") => format!(
-                "In the workspace, on the card the pane this run is drawn in stands on while it waits for a task, confirm it says how many tasks it cannot take yet ({}), and that among the lines under it, one per thing keeping them from being taken, the line \"{} ({})\" carries the count {} beside it.",
+                "In the workspace, with the pane this run is drawn in turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), on the card it stands on while it waits for a task, confirm it says how many tasks it cannot take yet ({}), and that among the lines under it, one per thing keeping them from being taken, the line \"{} ({})\" carries the count {} beside it.",
                 count(with, "tasks")?,
                 req(with, "value")?,
                 req(with, "dimension")?,
@@ -6692,7 +6692,7 @@ impl Instructor {
             // Read by typing, because the screen alone cannot say it: the last lines stay whether or
             // not the program is still there. The wait is the watch's look, a few seconds at most.
             (Domain::Automation, "run-pane-ended") => {
-                "In the pane this run is drawn in, give it up to ten seconds after the run is over, then type `echo still-here` and press Return. Confirm the program in that pane has ended: its last lines are still on the screen, and nothing answers the line — no `still-here` comes back and no new prompt appears."
+                "In the pane this run is drawn in, turned to its terminal (a run's pane opens on its picture: press \"Terminal\" on the line over it), give it up to ten seconds after the run is over, then type `echo still-here` and press Return. Confirm the program in that pane has ended: its last lines are still on the screen, and nothing answers the line — no `still-here` comes back and no new prompt appears."
                     .to_string()
             }
             // A row of the running tab. It draws every run this device is carrying, across projects,

@@ -1181,6 +1181,8 @@ export const id: Translation = {
     "auto.history.prev": "‹ Sebelumnya",
     "auto.history.next": "Berikutnya ›",
     "auto.history.count": "{from}–{to} dari {total}",
+    "auto.run.facePicture": "Diagram",
+    "auto.run.faceTerminal": "Terminal",
     "auto.run.pause": "Jeda",
     "auto.run.resume": "Lanjutkan",
     "auto.run.stop": "Hentikan",

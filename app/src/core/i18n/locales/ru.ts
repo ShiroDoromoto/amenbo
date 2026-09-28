@@ -1197,6 +1197,8 @@ export const ru: Translation = {
     "auto.history.prev": "‹ Назад",
     "auto.history.next": "Далее ›",
     "auto.history.count": "{from}–{to} из {total}",
+    "auto.run.facePicture": "Схема",
+    "auto.run.faceTerminal": "Терминал",
     "auto.run.pause": "Приостановить",
     "auto.run.resume": "Продолжить",
     "auto.run.stop": "Остановить",

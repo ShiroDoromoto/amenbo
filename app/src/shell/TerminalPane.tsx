@@ -37,6 +37,7 @@ import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
 import { BuiltinCard } from "./BuiltinCard";
+import { RunPicture } from "./RunPicture";
 import { RunOverCard, RunPausedCard } from "./RunBody";
 import { useBoxNumber } from "../screens/boxNumber";
 import type { BuiltinRun } from "../talk/automationStep";
@@ -82,6 +83,17 @@ async function handOver(session: string, paths: string[]) {
     pushNotice(errText(e));
   }
 }
+
+/** What a run's pane shows under its row: the automation's picture, or the terminal (`AMB-T-5775`). */
+type Face = "picture" | "terminal";
+
+/**
+ * **The face each run's pane was last turned to**, by run. A pane comes down when its page is turned
+ * and goes up again for the same run, which is the pane still, and should come back as the reader left
+ * it. A run not in here opens on its picture — every run does, the first time — and nothing is kept for
+ * the app as a whole: one reader turning one pane to its terminal says nothing about the next run.
+ */
+const faces = new Map<number, Face>();
 
 /**
  * One slot of the workspace: a frame, and the terminal in it when there is one.
@@ -304,6 +316,17 @@ export function TerminalPane({
    *  while the first is still opening a terminal would be answered off a run that has already moved.
    *  A refusal is said on the toast — the run may have ended a moment before the press. */
   const [pressing, setPressing] = useState(false);
+  // Which face a run's pane is turned to. An ordinary pane has the terminal and nothing else.
+  const [face, setFace] = useState<Face>(() => (run === null ? "terminal" : faces.get(run.run) ?? "picture"));
+  const runId = run?.run ?? null;
+  useEffect(() => {
+    if (runId !== null) setFace(faces.get(runId) ?? "picture");
+  }, [runId]);
+  const turn = (to: Face) => {
+    if (runId !== null) faces.set(runId, to);
+    setFace(to);
+  };
+  const onPicture = run !== null && face === "picture";
   const press = async (act: () => Promise<unknown>) => {
     setPressing(true);
     try {
@@ -896,6 +919,23 @@ export function TerminalPane({
               row says how it ended. **They are marks and not words** (`AMB-T-5529`), standing straight
               after the state they act on, so the row's words are left to the automation's name; each
               is named for a reader who cannot see it. Stopping keeps the pane. */}
+          {/* **The picture or the terminal** (`AMB-T-5775`), on a run's pane only. Two presses, one
+              pressed, rather than one that flips: what the reader needs to see is which face is up. */}
+          {run !== null && (
+            <span className="slot__faces" role="group">
+              {(["picture", "terminal"] as const).map((one) => (
+                <button
+                  key={one}
+                  type="button"
+                  className={`slot__face${face === one ? " slot__face--on" : ""}`}
+                  aria-pressed={face === one}
+                  onClick={() => turn(one)}
+                >
+                  {t(one === "picture" ? "auto.run.facePicture" : "auto.run.faceTerminal")}
+                </button>
+              ))}
+            </span>
+          )}
           {runLive && run !== null && (
             <span className="slot__runacts">
               {run.state?.status === "paused" ? (
@@ -1081,6 +1121,12 @@ export function TerminalPane({
             onPointerDown={onStretch}
           />
         )}
+        {run !== null && face === "picture" && <RunPicture run={run} />}
+        {/* Everything the terminal face is, kept mounted while the picture is up: the terminal is a
+            program writing into the rows it was told it has, and taking its element away would be
+            ending what draws it. Out of the layout, it has no size, and is not measured again until
+            it is back (`../talk/terminal`). */}
+        <div className={`slot__body${onPicture ? " slot__body--away" : ""}`}>
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}
         {run !== null && over && !running ? (
@@ -1199,6 +1245,7 @@ export function TerminalPane({
             <PaneModel frame={frame} session={live} agent={inPane} />
           </div>
         )}
+        </div>
       </div>
     </div>
   );

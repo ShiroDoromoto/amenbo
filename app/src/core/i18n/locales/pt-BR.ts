@@ -1193,6 +1193,8 @@ export const ptBR: Translation = {
     "auto.history.prev": "‹ Anterior",
     "auto.history.next": "Próxima ›",
     "auto.history.count": "{from}–{to} de {total}",
+    "auto.run.facePicture": "Diagrama",
+    "auto.run.faceTerminal": "Terminal",
     "auto.run.pause": "Pausar",
     "auto.run.resume": "Retomar",
     "auto.run.stop": "Parar",

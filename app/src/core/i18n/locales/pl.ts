@@ -990,6 +990,8 @@ export const pl: Translation = {
     "auto.step.entryReplaceConfirm": "To zmienia, od czego zaczyna się uruchomienie. To, co dzieje się dalej po obecnym starcie, oraz wychodzące z niego przekazania znikną. Kolejne umieszczenia zostaną; połącz je ponownie w „Co dzieje się dalej”.",
     "auto.step.next": "Co dzieje się dalej",
     "auto.step.nextNothing": "Nic jeszcze nie ustalono",
+    "auto.step.placeNext": "+ Umieść tu następną akcję",
+    "auto.step.putNextStep": "+ Wstaw tu następny krok",
     "auto.step.nextErrorNothing": "zatrzymaj się i zawołaj człowieka (domyślnie)",
     "auto.step.nextGo": "Otwórz {name}",
     "auto.step.maxTimes": "Najwyżej",

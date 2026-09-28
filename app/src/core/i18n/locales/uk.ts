@@ -990,6 +990,8 @@ export const uk: Translation = {
     "auto.step.entryReplaceConfirm": "Це змінює, з чого починається запуск. «Що далі» поточного старту й передачі з нього зникнуть. Подальші розміщення залишаться; з’єднайте їх знову в «Що далі».",
     "auto.step.next": "Що далі",
     "auto.step.nextNothing": "Ще нічого не задано",
+    "auto.step.placeNext": "+ Розмістити тут наступну дію",
+    "auto.step.putNextStep": "+ Поставити тут наступний крок",
     "auto.step.nextErrorNothing": "зупинитися й покликати людину (типово)",
     "auto.step.nextGo": "Відкрити {name}",
     "auto.step.maxTimes": "Не більше",

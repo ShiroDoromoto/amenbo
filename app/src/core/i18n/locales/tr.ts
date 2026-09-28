@@ -973,6 +973,8 @@ export const tr: Translation = {
     "auto.step.entryReplaceConfirm": "Bu, bir çalıştırmanın nereden başladığını değiştirir. Mevcut başlangıçtan sonra olanlar ve ondan çıkan aktarımlar silinir. Sonraki yerleşimler kalır; onları “Sonra ne olacak” altında yeniden bağlayın.",
     "auto.step.next": "Sonra ne olacak",
     "auto.step.nextNothing": "Henüz belirlenmedi",
+    "auto.step.placeNext": "+ Sonraki eylemi buraya yerleştir",
+    "auto.step.putNextStep": "+ Sonraki adımı buraya koy",
     "auto.step.nextErrorNothing": "dur ve birini çağır (varsayılan)",
     "auto.step.nextGo": "{name} aç",
     "auto.step.maxTimes": "En çok",

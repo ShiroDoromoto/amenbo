@@ -973,6 +973,8 @@ export const nl: Translation = {
     "auto.step.entryReplaceConfirm": "Hiermee verander je waar een run begint. Wat na de huidige start gebeurt en de overdrachten eruit verdwijnen. De plaatsingen daarna blijven; verbind ze opnieuw onder ‘Wat daarna gebeurt’.",
     "auto.step.next": "Wat daarna gebeurt",
     "auto.step.nextNothing": "Nog niets gezegd",
+    "auto.step.placeNext": "+ Volgende actie hier plaatsen",
+    "auto.step.putNextStep": "+ Volgende stap hier zetten",
     "auto.step.nextErrorNothing": "stoppen en iemand erbij halen (standaard)",
     "auto.step.nextGo": "{name} openen",
     "auto.step.maxTimes": "Hoogstens",

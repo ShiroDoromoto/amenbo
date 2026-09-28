@@ -1615,12 +1615,21 @@ button.feed__target:hover { color: var(--c-accent); }
 .autostep__exits--flow > li, .autostep__exits--flow .autostep__next--flow { display: contents; }
 .autostep__exits--flow .actport { justify-self: start; }
 .autostep__exits--flow .autostep__limit { grid-column: 3; }
+.autostep__exits--flow .autostep__placenext { grid-column: 3; justify-self: start; margin-block-start: 0; }
 /* A way out nothing is said after yet, picked out by colour in place of a sentence under the list. */
 .autostep__unset { border-color: var(--c-heed); color: var(--c-heed); }
 .autostep__limit { display: flex; align-items: center; gap: var(--s-1); }
 /* The count stands in the row of the select it caps, so it takes that select's height: with the
    form padding of every input it came out nearly twice as tall as the select beside it. */
 .autostep__limit input { width: 6rem; height: var(--tap-min); padding-block: 0; }
+/* The next box offered under a way out that says nothing yet (`AMB-D-1003`): a dashed accent frame,
+   the same "here" the picture draws, so the row and the picture read as one entrance. */
+.autostep__placenext {
+  align-self: flex-start; margin-block-start: var(--s-1); padding: var(--s-1) var(--s-2);
+  border: var(--border-w) dashed var(--c-accent); border-radius: var(--r-sm);
+  background: none; color: var(--c-accent); font: inherit; cursor: pointer; overflow-wrap: anywhere;
+}
+.autostep__placenext:hover { background: var(--c-accent-weak); }
 
 /* ----- the build screen's two dialogs (`screens/AutomationStepAdd.tsx`, `AutomationOutputAdd.tsx`) -----
    Both wear the plain card, so what tells them from the rest of the application is the question at

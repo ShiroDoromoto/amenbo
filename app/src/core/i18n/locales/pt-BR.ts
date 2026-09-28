@@ -986,6 +986,8 @@ export const ptBR: Translation = {
     "auto.step.entryReplaceConfirm": "Isso muda onde uma execução começa. O que acontece depois do início atual e os repasses que saem dele são removidos. Os posicionamentos seguintes continuam; conecte-os de novo em “O que acontece depois”.",
     "auto.step.next": "O que acontece depois",
     "auto.step.nextNothing": "Ainda não foi definido",
+    "auto.step.placeNext": "+ Colocar a próxima ação aqui",
+    "auto.step.putNextStep": "+ Colocar a próxima etapa aqui",
     "auto.step.nextErrorNothing": "parar e chamar uma pessoa (padrão)",
     "auto.step.nextGo": "Abrir {name}",
     "auto.step.maxTimes": "No máximo",

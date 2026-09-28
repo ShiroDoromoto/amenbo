@@ -71,6 +71,10 @@ import type { AutomationActionDetailDto, AutomationPlacedOnDto } from "../bindin
 
 /** Where a step put in on a line goes: after which way out of which step, and before which. */
 function whereTo(action: AutomationActionDetailDto | null, target: AddTarget): WhereTo {
+  if ("fromId" in target) {
+    const from = action?.steps.find((one) => one.id === target.fromId);
+    return { box: from?.name ?? "", exit: target.exitName };
+  }
   if (!("edgeId" in target)) return null;
   const edge = action?.edges.find((one) => one.id === target.edgeId);
   const from = action?.steps.find((one) => one.id === edge?.fromId);
@@ -381,6 +385,13 @@ export function AutomationActionBuildScreen({
             action={action}
             stepId={step}
             onRemoved={() => setStep(null)}
+            onPutNext={
+              readOnly
+                ? undefined
+                : (exitName) => {
+                    if (step !== null) setAdding({ picture: "action", fromId: step, exitName });
+                  }
+            }
           />
         </Panel>
       )}

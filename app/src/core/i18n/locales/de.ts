@@ -977,6 +977,8 @@ export const de: Translation = {
     "auto.step.entryReplaceConfirm": "Damit änderst du, womit ein Lauf beginnt. Was nach dem bisherigen Start passiert, und die Übergaben daraus fallen weg. Die Platzierungen danach bleiben; verbinde sie unter „Was danach passiert“ neu.",
     "auto.step.next": "Was danach passiert",
     "auto.step.nextNothing": "Noch nichts festgelegt",
+    "auto.step.placeNext": "+ Nächste Aktion hier platzieren",
+    "auto.step.putNextStep": "+ Nächsten Schritt hier einfügen",
     "auto.step.nextErrorNothing": "anhalten und eine Person rufen (Standard)",
     "auto.step.nextGo": "{name} öffnen",
     "auto.step.maxTimes": "Höchstens so oft",

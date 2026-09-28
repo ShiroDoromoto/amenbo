@@ -228,6 +228,24 @@ export async function insertAutomationBuiltin(
 }
 
 /**
+ * **Put a built-in on after a way out that says nothing yet** — `insertAutomationBuiltin` for a way
+ * out with no line to press. `axis` as for `placeAutomationBuiltin`.
+ */
+export async function insertAutomationBuiltinAtExit(
+  from: { boxId: number; exitName: string | null },
+  key: string,
+  axis: number | null = null,
+): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_builtin_insert_at_exit", {
+    fromId: from.boxId,
+    exitName: from.exitName,
+    key,
+    axis,
+  });
+}
+
+/**
  * **Make a library action** — its name, and which library it lands in.
  *
  * `project` is `null` for the device's library, which every project on this machine reaches, and the
@@ -476,7 +494,7 @@ export async function insertAutomationActionStepAtExit(
   },
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_step_insert_at_exit", {
+  return ack("automation_action_step_insert_at_exit", {
     fromId: from.boxId,
     exitName: from.exitName,
     name: step.name,
@@ -792,7 +810,7 @@ export async function insertAutomationActionAtExit(
   actionId: number,
 ): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_step_insert_at_exit", {
+  return ack("automation_step_insert_at_exit", {
     fromId: from.boxId,
     exitName: from.exitName,
     action: actionId,
@@ -809,7 +827,7 @@ export async function makeAutomationActionAtExit(
   shelf: ActionShelf,
 ): Promise<number | null> {
   if (!inTauri()) return null;
-  const ack = await invokeForAck("automation_placement_insert_new_at_exit", {
+  const ack = await forAck("automation_placement_insert_new_at_exit", {
     fromId: from.boxId,
     exitName: from.exitName,
     name,

@@ -974,6 +974,8 @@ export const id: Translation = {
     "auto.step.entryReplaceConfirm": "Ini mengubah titik awal sebuah run. Apa yang terjadi setelah awal saat ini, dan serah terima yang keluar darinya, akan hilang. Penempatan setelahnya tetap ada; sambungkan lagi di “Apa yang terjadi setelahnya”.",
     "auto.step.next": "Apa yang terjadi setelahnya",
     "auto.step.nextNothing": "Belum ditentukan",
+    "auto.step.placeNext": "+ Tempatkan aksi berikutnya di sini",
+    "auto.step.putNextStep": "+ Taruh langkah berikutnya di sini",
     "auto.step.nextErrorNothing": "berhenti dan panggil orang (bawaan)",
     "auto.step.nextGo": "Buka {name}",
     "auto.step.maxTimes": "Paling banyak",

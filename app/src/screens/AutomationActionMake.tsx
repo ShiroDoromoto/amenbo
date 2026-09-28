@@ -24,7 +24,11 @@
 // throw away what was typed.
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { makeAutomationAction, type ActionShelf } from "../core/automations";
+import {
+  makeAutomationAction,
+  makeAutomationActionAtExit,
+  type ActionShelf,
+} from "../core/automations";
 import { errText, t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
@@ -45,10 +49,11 @@ export function AutomationActionMake({
   onClose,
 }: {
   /**
-   * Where the new action is placed: on the line pressed. A picture with nothing on it takes one of the
-   * built-ins a run starts at, never an action made here (`AMB-D-977`).
+   * Where the new action is placed: on the line pressed, or after a way out that says nothing yet. A
+   * picture with nothing on it takes one of the built-ins a run starts at, never an action made here
+   * (`AMB-D-977`).
    */
-  into: { edgeId: number };
+  into: { edgeId: number } | { fromId: number; exitName: string };
   /** What the name box starts with. */
   name?: string;
   /** Where the new action goes, drawn over the fields. */
@@ -70,7 +75,14 @@ export function AutomationActionMake({
     setMaking(true);
     setRefused(null);
     try {
-      const id = await makeAutomationAction(into.edgeId, name.trim(), shelfPicked);
+      const id =
+        "edgeId" in into
+          ? await makeAutomationAction(into.edgeId, name.trim(), shelfPicked)
+          : await makeAutomationActionAtExit(
+              { boxId: into.fromId, exitName: into.exitName },
+              name.trim(),
+              shelfPicked,
+            );
       onClose();
       if (id !== null) onMade(id);
     } catch (e) {

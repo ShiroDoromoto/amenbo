@@ -266,6 +266,11 @@ function edgeKey(edge: AutomationEdgeDto | undefined): string {
  * "next" label would, an arrow after it. A way out other than the error one that nothing is said
  * after is then drawn in the heed colour: on that layout a row that has not been answered is picked
  * out by its colour rather than by a sentence under the list.
+ *
+ * **A way out that says nothing yet offers the next box under the row** (`AMB-D-1003`), when the
+ * screen hands `onPlaceNext`: the press opens the same place the picture's `+` does, aimed at this
+ * way out. The error one is left without it — saying nothing there already stops the run and calls a
+ * person.
  */
 export function NextRow({
   graph,
@@ -275,6 +280,7 @@ export function NextRow({
   arrow = false,
   run,
   head,
+  onPlaceNext,
 }: {
   /** The picture the line is drawn on, which is where the boxes to go on to are read from. */
   graph: PicGraph;
@@ -289,6 +295,8 @@ export function NextRow({
   run: Run;
   /** The way out's own mark, drawn ahead of the pulldown in place of the "next" label. */
   head?: ReactNode;
+  /** Open the place a box is put on after this way out from — left out where nothing may be written. */
+  onPlaceNext?: () => void;
 }) {
   const edge = graph.edges.find((one) => one.fromId === boxId && one.exitName === exitName);
   const [limit, setLimit] = useDraft(
@@ -336,8 +344,10 @@ export function NextRow({
   };
 
   const unset = head !== undefined && edge === undefined && exitName !== ERROR_EXIT;
+  const offersNext = onPlaceNext !== undefined && edge === undefined && exitName !== ERROR_EXIT;
 
   return (
+    <>
     <div className={head === undefined ? "autostep__next" : "autostep__next autostep__next--flow"}>
       {head !== undefined ? (
         <>
@@ -405,5 +415,11 @@ export function NextRow({
         </label>
       )}
     </div>
+    {offersNext && (
+      <button type="button" className="autostep__placenext" onClick={onPlaceNext}>
+        {t(picture === "action" ? "auto.step.putNextStep" : "auto.step.placeNext")}
+      </button>
+    )}
+    </>
   );
 }

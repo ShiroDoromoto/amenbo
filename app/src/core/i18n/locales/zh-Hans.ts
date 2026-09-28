@@ -975,6 +975,8 @@ export const zhHans: Translation = {
     "auto.step.entryReplaceConfirm": "这会更换运行的起点。从当前起点出去的“接下来做什么”和传递会被删除。后面的放置会保留，请在“接下来做什么”中重新连接。",
     "auto.step.next": "接下来做什么",
     "auto.step.nextNothing": "还没有确定",
+    "auto.step.placeNext": "+ 在这里放置下一个动作",
+    "auto.step.putNextStep": "+ 在这里放入下一个步骤",
     "auto.step.nextErrorNothing": "停下来叫人（默认）",
     "auto.step.nextGo": "打开 {name}",
     "auto.step.maxTimes": "最多次数",

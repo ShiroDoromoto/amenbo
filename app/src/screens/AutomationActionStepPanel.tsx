@@ -66,6 +66,7 @@ function ExitCard({
   onAddOutput,
   onAdded,
   run,
+  onPutNext,
 }: {
   action: AutomationActionDetailDto;
   step: AutomationStepDto;
@@ -75,6 +76,7 @@ function ExitCard({
   onAddOutput: () => void;
   onAdded: () => void;
   run: Run;
+  onPutNext?: () => void;
 }) {
   const isError = exit.name === ERROR_EXIT;
   return (
@@ -91,6 +93,7 @@ function ExitCard({
             exitName={exit.name}
             arrow
             run={run}
+            onPlaceNext={onPutNext}
           />
         </>
       }
@@ -220,12 +223,15 @@ export function AutomationActionStepPanel({
   action,
   stepId,
   onRemoved,
+  onPutNext,
 }: {
   action: AutomationActionDetailDto | null;
   /** The step the picture is showing as pressed, or nothing while none is. */
   stepId: number | null;
   /** The panel has nothing left to draw once its step is gone. */
   onRemoved: () => void;
+  /** Open the dialog that puts a step on after one way out of this step that says nothing yet. */
+  onPutNext?: (exitName: string) => void;
 }) {
   const step = action?.steps.find((one) => one.id === stepId) ?? null;
   const [prompt, setPrompt] = useDraft(step?.prompt ?? "");
@@ -327,6 +333,7 @@ export function AutomationActionStepPanel({
               onAddOutput={() => setAdding(one.id)}
               onAdded={() => setAdding(null)}
               run={run}
+              onPutNext={onPutNext === undefined ? undefined : () => onPutNext(one.name)}
             />
           ))}
       </DeclSec>

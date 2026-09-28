@@ -1902,6 +1902,23 @@ impl Store {
         })
     }
 
+    /// **Put a built-in on after a way out that says nothing yet** (one operation = one transaction) —
+    /// [`Self::automation_builtin_insert`] for a way out with no line on it
+    /// ([`crate::ops::automation::placement_insert_at_exit`]). The device's shelf is left undeclared
+    /// for the same reason as there.
+    pub fn automation_builtin_insert_at_exit(
+        &mut self,
+        from_id: i64,
+        exit_name: Option<&str>,
+        key: &str,
+        axis: Option<i64>,
+    ) -> Result<crate::model::AutomationPlacement> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, from_id)], |tx| {
+            let action = crate::ops::automation_builtin::action_on(tx, key, axis)?;
+            crate::ops::automation::placement_insert_at_exit(tx, from_id, exit_name, action.id)
+        })
+    }
+
     /// Reorder a placement within its automation's lists (one operation = one transaction).
     pub fn automation_placement_move(
         &mut self,

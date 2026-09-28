@@ -990,6 +990,8 @@ export const ru: Translation = {
     "auto.step.entryReplaceConfirm": "Это меняет, с чего начинается запуск. «Что дальше» текущего старта и передачи из него исчезнут. Следующие размещения останутся; соедините их заново в «Что дальше».",
     "auto.step.next": "Что дальше",
     "auto.step.nextNothing": "Пока ничего не задано",
+    "auto.step.placeNext": "+ Разместить здесь следующее действие",
+    "auto.step.putNextStep": "+ Поставить здесь следующий шаг",
     "auto.step.nextErrorNothing": "остановиться и позвать человека (по умолчанию)",
     "auto.step.nextGo": "Открыть {name}",
     "auto.step.maxTimes": "Не больше",

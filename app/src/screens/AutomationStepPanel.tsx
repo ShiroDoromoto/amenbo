@@ -499,6 +499,7 @@ export function AutomationStepPanel({
   placementId,
   onRemoved,
   onOpenAction,
+  onPlaceNext,
   readOnly = false,
 }: {
   automation: AutomationDetailDto | null;
@@ -508,6 +509,8 @@ export function AutomationStepPanel({
   onRemoved: () => void;
   /** Go to the action's own build screen, where what it declares and what its steps carry are written. */
   onOpenAction: (actionId: number) => void;
+  /** Open the library aimed at one way out of this spot that says nothing yet. */
+  onPlaceNext?: (exitName: string) => void;
   /**
    * Hold every write shut — a run is going on the automation (`AMB-D-961`). The press that goes to the
    * action stays live: it writes nothing, and it is where a reader goes to read what the steps carry.
@@ -620,6 +623,9 @@ export function AutomationStepPanel({
                   exitName={one.name}
                   run={run}
                   head={<ExitMark name={one.name} builtin={placement.builtin} />}
+                  onPlaceNext={
+                    readOnly || onPlaceNext === undefined ? undefined : () => onPlaceNext(one.name)
+                  }
                 />
               </li>
             ))}

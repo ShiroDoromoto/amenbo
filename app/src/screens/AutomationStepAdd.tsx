@@ -27,11 +27,21 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { WhereMark, type WhereTo } from "./automationParts";
-import { addAutomationStep, insertAutomationActionStep } from "../core/automations";
+import {
+  addAutomationStep,
+  insertAutomationActionStep,
+  insertAutomationActionStepAtExit,
+} from "../core/automations";
 import { t } from "../core/i18n";
 
-/** Where the new step goes: onto a line inside the action, or onto the action on its own. */
-export type AddTarget = { picture: "action"; edgeId: number } | { picture: "action"; actionId: number };
+/**
+ * Where the new step goes: onto a line inside the action, after a way out that says nothing yet, or
+ * onto the action on its own.
+ */
+export type AddTarget =
+  | { picture: "action"; edgeId: number }
+  | { picture: "action"; fromId: number; exitName: string }
+  | { picture: "action"; actionId: number };
 
 export function AutomationStepAdd({
   into,
@@ -45,7 +55,8 @@ export function AutomationStepAdd({
 }) {
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
-  const onLine = "edgeId" in into;
+  // After a way out the step goes somewhere as well, so the dialog draws where as it does on a line.
+  const onLine = !("actionId" in into);
 
   const ready = name.trim() !== "" && prompt.trim() !== "";
   const put = () => {
@@ -53,7 +64,9 @@ export function AutomationStepAdd({
     const step = { name: name.trim(), prompt: prompt.trim() };
     void ("edgeId" in into
       ? insertAutomationActionStep(into.edgeId, step)
-      : addAutomationStep(into.actionId, step));
+      : "fromId" in into
+        ? insertAutomationActionStepAtExit({ boxId: into.fromId, exitName: into.exitName }, step)
+        : addAutomationStep(into.actionId, step));
     onClose();
   };
 
@@ -66,7 +79,7 @@ export function AutomationStepAdd({
         aria-labelledby="auto-add-title"
       >
         <h2 className="autodlg__title" id="auto-add-title">
-          {onLine ? t("auto.act.insertTitle") : t("auto.act.addTitle")}
+          {"edgeId" in into ? t("auto.act.insertTitle") : t("auto.act.addTitle")}
         </h2>
 
         {onLine && <WhereMark where={where} />}
@@ -88,7 +101,7 @@ export function AutomationStepAdd({
 
         <div className="buttonrow">
           <button type="button" className="btn btn--primary" disabled={!ready} onClick={put}>
-            {onLine ? t("auto.act.insertPut") : t("auto.act.addPut")}
+            {"edgeId" in into ? t("auto.act.insertPut") : t("auto.act.addPut")}
           </button>
           <button type="button" className="btn" onClick={onClose}>
             {t("auto.add.cancel")}

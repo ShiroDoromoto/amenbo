@@ -1592,3 +1592,39 @@ fn a_step_added_after_placing_is_given_the_default_agent_at_every_placement() {
     assert_eq!(chosen(&s, at_there.id, third.id).as_deref(), Some("codex-cli"));
     fs::remove_dir_all(&dir).ok();
 }
+
+/// **A built-in put on after a way out that says nothing yet** is pointed at by that way out, and its
+/// own ways out are left saying nothing (`AMB-D-1003`).
+#[test]
+fn a_builtin_put_on_after_a_way_out_that_says_nothing_is_pointed_at_by_it() {
+    use crate::model::{AutomationEnds, AutomationOwner, AutomationPictureOwner, ERROR_EXIT};
+    use crate::ops::automation::NewAutomation;
+    use crate::store_engine::read;
+
+    let (mut s, dir) = fresh_store("builtin-at-exit");
+    let p = s.project_add(project("PJ")).unwrap();
+    let automation =
+        s.automation_add(p.id, NewAutomation { name: "回す".into(), ..Default::default() }).unwrap();
+    let first = s.automation_builtin_place(automation.id, "take_task", None).unwrap();
+
+    let put = s.automation_builtin_insert_at_exit(first.id, Some(ERROR_EXIT), "take_task", None).unwrap();
+
+    let conn = s.engine.conn();
+    let exit = read::automation_exit_by_name(conn, AutomationOwner::Action, first.action_id, Some(ERROR_EXIT))
+        .unwrap()
+        .unwrap();
+    let edge = read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, first.id, exit.id)
+        .unwrap()
+        .expect("the way out now says what happens after it");
+    assert_eq!((edge.ends, edge.to_id), (AutomationEnds::Go, Some(put.id)));
+    let theirs = read::automation_exit_by_name(conn, AutomationOwner::Action, put.action_id, Some(ERROR_EXIT))
+        .unwrap()
+        .unwrap();
+    assert!(
+        read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, put.id, theirs.id)
+            .unwrap()
+            .is_none(),
+        "and the new one's own way out is left to decide",
+    );
+    fs::remove_dir_all(&dir).ok();
+}

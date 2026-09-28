@@ -71,7 +71,7 @@
 import { useState } from "react";
 import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPanel";
 import { Panel } from "./AutomationActionBuildScreen";
-import { AutomationLibraryPanel, type PlaceTarget } from "./AutomationLibraryPanel";
+import { AutomationLibraryPanel, placeKey, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
 import { automationGraph } from "./automationLayout";
 import { AutomationActionMake } from "./AutomationActionMake";
@@ -89,6 +89,11 @@ import type { AutomationDetailDto } from "../bindings/bindings";
 
 /** Where the library's pick will go: after which way out of which box, or first of all. */
 function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): WhereTo {
+  if ("fromId" in target) {
+    const from = automation?.placements.find((one) => one.id === target.fromId);
+    const box = from === undefined ? "" : builtinWord(from.builtin, from.name);
+    return { box, exit: target.exitName, builtin: from?.builtin };
+  }
   if (!("edgeId" in target)) return null;
   const edge = automation?.edges.find((one) => one.id === target.edgeId);
   const from = automation?.placements.find((one) => one.id === edge?.fromId);
@@ -135,7 +140,10 @@ export function AutomationBuildScreen({
   );
   // Where the dialog that makes an action on the spot is about to put it, while it is open.
   // The dialog's target, and the name the library's search box held when it was pressed.
-  const [making, setMaking] = useState<{ target: { edgeId: number }; name: string } | null>(null);
+  const [making, setMaking] = useState<{
+    target: Exclude<PlaceTarget, { automationId: number }>;
+    name: string;
+  } | null>(null);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
@@ -246,7 +254,7 @@ export function AutomationBuildScreen({
       {automation !== null && showing?.kind === "library" && !held && (
         <Panel
           // A panel opened for another line or another box is another panel, and opens at its head.
-          key={"edgeId" in showing.target ? `e${showing.target.edgeId}` : "first"}
+          key={placeKey(showing.target)}
           place={t("auto.pic.place")}
           title=""
           onClose={close}
@@ -254,16 +262,16 @@ export function AutomationBuildScreen({
           <AutomationLibraryPanel
             // A new line pressed is a new pick: what was typed and opened for one line is not
             // carried to another.
-            key={"edgeId" in showing.target ? `e${showing.target.edgeId}` : "first"}
+            key={placeKey(showing.target)}
             target={showing.target}
             projectId={projectId}
             where={whereTo(automation, showing.target)}
             onPlaced={close}
             onMake={(name) => {
-              // The library offers making one only on a line: a picture with nothing on it takes
+              // The library offers making one only after a box: a picture with nothing on it takes
               // one of the built-ins a run starts at (`AMB-D-977`).
               const target = showing.target;
-              if ("edgeId" in target) setMaking({ target, name });
+              if (!("automationId" in target)) setMaking({ target, name });
             }}
           />
         </Panel>
@@ -287,6 +295,9 @@ export function AutomationBuildScreen({
             placementId={pressed.id}
             onRemoved={close}
             onOpenAction={onOpenAction}
+            onPlaceNext={(exitName) =>
+              setShowing({ kind: "library", target: { fromId: pressed.id, exitName } })
+            }
             readOnly={held}
           />
         </Panel>

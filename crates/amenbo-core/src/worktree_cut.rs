@@ -209,6 +209,27 @@ fn nothing_standing(cut: &Cut) -> Result<(), Refusal> {
     Ok(())
 }
 
+/// **What a worktree already standing for a task still holds** — what a cut met instead of cutting
+/// reports, so whoever built the automation can tell a leftover with nothing in it from work somebody
+/// still has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Leftovers {
+    /// The checkout carries changes nobody has committed.
+    pub uncommitted: bool,
+    /// The branch carries commits whose changes `base` does not have.
+    pub unmerged: bool,
+}
+
+/// Read what the task's worktree and branch still hold, measured against `base` as [`finish`] measures
+/// them. Either may be missing — a branch with no worktree on it, or the other way round — and what is
+/// missing holds nothing.
+pub fn leftovers(cut: &Cut, base: &str) -> Result<Leftovers, Refusal> {
+    let uncommitted = cut.worktree.exists()
+        && !git(&cut.worktree, &["--no-optional-locks", "status", "--porcelain"])?.is_empty();
+    let unmerged = branch_exists(&cut.root, &cut.branch) && !is_merged(&cut.root, &cut.branch, base);
+    Ok(Leftovers { uncommitted, unmerged })
+}
+
 /// `git worktree add` itself, into the sibling directory made for it.
 fn add(cut: &Cut, from: &str, flags: &[&str]) -> Result<(), Refusal> {
     std::fs::create_dir_all(&cut.parent)

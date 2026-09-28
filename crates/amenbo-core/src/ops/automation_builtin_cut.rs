@@ -9,6 +9,13 @@
 //! cut from `origin/<default>` ([`worktree_cut::start_from_origin`]). The main worktree is not touched:
 //! whatever it stands on, and whatever it has not pulled, a person may be working there.
 //!
+//! **One already standing is a way out, not a failure** (version 2, `AMB-D-1000`). A run stopped part
+//! way leaves its task's worktree and branch behind, and the next run to take that task meets them. The
+//! cut then leaves by [`ALREADY_THERE`], handing on the worktree's path and what it still holds
+//! ([`LEFT`]), so the automation can fold a leftover with nothing in it and cut again, or call a person
+//! where there is work in it. A copy made from version 1 declares no such way out, and leaves by the
+//! error way out as it always did.
+//!
 //! **Done before the step's transaction** ([`Work::Outside`]): the fetch waits on the remote, and the
 //! store is only read to find the task and its repository.
 //!
@@ -33,17 +40,38 @@ use crate::worktree_cut::{self, Refusal};
 /// The output the worktree's path is handed on through.
 pub const WORKTREE: &str = "worktree";
 
+/// The way out it leaves by when the task's worktree, or its branch, is already there.
+pub const ALREADY_THERE: &str = "既にある";
+
+/// The output that says what the worktree and branch already there still hold — one of [`NOTHING_LEFT`],
+/// [`UNCOMMITTED`], [`UNMERGED_COMMITS`] and [`BOTH_LEFT`].
+pub const LEFT: &str = "残っているもの";
+pub const NOTHING_LEFT: &str = "なし";
+pub const UNCOMMITTED: &str = "コミットしていない変更";
+pub const UNMERGED_COMMITS: &str = "既定ブランチに無いコミット";
+pub const BOTH_LEFT: &str = "コミットしていない変更と、既定ブランチに無いコミット";
+
 pub(super) const CUT_WORKTREE: Builtin = Builtin {
     key: "cut_worktree",
-    version: 1,
+    version: 2,
     name: "worktree を切る",
     does: "いま扱っているタスクの worktree を、リモートの既定ブランチの最新から切り、そのパスを渡す",
     settings: &[],
     ins: &[],
-    exits: &[BuiltinExit {
-        name: DONE_EXIT,
-        outs: &[BuiltinPort { name: WORKTREE, kind: AutomationPortKind::Value, required: true }],
-    }],
+    exits: &[
+        BuiltinExit {
+            name: DONE_EXIT,
+            outs: &[BuiltinPort { name: WORKTREE, kind: AutomationPortKind::Value, required: true }],
+        },
+        BuiltinExit {
+            name: ALREADY_THERE,
+            outs: &[
+                // Not handed where only the branch is there: there is no worktree to name.
+                BuiltinPort { name: WORKTREE, kind: AutomationPortKind::Value, required: false },
+                BuiltinPort { name: LEFT, kind: AutomationPortKind::Value, required: true },
+            ],
+        },
+    ],
     waits: None,
     chooses: None,
     work: Work::Outside(cut),
@@ -56,10 +84,37 @@ fn cut(outside: &Outside<'_>) -> Result<Worked> {
         .ok_or_else(|| Error::not_found(format!("task AMB-T-{task_id}")))?;
     let root = repository(outside.conn, lang, outside.run.project_id, task.at_binding_id)?;
     let cut = worktree_cut::layout(&root, &task_id.to_string());
-    let from = worktree_cut::start_from_origin(&cut).map_err(|r| refused(lang, r))?;
+    let from = match worktree_cut::start_from_origin(&cut) {
+        Ok(from) => from,
+        Err(Refusal::WorktreeExists(_) | Refusal::BranchExists(_)) if outside.version >= 2 => {
+            return already_there(lang, &root, &cut);
+        }
+        Err(other) => return Err(refused(lang, other)),
+    };
     let path = cut.worktree.to_string_lossy().into_owned();
     let report = say(lang, "cut", &[("path", &path), ("branch", &cut.branch), ("from", &from)]);
     Ok(Worked { exit: DONE_EXIT, report, hands: vec![(WORKTREE, path)] })
+}
+
+/// **The task's worktree, or its branch, is already there**: leave by [`ALREADY_THERE`] with the path,
+/// where there is a worktree, and what it still holds, measured against the remote's default branch
+/// fetched fresh — the trunk the cut would have cut from.
+fn already_there(lang: &str, root: &Path, cut: &worktree_cut::Cut) -> Result<Worked> {
+    let base = worktree_cut::origin_default(root).map_err(|r| refused(lang, r))?;
+    let left = worktree_cut::leftovers(cut, &base).map_err(|r| refused(lang, r))?;
+    let left = match (left.uncommitted, left.unmerged) {
+        (false, false) => NOTHING_LEFT,
+        (true, false) => UNCOMMITTED,
+        (false, true) => UNMERGED_COMMITS,
+        (true, true) => BOTH_LEFT,
+    };
+    let path = cut.worktree.to_string_lossy().into_owned();
+    let mut hands = vec![(LEFT, left.to_string())];
+    if cut.worktree.exists() {
+        hands.push((WORKTREE, path.clone()));
+    }
+    let report = say(lang, "alreadyCut", &[("path", &path), ("branch", &cut.branch)]);
+    Ok(Worked { exit: ALREADY_THERE, report, hands })
 }
 
 /// **The repository the task is worked in**: the one its own folder is in, or else the one every
@@ -154,7 +209,7 @@ mod tests {
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
-    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};
+    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, way_out, with_tx};
     use super::fixture::{bind, git, repositories};
     use crate::store_engine::WriteTx;
 
@@ -172,6 +227,7 @@ mod tests {
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(cut.id), None).expect("take → cut");
         automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, cut.id, None, EdgeTarget::Go(work.id), None).expect("cut → work");
+        automation::edge_add(tx, on, cut.id, Some(ALREADY_THERE), EdgeTarget::Done, None).expect("already there");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("work → done");
         automation::set_entry(tx, automation.id, Some(take.id)).expect("entry")
     }
@@ -234,6 +290,91 @@ mod tests {
             assert_eq!(git(&expected, &["rev-parse", "--abbrev-ref", "HEAD"]), format!("task/{task}"));
             assert_eq!(git(&app, &["rev-parse", "HEAD"]), before, "the project's checkout is not pulled");
             assert_eq!(git(&app, &["rev-parse", "--abbrev-ref", "HEAD"]), "main", "nor switched");
+        });
+    }
+
+    /// What the cut handed on, output by output.
+    fn handed(tx: &WriteTx<'_>, run_step_id: i64) -> Vec<(String, String)> {
+        let def = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+        let copy = read::automation_run_def(tx.conn(), def.run_def_id).expect("read").expect("copy");
+        read::automation_run_values_of(tx.conn(), run_step_id)
+            .expect("values")
+            .into_iter()
+            .filter_map(|v| Some((copy.port_name(v.port_id)?, v.value?)))
+            .collect()
+    }
+
+    /// **A worktree already standing is a way out** (`AMB-D-1000`): nothing is cut, and the path and what
+    /// it still holds are handed on — an empty one says so, and one with work in it says which.
+    #[test]
+    fn a_worktree_already_there_leaves_by_the_way_out_that_says_so() {
+        with_tx(|tx| {
+            let (app, _) = repositories("builtin-cut-already");
+            let project = mk_project(tx, "amenbo");
+            bind(tx, project, &[&app]);
+            let automation = picture(tx, project);
+            let task = for_ai(tx, project);
+            let root = worktree_cut::git_root(&app).expect("root");
+            let standing = worktree_cut::layout(&root, &task.to_string());
+            worktree_cut::start_from_origin(&standing).expect("left behind by a run that was stopped");
+            std::fs::write(standing.worktree.join("draft.txt"), "half done").expect("a change nobody committed");
+
+            let (_, run_step_id, _) = walk(tx, &automation);
+            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+            assert_eq!(ran.exit_id, way_out(tx, run_step_id, ALREADY_THERE), "{}", ran.report);
+            let mut handed = handed(tx, run_step_id);
+            handed.sort();
+            let mut expected = vec![
+                (WORKTREE.to_string(), standing.worktree.to_string_lossy().into_owned()),
+                (LEFT.to_string(), UNCOMMITTED.to_string()),
+            ];
+            expected.sort();
+            assert_eq!(handed, expected);
+            assert!(standing.worktree.join("draft.txt").exists(), "nothing standing is touched");
+        });
+    }
+
+    /// **A branch standing with no worktree on it** is the same way out, with no path to hand on, and a
+    /// branch whose one commit the trunk does not have says so.
+    #[test]
+    fn a_branch_already_there_hands_on_what_it_holds_and_no_path() {
+        with_tx(|tx| {
+            let (app, _) = repositories("builtin-cut-branch");
+            let project = mk_project(tx, "amenbo");
+            bind(tx, project, &[&app]);
+            let automation = picture(tx, project);
+            let task = for_ai(tx, project);
+            let root = worktree_cut::git_root(&app).expect("root");
+            let standing = worktree_cut::layout(&root, &task.to_string());
+            worktree_cut::start_from_origin(&standing).expect("cut");
+            git(&standing.worktree, &["commit", "--quiet", "--allow-empty", "-m", "the work"]);
+            git(&app, &["worktree", "remove", &standing.worktree.to_string_lossy()]);
+
+            let (_, run_step_id, _) = walk(tx, &automation);
+            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+            assert_eq!(ran.exit_id, way_out(tx, run_step_id, ALREADY_THERE), "{}", ran.report);
+            assert_eq!(handed(tx, run_step_id), vec![(LEFT.to_string(), UNMERGED_COMMITS.to_string())]);
+        });
+    }
+
+    /// **A copy made from version 1 declares no such way out**, and leaves by the error way out as it
+    /// always did.
+    #[test]
+    fn a_copy_of_version_one_still_fails_where_a_worktree_is_there() {
+        with_tx(|tx| {
+            let (app, _) = repositories("builtin-cut-v1");
+            let project = mk_project(tx, "amenbo");
+            bind(tx, project, &[&app]);
+            let automation = picture(tx, project);
+            let task = for_ai(tx, project);
+            let root = worktree_cut::git_root(&app).expect("root");
+            worktree_cut::start_from_origin(&worktree_cut::layout(&root, &task.to_string())).expect("cut");
+            tx.conn()
+                .execute("UPDATE automation_action SET builtin_version = 1 WHERE builtin = 'cut_worktree'", [])
+                .expect("an action written from version 1");
+
+            let (_, _, next) = walk(tx, &automation);
+            assert!(matches!(next, Next::Halted(_)), "it leaves by the error way out: {next:?}");
         });
     }
 

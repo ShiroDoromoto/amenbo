@@ -505,6 +505,7 @@ pub fn run() {
       automation::automation_builtin_page,
       automation::automation_builtin_place,
       automation::automation_builtin_insert,
+      automation::automation_builtin_insert_at_exit,
       automation::automation_placement_insert_new,
       automation::automation_placement_insert_new_at_exit,
       automation::automation_placement_remove,

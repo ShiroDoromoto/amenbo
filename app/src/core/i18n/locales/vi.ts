@@ -974,6 +974,8 @@ export const vi: Translation = {
     "auto.step.entryReplaceConfirm": "Thao tác này đổi điểm bắt đầu của lần chạy. “Sau đó làm gì” của điểm bắt đầu hiện tại và các chuyển giao đi ra từ nó sẽ bị xóa. Các vị trí phía sau vẫn giữ nguyên; hãy nối lại trong “Sau đó làm gì”.",
     "auto.step.next": "Sau đó làm gì",
     "auto.step.nextNothing": "Chưa định",
+    "auto.step.placeNext": "+ Đặt hành động tiếp theo ở đây",
+    "auto.step.putNextStep": "+ Đặt bước tiếp theo ở đây",
     "auto.step.nextErrorNothing": "dừng lại và gọi người (mặc định)",
     "auto.step.nextGo": "Mở {name}",
     "auto.step.maxTimes": "Nhiều nhất",

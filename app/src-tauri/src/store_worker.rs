@@ -49,6 +49,7 @@ pub const ON_WORKER: &[&str] = &[
     "automation_action_edit", "automation_action_set_scope", "automation_action_remove",
     "automation_action_finish_creating", "automation_action_abandon",
     "automation_builtin_page", "automation_builtin_place", "automation_builtin_insert",
+    "automation_builtin_insert_at_exit",
     "automation_placement_insert_new", "automation_placement_remove", "automation_step_edit",
     "automation_step_insert", "automation_step_add", "automation_step_remove",
     "automation_action_step_insert", "automation_placement_insert_new_at_exit",

@@ -1218,6 +1218,8 @@ const ui = {
   "auto.step.entryReplaceConfirm": "This changes what a run starts at. What happens next from the current start, and the handoffs out of it, go with it. The placements after it stay; connect them again under “What happens next”.",
   "auto.step.next": "What happens next",
   "auto.step.nextNothing": "Nothing said yet",
+  "auto.step.placeNext": "+ Place the next action here",
+  "auto.step.putNextStep": "+ Put the next step here",
   "auto.step.nextErrorNothing": "Stop and call a person (the default)",
   "auto.step.nextGo": "Open {name}",
   "auto.step.maxTimes": "Taken at most",

@@ -985,6 +985,8 @@ export const it: Translation = {
     "auto.step.entryReplaceConfirm": "Così cambi da dove parte un'esecuzione. Ciò che succede dopo l'inizio attuale e le consegne che ne escono vengono tolti. I posizionamenti successivi restano; ricollegali in «Cosa succede dopo».",
     "auto.step.next": "Cosa succede dopo",
     "auto.step.nextNothing": "Non è ancora stato detto nulla",
+    "auto.step.placeNext": "+ Colloca qui l'azione successiva",
+    "auto.step.putNextStep": "+ Metti qui il passo successivo",
     "auto.step.nextErrorNothing": "fermarsi e chiamare una persona (predefinito)",
     "auto.step.nextGo": "Apri {name}",
     "auto.step.maxTimes": "Al massimo",

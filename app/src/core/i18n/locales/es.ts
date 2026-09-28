@@ -985,6 +985,8 @@ export const es: Translation = {
     "auto.step.entryReplaceConfirm": "Esto cambia dónde empieza una ejecución. Lo que pasa después del inicio actual y las entregas que salen de él se eliminan. Las colocaciones siguientes se quedan; vuelve a conectarlas en «Qué pasa después».",
     "auto.step.next": "Qué pasa después",
     "auto.step.nextNothing": "Aún no se ha dicho nada",
+    "auto.step.placeNext": "+ Colocar aquí la siguiente acción",
+    "auto.step.putNextStep": "+ Poner aquí el siguiente paso",
     "auto.step.nextErrorNothing": "detenerse y avisar a una persona (predeterminado)",
     "auto.step.nextGo": "Abrir {name}",
     "auto.step.maxTimes": "Como máximo",

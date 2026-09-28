@@ -973,6 +973,8 @@ export const hi: Translation = {
     "auto.step.entryReplaceConfirm": "इससे बदलेगा कि रन कहाँ से शुरू होता है। मौजूदा शुरुआत से निकलने वाले “इसके बाद क्या होता है” और हस्तांतरण हट जाएँगे। उसके बाद के प्लेसमेंट बने रहेंगे; उन्हें “इसके बाद क्या होता है” में फिर से जोड़ें।",
     "auto.step.next": "इसके बाद क्या होता है",
     "auto.step.nextNothing": "अभी कुछ तय नहीं",
+    "auto.step.placeNext": "+ अगली कार्रवाई यहाँ रखें",
+    "auto.step.putNextStep": "+ अगला चरण यहाँ रखें",
     "auto.step.nextErrorNothing": "रुककर किसी व्यक्ति को बुलाएँ (डिफ़ॉल्ट)",
     "auto.step.nextGo": "{name} खोलें",
     "auto.step.maxTimes": "ज़्यादा से ज़्यादा",

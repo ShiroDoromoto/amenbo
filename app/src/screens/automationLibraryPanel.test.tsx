@@ -30,6 +30,8 @@ const hoisted = vi.hoisted(() => ({
   builtins: [] as AutomationBuiltinDto[],
   insert: vi.fn((..._args: unknown[]) => Promise.resolve()),
   insertBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  insertAtExit: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  insertBuiltinAtExit: vi.fn((..._args: unknown[]) => Promise.resolve()),
   placeBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
   dimensions: [] as DimensionDto[],
 }));
@@ -42,6 +44,8 @@ vi.mock("../core/automations", () => ({
   insertAutomationAction: hoisted.insert,
   useAutomationBuiltins: () => hoisted.builtins,
   insertAutomationBuiltin: hoisted.insertBuiltin,
+  insertAutomationActionAtExit: hoisted.insertAtExit,
+  insertAutomationBuiltinAtExit: hoisted.insertBuiltinAtExit,
   placeAutomationBuiltin: hoisted.placeBuiltin,
 }));
 // The project's axes are what the built-in that splits by one offers; nothing else here reads the snapshot.
@@ -186,6 +190,15 @@ describe("the library in the panel", () => {
     expect(placed).toHaveBeenCalledTimes(1);
   });
 
+  it("puts the picked action on after the way out it was opened from, when that says nothing yet (AMB-D-1003)", async () => {
+    await render({ fromId: 3, exitName: "taken" });
+    await act(async () => { button("Review").click(); });
+    await act(async () => { button(t("auto.pic.placeDo")).click(); });
+    expect(hoisted.insertAtExit).toHaveBeenCalledWith({ boxId: 3, exitName: "taken" }, 4);
+    expect(hoisted.insert).not.toHaveBeenCalled();
+    expect(placed).toHaveBeenCalledTimes(1);
+  });
+
   it("draws a refusal and stays open", async () => {
     hoisted.insert.mockRejectedValue({ code: "invalid", message_en: "that line is gone" });
     await render();
@@ -265,6 +278,14 @@ describe("the built-ins in the panel", () => {
     expect(hoisted.insertBuiltin).toHaveBeenCalledWith(9, "task_take", null);
     expect(hoisted.insert).not.toHaveBeenCalled();
     expect(placed).toHaveBeenCalledTimes(1);
+  });
+
+  it("put one on after a way out that says nothing yet, by its key", async () => {
+    await render({ fromId: 3, exitName: "taken" });
+    await act(async () => { button("Take a task").click(); });
+    await act(async () => { button(t("auto.pic.placeDo")).click(); });
+    expect(hoisted.insertBuiltinAtExit).toHaveBeenCalledWith({ boxId: 3, exitName: "taken" }, "task_take", null);
+    expect(hoisted.insertBuiltin).not.toHaveBeenCalled();
   });
 
   it("place one on its own where the picture has no line yet", async () => {

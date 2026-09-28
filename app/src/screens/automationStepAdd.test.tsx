@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const hoisted = vi.hoisted(() => ({
   make: vi.fn((..._args: unknown[]) => Promise.resolve(21 as number | null)),
   insertInside: vi.fn(),
+  insertAtExit: vi.fn(),
   add: vi.fn(),
   output: vi.fn(),
 }));
@@ -29,6 +30,7 @@ const hoisted = vi.hoisted(() => ({
 vi.mock("../core/automations", () => ({
   makeAutomationAction: hoisted.make,
   insertAutomationActionStep: hoisted.insertInside,
+  insertAutomationActionStepAtExit: hoisted.insertAtExit,
   addAutomationStep: hoisted.add,
   addAutomationOutput: hoisted.output,
 }));
@@ -36,7 +38,7 @@ vi.mock("../core/automations", () => ({
 import { t } from "../core/i18n";
 import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationOutputAdd } from "./AutomationOutputAdd";
-import { AutomationStepAdd } from "./AutomationStepAdd";
+import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -74,12 +76,12 @@ afterEach(() => {
 });
 
 describe("putting a step in inside an action", () => {
-  async function open(into: { picture: "action"; edgeId: number } | { picture: "action"; actionId: number }) {
+  async function open(into: AddTarget) {
     await act(async () => {
       root.render(
         createElement(AutomationStepAdd, {
           into,
-          where: "edgeId" in into ? { box: "書く", exit: "書けた", next: "見直す" } : null,
+          where: "actionId" in into ? null : { box: "書く", exit: "書けた", next: "見直す" },
           onClose: () => undefined,
         }),
       );
@@ -117,6 +119,20 @@ describe("putting a step in inside an action", () => {
     await typeInto(document.body.querySelector("textarea")!, "やる");
     await act(async () => button(t("auto.act.insertPut")).click());
     expect(hoisted.insertInside).toHaveBeenCalledWith(9, { name: "直す", prompt: "やる" });
+  });
+
+  it("puts a step on after a way out that says nothing yet, drawing where and saying add (AMB-D-1003)", async () => {
+    await open({ picture: "action", fromId: 3, exitName: "完了" });
+    expect(document.body.querySelector(".autodlg__title")?.textContent).toBe(t("auto.act.addTitle"));
+    expect(document.body.querySelector(".wheremark")).not.toBeNull();
+    await typeInto(boxes()[0]!, "直す");
+    await typeInto(document.body.querySelector("textarea")!, "やる");
+    await act(async () => button(t("auto.act.addPut")).click());
+    expect(hoisted.insertAtExit).toHaveBeenCalledWith(
+      { boxId: 3, exitName: "完了" },
+      { name: "直す", prompt: "やる" },
+    );
+    expect(hoisted.insertInside).not.toHaveBeenCalled();
   });
 
   it("adds the first step where the picture has no line to press", async () => {

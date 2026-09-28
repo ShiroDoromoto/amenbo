@@ -974,6 +974,8 @@ export const th: Translation = {
     "auto.step.entryReplaceConfirm": "การนี้จะเปลี่ยนจุดเริ่มของการรัน “สิ่งที่เกิดขึ้นต่อไป” และการส่งต่อที่ออกจากจุดเริ่มปัจจุบันจะหายไป ตำแหน่งที่วางไว้ถัดไปยังอยู่ ให้เชื่อมใหม่ใน “สิ่งที่เกิดขึ้นต่อไป”",
     "auto.step.next": "สิ่งที่เกิดขึ้นต่อไป",
     "auto.step.nextNothing": "ยังไม่ได้กำหนด",
+    "auto.step.placeNext": "+ วางแอ็กชันถัดไปที่นี่",
+    "auto.step.putNextStep": "+ ใส่ขั้นตอนถัดไปที่นี่",
     "auto.step.nextErrorNothing": "หยุดแล้วเรียกคน (ค่าเริ่มต้น)",
     "auto.step.nextGo": "เปิด {name}",
     "auto.step.maxTimes": "ไม่เกิน",

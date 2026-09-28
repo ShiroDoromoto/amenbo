@@ -556,6 +556,24 @@ describe("the panel of one spot", () => {
     expect(nextFor("完了").className).not.toContain("autostep__unset");
   });
 
+  it("offers the next action under a way out nothing is said after, and never under the error one (AMB-D-1003)", async () => {
+    const placeNext = vi.fn();
+    const offers = () =>
+      [...container.querySelectorAll<HTMLButtonElement>("button")].filter(
+        (one) => one.textContent === t("auto.step.placeNext"),
+      );
+    await render({ automation: detail(), placementId: 1, onPlaceNext: placeNext });
+    expect(offers()).toHaveLength(1);
+    await act(async () => offers()[0].click());
+    expect(placeNext).toHaveBeenCalledWith("完了");
+
+    const said = detail({ edges: [{ id: 5, fromId: 1, exitName: "完了", ends: "done" }] });
+    await render({ automation: said, placementId: 1, onPlaceNext: placeNext });
+    expect(offers()).toHaveLength(0);
+    await render({ automation: detail(), placementId: 1, onPlaceNext: placeNext, readOnly: true });
+    expect(offers()).toHaveLength(0);
+  });
+
   it("draws the error way out last, and offers neither a rename nor a delete on it", async () => {
     await render({ automation: detail(), placementId: 1 });
     const ways = [...container.querySelectorAll(".autostep__exits li")];

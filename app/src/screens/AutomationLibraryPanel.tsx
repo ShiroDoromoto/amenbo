@@ -44,7 +44,9 @@ import { useState } from "react";
 import {
   ENTRY_BUILTINS,
   insertAutomationAction,
+  insertAutomationActionAtExit,
   insertAutomationBuiltin,
+  insertAutomationBuiltinAtExit,
   placeAutomationBuiltin,
   useAutomationAction,
   useAutomationActions,
@@ -101,8 +103,21 @@ function SplitAxis({
   );
 }
 
-/** Where the picked action goes: onto a line, or onto a picture with no line yet. */
-export type PlaceTarget = { edgeId: number } | { automationId: number };
+/**
+ * Where the picked action goes: onto a line, after a way out that says nothing yet, or onto a picture
+ * with no line yet.
+ */
+export type PlaceTarget =
+  | { edgeId: number }
+  | { fromId: number; exitName: string }
+  | { automationId: number };
+
+/** One target as a key, so that a panel opened on another spot is another panel. */
+export function placeKey(target: PlaceTarget): string {
+  if ("edgeId" in target) return `e${target.edgeId}`;
+  if ("fromId" in target) return `x${target.fromId}:${target.exitName}`;
+  return "first";
+}
 
 /**
  * What an opened row declares, the same two rows for an action of one's own and a built-in: what it
@@ -198,14 +213,18 @@ export function AutomationLibraryPanel({
   const splitAxis = axes.find((dim) => dim.id === axis);
 
   // The first placement is where a run begins, and only an entry built-in can stand there.
-  const first = !("edgeId" in target);
+  const first = "automationId" in target;
 
   // Core refuses an action another project's library holds, and a line that went away underneath;
   // the sentence it writes is what the panel draws, over the list the reader picked from.
   const place = (actionId: number) => {
-    if (!("edgeId" in target)) return;
+    if ("automationId" in target) return;
     setRefused(null);
-    void insertAutomationAction(target.edgeId, actionId).then(onPlaced, (e: unknown) => setRefused(errText(e)));
+    const write =
+      "edgeId" in target
+        ? insertAutomationAction(target.edgeId, actionId)
+        : insertAutomationActionAtExit({ boxId: target.fromId, exitName: target.exitName }, actionId);
+    void write.then(onPlaced, (e: unknown) => setRefused(errText(e)));
   };
   const placeBuiltin = (key: string) => {
     setRefused(null);
@@ -213,7 +232,9 @@ export function AutomationLibraryPanel({
     const write =
       "edgeId" in target
         ? insertAutomationBuiltin(target.edgeId, key, on)
-        : placeAutomationBuiltin(target.automationId, key, on);
+        : "fromId" in target
+          ? insertAutomationBuiltinAtExit({ boxId: target.fromId, exitName: target.exitName }, key, on)
+          : placeAutomationBuiltin(target.automationId, key, on);
     void write.then(onPlaced, (e: unknown) => setRefused(errText(e)));
   };
 

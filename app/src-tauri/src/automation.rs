@@ -339,6 +339,22 @@ pub fn automation_builtin_insert(edge_id: i64, key: String, axis: Option<i64>) -
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
+/// **Put a built-in on after a way out that says nothing yet** — [`automation_builtin_insert`] for a
+/// way out with no line to press. `axis` as for [`automation_builtin_place`].
+#[tauri::command]
+pub fn automation_builtin_insert_at_exit(
+    from_id: i64,
+    exit_name: Option<String>,
+    key: String,
+    axis: Option<i64>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key, axis)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
 /// **Make a library action** — a name, and which library it lands in.
 ///
 /// **It is born empty**, which is what an action born from a name is: no steps, no entry, and the two

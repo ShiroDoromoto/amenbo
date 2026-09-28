@@ -975,6 +975,8 @@ export const zhHant: Translation = {
     "auto.step.entryReplaceConfirm": "這會更換執行的起點。從目前起點出去的「接下來做什麼」和傳遞會被刪除。後面的放置會保留，請在「接下來做什麼」中重新連接。",
     "auto.step.next": "接下來做什麼",
     "auto.step.nextNothing": "還沒有決定",
+    "auto.step.placeNext": "+ 在這裡放置下一個動作",
+    "auto.step.putNextStep": "+ 在這裡放入下一個步驟",
     "auto.step.nextErrorNothing": "停下來叫人（預設）",
     "auto.step.nextGo": "開啟 {name}",
     "auto.step.maxTimes": "最多次數",

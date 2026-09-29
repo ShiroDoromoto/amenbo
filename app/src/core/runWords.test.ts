@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AutomationRunCardDto } from "../bindings/bindings";
+import { t } from "./i18n";
 import { runSayOf } from "./runWords";
 
 /** A run as the "running" tab reads it, failed and nobody told yet. */
@@ -12,6 +13,8 @@ function card(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
     automationName: "nightly",
     status: "failed",
     pauseRequested: false,
+    pauseBeforeNextTask: false,
+    pausableBeforeNextTask: false,
     waiting: false,
     stoppedReason: "crashed",
     stepName: "build",
@@ -58,5 +61,14 @@ describe("the row over a run's pane no step has arrived in", () => {
     const task = { id: 5, key: "AMB-T-5", title: "t" } as unknown as AutomationRunCardDto["task"];
     expect(runSayOf(card({ status: "running", waiting: true, task }))!.task).toBeNull();
     expect(runSayOf(card({ task }))!.task).toBe(task);
+  });
+
+  // A run asked to pause before its next task pauses on the spot if it is waiting for one; until the
+  // pause lands, waiting to pause is what the row says, not waiting for a task.
+  it("says a waiting run asked to pause as waiting to pause", () => {
+    expect(runSayOf(card({ status: "running", waiting: true }))!.state?.word).toBe(t("auto.run.taskWait"));
+    const asked = runSayOf(card({ status: "running", waiting: true, pauseBeforeNextTask: true }))!;
+    expect(asked.state?.word).toBe(t("auto.run.pausing"));
+    expect(asked.state?.pauseRequested).toBe(false);
   });
 });

@@ -361,6 +361,8 @@ function heldRun(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     automationName: "Night round",
     status: "running",
     pauseRequested: false,
+    pauseBeforeNextTask: false,
+    pausableBeforeNextTask: false,
     waiting: false,
     stepsDone: 1,
     reportWithheld: [],

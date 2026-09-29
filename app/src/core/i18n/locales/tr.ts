@@ -624,6 +624,8 @@ export const tr: Translation = {
     "face.pages": "Sayfalar",
     "face.page": "Sayfa {n}",
     "face.order": "Bir bölmeyi başka sayfaya taşı",
+    "face.pauseAfterTask": "Görev bitince duraklat",
+    "face.pauseAfterTaskWaiting": "Duraklatma bekleniyor ({n})",
     "face.orderTitle": "Bölmeler, sayfa sayfa",
     "face.orderApply": "Bu sırayı kullan",
     "face.orderCancel": "Vazgeç",

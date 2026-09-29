@@ -14,15 +14,27 @@ import type { RunState, Say } from "../talk/nameplate";
 const ERROR_EXIT = "*";
 
 /**
+ * **Whether a pause has been asked for and not settled** — at the end of the action under way
+ * (`AMB-D-1002`), or before the run takes its next task (`AMB-D-1009`). The run is still `running`.
+ */
+export function isPausing(
+  run: Pick<AutomationRunCardDto, "status" | "pauseRequested" | "pauseBeforeNextTask">,
+): boolean {
+  return run.status === "running" && (run.pauseRequested || run.pauseBeforeNextTask);
+}
+
+/**
  * What the run is doing, in one word.
  *
  * A pause that has been asked for and not settled is its own line rather than either of the two it
  * sits between: the run is still `running` and a reader told only that would press pause again, and
- * told "paused" would believe the action under way had already ended (`AMB-D-1002`,
- * `amenbo_core::ops::automation_stop`).
+ * told "paused" would believe the action under way — or, asked before its next task, the task — had
+ * already ended (`AMB-D-1002`, `AMB-D-1009`, `amenbo_core::ops::automation_stop`).
  */
-export function runStatusWord(run: Pick<AutomationRunCardDto, "status" | "pauseRequested">): string {
-  if (run.status === "running" && run.pauseRequested) return t("auto.run.pausing");
+export function runStatusWord(
+  run: Pick<AutomationRunCardDto, "status" | "pauseRequested" | "pauseBeforeNextTask">,
+): string {
+  if (isPausing(run)) return t("auto.run.pausing");
   switch (run.status) {
     case "running": return t("auto.run.running");
     case "paused": return t("auto.run.paused");
@@ -81,10 +93,12 @@ export function runStateOf(run: AutomationRunCardDto | undefined): RunState | nu
 
 /**
  * **A run whose built-in is waiting for a task**, as its pane says it: still running, in the word the
- * running tab says a waiting run with (`auto.run.taskWait`). A run held or over says that instead.
+ * running tab says a waiting run with (`auto.run.taskWait`). A run held, over, or asked to pause says
+ * that instead.
  */
-export function waitingState(state: RunState | null): RunState | null {
-  if (state === null || state.status !== "running" || state.pauseRequested) return state;
+export function waitingState(run: AutomationRunCardDto | undefined): RunState | null {
+  const state = runStateOf(run);
+  if (run === undefined || state === null || state.status !== "running" || isPausing(run)) return state;
   return { ...state, word: t("auto.run.taskWait") };
 }
 
@@ -114,6 +128,6 @@ export function runSayOf(run: AutomationRunCardDto | undefined): Say | null {
     action: run.actionName === undefined ? null : builtinWord(run.builtin, run.actionName),
     // A run waiting for the next task still carries the one it closed before (`../shell/WorkspaceFace`).
     task: run.waiting ? null : run.task ?? null,
-    state: run.waiting ? waitingState(runStateOf(run)) : runStateOf(run),
+    state: run.waiting ? waitingState(run) : runStateOf(run),
   };
 }

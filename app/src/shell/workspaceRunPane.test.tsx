@@ -176,6 +176,8 @@ function runCard(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     automationName: "家計簿の開発ループ",
     status: "running",
     pauseRequested: false,
+    pauseBeforeNextTask: false,
+    pausableBeforeNextTask: false,
     waiting: false,
     stepName: "取る",
     stepsDone: 1,
@@ -491,6 +493,17 @@ describe("what the row above a run's pane says, and what closing it does", () =>
 
     expect((q(".slot__runact")[0] as HTMLButtonElement).disabled).toBe(true);
     expect((q(".slot__runact")[1] as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // Asked from the project's header, the pane says the run is waiting to pause, and its own pause —
+  // at the end of the action under way — can still be pressed (`AMB-D-1009`).
+  it("says a run asked to pause before its next task is waiting to pause, and keeps its pause", async () => {
+    hoisted.cards = [runCard({ pauseBeforeNextTask: true })];
+    await mount();
+    await arrive();
+
+    expect(container.textContent).toContain(t("auto.run.pausing"));
+    expect((q(".slot__runact")[0] as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("picks a held run up again, or cancels it, from its pane", async () => {

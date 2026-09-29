@@ -626,6 +626,8 @@ export const id: Translation = {
     "face.pages": "Halaman",
     "face.page": "Halaman {n}",
     "face.order": "Pindahkan panel ke halaman lain",
+    "face.pauseAfterTask": "Jeda setelah tugas selesai",
+    "face.pauseAfterTaskWaiting": "Menunggu jeda ({n})",
     "face.orderTitle": "Panel, halaman demi halaman",
     "face.orderApply": "Gunakan urutan ini",
     "face.orderCancel": "Batal",

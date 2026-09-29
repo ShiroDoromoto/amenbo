@@ -622,6 +622,8 @@ export const ko: Translation = {
     "face.pages": "페이지",
     "face.page": "{n}페이지",
     "face.order": "페인을 다른 페이지로 옮기기",
+    "face.pauseAfterTask": "작업이 끝나면 일시 중지",
+    "face.pauseAfterTaskWaiting": "일시 중지 대기 ({n}건)",
     "face.orderTitle": "페이지별 페인",
     "face.orderApply": "이 순서로 하기",
     "face.orderCancel": "취소",

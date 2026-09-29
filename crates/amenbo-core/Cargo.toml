@@ -205,6 +205,8 @@ criterion = "0.8"
 [[bench]]
 name = "read_hotpath"
 harness = false
+# The seed it shares with the scale guards (`tests/common`) goes through an entry point only `scale` builds.
+required-features = ["scale"]
 
 # The read-hotpath scaling guard is the single heaviest test in the suite (~23s seeding a 10k
 # store). Gate it behind `scale` so it builds/runs only under `cargo test --features scale`.

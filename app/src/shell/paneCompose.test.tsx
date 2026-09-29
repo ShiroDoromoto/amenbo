@@ -346,8 +346,8 @@ describe("the box under a pane", () => {
     // The pane's frame is one column: the row, the terminal, the box, and the pane's own band under
     // it (`AMB-D-889`). The box coming after the terminal is what makes the terminal give room up
     // rather than be covered.
-    // The terminal face is one element that lays nothing out (`.slot__body`), so its children are the
-    // column's own.
+    // The terminal face is one element (`.slot__body`) laid out as the frame's column again, so its
+    // children stand in the column's order.
     const frame = container.querySelector(".slot__frame")!;
     const bands = [...frame.children]
       .flatMap((one) => (one.classList.contains("slot__body") ? [...one.children] : [one]))

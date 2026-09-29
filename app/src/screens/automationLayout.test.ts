@@ -1232,6 +1232,58 @@ describe("the picture of an automation", () => {
     }
   });
 
+  it("stands two boxes further apart where the name of a line down on their left runs over the leg across of a line between them, and on into its name", () => {
+    const word = "もう一度はじめからやり直すもう一度はじめからやり直す";
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({
+            id: 2,
+            name: "work",
+            exits: [
+              { id: 80, name: "完了", outputs: [] },
+              { id: 81, name: "*", outputs: [] },
+              { id: 82, name: "別", outputs: [] },
+            ],
+          }),
+          step({
+            id: 3,
+            name: "left",
+            exits: [
+              { id: 90, name: "完了", outputs: [] },
+              { id: 91, name: "*", outputs: [] },
+              { id: 92, name: word, outputs: [] },
+            ],
+          }),
+          step({ id: 4, name: "right" }),
+          step({ id: 5, name: "one" }),
+          step({ id: 6, name: "two" }),
+          step({ id: 7, name: "three" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "別", toId: 4 }),
+          edge({ id: 4, fromId: 3, toId: 5 }),
+          edge({ id: 5, fromId: 3, exitName: word, toId: 6 }),
+          edge({ id: 6, fromId: 4, toId: 7 }),
+        ],
+      }),
+    );
+    const long = wordBox(picture.lines.find((one) => one.key === "edge-5")!);
+    const other = picture.lines.find((one) => one.key === "edge-6")!;
+    // The line from the box on the right turns in the same row of words as the long name.
+    const across = pieces(other)[1]!;
+    expect(across.top).toBe(across.bottom);
+    expect(across.top).toBeGreaterThanOrEqual(long.top);
+    expect(across.top).toBeLessThan(long.bottom + 15);
+    // Its leg across and its name both begin a name's room past the end of the long name.
+    expect(across.left - long.right).toBeGreaterThanOrEqual(14);
+    expect(wordBox(other).left - long.right).toBeGreaterThanOrEqual(14);
+  });
+
   it("writes the name of a line straight down on its left, and staggers the + of lines side by side in the margin", () => {
     const picture = layOut(
       detail({

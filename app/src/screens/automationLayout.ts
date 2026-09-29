@@ -1240,8 +1240,12 @@ function layOutWith(
   }
 
   // The lines down to a neighbour whose name is written past the end of the leg across, beside the leg
-  // into the box it goes to — which may run on as far as the leg of a box beside either of its own.
+  // into the box it goes to — which may run on as far as the leg of a box beside either of its own, or
+  // the leg across and the name of a line between two of those.
   const besideLeg: { line: PicLine; from: PicNode; to: PicNode; left: boolean }[] = [];
+  // Every line down to a neighbour, with the two boxes it runs between and whether its name is
+  // written beside the leg into the box it goes to: what stands in the way of a name beside a leg.
+  const acrossOf = new Map<PicLine, { from: PicNode; to: PicNode; short: boolean }>();
   for (const edge of edges) {
     const from = node.get(edge.fromId);
     if (from === undefined) continue;
@@ -1305,6 +1309,7 @@ function layOutWith(
         align: left ? "end" : "start",
       };
       lines.push(line);
+      acrossOf.set(line, { from, to, short });
       if (short) besideLeg.push({ line, from, to, left });
       continue;
     }
@@ -1566,15 +1571,25 @@ function layOutWith(
 
   // A name written beside the leg into its box, past the end of its leg across, runs on the side it
   // turns to, and one longer than a column is across ran over the leg of a box beside one of its own
-  // two: down onto the next box of the row it goes to, or down from the next box of the row it leaves.
-  // The two boxes stand further apart until the name ends a name's room short of that leg
-  // (`AMB-T-5880`). Every row is centred, so two boxes of the row the line leaves stand apart from the
-  // row it goes to by half of what their room grows by: they are given twice as much.
-  const nextTo = (box: PicNode, left: boolean): number | undefined => {
+  // two: down onto the next box of the row it goes to, or down from the next box of the row it leaves
+  // (`AMB-T-5880`). It ran as well over the leg across of a line between two boxes beside its own,
+  // which turns in the same row of words, and on into that line's name, read as one word with it. The
+  // two boxes stand further apart until the name ends a name's room short of each. Every row is
+  // centred, so two boxes of the row the line leaves stand apart from the row it goes to by half of
+  // what their room grows by: they are given twice as much.
+  const rowOf = (box: PicNode): readonly number[] | undefined => {
     const place = at.get(box.boxId);
-    if (place === undefined) return undefined;
-    const row = laps[place.lap]!.rows[place.row]!;
+    return place === undefined ? undefined : laps[place.lap]!.rows[place.row]!;
+  };
+  const nextTo = (box: PicNode, left: boolean): number | undefined => {
+    const row = rowOf(box);
+    if (row === undefined) return undefined;
     return left ? row[row.indexOf(box.boxId) - 1] : box.boxId;
+  };
+  const widen = (before: number | undefined, more: number) => {
+    if (before === undefined) return;
+    const gap = gapAfter(boxes.get(before)!) + more;
+    gapsOf.set(before, Math.max(gapsOf.get(before) ?? 0, gap));
   };
   const uprights = lines.flatMap((one) =>
     one.points.slice(1).flatMap((q, nth) => {
@@ -1588,19 +1603,43 @@ function layOutWith(
     const top = line.at.y - 10;
     const bottom = line.at.y + 1;
     const beyond = (box: PicNode, x: number) => (left ? x < box.x : x > box.x + box.w);
+    // How far what stands at `x` reaches into the name, or into a name's room past its end.
+    const pastOf = (x: number) => (left ? x + BESIDE - start : start + wide + BESIDE - x);
     for (const leg of uprights) {
       if (leg.line === line || leg.top > bottom || top > leg.bottom) continue;
-      const past = left ? leg.x + BESIDE - start : start + wide + BESIDE - leg.x;
+      const past = pastOf(leg.x);
       if (past <= 0) continue;
-      const room =
-        leg.bottom === to.y && beyond(to, leg.x)
-          ? { before: nextTo(to, left), more: past }
-          : leg.top === from.y + nodeH && beyond(from, leg.x)
-            ? { before: nextTo(from, left), more: past * 2 }
-            : undefined;
-      if (room?.before === undefined) continue;
-      const gap = gapAfter(boxes.get(room.before)!) + room.more;
-      gapsOf.set(room.before, Math.max(gapsOf.get(room.before) ?? 0, gap));
+      if (leg.bottom === to.y && beyond(to, leg.x)) widen(nextTo(to, left), past);
+      else if (leg.top === from.y + nodeH && beyond(from, leg.x)) widen(nextTo(from, left), past * 2);
+    }
+    // What stands at `x` with the box `box`: that box stands further out, where it is past one of the
+    // name's own two boxes in the same row, on the side the name runs to.
+    const apart = (box: PicNode, x: number) => {
+      const past = pastOf(x);
+      if (past <= 0 || (left ? x >= start + wide : x <= start)) return;
+      const row = rowOf(box);
+      const standsPast = (own: PicNode) => {
+        if (row === undefined || rowOf(own) !== row) return false;
+        const nth = row.indexOf(box.boxId) - row.indexOf(own.boxId);
+        return left ? nth < 0 : nth > 0;
+      };
+      if (standsPast(to)) widen(nextTo(to, left), past);
+      else if (standsPast(from)) widen(nextTo(from, left), past * 2);
+    };
+    for (const [other, ends] of acrossOf) {
+      if (other === line) continue;
+      // Its leg across, where it turns in the name's own row of words: the end nearer the name stands
+      // with the box at that end.
+      const [p, q] = [other.points[1]!, other.points[2]!];
+      if (p.x !== q.x && top <= p.y && p.y < line.at.y + WORD_H - 3) {
+        const near = left ? Math.max(p.x, q.x) : Math.min(p.x, q.x);
+        apart(near === p.x ? ends.from : ends.to, near);
+      }
+      // Its name, beside it in the same row of words: it stands with the box it is written by.
+      if (other.at.y - 10 >= bottom || top >= other.at.y + 1) continue;
+      const theirs = wordW(edgeWord(other));
+      const their = wordLeft(other, theirs);
+      apart(ends.short ? ends.to : ends.from, left ? their + theirs : their);
     }
   }
 

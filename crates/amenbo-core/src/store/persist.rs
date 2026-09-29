@@ -69,18 +69,6 @@ fn new_step_default(
     Ok(())
 }
 
-/// Take the next activity sequence number for a system event and mark it used **in the same
-/// transaction**. A system event has no row in the DB (only a line in the ledger), so the next
-/// `MAX(id)` would not see this id — without the high-water mark, two events in a row would be
-/// handed the same id, breaking the `(at, source, id)` tie-break of the total order that merges the
-/// ledger with the comment tables. The mark commits together with the mutation that caused the
-/// event, so an id can never be handed out while the mutation rolls back (which would leave a gap).
-fn mint_activity_id(tx: &WriteTx<'_>) -> Result<i64> {
-    let id = crate::store_engine::read::next_activity_id(tx.conn())?;
-    tx.set_meta(crate::store_engine::read::ACTIVITY_HIGH_WATER, Some(&id.to_string()))?;
-    Ok(id)
-}
-
 /// The ledger line a decision's own transition leaves behind, built **inside** the mutation's
 /// transaction and appended by the caller **after** the commit (`crate::activity_log`). The id is
 /// minted here so it keeps its place in the sequence even when the commit that earned it is the last
@@ -93,7 +81,7 @@ fn decision_ledger_entry(
     event: serde_json::Value,
 ) -> Result<crate::activity_log::Entry> {
     Ok(crate::activity_log::Entry {
-        id: mint_activity_id(tx)?,
+        id: tx.mint_activity_id()?,
         at: crate::time::Timestamp::now(),
         actor: Some(actor),
         project: Some(decision.project_id),
@@ -119,6 +107,11 @@ impl Store {
     /// The same declaration is what moves the **sync version** of every project the mutation reaches
     /// (`AMB-D-582`): read here, before `op`, while a row about to be deleted can still name its project
     /// and a re-homing still names both ends; stamped at the commit, and only if the batch wrote anything.
+    ///
+    /// The activity lines `op` queued ([`WriteTx::record_activity`]) are appended to the ledger here,
+    /// **after** the commit succeeds, in the order they were queued — a batch that fails leaves none.
+    /// The append cannot fail the operation: the ledger is not the truth source
+    /// ([`crate::activity_log::append`]).
     fn write_one<T>(
         &mut self,
         targets: &[WriteTarget],
@@ -132,7 +125,11 @@ impl Store {
             tx.touches_project(project);
         }
         let out = op(&tx)?;
+        let activity = tx.take_activity();
         tx.commit()?;
+        for entry in &activity {
+            crate::activity_log::append(&self.paths.activity_file, entry);
+        }
         Ok(out)
     }
 
@@ -306,7 +303,7 @@ impl Store {
         let (orphaned, entry) = self.write_one(&[WriteTarget::Task(id)], |tx| {
             let title = crate::store_engine::read::task_title(tx.conn(), id)?;
             let project = crate::store_engine::read::task_project_id(tx.conn(), id)?;
-            let activity_id = mint_activity_id(tx)?;
+            let activity_id = tx.mint_activity_id()?;
             let orphaned = crate::ops::task::delete(tx, id, actor)?;
             let entry = crate::activity_log::Entry {
                 id: activity_id,
@@ -593,7 +590,7 @@ impl Store {
             // Read the cascade set **before** the delete: afterwards there is no row left to count.
             let tasks = read::task_ids_in_project(tx.conn(), id)?.len();
             let decisions = read::decision_ids_in_project(tx.conn(), id)?.len();
-            let activity_id = mint_activity_id(tx)?;
+            let activity_id = tx.mint_activity_id()?;
             let orphaned = crate::ops::project::delete(tx, id, actor)?;
             let entry = crate::activity_log::Entry {
                 id: activity_id,
@@ -831,7 +828,7 @@ impl Store {
     ) -> Result<crate::activity_log::Entry> {
         let entry = self.write_one(&[WriteTarget::Task(target_id)], |tx| {
             Ok(crate::activity_log::Entry {
-                id: mint_activity_id(tx)?,
+                id: tx.mint_activity_id()?,
                 at: crate::time::Timestamp::now(),
                 actor: Some(author_kind),
                 // A ledger line carries its own project — a file cannot be joined against the DB.
@@ -859,7 +856,7 @@ impl Store {
     ) -> Result<crate::activity_log::Entry> {
         let entry = self.write_one(&[WriteTarget::Decision(decision_id)], |tx| {
             Ok(crate::activity_log::Entry {
-                id: mint_activity_id(tx)?,
+                id: tx.mint_activity_id()?,
                 at: crate::time::Timestamp::now(),
                 actor: Some(author_kind),
                 // A ledger line carries its own project — a file cannot be joined against the DB.
@@ -1097,7 +1094,7 @@ impl Store {
             use crate::store_engine::read;
             let title = read::decision_title(tx.conn(), id)?;
             let project = read::decision_project_id(tx.conn(), id)?;
-            let activity_id = mint_activity_id(tx)?;
+            let activity_id = tx.mint_activity_id()?;
             let orphaned = crate::ops::decision::delete(tx, id)?;
             let entry = crate::activity_log::Entry {
                 id: activity_id,
@@ -2228,5 +2225,81 @@ impl Store {
         let cfg_json = serde_json::to_string_pretty(&self.config)?;
         write_atomic(&self.paths.config_file, cfg_json.as_bytes())?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Paths;
+
+    fn line(tx: &WriteTx<'_>, title: &str) -> Result<crate::activity_log::Entry> {
+        Ok(crate::activity_log::Entry {
+            id: tx.mint_activity_id()?,
+            at: crate::time::Timestamp::now(),
+            actor: Some(crate::model::ActorKind::Ai),
+            project: None,
+            task: None,
+            decision: None,
+            event: crate::activity_log::event::task_created(title),
+        })
+    }
+
+    fn ledger(s: &Store) -> Vec<serde_json::Value> {
+        std::fs::read_to_string(&s.paths.activity_file)
+            .unwrap_or_default()
+            .lines()
+            .map(|l| serde_json::from_str(l).expect("a whole line of JSON"))
+            .collect()
+    }
+
+    /// The lines an operation queues reach the ledger once it commits, in the order it queued them, each
+    /// under the id minted for it inside the transaction.
+    #[test]
+    fn the_lines_an_operation_queues_are_appended_after_it_commits() {
+        let dir = amenbo_scratch::scratch("write-one-activity");
+        let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
+
+        let ids = s
+            .write_one(&[], |tx| {
+                let first = line(tx, "first")?;
+                let second = line(tx, "second")?;
+                let ids = (first.id, second.id);
+                tx.record_activity(first);
+                tx.record_activity(second);
+                Ok(ids)
+            })
+            .unwrap();
+
+        let lines = ledger(&s);
+        let got: Vec<_> = lines.iter().map(|l| (l["id"].as_i64(), l["event"]["title"].clone())).collect();
+        assert_eq!(
+            got,
+            vec![(Some(ids.0), serde_json::json!("first")), (Some(ids.1), serde_json::json!("second"))]
+        );
+        assert!(ids.0 < ids.1, "each line takes its own number from the activity sequence");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// An operation that fails after queuing a line leaves no line: the line goes with the rolled-back
+    /// batch, and so does the id minted for it.
+    #[test]
+    fn a_failed_operation_leaves_no_line() {
+        let dir = amenbo_scratch::scratch("write-one-activity-rollback");
+        let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
+
+        let mut minted = None;
+        let failed: Result<()> = s.write_one(&[], |tx| {
+            let entry = line(tx, "never")?;
+            minted = Some(entry.id);
+            tx.record_activity(entry);
+            Err(crate::error::Error::invalid("the operation fails after queuing"))
+        });
+        assert!(failed.is_err());
+        assert!(ledger(&s).is_empty(), "a rolled-back operation leaves no line in the ledger");
+
+        let next = s.write_one(&[], |tx| Ok(tx.mint_activity_id()?)).unwrap();
+        assert_eq!(Some(next), minted, "the id minted inside the rolled-back batch is not spent");
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

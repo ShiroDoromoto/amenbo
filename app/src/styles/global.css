@@ -63,15 +63,23 @@ textarea { resize: vertical; max-width: var(--measure-prose); }
    of the ways of saying how tall it should be reaches it (`--tap-min`, WCAG 2.2 SC 2.5.8).
 
    What a select is drawn as is the platform's: with its own appearance left on — which is what keeps
-   the caret the machine draws — WebKit takes the control's height off the font and leaves `padding`
-   and `min-height` where they are. Measured in the app: a `.btn` select stayed at 22px under
-   `min-height` and came to 24 under `height`, and the same select with its appearance turned off
-   jumped to 36 as the form padding above suddenly applied. So it is `height`, and it is said here on
-   the element rather than on each class that happens to wear one — every select is under the floor on
-   its text alone, whatever it is wearing, and the three found short were wearing three different
-   classes with one of them wearing none at all. A select that has to stand taller than this says so
-   with a height of its own. */
+   the caret the machine draws — WebKit on macOS takes the control's height off the font and leaves
+   `padding` and `min-height` where they are. Measured in the app: a `.btn` select stayed at 22px
+   under `min-height` and came to 24 under `height`, and the same select with its appearance turned
+   off jumped to 36 as the form padding above suddenly applied. So it is `height`, and it is said here
+   on the element rather than on each class that happens to wear one — every select is under the
+   floor on its text alone, whatever it is wearing, and the three found short were wearing three
+   different classes with one of them wearing none at all. A select that has to stand taller than
+   this says so with a height of its own.
+
+   **Chromium on Windows does apply the padding**, inside that same height. The form padding above
+   left 24 − 2×8 − 2×1 = 6px for a 21px line, and `.btn`'s left 14: the lower half of the text was
+   cut off. So a select has no padding above or below its text — the height already says how tall it
+   is, and the text is centred in it. It is said on `select[class]` as well, because a class that
+   pads a select and a button alike (`.btn`) is more specific than the element and would bring the
+   cut back; only the block padding is taken, so a class still says its own padding at the sides. */
 select { cursor: pointer; height: var(--tap-min); }
+select, select[class] { padding-block: 0; }
 /* A tick box is drawn by the platform and stays that way: the rule above is for boxes with a value
    typed into them, and its padding, ground and border would each take a piece of the tick. What it
    keeps from the rule is the accent, so the tick is the app's colour and not the system's. */

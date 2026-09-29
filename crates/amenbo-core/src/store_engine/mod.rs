@@ -21,6 +21,8 @@ pub mod schema;
 pub mod schema_frozen;
 pub mod search;
 pub mod sql;
+#[cfg(test)]
+mod tests;
 pub mod write;
 
 pub use engine::{

@@ -54,6 +54,7 @@ dependencies = [
  "clap",
  "libc",
  "rpassword",
+ "rusqlite",
  "serde",
  "serde_json",
 ]

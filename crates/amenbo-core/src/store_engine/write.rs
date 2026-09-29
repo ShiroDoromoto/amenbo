@@ -119,17 +119,17 @@ impl<'a> WriteTx<'a> {
 
     /// Write one field into its read-model column (registry-validated). See
     /// [`StoreEngine::set_field`].
-    pub fn set_field(&self, dataset: &str, row: i64, col: &str, val: Value) -> Result<()> {
+    pub(crate) fn set_field(&self, dataset: &str, row: i64, col: &str, val: Value) -> Result<()> {
         self.engine.set_field(dataset, row, col, val)
     }
 
     /// Create or update a record as a batch of field writes. See [`StoreEngine::put_record`].
-    pub fn put_record(&self, dataset: &str, id: i64, fields: &[(&str, Value)]) -> Result<()> {
+    pub(crate) fn put_record(&self, dataset: &str, id: i64, fields: &[(&str, Value)]) -> Result<()> {
         self.engine.put_record(dataset, id, fields)
     }
 
     /// Physically delete one record row. See [`StoreEngine::delete_record`].
-    pub fn delete_record(&self, dataset: &str, id: i64) -> Result<()> {
+    pub(crate) fn delete_record(&self, dataset: &str, id: i64) -> Result<()> {
         self.engine.delete_record(dataset, id)
     }
 

@@ -38,6 +38,10 @@ libc = "0.2"
 [dev-dependencies]
 amenbo-scratch.workspace = true
 amenbo-static-host.workspace = true
+# A test that stands a store up in a state no command leaves it in — a format ahead of this build, a
+# handover account — writes that `store_meta` row itself, since core opens no write path to it from
+# outside. Match core's version and features.
+rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
 
 # The real-binary end-to-end suite, one target per surface it walks (`tests/e2e/`), all sharing
 # `tests/e2e/harness.rs`. Every one of them is gated behind `e2e`; build/run them with

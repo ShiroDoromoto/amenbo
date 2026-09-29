@@ -169,7 +169,7 @@ impl StoreEngine {
     /// is no at-rest key. A legacy SQLCipher-encrypted file is refused by the store-open paths *before*
     /// this (`Store::open_at` errors out via `at_rest_status`); if one reaches here it surfaces as
     /// SQLCipher's "file is not a database" on the first schema access.
-    pub fn open(path: &Path) -> Result<StoreEngine> {
+    pub(crate) fn open(path: &Path) -> Result<StoreEngine> {
         let conn = Connection::open(path)?;
         Self::init(conn)
     }
@@ -349,7 +349,7 @@ impl StoreEngine {
     /// A column the word index carries has its normalised copy rewritten in the same breath
     /// ([`super::search`]): this is the *only* path a record's text takes into the store, so an index
     /// kept here cannot fall behind by a write path that forgot it.
-    pub fn set_field(&self, dataset: &str, row: i64, col: &str, val: Value) -> Result<()> {
+    pub(crate) fn set_field(&self, dataset: &str, row: i64, col: &str, val: Value) -> Result<()> {
         let ds = schema::dataset(dataset).ok_or_else(|| StoreEngineError::UnknownDataset(dataset.into()))?;
         if !ds.writable(col) {
             return Err(StoreEngineError::UnknownColumn { dataset: dataset.into(), col: col.into() });
@@ -464,7 +464,7 @@ impl StoreEngine {
     }
 
     /// Create or update a record as a batch of field writes (one UPSERT per field).
-    pub fn put_record(&self, dataset: &str, id: i64, fields: &[(&str, Value)]) -> Result<()> {
+    pub(crate) fn put_record(&self, dataset: &str, id: i64, fields: &[(&str, Value)]) -> Result<()> {
         for (col, val) in fields {
             self.set_field(dataset, id, col, val.clone())?;
         }
@@ -478,7 +478,7 @@ impl StoreEngine {
     /// settings go with the project instead (`CASCADE`). The polymorphic
     /// `attachment` carries no constraint at all; the caller sweeps it with
     /// [`delete_records_for_target`](Self::delete_records_for_target) before deleting the parent.
-    pub fn delete_record(&self, dataset: &str, row: i64) -> Result<()> {
+    pub(crate) fn delete_record(&self, dataset: &str, row: i64) -> Result<()> {
         let ds = schema::dataset(dataset)
             .ok_or_else(|| StoreEngineError::UnknownDataset(dataset.into()))?;
         Delete::from(ds.as_table()).filter(Pred::eq(ds.id_col(), row)).sql().execute(&self.conn)?;

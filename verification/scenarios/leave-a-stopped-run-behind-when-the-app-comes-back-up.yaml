@@ -4,14 +4,14 @@
 # app comes back up, and its pane with it (`app/src/talk/layout.ts`, `withoutRuns`). While the app is
 # up the pane stays, so what the terminal printed is still there to be read.
 #
-# The pane the folder opened is made half the page first, so the run's pane — which takes the size of
-# the pane before it — lands beside it on the same page: the count of panes on that page is what
-# tells a pane left behind from an empty place kept for it.
+# A pane of the reader's own is opened and made half the page first, so the run's pane — which takes
+# the size of the pane before it — lands beside it on the same page: the count of panes on that page
+# is what tells a pane left behind from an empty place kept for it.
 id: leave-a-stopped-run-behind-when-the-app-comes-back-up
 title: A run that was stopped is left behind when the app comes back up, and its pane with it
 description: >
   Start a run and stop it from its pane: the pane stays, saying the run was canceled. Quit the app
-  and read the workspace it comes back up to: the pane the folder opened is back, and the run's pane
+  and read the workspace it comes back up to: the pane opened first is back, and the run's pane
   is not.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
@@ -47,11 +47,13 @@ steps_gui:
     with:
       face: workspace
 
+  # The project the run stands in is bound to the run's folder already, so the face offers the empty
+  # frame rather than the way in, and the press there asks nothing.
   - type: action
     domain: workspace
-    op: open-folder
+    op: open-pane
     with:
-      dir: lantern
+      from: face
 
   - type: action
     domain: workspace
@@ -114,7 +116,7 @@ steps_gui:
     with:
       count: 2
 
-  # The pane the folder opened still has its program running, so the way out asks first.
+  # The pane opened first still has its program running, so the way out asks first.
   - type: action
     domain: store
     op: quit
@@ -128,7 +130,7 @@ steps_gui:
     with:
       answer: leave
 
-  # The goal. The app comes back up with the pane the folder opened, and without the stopped run's:
+  # The goal. The app comes back up with the pane opened first, and without the stopped run's:
   # the run needs nobody, and what it did is read on the history tab.
   - type: action
     domain: workspace

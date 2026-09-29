@@ -54,12 +54,6 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: open-folder
-    with:
-      dir: lantern
-
-  - type: action
-    domain: workspace
     op: show-face
     with:
       face: tasks

@@ -82,8 +82,9 @@ die() { echo "✗ $*" >&2; exit 1; }
 # the evidence; all this holds is the deadline a caller asked for by hand.
 appear_wait() {
     local tries="$1" what="$2"
-    [ -n "$APPEAR_LIMIT" ] && [ "$tries" -ge "$APPEAR_LIMIT" ] &&
+    if [ -n "$APPEAR_LIMIT" ] && [ "$tries" -ge "$APPEAR_LIMIT" ]; then
         die "gave up waiting for $what after $((APPEAR_LIMIT * APPEAR_SECONDS))s"
+    fi
     [ $(( (tries - 1) % SAY_EVERY )) -eq 0 ] && echo "waiting for $what" >&2
     sleep "$APPEAR_SECONDS"
 }
@@ -172,7 +173,9 @@ run_overtaken() {
     local sha="$1" workflow="$2" branch="$3" newer
     newer=$(gh run list -R "$repo" --workflow "$workflow" --branch "$branch" --event push \
         --limit 1 --json headSha --jq '.[0].headSha // ""' 2>/dev/null) || return 1
-    [ -n "$newer" ] && [ "$newer" != "$sha" ] || return 1
+    if [ -z "$newer" ] || [ "$newer" = "$sha" ]; then
+        return 1
+    fi
     [ "$(gh api "repos/$repo/compare/$sha...$newer" --jq .status 2>/dev/null)" = ahead ] || return 1
     echo "$newer"
 }
@@ -235,7 +238,9 @@ watch_run() {
         fail=$(jq -r '.jobs[]
             | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")
             | "FAIL \(.name) (\(.conclusion))"' <<< "$st" | sort)
-        [ -n "$fail" ] && [ "$fail" != "$prev" ] && echo "$fail"
+        if [ -n "$fail" ] && [ "$fail" != "$prev" ]; then
+            echo "$fail"
+        fi
         prev=$fail
         status=$(jq -r .status <<< "$st")
         # A re-run reopens the same id, and it reaches the jobs before it reaches the
@@ -290,7 +295,9 @@ watch_pr() {
         [ "$state" != OPEN ] && { echo "pull request $pr: $state"; [ "$state" = MERGED ]; return $?; }
         ms=$(jq -r .mergeStateStatus <<< "$v")
         # DIRTY is the only merge state that will not clear on its own.
-        [ "$ms" = DIRTY ] && [ "$ms" != "$prevms" ] && echo "needs a hand: $ms"
+        if [ "$ms" = DIRTY ] && [ "$ms" != "$prevms" ]; then
+            echo "needs a hand: $ms"
+        fi
         prevms=$ms
         # `gh pr checks` refuses, rather than reporting nothing, when the head commit
         # carries no check yet — the window right after a push, which is exactly when

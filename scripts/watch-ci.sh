@@ -44,7 +44,8 @@
 # a threshold placed on a distribution the caller cannot see reads slowness as absence.
 # So a wait ends on evidence that the thing is not coming — a commit or a tag that is
 # not on the remote, a workflow that is not there, every run on the head commit finished
-# without the check — and not on a clock. Until then it waits, and says so as it waits.
+# without the check, a later push to main that already has its run — and not on a clock.
+# Until then it waits, and says so as it waits.
 #
 # Progress and diagnostics go to stderr throughout. Stdout carries the id under
 # --print-id and the emitted events otherwise, so a caller may read either.
@@ -128,10 +129,11 @@ fi
 #
 # The wait has no deadline, so the caller resolves the commit on the remote first and
 # hands the sha in — that answer, and not a clock, is what rules out a run that is never
-# coming. Here the commit is known to exist, so nothing left is worth giving up on.
+# coming. A caller that names the branch the commit was pushed to is also told when
+# GitHub has moved past it: see run_overtaken.
 resolve_one() {
-    local label="$1" sha="$2" workflow="$3"
-    local tries=0 rows count
+    local label="$1" sha="$2" workflow="$3" branch="${4:-}"
+    local tries=0 rows count newer
     while :; do
         rows=$(gh run list -R "$repo" --commit "$sha" --event push --workflow "$workflow" \
             --json databaseId,name,event,createdAt) ||
@@ -147,8 +149,32 @@ resolve_one() {
             exit 1
         fi
         tries=$((tries + 1))
+        if [ -n "$branch" ] && newer=$(run_overtaken "$sha" "$workflow" "$branch"); then
+            die "$label has no push run of $workflow, and GitHub has already started one for $newer, a later push to $branch — none is coming for this commit. That run's path filter sees only its own push, so this commit's change was never judged by it"
+        fi
         appear_wait "$tries" "$label to start a run"
     done
+}
+
+# The sha of a later push to a branch whose run GitHub has already started, printed when
+# the newest push run of the workflow there is on a descendant of this commit.
+#
+# A push can reach the branch without a push event: a merge whose ref moved and whose
+# pull request reads merged, but which GitHub delivered no event for — no push run, no
+# entry in the repository's activity, no branch deletion after it. Nothing on this side
+# can start that run again, and waiting for it is waiting forever. What says so is the
+# order GitHub keeps: runs are registered as pushes arrive, so a run already standing for
+# a later push is one this commit's run would have come before.
+#
+# Anything short of that answers nothing, and waiting is the safe way to be wrong: a call
+# that fails, the newest run being this commit's own or an older one's.
+run_overtaken() {
+    local sha="$1" workflow="$2" branch="$3" newer
+    newer=$(gh run list -R "$repo" --workflow "$workflow" --branch "$branch" --event push \
+        --limit 1 --json headSha --jq '.[0].headSha // ""' 2>/dev/null) || return 1
+    [ -n "$newer" ] && [ "$newer" != "$sha" ] || return 1
+    [ "$(gh api "repos/$repo/compare/$sha...$newer" --jq .status 2>/dev/null)" = ahead ] || return 1
+    echo "$newer"
 }
 
 # The newest dispatched run of a workflow on a ref, delivered once it is the right one.
@@ -403,7 +429,7 @@ case "$mode" in
         # would be passed on as if it were an id.
         sha=$(remote_ref_sha "$1") ||
             die "main $1: no such commit on $repo — nothing there will start a run"
-        id=$(resolve_one "main $1" "$sha" ci-change.yml)
+        id=$(resolve_one "main $1" "$sha" ci-change.yml main)
         deliver "$id"
         ;;
     tag)

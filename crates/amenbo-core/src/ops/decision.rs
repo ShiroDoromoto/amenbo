@@ -523,7 +523,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 /// `RESTRICT`, so leaving one behind does not orphan a row — it stops the delete, this one and
 /// `project::delete`'s, which clears a project's decisions before its axes.
 /// Returns the blob hashes this subtree let go of (candidates for collection after commit).
-pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
+pub(in crate::ops) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let mut orphaned = Vec::new();
     for comment_id in read::decision_comment_ids(tx.conn(), id)? {
         orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::DecisionComment, comment_id)?);

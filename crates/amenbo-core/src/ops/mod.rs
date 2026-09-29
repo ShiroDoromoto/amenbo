@@ -23,6 +23,12 @@
 //! **Mutations issue SQL straight at the source of truth (the read-model).** Every mutator takes only the
 //! [`WriteTx`] (`BEGIN IMMEDIATE`) the caller opened, and reads both its `before` snapshot and any existence
 //! check **inside that transaction**, through [`crate::store_engine::read`].
+//!
+//! **A write that records no observation event stays inside `ops`.** The public mutators write the event
+//! for what they did in the same transaction; the pieces they are built from — [`emit_create`],
+//! [`emit_update`] and the `task` / `decision` `delete_subtree` sweeps — write rows only, so they are
+//! `pub(in crate::ops)`: a new path elsewhere in the crate cannot reach the rows without going through an
+//! op that tells.
 
 pub mod attachment;
 pub mod automation;
@@ -128,7 +134,7 @@ pub(crate) fn guard_same_project(
 /// [`crate::store_engine::record`]; all this function decides is the **destination** — this operation's
 /// `BEGIN IMMEDIATE` transaction ([`WriteTx`]). A `?` on the way out drops the guard before commit and
 /// **nothing lands**: a partially written row is structurally impossible.
-pub(crate) fn emit_create(tx: &WriteTx<'_>, rec: Record) -> Result<()> {
+pub(in crate::ops) fn emit_create(tx: &WriteTx<'_>, rec: Record) -> Result<()> {
     for (col, val) in rec.fields {
         tx.set_field(rec.dataset, rec.id, col, val)?;
     }
@@ -140,7 +146,7 @@ pub(crate) fn emit_create(tx: &WriteTx<'_>, rec: Record) -> Result<()> {
 /// lands **on top of the state it was computed from** — take `before` outside the transaction and another
 /// process can write the same row in between, making the diff read as "unchanged" and silently dropping the
 /// write.
-pub(crate) fn emit_update(tx: &WriteTx<'_>, before: Record, after: Record) -> Result<()> {
+pub(in crate::ops) fn emit_update(tx: &WriteTx<'_>, before: Record, after: Record) -> Result<()> {
     for (col, val) in after.changed_from(&before) {
         tx.set_field(after.dataset, after.id, col, val)?;
     }

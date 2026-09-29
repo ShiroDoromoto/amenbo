@@ -115,7 +115,12 @@ describe("a setting's answer", () => {
   });
 
   // `AMB-T-5552`: a classification row per axis the project files a task under.
-  const axis = (name: string, appliesTo: DimensionDto["appliesTo"], values: string[]): DimensionDto => ({
+  const axis = (
+    name: string,
+    appliesTo: DimensionDto["appliesTo"],
+    values: string[],
+    closed: string[] = [],
+  ): DimensionDto => ({
     id: 0,
     name,
     notes: "",
@@ -125,7 +130,9 @@ describe("a setting's answer", () => {
     showOnCard: false,
     required: false,
     sequential: false, appliesTo,
-    values: values.map((one, i) => ({ id: i, name: one }) as DimensionDto["values"][number]),
+    values: values.map(
+      (one, i) => ({ id: i, name: one, closed: closed.includes(one) }) as DimensionDto["values"][number],
+    ),
   });
 
   it("draws a row per axis a task is filed under, with a value to press", () => {
@@ -134,10 +141,37 @@ describe("a setting's answer", () => {
       axis("stance", "decision", ["for"]),
       axis("empty", "task", []),
       axis("stage", "task", ["second"]),
-    ]);
+    ], undefined, {});
     expect(rows).toEqual([
       { axis: "theme", values: ["main", "side"] },
       { axis: "stage", values: ["second"] },
+    ]);
+  });
+
+  // `AMB-D-1008`: the built-in that takes a task offers no closed value but one already pressed.
+  const withClosed = [
+    axis("release", "task", ["v1", "v2", "v3"], ["v1", "v2"]),
+    axis("retired", "task", ["old"], ["old"]),
+  ];
+
+  it("offers a closed value where a person's own action or another built-in stands", () => {
+    const all = [
+      { axis: "release", values: ["v1", "v2", "v3"] },
+      { axis: "retired", values: ["old"] },
+    ];
+    expect(dimRows(withClosed, undefined, {})).toEqual(all);
+    expect(dimRows(withClosed, "close_task", {})).toEqual(all);
+  });
+
+  it("leaves a closed value out where the built-in that takes a task stands, and an axis left with none", () => {
+    expect(dimRows(withClosed, "take_task", {})).toEqual([{ axis: "release", values: ["v3"] }]);
+  });
+
+  it("still draws a closed value a saved answer has pressed where the built-in that takes a task stands", () => {
+    const filter = { dim: [dimToken("release", "v1"), dimToken("retired", "old")] };
+    expect(dimRows(withClosed, "take_task", filter)).toEqual([
+      { axis: "release", values: ["v1", "v3"] },
+      { axis: "retired", values: ["old"] },
     ]);
   });
 

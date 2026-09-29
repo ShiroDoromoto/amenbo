@@ -28,11 +28,11 @@
 //!   never appears, a crash after commit means the row is lost. Never duplicated; it falls to the
 //!   losing side. What the transaction holds is the *line*, not the append: an operation queues it
 //!   with [`WriteTx::record_activity`], its id minted inside the transaction
-//!   ([`WriteTx::mint_activity_id`]), and `Store::write_one` appends the queued lines once
-//!   [`WriteTx::commit`] has returned `Ok`. A rolled-back batch drops its lines with the guard.
-//!   **Only `write_one` writes them out** — a path that opens [`StoreEngine::write`] itself and commits
-//!   has nobody to append for it, so queuing a line there is a bug, and `commit` says so in a debug
-//!   build.
+//!   ([`WriteTx::mint_activity_id`]), and [`WriteTx::commit`] appends the queued lines to the engine's
+//!   ledger once the SQLite commit has succeeded. A rolled-back batch drops its lines with the guard.
+//!   The append lives in `commit` rather than in any one caller, so a path that opens
+//!   [`StoreEngine::write`] itself carries its lines out exactly as `Store::write_one` does. An engine
+//!   with no ledger named ([`StoreEngine::keep_activity_in`]) refuses the commit instead of dropping them.
 //!
 //! Failure needs no ceremony: return early with `?` and the guard drops before `commit()`, rolling the
 //! whole batch back. That is what keeps a contended `SQLITE_BUSY` mid-batch from leaving a torn row
@@ -66,8 +66,8 @@ pub struct WriteTx<'a> {
     /// named one for — a test, a migration — writes English.
     language: String,
     /// The activity lines this operation earned, in the order it queued them — appended to the ledger
-    /// only after the commit ([`record_activity`](Self::record_activity)). `RefCell` for the same reason
-    /// as `projects`.
+    /// by [`commit`](Self::commit), only after the SQLite commit succeeds
+    /// ([`record_activity`](Self::record_activity)). `RefCell` for the same reason as `projects`.
     activity: std::cell::RefCell<Vec<crate::activity_log::Entry>>,
 }
 
@@ -153,17 +153,12 @@ impl<'a> WriteTx<'a> {
     }
 
     /// Queue one activity line for this operation. The ledger is a file and cannot join the
-    /// transaction, so the line is held here and `Store::write_one` appends it **after** the commit
-    /// succeeds; on an earlier `?` it goes with the guard, so no line tells of a change that did not
-    /// commit. Mint its id with [`mint_activity_id`](Self::mint_activity_id) inside this transaction.
+    /// transaction, so the line is held here and [`commit`](Self::commit) appends it **after** the
+    /// SQLite commit succeeds; on an earlier `?` it goes with the guard, so no line tells of a change
+    /// that did not commit. Mint its id with [`mint_activity_id`](Self::mint_activity_id) inside this
+    /// transaction.
     pub fn record_activity(&self, entry: crate::activity_log::Entry) {
         self.activity.borrow_mut().push(entry);
-    }
-
-    /// Hand over the queued activity lines, emptying the queue — what `Store::write_one` takes just
-    /// before [`commit`](Self::commit) to append once it has returned `Ok`.
-    pub(crate) fn take_activity(&self) -> Vec<crate::activity_log::Entry> {
-        self.activity.take()
     }
 
     /// Physically delete the `attachment` rows of `(target_type, target_id)`. See
@@ -188,24 +183,35 @@ impl<'a> WriteTx<'a> {
 
     /// Commit the batch. Everything written through this guard lands together; on any earlier `?` the
     /// guard drops and none of it does. Consumes the guard, so a committed transaction cannot be
-    /// written to again — and the caller's activity append can only follow this returning `Ok`. **The
-    /// change feed is written here, inside this transaction**: the rows SQLite reported to
-    /// the `update_hook` while the batch ran are appended to `change_feed` just before the commit. A
-    /// committed change therefore always has its feed rows — the feed cannot say less than the truth
-    /// source does, which is what a reader keeping a screen current depends on (an append *after* the
-    /// commit, which is what the activity ledger does deliberately, can lose the row and leave the
+    /// written to again. **The change feed is written here, inside this transaction**: the rows SQLite
+    /// reported to the `update_hook` while the batch ran are appended to `change_feed` just before the
+    /// commit. A committed change therefore always has its feed rows — the feed cannot say less than the
+    /// truth source does, which is what a reader keeping a screen current depends on (an append *after*
+    /// the commit, which is what the activity ledger does deliberately, can lose the row and leave the
     /// screen wrong). The sync version of every project this operation declared it touches rides the same
     /// drain ([`stamp_project_versions`](Self::stamp_project_versions)), for the same reason.
     ///
-    /// Activity lines still queued here would be lost without a word — nobody appends them after this
-    /// returns — so a debug build refuses them ([`record_activity`](Self::record_activity)).
+    /// **The activity lines are appended here too, after the commit** — in the order they were queued, to
+    /// the ledger the engine was opened with ([`StoreEngine::keep_activity_in`]). The append cannot fail
+    /// the operation: the ledger is not the truth source ([`crate::activity_log::append`]). An engine with
+    /// no ledger has nowhere to put them, so a batch that queued any is refused before it commits — in
+    /// every build — rather than committed with its lines lost.
     pub fn commit(self) -> Result<()> {
-        debug_assert!(
-            self.activity.borrow().is_empty(),
-            "activity lines queued on a transaction nobody appends them for; only Store::write_one writes them out"
-        );
+        // Copied out of the guard: `self.tx` is moved by the commit below, the ledger path outlives it.
+        let engine = self.engine;
+        let ledger = engine.activity_file();
+        let activity = self.activity.take();
+        if ledger.is_none() && !activity.is_empty() {
+            return Err(StoreEngineError::ActivityWithoutLedger(activity.len()));
+        }
         self.write_change_feed()?;
-        self.tx.commit().map_err(StoreEngineError::from)
+        self.tx.commit().map_err(StoreEngineError::from)?;
+        if let Some(path) = ledger {
+            for entry in &activity {
+                crate::activity_log::append(path, entry);
+            }
+        }
+        Ok(())
     }
 
     /// Drain the transaction's collected row changes into `change_feed`. The feed's own INSERTs fire the
@@ -569,5 +575,64 @@ mod tests {
         let outer = e.write().unwrap();
         assert!(e.write().is_err(), "a write transaction cannot be opened inside another");
         drop(outer);
+    }
+
+    fn line(tx: &WriteTx<'_>, title: &str) -> crate::activity_log::Entry {
+        crate::activity_log::Entry {
+            id: tx.mint_activity_id().unwrap(),
+            at: crate::time::Timestamp::now(),
+            actor: Some(crate::model::ActorKind::Ai),
+            project: None,
+            task: None,
+            decision: None,
+            event: crate::activity_log::event::task_created(title),
+        }
+    }
+
+    /// A path that opens the write itself — not through `Store::write_one` — still carries its queued
+    /// lines out: `commit` appends them to the engine's ledger, in the order they were queued.
+    #[test]
+    fn a_commit_appends_its_queued_lines_to_the_engines_ledger() {
+        let dir = amenbo_scratch::scratch("write-commit-activity");
+        let ledger = dir.join(crate::activity_log::FILE_NAME);
+        let mut e = StoreEngine::open_in_memory().unwrap();
+        e.keep_activity_in(ledger.clone());
+
+        let tx = e.write().unwrap();
+        let (first, second) = (line(&tx, "first"), line(&tx, "second"));
+        let ids = (first.id, second.id);
+        tx.record_activity(first);
+        tx.record_activity(second);
+        tx.commit().unwrap();
+
+        let got: Vec<_> = crate::activity_log::read(&ledger)
+            .into_iter()
+            .map(|l| (l.id, l.event["title"].clone()))
+            .collect();
+        assert_eq!(
+            got,
+            vec![(ids.0, serde_json::json!("first")), (ids.1, serde_json::json!("second"))]
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// An engine nobody named a ledger for refuses a commit that queued lines — in every build, not
+    /// only under `debug_assert!` — and the batch rolls back with them, the minted id included.
+    #[test]
+    fn a_commit_with_lines_and_no_ledger_is_refused_and_rolls_back() {
+        let e = StoreEngine::open_in_memory().unwrap();
+
+        let tx = e.write().unwrap();
+        let entry = line(&tx, "nowhere");
+        let minted = entry.id;
+        tx.record_activity(entry);
+        let refused = tx.commit();
+        assert!(
+            matches!(refused, Err(StoreEngineError::ActivityWithoutLedger(1))),
+            "the lines are refused, not dropped: {refused:?}"
+        );
+
+        let next = super::super::read::next_activity_id(e.conn()).unwrap();
+        assert_eq!(next, minted, "the refused batch did not commit, so its id is not spent");
     }
 }

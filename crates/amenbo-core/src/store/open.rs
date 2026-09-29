@@ -309,7 +309,8 @@ impl Store {
         // integer-keyed tables alongside it — unless it is provably empty, which is cleared here so the
         // open below lands genesis in its place.
         reconcile_legacy_key_space(&db_path, &paths.base_dir)?;
-        let engine = StoreEngine::open(&db_path)?;
+        let mut engine = StoreEngine::open(&db_path)?;
+        engine.keep_activity_in(paths.activity_file.clone());
         let engine_populated = engine.is_populated()?;
 
         // **This open does not migrate the truth source**: if the engine is already populated (the
@@ -404,10 +405,11 @@ impl Store {
         // `is_populated` fails and we drop into the `_ => open_at` fallback below (`open_at` does not
         // decrypt and migrate; it fails explicitly). An engine that is merely empty (never populated)
         // takes the same fallback and lets `open_at` do genesis.
-        let engine = match StoreEngine::open_read(&db_path) {
+        let mut engine = match StoreEngine::open_read(&db_path) {
             Ok(e) if matches!(e.is_populated(), Ok(true)) => e,
             _ => return Store::open_at(paths),
         };
+        engine.keep_activity_in(paths.activity_file.clone());
         // A store in the pre-consolidation key space (ULID keys) is refused by name on this path too —
         // unless it is provably empty, which the writing open clears to genesis. This read
         // open writes nothing to disk, so it cannot clear; it defers to `open_at`, which does. Anything

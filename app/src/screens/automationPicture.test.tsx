@@ -13,7 +13,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t, tf } from "../core/i18n";
 import { AutomationPicture } from "./AutomationPicture";
-import { automationGraph, type PicGraph } from "./automationLayout";
+import { automationGraph, layOut, type PicGraph } from "./automationLayout";
 import type { AutomationDetailDto, AutomationPlacementDto } from "../bindings/bindings";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -554,11 +554,71 @@ describe("the picture of a run", () => {
     const lit = [...container.querySelectorAll("polyline.autopic__line")].map((one) =>
       (one.getAttribute("class") ?? "").includes("autopic__line--lit"),
     );
-    expect(lit).toEqual([true, false]);
+    // Drawn after the lines the run did not walk, so none of them lies over it.
+    expect(lit).toEqual([false, true]);
     // Its arrowhead is lit with it.
     expect(container.querySelector("polyline.autopic__line--lit")?.getAttribute("marker-end")).toMatch(/-lit\)$/);
     expect(plusses()).toHaveLength(0);
     expect(container.querySelector(".autopic__legend")).toBeNull();
+  });
+
+  it("lights the way from the leg of the way out the run left by into the box, where lines join on a lane (AMB-T-5824)", async () => {
+    // Checking leaves by either of two ways out back into the work; the run went back by "b".
+    const back = detail({
+      placements: [
+        step({ id: 1, name: "take" }),
+        step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] }),
+        step({ id: 3, name: "check", exits: [{ id: 31, name: "a", outputs: [] }, { id: 32, name: "b", outputs: [] }] }),
+      ],
+      edges: [
+        { id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" },
+        { id: 2, fromId: 2, exitName: "完了", toId: 3, ends: "go" },
+        { id: 3, fromId: 3, exitName: "a", toId: 2, ends: "go" },
+        { id: 4, fromId: 3, exitName: "b", toId: 2, ends: "go" },
+      ],
+    });
+    await render({ graph: back, trail: { boxes: new Set([1, 2, 3]), edges: new Set([1, 2, 4]), at: 2 } });
+    const drawn = layOut(back).lines;
+    const polyline = (key: string) => {
+      const points = drawn.find((one) => one.key === key)!.points.map((p) => `${p.x},${p.y}`).join(" ");
+      return [...container.querySelectorAll("polyline.autopic__line")].find((one) => one.getAttribute("points") === points)!;
+    };
+    const lit = (key: string) => (polyline(key).getAttribute("class") ?? "").includes("autopic__line--lit");
+    expect(lit("edge-4")).toBe(true);
+    expect(lit("edge-3")).toBe(false);
+    // Every piece of the lane "b" runs along is lit, and the line on into the box ends in the lit head.
+    const along = drawn.filter((one) => one.carries?.includes(4));
+    expect(along.length).toBeGreaterThan(1);
+    for (const one of along) expect(lit(one.key)).toBe(true);
+    const into = along.find((one) => one.joins !== true)!;
+    expect(polyline(into.key).getAttribute("marker-end")).toMatch(/-lit\)$/);
+  });
+
+  it("lights the leg of the way out the run left by into the row under, drawn over the other ways into that box (AMB-T-5824)", async () => {
+    // Merging leaves by two ways out down into the work, and by one into closing; the run went by "main".
+    const down = detail({
+      placements: [
+        step({ id: 1, name: "merge", exits: [{ id: 10, name: "完了", outputs: [] }, { id: 11, name: "ci", outputs: [] }, { id: 12, name: "main", outputs: [] }] }),
+        step({ id: 2, name: "work" }),
+        step({ id: 3, name: "close" }),
+      ],
+      edges: [
+        { id: 1, fromId: 1, exitName: "ci", toId: 2, ends: "go" },
+        { id: 2, fromId: 1, exitName: "main", toId: 2, ends: "go" },
+        { id: 3, fromId: 1, exitName: "完了", toId: 3, ends: "go" },
+      ],
+    });
+    await render({ graph: down, trail: { boxes: new Set([1, 2]), edges: new Set([2]), at: 2 } });
+    const drawn = layOut(down).lines;
+    const pointsOf = (key: string) =>
+      drawn.find((one) => one.key === key)!.points.map((p) => `${p.x},${p.y}`).join(" ");
+    const polylines = [...container.querySelectorAll("polyline.autopic__line")];
+    const lit = polylines.filter((one) => (one.getAttribute("class") ?? "").includes("autopic__line--lit"));
+    expect(lit.map((one) => one.getAttribute("points"))).toEqual([pointsOf("edge-2")]);
+    // Its own leg, apart from the other way into the work, and drawn after it.
+    expect(drawn.find((one) => one.key === "edge-2")!.points[0]!.x).not.toBe(drawn.find((one) => one.key === "edge-1")!.points[0]!.x);
+    const nth = (key: string) => polylines.findIndex((one) => one.getAttribute("points") === pointsOf(key));
+    expect(nth("edge-2")).toBeGreaterThan(nth("edge-1"));
   });
 
   it("brings the box the run reaches to the middle, though it is in sight already", async () => {

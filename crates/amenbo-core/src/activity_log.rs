@@ -8,9 +8,9 @@
 //!   line carries its own `project` (the file cannot join against the DB).
 //! - **One line per event**, JSON, LF-terminated, at most [`MAX_LINE_BYTES`]; an oversized `event` payload
 //!   is dropped down to its `kind` with `"truncated": true` rather than being allowed to grow the line.
-//! - **Written after the commit** succeeds — queued by the op that made the change
-//!   ([`crate::store_engine::WriteTx::record_activity`]), or written by
-//!   [`crate::store::Store::add_system_event`] once the change has committed. Crash before the
+//! - **Written after the commit** succeeds — queued inside the transaction
+//!   ([`crate::store_engine::WriteTx::record_activity`]) and appended by
+//!   [`crate::store_engine::WriteTx::commit`] once it has committed. Crash before the
 //!   commit and no line appears; crash after it and the line is lost. It never duplicates, and it falls to
 //!   the side of losing a line — that asymmetry is the whole point of not being a system of record.
 //! - **Every system event lives only here** ([`event`]) — no table carries a copy.

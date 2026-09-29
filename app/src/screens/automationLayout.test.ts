@@ -1872,6 +1872,53 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
     expect(at(picture, 2).y - (at(picture, 1).y + at(picture, 1).h)).toBe(56);
   });
 
+  it("hangs under the lowest leg its box sends out to the right margin, its name and press across none of them", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          step({ id: 1, name: "take", exits: [{ id: 90, name: "ok", outputs: [] }] }),
+          step({ id: 2, name: "work", exits: [] }),
+          step({
+            id: 3,
+            name: "check",
+            exits: [
+              { id: 91, name: "again", outputs: [] },
+              { id: 92, name: "redo", outputs: [] },
+              { id: 93, name: "none left", outputs: [] },
+              { id: 94, name: "*", outputs: [] },
+            ],
+          }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 }),
+          edge({ id: 2, fromId: 3, exitName: "again", toId: 3 }),
+          edge({ id: 3, fromId: 3, exitName: "redo", toId: 3 }),
+        ],
+      }),
+    );
+    const box = at(picture, 3);
+    const open = picture.lines.find((one) => one.key === "open-3-none left")!;
+    const press = picture.opens.find((one) => one.boxId === 3)!;
+    const legs = picture.lines.filter((one) => one.key === "edge-2" || one.key === "edge-3");
+    // Both leave for the right margin, one turning a row lower than the other.
+    for (const leg of legs) expect(leg.points[2]!.x).toBeGreaterThan(box.x + box.w);
+    expect(new Set(legs.map((leg) => leg.points[1]!.y)).size).toBe(2);
+    const pressBox = {
+      left: press.x,
+      right: press.x + wordW(openWord(false)) + 28,
+      top: press.y - 12,
+      bottom: press.y + 12,
+    };
+    for (const piece of legs.flatMap(pieces)) {
+      expect(overlaps(wordBox(open), piece, true)).toBe(false);
+      expect(overlaps(pressBox, piece, true)).toBe(false);
+    }
+    // The name and the press still stand under the foot of their own line.
+    expect(open.at.y).toBeGreaterThan(open.points[1]!.y);
+    expect(press.y).toBeGreaterThan(open.points[1]!.y);
+  });
+
   it("is not drawn for the way out a built-in never leaves by", () => {
     const picture = layOut(
       detail({

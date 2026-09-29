@@ -733,12 +733,12 @@ export function wordW(exitName: string | undefined): number {
  * other: where the name is written is known once the rows stand (`AMB-T-5880`).
  */
 export function layOut(graph: PicGraph | null): Picture {
-  let legs = new Map<number, number>();
+  let legs = new Map<string, number>();
   let turns = new Map<number, number>();
   let gaps = new Map<number, number>();
   for (;;) {
     const { picture, legsOf, turnsOf, gapsOf } = layOutWith(graph, legs, turns, gaps);
-    const more = [...legsOf].filter(([boxId, count]) => count > (legs.get(boxId) ?? 0));
+    const more = [...legsOf].filter(([key, count]) => count > (legs.get(key) ?? 0));
     const lower = [...turnsOf].filter(([boxId, count]) => count > (turns.get(boxId) ?? 1));
     const wider = [...gapsOf].filter(([boxId, gap]) => gap > (gaps.get(boxId) ?? 0));
     if (more.length === 0 && lower.length === 0 && wider.length === 0) return picture;
@@ -748,16 +748,16 @@ export function layOut(graph: PicGraph | null): Picture {
   }
 }
 
-/** Lay one picture out with `legs` lines leaving each box for one of the margins at the most, its
+/** Lay one picture out with `legs` lines leaving each box for each of the margins at the most, its
  *  lines down to the next row turning at `turns` heights, and `gaps` of room at the least before the
  *  next box in its row, and say how many each box turned out to need of each. */
 function layOutWith(
   graph: PicGraph | null,
-  legs: ReadonlyMap<number, number>,
+  legs: ReadonlyMap<string, number>,
   turns: ReadonlyMap<number, number>,
   gaps: ReadonlyMap<number, number>,
-): { picture: Picture; legsOf: Map<number, number>; turnsOf: Map<number, number>; gapsOf: Map<number, number> } {
-  const legsOf = new Map<number, number>();
+): { picture: Picture; legsOf: Map<string, number>; turnsOf: Map<number, number>; gapsOf: Map<number, number> } {
+  const legsOf = new Map<string, number>();
   const turnsOf = new Map<number, number>();
   const gapsOf = new Map<number, number>();
   const empty: Picture = { width: 0, height: 0, laps: [], nodes: [], lines: [], inserts: [], opens: [], marks: [] };
@@ -783,8 +783,17 @@ function layOutWith(
   // of words apart, and a line down to the next row turns under the lowest of them, so the name over
   // its turn is not written across one (`AMB-T-5824`).
   const hangOf = (box: PicBox): number => {
-    const count = legs.get(box.id) ?? 0;
+    const count = Math.max(legs.get(`left-${box.id}`) ?? 0, legs.get(`right-${box.id}`) ?? 0);
     return Math.max(count === 0 ? 0 : DROP + (count - 1) * WORD_H, pressHangOf(box));
+  };
+  // How much lower than the shortest the ways out with nothing decided hang under a box whose lines
+  // out to the right margin turn as low as the press, or lower. Those legs stand right of every one
+  // of them, and a name and its press run off to the right: under the box, one ran across the legs
+  // and was not read. So they hang from the lowest leg's turn as they would from the box.
+  const openDrop = (box: PicBox): number => {
+    const right = legs.get(`right-${box.id}`) ?? 0;
+    const turn = right === 0 ? 0 : DROP + (right - 1) * WORD_H;
+    return undecidedOf(box).length === 0 || turn < STUB + OVER - 4 - PRESS_H / 2 ? 0 : turn;
   };
   // How far what hangs from its ways out with nothing decided, and from its lines that go nowhere,
   // reaches: its lowest press, or the name of a line of its that goes nowhere, which hangs under every
@@ -802,8 +811,11 @@ function layOutWith(
           (edge.ends === "exit" && !outs.some((out) => out.name === edge.exitTo))),
     ).length;
     if (undecided === 0) return nowhere === 0 ? 0 : STUB + (nowhere - 1) * WORD_H + OVER + 4;
-    const press = STUB + (undecided - 1) * OPEN_H + OVER - 4 + PRESS_H / 2;
-    return nowhere === 0 ? press : Math.max(press, STUB + undecided * OPEN_H + (nowhere - 1) * WORD_H + OVER + 4);
+    const drop = openDrop(box);
+    const press = drop + STUB + (undecided - 1) * OPEN_H + OVER - 4 + PRESS_H / 2;
+    return nowhere === 0
+      ? press
+      : Math.max(press, drop + STUB + undecided * OPEN_H + (nowhere - 1) * WORD_H + OVER + 4);
   };
   // How much room a box leaves on its right before the next box in its row. A press beside a long
   // name runs past the box's right edge, and under the next box it lay over the lines that one sends
@@ -1084,7 +1096,7 @@ function layOutWith(
       .filter(({ box }) => box.y === from.y && (side === "left" ? box.x < from.x : box.x > from.x))
       .reduce((sum, { many }) => sum + many, 0);
     legsOver.set(key, over);
-    legsOf.set(from.boxId, Math.max(legsOf.get(from.boxId) ?? 0, over + count));
+    legsOf.set(key, over + count);
   }
   // Whether a line comes into each box from the left margin. It lands first along the box's top, so
   // a line from the row above lands after it rather than on its last leg; one from the right margin
@@ -1161,15 +1173,16 @@ function layOutWith(
     const before = own.filter((edge) => reach(edge) <= 2).length;
     slots.set(box.id, own.length + undecided.length);
     const nowhere = own.filter((edge) => reach(edge) === 2).length;
+    const drop = openDrop(box);
     let seen = 0;
     own.forEach((edge, nth) => {
       // How many lines that go nowhere stand to this one's right: its words go that many rows lower,
       // and under every press to its right as well.
-      const below = reach(edge) === 2 ? (nowhere - 1 - seen++) * WORD_H + undecided.length * OPEN_H : 0;
+      const below = reach(edge) === 2 ? (nowhere - 1 - seen++) * WORD_H + undecided.length * OPEN_H + drop : 0;
       slot.set(edge.id, { nth: nth < before ? nth : nth + undecided.length, below });
     });
     undecided.forEach((open, nth) => {
-      openSlot.set(open.key, { nth: before + nth, below: (undecided.length - 1 - nth) * OPEN_H });
+      openSlot.set(open.key, { nth: before + nth, below: (undecided.length - 1 - nth) * OPEN_H + drop });
     });
   }
 

@@ -219,7 +219,11 @@ fn hydrated(s: &Store) -> Database {
         )
         .unwrap();
         let after_mut = count(&s);
-        assert_eq!(after_mut, (1, 1), "the write seam must have committed the comment and the event");
+        assert_eq!(
+            after_mut,
+            (1, 3),
+            "the write seam must have committed the comment and the lines (created, status, the event)"
+        );
 
         // Reopen: the engine is non-empty, so nothing is backfilled and the counts do not move.
         drop(s);
@@ -1217,7 +1221,7 @@ fn a_system_event_lands_in_the_ledger_beside_the_store() {
         .unwrap();
 
     let text = fs::read_to_string(&s.paths.activity_file).expect("the ledger sits beside the store");
-    let line: serde_json::Value = serde_json::from_str(text.lines().next().unwrap()).unwrap();
+    let line: serde_json::Value = serde_json::from_str(text.lines().last().unwrap()).unwrap();
     assert_eq!(line["v"], serde_json::json!(2));
     assert_eq!(line["id"].as_i64(), Some(event.id), "the row id is the activity sequence number the DB assigned");
     assert_eq!(line["actor"], serde_json::json!("ai"));
@@ -1245,6 +1249,67 @@ fn ledger(s: &Store) -> Vec<serde_json::Value> {
         .collect()
 }
 
+/// A task's creation, status, assignee and project each leave one line, queued by the op itself — so a
+/// surface that writes through the op gets its timeline without writing the line, and none is doubled.
+/// A write that changes nothing (the same status again, the same assignee again, a reorder within the
+/// project) is not a moment and leaves no line.
+#[test]
+fn a_tasks_own_writes_narrate_themselves_once() {
+    let (mut s, dir) = fresh_store("ledger-task-writes");
+    let home = s.project_add(project("PJ")).unwrap().id;
+    let away = s.project_add(project("PJ2")).unwrap().id;
+    let mut input = task("walk", Some(home));
+    input.created_by_kind = Some(ActorKind::Human);
+    let t = filed(&mut s, input);
+
+    s.set_task_status(t.id, TaskStatus::InProgress, ActorKind::Ai).unwrap();
+    s.set_task_assignee(t.id, Some(ActorKind::Ai), ActorKind::Human).unwrap();
+    s.set_task_assignee(t.id, Some(ActorKind::Ai), ActorKind::Human).unwrap();
+    s.set_task_assignee(t.id, None, ActorKind::Human).unwrap();
+    s.move_task(t.id, None, crate::ops::Position::Top, ActorKind::Human).unwrap();
+    s.move_task(t.id, Some(away), crate::ops::Position::Bottom, ActorKind::Human).unwrap();
+    s.set_task_status(t.id, TaskStatus::Done, ActorKind::Ai).unwrap();
+    s.set_task_status(t.id, TaskStatus::Done, ActorKind::Ai).unwrap();
+
+    let lines = ledger(&s);
+    let events: Vec<&serde_json::Value> = lines.iter().map(|l| &l["event"]).collect();
+    assert_eq!(
+        events,
+        vec![
+            &serde_json::json!({ "kind": "task.created", "title": "walk" }),
+            &serde_json::json!({ "kind": "task.status_changed", "field": "status", "old": "todo", "new": "in_progress" }),
+            &serde_json::json!({ "kind": "task.assigned", "to_kind": "ai" }),
+            &serde_json::json!({ "kind": "task.assigned", "to_kind": null }),
+            &serde_json::json!({ "kind": "task.moved", "project": away.to_string() }),
+            &serde_json::json!({ "kind": "task.status_changed", "field": "status", "old": "in_progress", "new": "done" }),
+        ],
+    );
+    let actors: Vec<&serde_json::Value> = lines.iter().map(|l| &l["actor"]).collect();
+    let (human, ai) = (serde_json::json!("human"), serde_json::json!("ai"));
+    assert_eq!(actors, vec![&human, &ai, &human, &human, &human, &ai], "each line names who wrote it");
+    assert!(lines.iter().all(|l| l["task"].as_i64() == Some(t.id)));
+    assert_eq!(lines[3]["project"].as_i64(), Some(home));
+    assert_eq!(lines[4]["project"].as_i64(), Some(away), "a move's line is filed under where the task went");
+
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// A write that fails leaves no line: the op queued it inside the transaction, and the transaction
+/// never committed.
+#[test]
+fn a_refused_task_write_leaves_no_line() {
+    let (mut s, dir) = fresh_store("ledger-task-refused");
+    let pid = s.project_add(project("PJ")).unwrap().id;
+    let t = s.add_task(task("draft", Some(pid))).unwrap();
+    let before = ledger(&s).len();
+
+    // A creation still open refuses `done` (`AMB-D-846`).
+    assert!(s.set_task_status(t.id, TaskStatus::Done, ActorKind::Ai).is_err());
+    assert_eq!(ledger(&s).len(), before);
+
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// A deletion leaves its only trace in the **ledger**. The row is gone from the truth source, so the
 /// ledger line is the last thing that remembers what the task was called — which is why the line
 /// carries its own title and project.
@@ -1253,7 +1318,6 @@ fn deleting_a_task_leaves_its_only_trace_in_the_ledger() {
     let (mut s, dir) = fresh_store("ledger-task-deleted");
     let pid = s.project_add(project("PJ")).unwrap().id;
     let t = s.add_task(task("doomed", Some(pid))).unwrap();
-    s.add_system_event(crate::model::ActorKind::Ai, t.id, crate::activity_log::event::task_created("doomed")).unwrap();
 
     s.delete_task(t.id, crate::model::ActorKind::Human).unwrap();
 
@@ -1375,12 +1439,11 @@ fn row_less_events_still_spend_the_activity_sequence() {
 
     s.delete_task(a.id, crate::model::ActorKind::Ai).unwrap();
     s.delete_task(b.id, crate::model::ActorKind::Ai).unwrap();
-    // A system event after those deletions carries on from where they left off.
-    let c = s.add_task(task("c", None)).unwrap();
-    s.add_system_event(crate::model::ActorKind::Ai, c.id, crate::activity_log::event::task_created("c")).unwrap();
+    // A line after those deletions carries on from where they left off.
+    s.add_task(task("c", None)).unwrap();
 
     let ids: Vec<i64> = ledger(&s).iter().map(|l| l["id"].as_i64().unwrap()).collect();
-    assert_eq!(ids, vec![1, 2, 3], "an event with no row still uses one sequence number");
+    assert_eq!(ids, vec![1, 2, 3, 4, 5], "an event with no row still uses one sequence number");
     fs::remove_dir_all(&dir).ok();
 }
 
@@ -1396,7 +1459,9 @@ fn deleting_a_project_says_how_much_went_with_it() {
 
     s.project_delete(pid, crate::model::ActorKind::Ai).unwrap();
 
-    let lines = ledger(&s);
+    // The two creations left their own lines; the deletion adds exactly one.
+    let lines: Vec<_> =
+        ledger(&s).into_iter().filter(|l| l["event"]["kind"] != serde_json::json!("task.created")).collect();
     assert_eq!(lines.len(), 1, "one row per project");
     assert_eq!(lines[0]["event"]["kind"], serde_json::json!("project.deleted"));
     assert_eq!(lines[0]["event"]["name"], serde_json::json!("PJ"));

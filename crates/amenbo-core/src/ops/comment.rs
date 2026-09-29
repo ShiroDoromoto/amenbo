@@ -2,8 +2,9 @@
 //!
 //! Permanent comments go into their own table, `task_comment` ([`TaskComment`]). The other half of the
 //! timeline — system events — has no table at all: it lives only in the ledger file
-//! ([`crate::activity_log`]), so it is emitted through [`crate::store::Store::add_system_event`] with
-//! payloads from [`crate::activity_log::event`].
+//! ([`crate::activity_log`]), with payloads from [`crate::activity_log::event`]. A task's own writes
+//! queue theirs from the op ([`crate::store_engine::WriteTx::record_activity`]); the rest are written
+//! through [`crate::store::Store::add_system_event`].
 
 use crate::error::{Error, ErrorCode, Result};
 use crate::model::{ActorKind, AttachmentTarget, TaskComment};

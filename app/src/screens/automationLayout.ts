@@ -1129,9 +1129,6 @@ function layOutWith(
   const openSlot = new Map<string, { nth: number; below: number }>();
   /** How many of its ways out each box has a line from — the places along its bottom. */
   const slots = new Map<number, number>();
-  // The first of each box's lines that go down to a neighbour — the one with nothing of its box's
-  // coming down on its left, where a name beside it can be written.
-  const firstDown = new Map<number, number>();
   // Where a line down to a neighbour lands, which its box's lines down stand along its bottom in the
   // order of: so none of them runs across another's leg.
   const landsAt = (edge: AutomationEdgeDto): number => (reach(edge) === 1 ? fromAbove(node.get(toOf(edge)!)!) : 0);
@@ -1152,7 +1149,6 @@ function layOutWith(
       // and under every press to its right as well.
       const below = reach(edge) === 2 ? (nowhere - 1 - seen++) * WORD_H + undecided.length * OPEN_H : 0;
       slot.set(edge.id, { nth: nth < before ? nth : nth + undecided.length, below });
-      if (reach(edge) === 1 && !firstDown.has(box.id)) firstDown.set(box.id, edge.id);
     });
     undecided.forEach((open, nth) => {
       openSlot.set(open.key, { nth: before + nth, below: (undecided.length - 1 - nth) * OPEN_H });
@@ -1164,6 +1160,7 @@ function layOutWith(
   // in one place, and which of them a run went down could not be read. Of a box's lines that turn
   // left, each one further right turns a row lower, and of those that turn right each one further
   // left: so none runs across another's leg, and each one's name has a row of its own over its turn.
+  // A line straight down counts with the ones that turn left: its name is written on its left too.
   const turnOf = new Map<number, number>();
   for (const box of graph.boxes) {
     const from = node.get(box.id);
@@ -1171,7 +1168,7 @@ function layOutWith(
     const down = edges
       .filter((edge) => edge.fromId === box.id && reach(edge) === 1)
       .map((edge) => ({ edge, sx: attach(from, slot.get(edge.id)!.nth), tx: landsAt(edge) }));
-    const lefts = down.filter((one) => one.tx < one.sx).sort((a, b) => a.sx - b.sx);
+    const lefts = down.filter((one) => one.tx <= one.sx).sort((a, b) => a.sx - b.sx);
     const rights = down.filter((one) => one.tx > one.sx).sort((a, b) => b.sx - a.sx);
     lefts.forEach((one, nth) => turnOf.set(one.edge.id, nth));
     rights.forEach((one, nth) => turnOf.set(one.edge.id, nth));
@@ -1243,18 +1240,17 @@ function layOutWith(
       // The name is written over its own turn, beside its own leg, on the side it turns to: no other
       // line of its box runs there, and it is read as that leg's. A leg across shorter than the name
       // has no room to write it over: it runs over the lines leaving beside it (`AMB-T-5675`). A line
-      // straight down has no leg at all. Either way the name goes level with the leg, on the left where
-      // the lines that go nowhere do not write theirs — but only for the first of its box's lines down
-      // to a neighbour. Any other has one of those turning on its left, so its name goes past its right
-      // end instead.
+      // straight down has no leg at all. Either way the name still goes in its own row over its turn,
+      // past the end of the leg on the side it turns to — on the left for a line straight down. The
+      // box's lines turning that way nearer that side turn higher, so no leg of theirs comes down there.
       const word = wordW(lineWord({ exitName: edge.exitName, builtin: from.builtin }));
       const short = Math.abs(tx - sx) < Math.max(BESIDE * 2, word + BESIDE);
-      const left = firstDown.get(edge.fromId) === edge.id && tx <= sx + BESIDE * 2;
+      const left = tx <= sx;
       const at = !short
-        ? { x: tx < sx ? sx - 6 : sx + 6, y: mid - 3 }
+        ? { x: left ? sx - 6 : sx + 6, y: mid - 3 }
         : left
-          ? { x: Math.min(sx, tx) - BESIDE, y: mid + 4 }
-          : { x: Math.max(sx, tx) + BESIDE, y: mid + 4 };
+          ? { x: tx - BESIDE, y: mid - 3 }
+          : { x: tx + BESIDE, y: mid - 3 };
       lines.push({
         key,
         points: [{ x: sx, y: sy }, { x: sx, y: mid }, { x: tx, y: mid }, { x: tx, y: ty }],
@@ -1263,7 +1259,7 @@ function layOutWith(
         exitName: edge.exitName,
         builtin: from.builtin,
         at,
-        align: !short ? (tx < sx ? "end" : "start") : left ? "end" : "start",
+        align: left ? "end" : "start",
       });
       continue;
     }
@@ -1401,7 +1397,15 @@ function layOutWith(
     }
   }
   // Every outline reaches out as far as the furthest name on either side, so none of them crosses it
-  // and their edges stay in one line; the lanes start past it.
+  // and their edges stay in one line; the lanes start past it. That is the name of a line down to a
+  // neighbour too: one too long for its leg across runs out past the box it leaves.
+  for (const line of lines) {
+    const wide = wordW(edgeWord(line));
+    if (wide === 0) continue;
+    const left = line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x;
+    wordsOut.left = Math.min(wordsOut.left, left - LAP_PAD / 2);
+    wordsOut.right = Math.max(wordsOut.right, left + wide + LAP_PAD / 2);
+  }
   // A press at the end of a way out that says nothing yet runs off to the right of its name, and the
   // outline reaches past it too.
   wordsOut.right = Math.max(wordsOut.right, ...pressed.map((one) => one.x + pressW + LAP_PAD / 2));

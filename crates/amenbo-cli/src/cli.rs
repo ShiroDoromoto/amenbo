@@ -939,7 +939,9 @@ pub enum TickCmd {
     ///
     /// It resolves no folder and takes no facet: a scheduler runs it from wherever it happens to stand,
     /// and what it works is this device's one store. On a device holding no store there is nothing to do,
-    /// and it says nothing and exits 0 rather than raising one on a schedule.
+    /// and it says nothing and exits 0 rather than raising one on a schedule. A store at another format
+    /// than this build's is left the same way — neither migrated nor refused — for the CLI or the GUI a
+    /// person starts to carry forward.
     #[command(hide = true)]
     Run,
 }

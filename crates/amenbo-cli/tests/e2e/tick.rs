@@ -55,6 +55,27 @@ fn a_tick_on_a_device_with_no_store_raises_none() {
     assert!(!empty.exists(), "a tick does not bring a store into being");
 }
 
+/// A store at another format than this build's is left as it is. The scheduler starts whatever app holds
+/// the bundle id, so the tick may well be a build the person is not using: it neither carries a store
+/// behind it forward nor fails on one ahead of it. Either way the next surface a person starts decides.
+#[test]
+fn a_tick_leaves_a_store_of_another_format_as_it_found_it() {
+    use amenbo_core::model::FORMAT_VERSION;
+    use amenbo_core::store_engine::{probe_format_version, StoreEngine, META_FORMAT_VERSION};
+
+    for version in [FORMAT_VERSION - 1, FORMAT_VERSION + 1] {
+        let cli = Cli::new();
+        cli.run(&["init", "--name", "tester"]);
+        let store = cli.home.join("store.sqlite");
+        StoreEngine::open(&store).unwrap().set_meta(META_FORMAT_VERSION, Some(&version.to_string())).unwrap();
+
+        let (out, code) = cli.run(&["tick", "run", "--json"]);
+        assert_eq!(code, 0, "a store of another format is not the tick's failure (v{version}): {out}");
+        assert!(out.trim().is_empty(), "and nothing is reported (v{version}): {out}");
+        assert_eq!(probe_format_version(&store), version, "the store is not migrated by the tick");
+    }
+}
+
 /// The whole road, walked once: a day comes, the tick warns about it, and the warning is carried out of
 /// the outbox in the same round — with no app open, no facet on the command line, and nothing resident
 /// (`AMB-D-706`).

@@ -201,12 +201,14 @@ fn stand_in(
                 automation_report::out(tx, run_step_id, port.id, Produced::Value(&value))?;
             }
             AutomationPortKind::File => {
-                // A row naming no bytes: nothing reads the file before the walk is thrown away.
+                // A row naming the empty bytes, which are never put in the blob store: nothing reads the
+                // file before the walk is thrown away, but the hash still has to be one the schema holds.
+                let empty = blake3::hash(b"").to_hex();
                 let file = crate::ops::attachment::add_blob(
                     tx,
                     AttachmentTarget::AutomationRunStep,
                     run_step_id,
-                    "",
+                    &empty,
                     &port.name,
                     None,
                     0,
@@ -373,6 +375,37 @@ mod tests {
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed);
             let filed = read::task_ids_in_project(tx.conn(), project).expect("tasks");
             assert!(filed.is_empty(), "nothing is filed in the project: {filed:?}");
+        });
+    }
+
+    /// **A way out that hands on a file is walked through** — the placeholder file is put down as a row
+    /// the schema holds, and the walk goes on to the end.
+    #[test]
+    fn a_way_out_that_hands_on_a_file_is_walked_through() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                automation::add(tx, project, NewAutomation { name: "file".into(), ..Default::default() })
+                    .expect("automation");
+            let make = automation::placement_add(tx, automation.id, action(tx, "make_task").expect("make").id)
+                .expect("place it");
+            automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
+                .expect("take it");
+            let (plan_action, plan) = mk_placed(tx, &automation, "plan", "write the plan", "claude");
+            mk_out(tx, &plan_action, None, "plan", AutomationPortKind::File, true);
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(plan.id), None)
+                .expect("onward");
+            mk_closed_after(tx, &automation, plan.id, None);
+            let automation = automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
+
+            let handed = HandedAtLaunch { title: Some("梅雨どきの家事の記事".into()), ..Default::default() };
+            let rehearsal = walk(tx, &automation, &handed);
+            let exits: Vec<&str> = rehearsal.steps.iter().map(|s| s.exit.as_str()).collect();
+            assert_eq!(exits, vec![MADE_AND_TAKEN, DONE_EXIT, DONE_EXIT], "{rehearsal:?}");
+            assert_eq!(rehearsal.steps[1].name, "plan", "{rehearsal:?}");
+            assert_eq!(rehearsal.status, AutomationRunStatus::Completed, "{rehearsal:?}");
+            assert_eq!(rehearsal.cut, None);
         });
     }
 }

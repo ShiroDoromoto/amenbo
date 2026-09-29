@@ -150,7 +150,7 @@ resolve_one() {
         fi
         tries=$((tries + 1))
         if [ -n "$branch" ] && newer=$(run_overtaken "$sha" "$workflow" "$branch"); then
-            die "$label has no push run of $workflow, and GitHub has already started one for $newer, a later push to $branch — none is coming for this commit. That run's path filter sees only its own push, so this commit's change was never judged by it"
+            die "$label has no push run of $workflow, and GitHub has already started one for $newer, a later push to $branch — none is coming for this commit. That run's path filter sees only its own push, so this commit's change was never judged by it. Judge it again with: gh workflow run ci-change-manual.yml -R $repo --ref $branch -f base=\$(git rev-parse $sha^1)"
         fi
         appear_wait "$tries" "$label to start a run"
     done

@@ -1,0 +1,49 @@
+name: ci-change-manual
+
+# ci-change's judgment on main, for a merge GitHub never started a push run for.
+#
+# A merge can move main without a push event: the ref moves and the pull request reads merged, but
+# no run is created. The next push's run does not cover it, because on `push` the path filter sees
+# only that push's own diff — so the missed merge's change is never judged, and main reads green.
+# scripts/watch-ci.sh stops on exactly this and names the command below.
+#
+# `base` is the last commit already judged — for a missed merge, its first parent. The filter then
+# diffs `base` against the head of the ref dispatched on, which covers the missed merge and every
+# push after it. That is more than was missed, never less, and what it builds is the head itself,
+# the tree main now stands on:
+#
+#   gh workflow run ci-change-manual.yml --ref main -f base=$(git rev-parse <missed merge>^1)
+#
+# The whole sha is needed: paths-filter reads a 40-hex `base` as a commit and anything else as a
+# branch name, so a short sha is looked up as a branch and the run fails on a fetch.
+#
+# ci-full-manual.yml answers too, with every layer forced open; this runs only the layers the diff
+# reaches, which is what the missed push run would have run.
+#
+# It is a file of its own rather than a third trigger on ci-change.yml. There a dispatch would be
+# keyed by the head's sha like a push, and cancel the push run of the very commit it was sent to.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: the whole sha of the last commit already judged (a missed merge's first parent)
+        type: string
+        required: true
+
+# Keyed by base as well as ref: two missed merges re-judged at once must not cancel each other,
+# while dispatching the same base again supersedes the older run, whose diff the newer one contains.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.base }}
+  cancel-in-progress: true
+
+jobs:
+  # Named `ci` to match ci-change.yml: a called workflow's checks are reported as
+  # `<this id> / <job name>`, and `ci / all green` is the single check main requires.
+  ci:
+    uses: ./.github/workflows/_ci.yml
+    with:
+      base: ${{ inputs.base }}
+    permissions:
+      contents: read
+      pull-requests: read

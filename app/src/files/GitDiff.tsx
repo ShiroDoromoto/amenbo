@@ -78,6 +78,7 @@ export function GitDiff({ projectId, root, picked }: {
       .catch(() => { if (alive) setPatch(""); });
     return () => { alive = false; };
     // Asked about by `asked` rather than by `picked`, which is a fresh object on every draw.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, root, asked, picked?.staged, moved]);
 
   // Nothing gathered. The face stands — a reader who pressed for it has it — and says what to press

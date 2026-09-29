@@ -46,6 +46,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
     setDraft(text);
     setEditing(true);
     // The draft copies the body as it stood when editing opened; making `text` a dependency would let an outside change overwrite it mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startEditAt]);
   // Await the edit before closing the box: on success it closes; on a refusal it stays open with the text intact
   // and the error shown, so the draft is never lost and retrying costs nothing.

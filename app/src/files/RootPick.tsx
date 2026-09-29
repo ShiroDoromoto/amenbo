@@ -66,6 +66,8 @@ export function RootPick({ projectId, sections, root, onRoot }: {
         if (alive) setChanged(sections.filter((_, i) => answers[i] === true).map((one) => one.path));
       });
     return () => { alive = false; };
+    // Watched as `asked`, the folders said as one word, rather than as the array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, projectId, asked]);
 
   // The choice is between folders, so there is nothing to choose with one of them.

@@ -337,6 +337,8 @@ export function GitPanel({
       // folder that is no repository — and the half beside this one says which of the two it was.
       .catch(() => { if (alive) { setGit(NOTHING); setAnswered(true); } });
     return () => { alive = false; };
+    // What asks git again is the folder moving; `onPrefix` is the caller's and a fresh function on every draw.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, root, moved]);
 
   // The window moving to another folder is the window being about something else: what git said was
@@ -372,6 +374,8 @@ export function GitPanel({
       if (which === "staged") void ask(() => folderGitStage(projectId, root, held.paths), true);
       if (which === "changed") void ask(() => folderGitUnstage(projectId, root, held.paths), true);
     },
+    // `ask` is rebuilt on every draw; what it reads that changes the answer is `running`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [projectId, root, running]);
 
   // A path git no longer names is a row nobody can see, and a set holding one is a set the next
@@ -393,6 +397,7 @@ export function GitPanel({
   useEffect(() => {
     onPicked?.(showing);
     // Told by `shown`, which is the set said as a word.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown]);
 
   // Asked each time the list opens, because what is put aside is what is put aside now — and asked
@@ -1162,6 +1167,8 @@ function RowList({ what, which, on, rows, scroller, onSpace, row }: {
     const y = ul.getBoundingClientRect().top - box.getBoundingClientRect().top + at * ROW;
     if (y < 0) box.scrollTop += y;
     else if (y + ROW > box.clientHeight) box.scrollTop += y + ROW - box.clientHeight;
+    // `rows` and `scroller` are read as they stand; only a press or a turn of the wheel reaches for the row again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [named, from, to]);
 
   const onKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {

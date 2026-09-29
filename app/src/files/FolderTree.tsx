@@ -373,6 +373,8 @@ export function FolderTree({
       const kept = Object.entries(was).filter(([root]) => sections.some((one) => one.path === root));
       return kept.length === Object.keys(was).length ? was : Object.fromEntries(kept);
     });
+    // Watched as `recorded`, the paths said as one word, so the same folders read again do nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recorded]);
 
   /**
@@ -449,6 +451,8 @@ export function FolderTree({
       stop?.();
       setLanding(null);
     };
+    // Watched as the path of the folder drawn rather than as `drawn`, the entry that stands for it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, drawn?.path]);
 
   // And the rows of this panel, carried by hand to one of its own folders (`./handDrag`).
@@ -482,6 +486,8 @@ export function FolderTree({
           .catch((e: unknown) => pushNotice(errText(e)));
       },
     });
+    // Watched as the path of the folder drawn rather than as `drawn`, the entry that stands for it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, drawn?.path]);
 
   // The tree takes the focus once it has changed a folder, so that undo is the next thing a reader
@@ -802,6 +808,8 @@ function FolderSection({
       treeOpen: true,
       open: making === "" || was.open.includes(making) ? was.open : [...was.open, making],
     }));
+    // Only a new place to make a name in asks for this; `onOpened` is a fresh function on every draw.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [making]);
 
   useEffect(() => {
@@ -850,6 +858,8 @@ function FolderSection({
       .then((now) => { if (alive) { setGit(now.rows); onGit(now.prefix, now.rows); } })
       .catch(() => { if (alive) { setGit([]); onGit("", []); } });
     return () => { alive = false; };
+    // What asks git again is the folder moving; `onGit` is the panel's and a fresh function on every draw.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, root, bound, treeOpen, moved]);
 
   const marks = useMemo(() => gitMarks(git), [git]);
@@ -1238,6 +1248,7 @@ function Tree({
     return () => { alive = false; };
     // `levels` is what the effect writes, and reading it here is only to skip what is already in
     // hand — watching it would run this again for every level that came back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, root, shown, moved]);
 
   const lines = useMemo(
@@ -1288,6 +1299,8 @@ function Tree({
     };
     if (picked.every(held)) return;
     onPicked(picked.filter(held), anchor);
+    // Only the folder's answer and the picked rows are reasons to look again; `onPicked` is a fresh function on every draw.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [levels, picked]);
 
   /**
@@ -1416,6 +1429,8 @@ function Tree({
     const y = ul.getBoundingClientRect().top - box.getBoundingClientRect().top + at * ROW;
     if (y < 0) box.scrollTop += y;
     else if (y + ROW > box.clientHeight) box.scrollTop += y + ROW - box.clientHeight;
+    // `lines` and `scroller` are read as they stand; only a press or a turn of the wheel reaches for the row again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [named, from, to]);
 
   /**

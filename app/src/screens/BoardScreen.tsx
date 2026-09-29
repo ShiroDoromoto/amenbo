@@ -134,6 +134,8 @@ export function BoardScreen({
     if (!openDimensionAt) return;
     setDimMgrFocus(openDimensionAt.dimension);
     setDimMgrOpen(true);
+    // Watched by its fields rather than by the object the caller hands in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openDimensionAt?.nth, openDimensionAt?.dimension]);
   // Free-word search, run by core over every face the word index carries (see the doc comment above).
   // Incremental, and ANDs with the filter chips.

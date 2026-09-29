@@ -97,6 +97,8 @@ export function ActivityFeed({
   // sparse filter must not look like "too short to scroll, so that's all there is". Reruns only as total/viewportH move.
   useEffect(() => {
     if (!exhausted && !loadingRef.current && total * ROW_H <= viewportH) loadMore();
+    // `loadMore` is rebuilt on every draw; what it reads is watched here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total, viewportH, exhausted, raw.length]);
 
   const startIdx = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);

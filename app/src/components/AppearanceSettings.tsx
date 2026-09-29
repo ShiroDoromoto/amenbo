@@ -56,7 +56,6 @@ export function AppearanceSettings() {
       stop = off;
     });
     return () => stop?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**

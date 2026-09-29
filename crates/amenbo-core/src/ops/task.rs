@@ -550,7 +550,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<Vec<String>
 /// polymorphic children come first of all — the task's own attachments, plus the attachments hanging off
 /// each comment, swept before that comment goes, because once the parent row is gone nobody can find them
 /// any more. Returns the blob hashes this subtree let go of — the candidates for reclamation after commit.
-pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
+pub(in crate::ops) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let mut orphaned = Vec::new();
     for comment_id in read::task_comment_ids(tx.conn(), id)? {
         orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::TaskComment, comment_id)?);

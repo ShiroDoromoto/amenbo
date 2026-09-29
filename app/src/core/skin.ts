@@ -250,7 +250,7 @@ export function skinTables(name: string): Promise<SkinTablesDto | null> {
  * The writing is the host's, so a window that changed it does not have to be the one that reads it
  * back.
  */
-export async function useSkin(name: string | null): Promise<void> {
+export async function wearSkin(name: string | null): Promise<void> {
   await invoke<void>("skin_use", { name });
   setSkin(name === null ? null : await skinTables(name));
 }

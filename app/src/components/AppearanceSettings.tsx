@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SkinRowDto } from "../bindings/bindings";
 import { pickSaveAs } from "../core/dialog";
 import { t, tf } from "../core/i18n";
-import { fitOnto, listSkins, pictureSlots, setSkin, skinFontLicence, skinTables, skinTitle, useSkin, watchSkinChanged, writeSkinOut } from "../core/skin";
+import { fitOnto, listSkins, pictureSlots, setSkin, skinFontLicence, skinTables, skinTitle, watchSkinChanged, wearSkin, writeSkinOut } from "../core/skin";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { SkinAdd } from "./SkinAdd";
 
@@ -121,9 +121,7 @@ export function AppearanceSettings() {
 
   const wear = () => {
     if (!fitting) return;
-    // `useSkin` asks the host to put a skin on; it is not a React hook.
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    void useSkin(fitting.name)
+    void wearSkin(fitting.name)
       .then(() => {
         keep();
         reload();
@@ -244,8 +242,7 @@ export function AppearanceSettings() {
               })}{" "}
               {/* Drawn in colours of its own rather than in tokens: this is the way out of a skin
                   that is already on, and a way out the skin can paint over is not one. */}
-              {/* eslint-disable-next-line react-hooks/rules-of-hooks */}
-              <button className="skinesc" onClick={() => void useSkin(null).then(reload).catch(() => {})}>
+              <button className="skinesc" onClick={() => void wearSkin(null).then(reload).catch(() => {})}>
                 {t("settings.skinTakeOff")}
               </button>
             </div>

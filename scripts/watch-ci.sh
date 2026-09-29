@@ -443,7 +443,9 @@ case "$mode" in
         deliver "$id"
         ;;
     dispatch)
-        [ $# -ge 2 ] && [ $# -le 3 ] || die "usage: watch-ci.sh dispatch <workflow> <ref> [not-before]"
+        if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+            die "usage: watch-ci.sh dispatch <workflow> <ref> [not-before]"
+        fi
         dispatch_newest "$1" "$2" "${3:-}"
         ;;
     run)

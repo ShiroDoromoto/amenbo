@@ -1164,18 +1164,41 @@ function layOutWith(
   // in one place, and which of them a run went down could not be read. Of a box's lines that turn
   // left, each one further right turns a row lower, and of those that turn right each one further
   // left: so none runs across another's leg, and each one's name has a row of its own over its turn.
+  // The lines of the other boxes in its row turn at the same heights, so one whose leg across runs
+  // over theirs turns lower again, at the first height none of them runs across it at (`AMB-T-5857`).
   const turnOf = new Map<number, number>();
+  const rows = new Map<string, PicNode[]>();
   for (const box of graph.boxes) {
     const from = node.get(box.id);
     if (from === undefined) continue;
-    const down = edges
-      .filter((edge) => edge.fromId === box.id && reach(edge) === 1)
-      .map((edge) => ({ edge, sx: attach(from, slot.get(edge.id)!.nth), tx: landsAt(edge) }));
-    const lefts = down.filter((one) => one.tx < one.sx).sort((a, b) => a.sx - b.sx);
-    const rights = down.filter((one) => one.tx > one.sx).sort((a, b) => b.sx - a.sx);
-    lefts.forEach((one, nth) => turnOf.set(one.edge.id, nth));
-    rights.forEach((one, nth) => turnOf.set(one.edge.id, nth));
-    turnsOf.set(box.id, Math.max(1, lefts.length, rights.length));
+    // The top mark stands in no row: its lines are its own.
+    const where = at.get(box.id);
+    const key = where === undefined ? `box-${box.id}` : `${where.lap}-${where.row}`;
+    rows.set(key, [...(rows.get(key) ?? []), from]);
+  }
+  for (const row of rows.values()) {
+    const taken: { left: number; right: number; turn: number }[] = [];
+    for (const from of [...row].sort((a, b) => a.x - b.x)) {
+      const down = edges
+        .filter((edge) => edge.fromId === from.boxId && reach(edge) === 1)
+        .map((edge) => ({ edge, sx: attach(from, slot.get(edge.id)!.nth), tx: landsAt(edge) }));
+      const lefts = down.filter((one) => one.tx < one.sx).sort((a, b) => a.sx - b.sx);
+      const rights = down.filter((one) => one.tx > one.sx).sort((a, b) => b.sx - a.sx);
+      let most = 0;
+      for (const side of [lefts, rights]) {
+        let turn = 0;
+        for (const one of side) {
+          const left = Math.min(one.sx, one.tx);
+          const right = Math.max(one.sx, one.tx);
+          while (taken.some((other) => other.turn === turn && other.left < right && left < other.right)) turn++;
+          turnOf.set(one.edge.id, turn);
+          taken.push({ left, right, turn });
+          most = Math.max(most, turn + 1);
+          turn++;
+        }
+      }
+      turnsOf.set(from.boxId, Math.max(1, most));
+    }
   }
 
   // Each way out with nothing decided hangs as a line that goes nowhere does, its name under its foot,
@@ -1233,7 +1256,7 @@ function layOutWith(
     if (neighbours(edge.fromId, toId)) {
       const tx = fromAbove(to);
       // Under a row a press hangs from, it turns past the lowest of them; and a row of words lower for
-      // each line of its box's turning the same way over it.
+      // each line of its row's turning over it.
       const hang = hangUnder.get(edge.fromId) ?? 0;
       const stair = stairUnder.get(edge.fromId) ?? 0;
       const top = Math.max(Math.round((sy + ty - stair) / 2), hang === 0 ? 0 : sy + hang + LEG_CLEAR);

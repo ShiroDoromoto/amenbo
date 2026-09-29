@@ -802,6 +802,64 @@ describe("the picture of an automation", () => {
     }
   });
 
+  it("turns lines down from two boxes of one row at heights of their own where their legs across meet (AMB-T-5857)", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", {
+            exits: [
+              { id: 91, name: "yes", outputs: [] },
+              { id: 92, name: "no", outputs: [port("task", "task_take")] },
+            ],
+          }),
+          step({
+            id: 2,
+            name: "left",
+            exits: [
+              { id: 81, name: "a", outputs: [] },
+              { id: 82, name: "b", outputs: [] },
+              { id: 83, name: "*", outputs: [] },
+            ],
+          }),
+          step({ id: 3, name: "right" }),
+          step({ id: 4, name: "under left" }),
+          step({ id: 5, name: "under right" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, exitName: "yes", toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "no", toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "a", toId: 4 }),
+          edge({ id: 4, fromId: 2, exitName: "b", toId: 5 }),
+          edge({ id: 5, fromId: 3, toId: 4 }),
+        ],
+      }),
+    );
+    expect(at(picture, 2).y).toBe(at(picture, 3).y);
+    expect(at(picture, 4).y).toBe(at(picture, 5).y);
+    const down = ["edge-3", "edge-4", "edge-5"].map((key) => picture.lines.find((one) => one.key === key)!);
+    const level = down
+      .filter((one) => one.points.length === 4)
+      .map((one) => ({
+        key: one.key,
+        y: one.points[1]!.y,
+        left: Math.min(one.points[1]!.x, one.points[2]!.x),
+        right: Math.max(one.points[1]!.x, one.points[2]!.x),
+      }));
+    // The one from the left box out to the right and the one from the right box back to the left
+    // run across each other's way.
+    const [out, back] = [level.find((one) => one.key === "edge-4")!, level.find((one) => one.key === "edge-5")!];
+    expect(out.left < back.right && back.left < out.right).toBe(true);
+    for (const one of level) {
+      const over = level.filter(
+        (other) => other.key !== one.key && other.y === one.y && other.left < one.right && one.left < other.right,
+      );
+      expect(over.map((other) => other.key), one.key).toEqual([]);
+    }
+    // The row under stands lower by the height the lower one turns at, so it still turns over it.
+    for (const one of down) expect(one.points[1]!.y).toBeLessThan(at(picture, 4).y);
+  });
+
   it("draws the error way out only where somebody drew a line from it — the legend says the rest", () => {
     const steps = [taker(1, "take"), step({ id: 2, name: "work" })];
     const plain = layOut(

@@ -1121,6 +1121,73 @@ describe("the picture of an automation", () => {
     }
   });
 
+  it("writes the name of a line down under its box after one down to the column on its left in a row of its own, over no line", () => {
+    for (const word of ["やり直す", "もう一度はじめからやり直す"]) {
+      const picture = layOut(
+        detail({
+          entryPlacementId: 1,
+          placements: [
+            taker(1, "take"),
+            step({
+              id: 2,
+              name: "work",
+              exits: [
+                { id: 90, name: "完了", outputs: [] },
+                { id: 91, name: "*", outputs: [] },
+                { id: 92, name: "左の列へ下りる", outputs: [] },
+                { id: 93, name: word, outputs: [] },
+                { id: 94, name: "右", outputs: [] },
+              ],
+            }),
+            step({ id: 3, name: "left" }),
+            step({ id: 4, name: "under" }),
+            step({ id: 5, name: "right" }),
+          ],
+          edges: [
+            edge({ id: 1, fromId: 1, toId: 2 }),
+            edge({ id: 2, fromId: 2, exitName: "左の列へ下りる", toId: 3 }),
+            edge({ id: 3, fromId: 2, exitName: word, toId: 4 }),
+            edge({ id: 4, fromId: 2, exitName: "右", toId: 5 }),
+          ],
+        }),
+      );
+      expect(at(picture, 3).x).toBeLessThan(at(picture, 4).x);
+      expect(at(picture, 4).x).toBe(at(picture, 2).x);
+      const down = ["edge-2", "edge-3", "edge-4"].map((key) => picture.lines.find((one) => one.key === key)!);
+      const [aside, under] = down;
+      // The line under its box turns a row lower than the one to the left column, and its name is
+      // written in that row, on its left.
+      expect(under!.points[1]!.y - aside!.points[1]!.y).toBe(15);
+      expect(under!.align).toBe("end");
+      expect(under!.at.x).toBeLessThan(Math.min(under!.points[1]!.x, under!.points[2]!.x));
+      expect(under!.at.y).toBeLessThan(under!.points[1]!.y);
+      expect(under!.at.y).toBeGreaterThan(aside!.points[1]!.y);
+      const boxes = down.map((one) => {
+        const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+        const left = one.align === "end" ? one.at.x - wide : one.at.x;
+        return { key: one.key, left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
+      });
+      for (const [nth, a] of boxes.entries()) {
+        for (const b of boxes.slice(nth + 1)) {
+          expect(a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom, `${a.key} / ${b.key}`).toBe(
+            false,
+          );
+        }
+        // No piece of any line runs through a name.
+        for (const one of picture.lines) {
+          one.points.slice(1).forEach((to, at) => {
+            const from = one.points[at]!;
+            const [left, right] = [Math.min(from.x, to.x), Math.max(from.x, to.x)];
+            const [top, bottom] = [Math.min(from.y, to.y), Math.max(from.y, to.y)];
+            expect(left <= a.right && a.left <= right && top <= a.bottom && a.top <= bottom, `${a.key} / ${one.key}`).toBe(
+              false,
+            );
+          });
+        }
+      }
+    }
+  });
+
   it("writes the name of a line straight down on its left, and staggers the + of lines side by side in the margin", () => {
     const picture = layOut(
       detail({

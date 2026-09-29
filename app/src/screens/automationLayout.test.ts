@@ -91,6 +91,40 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
 const at = (picture: ReturnType<typeof layOut>, boxId: number) =>
   picture.nodes.find((one) => one.boxId === boxId)!;
 
+type Box = { left: number; right: number; top: number; bottom: number };
+
+/** How wide the picture guesses a word is written: a wide character twelve points, any other seven. */
+function wordWide(word: string): number {
+  return [...word].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+}
+
+/** Where a line's words stand, as wide as the picture guesses them. */
+function wordBox(one: PicLine): Box {
+  const wide = wordWide(edgeWord(one));
+  const left = one.align === "end" ? one.at.x - wide : one.align === "middle" ? one.at.x - wide / 2 : one.at.x;
+  return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
+}
+
+/** Each straight piece of a line, as the box it spans. */
+function pieces(one: PicLine): Box[] {
+  return one.points.slice(1).map((to, at) => {
+    const from = one.points[at]!;
+    return {
+      left: Math.min(from.x, to.x),
+      right: Math.max(from.x, to.x),
+      top: Math.min(from.y, to.y),
+      bottom: Math.max(from.y, to.y),
+    };
+  });
+}
+
+/** Whether two boxes share any room. Two that only touch do not, unless `touching` counts them. */
+function overlaps(a: Box, b: Box, touching = false): boolean {
+  return touching
+    ? a.left <= b.right && b.left <= a.right && a.top <= b.bottom && b.top <= a.bottom
+    : a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
 describe("the picture of an automation", () => {
   it("has nothing to draw for nothing, and for an automation with no steps", () => {
     expect(layOut(null).nodes).toEqual([]);
@@ -472,8 +506,7 @@ describe("the picture of an automation", () => {
     expect(outer.at.y).toBeGreaterThan(inner.points[1]!.y);
     expect(outer.at.y).toBeLessThan(outer.points[1]!.y);
     // Every lane stands past both names, so none of them crosses one.
-    // As wide as the picture guesses the name is written: a wide character twelve points, any other seven.
-    const left = outer.at.x - [...edgeWord(outer)].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+    const left = wordBox(outer).left;
     expect(laneX("edge-3")).toBeLessThan(left);
     expect(laneX("edge-4")).toBeLessThan(left);
     // The outline stands past the names too, and the picture keeps the room for them.
@@ -661,27 +694,18 @@ describe("the picture of an automation", () => {
     const idOf = (fromId: number, exitName: string) =>
       lines.findIndex(([from, name]) => from === fromId && name === exitName) + 1;
     const line = (fromId: number, exitName: string) => picture.lines.find((one) => one.key === `edge-${idOf(fromId, exitName)}`)!;
-    /** Where a line's words stand, as wide as the picture guesses them. */
-    const wordBox = (one: PicLine) => {
-      const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
-      const left = one.align === "end" ? one.at.x - wide : one.align === "middle" ? one.at.x - wide / 2 : one.at.x;
-      return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
-    };
     const named = picture.lines.filter((one) => edgeWord(one) !== "");
     const level = picture.lines.flatMap((one) =>
-      one.points.slice(1).flatMap((q, nth) => {
-        const p = one.points[nth]!;
-        return p.y === q.y && p.x !== q.x ? [{ key: one.key, y: p.y, left: Math.min(p.x, q.x), right: Math.max(p.x, q.x) }] : [];
-      }),
+      pieces(one)
+        .filter((seg) => seg.top === seg.bottom && seg.left !== seg.right)
+        .map((seg) => ({ ...seg, key: one.key, y: seg.top })),
     );
 
     it("writes no name over another", () => {
       for (const one of named) {
         for (const other of named) {
           if (one === other) continue;
-          const [a, b] = [wordBox(one), wordBox(other)];
-          const over = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-          expect(over, `${edgeWord(one)} / ${edgeWord(other)}`).toBe(false);
+          expect(overlaps(wordBox(one), wordBox(other)), `${edgeWord(one)} / ${edgeWord(other)}`).toBe(false);
         }
       }
     });
@@ -689,7 +713,7 @@ describe("the picture of an automation", () => {
     it("runs no line across a name", () => {
       for (const one of named) {
         const box = wordBox(one);
-        const across = level.filter((seg) => seg.y > box.top && seg.y < box.bottom && seg.left < box.right && box.left < seg.right);
+        const across = level.filter((seg) => overlaps(seg, box));
         expect(across.map((seg) => seg.key), edgeWord(one)).toEqual([]);
       }
     });
@@ -784,20 +808,16 @@ describe("the picture of an automation", () => {
     }
     // Each name stands over its own turn, beside its own leg, and no two lie over each other.
     const boxes = down.map((one) => {
-      const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
-      const left = one.align === "end" ? one.at.x - wide : one.align === "middle" ? one.at.x - wide / 2 : one.at.x;
       expect(Math.abs(one.at.x - one.points[0]!.x)).toBe(6);
       expect(one.at.y).toBeLessThan(one.points[1]!.y);
-      return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
+      return wordBox(one);
     });
     for (const [nth, a] of boxes.entries()) {
       for (const b of boxes.slice(nth + 1)) {
-        expect(a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom).toBe(false);
+        expect(overlaps(a, b)).toBe(false);
       }
       for (const one of level) {
-        expect(one.y > a.top && one.y < a.bottom && one.left < a.right && a.left < one.right, `${nth} / ${one.key}`).toBe(
-          false,
-        );
+        expect(overlaps({ ...one, top: one.y, bottom: one.y }, a), `${nth} / ${one.key}`).toBe(false);
       }
     }
   });
@@ -890,31 +910,24 @@ describe("the picture of an automation", () => {
       }),
     );
     const line = (key: string) => picture.lines.find((one) => one.key === key)!;
-    const words = (one: PicLine) => {
-      const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
-      const left = one.align === "end" ? one.at.x - wide : one.at.x;
-      return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
-    };
     const right = line("edge-5");
     const [sx, turn, tx] = [right.points[0]!.x, right.points[1]!.y, right.points[2]!.x];
     expect(tx).toBeGreaterThan(sx);
-    const name = words(right);
+    const name = wordBox(right);
     for (const key of ["edge-3", "edge-4"]) {
       const nowhere = line(key);
       const x = nowhere.points[0]!.x;
       // Its leg across runs under the line that goes nowhere, and under that line's name.
       expect(x > sx && x < tx && nowhere.points[1]!.y >= turn, key).toBe(false);
-      const hung = words(nowhere);
+      const hung = wordBox(nowhere);
       expect(hung.bottom, key).toBeLessThan(turn);
       // Its own name lies over neither the line that goes nowhere nor that line's name.
       expect(x > name.left && x < name.right && nowhere.points[1]!.y > name.top, key).toBe(false);
-      expect(hung.left < name.right && name.left < hung.right && hung.top < name.bottom && name.top < hung.bottom, key).toBe(
-        false,
-      );
+      expect(overlaps(hung, name), key).toBe(false);
     }
     // Nor does its leg down into the box on the right run through a name that goes nowhere.
     for (const key of ["edge-3", "edge-4"]) {
-      const hung = words(line(key));
+      const hung = wordBox(line(key));
       expect(tx > hung.left && tx < hung.right && hung.bottom > turn, key).toBe(false);
     }
   });
@@ -1011,8 +1024,7 @@ describe("the picture of an automation", () => {
     // The way out and where the run goes after it, both: the ending is the half that got cut.
     const words = edgeWord(line);
     expect(words.length).toBeGreaterThan("着手できるタスクが無い".length);
-    const wide = [...words].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
-    expect(line.at.x + wide).toBeLessThanOrEqual(picture.width);
+    expect(line.at.x + wordWide(words)).toBeLessThanOrEqual(picture.width);
   });
 
   it("ties a named way out first when the ways out before it have no line", () => {
@@ -1095,28 +1107,20 @@ describe("the picture of an automation", () => {
     const down = ["edge-1", "edge-2", "edge-3"].map((key) => picture.lines.find((one) => one.key === key)!);
     expect(down.map((one) => one.points[1]!.y - down[0]!.points[1]!.y)).toEqual([0, 15, 30]);
     const boxes = down.map((one) => {
-      const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
       expect(one.align).toBe("end");
       expect(one.at.y).toBeLessThan(one.points[1]!.y);
-      return { key: one.key, left: one.at.x - wide, right: one.at.x, top: one.at.y - 10, bottom: one.at.y + 1 };
+      return { key: one.key, ...wordBox(one) };
     });
     const lap = picture.laps[0]!;
     for (const [nth, a] of boxes.entries()) {
       // The outline round the stretch reaches past the name, so its edge does not run through it.
       expect(a.left, a.key).toBeGreaterThan(lap.x);
       for (const b of boxes.slice(nth + 1)) {
-        expect(a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom).toBe(false);
+        expect(overlaps(a, b)).toBe(false);
       }
       // No piece of any of the lines runs through a name.
       for (const one of down) {
-        one.points.slice(1).forEach((to, at) => {
-          const from = one.points[at]!;
-          const [left, right] = [Math.min(from.x, to.x), Math.max(from.x, to.x)];
-          const [top, bottom] = [Math.min(from.y, to.y), Math.max(from.y, to.y)];
-          expect(left <= a.right && a.left <= right && top <= a.bottom && a.top <= bottom, `${a.key} / ${one.key}`).toBe(
-            false,
-          );
-        });
+        for (const piece of pieces(one)) expect(overlaps(piece, a, true), `${a.key} / ${one.key}`).toBe(false);
       }
     }
   });
@@ -1162,27 +1166,14 @@ describe("the picture of an automation", () => {
       expect(under!.at.x).toBeLessThan(Math.min(under!.points[1]!.x, under!.points[2]!.x));
       expect(under!.at.y).toBeLessThan(under!.points[1]!.y);
       expect(under!.at.y).toBeGreaterThan(aside!.points[1]!.y);
-      const boxes = down.map((one) => {
-        const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
-        const left = one.align === "end" ? one.at.x - wide : one.at.x;
-        return { key: one.key, left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
-      });
+      const boxes = down.map((one) => ({ key: one.key, ...wordBox(one) }));
       for (const [nth, a] of boxes.entries()) {
         for (const b of boxes.slice(nth + 1)) {
-          expect(a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom, `${a.key} / ${b.key}`).toBe(
-            false,
-          );
+          expect(overlaps(a, b), `${a.key} / ${b.key}`).toBe(false);
         }
         // No piece of any line runs through a name.
         for (const one of picture.lines) {
-          one.points.slice(1).forEach((to, at) => {
-            const from = one.points[at]!;
-            const [left, right] = [Math.min(from.x, to.x), Math.max(from.x, to.x)];
-            const [top, bottom] = [Math.min(from.y, to.y), Math.max(from.y, to.y)];
-            expect(left <= a.right && a.left <= right && top <= a.bottom && a.top <= bottom, `${a.key} / ${one.key}`).toBe(
-              false,
-            );
-          });
+          for (const piece of pieces(one)) expect(overlaps(piece, a, true), `${a.key} / ${one.key}`).toBe(false);
         }
       }
     }
@@ -1578,8 +1569,6 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   });
 
   it("stands the next box in its row further right, so a press beside a long name ends short of its lines", () => {
-    // How wide the layout reckons a word, as it has no screen to measure on.
-    const guess = (word: string) => [...word].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
     const picture = layOut(
       detail({
         entryPlacementId: 1,
@@ -1614,7 +1603,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
     expect(left.y).toBe(right.y);
     const press = picture.opens.find((one) => one.boxId === 2)!;
     const down = picture.lines.find((one) => one.key === "edge-3")!;
-    expect(press.x + guess(openWord(false)) + 28).toBeLessThan(down.points[0]!.x);
+    expect(press.x + wordWide(openWord(false)) + 28).toBeLessThan(down.points[0]!.x);
     expect(right.x - (left.x + left.w)).toBeGreaterThan(24);
   });
 

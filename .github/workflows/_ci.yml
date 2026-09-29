@@ -91,7 +91,7 @@ jobs:
   # `gui` (gates gui-web) is a positive allowlist of every front-end build input:
   # the app/ tree (src, package*.json, tsconfig, vite/vitest config, src-tauri
   # types), plus the root .nvmrc that setup-node reads and the workflow itself.
-  # A Rust-only change touches none of these, so the GUI typecheck+build+vitest is
+  # A Rust-only change touches none of these, so the GUI lint+typecheck+build+vitest is
   # skipped. app/src-tauri/** is under app/**, so a Tauri command change still
   # reruns the GUI (its TS bindings may depend on it).
   #
@@ -680,7 +680,7 @@ jobs:
         run: cargo test --manifest-path verification/Cargo.toml
 
   gui-web:
-    name: GUI typecheck + build
+    name: GUI lint + typecheck + build
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.gui == 'true' }}

@@ -163,7 +163,7 @@ impl<'a> WriteTx<'a> {
 
     /// Physically delete the `attachment` rows of `(target_type, target_id)`. See
     /// [`StoreEngine::delete_records_for_target`].
-    pub fn delete_records_for_target(
+    pub(crate) fn delete_records_for_target(
         &self,
         target_type: AttachmentTarget,
         target_id: i64,

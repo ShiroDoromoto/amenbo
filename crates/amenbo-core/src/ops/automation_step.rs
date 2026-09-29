@@ -814,6 +814,8 @@ fn one_value(handed: &Handed) -> String {
 /// order, and "the top one" would then be whichever task somebody last dragged up.
 /// It is joined with `=`, because a descending order starts with `-` and would otherwise be read as an
 /// option of its own.
+/// It ends on `--actor ai`: `task list` draws its reach from the facet, and the step is told to run the
+/// line as it stands (`AMB-D-408`).
 /// Every other kind is the text of its answer. A setting nobody answered says so, rather than being left
 /// out: a prompt that names it would otherwise be pointing at nothing.
 fn one_setting(cfg: &RunDefCfg) -> String {
@@ -825,7 +827,7 @@ fn one_setting(cfg: &RunDefCfg) -> String {
         (AutomationCfgKind::TaskFilter, Some(expr)) => {
             let cli = crate::config::Paths::command_name();
             let sort = taskfilter_sort(value);
-            format!("{name}: the tasks `{cli} task list --filter \"{expr}\" --sort={sort}` lists, in that order")
+            format!("{name}: the tasks `{cli} task list --filter \"{expr}\" --sort={sort} --actor ai` lists, in that order")
         }
         _ => format!("{name}: {}", unquoted(value)),
     }
@@ -846,6 +848,10 @@ fn one_setting(cfg: &RunDefCfg) -> String {
 /// declares it in one act ([`crate::ops::automation_report::take`]), and nothing a step types takes it
 /// (`AMB-D-964`). So that kind is said to be none of the step's, rather than left for the agent to find
 /// a command for — an agent does what the text says (`AMB-T-5279`).
+///
+/// **Every command it names carries `--actor ai`.** Both verbs use the facet, and nothing hands one to
+/// the step: it is declared on the command line or not at all (`AMB-D-408`). A line without it is
+/// refused with `facet_required` when typed as it stands, which is what an agent does.
 fn handing_back(exits: &[RunDefExit], choices: &[Choices]) -> String {
     let cli = crate::config::Paths::command_name();
     let mut lines = vec![format!("## How to hand your work back\n")];
@@ -894,10 +900,10 @@ fn handing_back(exits: &[RunDefExit], choices: &[Choices]) -> String {
         for kind in &kinds {
             lines.push(match kind {
                 AutomationPortKind::Value => {
-                    format!("- a value — `{cli} automation step-out <id>=<value>`")
+                    format!("- a value — `{cli} automation step-out <id>=<value> --actor ai`")
                 }
                 AutomationPortKind::File => {
-                    format!("- a file — `{cli} automation step-out <id> --file <path>`")
+                    format!("- a file — `{cli} automation step-out <id> --file <path> --actor ai`")
                 }
                 // A built-in takes it (`AMB-D-964`): there is no command for it here, `out` included.
                 AutomationPortKind::TaskTake => "- the task the run works — not yours to put down: a \
@@ -905,7 +911,7 @@ fn handing_back(exits: &[RunDefExit], choices: &[Choices]) -> String {
                      declare it."
                     .to_string(),
                 AutomationPortKind::TaskMake => format!(
-                    "- a task you raised along the way — `{cli} automation step-out <id>=<task>`. It is \
+                    "- a task you raised along the way — `{cli} automation step-out <id>=<task> --actor ai`. It is \
                      not the task this run is working: nothing reserves it, and whoever comes to it \
                      next picks it up."
                 ),
@@ -914,7 +920,7 @@ fn handing_back(exits: &[RunDefExit], choices: &[Choices]) -> String {
     }
     lines.push(String::new());
     lines.push(format!(
-        "Then finish with `{cli} automation step-done --exit <id> --report -`, the id being the way out's \
+        "Then finish with `{cli} automation step-done --exit <id> --report - --actor ai`, the id being the way out's \
          from the list above. A report is owed whichever way out you take."
     ));
     lines.join("\n")
@@ -1194,7 +1200,7 @@ mod tests {
             assert!(text.contains("## Your settings"), "{text}");
             assert!(
                 text.contains(&format!(
-                    "- 受信箱: the tasks `{cli} task list --filter \"assignee:me-ai status:todo,blocked\" --sort=priority` lists, in that order"
+                    "- 受信箱: the tasks `{cli} task list --filter \"assignee:me-ai status:todo,blocked\" --sort=priority --actor ai` lists, in that order"
                 )),
                 "{text}"
             );
@@ -1261,7 +1267,7 @@ mod tests {
         let cli = crate::config::Paths::command_name();
         assert_eq!(
             one_setting(&cfg),
-            format!("受信箱: the tasks `{cli} task list --filter \"status:todo\" --sort=-created` lists, in that order")
+            format!("受信箱: the tasks `{cli} task list --filter \"status:todo\" --sort=-created --actor ai` lists, in that order")
         );
     }
 
@@ -1295,14 +1301,15 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
 
-            assert!(text.contains("- a value — `amenbo automation step-out <id>=<value>`"), "{text}");
+            assert!(text.contains("- a value — `amenbo automation step-out <id>=<value> --actor ai`"), "{text}");
             assert!(
                 text.contains("the task the run works — not yours to put down: a built-in takes it"),
                 "{text}"
             );
             assert!(!text.contains("step-take"), "{text}");
+            assert!(text.contains("`amenbo automation step-done --exit <id> --report - --actor ai`"), "{text}");
             assert!(
-                text.contains("a task you raised along the way — `amenbo automation step-out <id>=<task>`"),
+                text.contains("a task you raised along the way — `amenbo automation step-out <id>=<task> --actor ai`"),
                 "{text}"
             );
             // The line that was wrong: one command for every kind.

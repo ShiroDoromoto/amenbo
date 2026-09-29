@@ -184,7 +184,7 @@ pub fn preamble(cmd: &str) -> String {
          reaches no later step.\n\
          \n\
          **Your settings** carries the answers written for this step where it was placed, one line \
-         each. A task filter arrives as the `{cmd} task list --filter \"…\" --sort=…` that lists the \
+         each. A task filter arrives as the `{cmd} task list --filter \"…\" --sort=… --actor ai` that lists the \
          tasks it means, in the order it means them: run that one as it stands rather than writing a \
          filter or an order of your own."
     )

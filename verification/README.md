@@ -771,7 +771,8 @@ line then names the declared ones and the step stays running, which the pane is 
 terminal, where building a definition, driving a run, moving a task's status and what a built-in does
 are turned away (`automation_outside_only`). A road writes `refused:` on it, and the words after
 `amenbo` are the road's to spell — a `<run>` among them is a gap the operator fills off the line over
-the pane, and a `<ref>` one filled with the ref of the task `task:` names.
+the pane, and a `<ref>` one filled with the ref of the task `task:` names. The op types them with
+`--actor ai` after them, so the facet is named and the refusal met is the step's alone.
 `done-outside-pane` is the report made **without** that pane: a step's terminal is started whether or
 not its pane is drawn, and opening the pane to type in it would start one on the spot either way. So
 it is typed at a plain shell in whatever pane is up, with the step the window would have named put

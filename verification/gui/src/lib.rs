@@ -4654,6 +4654,8 @@ impl Instructor {
             // reached for from inside a step. What the line says is spelled out rather than left at
             // "it was refused", because this road is about which refusal — a mistyped number is
             // turned away too, and on a shot the two would read the same.
+            // It carries `--actor ai` as the step's own text teaches, so the facet is named and the
+            // one refusal left to meet is the step's — whichever of the two checks runs first.
             (Domain::Automation, "command-in-pane") => {
                 let command = req(with, "command")?;
                 let mut gaps = Vec::new();
@@ -4674,7 +4676,7 @@ impl Instructor {
                     false => format!(", putting {}", gaps.join(", and ")),
                 };
                 format!(
-                    "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo {command}` and run it{filling}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
+                    "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo {command} --actor ai` and run it{filling}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
                 )
             }
             // The report made without the run's pane. The step's number is not on any screen — the

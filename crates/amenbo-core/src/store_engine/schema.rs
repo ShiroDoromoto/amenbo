@@ -1258,6 +1258,9 @@ datasets! {
     // `pause_requested` is the gap between the button and the pause: an action is under way and is
     // not cut in half, so the request is recorded and the run reaches `paused` when that action ends.
     //
+    // `pause_before_next_task` is the same gap, one task wide: the run reaches `paused` where it next
+    // comes to the built-in that takes a task, without taking one (`AMB-D-1009`).
+    //
     // `stopped_reason` is why it failed, and it is stored because it cannot be derived: the records
     // show a crash (that step execution is left `failed`) and say nothing about a loop that ran out
     // of turns, an agent that was not there, or an input nothing filled. Set only while
@@ -1270,6 +1273,7 @@ datasets! {
         project_id: fk("project", "RESTRICT"),
         status: enum_col("running", "paused", "completed", "failed", "canceled"),
         pause_requested: bool_col,
+        pause_before_next_task: bool_col,
         stopped_reason: enum_opt("crashed", "max_times", "no_agent", "no_input", "no_way_on", "halted", "left_task_open"),
         started_by_kind: actor_kind,
         started_at: ts_opt,

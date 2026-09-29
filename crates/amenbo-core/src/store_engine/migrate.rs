@@ -1118,7 +1118,33 @@ pub const STEPS: &[Step] = &[
         // written by a build with no such stage, so nobody is still deciding whether to keep it.
         apply: Apply::Custom(give_the_actions_a_draft_flag),
     },
+    Step {
+        to: 87,
+        name: "add automation_run.pause_before_next_task, a run asked to pause before it takes its next task",
+        // `AMB-D-1009`. Recorded on the run as `pause_requested` is, and read where the run next comes
+        // to the built-in that takes a task.
+        //
+        // **Seeded, and the seed is not a guess: `0` on every row.** No build before this one could ask
+        // for it.
+        apply: Apply::Custom(give_the_runs_a_pause_before_next_task),
+    },
 ];
+
+/// v87: `automation_run.pause_before_next_task` — a run asked to pause before it takes its next task
+/// (`AMB-D-1009`).
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason: a store raised from before
+/// the automation tables were created has them created in the live shape, column and all.
+fn give_the_runs_a_pause_before_next_task(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run")?.iter().any(|c| c == "pause_before_next_task") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run ADD COLUMN pause_before_next_task BOOLEAN NOT NULL DEFAULT 0 \
+                 CHECK(pause_before_next_task IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
 
 /// v86: `automation_action.draft` — whether an action made on the spot is still being written
 /// (`AMB-D-1005`).
@@ -9510,6 +9536,36 @@ mod tests {
         assert!(!on, "an axis the store already had starts without it");
         assert!(
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
+            "only the two booleans go in"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v87: every run an upgrade brings in arrives asked for nothing — no build before this one could ask
+    /// a run to pause before its next task.
+    #[test]
+    fn every_run_already_written_is_not_asked_to_pause_before_its_next_task() {
+        let dir = scratch("pause-before-next-task");
+        let engine = store_at(&dir, 86);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, pause_requested) VALUES
+                     (1, 1, 1, 'running', 1), (2, 1, 1, 'paused', 0);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let mut stmt =
+            engine.conn().prepare("SELECT pause_before_next_task FROM automation_run ORDER BY id").unwrap();
+        let asked: Vec<bool> = stmt.query_map([], |r| r.get::<_, bool>(0)).unwrap().map(|v| v.unwrap()).collect();
+        assert_eq!(asked, vec![false, false]);
+        assert!(
+            engine.conn().execute("UPDATE automation_run SET pause_before_next_task = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
         );
         std::fs::remove_dir_all(&dir).ok();

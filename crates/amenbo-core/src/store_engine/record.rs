@@ -717,6 +717,7 @@ pub fn automation_run(r: &AutomationRun) -> Record {
                 ("project_id", kv(r.project_id)),
                 ("status", tv(r.status.as_str())),
                 ("pause_requested", bv(r.pause_requested)),
+                ("pause_before_next_task", bv(r.pause_before_next_task)),
                 ("stopped_reason", r.stopped_reason.map(|s| tv(s.as_str())).unwrap_or(Value::Null)),
                 ("started_by_kind", kov(&r.started_by_kind)),
                 ("started_at", tsov(&r.started_at)),

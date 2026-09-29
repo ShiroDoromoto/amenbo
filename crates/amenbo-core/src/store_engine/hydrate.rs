@@ -651,6 +651,7 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         project_id: get(r, C.project_id)?,
         status: enum_req(r, C.status, AutomationRunStatus::parse)?,
         pause_requested: get(r, C.pause_requested)?,
+        pause_before_next_task: get(r, C.pause_before_next_task)?,
         stopped_reason: enum_opt(r, C.stopped_reason, AutomationStoppedReason::parse)?,
         started_by_kind: enum_opt(r, C.started_by_kind, ActorKind::parse)?,
         started_at: ts_opt(r, C.started_at)?,

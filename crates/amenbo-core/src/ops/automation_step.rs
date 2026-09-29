@@ -79,7 +79,8 @@ pub enum Opened {
     /// **The step is a built-in set to wait, and nothing has turned up for it yet** (`AMB-D-969`).
     /// Nothing was written, so the run still stands before this step and the next look opens it again.
     /// Where a pause had been asked for, `run` has been paused here instead: a waiting step never
-    /// reports, so this is where the pause takes hold.
+    /// reports, so this is where the pause takes hold. So is a run asked to pause before its next task
+    /// that has come to the step that takes one (`AMB-D-1009`), whether or not a task stands ready.
     Waiting { run: AutomationRun },
     /// **The step is a built-in that holds it open** (`AMB-D-983`): its execution stands under way, as
     /// an agent's does while it works, and nothing was carried out. No terminal is opened for it — the
@@ -191,6 +192,12 @@ fn open_as(
             super::automation_stop::Ending::Failed(AutomationStoppedReason::LeftTaskOpen),
         )?;
         return Ok(Opened::LeftTaskOpen { run: stopped.run });
+    }
+    // **A run asked to pause before its next task pauses here, without taking one** (`AMB-D-1009`).
+    // Nothing is written but the pause, so picking it up again opens this step afresh.
+    if run.pause_before_next_task && super::automation_stop::takes_a_task(&def) {
+        let run = super::automation_stop::settle(tx, run)?.run;
+        return Ok(Opened::Waiting { run });
     }
 
     // **The first step the run opens reads what was handed over at launch** (`AMB-D-970`), and no step

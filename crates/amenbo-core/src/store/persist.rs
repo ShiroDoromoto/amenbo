@@ -1675,6 +1675,17 @@ impl Store {
         })
     }
 
+    /// **Ask every run of a project to pause before it takes its next task** (`AMB-D-1009`), and answer
+    /// with the runs that were asked.
+    pub fn automation_pause_before_next_task(
+        &mut self,
+        project_id: i64,
+    ) -> Result<Vec<crate::model::AutomationRun>> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::automation_stop::pause_before_next_task(tx, project_id)
+        })
+    }
+
     /// **Pick a paused run up again**, from the way out the step before it left through.
     pub fn automation_resume(
         &mut self,

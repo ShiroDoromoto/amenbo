@@ -72,7 +72,7 @@ fn close(carry: &Carry<'_, '_>) -> Result<Carried> {
             crate::ops::comment::add_report_comment(tx, task_id, ActorKind::Ai, &reported.report, reported.id)?;
         }
     }
-    crate::ops::task::set_completed(tx, task_id, true)?;
+    crate::ops::task::set_completed(tx, task_id, true, ActorKind::Ai)?;
     let report = match recorded {
         Some(sha) => say(lang, "closedRecorded", &[("task", &named), ("title", &task.title), ("sha", &sha)]),
         None => say(lang, "closed", &[("task", &named), ("title", &task.title)]),
@@ -127,6 +127,8 @@ mod tests {
     use crate::ops::automation_run::{launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
+    use crate::lifecycle::name::{COMMENT_ADDED, TASK_DONE, TASK_STATUS_CHANGED};
+    use crate::ops::test_support::{by_ai, events_after, outbox_head};
     use crate::ops::test_support::{mk_out, mk_placed, mk_project, mk_task_in, only_step, out_port, with_tx};
 
     /// Take a task, work on it — handing the commit on — and close it: the line a run walks for each
@@ -160,7 +162,7 @@ mod tests {
 
     fn for_ai(tx: &WriteTx<'_>, project: i64) -> i64 {
         let id = mk_task_in(tx, "直すもの", Some(project));
-        crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai)).expect("give it to the AI");
+        crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
         id
     }
 
@@ -264,6 +266,54 @@ mod tests {
             walk(tx, &p, None, "Fixed it.");
             assert_eq!(comments(tx, task), vec!["Fixed it.".to_string()]);
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Done));
+        });
+    }
+
+    /// **What the run does to the task reaches the outbox as the AI's** (`AMB-D-367`): the take, the
+    /// agent's report and the close each fire the event a person's own write would, stamped `ai` — the
+    /// one actor a notification sends for (`AMB-D-473`). Without the stamp, a run would close work and
+    /// nobody would hear of it.
+    #[test]
+    fn the_take_the_report_and_the_close_are_announced_as_the_ai_s() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let p = picture(tx, project);
+            for_ai(tx, project);
+            let head = outbox_head(tx);
+
+            walk(tx, &p, None, "Fixed it.");
+            assert_eq!(
+                events_after(tx, head),
+                vec![
+                    by_ai(TASK_STATUS_CHANGED, Some("in_progress")),
+                    by_ai(COMMENT_ADDED, None),
+                    by_ai(TASK_DONE, None),
+                ]
+            );
+        });
+    }
+
+    /// **A report the step carried onto the task itself is announced there, and once** — by the step
+    /// that wrote it, not again by the close.
+    #[test]
+    fn a_report_the_step_carried_onto_the_task_is_announced_once() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let p = picture(tx, project);
+            automation::step_update(tx, p.work_step, None, None, None, None, Some(true), None, None, None, None)
+                .expect("report to the task");
+            for_ai(tx, project);
+            let head = outbox_head(tx);
+
+            walk(tx, &p, None, "Fixed it.");
+            assert_eq!(
+                events_after(tx, head),
+                vec![
+                    by_ai(TASK_STATUS_CHANGED, Some("in_progress")),
+                    by_ai(COMMENT_ADDED, None),
+                    by_ai(TASK_DONE, None),
+                ]
+            );
         });
     }
 

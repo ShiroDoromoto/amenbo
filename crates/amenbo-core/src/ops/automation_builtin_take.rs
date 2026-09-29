@@ -332,7 +332,7 @@ mod tests {
 
     fn for_ai(tx: &WriteTx<'_>, title: &str, project: i64, priority: Option<Priority>) -> i64 {
         let id = mk_task_in(tx, title, Some(project));
-        task::set_assignee(tx, id, Some(ActorKind::Ai)).expect("give it to the AI");
+        task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
         if priority.is_some() {
             task::update(tx, id, TaskPatch { priority, ..Default::default() }).expect("priority");
         }
@@ -358,7 +358,7 @@ mod tests {
             task::update(tx, people, TaskPatch { priority: Some(Priority::High), ..Default::default() })
                 .expect("priority");
             let running = for_ai(tx, "running", project, Some(Priority::High));
-            task::set_status(tx, running, TaskStatus::InProgress).expect("reserve");
+            task::set_status(tx, running, TaskStatus::InProgress, crate::model::ActorKind::Ai).expect("reserve");
             let waiting = for_ai(tx, "waiting", project, Some(Priority::High));
             crate::ops::dependency::add(tx, waiting, low, None).expect("depend");
             for_ai(tx, "not ours", elsewhere, Some(Priority::High));
@@ -390,7 +390,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let (automation, spot) = picture(tx, project);
             let running = for_ai(tx, "running", project, None);
-            task::set_status(tx, running, TaskStatus::InProgress).expect("reserve");
+            task::set_status(tx, running, TaskStatus::InProgress, crate::model::ActorKind::Ai).expect("reserve");
             let people = mk_task_in(tx, "a person's", Some(project));
             automation::cfg_set(
                 tx,

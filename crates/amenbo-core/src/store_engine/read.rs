@@ -8033,7 +8033,7 @@ mod tests {
         // A blocker added after but already done — never blocked, so not a premise change.
         let done_blk = mk_task_in(&tx, "done blocker", Some(pid));
         dependency::add(&tx, held, done_blk, None).unwrap();
-        task::set_status(&tx, done_blk, TaskStatus::Done).unwrap();
+        task::set_status(&tx, done_blk, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
 
         // A proposed (unsettled) decision linked after — flagged.
         let d_open =
@@ -8042,7 +8042,7 @@ mod tests {
         // An accepted decision linked after — a settled ground never blocks, so not a premise change.
         let d_settled =
             decision::add(&tx, decision::NewDecision { title: "採択済み".into(), body: String::new(), project_id: pid, made_in: None }).unwrap();
-        decision::finish_writing(&tx, d_settled.id, None).unwrap();
+        decision::finish_writing(&tx, d_settled.id, None, crate::model::ActorKind::Ai).unwrap();
         decision::link(&tx, d_settled.id, held).unwrap();
 
         let got = premise_change_since(tx.conn(), held).unwrap().unwrap();
@@ -8128,7 +8128,7 @@ mod tests {
                 decision::NewDecision { title: title.into(), body: String::new(), project_id: pid, made_in: None },
             )
             .unwrap();
-            decision::finish_writing(&tx, d.id, None).unwrap();
+            decision::finish_writing(&tx, d.id, None, crate::model::ActorKind::Ai).unwrap();
             let link = decision::link(&tx, d.id, held).unwrap().0;
             tx.set_field("decision_task_link", link.id, "linked_at", text("2019-01-01T00:00:00Z")).unwrap();
             tx.set_field("decision", d.id, "status_changed_at", text("2019-01-01T00:00:00Z")).unwrap();
@@ -8181,7 +8181,7 @@ mod tests {
         // An accepted ground, linked and settled long before the reservation — so neither the link's clock
         // nor the decision's own can be what flags it below.
         let ground = mk("置き換えられる前提");
-        decision::finish_writing(&tx, ground, None).unwrap();
+        decision::finish_writing(&tx, ground, None, crate::model::ActorKind::Ai).unwrap();
         let link = decision::link(&tx, ground, held).unwrap().0;
         tx.set_field("decision_task_link", link.id, "linked_at", text("2019-01-01T00:00:00Z")).unwrap();
         tx.set_field("decision", ground, "status_changed_at", text("2019-01-01T00:00:00Z")).unwrap();

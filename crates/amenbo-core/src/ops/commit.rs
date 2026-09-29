@@ -176,7 +176,7 @@ mod tests {
             let a = mk_task(tx, "a");
             add(tx, a, SHA1, None).unwrap();
             add(tx, a, SHA256, None).unwrap();
-            crate::ops::task::delete(tx, a).unwrap();
+            crate::ops::task::delete(tx, a, crate::model::ActorKind::Ai).unwrap();
             assert!(read::task_commits(tx.conn(), a).unwrap().is_empty(), "the anchors went with the task");
         });
     }

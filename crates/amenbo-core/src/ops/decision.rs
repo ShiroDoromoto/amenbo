@@ -19,7 +19,7 @@ use crate::model::{
     ActorKind, AttachmentTarget, Decision, DecisionComment, DecisionEdge, DecisionEdgeKind,
     DecisionStatus, DecisionTaskLink,
 };
-use crate::ops::{emit_create, emit_update, MadeIn, Noun};
+use crate::ops::{emit_create, emit_update, event, MadeIn, Noun};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -189,19 +189,24 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: DecisionPatch) -> Result<Decisio
 /// untouched, the shape `finish_creating` has, so re-running it neither re-stamps nor re-fires. That
 /// covers the rejected and the already-settled alike: neither is still being written.
 ///
-/// Returns `(decision, changed)`. `changed` is `false` on that noop, which is what the caller watches
-/// to fire `decision.accepted` once and once only.
+/// Returns `(decision, changed)`. `changed` is `false` on that noop, and only the real transition fires
+/// `decision.accepted`, stamped with `actor` — once and once only per decision. The event keeps that name:
+/// it is baked into `project_notify_event`'s `CHECK`, and moving the door a decision leaves by is no reason
+/// to make every subscriber relearn what to listen for (`AMB-D-918`).
 pub fn finish_writing(
     tx: &WriteTx<'_>,
     id: i64,
     decided_by: Option<String>,
+    actor: ActorKind,
 ) -> Result<(Decision, bool)> {
     let decided_by = decided_by.map(|t| t.trim().to_string());
     let before = live_before(tx, id)?;
     if !before.draft {
         return Ok((before, false)); // idempotent: the writing is already finished, nothing changed
     }
-    Ok((settle(tx, &before, decided_by)?, true))
+    let after = settle(tx, &before, decided_by)?;
+    event::emit_decision_verdict(tx, &after, crate::lifecycle::name::DECISION_ACCEPTED, actor)?;
+    Ok((after, true))
 }
 
 /// The row half of finishing the writing: the required classification is read, the writing ends, and
@@ -277,8 +282,9 @@ pub fn unmet_required_axes(conn: &rusqlite::Connection, decision: &Decision) -> 
 /// over is an error — a settled decision is replaced by superseding it.
 ///
 /// Returns `(decision, changed)`. `changed` is `false` on the idempotent noop (already `Rejected`), so
-/// the caller does not report a fresh rejection that never happened.
-pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
+/// the caller does not report a fresh rejection that never happened. Only the real transition fires
+/// `decision.rejected`, stamped with `actor`.
+pub fn reject(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<(Decision, bool)> {
     let before = live_before(tx, id)?;
     // Rejected first, and `draft` after: a rejected decision carries `draft` down too, so reading the
     // flag alone would send the idempotent case into the refusal.
@@ -303,6 +309,7 @@ pub fn reject(tx: &WriteTx<'_>, id: i64) -> Result<(Decision, bool)> {
         ..before.clone()
     };
     emit_update(tx, record::decision(&before), record::decision(&after))?;
+    event::emit_decision_verdict(tx, &after, crate::lifecycle::name::DECISION_REJECTED, actor)?;
     Ok((after, true))
 }
 
@@ -678,7 +685,7 @@ mod tests {
         // Settling it ends the writing.
         let settled = new_decision(tx, pid, "採択される決定");
         assert!(settled.draft, "a decision begins half-written");
-        let (settled, _) = finish_writing(tx, settled.id, None).unwrap();
+        let (settled, _) = finish_writing(tx, settled.id, None, crate::model::ActorKind::Ai).unwrap();
         assert!(!settled.draft);
         assert_eq!(settled.status, DecisionStatus::Decided);
 
@@ -690,7 +697,7 @@ mod tests {
 
         // Rejecting it ends the writing too — nobody goes back to finish a decision not taken.
         let turned_down = new_decision(tx, pid, "却下される決定");
-        let (turned_down, _) = reject(tx, turned_down.id).unwrap();
+        let (turned_down, _) = reject(tx, turned_down.id, crate::model::ActorKind::Ai).unwrap();
         assert!(!turned_down.draft);
 
         // Superseding is not a route out: it draws one edge and leaves the new side half-written.
@@ -708,7 +715,7 @@ mod tests {
         let pid = mk_project(tx, "amenbo 開発");
         let open = new_decision(tx, pid, "書きかけの決定");
         let settled = new_decision(tx, pid, "書き終えた決定");
-        finish_writing(tx, settled.id, None).unwrap();
+        finish_writing(tx, settled.id, None, crate::model::ActorKind::Ai).unwrap();
 
         let list = |filter: &str| -> Vec<i64> {
             decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
@@ -761,7 +768,7 @@ mod tests {
         let d = new_decision(tx, pid, "書き終える決定");
         assert!(d.draft && d.decided_at.is_none());
 
-        let (written, changed) = finish_writing(tx, d.id, Some("  ai  ".to_string())).unwrap();
+        let (written, changed) = finish_writing(tx, d.id, Some("  ai  ".to_string()), crate::model::ActorKind::Ai).unwrap();
         assert!(changed);
         assert!(!written.draft);
         assert_eq!(written.status, DecisionStatus::Decided);
@@ -769,7 +776,7 @@ mod tests {
         assert_eq!(written.decided_by.as_deref(), Some("ai"), "the facet is trimmed on the way in");
 
         // Already written: the same call changes nothing and leaves the stamps where they are.
-        let (again, changed) = finish_writing(tx, d.id, Some("human".to_string())).unwrap();
+        let (again, changed) = finish_writing(tx, d.id, Some("human".to_string()), crate::model::ActorKind::Ai).unwrap();
         assert!(!changed);
         assert_eq!(again.decided_by.as_deref(), Some("ai"), "who finished it is not overwritten");
         assert_eq!(again.decided_at, written.decided_at);
@@ -777,8 +784,8 @@ mod tests {
         // A rejected decision is not being written either, so it is the same no-op rather than a
         // second route into settling one.
         let turned_down = new_decision(tx, pid, "却下された決定");
-        reject(tx, turned_down.id).unwrap();
-        let (untouched, changed) = finish_writing(tx, turned_down.id, None).unwrap();
+        reject(tx, turned_down.id, crate::model::ActorKind::Ai).unwrap();
+        let (untouched, changed) = finish_writing(tx, turned_down.id, None, crate::model::ActorKind::Ai).unwrap();
         assert!(!changed);
         assert_eq!(untouched.status, DecisionStatus::Rejected);
     }
@@ -801,7 +808,7 @@ mod tests {
             .unwrap();
 
         let d = new_decision(tx, pid, "分類のない決定");
-        let err = finish_writing(tx, d.id, None).unwrap_err();
+        let err = finish_writing(tx, d.id, None, crate::model::ActorKind::Ai).unwrap_err();
         assert!(
             err.message_en().contains("影響半径"),
             "the refusal names the axis to fill in: {}",
@@ -810,7 +817,7 @@ mod tests {
         assert!(live_before(tx, d.id).unwrap().draft, "and the writing is still open");
 
         crate::ops::dimension::set_on_decision(tx, d.id, value.id).unwrap();
-        assert!(!finish_writing(tx, d.id, None).unwrap().0.draft);
+        assert!(!finish_writing(tx, d.id, None, crate::model::ActorKind::Ai).unwrap().0.draft);
     }
 
     /// Raising the flag does not reach back: a project's decisions settled before it marked an axis
@@ -831,19 +838,19 @@ mod tests {
         // Settled before the flag went up: the decisions a project already ruled on are not reached back
         // for, which is what "the check is the transition" means.
         let settled = new_decision(tx, pid, "先に書き終えた決定");
-        finish_writing(tx, settled.id, None).unwrap();
+        finish_writing(tx, settled.id, None, crate::model::ActorKind::Ai).unwrap();
 
         crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
             .unwrap();
         assert!(
-            !finish_writing(tx, settled.id, None).unwrap().1,
+            !finish_writing(tx, settled.id, None, crate::model::ActorKind::Ai).unwrap().1,
             "the settled one is still an idempotent no-op rather than a fresh refusal",
         );
 
         let d = new_decision(tx, pid, "分類のない決定");
-        assert!(finish_writing(tx, d.id, None).is_err(), "a fresh one is still held");
+        assert!(finish_writing(tx, d.id, None, crate::model::ActorKind::Ai).is_err(), "a fresh one is still held");
         crate::ops::dimension::set_on_decision(tx, d.id, value.id).unwrap();
-        assert_eq!(finish_writing(tx, d.id, None).unwrap().0.status, DecisionStatus::Decided);
+        assert_eq!(finish_writing(tx, d.id, None, crate::model::ActorKind::Ai).unwrap().0.status, DecisionStatus::Decided);
     }
 
     /// `supersede` draws one edge and settles nothing (`AMB-D-918`), so the required-classification
@@ -855,7 +862,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let old = new_decision(tx, pid, "覆される決定");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
 
         let axis = crate::ops::dimension::add(
             tx,
@@ -966,7 +973,7 @@ mod tests {
         let pid = mk_project(tx, "amenbo 開発");
         let d = new_decision(tx, pid, "件名");
         let c = add_comment(tx, d.id, ActorKind::Ai, "誤字のある投稿").unwrap();
-        finish_writing(tx, d.id, None).unwrap();
+        finish_writing(tx, d.id, None, crate::model::ActorKind::Ai).unwrap();
 
         let edited = edit_comment(tx, c.id, "直した投稿").unwrap();
         assert_eq!(edited.id, c.id, "the id does not change (this is not a new post)");
@@ -1087,7 +1094,7 @@ mod tests {
         let t = add_task_in(tx, pid, "task");
         link(tx, d.id, t).unwrap();
         // Delete the task and it drops out of the decision → task view: the endpoint is gone.
-        crate::ops::task::delete(tx, t).unwrap();
+        crate::ops::task::delete(tx, t, crate::model::ActorKind::Ai).unwrap();
         assert!(tasks_for_decision(tx, d.id).is_empty(), "a dead task is not returned");
         // Delete the decision and it drops out of the task → decision view as well.
         let t2 = add_task_in(tx, pid, "task2");
@@ -1172,7 +1179,7 @@ mod tests {
             project_id: pid,
             made_in: None,
         }).unwrap();
-        finish_writing(tx, d1.id, None).unwrap();
+        finish_writing(tx, d1.id, None, crate::model::ActorKind::Ai).unwrap();
         let _d2 = add(tx, NewDecision {
             title: "OSS は英語表記".to_string(),
             body: "README とコミットは英語".to_string(),
@@ -1425,7 +1432,7 @@ mod tests {
         assert_eq!(edited.title, "new title");
         assert_eq!(edited.body, "詳しい根拠");
         // Accepted edits in place too (`AMB-D-363`), and editing does not re-decide: the decided_* stamps stand.
-        let (accepted, _) = finish_writing(tx, d.id, Some("user-1".to_string())).unwrap();
+        let (accepted, _) = finish_writing(tx, d.id, Some("user-1".to_string()), crate::model::ActorKind::Ai).unwrap();
         let decided_at = accepted.decided_at;
         let reedited = update(tx, d.id, DecisionPatch { body: Some("採択後に直した本文".to_string()), ..Default::default() }).unwrap();
         assert_eq!(reedited.status, DecisionStatus::Decided, "editing a settled decision does not un-settle it");
@@ -1434,7 +1441,7 @@ mod tests {
         assert_eq!(reedited.decided_at, decided_at, "edit leaves decided_at untouched");
         // A rejected decision is terminal: it cannot be edited.
         let r = new_decision(tx, pid, "却下する案");
-        reject(tx, r.id).unwrap();
+        reject(tx, r.id, crate::model::ActorKind::Ai).unwrap();
         assert!(update(tx, r.id, DecisionPatch { body: Some("x".to_string()), ..Default::default() }).is_err());
     }
 
@@ -1444,17 +1451,17 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let d = new_decision(tx, pid, "却下する案");
-        let (r, changed) = reject(tx, d.id).unwrap();
+        let (r, changed) = reject(tx, d.id, crate::model::ActorKind::Ai).unwrap();
         assert!(changed, "a fresh rejection reports changed");
         assert_eq!(r.status, DecisionStatus::Rejected);
         // Idempotent: re-rejecting reports unchanged.
-        let (r2, changed2) = reject(tx, d.id).unwrap();
+        let (r2, changed2) = reject(tx, d.id, crate::model::ActorKind::Ai).unwrap();
         assert!(!changed2, "re-rejecting an already-rejected decision reports unchanged");
         assert_eq!(r2.status, DecisionStatus::Rejected);
         // A decision whose writing is over cannot be rejected.
         let d2 = new_decision(tx, pid, "書き終えた決定");
-        finish_writing(tx, d2.id, None).unwrap();
-        assert!(reject(tx, d2.id).is_err());
+        finish_writing(tx, d2.id, None, crate::model::ActorKind::Ai).unwrap();
+        assert!(reject(tx, d2.id, crate::model::ActorKind::Ai).is_err());
     }
 
     #[test]
@@ -1463,7 +1470,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let d = new_decision(tx, pid, "早すぎた採択を議論へ戻す決定");
-        finish_writing(tx, d.id, Some("user-1".to_string())).unwrap();
+        finish_writing(tx, d.id, Some("user-1".to_string()), crate::model::ActorKind::Ai).unwrap();
         // reopen un-settles it back to discussion, clearing decided_* — this is its whole job now
         // (editing does not need it: an accepted decision edits in place, see the update test).
         let (re, changed) = reopen(tx, d.id).unwrap();
@@ -1473,7 +1480,7 @@ mod tests {
         assert!(re.decided_at.is_none(), "decided_at is cleared");
         assert!(re.decided_by.is_none(), "decided_by is cleared");
         // Finishing the writing again settles it again — a real transition.
-        let (reaccepted, changed) = finish_writing(tx, d.id, Some("user-1".to_string())).unwrap();
+        let (reaccepted, changed) = finish_writing(tx, d.id, Some("user-1".to_string()), crate::model::ActorKind::Ai).unwrap();
         assert!(changed, "settling it again after a reopen is a real transition");
         assert_eq!(reaccepted.status, DecisionStatus::Decided);
         assert!(reaccepted.decided_at.is_some());
@@ -1507,12 +1514,12 @@ mod tests {
             .unwrap();
         assert_eq!(clock(d.id), planted, "editing the body leaves the status clock where it was");
 
-        finish_writing(tx, d.id, None).unwrap();
+        finish_writing(tx, d.id, None, crate::model::ActorKind::Ai).unwrap();
         assert_ne!(clock(d.id), planted, "accepting stamps the clock");
 
         // The idempotent re-accept never reaches the write, so it cannot re-stamp.
         plant(d.id);
-        finish_writing(tx, d.id, Some("user-2".to_string())).unwrap();
+        finish_writing(tx, d.id, Some("user-2".to_string()), crate::model::ActorKind::Ai).unwrap();
         assert_eq!(clock(d.id), planted, "re-settling a settled decision leaves the clock alone");
 
         // Reopen is the transition the whole axis is built on (`AMB-D-373`).
@@ -1522,7 +1529,7 @@ mod tests {
         // Superseding rewrites neither row — being superseded is an edge, not a status — so both
         // clocks stand.
         let old = new_decision(tx, pid, "旧: 置き換えられる");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let newer = new_decision(tx, pid, "新: 置き換える");
         plant(old.id);
         plant(newer.id);
@@ -1543,11 +1550,11 @@ mod tests {
         assert!(!changed, "reopening a decision still being written changes nothing");
         // Rejected cannot be reopened: reject has no inverse.
         let r = new_decision(tx, pid, "却下した決定");
-        reject(tx, r.id).unwrap();
+        reject(tx, r.id, crate::model::ActorKind::Ai).unwrap();
         assert!(reopen(tx, r.id).is_err(), "Rejected cannot be reopened");
         // A superseded decision stays accepted (being superseded is a derived projection, not a status), so reopen works.
         let old = new_decision(tx, pid, "旧: 置き換えられる");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let newer = new_decision(tx, pid, "新: 置き換える");
         supersede(tx, newer.id, old.id).unwrap();
         assert!(reopen(tx, old.id).unwrap().0.draft, "being superseded is no bar to reopening");
@@ -1559,9 +1566,9 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let old = new_decision(tx, pid, "v1: engine を真実源");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let new = new_decision(tx, pid, "v2: RDB を真実源");
-        finish_writing(tx, new.id, Some("user-1".to_string())).unwrap();
+        finish_writing(tx, new.id, Some("user-1".to_string()), crate::model::ActorKind::Ai).unwrap();
         let (res, changed) = supersede(tx, new.id, old.id).unwrap();
         assert!(changed, "drawing the edge is a real change");
         assert_eq!(targets(tx, new.id, DecisionEdgeKind::Supersedes), vec![old.id]);
@@ -1588,7 +1595,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let old = new_decision(tx, pid, "旧");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let new = new_decision(tx, pid, "誤って覆した決定");
         supersede(tx, new.id, old.id).unwrap();
         assert!(is_superseded(tx, old.id), "precondition: it has been superseded");
@@ -1616,7 +1623,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let old = new_decision(tx, pid, "旧");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let new = new_decision(tx, pid, "誤って覆した決定");
         supersede(tx, new.id, old.id).unwrap();
         assert!(is_superseded(tx, old.id));
@@ -1634,9 +1641,9 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let old = new_decision(tx, pid, "覆される決定");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let new = new_decision(tx, pid, "覆す決定");
-        finish_writing(tx, new.id, None).unwrap();
+        finish_writing(tx, new.id, None, crate::model::ActorKind::Ai).unwrap();
         supersede(tx, new.id, old.id).unwrap();
 
         let list = |filter: &str| -> Vec<i64> {
@@ -1676,7 +1683,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let settled = new_decision(tx, pid, "今日採択した決定");
-        finish_writing(tx, settled.id, None).unwrap();
+        finish_writing(tx, settled.id, None, crate::model::ActorKind::Ai).unwrap();
         let open = new_decision(tx, pid, "まだ採択していない決定");
 
         let list = |filter: &str| -> Vec<i64> {
@@ -1830,7 +1837,7 @@ mod tests {
         let b = new_decision(tx, pid, "旧 B");
         let c = new_decision(tx, pid, "旧 C");
         for d in [&a, &b, &c] {
-            finish_writing(tx, d.id, None).unwrap();
+            finish_writing(tx, d.id, None, crate::model::ActorKind::Ai).unwrap();
         }
         let newer = new_decision(tx, pid, "新: A と B を置き換え C を改訂");
         supersede(tx, newer.id, a.id).unwrap();
@@ -1858,7 +1865,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let old = new_decision(tx, pid, "旧");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let new = new_decision(tx, pid, "新");
 
         amend(tx, new.id, old.id).unwrap();
@@ -1882,7 +1889,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let premise = new_decision(tx, pid, "同期基盤を撤去");
-        finish_writing(tx, premise.id, None).unwrap();
+        finish_writing(tx, premise.id, None, crate::model::ActorKind::Ai).unwrap();
         let standing = new_decision(tx, pid, "その上に立つ決定");
 
         let res = builds_on(tx, standing.id, premise.id).unwrap();
@@ -1906,7 +1913,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let old = new_decision(tx, pid, "旧");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let superseding = new_decision(tx, pid, "覆す側");
         let amending = new_decision(tx, pid, "改訂する側");
         supersede(tx, superseding.id, old.id).unwrap();
@@ -1941,7 +1948,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let old = new_decision(tx, pid, "旧");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let new = new_decision(tx, pid, "新");
         supersede(tx, new.id, old.id).unwrap();
 
@@ -1956,7 +1963,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let old = new_decision(tx, pid, "軸を統一");
-        finish_writing(tx, old.id, None).unwrap();
+        finish_writing(tx, old.id, None, crate::model::ActorKind::Ai).unwrap();
         let new = new_decision(tx, pid, "タグ行だけ改訂");
         amend(tx, new.id, old.id).unwrap();
         assert_eq!(targets(tx, new.id, DecisionEdgeKind::Amends), vec![old.id]);
@@ -1985,7 +1992,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let target = new_decision(tx, pid, "通信ゼロ");
-        finish_writing(tx, target.id, None).unwrap();
+        finish_writing(tx, target.id, None, crate::model::ActorKind::Ai).unwrap();
         let amending = new_decision(tx, pid, "更新チェックを解禁");
         assert!(amending.draft);
 
@@ -1995,7 +2002,7 @@ mod tests {
         assert!(res.decided_by.is_none(), "decided_by is not set");
         assert_eq!(targets(tx, amending.id, DecisionEdgeKind::Amends), vec![target.id]);
         // Finishing the writing still works as a separate operation, and leaves the edge as it is.
-        let (settled, _) = finish_writing(tx, amending.id, None).unwrap();
+        let (settled, _) = finish_writing(tx, amending.id, None, crate::model::ActorKind::Ai).unwrap();
         assert!(!settled.draft);
         assert_eq!(targets(tx, amending.id, DecisionEdgeKind::Amends), vec![target.id]);
     }
@@ -2020,7 +2027,7 @@ mod tests {
         // Even an accepted decision can be deleted: retiring a record outright is a different act from
         // editing or superseding it.
         let d = new_decision(tx, pid, "退役させる商用決定");
-        finish_writing(tx, d.id, None).unwrap();
+        finish_writing(tx, d.id, None, crate::model::ActorKind::Ai).unwrap();
         let t = add_task_in(tx, pid, "linked task");
         link(tx, d.id, t).unwrap();
         assert!(read::decision_task_link_id(tx.conn(), d.id, t).unwrap().is_some());

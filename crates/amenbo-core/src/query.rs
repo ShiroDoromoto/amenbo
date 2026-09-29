@@ -3027,8 +3027,8 @@ mod filter_tests {
         let ai = task(tx, "ai", Some(p));
         let human = task(tx, "human", Some(p));
         let unassigned = task(tx, "unassigned", Some(p));
-        ops::task::set_assignee(tx, ai, Some(ActorKind::Ai)).unwrap();
-        ops::task::set_assignee(tx, human, Some(ActorKind::Human)).unwrap();
+        ops::task::set_assignee(tx, ai, Some(ActorKind::Ai), ActorKind::Ai).unwrap();
+        ops::task::set_assignee(tx, human, Some(ActorKind::Human), ActorKind::Ai).unwrap();
 
         assert_eq!(ids(tx, Some("ai:true")), vec![ai], "only what is delegated to an AI");
         let mut not_ai = vec![human, unassigned];
@@ -3050,9 +3050,9 @@ mod filter_tests {
         let ip = task(tx, "in_progress", Some(p));
         let dn = task(tx, "done", Some(p));
         let bl = task(tx, "blocked", Some(p));
-        ops::task::set_status(tx, ip, TaskStatus::InProgress).unwrap();
-        ops::task::set_status(tx, dn, TaskStatus::Done).unwrap();
-        ops::task::set_status(tx, bl, TaskStatus::Blocked).unwrap();
+        ops::task::set_status(tx, ip, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
+        ops::task::set_status(tx, dn, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
+        ops::task::set_status(tx, bl, TaskStatus::Blocked, crate::model::ActorKind::Ai).unwrap();
 
         let mut expected = vec![td, ip];
         expected.sort();
@@ -3125,8 +3125,8 @@ mod filter_tests {
         let ai = task(tx, "ai", Some(p));
         let human = task(tx, "human", Some(p));
         let unassigned = task(tx, "unassigned", Some(p));
-        ops::task::set_assignee(tx, ai, Some(ActorKind::Ai)).unwrap();
-        ops::task::set_assignee(tx, human, Some(ActorKind::Human)).unwrap();
+        ops::task::set_assignee(tx, ai, Some(ActorKind::Ai), ActorKind::Ai).unwrap();
+        ops::task::set_assignee(tx, human, Some(ActorKind::Human), ActorKind::Ai).unwrap();
 
         assert_eq!(ids(tx, Some("assignee:me-ai")), vec![ai], "a single value works as before");
         let mut mine_or_nobodys = vec![ai, unassigned];

@@ -2224,7 +2224,7 @@ mod tests {
         assert_eq!(read::task_dimension_assignments(tx.conn(), t).unwrap(), vec![(axis.id, core.id)]);
 
         // And the creation premise reads the same "one or more": the task is answered, so it passes.
-        assert!(crate::ops::task::finish_creating(tx, t).is_ok());
+        assert!(crate::ops::task::finish_creating(tx, t, crate::model::ActorKind::Ai).is_ok());
     }
 
     /// The time axis holds one value at a time (`AMB-D-826`), and the refusal is the same whichever half
@@ -2567,7 +2567,7 @@ mod tests {
         let second = on(v2.id, "次");
         on(v3.id, "その次");
         let going = on(v3.id, "着手済み");
-        crate::ops::task::set_status(tx, going, crate::model::TaskStatus::InProgress).unwrap();
+        crate::ops::task::set_status(tx, going, crate::model::TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
         task_in(tx, "値なし", p);
 
         assert_eq!(held_by_order(tx, &dim(tx, axis.id)).unwrap(), 0, "an axis without it holds nobody");
@@ -2581,11 +2581,11 @@ mod tests {
         assert_eq!(held_by_order(tx, &raised).unwrap(), 2, "v2's and v3's todo tasks wait on v1");
 
         // A value closes once its own tasks are finished.
-        crate::ops::task::set_status(tx, first, crate::model::TaskStatus::Done).unwrap();
+        crate::ops::task::set_status(tx, first, crate::model::TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
         value_set_closed(tx, v1.id, true).unwrap();
         assert_eq!(held_by_order(tx, &dim(tx, axis.id)).unwrap(), 1, "with v1 closed, only v3 waits, on v2");
 
-        crate::ops::task::set_status(tx, second, crate::model::TaskStatus::Done).unwrap();
+        crate::ops::task::set_status(tx, second, crate::model::TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
         value_set_closed(tx, v2.id, true).unwrap();
         assert_eq!(held_by_order(tx, &dim(tx, axis.id)).unwrap(), 0, "everything before v3 is closed");
     }
@@ -2606,7 +2606,7 @@ mod tests {
             let t = task_in(tx, title, p);
             set(tx, t, v1.id).unwrap();
             if let Some(s) = status {
-                crate::ops::task::set_status(tx, t, s).unwrap();
+                crate::ops::task::set_status(tx, t, s, crate::model::ActorKind::Ai).unwrap();
             }
             t
         };
@@ -2626,11 +2626,11 @@ mod tests {
         );
         assert!(!val(tx, v1.id).closed, "and nothing was written");
 
-        crate::ops::task::set_status(tx, going, crate::model::TaskStatus::Blocked).unwrap();
+        crate::ops::task::set_status(tx, going, crate::model::TaskStatus::Blocked, crate::model::ActorKind::Ai).unwrap();
         assert!(value_set_closed(tx, v1.id, true).is_err(), "a blocked task is not finished either");
 
-        crate::ops::task::set_status(tx, todo, crate::model::TaskStatus::Done).unwrap();
-        crate::ops::task::set_status(tx, going, crate::model::TaskStatus::Done).unwrap();
+        crate::ops::task::set_status(tx, todo, crate::model::TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
+        crate::ops::task::set_status(tx, going, crate::model::TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
         assert!(value_set_closed(tx, v1.id, true).unwrap().closed, "with every task finished it closes");
 
         let loose = add(tx, p, NewDimension { ordered: true, role: DimensionRole::Closable, ..custom("区切り") })
@@ -2733,7 +2733,7 @@ mod tests {
         assert_eq!(standing(tx, bare), ready_standing(), "a task with no value waits on nothing");
 
         // A value closes once its own tasks are finished (`AMB-D-990`).
-        crate::ops::task::set_status(tx, first, crate::model::TaskStatus::Done).unwrap();
+        crate::ops::task::set_status(tx, first, crate::model::TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
         value_set_closed(tx, v1.id, true).unwrap();
         assert_eq!(
             read::newly_ready_by_closing(tx.conn(), v1.id).unwrap(),
@@ -2743,7 +2743,7 @@ mod tests {
         assert_eq!(standing(tx, second), ready_standing());
         assert_eq!(standing(tx, third), waiting_standing(&["v2"]));
 
-        crate::ops::task::set_status(tx, second, crate::model::TaskStatus::Done).unwrap();
+        crate::ops::task::set_status(tx, second, crate::model::TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
         value_set_closed(tx, v2.id, true).unwrap();
         assert_eq!(read::newly_ready_by_closing(tx.conn(), v2.id).unwrap(), vec![third]);
         assert_eq!(standing(tx, third), ready_standing());
@@ -2767,7 +2767,7 @@ mod tests {
         set(tx, going, v2.id).unwrap();
         sequence(tx, axis.id, true).unwrap();
 
-        let err = crate::ops::task::set_status(tx, waiting, TaskStatus::InProgress).unwrap_err();
+        let err = crate::ops::task::set_status(tx, waiting, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
         assert_eq!(err.code(), ErrorCode::NotReady.as_str(), "{err}");
         assert!(err.to_string().contains("v1"), "the refusal names the value to close: {err}");
         assert!(
@@ -2776,7 +2776,7 @@ mod tests {
         );
 
         value_set_closed(tx, v1.id, true).unwrap();
-        crate::ops::task::set_status(tx, going, TaskStatus::InProgress).unwrap();
+        crate::ops::task::set_status(tx, going, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
         value_set_closed(tx, v1.id, false).unwrap();
         assert_eq!(
             read::task_status(tx.conn(), going).unwrap(),
@@ -2802,7 +2802,7 @@ mod tests {
         set(tx, going, v2.id).unwrap();
         sequence(tx, axis.id, true).unwrap();
         value_set_closed(tx, v1.id, true).unwrap();
-        crate::ops::task::set_status(tx, going, TaskStatus::InProgress).unwrap();
+        crate::ops::task::set_status(tx, going, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
         // The clocks count whole seconds, so the reservation is put in the past for what follows to be
         // after it.
         let at = |table: &str, column: &str, id: i64, when: &str| {

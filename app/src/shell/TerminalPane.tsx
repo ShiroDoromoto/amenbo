@@ -662,6 +662,7 @@ export function TerminalPane({
     // Only `running` is a reason to do any of this again. `start`, `frame` and `run` are what this
     // pane *is* — a change of any of them would be a different pane, and the face gives that one a
     // different key (`./WorkspaceFace`). The one exception is the run's task, told below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running]);
 
   // **The row above a built-in's card** (`./BuiltinCard`). There is no terminal for the effect above
@@ -690,6 +691,8 @@ export function TerminalPane({
       plateRef.current = null;
       on.current.onRow?.(frame, null);
     };
+    // Once per pane: `frame`, `hue` and `run` are what the pane is, as said above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowWithout]);
 
   // The keyboard, at the moment a terminal opens here and at every fold after it. What a person does
@@ -715,6 +718,8 @@ export function TerminalPane({
     if (live === null || !focused) return;
     if (folded) focusTerminal(paneRef.current);
     else boxRef.current?.focus();
+    // `focused` is read as it stands: the two reasons are the ones said above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, folded]);
 
   // A naming reaches every row, not only the one it happened in: the rail renames a pane that is not
@@ -729,6 +734,8 @@ export function TerminalPane({
   const took = run?.task ?? null;
   useEffect(() => {
     plateRef.current?.took(took);
+    // Watched by the task's fields, for the reason said above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [took?.ref, took?.title, took?.seq]);
 
   // **Where the run stands** (`AMB-T-5506`). It moves while a step's pane stands — the run ends, or is
@@ -737,6 +744,8 @@ export function TerminalPane({
   const stood = run?.state ?? null;
   useEffect(() => {
     plateRef.current?.stated(stood);
+    // Watched by the words, for `took`'s reason.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stood?.status, stood?.word]);
 
   // **The number of the box the step was opened from** (`AMB-T-5538`), read off the automation's

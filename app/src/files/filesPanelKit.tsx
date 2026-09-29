@@ -485,7 +485,8 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
   // the tree and the tree itself are two readers of one choice (`AMB-D-905`,
   // `../shell/WorkspaceFace`).
   const [pickedRoot, setPickedRoot] = useState<string | null>(null);
-  const folderRoots = useMemo(() => sectionsOf(hoisted.bound), [hoisted.bound]);
+  const bound = hoisted.bound;
+  const folderRoots = useMemo(() => sectionsOf(bound), [bound]);
   // Which face is up. The workspace keeps it and the column reads it, so the harness holds it
   // too (`../talk/columns`).
   const [tab, setTab] = useState<SideTab>(props.tab ?? "files");
@@ -516,6 +517,8 @@ export function Columns({ show, ...props }: Partial<Props> & { projectId: number
     if (show === undefined || show === null) return;
     const found = fileUnderAny(hoisted.bound.map((one) => one.path), show.cwd, show.target);
     if (found) openOne(found);
+    // `nth` is what makes the same path asked for twice two answers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show?.nth]);
   // Each in the place the face puts it, so a road can say which column it means: the same class name
   // is drawn in both, and a test that asked the document for it would be handed whichever came

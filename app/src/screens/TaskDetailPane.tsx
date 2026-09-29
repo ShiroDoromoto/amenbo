@@ -97,6 +97,8 @@ export function TaskDetailPane({
     loadTaskActivity(taskId).then((items) => { if (alive) setTaskActivity(items); });
     store.markSeen(taskId);
     return () => { alive = false; };
+    // `store` is rebuilt whenever the activity moves; the fetch is keyed by the task and its comment count.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, commentCount]);
   // Pull this task's dimension assignments from the read-model (Tauri only; empty in the mock).
   useEffect(() => {
@@ -152,6 +154,8 @@ export function TaskDetailPane({
   useEffect(() => {
     if (editCommentAt === undefined) return;
     setTab("detail");
+    // `nonce` is what makes the same comment asked for twice two answers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editCommentAt?.nonce]);
   const roster = dataAdapter.listRoster();
   // The comment box: a second send before the first has landed is dropped: the box still holds the body, so it would post it again.

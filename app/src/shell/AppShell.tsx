@@ -423,7 +423,7 @@ export function AppShell() {
     if (rightDirtyRef.current && !(await confirmDialog(t("pane.discardConfirm")))) return false;
     rightDirtyRef.current = false;
     return true;
-  }, [t]);
+  }, []);
 
   const selectTask = useCallback(async (id: number): Promise<boolean> => {
     if (id === selectedTaskId && compose === null) return true;
@@ -469,13 +469,13 @@ export function AppShell() {
     setCompose(target);
   };
   // After a save, delete or create we simply close (nothing is unsaved). Clear dirty and push a Location with no selection.
-  const closeRight = () => {
+  const closeRight = useCallback(() => {
     rightDirtyRef.current = false;
     setCompose(null);
     setReplyFocus(null);
     setDecisionReplyFocus(null);
     go({ nav, sel: NO_SELECTION });
-  };
+  }, [go, nav]);
   const afterCreate = (newId: number | null) => {
     rightDirtyRef.current = false;
     setCompose(null);
@@ -492,10 +492,10 @@ export function AppShell() {
   const goBack = useCallback(async () => { if (await guardDirty()) back(); }, [back, guardDirty]);
   const goForward = useCallback(async () => { if (await guardDirty()) forward(); }, [forward, guardDirty]);
   // Closing via a click on blank space (outside a row or card), the cross, or Cancel. With unsaved input we interpose the discard confirmation and close only on OK.
-  const requestCloseRight = async () => {
+  const requestCloseRight = useCallback(async () => {
     if (!(await guardDirty())) return;
     closeRight();
-  };
+  }, [guardDirty, closeRight]);
 
   // Re-clamp the current widths on every resize, so shrinking the window cannot leave a pane over its cap (the right
   // pane at ~50%, the sidebar at ~40% of the window).
@@ -717,7 +717,7 @@ export function AppShell() {
     };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
-  }, [showDetail]);
+  }, [showDetail, requestCloseRight]);
 
   return (
     <RefNavProvider value={refNav}>

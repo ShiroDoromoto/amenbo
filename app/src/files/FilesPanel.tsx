@@ -815,12 +815,15 @@ function FileReader({
   // time it arrives, and a reader who had typed is asked rather than read over (`AMB-D-784`).
   const [typedText, setTypedText] = useState<string | null>(null);
   const name = path[path.length - 1];
+  // The path as one word, which is what the effects below are set up again for: `path` itself is a
+  // fresh array on every draw.
+  const pathKey = path.join("/");
   // The one thing the name decides, and the only file there are two ways to show (`MARKDOWN`).
   const markdown = MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext));
 
   // A different file is a different question: what the reader named was this file's encoding, and
   // carrying it to the next one would open that one in an encoding nobody chose for it.
-  useEffect(() => setAsked(undefined), [projectId, root, path.join("/")]);
+  useEffect(() => setAsked(undefined), [projectId, root, pathKey]);
 
   // What the file was as it was last read, whether there is anything of the reader's to lose by
   // replacing it, and that text itself where the editor is no longer the one holding it — a
@@ -891,7 +894,9 @@ function FileReader({
         if (alive) setFailed(unanswered(e));
       });
     return () => { alive = false; };
-  }, [projectId, root, path.join("/"), asked]);
+    // Once per file: `onTyped` and what was typed are read as they stood when the file was opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, root, pathKey, asked]);
 
   // What the reader typed, handed up as this file leaves the screen — another tab brought up, the
   // draft page opened, the column closed. The text is in the editor and the editor goes with the
@@ -909,7 +914,9 @@ function FileReader({
       if (text === null) return;
       onTyped(here, { text, edited: held.current.edited, seen: held.current.digest });
     };
-  }, [projectId, root, path.join("/")]);
+    // Once per file, for the reason said above: the way up is the one this file arrived by.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, root, pathKey]);
 
   // The file moving under the reader while they have it open.
   //
@@ -959,7 +966,9 @@ function FileReader({
       void listening.then((stop) => stop());
       void folderUnwatch(root, "file", tag);
     };
-  }, [projectId, root, path.join("/"), tracked, asked]);
+    // Once per file and per encoding: `path`, a fresh array on every draw, is watched as `pathKey`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, root, pathKey, tracked, asked]);
 
   // Taking what is on the disk now, over what the reader has typed. It is the one thing here that
   // loses somebody's work, which is why nothing does it on their behalf (`AMB-D-784`).
@@ -1450,6 +1459,8 @@ function EncodingMenu({ at, onPick, onClose }: {
       .then((found) => { if (alive) setNames(found); })
       .catch(() => { if (alive) onClose(); });
     return () => { alive = false; };
+    // Asked once, as the menu opens; `onClose` is the caller's and a fresh function on every draw.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

@@ -166,7 +166,7 @@ export function Attachments({ target, targetId, compact = false }: {
       },
     });
     return () => { alive = false; stop(); };
-  }, [well]);
+  }, [well, target, targetId]);
   const onPick = async () => {
     setBusy(true);
     try { await pickAndAttach(target, targetId); }

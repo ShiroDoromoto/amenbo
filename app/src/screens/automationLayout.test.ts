@@ -802,6 +802,65 @@ describe("the picture of an automation", () => {
     }
   });
 
+  it("turns a line down to the box on the right under the names of the lines that go nowhere beside it", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "タスクに着手する"),
+          step({
+            id: 2,
+            name: "PR を作ってマージする",
+            exits: [
+              { id: 70, name: "完了", outputs: [] },
+              { id: 71, name: "*", outputs: [] },
+              { id: 72, name: "main が赤", outputs: [] },
+              { id: 73, name: "CI が赤", outputs: [] },
+              { id: 74, name: "CI の不調", outputs: [] },
+            ],
+          }),
+          step({ id: 3, name: "タスクを閉じる" }),
+          step({ id: 4, name: "CI を直す" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "main が赤", ends: "halt" }),
+          edge({ id: 4, fromId: 2, exitName: "CI が赤", ends: "halt" }),
+          edge({ id: 5, fromId: 2, exitName: "CI の不調", toId: 4 }),
+        ],
+      }),
+    );
+    const line = (key: string) => picture.lines.find((one) => one.key === key)!;
+    const words = (one: PicLine) => {
+      const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+      const left = one.align === "end" ? one.at.x - wide : one.at.x;
+      return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
+    };
+    const right = line("edge-5");
+    const [sx, turn, tx] = [right.points[0]!.x, right.points[1]!.y, right.points[2]!.x];
+    expect(tx).toBeGreaterThan(sx);
+    const name = words(right);
+    for (const key of ["edge-3", "edge-4"]) {
+      const nowhere = line(key);
+      const x = nowhere.points[0]!.x;
+      // Its leg across runs under the line that goes nowhere, and under that line's name.
+      expect(x > sx && x < tx && nowhere.points[1]!.y >= turn, key).toBe(false);
+      const hung = words(nowhere);
+      expect(hung.bottom, key).toBeLessThan(turn);
+      // Its own name lies over neither the line that goes nowhere nor that line's name.
+      expect(x > name.left && x < name.right && nowhere.points[1]!.y > name.top, key).toBe(false);
+      expect(hung.left < name.right && name.left < hung.right && hung.top < name.bottom && name.top < hung.bottom, key).toBe(
+        false,
+      );
+    }
+    // Nor does its leg down into the box on the right run through a name that goes nowhere.
+    for (const key of ["edge-3", "edge-4"]) {
+      const hung = words(line(key));
+      expect(tx > hung.left && tx < hung.right && hung.bottom > turn, key).toBe(false);
+    }
+  });
+
   it("draws the error way out only where somebody drew a line from it — the legend says the rest", () => {
     const steps = [taker(1, "take"), step({ id: 2, name: "work" })];
     const plain = layOut(

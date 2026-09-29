@@ -1536,12 +1536,15 @@ function layOutWith(
   // one margin, each runs out to the lane and stops there. The lane is drawn a piece per stretch
   // between two joinings, so no two lie over each other, and one more line takes it on into the box.
   const groups = new Map<string, Aside[]>();
+  // The leg each margin's lines come down onto a box's top by, with that box.
+  const landings: { x: number; top: number; bottom: number; to: PicNode }[] = [];
   for (const line of asides) groups.set(intoKey(line), [...(groups.get(intoKey(line)) ?? []), line]);
   for (const [key, group] of groups) {
     const x = laneX(group[0]!);
     const to = group[0]!.to;
     const inY = to.y - DROP;
     const joined = group.length > 1;
+    landings.push({ x: inX(group[0]!), top: inY, bottom: to.y, to });
     // Toward where the lane turns into the box, from above and from below: each one stops where the
     // next nearer one joins.
     const stops = new Map<string, number>();
@@ -1652,7 +1655,8 @@ function layOutWith(
   // what their room grows by: they are given twice as much.
   const rowOf = (box: PicNode): readonly number[] | undefined => {
     const place = at.get(box.boxId);
-    return place === undefined ? undefined : laps[place.lap]!.rows[place.row]!;
+    // The marks of an action's ways out stand in a row after every stretch, of no stretch's own.
+    return place === undefined ? undefined : laps[place.lap]?.rows[place.row];
   };
   // The box before the gap beside `box` on that side, if that gap is one between two boxes of its row:
   // past the last box of a row there is none to stand further out.
@@ -1720,23 +1724,30 @@ function layOutWith(
   }
 
   // A name written over its own turn ran over the leg into its box of a line from the same row that
-  // turns higher and crosses it. The box it leaves stands further out, on the side the name runs from,
-  // until the name starts a name's room past that leg; where that box stands at the end of its row, or
-  // the line is one of its own, the box that leg goes into stands further out the other way instead.
-  // The two boxes are in different rows, each centred: they are given twice as much.
+  // turns higher and crosses it, or of a line from a margin down onto a box of the row below. The box
+  // it leaves stands further out, on the side the name runs from, until the name starts a name's room
+  // past that leg; where that box stands at the end of its row, or the line is one of its own, the box
+  // that leg goes into stands further out the other way instead. The two boxes are in different rows,
+  // each centred: they are given twice as much.
   for (const { line, from, left } of overTurn) {
     const wide = wordW(edgeWord(line));
     const start = wordLeft(line, wide);
     const top = line.at.y - 10;
     const bottom = line.at.y + 1;
     const row = rowOf(from);
-    for (const [other, ends] of acrossOf) {
-      if (other === line || row === undefined || rowOf(ends.from) !== row) continue;
-      const [p, q] = [other.points[2]!, other.points[3]!];
-      if (p.y > bottom || top > q.y || p.x < start || start + wide < p.x) continue;
-      const past = left ? p.x + BESIDE - start : start + wide + BESIDE - p.x;
-      const out = ends.from === from ? undefined : nextTo(from, left);
-      widen(out ?? nextTo(ends.to, !left), past * 2);
+    const legs = [
+      ...[...acrossOf].flatMap(([other, ends]) =>
+        other === line || row === undefined || rowOf(ends.from) !== row
+          ? []
+          : [{ x: other.points[2]!.x, top: other.points[2]!.y, bottom: other.points[3]!.y, ...ends }],
+      ),
+      ...landings.map((leg) => ({ ...leg, from: undefined })),
+    ];
+    for (const leg of legs) {
+      if (leg.top > bottom || top > leg.bottom || leg.x < start || start + wide < leg.x) continue;
+      const past = left ? leg.x + BESIDE - start : start + wide + BESIDE - leg.x;
+      const out = leg.from === from ? undefined : nextTo(from, left);
+      widen(out ?? nextTo(leg.to, !left), past * 2);
     }
   }
 

@@ -710,10 +710,19 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // pointer says nothing about whether there is anything to do — but it must not be the thing that brings
     // a store into being either, and `Store::open` below would do exactly that on a device where Amenbo has
     // never been used. Reach for this device's store file directly: no store, nothing owed, nothing to say.
-    if matches!(cli.command, Some(Command::Tick { sub: TickCmd::Run }))
-        && !amenbo_core::config::Paths::resolve().map_err(CliError::from)?.store_file.exists()
-    {
-        return Ok(0);
+    //
+    // Nor is it the thing that carries a store to another format. The scheduler starts whatever app holds
+    // the bundle id, so a newer build merely lying somewhere on the device would otherwise migrate the store
+    // under the one the person actually uses — and a too-new store, left by a newer build, is nobody's
+    // error to hear at this hour. A store at any other version than this build's waits for a surface a
+    // person started (the CLI or the GUI); the tick says nothing and leaves it as it found it.
+    if matches!(cli.command, Some(Command::Tick { sub: TickCmd::Run })) {
+        let store_file = amenbo_core::config::Paths::resolve().map_err(CliError::from)?.store_file;
+        if !store_file.exists()
+            || amenbo_core::store_engine::probe_format_version(&store_file) != amenbo_core::model::FORMAT_VERSION
+        {
+            return Ok(0);
+        }
     }
     // Restore sits after the exec guard (it needs to know where this device's store is) and ahead of the
     // migration and the open, because it is the one command that replaces the truth source **wholesale** and

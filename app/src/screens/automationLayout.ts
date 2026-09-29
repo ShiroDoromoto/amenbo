@@ -730,7 +730,8 @@ export function wordW(exitName: string | undefined): number {
  * turned out to need, until no box needs more. So are the heights its lines down to the next row turn
  * at, a row of words apart, which are known once its lines stand along its bottom. So is the room
  * between two boxes of a row, where the name of a line down past one of them runs over a leg of the
- * other: where the name is written is known once the rows stand (`AMB-T-5880`).
+ * other, or where the name over a line's turn runs over the leg of another from its row: where the
+ * name is written is known once the rows stand (`AMB-T-5880`).
  */
 export function layOut(graph: PicGraph | null): Picture {
   let legs = new Map<string, number>();
@@ -1265,6 +1266,9 @@ function layOutWith(
   // into the box it goes to — which may run on as far as the leg of a box beside either of its own, or
   // the leg across and the name of a line between two of those.
   const besideLeg: { line: PicLine; from: PicNode; to: PicNode; left: boolean }[] = [];
+  // The lines down to a neighbour whose name is written over their own turn — which a leg of a line
+  // from the same row, turning higher, may come down through on its way into its box.
+  const overTurn: { line: PicLine; from: PicNode; left: boolean }[] = [];
   // Every line down to a neighbour, with the two boxes it runs between and whether its name is
   // written beside the leg into the box it goes to: what stands in the way of a name beside a leg.
   const acrossOf = new Map<PicLine, { from: PicNode; to: PicNode; short: boolean }>();
@@ -1341,6 +1345,7 @@ function layOutWith(
       lines.push(line);
       acrossOf.set(line, { from, to, short });
       if (short) besideLeg.push({ line, from, to, left });
+      else overTurn.push({ line, from, left });
       continue;
     }
     // The walk's own reading, not where the two boxes landed: a span stacked by the row it starts at
@@ -1696,6 +1701,33 @@ function layOutWith(
       const theirs = wordW(edgeWord(other));
       const their = wordLeft(other, theirs);
       apart(ends.short ? ends.to : ends.from, left ? their + theirs : their);
+    }
+  }
+
+  // A name written over its own turn ran over the leg into its box of a line from the same row that
+  // turns higher and crosses it. The box it leaves stands further out, on the side the name runs from,
+  // until the name starts a name's room past that leg; where that box stands at the end of its row, or
+  // the line is one of its own, the box that leg goes into stands further out the other way instead.
+  // The two boxes are in different rows, each centred: they are given twice as much.
+  const between = (box: PicNode, left: boolean): number | undefined => {
+    const row = rowOf(box);
+    if (row === undefined) return undefined;
+    const nth = row.indexOf(box.boxId);
+    return left ? row[nth - 1] : nth < row.length - 1 ? box.boxId : undefined;
+  };
+  for (const { line, from, left } of overTurn) {
+    const wide = wordW(edgeWord(line));
+    const start = wordLeft(line, wide);
+    const top = line.at.y - 10;
+    const bottom = line.at.y + 1;
+    const row = rowOf(from);
+    for (const [other, ends] of acrossOf) {
+      if (other === line || row === undefined || rowOf(ends.from) !== row) continue;
+      const [p, q] = [other.points[2]!, other.points[3]!];
+      if (p.y > bottom || top > q.y || p.x < start || start + wide < p.x) continue;
+      const past = left ? p.x + BESIDE - start : start + wide + BESIDE - p.x;
+      const out = ends.from === from ? undefined : between(from, left);
+      widen(out ?? between(ends.to, !left), past * 2);
     }
   }
 

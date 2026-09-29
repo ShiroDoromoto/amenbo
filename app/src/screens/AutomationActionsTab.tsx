@@ -51,7 +51,7 @@ import {
 } from "../core/automations";
 import { dataAdapter } from "../mock/adapter";
 import { asTyped } from "../core/keys";
-import { errText, t } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { builtinShown } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -391,6 +391,7 @@ function ActionRow({
       <div className="actlib__line">
         <button type="button" className="auto__row actlib__row" onClick={() => onOpen(action.id)}>
           <span className="auto__name">
+            <span className="autoid">{tf("auto.id", { id: action.id })}</span>
             {action.name}
             {firstLine(action.note) !== "" && (
               <span className="auto__note">{firstLine(action.note)}</span>

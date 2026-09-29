@@ -53,7 +53,7 @@ vi.mock("../mock/adapter", () => ({
   dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }, { id: 2, name: "site" }] },
 }));
 
-import { t, tn } from "../core/i18n";
+import { t, tf, tn } from "../core/i18n";
 import { AutomationActionsTab } from "./AutomationActionsTab";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -203,6 +203,12 @@ describe("the library", () => {
     expect(rows()[0]).toContain(t("auto.actions.unused"));
     expect(rows()[0]).not.toContain(tn("auto.actions.usedBy", 0));
   });
+
+  it("leads each row with the action's ID, the number the terminal names it by", async () => {
+    hoisted.actions = [action({ id: 12 })];
+    await render();
+    expect(container.querySelector(".actlib__row .autoid")?.textContent).toBe(tf("auto.id", { id: 12 }));
+  });
 });
 
 describe("narrowing it", () => {
@@ -322,6 +328,8 @@ describe("the library with every project picked", () => {
     await renderEvery();
     const names = [...container.querySelectorAll(".actlib__project")].map((one) => one.textContent);
     expect(names).toEqual(["", "site"]);
+    const ids = [...container.querySelectorAll(".actlib__row .autoid")].map((one) => one.textContent);
+    expect(ids).toEqual([tf("auto.id", { id: 5 }), tf("auto.id", { id: 3 })]);
     // "This project" would name none of the projects listed.
     expect(rows()[1]).toContain(t("auto.actions.reachAnyProject"));
     expect(container.textContent).not.toContain(t("auto.actions.reachProject"));
@@ -496,6 +504,8 @@ describe("the built-ins", () => {
     expect(all[1]).toContain(t("auto.actions.reachBuiltin"));
     expect(all[1]).toContain(t("auto.actions.unused"));
     expect(container.querySelectorAll(".auto__row")[1]!.querySelector('[data-icon="lock"]')).not.toBeNull();
+    // A built-in is no row of the store, so it has no number to lead with.
+    expect(container.querySelectorAll(".auto__row")[1]!.querySelector(".autoid")).toBeNull();
   });
 
   it("are narrowed by their own chip, and left out by another reach's", async () => {

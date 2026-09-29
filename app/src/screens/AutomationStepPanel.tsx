@@ -195,7 +195,7 @@ function CfgRow({ placementId, projectId, builtin, cfg, siblings, run }: {
   const filter: TaskFilter = readFilter(cfg.value);
   const sort = readSort(cfg.value);
   const dims = cfg.kind === "taskfilter"
-    ? dimRows(getSnapshot().projects.find((p) => p.id === projectId)?.dimensions ?? [])
+    ? dimRows(getSnapshot().projects.find((p) => p.id === projectId)?.dimensions ?? [], builtin, filter)
     : [];
   const choices = choicesOf(cfg.options);
   // A built-in's setting and its choices are drawn in the screen's language; what is written is still

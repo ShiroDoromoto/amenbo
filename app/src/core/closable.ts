@@ -4,8 +4,9 @@
 //
 // Closing retires a value from what a record is newly filed under and takes nothing away: the records
 // already on it keep it, and a filter naming it goes on resolving. Which is why each face reads the
-// flag to its own end — the filter offers a closed value, the picker hides it unless the record
-// carries it, and this panel shows every value.
+// flag to its own end — the filter offers a closed value (the built-in that takes a task only one
+// already pressed, `AMB-D-1008`), the picker hides it unless the record carries it, and this panel
+// shows every value.
 import type { DimensionDto } from "../bindings/bindings";
 
 /** Can this dimension's values be closed? Only a closable axis can — reopening is free on any axis. */

@@ -43,14 +43,26 @@ export const DIM_KEY = "dim";
  * `--dim` takes — so a value pressed on each of two rows is both, and two on one row is either,
  * which is how `task list --filter` reads `dim:` tokens (`AMB-D-655`).
  *
- * Every value is offered, a closed one too: closing retires a value from what a task is newly filed
- * under, and a filter naming it still finds the tasks already on it (`AMB-D-829`). An axis with no value
- * has nothing to press, and is not drawn.
+ * A closed value is offered too, since a filter naming it still finds the tasks already on it
+ * (`AMB-D-829`) — **except where the built-in that takes a task stands** (`AMB-D-1008`): it takes only
+ * a task not yet started (`AMB-D-964`), and a closed value is mostly a finished batch with none left to
+ * take. One already pressed in `filter` is still drawn there, so a saved answer's condition stays in
+ * sight and can be let go. An axis with no value to offer has nothing to press, and is not drawn.
  */
-export function dimRows(dims: readonly DimensionDto[]): { axis: string; values: string[] }[] {
+export function dimRows(
+  dims: readonly DimensionDto[],
+  builtin: string | undefined,
+  filter: TaskFilter,
+): { axis: string; values: string[] }[] {
+  const pressed = filter[DIM_KEY] ?? [];
+  const offered = (axis: string, value: DimensionDto["values"][number]) =>
+    builtin !== TAKE_TASK || !value.closed || pressed.includes(dimToken(axis, value.name));
   return axesFor("task", dims)
-    .filter((dim) => dim.values.length > 0)
-    .map((dim) => ({ axis: dim.name, values: dim.values.map((value) => value.name) }));
+    .map((dim) => ({
+      axis: dim.name,
+      values: dim.values.filter((value) => offered(dim.name, value)).map((value) => value.name),
+    }))
+    .filter((row) => row.values.length > 0);
 }
 
 /** The word a classification is pressed as — what `--dim` takes. */

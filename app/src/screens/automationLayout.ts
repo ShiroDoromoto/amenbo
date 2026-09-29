@@ -704,6 +704,11 @@ export function edgeWord(line: Pick<PicLine, "exitName" | "builtin" | "ends">): 
   return [exitWord(line), endWord(line)].filter((one) => one !== "").join(" — ");
 }
 
+/** Where the words of a line `wide` across start, from which end of them its `at` is. */
+export function wordLeft(line: Pick<PicLine, "at" | "align">, wide: number): number {
+  return line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x;
+}
+
 /**
  * About how wide a name on a line is written, for the room the margins keep for it. Only a guess:
  * the picture is laid out without a screen to measure on. A wide character (Japanese) takes the
@@ -1386,7 +1391,7 @@ function layOutWith(
       });
       const wide = wordW(edgeWord(line));
       if (wide === 0) continue;
-      const left = line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x;
+      const left = wordLeft(line, wide);
       taken.push(wordRect(left, wide, line.at.y));
     }
     // The legs out to the margins: down from the box, and across out past everything on that side.
@@ -1429,7 +1434,7 @@ function layOutWith(
   for (const line of lines) {
     const wide = wordW(edgeWord(line));
     if (wide === 0) continue;
-    const left = line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x;
+    const left = wordLeft(line, wide);
     wordsOut.left = Math.min(wordsOut.left, left - LAP_PAD / 2);
     wordsOut.right = Math.max(wordsOut.right, left + wide + LAP_PAD / 2);
   }
@@ -1552,7 +1557,7 @@ function layOutWith(
     -wordsOut.left + laneCount("left") * LANE_W,
     ...lines.map((line) => {
       const wide = wordW(edgeWord(line));
-      return -(line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x);
+      return -wordLeft(line, wide);
     }),
   );
   const dx = PAD + leftRoom;
@@ -1562,7 +1567,7 @@ function layOutWith(
     wordsOut.right - contentW + laneCount("right") * LANE_W,
     ...lines.map((line) => {
       const wide = wordW(edgeWord(line));
-      return (line.align === "start" ? line.at.x + wide : line.align === "middle" ? line.at.x + wide / 2 : line.at.x) - contentW;
+      return wordLeft(line, wide) + wide - contentW;
     }),
     ...pressed.map((one) => one.x + pressW - contentW),
   );

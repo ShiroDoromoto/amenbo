@@ -7,7 +7,7 @@
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
-import { automationGraph, edgeWord, layOut, openWord, wordW, type PicGraph, type PicLine } from "./automationLayout";
+import { automationGraph, edgeWord, layOut, openWord, wordLeft, wordW, type PicGraph, type PicLine } from "./automationLayout";
 import type {
   AutomationDetailDto,
   AutomationEdgeDto,
@@ -96,7 +96,7 @@ type Box = { left: number; right: number; top: number; bottom: number };
 /** Where a line's words stand, as wide as the picture guesses them. */
 function wordBox(one: PicLine): Box {
   const wide = wordW(edgeWord(one));
-  const left = one.align === "end" ? one.at.x - wide : one.align === "middle" ? one.at.x - wide / 2 : one.at.x;
+  const left = wordLeft(one, wide);
   return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
 }
 

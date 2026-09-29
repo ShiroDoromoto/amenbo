@@ -87,9 +87,9 @@ fn copy_tree(src: &Path, dst: &Path) {
     }
 }
 
-/// Check that a snapshot / engine file is a complete truth source by walking the same path the app
-/// takes on startup (open → `integrity_check` → hydrate), and return its live task count. No key is
-/// needed: the truth source is plaintext SQLite.
+/// Check that a snapshot / engine file is a complete truth source by opening it read-only
+/// (`StoreEngine::open_read`) and hydrating it, and return its live task count. No key is needed:
+/// the truth source is plaintext SQLite.
 fn hydrated_task_count(file: &Path) -> usize {
     let engine = StoreEngine::open_read(file).expect("snapshot opens");
     let db = hydrate_database(engine.conn()).expect("snapshot hydrates");

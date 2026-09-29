@@ -69,6 +69,7 @@ fn build() -> (Store, i64, i64, i64) {
 
     let decision = store
         .add_decision(ops::decision::NewDecision {
+            proposed_by: None,
             title: "a real decision".to_string(),
             body: format!("Sound conclusion.\n\nAside: {SECRET_SECTION} should not be here.\n\nMore rationale."),
             project_id: project,

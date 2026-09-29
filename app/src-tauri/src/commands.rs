@@ -2633,14 +2633,8 @@ pub fn decision_add(
             title, body: body.unwrap_or_default(), project_id,
             // No pane made this, for the reason written on `task_add` (`AMB-D-897`).
             made_in: None,
+            proposed_by: Some(ActorKind::Human),
         }, &dimension_value_ids.unwrap_or_default())?;
-        // The proposal is a moment, and the column cannot hold it (`AMB-T-3639`). A line that could
-        // not be written is not a decision that was not made: the ledger is not the record.
-        let _ = store.add_decision_system_event(
-            ActorKind::Human,
-            d.id,
-            amenbo_core::activity_log::event::decision_proposed(&d.title),
-        );
         Ok(d.id)
     })?;
     Ok(WriteAck::new(&["decisions"]).decision(id))
@@ -2775,13 +2769,9 @@ pub fn decision_promote(comment_id: i64, title: String) -> Result<WriteAck, CmdE
         let d = store.add_decision(amenbo_core::ops::decision::NewDecision {
             title, body, project_id,
             made_in: None,
+            proposed_by: Some(ActorKind::Human),
         })?;
         let did = d.id;
-        let _ = store.add_decision_system_event(
-            ActorKind::Human,
-            did,
-            amenbo_core::activity_log::event::decision_proposed(&d.title),
-        );
         store.link_decision(did, task_id)?;
         Ok((did, task_id))
     })?;
@@ -5771,6 +5761,7 @@ pub(crate) mod tests {
             .unwrap()
             .id;
         let new = |title: &str, body: &str| amenbo_core::ops::decision::NewDecision {
+            proposed_by: None,
             title: title.to_string(),
             body: body.to_string(),
             project_id,
@@ -7866,6 +7857,7 @@ pub(crate) mod tests {
             store.add_task_comment(a, ActorKind::Human, "確認").unwrap();
             let d = store
                 .add_decision(amenbo_core::ops::decision::NewDecision {
+                    proposed_by: None,
                     title: "方針X".into(),
                     body: "理由".into(),
                     project_id: p.id,
@@ -7876,6 +7868,7 @@ pub(crate) mod tests {
             store.finish_writing_decision(d.id, Some(me.clone()), ActorKind::Human).unwrap();
             let d2 = store
                 .add_decision(amenbo_core::ops::decision::NewDecision {
+                    proposed_by: None,
                     title: "方針Y".into(),
                     body: "改訂".into(),
                     project_id: p.id,
@@ -7886,6 +7879,7 @@ pub(crate) mod tests {
             store.supersede_decision(d2.id, d.id).unwrap();
             let d3 = store
                 .add_decision(amenbo_core::ops::decision::NewDecision {
+                    proposed_by: None,
                     title: "方針Y改".into(),
                     body: "一部改訂".into(),
                     project_id: p.id,

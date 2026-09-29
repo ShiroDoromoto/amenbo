@@ -14,6 +14,7 @@
 //! snapshot, the existence checks, and the read-then-write behind [`add`]'s `next_id`. Read the
 //! number outside the transaction and two writers will take the same one.
 
+use crate::activity_log;
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, Decision, DecisionComment, DecisionEdge, DecisionEdgeKind,
@@ -89,6 +90,9 @@ pub struct NewDecision {
     /// The session this was recorded from ([`MadeIn`], `AMB-D-897`), or `None` for a decision recorded
     /// outside the talk window. Stated by the caller; the create reads nothing of where it was typed.
     pub made_in: Option<MadeIn>,
+    /// The facet recording it, carried only into the timeline's `decision.proposed` line — a decision
+    /// row keeps no author of its own. Left unset, the line names no actor.
+    pub proposed_by: Option<ActorKind>,
 }
 
 /// Create a decision — `Decided` from the moment it is saved (`AMB-D-917`), with `draft` up because
@@ -141,6 +145,19 @@ pub fn add(tx: &WriteTx<'_>, input: NewDecision) -> Result<Decision> {
             }),
         )?;
     }
+    // Recording it is a moment, and no column holds that moment: `status` reads `decided` from the start
+    // and `status_changed_at` is overwritten by whatever ends the writing (`AMB-T-3639`). The line is
+    // queued here rather than by the surface that called, so a decision filed by an automation run's own
+    // steps reaches the timeline as well; the store's write door appends it once this commits.
+    tx.record_activity(activity_log::Entry {
+        id: tx.mint_activity_id()?,
+        at: decision.created_at,
+        actor: input.proposed_by,
+        project: Some(decision.project_id),
+        task: None,
+        decision: Some(decision.id),
+        event: activity_log::event::decision_proposed(&decision.title),
+    });
     Ok(decision)
 }
 
@@ -663,6 +680,7 @@ mod tests {
         add(
             tx,
             NewDecision {
+                proposed_by: None,
                 title: title.to_string(),
                 body: "結論と根拠".to_string(),
                 project_id: pid,
@@ -1174,6 +1192,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let d1 = add(tx, NewDecision {
+            proposed_by: None,
             title: "RDB を真実源にする".to_string(),
             body: "engine+HLC で同期".to_string(),
             project_id: pid,
@@ -1181,6 +1200,7 @@ mod tests {
         }).unwrap();
         finish_writing(tx, d1.id, None, crate::model::ActorKind::Ai).unwrap();
         let _d2 = add(tx, NewDecision {
+            proposed_by: None,
             title: "OSS は英語表記".to_string(),
             body: "README とコミットは英語".to_string(),
             project_id: pid,
@@ -1227,6 +1247,7 @@ mod tests {
         // The term appears in neither title nor body — only in a comment. Before the comment arm this
         // matched nothing; now it hits, mirroring the task side's word narrowing over comment bodies.
         let d = add(tx, NewDecision {
+            proposed_by: None,
             title: "RDB を真実源にする".to_string(),
             body: "engine+HLC で同期".to_string(),
             project_id: pid,
@@ -1235,6 +1256,7 @@ mod tests {
         add_comment(tx, d.id, ActorKind::Ai, "計測してから設計する方針で合意").unwrap();
         // A second decision with the term nowhere, to prove the filter still narrows.
         add(tx, NewDecision {
+            proposed_by: None,
             title: "OSS は英語表記".to_string(),
             body: "README とコミットは英語".to_string(),
             project_id: pid,
@@ -1272,10 +1294,12 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let first = add(tx, NewDecision {
+            proposed_by: None,
             title: "先の決定".to_string(), body: String::new(), project_id: pid,
             made_in: None,
         }).unwrap();
         let second = add(tx, NewDecision {
+            proposed_by: None,
             title: "後の決定".to_string(), body: String::new(), project_id: pid,
             made_in: None,
         }).unwrap();
@@ -1305,6 +1329,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         let d = add(tx, NewDecision {
+            proposed_by: None,
             title: "the store is the truth".to_string(),
             body: String::new(),
             project_id: pid,
@@ -1312,6 +1337,7 @@ mod tests {
         }).unwrap();
         add_comment(tx, d.id, ActorKind::Ai, "measured first, designed after").unwrap();
         add(tx, NewDecision {
+            proposed_by: None,
             title: "commits are English".to_string(),
             body: String::new(),
             project_id: pid,
@@ -1351,6 +1377,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         add(tx, NewDecision {
+            proposed_by: None,
             title: "RDB を真実源にする".to_string(),
             body: "engine+HLC で同期".to_string(),
             project_id: pid,
@@ -1404,12 +1431,14 @@ mod tests {
         let tx = &e.write().unwrap();
         let pid = mk_project(tx, "amenbo 開発");
         assert!(add(tx, NewDecision {
+            proposed_by: None,
             title: "  ".to_string(),
             body: String::new(),
             project_id: pid,
             made_in: None,
         }).is_err());
         assert!(add(tx, NewDecision {
+            proposed_by: None,
             title: "x".to_string(),
             body: String::new(),
             project_id: 999_999,
@@ -2061,6 +2090,7 @@ mod tests {
         let d = add(
             tx,
             NewDecision {
+                proposed_by: None,
                 title: "ペインのついた決定".to_string(),
                 body: "結論と根拠".to_string(),
                 project_id: pid,
@@ -2097,6 +2127,7 @@ mod tests {
         let d = add(
             tx,
             NewDecision {
+                proposed_by: None,
                 title: "ペインのついた決定".to_string(),
                 body: "結論と根拠".to_string(),
                 project_id: pid,

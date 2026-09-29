@@ -512,6 +512,7 @@ mod tests {
             let premise = crate::ops::decision::add(
                 tx,
                 crate::ops::decision::NewDecision {
+                    proposed_by: None,
                     title: "the premise".to_string(),
                     body: String::new(),
                     project_id: project,

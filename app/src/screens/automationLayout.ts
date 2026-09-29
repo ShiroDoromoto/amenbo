@@ -710,7 +710,7 @@ export function edgeWord(line: Pick<PicLine, "exitName" | "builtin" | "ends">): 
  * font's size, anything else a little over half of it; the error way out is written as a word of
  * the reader's language, and none of them runs past five narrow letters.
  */
-function wordW(exitName: string | undefined): number {
+export function wordW(exitName: string | undefined): number {
   if (exitName === undefined) return 0;
   if (exitName === ERROR_EXIT) return 40;
   return [...exitName].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);

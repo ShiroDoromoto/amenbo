@@ -1643,10 +1643,13 @@ function layOutWith(
     const place = at.get(box.boxId);
     return place === undefined ? undefined : laps[place.lap]!.rows[place.row]!;
   };
+  // The box before the gap beside `box` on that side, if that gap is one between two boxes of its row:
+  // past the last box of a row there is none to stand further out.
   const nextTo = (box: PicNode, left: boolean): number | undefined => {
     const row = rowOf(box);
     if (row === undefined) return undefined;
-    return left ? row[row.indexOf(box.boxId) - 1] : box.boxId;
+    const nth = row.indexOf(box.boxId);
+    return left ? row[nth - 1] : nth < row.length - 1 ? box.boxId : undefined;
   };
   const widen = (before: number | undefined, more: number) => {
     if (before === undefined) return;
@@ -1710,12 +1713,6 @@ function layOutWith(
   // until the name starts a name's room past that leg; where that box stands at the end of its row, or
   // the line is one of its own, the box that leg goes into stands further out the other way instead.
   // The two boxes are in different rows, each centred: they are given twice as much.
-  const between = (box: PicNode, left: boolean): number | undefined => {
-    const row = rowOf(box);
-    if (row === undefined) return undefined;
-    const nth = row.indexOf(box.boxId);
-    return left ? row[nth - 1] : nth < row.length - 1 ? box.boxId : undefined;
-  };
   for (const { line, from, left } of overTurn) {
     const wide = wordW(edgeWord(line));
     const start = wordLeft(line, wide);
@@ -1727,8 +1724,8 @@ function layOutWith(
       const [p, q] = [other.points[2]!, other.points[3]!];
       if (p.y > bottom || top > q.y || p.x < start || start + wide < p.x) continue;
       const past = left ? p.x + BESIDE - start : start + wide + BESIDE - p.x;
-      const out = ends.from === from ? undefined : between(from, left);
-      widen(out ?? between(ends.to, !left), past * 2);
+      const out = ends.from === from ? undefined : nextTo(from, left);
+      widen(out ?? nextTo(ends.to, !left), past * 2);
     }
   }
 

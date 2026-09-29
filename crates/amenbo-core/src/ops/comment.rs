@@ -2,9 +2,12 @@
 //!
 //! Permanent comments go into their own table, `task_comment` ([`TaskComment`]). The other half of the
 //! timeline — system events — has no table at all: it lives only in the ledger file
-//! ([`crate::activity_log`]), with payloads from [`crate::activity_log::event`]. A task's own writes
-//! queue theirs from the op ([`crate::store_engine::WriteTx::record_activity`]); the rest are written
-//! through [`crate::store::Store::add_system_event`].
+//! ([`crate::activity_log`]), with payloads from [`crate::activity_log::event`]. A task's own writes and
+//! a decision's ([`crate::ops::decision::add`], [`crate::ops::decision::finish_writing`],
+//! [`crate::ops::decision::reject`]) queue theirs from the op
+//! ([`crate::store_engine::WriteTx::record_activity`]); deletions (a task, a project, a decision) are
+//! written by their door in `store/persist.rs`; the rest are written through
+//! [`crate::store::Store::add_system_event`].
 
 use crate::error::{Error, ErrorCode, Result};
 use crate::model::{ActorKind, AttachmentTarget, TaskComment};

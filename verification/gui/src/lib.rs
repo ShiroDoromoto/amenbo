@@ -4612,12 +4612,14 @@ impl Instructor {
             // **What a step of a run types.** The command is written out because it is the whole of
             // the step: which step is being answered comes off the environment the window opened that
             // terminal with, so the same words typed in any other pane are refused.
+            // It carries `--actor ai` as the step's own text does: the verb uses the facet, and nothing
+            // hands the stand-in one. The `done-…` ops below type it for the same reason.
             //
             // The output is typed as its id, which the step's text lists beside its name — so the id
             // is left as a gap, the store issuing the number, so a road can name the output but never
             // the characters the command takes.
             (Domain::Automation, "out-in-pane") => format!(
-                "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-out \"<id>={}\"` and run it, putting where the command says `<id>` the id the step's text lists in front of the output \"{}\". Confirm the line comes back saying it was handed on.",
+                "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-out \"<id>={}\" --actor ai` and run it, putting where the command says `<id>` the id the step's text lists in front of the output \"{}\". Confirm the line comes back saying it was handed on.",
                 req(with, "value")?,
                 req(with, "name")?
             ),
@@ -4628,7 +4630,7 @@ impl Instructor {
             // The way out is typed as an id here, since what is refused is an id the step does not
             // carry — a road names one no row can have.
             (Domain::Automation, "done-in-pane") if with.contains_key("refused") => format!(
-                "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{}\" --exit {}` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — each as `--exit` and its id, the error one among them.",
+                "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{}\" --exit {} --actor ai` and run it. Confirm the line that comes back says the step does not declare that way out, that nothing was recorded and the step is still running, and that it lists the ways out the step does declare as they are typed — each as `--exit` and its id, the error one among them.",
                 req(with, "report")?,
                 req(with, "exit")?
             ),
@@ -4641,10 +4643,10 @@ impl Instructor {
                 let report = req(with, "report")?;
                 match arg_str(with, "exit") {
                     Some(exit) => format!(
-                        "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\" --exit <id>` and run it, putting the id the step's text in that pane lists for the way out \"{exit}\" where the command says `<id>`. Confirm the line comes back saying the step is done."
+                        "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\" --exit <id> --actor ai` and run it, putting the id the step's text in that pane lists for the way out \"{exit}\" where the command says `<id>`. Confirm the line comes back saying the step is done."
                     ),
                     None => format!(
-                        "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\"` and run it, and confirm the line comes back saying the step is done."
+                        "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\" --actor ai` and run it, and confirm the line comes back saying the step is done."
                     ),
                 }
             }
@@ -4690,7 +4692,7 @@ impl Instructor {
                     );
                 }
                 format!(
-                    "Without opening the pane this run is drawn in, read the run's number off its row on the running tab of the automations the sidebar opens. Then, in the plain shell of the pane that is up in the workspace, type `amenbo automation run-show <run> --json`, putting that number where the command says `<run>`, and take the `id` under `step` in the last entry of `steps` — the step still running. Type `AMENBO_AUTOMATION_STEP=<step> amenbo automation step-done --report \"{}\"` with that id where the command says `<step>`, run it, and confirm the line comes back saying the step is done.",
+                    "Without opening the pane this run is drawn in, read the run's number off its row on the running tab of the automations the sidebar opens. Then, in the plain shell of the pane that is up in the workspace, type `amenbo automation run-show <run> --json --actor ai`, putting that number where the command says `<run>`, and take the `id` under `step` in the last entry of `steps` — the step still running. Type `AMENBO_AUTOMATION_STEP=<step> amenbo automation step-done --report \"{}\" --actor ai` with that id where the command says `<step>`, run it, and confirm the line comes back saying the step is done.",
                     req(with, "report")?
                 )
             }

@@ -68,8 +68,8 @@ const (
 	vmVerifyInstallStatus = vmGuestHome + "/install-in-session.status"
 )
 
-// vmVerifyCmd dispatches `vm verify`: two commands to put a build in there, and five to walk a road
-// with it and be done with it.
+// vmVerifyCmd dispatches `vm verify`: two commands to put a build in there, five to walk a road
+// with it and be done with it, and one to run the CLI set against it (vmverifycli.go).
 func vmVerifyCmd(args []string) {
 	if len(args) == 0 {
 		usage()
@@ -130,6 +130,19 @@ func vmVerifyCmd(args []string) {
 		fs := flag.NewFlagSet("vm verify stop", flag.ExitOnError)
 		fs.Parse(args[1:])
 		fail(vmVerifyStop())
+	case "cli":
+		fs := flag.NewFlagSet("vm verify cli", flag.ExitOnError)
+		fromRun := fs.String("from-run", "", "download the mac build from this CI run instead of taking a path")
+		asJSON := fs.Bool("json", false, "have verify-all print its machine-readable roll-up")
+		first, rest := parseAroundID(fs, args[1:])
+		pkg, scenarios, err := vmVerifyCLIArgs(append([]string{first}, rest...))
+		if err != nil {
+			logf("devtool: %v", err)
+			os.Exit(2)
+		}
+		code, err := vmVerifyCLI(pkg, *fromRun, scenarios, *asJSON)
+		fail(err)
+		os.Exit(code)
 	default:
 		logf("devtool: unknown vm verify subcommand %q", sub)
 		usage()
@@ -584,6 +597,14 @@ func vmVerifyRun(scenario string) error {
 	}
 	if _, err := sshRun(ip, "test -d "+vmGuestApp); err != nil {
 		return fmt.Errorf("no build installed in the guest — `devtool vm verify install <pkg>` puts one there")
+	}
+	// A CLI run has the real agents aside for as long as it lasts, and one road here reads the real
+	// `claude`. One cut off before it could put them back left them aside, so they go back first.
+	if _, err := sshRun(ip, "pgrep -f "+vmVerifyAllBin+" > /dev/null"); err == nil {
+		return fmt.Errorf("`devtool vm verify cli` is running in %s with the agents moved aside — wait for it to end", vmCloneName)
+	}
+	if _, err := sshRun(ip, vmAgentsBackCommand(vmGuestAgents)); err != nil {
+		return fmt.Errorf("putting back the agents a CLI run moved aside: %w", err)
 	}
 
 	// A previous run's app is taken down first. The harness takes its own down when it ends, and

@@ -46,6 +46,7 @@ pub mod commit;
 pub mod decision;
 pub mod dependency;
 pub mod dimension;
+mod event;
 pub mod comment;
 pub mod notify;
 pub mod project;
@@ -456,7 +457,7 @@ pub(crate) mod test_support {
         )
         .expect("add task")
         .id;
-        super::task::finish_creating(tx, id).expect("finish creating the task");
+        super::task::finish_creating(tx, id, crate::model::ActorKind::Ai).expect("finish creating the task");
         id
     }
 
@@ -491,6 +492,30 @@ pub(crate) mod test_support {
         .id
     }
 
+    /// The outbox's head — the cursor a test takes just before the step whose events it reads.
+    pub(crate) fn outbox_head(tx: &WriteTx<'_>) -> i64 {
+        crate::store_engine::outbox::outbox_head(tx.conn()).expect("the outbox head")
+    }
+
+    /// The observation events the outbox gained after `after`, oldest first, as `(event, actor, new
+    /// state)`. The ledger's own `store.changed` is left out: it says nothing about which event happened.
+    pub(crate) fn events_after(tx: &WriteTx<'_>, after: i64) -> Vec<(String, String, Option<String>)> {
+        use crate::store_engine::outbox::{events_since, OutboxSlice};
+        let OutboxSlice::Events { rows, .. } = events_since(tx.conn(), after, 10_000).expect("the outbox")
+        else {
+            panic!("nothing was trimmed from the outbox");
+        };
+        rows.into_iter()
+            .filter(|r| r.event != crate::lifecycle::name::STORE_CHANGED)
+            .map(|r| (r.event, r.actor, r.new_state))
+            .collect()
+    }
+
+    /// One event as [`events_after`] reads it back, written by the AI facet — the only actor whose events
+    /// a notification sends (`AMB-D-473`).
+    pub(crate) fn by_ai(event: &str, new_state: Option<&str>) -> (String, String, Option<String>) {
+        (event.to_string(), crate::model::ActorKind::Ai.as_str().to_string(), new_state.map(str::to_string))
+    }
 }
 
 /// No edge may cross a project boundary — from any entry point.
@@ -590,14 +615,14 @@ mod cross_project_tests {
             let value = mk_value(tx, a, "分類", "バグ");
             super::dimension::set(tx, ta, value).expect("a classification within one project");
 
-            let e = super::task::move_to(tx, ta, Some(b), super::Position::Bottom)
+            let e = super::task::move_to(tx, ta, Some(b), super::Position::Bottom, crate::model::ActorKind::Ai)
                 .expect_err("a move that would leave a crossing must be rejected");
             assert_eq!(e.code(), "invalid_value", "{e}");
 
             // Clear the classification and it moves — the same "we never cut edges silently" rule the
             // dependency case follows.
             super::dimension::unset(tx, ta, value).expect("clear the classification");
-            super::task::move_to(tx, ta, Some(b), super::Position::Bottom).expect("once cleared, it moves");
+            super::task::move_to(tx, ta, Some(b), super::Position::Bottom, crate::model::ActorKind::Ai).expect("once cleared, it moves");
         });
     }
 
@@ -611,14 +636,14 @@ mod cross_project_tests {
             let blocker = mk_task_in(tx, "A のブロッカー", Some(a));
             super::dependency::add(tx, ta, blocker, None).expect("a dependency within one project");
 
-            let e = super::task::move_to(tx, ta, Some(b), super::Position::Bottom)
+            let e = super::task::move_to(tx, ta, Some(b), super::Position::Bottom, crate::model::ActorKind::Ai)
                 .expect_err("a move that would leave a crossing must be rejected");
             assert_eq!(e.code(), "invalid_value", "{e}");
 
             // Detach the dependency and it moves (whether to detach is the caller's call — we never cut
             // edges silently).
             super::dependency::remove(tx, ta, blocker).expect("detach the dependency");
-            super::task::move_to(tx, ta, Some(b), super::Position::Bottom).expect("once detached, it moves");
+            super::task::move_to(tx, ta, Some(b), super::Position::Bottom, crate::model::ActorKind::Ai).expect("once detached, it moves");
         });
     }
 }
@@ -736,7 +761,7 @@ mod delete_children_tests {
         with_unenforced_tx(|tx| {
             let (_, t, other, _, _, _) = seed(tx);
 
-            super::task::delete(tx, t).expect("delete the task");
+            super::task::delete(tx, t, crate::model::ActorKind::Ai).expect("delete the task");
 
             let left = scalar(tx, &format!(
                 "SELECT (SELECT COUNT(*) FROM task_comment WHERE task_id = {t})
@@ -801,7 +826,7 @@ mod delete_children_tests {
         with_unenforced_tx(|tx| {
             let (p, ..) = seed(tx);
 
-            super::project::delete(tx, p).expect("delete the project");
+            super::project::delete(tx, p, crate::model::ActorKind::Ai).expect("delete the project");
 
             for table in [
                 "task",

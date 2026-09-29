@@ -208,7 +208,7 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
         crate::ops::dimension::set(tx, filed.id, value)?;
     }
     if assignee.is_some() {
-        task::set_assignee(tx, filed.id, assignee)?;
+        task::set_assignee(tx, filed.id, assignee, ActorKind::Ai)?;
     }
     for blocker in depends_on {
         crate::ops::dependency::add(tx, filed.id, blocker, Some(ActorKind::Ai))?;
@@ -219,7 +219,7 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     if at_launch {
         attach_handed(carry, filed.id)?;
     }
-    let filed = task::finish_creating(tx, filed.id)?;
+    let filed = task::finish_creating(tx, filed.id, ActorKind::Ai)?;
 
     if takes {
         let taken = automation_report::take(tx, carry.run_step.id, filed.id)?;
@@ -805,6 +805,8 @@ mod tests {
         Launcher, Unmet,
     };
     use crate::ops::automation_step::Opened;
+    use crate::lifecycle::name::{TASK_ASSIGNED, TASK_CREATED, TASK_DONE, TASK_STATUS_CHANGED};
+    use crate::ops::test_support::{by_ai, events_after, outbox_head};
     use crate::ops::test_support::{mk_out, mk_placed, mk_project, open, way_out, with_tx};
     use crate::store_engine::WriteTx;
 
@@ -900,7 +902,7 @@ mod tests {
         let found = way_out(tx, opening.run_step.id, "found");
         automation_report::done(tx, opening.run_step.id, found, "took one").expect("done");
         if close_first {
-            task::set_status(tx, first, TaskStatus::Done).expect("close the first");
+            task::set_status(tx, first, TaskStatus::Done, crate::model::ActorKind::Ai).expect("close the first");
         }
         match open(tx, run.id, def_of(p.make.id).id, Some(&claude)).expect("open") {
             Opened::Carried { run_step_id, next } => (run, first, run_step_id, next),
@@ -955,6 +957,33 @@ mod tests {
             let stretch = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("stretch");
             assert_eq!(stretch.task_id, Some(filed.id));
             assert_ne!(stretch.task_id, Some(first));
+        });
+    }
+
+    /// **The task it files is announced as the AI's** (`AMB-D-367`): given to someone, then born — the
+    /// end of its creation is when a task is announced (`AMB-D-557`) — and, set to take it, taken. Each
+    /// event is stamped `ai`, the one actor a notification sends for (`AMB-D-473`).
+    #[test]
+    fn the_task_it_files_and_takes_is_announced_as_the_ai_s() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            answer(tx, &p, ASSIGNEE, AI);
+            answer(tx, &p, WHAT_THEN, TAKE_IT);
+            let head = outbox_head(tx);
+            carried(tx, &p, true);
+            assert_eq!(
+                events_after(tx, head),
+                vec![
+                    // The first step's task: filed by the test, taken, and closed by hand.
+                    by_ai(TASK_CREATED, None),
+                    by_ai(TASK_STATUS_CHANGED, Some("in_progress")),
+                    by_ai(TASK_DONE, None),
+                    // The one the built-in files.
+                    by_ai(TASK_ASSIGNED, Some("ai")),
+                    by_ai(TASK_CREATED, None),
+                    by_ai(TASK_STATUS_CHANGED, Some("in_progress")),
+                ]
+            );
         });
     }
 

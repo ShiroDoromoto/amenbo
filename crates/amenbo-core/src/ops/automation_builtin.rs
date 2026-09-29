@@ -1160,7 +1160,7 @@ mod tests {
                 .expect("read")
                 .and_then(|s| s.task_id)
                 .expect("the task the first step took");
-            crate::ops::task::set_status(tx, task, crate::model::TaskStatus::Done).expect("close");
+            crate::ops::task::set_status(tx, task, crate::model::TaskStatus::Done, crate::model::ActorKind::Ai).expect("close");
 
             // Only "claude" can be started here, and the built-in is opened all the same.
             let (run_step_id, next) = match open(tx, run.id, next.id, Some(&startable)).expect("open") {

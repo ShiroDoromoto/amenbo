@@ -156,7 +156,7 @@ pub fn take(tx: &WriteTx<'_>, run_step_id: i64, task_id: i64) -> Result<Task> {
             )))
         }
     };
-    let task = crate::ops::task::set_status(tx, task_id, TaskStatus::InProgress)?;
+    let task = crate::ops::task::set_status(tx, task_id, TaskStatus::InProgress, ActorKind::Ai)?;
     // The stretch is what the task belongs to: a run walks several in turn, and every step of this one
     // is about this task from here on.
     if let Some(stretch_id) = run_step.run_task_id {
@@ -678,7 +678,7 @@ mod tests {
             },
         )
         .expect("task");
-        crate::ops::task::finish_creating(tx, task.id).expect("finish creating")
+        crate::ops::task::finish_creating(tx, task.id, crate::model::ActorKind::Ai).expect("finish creating")
     }
 
     fn outs(tx: &WriteTx<'_>, run_step_id: i64) -> Vec<AutomationRunValue> {
@@ -782,7 +782,7 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "SCENARIO SEED — already held");
-            crate::ops::task::set_status(tx, task.id, TaskStatus::InProgress).expect("reserve");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::InProgress, crate::model::ActorKind::Ai).expect("reserve");
 
             let refused = take(tx, step.run_step.id, task.id).expect_err("already reserved");
             assert!(refused.to_string().contains("cannot reserve"), "{refused}");
@@ -1024,7 +1024,7 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "閉じる");
             take(tx, step.run_step.id, task.id).expect("take");
-            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("a person closes it");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::Done, crate::model::ActorKind::Ai).expect("a person closes it");
 
             done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.")
                 .expect("the step finishes all the same");
@@ -1051,7 +1051,7 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "閉じる");
             take(tx, step.run_step.id, task.id).expect("take");
-            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("a person closes it");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::Done, crate::model::ActorKind::Ai).expect("a person closes it");
 
             done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.").expect("done");
 

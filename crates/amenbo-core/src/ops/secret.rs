@@ -135,7 +135,7 @@ mod tests {
             set(tx, None, SecretArea::Notify, Some(1), "webhook_url", Some("device")).unwrap();
             set(tx, Some(p), SecretArea::Notify, Some(1), "webhook_url", Some("project")).unwrap();
 
-            crate::ops::project::delete(tx, p).unwrap();
+            crate::ops::project::delete(tx, p, crate::model::ActorKind::Ai).unwrap();
 
             assert_eq!(
                 read::secret_value(tx.conn(), Some(p), SecretArea::Notify, Some(1), "webhook_url")
@@ -246,7 +246,7 @@ mod tests {
         with_tx(|tx| {
             let p = mk_project(tx, "proj");
             set(tx, Some(p), SecretArea::Notify, Some(1), "webhook_url", Some("s3cret")).unwrap();
-            crate::ops::project::delete(tx, p).unwrap();
+            crate::ops::project::delete(tx, p, crate::model::ActorKind::Ai).unwrap();
             let n: i64 = tx
                 .conn()
                 .query_row("SELECT count(*) FROM secret WHERE project_id=?1", [p], |r| r.get(0))

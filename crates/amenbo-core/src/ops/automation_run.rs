@@ -2972,7 +2972,7 @@ mod tests {
         with_tx(|tx| {
             let (automation, _, placement) = launchable(tx);
             let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
-            crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai)).expect("give it to the AI");
+            crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
 
             // Nothing has run yet, so what is waiting is where the run starts: the built-in that takes

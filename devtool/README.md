@@ -602,11 +602,12 @@ standing here and signed in with the credential standing here.
   wait measured against one version has stopped being enough, and an operator
   reading that has to be able to hold it against the build on their own machine.
   Updates are turned off in the guest for the same reason.
-- **Four things have to be true before a pane opens on it**, and `up` says all
-  four: the binary is there; `~/.local/bin` is on the **end** of the interactive
+- **Five things have to be true before a pane opens on it**, and `up` sees to all
+  five: the binary is there; `~/.local/bin` is on the **end** of the interactive
   shell's `PATH` (the installer says so and does not do it, and a pane is a login
-  *and* interactive shell); onboarding is behind it and `/` is trusted, so the first
-  screen in the pane is a prompt rather than a question; and the login keychain
+  *and* interactive shell); the golden's own `~/bin/claude` is gone; onboarding
+  is behind it and `/` is trusted, so the first screen in the pane is a prompt
+  rather than a question; and the login keychain
   holds the credential. Trust is read up the tree, which is why `/` is what is
   trusted — a run's folder is made while the run is going, and nothing here can
   be told its name in advance.
@@ -614,9 +615,15 @@ standing here and signed in with the credential standing here.
   screen roads hand the guest a directory of their own in front of the `PATH` and
   stand programs up in there under these same names, so a profile that prepended
   `~/.local/bin` would take `claude` back and a road reading a stand-in would be
-  reading this install instead. Nothing is lost by being last: a clone carries no
-  other `claude`, and the road that wants this one stands nothing up. The line is
+  reading this install instead. Nothing is lost by being last once the golden's
+  stand-in is gone, and the road that wants this one stands nothing up. The line is
   taken out before it is written, so a clone raised before it moved is corrected.
+- **The golden's `~/bin/claude` is removed on every raise.** It is a stand-in that
+  prints its arguments and turns into `/bin/sh`, on a `~/bin` the golden's
+  `~/.zprofile` puts in front of the `PATH`. Left there, it answers to `claude`
+  ahead of the seeded install, and an automation step's pane in the dev GUI opens
+  on a plain `sh` prompt. The copy `vm verify cli` moves aside is removed too, so
+  it is not put back later.
 - **`~/.claude.json` is written over whatever is there**, because the install
   leaves one of its own: a write that stood back for a file already present
   wrote nothing, and the guest asked its theme question on the pane's first
@@ -1068,7 +1075,7 @@ and on the clone too: `vm up` seeds the real Claude Code into it for the one scr
 the product. For v32.0.0 these three were moved aside by hand in the guest before `verify-all` was
 run; this command is that, written down:
 
-- `/Users/admin/bin/claude`
+- `/Users/admin/bin/claude` — the golden's own; `vm up` removes it, but not when the host has no `claude` to seed
 - `/Users/admin/.local/bin/claude` — the one `vm up` seeds
 - `/opt/homebrew/bin/codex`
 

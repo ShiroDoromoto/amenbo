@@ -1121,7 +1121,8 @@ describe("the picture of an automation", () => {
   });
 
   it("writes the name of a line down under its box after one down to the column on its left in a row of its own, over no line", () => {
-    for (const word of ["やり直す", "もう一度はじめからやり直す"]) {
+    // The last one is longer than a column is across, and ran over the leg into the column on the left.
+    for (const word of ["やり直す", "もう一度はじめからやり直す", "もう一度はじめからやり直すもう一度はじめからやり直す"]) {
       const picture = layOut(
         detail({
           entryPlacementId: 1,
@@ -1169,6 +1170,63 @@ describe("the picture of an automation", () => {
         // No piece of any line runs through a name.
         for (const one of picture.lines) {
           for (const piece of pieces(one)) expect(overlaps(piece, a, true), `${a.key} / ${one.key}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("stands two boxes of a row further apart where the name of a line down on their right runs past the leg down from the one on the right", () => {
+    const word = "もう一度はじめからやり直すもう一度はじめからやり直す";
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({
+            id: 2,
+            name: "work",
+            exits: [
+              { id: 80, name: "完了", outputs: [] },
+              { id: 81, name: "*", outputs: [] },
+              { id: 82, name: "別", outputs: [] },
+            ],
+          }),
+          step({
+            id: 3,
+            name: "left",
+            exits: [
+              { id: 90, name: "完了", outputs: [] },
+              { id: 91, name: "*", outputs: [] },
+              { id: 92, name: word, outputs: [] },
+            ],
+          }),
+          step({ id: 4, name: "right" }),
+          step({ id: 5, name: "one" }),
+          step({ id: 6, name: "two" }),
+          step({ id: 7, name: "three" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "別", toId: 4 }),
+          edge({ id: 4, fromId: 3, toId: 5 }),
+          edge({ id: 5, fromId: 3, exitName: word, toId: 6 }),
+          edge({ id: 6, fromId: 4, toId: 7 }),
+        ],
+      }),
+    );
+    const long = picture.lines.find((one) => one.key === "edge-5")!;
+    // Its leg across is shorter than its name, which is written past its end, on its right, and is
+    // longer than a column is across.
+    expect(long.align).toBe("start");
+    expect(long.at.x).toBeGreaterThan(Math.max(long.points[1]!.x, long.points[2]!.x));
+    expect(wordBox(long).right).toBeGreaterThan(at(picture, 7).x);
+    // No piece of any line runs through a name.
+    for (const one of picture.lines) {
+      const words = wordBox(one);
+      for (const other of picture.lines) {
+        for (const piece of pieces(other)) {
+          expect(overlaps(piece, words, true), `${one.key} / ${other.key}`).toBe(false);
         }
       }
     }

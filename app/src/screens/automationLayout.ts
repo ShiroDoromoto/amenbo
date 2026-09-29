@@ -731,33 +731,40 @@ export function wordW(exitName: string | undefined): number {
  * apart, with the line down to the next row turning under them (`AMB-T-5824`). Which margin a line
  * goes to is decided once the rows stand, so the rows are laid out again with the room each box
  * turned out to need, until no box needs more. So are the heights its lines down to the next row turn
- * at, a row of words apart, which are known once its lines stand along its bottom.
+ * at, a row of words apart, which are known once its lines stand along its bottom. So is the room
+ * between two boxes of a row, where the name of a line down past one of them runs over a leg of the
+ * other: where the name is written is known once the rows stand (`AMB-T-5880`).
  */
 export function layOut(graph: PicGraph | null): Picture {
   let legs = new Map<number, number>();
   let turns = new Map<number, number>();
+  let gaps = new Map<number, number>();
   for (;;) {
-    const { picture, legsOf, turnsOf } = layOutWith(graph, legs, turns);
+    const { picture, legsOf, turnsOf, gapsOf } = layOutWith(graph, legs, turns, gaps);
     const more = [...legsOf].filter(([boxId, count]) => count > (legs.get(boxId) ?? 0));
     const lower = [...turnsOf].filter(([boxId, count]) => count > (turns.get(boxId) ?? 1));
-    if (more.length === 0 && lower.length === 0) return picture;
+    const wider = [...gapsOf].filter(([boxId, gap]) => gap > (gaps.get(boxId) ?? 0));
+    if (more.length === 0 && lower.length === 0 && wider.length === 0) return picture;
     legs = new Map([...legs, ...more]);
     turns = new Map([...turns, ...lower]);
+    gaps = new Map([...gaps, ...wider]);
   }
 }
 
-/** Lay one picture out with `legs` lines leaving each box for one of the margins at the most, and
- *  its lines down to the next row turning at `turns` heights, and say how many each box turned out
- *  to need of each. */
+/** Lay one picture out with `legs` lines leaving each box for one of the margins at the most, its
+ *  lines down to the next row turning at `turns` heights, and `gaps` of room at the least before the
+ *  next box in its row, and say how many each box turned out to need of each. */
 function layOutWith(
   graph: PicGraph | null,
   legs: ReadonlyMap<number, number>,
   turns: ReadonlyMap<number, number>,
-): { picture: Picture; legsOf: Map<number, number>; turnsOf: Map<number, number> } {
+  gaps: ReadonlyMap<number, number>,
+): { picture: Picture; legsOf: Map<number, number>; turnsOf: Map<number, number>; gapsOf: Map<number, number> } {
   const legsOf = new Map<number, number>();
   const turnsOf = new Map<number, number>();
+  const gapsOf = new Map<number, number>();
   const empty: Picture = { width: 0, height: 0, laps: [], nodes: [], lines: [], inserts: [], opens: [], marks: [] };
-  if (graph === null || graph.boxes.length === 0) return { picture: empty, legsOf, turnsOf };
+  if (graph === null || graph.boxes.length === 0) return { picture: empty, legsOf, turnsOf, gapsOf };
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
   const nodeH = graph.boundary !== undefined ? STEP_H : NODE_H;
@@ -805,7 +812,8 @@ function layOutWith(
   // name runs past the box's right edge, and under the next box it lay over the lines that one sends
   // down: the next box stands as much further right, so the press ends short of its first line
   // (`AMB-T-5790`). Where the lines of the box stand along its bottom is not known yet, so each press
-  // is put after every line the box has — never further left than it will be drawn.
+  // is put after every line the box has — never further left than it will be drawn. It leaves more
+  // where a name of a line down past it or the next box ran over a leg of the other (`AMB-T-5880`).
   const pressW = wordW(openWord(graph.boundary !== undefined)) + 28;
   const gapAfter = (box: PicBox): number => {
     const lines = graph.edges.filter((edge) => edge.fromId === box.id).length;
@@ -820,7 +828,7 @@ function layOutWith(
           pressW,
       ),
     );
-    return Math.max(COL_GAP, reach + BESIDE - NODE_W - ATTACH);
+    return Math.max(COL_GAP, reach + BESIDE - NODE_W - ATTACH, gaps.get(box.id) ?? 0);
   };
   /** Where each box of a row stands from the row's left edge, and how wide the row is. */
   const columnsOf = (row: readonly number[]): { xs: number[]; w: number } => {
@@ -1231,6 +1239,9 @@ function layOutWith(
     pressed.push({ boxId: open.boxId, exitName: open.exitName, x: sx - 6 + wordW(word) + BESIDE / 2, y: foot + OVER - 4 });
   }
 
+  // The lines down to a neighbour whose name is written past the end of the leg across, beside the leg
+  // into the box it goes to — which may run on as far as the leg of a box beside either of its own.
+  const besideLeg: { line: PicLine; from: PicNode; to: PicNode; left: boolean }[] = [];
   for (const edge of edges) {
     const from = node.get(edge.fromId);
     if (from === undefined) continue;
@@ -1283,7 +1294,7 @@ function layOutWith(
         : left
           ? { x: tx - BESIDE, y: mid - 3 }
           : { x: tx + BESIDE, y: mid - 3 };
-      lines.push({
+      const line: PicLine = {
         key,
         points: [{ x: sx, y: sy }, { x: sx, y: mid }, { x: tx, y: mid }, { x: tx, y: ty }],
         back: false,
@@ -1292,7 +1303,9 @@ function layOutWith(
         builtin: from.builtin,
         at,
         align: left ? "end" : "start",
-      });
+      };
+      lines.push(line);
+      if (short) besideLeg.push({ line, from, to, left });
       continue;
     }
     // The walk's own reading, not where the two boxes landed: a span stacked by the row it starts at
@@ -1551,6 +1564,46 @@ function layOutWith(
     along(group, key, [{ x, y: inY }, { x: inX(group[0]!), y: inY }, { x: inX(group[0]!), y: to.y }]);
   }
 
+  // A name written beside the leg into its box, past the end of its leg across, runs on the side it
+  // turns to, and one longer than a column is across ran over the leg of a box beside one of its own
+  // two: down onto the next box of the row it goes to, or down from the next box of the row it leaves.
+  // The two boxes stand further apart until the name ends a name's room short of that leg
+  // (`AMB-T-5880`). Every row is centred, so two boxes of the row the line leaves stand apart from the
+  // row it goes to by half of what their room grows by: they are given twice as much.
+  const nextTo = (box: PicNode, left: boolean): number | undefined => {
+    const place = at.get(box.boxId);
+    if (place === undefined) return undefined;
+    const row = laps[place.lap]!.rows[place.row]!;
+    return left ? row[row.indexOf(box.boxId) - 1] : box.boxId;
+  };
+  const uprights = lines.flatMap((one) =>
+    one.points.slice(1).flatMap((q, nth) => {
+      const p = one.points[nth]!;
+      return p.x === q.x ? [{ line: one, x: p.x, top: Math.min(p.y, q.y), bottom: Math.max(p.y, q.y) }] : [];
+    }),
+  );
+  for (const { line, from, to, left } of besideLeg) {
+    const wide = wordW(edgeWord(line));
+    const start = wordLeft(line, wide);
+    const top = line.at.y - 10;
+    const bottom = line.at.y + 1;
+    const beyond = (box: PicNode, x: number) => (left ? x < box.x : x > box.x + box.w);
+    for (const leg of uprights) {
+      if (leg.line === line || leg.top > bottom || top > leg.bottom) continue;
+      const past = left ? leg.x + BESIDE - start : start + wide + BESIDE - leg.x;
+      if (past <= 0) continue;
+      const room =
+        leg.bottom === to.y && beyond(to, leg.x)
+          ? { before: nextTo(to, left), more: past }
+          : leg.top === from.y + nodeH && beyond(from, leg.x)
+            ? { before: nextTo(from, left), more: past * 2 }
+            : undefined;
+      if (room?.before === undefined) continue;
+      const gap = gapAfter(boxes.get(room.before)!) + room.more;
+      gapsOf.set(room.before, Math.max(gapsOf.get(room.before) ?? 0, gap));
+    }
+  }
+
   // Everything was laid out with the boxes at x=0. Shift it right by the room the left margin took:
   // the lanes, and any name written further out than the boxes start.
   const leftRoom = Math.max(
@@ -1587,5 +1640,5 @@ function layOutWith(
     marks: marks.map((one) => ({ ...one, x: one.x + dx })),
     outFrame: outFrame === undefined ? undefined : { ...outFrame, x: outFrame.x + dx },
   };
-  return { picture, legsOf, turnsOf };
+  return { picture, legsOf, turnsOf, gapsOf };
 }

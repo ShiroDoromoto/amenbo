@@ -68,6 +68,35 @@ fn every_project_a_screen_road_opens_is_a_project_that_exists() {
     }
 }
 
+/// The way in in the middle of the workspace is drawn only on a face with no folder bound to it. A
+/// premise is stood up by a driver that boots by raising a project on the run's folder, so a road
+/// with a world — one that did not take the device back to nothing raised — opens on a face that
+/// already has its folder, and an operator told to press the way in finds nothing to press. Nothing
+/// else catches it: the step renders, lints and walks, and the operator is left to guess which of
+/// the shapes it lists they have landed in.
+#[test]
+fn no_screen_road_opens_a_folder_on_a_face_that_already_has_one() {
+    for f in scenario_files() {
+        let scenario = amenbo_scenario::lint_file(&f, None).expect("lints");
+        if !scenario.runs_on(Driver::Gui) || scenario.given.is_empty() {
+            continue;
+        }
+        if !projects_standing(&scenario).contains(amenbo_verify_cli::scratch::CWD_DIR) {
+            continue;
+        }
+        for step in scenario.steps(Driver::Gui) {
+            let Step::Action { domain, op, .. } = step else { continue };
+            assert!(
+                !(*domain == Domain::Workspace && op.as_str() == "open-folder"),
+                "{} opens a folder on the workspace, but its world leaves the run standing in `{}` \
+                 with the run's folder bound to it, so the face has no way in to press",
+                f.display(),
+                amenbo_verify_cli::scratch::CWD_DIR
+            );
+        }
+    }
+}
+
 /// The projects an operator could find in the list when a road opens: whatever the world raised, and
 /// the one the run is standing in before it raised anything.
 ///

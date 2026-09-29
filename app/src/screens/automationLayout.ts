@@ -787,14 +787,15 @@ function layOutWith(
     const count = Math.max(legs.get(`left-${box.id}`) ?? 0, legs.get(`right-${box.id}`) ?? 0);
     return Math.max(count === 0 ? 0 : DROP + (count - 1) * WORD_H, pressHangOf(box));
   };
-  // How much lower than the shortest the ways out with nothing decided hang under a box whose lines
-  // out to the right margin turn as low as the press, or lower. Those legs stand right of every one
-  // of them, and a name and its press run off to the right: under the box, one ran across the legs
-  // and was not read. So they hang from the lowest leg's turn as they would from the box.
+  // How much lower than the shortest the ways out with nothing decided, and the lines that go nowhere,
+  // hang under a box whose lines out to the right margin turn as low as the press, or lower. Those
+  // legs stand right of every one of them, and a name and its press run off to the right: under the
+  // box, one ran across the legs and was not read. So they hang from the lowest leg's turn as they
+  // would from the box.
   const openDrop = (box: PicBox): number => {
     const right = legs.get(`right-${box.id}`) ?? 0;
     const turn = right === 0 ? 0 : DROP + (right - 1) * WORD_H;
-    return undecidedOf(box).length === 0 || turn < STUB + OVER - 4 - PRESS_H / 2 ? 0 : turn;
+    return turn < STUB + OVER - 4 - PRESS_H / 2 ? 0 : turn;
   };
   // How far what hangs from its ways out with nothing decided, and from its lines that go nowhere,
   // reaches: its lowest press, or the name of a line of its that goes nowhere, which hangs under every
@@ -811,8 +812,8 @@ function layOutWith(
           edge.ends === "halt" ||
           (edge.ends === "exit" && !outs.some((out) => out.name === edge.exitTo))),
     ).length;
-    if (undecided === 0) return nowhere === 0 ? 0 : STUB + (nowhere - 1) * WORD_H + OVER + 4;
     const drop = openDrop(box);
+    if (undecided === 0) return nowhere === 0 ? 0 : drop + STUB + (nowhere - 1) * WORD_H + OVER + 4;
     const press = drop + STUB + (undecided - 1) * OPEN_H + OVER - 4 + PRESS_H / 2;
     return nowhere === 0
       ? press

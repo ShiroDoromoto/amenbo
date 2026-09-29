@@ -7,15 +7,20 @@
 # Which way out a step is left by is chosen by the test run, since nobody is doing the work that
 # would decide it: the first it declares the first time, the next each time it is reached again. That
 # is what walks a picture that takes tasks until there are none once round and then out.
+#
+# What a way out hands on is put down in the walk as a stand-in of its kind, and a file is one. The
+# work step's done way out hands one on, so the walk has to get past putting it down — which is where
+# a test run once stopped short with nothing but a storage error to show for it.
 id: walk-an-automation-through-as-a-test-run
 title: A test run walks an automation once round and out, and keeps nothing
 description: >
   Stand up an automation that takes a task, works on it, closes it and goes back to take the next,
   with a task in the project it could take. Walk it as a test run, from the terminal or from its build
   screen, where a pane beside the picture steps through the walk one step at a time: the take leaves by
-  the way out that took a task, the work and the close each by their done one, and the second take by
-  the way out that found none, which ends the run completed. Afterwards the automation has no run
-  behind it, the project holds the one task it held, and that task is still waiting to be taken.
+  the way out that took a task, the work and the close each by their done one — the work's handing
+  on a file — and the second take by the way out that found none, which ends the run completed.
+  Afterwards the automation has no run behind it, the project holds the one task it held, and that
+  task is still waiting to be taken.
 given:
   # The agent the work step names is one this machine can start, so the walk goes past it rather than
   # stopping where a run would — on whichever machine the screen road is walked.
@@ -25,9 +30,11 @@ given:
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task to take }, as: real }
   - { type: action, domain: task, op: assign, with: { target: real, assignee: me-ai } }
 
-  # The work: one step, left by its done way out, which is the action's own.
+  # The work: one step, left by its done way out, which is the action's own. That way out hands on a
+  # file, which the walk has to put down a stand-in for on its way past.
   - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
   - { type: action, domain: automation, op: step-add, with: { target: work, name: fix, prompt: fix what the task asks for }, as: fix }
+  - { type: action, domain: automation, op: port-add, with: { action: work, step: fix, exit: 完了, name: patch, kind: file } }
   - { type: action, domain: automation, op: action-entry, with: { target: work, step: fix } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: fix, exit_to: "" } }
 
@@ -48,8 +55,9 @@ steps_cli:
     op: test-run
     with: { target: auto }
 
-  # Once round and out: the first take is left by the way out that took a task, the second by the one
-  # that found none, and the run ends completed rather than being cut short.
+  # Once round and out: the first take is left by the way out that took a task, the work by the one
+  # that hands on a file, the second take by the one that found none, and the run ends completed
+  # rather than being cut short.
   - type: assert
     domain: automation
     op: test-run-walked

@@ -48,7 +48,7 @@
 // so a reader scrolling away from the box that stays picked is not pulled back.
 //
 // **Drawn in a run's pane, it is the run's trail** (`AMB-T-5775`, `../shell/RunPicture`). The boxes and
-// lines the run passed on the task it is working are lit, the box under way blinks — or wears only its
+// lines the run passed on the lap it is walking are lit, the box under way blinks — or wears only its
 // border where the reader asked for less motion — and each box the run moves on to is picked and
 // brought to the middle. Nothing is put in there, so no `+` is drawn, and the legend is left to the
 // build screen: what a line means is read where the picture is made.
@@ -91,8 +91,8 @@ function inputsLine(mark: PicMark): string {
 }
 
 /**
- * **What a run has walked on this picture** (`AMB-T-5775`): the boxes and the lines it passed on the task
- * it is working, and the box under way.
+ * **What a run has walked on this picture** (`AMB-T-5775`): the boxes and the lines it passed on the lap
+ * it is walking (`AMB-T-5825`), and the box under way.
  */
 export type PicTrail = {
   boxes: ReadonlySet<number>;

@@ -338,7 +338,7 @@ impl StoreEngine {
     /// a snapshot read — and the only way the wait-don't-fail discipline holds. Uses `new_unchecked` (not
     /// `Connection::transaction`) because the writes borrow `&self.conn` immutably alongside the guard,
     /// so the guard cannot take `&mut Connection`.
-    pub fn transaction(&self) -> Result<rusqlite::Transaction<'_>> {
+    pub(crate) fn transaction(&self) -> Result<rusqlite::Transaction<'_>> {
         Ok(rusqlite::Transaction::new_unchecked(&self.conn, rusqlite::TransactionBehavior::Immediate)?)
     }
 
@@ -496,7 +496,7 @@ impl StoreEngine {
     /// `target_type` column. Returns how many rows went. `attachment` is the only polymorphic child the
     /// store has, so it is named here rather than taken as a dataset: its two columns are then ordinary
     /// typed identifiers, and a registry rename lands on this sweep at compile time.
-    pub fn delete_records_for_target(
+    pub(crate) fn delete_records_for_target(
         &self,
         target_type: AttachmentTarget,
         target_id: i64,

@@ -70,7 +70,8 @@ fn new_step_default(
 }
 
 /// The ledger line a decision's own transition leaves behind, built **inside** the mutation's
-/// transaction and appended by the caller **after** the commit (`crate::activity_log`). The id is
+/// transaction and queued there ([`WriteTx::record_activity`]), so [`WriteTx::commit`] appends it
+/// **after** the commit succeeds (`crate::activity_log`). The id is
 /// minted here so it keeps its place in the sequence even when the commit that earned it is the last
 /// thing to happen; the project and the title come off the row the transition just wrote, which saves
 /// a second read and is the only version of them the line should carry.
@@ -290,11 +291,13 @@ impl Store {
     /// Delete a task — a hard delete (one operation = one transaction). The task row and its
     /// dependency edges go in the same transaction (leave one behind and you have a dangling edge).
     /// Blobs the delete orphaned are reclaimed after the commit ([`Self::reclaim_after_delete`]). The
-    /// delete leaves a line **only in the file ledger** ([`Self::log_deletion`]) — and since what was
-    /// deleted (its title, its project) becomes unreadable the moment the row is gone, it is read
-    /// **before** the delete, inside the same transaction.
+    /// delete leaves a line **only in the file ledger**, queued with [`WriteTx::record_activity`] and
+    /// appended once the commit succeeds — since a deletion takes its row with it, that line is the
+    /// only thing that remembers what was deleted. What was deleted (its title, its project) becomes
+    /// unreadable the moment the row is gone, so it is read **before** the delete, inside the same
+    /// transaction.
     pub fn delete_task(&mut self, id: i64, actor: crate::model::ActorKind) -> Result<()> {
-        let (orphaned, entry) = self.write_one(&[WriteTarget::Task(id)], |tx| {
+        let orphaned = self.write_one(&[WriteTarget::Task(id)], |tx| {
             let title = crate::store_engine::read::task_title(tx.conn(), id)?;
             let project = crate::store_engine::read::task_project_id(tx.conn(), id)?;
             let activity_id = tx.mint_activity_id()?;
@@ -308,18 +311,11 @@ impl Store {
                 decision: None,
                 event: crate::activity_log::event::task_deleted(title.as_deref()),
             };
-            Ok((orphaned, entry))
+            tx.record_activity(entry);
+            Ok(orphaned)
         })?;
-        self.log_deletion(entry);
         self.reclaim_after_delete(&orphaned);
         Ok(())
-    }
-
-    /// Append one line for a deletion to the file ledger. Call this **after the commit**. A failure
-    /// is a warning and the deletion still stands (the ledger is not the system of record). Since a
-    /// deletion takes its row with it, this line is the only thing that remembers what was deleted.
-    fn log_deletion(&self, entry: crate::activity_log::Entry) {
-        crate::activity_log::append(&self.paths.activity_file, &entry);
     }
 
     /// Reclaim the bytes of blobs a deletion let go of. Call this **after the commit**: erase bytes
@@ -571,14 +567,14 @@ impl Store {
     /// teardown above is **bound up with releasing the bound folders**, and deletion paths that never
     /// call it (library users, tests that only hit project delete) must not leave bytes behind (the
     /// full sweep in `project_teardown` remains as the catch-all and picks up blobs that were skipped
-    /// for being too young). The ledger gets one line per project ([`Self::log_deletion`]), and the
-    /// tasks and decisions taken down with it are recorded **as counts only** — a line each would
+    /// for being too young). The ledger gets one line per project ([`WriteTx::record_activity`]), and
+    /// the tasks and decisions taken down with it are recorded **as counts only** — a line each would
     /// have a single delete bury thousands of lines in the ledger and wash every other story away.
     ///
     /// **The plugin outbox is the opposite**: it gets an event for every task and comment the cascade
     /// carried off, which the op itself fires ([`crate::ops::project::delete`]).
     pub fn project_delete(&mut self, id: i64, actor: crate::model::ActorKind) -> Result<()> {
-        let (orphaned, entry) = self.write_one(&[WriteTarget::Project(id)], |tx| {
+        let orphaned = self.write_one(&[WriteTarget::Project(id)], |tx| {
             use crate::store_engine::read;
             let name = read::project_name(tx.conn(), id)?;
             // Read the cascade set **before** the delete: afterwards there is no row left to count.
@@ -599,9 +595,9 @@ impl Store {
                     decisions,
                 ),
             };
-            Ok((orphaned, entry))
+            tx.record_activity(entry);
+            Ok(orphaned)
         })?;
-        self.log_deletion(entry);
         self.reclaim_after_delete(&orphaned);
         Ok(())
     }
@@ -805,16 +801,16 @@ impl Store {
     }
 
     /// Add one system event to a task's activity (one operation = one transaction). It **does not
-    /// ride in the mutation's own transaction**: activity is not the system of record, and it is
-    /// written **after** the commit succeeds (crash before the commit and no line appears; crash
+    /// ride in the mutation's own transaction**: activity is not the system of record, so the line is
+    /// queued in a transaction of its own ([`WriteTx::record_activity`]) and [`WriteTx::commit`]
+    /// appends it **after** that commit succeeds (crash before the commit and no line appears; crash
     /// after it and the line is lost — we err towards losing a line, never towards duplicating one).
-    /// The callers (CLI, GUI) invoke this after the mutation wrapper has committed, so that ordering
-    /// holds. A line the mutation itself narrates — a task created, its status, assignee or project
-    /// changed, a decision recorded — is not written here: the op queues it
-    /// ([`WriteTx::record_activity`]) and the store's write door appends it once the change commits.
-    /// A failure is warned about by the caller and the mutation proceeds. The line goes only into the
-    /// file ledger ([`crate::activity_log`]); all that stays in the DB is the sequence-number mark, and
-    /// the event itself — who did what — is one line of JSONL. Same shape as the deletion events
+    /// The callers (CLI, GUI) invoke this after the mutation wrapper has committed. A line the
+    /// mutation itself narrates — a task created, its status, assignee or project changed, a decision
+    /// recorded — is not written here: the op queues it in the mutation's own transaction. A failed
+    /// append is only a warning and the mutation proceeds. The line goes only into the file ledger
+    /// ([`crate::activity_log`]); all that stays in the DB is the sequence-number mark, and the event
+    /// itself — who did what — is one line of JSONL. Same shape as the deletion events
     /// ([`Self::delete_task`] and friends): the only difference between this path and the deletion
     /// path is whether the target's row survives.
     pub fn add_system_event(
@@ -823,8 +819,8 @@ impl Store {
         target_id: i64,
         event: serde_json::Value,
     ) -> Result<crate::activity_log::Entry> {
-        let entry = self.write_one(&[WriteTarget::Task(target_id)], |tx| {
-            Ok(crate::activity_log::Entry {
+        self.write_one(&[WriteTarget::Task(target_id)], |tx| {
+            let entry = crate::activity_log::Entry {
                 id: tx.mint_activity_id()?,
                 at: crate::time::Timestamp::now(),
                 actor: Some(author_kind),
@@ -833,10 +829,10 @@ impl Store {
                 task: Some(target_id),
                 decision: None,
                 event,
-            })
-        })?;
-        crate::activity_log::append(&self.paths.activity_file, &entry);
-        Ok(entry)
+            };
+            tx.record_activity(entry.clone());
+            Ok(entry)
+        })
     }
 
     /// Add a comment to a task (one operation = one transaction).
@@ -950,53 +946,45 @@ impl Store {
     /// was already finished, which is what keeps `decision.accepted` to one firing per decision
     /// ([`crate::ops::decision::finish_writing`] fires it).
     ///
-    /// A real transition also leaves a `decision.decided` line in the activity ledger, written after
-    /// the commit. The line is written here rather than in the callers — as [`Store::reject_decision`]
-    /// writes its own — so the CLI and the GUI narrate the same moment without either having to
-    /// remember to.
+    /// A real transition also leaves a `decision.decided` line in the activity ledger, queued in the
+    /// same transaction and appended after the commit. The line is written here rather than in the
+    /// callers — as [`Store::reject_decision`] writes its own — so the CLI and the GUI narrate the
+    /// same moment without either having to remember to.
     pub fn finish_writing_decision(
         &mut self,
         id: i64,
         decided_by: Option<String>,
         actor: crate::model::ActorKind,
     ) -> Result<(crate::model::Decision, bool)> {
-        let (decision, changed, entry) = self.write_one(&[WriteTarget::Decision(id)], |tx| {
+        self.write_one(&[WriteTarget::Decision(id)], |tx| {
             let (decision, changed) = crate::ops::decision::finish_writing(tx, id, decided_by, actor)?;
             if !changed {
-                return Ok((decision, false, None));
+                return Ok((decision, false));
             }
             let event = crate::activity_log::event::decision_decided(&decision.title);
-            let entry = decision_ledger_entry(tx, &decision, actor, event)?;
-            Ok((decision, true, Some(entry)))
-        })?;
-        if let Some(entry) = &entry {
-            crate::activity_log::append(&self.paths.activity_file, entry);
-        }
-        Ok((decision, changed))
+            tx.record_activity(decision_ledger_entry(tx, &decision, actor, event)?);
+            Ok((decision, true))
+        })
     }
 
     /// Reject a decision (one operation = one transaction). Returns `(decision, changed)`; `changed`
     /// is `false` on the idempotent noop (already rejected). `actor` is the process facet, stamped onto
     /// the `decision.rejected` event fired on a real transition, and onto the activity line that goes
-    /// with it — the ledger twin of [`Store::finish_writing_decision`], written after the commit.
+    /// with it — the ledger twin of [`Store::finish_writing_decision`], appended after the commit.
     pub fn reject_decision(
         &mut self,
         id: i64,
         actor: crate::model::ActorKind,
     ) -> Result<(crate::model::Decision, bool)> {
-        let (decision, changed, entry) = self.write_one(&[WriteTarget::Decision(id)], |tx| {
+        self.write_one(&[WriteTarget::Decision(id)], |tx| {
             let (decision, changed) = crate::ops::decision::reject(tx, id, actor)?;
             if !changed {
-                return Ok((decision, false, None));
+                return Ok((decision, false));
             }
             let event = crate::activity_log::event::decision_rejected(&decision.title);
-            let entry = decision_ledger_entry(tx, &decision, actor, event)?;
-            Ok((decision, true, Some(entry)))
-        })?;
-        if let Some(entry) = &entry {
-            crate::activity_log::append(&self.paths.activity_file, entry);
-        }
-        Ok((decision, changed))
+            tx.record_activity(decision_ledger_entry(tx, &decision, actor, event)?);
+            Ok((decision, true))
+        })
     }
 
     /// Return an accepted decision to discussion (one operation = one transaction). Returns
@@ -1059,7 +1047,7 @@ impl Store {
     /// Blobs the delete orphaned are reclaimed after the commit. The ledger line points at the
     /// decision through its `decision` field ([`crate::activity_log::Entry`]).
     pub fn delete_decision(&mut self, id: i64, actor: crate::model::ActorKind) -> Result<()> {
-        let (orphaned, entry) = self.write_one(&[WriteTarget::Decision(id)], |tx| {
+        let orphaned = self.write_one(&[WriteTarget::Decision(id)], |tx| {
             use crate::store_engine::read;
             let title = read::decision_title(tx.conn(), id)?;
             let project = read::decision_project_id(tx.conn(), id)?;
@@ -1074,9 +1062,9 @@ impl Store {
                 decision: Some(id),
                 event: crate::activity_log::event::decision_deleted(title.as_deref()),
             };
-            Ok((orphaned, entry))
+            tx.record_activity(entry);
+            Ok(orphaned)
         })?;
-        self.log_deletion(entry);
         self.reclaim_after_delete(&orphaned);
         Ok(())
     }

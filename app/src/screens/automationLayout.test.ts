@@ -7,7 +7,7 @@
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
-import { automationGraph, edgeWord, layOut, openWord, type PicGraph } from "./automationLayout";
+import { automationGraph, edgeWord, layOut, openWord, type PicGraph, type PicLine } from "./automationLayout";
 import type {
   AutomationDetailDto,
   AutomationEdgeDto,
@@ -132,12 +132,14 @@ describe("the picture of an automation", () => {
     const picture = layOut(one);
     expect(at(picture, 2).y).toBe(at(picture, 3).y);
     expect(at(picture, 2).x).not.toBe(at(picture, 3).x);
-    // Each name is written over the middle of its own line's leg across, not stacked under the step.
+    // Each name is written over its own line's leg across, beside its own leg down, on the side it
+    // turns to — not stacked under the step.
     for (const key of ["edge-1", "edge-2"]) {
       const line = picture.lines.find((one) => one.key === key)!;
-      const [, turn, across] = line.points;
-      expect(line.align).toBe("middle");
-      expect(line.at.x).toBe(Math.round((turn!.x + across!.x) / 2));
+      const [leg, turn, across] = line.points;
+      const toLeft = across!.x < turn!.x;
+      expect(line.align).toBe(toLeft ? "end" : "start");
+      expect(line.at.x).toBe(leg!.x + (toLeft ? -6 : 6));
       expect(line.at.y).toBeLessThan(turn!.y);
     }
   });
@@ -347,7 +349,7 @@ describe("the picture of an automation", () => {
     const picture = layOut(one);
     const line = (key: string) => picture.lines.find((one) => one.key === key)!;
     const laneX = (key: string) => Math.min(...line(key).points.map((p) => p.x));
-    const into = picture.lines.find((one) => one.key.startsWith("into-"))!;
+    const into = picture.lines.find((one) => one.key.startsWith("into-") && one.joins !== true)!;
     // On one lane, each ending there without an arrowhead, and one line on from there into the box.
     expect(laneX("edge-4")).toBe(laneX("edge-5"));
     expect(line("edge-4").joins).toBe(true);
@@ -356,10 +358,19 @@ describe("the picture of an automation", () => {
     expect(into.points[0]!.x).toBe(line("edge-4").points.slice(-1)[0]!.x);
     const work = picture.nodes.find((one) => one.boxId === 2)!;
     expect(into.points.slice(-1)[0]!.y).toBe(work.y);
-    // Neither lies over the other along the lane: the one further out stops where the nearer joins.
+    // Each edge ends where it reaches the lane. The lane is drawn a piece per stretch between two
+    // joinings, so neither lies over the other: the piece from the one further out runs to where the
+    // nearer joins, and the one from there on to the line into the box.
     const [far, near] = [line("edge-4"), line("edge-5")].sort((a, b) => b.points[1]!.y - a.points[1]!.y);
-    expect(far!.points.slice(-1)[0]!.y).toBe(near!.points[2]!.y);
-    expect(near!.points.slice(-1)[0]!.y).toBe(into.points[0]!.y);
+    const piece = (edge: PicLine) =>
+      picture.lines.find((one) => one.joins === true && one.carries !== undefined && one.points[0]!.y === edge.points.slice(-1)[0]!.y)!;
+    expect(piece(far!).points.slice(-1)[0]!.y).toBe(near!.points.slice(-1)[0]!.y);
+    expect(piece(near!).points.slice(-1)[0]!.y).toBe(into.points[0]!.y);
+    // What each piece carries: the line further out goes on along the nearer one's piece.
+    const id = (edge: PicLine) => Number(edge.key.slice("edge-".length));
+    expect(piece(far!).carries).toEqual([id(far!)]);
+    expect([...piece(near!).carries!].sort()).toEqual([id(far!), id(near!)].sort());
+    expect([...into.carries!].sort()).toEqual([4, 5]);
   });
 
   it("gives two lines crossing the same rows into different boxes a lane each, or a margin each", () => {
@@ -455,9 +466,11 @@ describe("the picture of an automation", () => {
     expect(check.x - inner.at.x).toBeLessThanOrEqual(14);
     expect(inner.at.y).toBeGreaterThan(check.y + check.h);
     expect(inner.at.y).toBeLessThan(inner.points[1]!.y);
-    // Side by side on one row, the inner line's name nearest the box, and neither over the other.
-    expect(outer.at.y).toBe(inner.at.y);
-    expect(outer.at.x).toBeLessThanOrEqual(inner.at.x - "again".length * 7);
+    // Each over its own leg, a row of words apart, the inner line's on top (`AMB-T-5824`).
+    expect(outer.points[1]!.y - inner.points[1]!.y).toBe(15);
+    expect(outer.at.y).toBe(inner.at.y + 15);
+    expect(outer.at.y).toBeGreaterThan(inner.points[1]!.y);
+    expect(outer.at.y).toBeLessThan(outer.points[1]!.y);
     // Every lane stands past both names, so none of them crosses one.
     // As wide as the picture guesses the name is written: a wide character twelve points, any other seven.
     const left = outer.at.x - [...edgeWord(outer)].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
@@ -585,6 +598,208 @@ describe("the picture of an automation", () => {
     // Tied at two places, and the one going further out turns lower and from further right.
     expect(inner[0]!.x).toBeLessThan(outer[0]!.x);
     expect(inner[1]!.y).toBeLessThan(outer[1]!.y);
+  });
+
+  describe("a loop of eighteen boxes, lines going back into one box from three rows (AMB-T-5824)", () => {
+    // Take a task, cut a worktree, read, build, look at the screen, review, merge — and back to
+    // building from each of the last three. Merging leaves by two ways out back into building.
+    const ways = (...names: string[]) => [
+      { id: nextId++, name: "完了", outputs: [] },
+      { id: nextId++, name: "*", outputs: [] },
+      ...names.map((name) => ({ id: nextId++, name, outputs: [] })),
+    ];
+    const names: [number, string, string[]][] = [
+      [2, "worktree を切る", ["既にある"]],
+      [3, "文脈を読む", ["大きすぎる"]],
+      [4, "実装する", ["作るものが無い", "画面の確認が要る", "直すものが無い"]],
+      [5, "画面を確かめる", ["直すところあり"]],
+      [6, "レビューする", ["直すところあり"]],
+      [7, "PR を作ってマージする", ["CI が赤", "main が赤", "CI の不調"]],
+      [8, "起票することを集める", ["起票することが無い"]],
+      [9, "日本語を点検する", []],
+      [10, "作成を終える", []],
+      [11, "タスクを閉じる", []],
+      [12, "worktree を畳む", ["未マージ"]],
+      [13, "worktree を畳む", ["未マージ"]],
+      [14, "起票案を作る", []],
+      [15, "起票する", ["起票なし"]],
+      [16, "追跡外を直す", []],
+      [17, "待つ", []],
+      [18, "作業場所を判定する", ["git の外"]],
+    ];
+    const lines: [number, string, number | "done" | "halt"][] = [
+      [1, "着手した", 18], [1, "着手できるタスクが無い", "done"], [2, "完了", 3], [2, "既にある", 13],
+      [13, "完了", 2], [13, "未マージ", "halt"], [3, "完了", 4], [3, "大きすぎる", 12], [4, "完了", 6],
+      [4, "作るものが無い", 12], [4, "画面の確認が要る", 5], [5, "完了", 6], [5, "直すところあり", 4],
+      [6, "完了", 7], [6, "直すところあり", 4], [7, "完了", 12], [7, "CI が赤", 4], [8, "完了", 14],
+      [8, "起票することが無い", 11], [9, "完了", 10], [10, "完了", 11], [11, "完了", 1], [12, "完了", 8],
+      [12, "未マージ", 7], [14, "完了", 15], [15, "完了", 9], [15, "起票なし", 11], [16, "完了", 8],
+      [7, "main が赤", 4], [7, "CI の不調", 17], [17, "完了", 7], [4, "直すものが無い", 7], [18, "完了", 2],
+      [18, "git の外", 16],
+    ];
+    const loop = detail({
+      entryPlacementId: 1,
+      placements: [
+        step({
+          id: 1,
+          name: "タスクに着手する",
+          exits: [
+            { id: nextId++, name: "着手した", outputs: [port("タスク", "task_take")] },
+            { id: nextId++, name: "*", outputs: [] },
+            { id: nextId++, name: "着手できるタスクが無い", outputs: [] },
+          ],
+        }),
+        ...names.map(([id, name, more]) => step({ id, name, exits: ways(...more) })),
+      ],
+      edges: lines.map(([fromId, exitName, to], nth) =>
+        typeof to === "number"
+          ? edge({ id: nth + 1, fromId, exitName, toId: to })
+          : edge({ id: nth + 1, fromId, exitName, ends: to }),
+      ),
+    });
+    const picture = layOut(loop);
+    const idOf = (fromId: number, exitName: string) =>
+      lines.findIndex(([from, name]) => from === fromId && name === exitName) + 1;
+    const line = (fromId: number, exitName: string) => picture.lines.find((one) => one.key === `edge-${idOf(fromId, exitName)}`)!;
+    /** Where a line's words stand, as wide as the picture guesses them. */
+    const wordBox = (one: PicLine) => {
+      const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+      const left = one.align === "end" ? one.at.x - wide : one.align === "middle" ? one.at.x - wide / 2 : one.at.x;
+      return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
+    };
+    const named = picture.lines.filter((one) => edgeWord(one) !== "");
+    const level = picture.lines.flatMap((one) =>
+      one.points.slice(1).flatMap((q, nth) => {
+        const p = one.points[nth]!;
+        return p.y === q.y && p.x !== q.x ? [{ key: one.key, y: p.y, left: Math.min(p.x, q.x), right: Math.max(p.x, q.x) }] : [];
+      }),
+    );
+
+    it("writes no name over another", () => {
+      for (const one of named) {
+        for (const other of named) {
+          if (one === other) continue;
+          const [a, b] = [wordBox(one), wordBox(other)];
+          const over = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+          expect(over, `${edgeWord(one)} / ${edgeWord(other)}`).toBe(false);
+        }
+      }
+    });
+
+    it("runs no line across a name", () => {
+      for (const one of named) {
+        const box = wordBox(one);
+        const across = level.filter((seg) => seg.y > box.top && seg.y < box.bottom && seg.left < box.right && box.left < seg.right);
+        expect(across.map((seg) => seg.key), edgeWord(one)).toEqual([]);
+      }
+    });
+
+    it("lays no two lines over each other along a level stretch", () => {
+      for (const one of level) {
+        const over = level.filter((other) => other.key !== one.key && other.y === one.y && other.left < one.right && one.left < other.right);
+        expect(over.map((other) => other.key), one.key).toEqual([]);
+      }
+    });
+
+    it("gives the two ways out of merging back into building a leg each, its name over it", () => {
+      const [red, main] = [line(7, "CI が赤"), line(7, "main が赤")].sort((a, b) => a.points[1]!.y - b.points[1]!.y);
+      expect(main!.points[1]!.y - red!.points[1]!.y).toBe(15);
+      expect(red!.at.y).toBeLessThan(red!.points[1]!.y);
+      expect(main!.at.y).toBeLessThan(main!.points[1]!.y);
+      expect(main!.at.y).toBeGreaterThan(red!.points[1]!.y);
+    });
+
+    it("carries the way of the lower one on along the lane into building, and no other box's leg", () => {
+      const id = idOf(7, "main が赤");
+      const build = at(picture, 4);
+      const lit = picture.lines.filter((one) => one.carries?.includes(id));
+      expect(lit.every((one) => !one.key.startsWith("edge-"))).toBe(true);
+      // From where its own leg reaches the lane, piece by piece, into building's top.
+      let from = line(7, "main が赤").points.slice(-1)[0]!;
+      for (;;) {
+        const next = lit.find((one) => one.points[0]!.x === from.x && one.points[0]!.y === from.y);
+        expect(next, `from ${from.x},${from.y}`).toBeDefined();
+        from = next!.points.slice(-1)[0]!;
+        if (next!.joins !== true) break;
+      }
+      expect(from.y).toBe(build.y);
+      expect(from.x).toBeGreaterThanOrEqual(build.x);
+      // The other way out's leg is not one of them.
+      const other = idOf(7, "CI が赤");
+      expect(lit.some((one) => one.carries!.length === 1 && one.carries![0] === other)).toBe(false);
+    });
+  });
+
+  it("turns two ways out into the box under at heights of their own, each name beside its own leg (AMB-T-5824)", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "タスクに着手する"),
+          step({
+            id: 2,
+            name: "PR を作ってマージする",
+            exits: [
+              { id: 70, name: "完了", outputs: [] },
+              { id: 71, name: "*", outputs: [] },
+              { id: 72, name: "CI が赤", outputs: [] },
+              { id: 73, name: "main が赤", outputs: [] },
+            ],
+          }),
+          step({ id: 3, name: "実装する" }),
+          step({ id: 4, name: "タスクを閉じる" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, exitName: "CI が赤", toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "main が赤", toId: 3 }),
+          edge({ id: 4, fromId: 2, toId: 4 }),
+          edge({ id: 5, fromId: 3, toId: 2 }),
+        ],
+      }),
+    );
+    expect(at(picture, 3).y).toBe(at(picture, 4).y);
+    const down = ["edge-2", "edge-3", "edge-4"].map((key) => picture.lines.find((one) => one.key === key)!);
+    // Each leaves by a leg of its own, and the two into the same box turn across a row of words apart.
+    expect(new Set(down.map((one) => one.points[0]!.x)).size).toBe(3);
+    const [red, main] = [down[0]!, down[1]!];
+    expect(Math.abs(red.points[1]!.y - main.points[1]!.y)).toBe(15);
+    const level = down.map((one) => ({
+      key: one.key,
+      y: one.points[1]!.y,
+      left: Math.min(one.points[1]!.x, one.points[2]!.x),
+      right: Math.max(one.points[1]!.x, one.points[2]!.x),
+    }));
+    for (const one of level) {
+      const over = level.filter(
+        (other) => other.key !== one.key && other.y === one.y && other.left < one.right && one.left < other.right,
+      );
+      expect(over.map((other) => other.key), one.key).toEqual([]);
+      // No leg across runs over another line's leg down.
+      for (const other of down) {
+        if (other.key === one.key) continue;
+        const x = other.points[0]!.x;
+        expect(x > one.left && x < one.right && other.points[1]!.y > one.y, `${one.key} / ${other.key}`).toBe(false);
+      }
+    }
+    // Each name stands over its own turn, beside its own leg, and no two lie over each other.
+    const boxes = down.map((one) => {
+      const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+      const left = one.align === "end" ? one.at.x - wide : one.align === "middle" ? one.at.x - wide / 2 : one.at.x;
+      expect(Math.abs(one.at.x - one.points[0]!.x)).toBe(6);
+      expect(one.at.y).toBeLessThan(one.points[1]!.y);
+      return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
+    });
+    for (const [nth, a] of boxes.entries()) {
+      for (const b of boxes.slice(nth + 1)) {
+        expect(a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom).toBe(false);
+      }
+      for (const one of level) {
+        expect(one.y > a.top && one.y < a.bottom && one.left < a.right && a.left < one.right, `${nth} / ${one.key}`).toBe(
+          false,
+        );
+      }
+    }
   });
 
   it("draws the error way out only where somebody drew a line from it — the legend says the rest", () => {

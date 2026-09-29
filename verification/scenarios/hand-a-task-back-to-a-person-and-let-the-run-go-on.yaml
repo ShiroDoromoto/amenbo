@@ -1,0 +1,127 @@
+# A run could let go of the task it took two ways: close it, or stop and call a person. The second
+# fails the run, and a run that stops takes no task after it — so a picture that sends some tasks to a
+# person (one outside the project, say) failed every time it did, and the tasks behind it waited.
+#
+# The built-in that hands the task back to a person is the third way. The task goes back to `todo`,
+# given to the person who launched the run, with the step's report on it, and the run goes on to
+# whatever the picture draws next: here, the take again, which finds nothing more and ends the run.
+id: hand-a-task-back-to-a-person-and-let-the-run-go-on
+title: A run hands its task back to a person and goes on without stopping
+description: >
+  Start a run whose built-in takes a task, and report the step after it done into the built-in that
+  hands the task back to a person, which goes back to the take. The task is `todo` again, assigned to a
+  human, with the step's report on its timeline, and the run has not failed: the take finds nothing
+  more, and the run is on the history tab as completed.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task that is a person's }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
+
+  # The same one-step action as get-a-task-back-when-a-step-could-not-finish-it, after the built-in that
+  # takes the task. What follows it is the hand back, which goes round to the take.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: work the task the run took }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that hands its task back" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: hand_back_task }, as: at_back }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_back } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_back } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_back, to: at_start } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # The step says the task is a person's, and leaves by the way out drawn to the hand back.
+  - type: action
+    domain: automation
+    op: done-in-pane
+    with:
+      target: run
+      exit: got one
+      report: this task is not this project's
+
+  # The person's turn: back to `todo`, and on a human rather than the AI, so the take after it does not
+  # take it again.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: assignee_kind
+      equals: human
+
+  - type: assert
+    domain: task
+    op: commented
+    with:
+      target: seed
+      text: this task is not this project's
+      present: true
+
+  # Handed back, taken nothing more, and ended: the run is over, and not failed.
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: history
+
+  - type: assert
+    domain: automation
+    op: history-row
+    with:
+      target: run
+      state: completed

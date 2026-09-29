@@ -209,11 +209,11 @@ impl Unmet {
                 match to {
                     Some(to) => format!(
                         "{from} goes on to '{to}', which takes another task, with the task taken before \
-                         still open — close it or call a person on the way"
+                         still open — close it, hand it back to a person, or call a person on the way"
                     ),
                     None => format!(
-                        "{from} ends the run with the task it took still open — close it or call a \
-                         person on the way"
+                        "{from} ends the run with the task it took still open — close it, hand it back \
+                         to a person, or call a person on the way"
                     ),
                 }
             }
@@ -683,11 +683,11 @@ pub fn check(
 /// task on.
 ///
 /// While a run holds the task it took, the walk goes on through the placements it reaches and stops at
-/// the two that settle the task: the built-in that closes it, and a line that stops the run and calls a
-/// person (the error way out with nothing after it is one — it halts). Reaching the run's end, or a
-/// placement that takes a task, before either is the line refused. A placement already walked is not
-/// walked again, so a line back within the task — a review sending the work back — is followed once
-/// and asked nothing.
+/// the ones that settle the task: the built-ins that close it or hand it back to a person, and a line
+/// that stops the run and calls a person (the error way out with nothing after it is one — it halts).
+/// Reaching the run's end, or a placement that takes a task, before any of them is the line refused. A
+/// placement already walked is not walked again, so a line back within the task — a review sending the
+/// work back — is followed once and asked nothing.
 ///
 /// **The picture inside an action is opened too.** A line in there can end the run on its own, and
 /// that is the same task left open. What takes a task and what closes one are asked of the action as a
@@ -740,7 +740,7 @@ fn leaves_task_open(
                     None => continue,
                 },
             };
-            if closes_the_task(conn, to.action_id)? {
+            if lets_go_of_the_task(conn, to.action_id)? {
                 continue;
             }
             if takes_a_task(conn, to)? {
@@ -795,10 +795,14 @@ fn hands_on_the_task(
     Ok(found)
 }
 
-/// Whether a placement of this action closes the task the run holds — the built-in that does
-/// (`AMB-D-964`).
-fn closes_the_task(conn: &Connection, action_id: i64) -> Result<bool> {
-    Ok(action_builtin(conn, action_id)?.as_deref() == Some(crate::ops::automation_builtin_close::CLOSE_TASK.key))
+/// Whether a placement of this action lets go of the task the run holds — the built-in that closes it
+/// (`AMB-D-964`), or the one that hands it back to a person and goes on.
+fn lets_go_of_the_task(conn: &Connection, action_id: i64) -> Result<bool> {
+    let lets_go = [
+        crate::ops::automation_builtin_close::CLOSE_TASK.key,
+        crate::ops::automation_builtin_hand_back::HAND_BACK_TASK.key,
+    ];
+    Ok(action_builtin(conn, action_id)?.is_some_and(|key| lets_go.contains(&key.as_str())))
 }
 
 /// The lines inside the action standing on one placement that end the run, each named by the step and

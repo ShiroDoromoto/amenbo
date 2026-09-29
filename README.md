@@ -374,7 +374,7 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # a URL, a file path or a command set beforehand. What is fetched is filed through make_task, which can
 # take the task as it files it — the example below takes the first entrance.
 amenbo automation add --name "Work the queue"          # the picture itself; what every step is told first is Amenbo's own
-amenbo automation builtin-list                         # take_task, make_task, fetch, split_by_dim, cut_worktree, fold_worktree, close_task, wait — with the names of what each reads, hands on and leaves by
+amenbo automation builtin-list                         # take_task, make_task, fetch, split_by_dim, cut_worktree, fold_worktree, close_task, hand_back_task, wait — with the names of what each reads, hands on and leaves by
 amenbo automation place-add 3 --builtin take_task      # 31: where a run starts, first placed; reserves the first task its filter finds
 amenbo automation cfg-set 31 --name "<filter>" --assignee me-ai --dim "Area=Core" # which tasks it takes (unanswered: the ones handed to the AI)
 amenbo automation cfg-set 31 --name "<when none>" --choice "<wait>" # or wait for one to turn up, until a person pauses or stops the run

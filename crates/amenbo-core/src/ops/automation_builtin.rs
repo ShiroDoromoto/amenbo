@@ -48,6 +48,7 @@ use crate::ops::automation_builtin_close::CLOSE_TASK;
 use crate::ops::automation_builtin_cut::CUT_WORKTREE;
 use crate::ops::automation_builtin_fetch::FETCH;
 use crate::ops::automation_builtin_fold::FOLD_WORKTREE;
+use crate::ops::automation_builtin_hand_back::HAND_BACK_TASK;
 use crate::ops::automation_builtin_make::MAKE_TASK;
 use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
 use crate::ops::automation_builtin_take::TAKE_TASK;
@@ -433,8 +434,17 @@ pub struct Carried {
 /// **Every built-in this build carries.** Each is its own module, holding its definition and the work
 /// it does.
 #[cfg(not(test))]
-const BUILTINS: &[Builtin] =
-    &[TAKE_TASK, MAKE_TASK, CUT_WORKTREE, FOLD_WORKTREE, CLOSE_TASK, FETCH, SPLIT_BY_DIM, WAIT];
+const BUILTINS: &[Builtin] = &[
+    TAKE_TASK,
+    MAKE_TASK,
+    CUT_WORKTREE,
+    FOLD_WORKTREE,
+    CLOSE_TASK,
+    HAND_BACK_TASK,
+    FETCH,
+    SPLIT_BY_DIM,
+    WAIT,
+];
 #[cfg(test)]
 const BUILTINS: &[Builtin] = &[
     TAKE_TASK,
@@ -442,6 +452,7 @@ const BUILTINS: &[Builtin] = &[
     CUT_WORKTREE,
     FOLD_WORKTREE,
     CLOSE_TASK,
+    HAND_BACK_TASK,
     FETCH,
     SPLIT_BY_DIM,
     WAIT,

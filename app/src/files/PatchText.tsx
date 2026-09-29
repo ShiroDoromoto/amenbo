@@ -16,7 +16,6 @@ export function PatchText({ text }: { text: string }) {
       {text.split("\n").map((line, at) => (
         // The line's place in the patch, which is the only thing that tells two identical lines
         // apart — a patch is full of them.
-        // eslint-disable-next-line react/no-array-index-key
         <span key={at} className={`patch__line patch__line--${kindOf(line)}`}>{line}{"\n"}</span>
       ))}
     </>

@@ -343,8 +343,9 @@ export type Picture = {
  * through it, so it takes no task however that way out is drawn. Core decides the same way.
  */
 function takesTask(box: PicBox): boolean {
-  return box.exits.some((exit) =>
-    exit.name !== box.neverLeavesBy && exit.outputs.some((port) => port.kind === "task_take"));
+  return box.exits.some(
+    (exit) => exit.name !== box.neverLeavesBy && exit.outputs.some((port) => port.kind === "task_take"),
+  );
 }
 
 /** The boxes one task is worked by, in the rows the walk put them in. */
@@ -443,7 +444,10 @@ function walk(graph: PicGraph): Walk {
 
   // The spans, one per box that takes a task, in the order the walk came to them.
   const owner = new Map<number, number>();
-  const takers = graph.boxes.filter(takesTask).map((box) => box.id).sort((a, b) => order(a) - order(b));
+  const takers = graph.boxes
+    .filter(takesTask)
+    .map((box) => box.id)
+    .sort((a, b) => order(a) - order(b));
   for (const head of takers) {
     const handsOn = new Set(
       boxes
@@ -616,12 +620,7 @@ const READ_AT_LAUNCH: readonly string[] = ["タイトル", "本文", "選んだ�
  * a wire (`amenbo_core::ops::automation_builtin_make::read_at_launch`), so nothing has to reach it.
  * Only on the automation's own picture: inside an action there is no start dialog to hand anything.
  */
-export function readAtLaunch(
-  graph: PicGraph,
-  builtin: string | undefined,
-  boxId: number,
-  port: string,
-): boolean {
+export function readAtLaunch(graph: PicGraph, builtin: string | undefined, boxId: number, port: string): boolean {
   return (
     graph.boundary === undefined && boxId === graph.entryId && builtin === MAKE_TASK && READ_AT_LAUNCH.includes(port)
   );
@@ -649,9 +648,7 @@ function lanes(spans: readonly { key: string; top: number; bottom: number }[]): 
   for (const span of order) {
     // One that ends just short of where the other starts counts as running past it: on the same lane,
     // the two read as one line (`AMB-T-5824`).
-    const past = placed.filter(
-      (one) => one.top <= span.bottom + LANE_CLEAR && span.top <= one.bottom + LANE_CLEAR,
-    );
+    const past = placed.filter((one) => one.top <= span.bottom + LANE_CLEAR && span.top <= one.bottom + LANE_CLEAR);
     const inside = past.filter((one) => span.top <= one.top && one.bottom <= span.bottom);
     let lane = inside.length === 0 ? 0 : Math.max(...inside.map((one) => one.lane)) + 1;
     while (past.some((one) => one.lane === lane)) lane++;
@@ -897,8 +894,7 @@ function layOutWith(
           takes: takesTask(box),
           global: box.global,
           builtin: box.builtin,
-          empty:
-            box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
+          empty: box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
           draft: box.draft === true,
           unfed: !live.has(boxId)
             ? []
@@ -1114,7 +1110,12 @@ function layOutWith(
     const mid = Math.round((sy + entered.y) / 2);
     lines.push({
       key: "in",
-      points: [{ x: sx, y: sy }, { x: sx, y: mid }, { x: tx, y: mid }, { x: tx, y: entered.y }],
+      points: [
+        { x: sx, y: sy },
+        { x: sx, y: mid },
+        { x: tx, y: mid },
+        { x: tx, y: entered.y },
+      ],
       back: false,
       leaves: true,
       at: { x: sx, y: sy },
@@ -1228,7 +1229,10 @@ function layOutWith(
     const word = exitWord({ exitName: open.exitName, builtin: from.builtin });
     undecidedLines.push({
       key: open.key,
-      points: [{ x: sx, y: sy }, { x: sx, y: foot }],
+      points: [
+        { x: sx, y: sy },
+        { x: sx, y: foot },
+      ],
       back: false,
       open: true,
       exitName: open.exitName,
@@ -1236,7 +1240,12 @@ function layOutWith(
       at: { x: sx - 6, y: foot + OVER },
       align: "start",
     });
-    pressed.push({ boxId: open.boxId, exitName: open.exitName, x: sx - 6 + wordW(word) + BESIDE / 2, y: foot + OVER - 4 });
+    pressed.push({
+      boxId: open.boxId,
+      exitName: open.exitName,
+      x: sx - 6 + wordW(word) + BESIDE / 2,
+      y: foot + OVER - 4,
+    });
   }
 
   // The lines down to a neighbour whose name is written past the end of the leg across, beside the leg
@@ -1257,7 +1266,10 @@ function layOutWith(
       inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
       lines.push({
         key,
-        points: [{ x: sx, y: sy }, { x: sx, y: foot }],
+        points: [
+          { x: sx, y: sy },
+          { x: sx, y: foot },
+        ],
         back: false,
         exitName: edge.exitName,
         builtin: from.builtin,
@@ -1296,7 +1308,12 @@ function layOutWith(
           : { x: tx + BESIDE, y: mid - 3 };
       const line: PicLine = {
         key,
-        points: [{ x: sx, y: sy }, { x: sx, y: mid }, { x: tx, y: mid }, { x: tx, y: ty }],
+        points: [
+          { x: sx, y: sy },
+          { x: sx, y: mid },
+          { x: tx, y: mid },
+          { x: tx, y: ty },
+        ],
         back: false,
         leaves: edge.ends === "exit",
         exitName: edge.exitName,
@@ -1358,7 +1375,9 @@ function layOutWith(
       shared.set(key, [...(shared.get(key) ?? []), line]);
     }
     for (const group of shared.values()) {
-      group.sort((a, b) => lane(a) - lane(b) || a.edgeId - b.edgeId).forEach((line, nth) => outStair.set(line.key, nth));
+      group
+        .sort((a, b) => lane(a) - lane(b) || a.edgeId - b.edgeId)
+        .forEach((line, nth) => outStair.set(line.key, nth));
     }
   }
   /** Where a line leaves its box: the first places along its bottom for the left margin, the innermost
@@ -1498,7 +1517,12 @@ function layOutWith(
         .sort((a, b) => Math.abs(outY(b) - inY) - Math.abs(outY(a) - inY) || a.edgeId - b.edgeId);
       run.forEach((line, nth) => stops.set(line.key, nth + 1 < run.length ? outY(run[nth + 1]!) : inY));
       // Each one carries on along the next nearer one's, so a line is also the way of every one further off.
-      run.forEach((line, nth) => carried.set(line.key, run.slice(0, nth + 1).map((one) => one.edgeId)));
+      run.forEach((line, nth) =>
+        carried.set(
+          line.key,
+          run.slice(0, nth + 1).map((one) => one.edgeId),
+        ),
+      );
     }
     for (const line of group) {
       const sx = outX(line);
@@ -1520,12 +1544,24 @@ function layOutWith(
       const plus = room
         ? { x, y: near }
         : !joined
-          ? { x, y: Math.min(Math.round((line.top + line.bottom) / 2) + lane(line) * LANE_PLUS, line.bottom - LANE_PLUS / 2) }
+          ? {
+              x,
+              y: Math.min(
+                Math.round((line.top + line.bottom) / 2) + lane(line) * LANE_PLUS,
+                line.bottom - LANE_PLUS / 2,
+              ),
+            }
           : Math.abs(stop - oy) >= LANE_PLUS
             ? { x, y: Math.round((oy + stop) / 2) }
             : { x: x + (inward * LANE_PLUS) / 2, y: oy };
       inserts.push({ edgeId: line.edgeId, ...plus });
-      const tail = joined ? [] : [{ x, y: inY }, { x: inX(line), y: inY }, { x: inX(line), y: to.y }];
+      const tail = joined
+        ? []
+        : [
+            { x, y: inY },
+            { x: inX(line), y: inY },
+            { x: inX(line), y: to.y },
+          ];
       lines.push({
         key: line.key,
         points: [{ x: sx, y: sy }, { x: sx, y: oy }, { x, y: oy }, ...tail],
@@ -1559,9 +1595,16 @@ function layOutWith(
     };
     for (const line of group) {
       const carrying = group.filter((one) => carried.get(line.key)!.includes(one.edgeId));
-      along(carrying, `${key}-${line.edgeId}`, [{ x, y: outY(line) }, { x, y: stops.get(line.key)! }]);
+      along(carrying, `${key}-${line.edgeId}`, [
+        { x, y: outY(line) },
+        { x, y: stops.get(line.key)! },
+      ]);
     }
-    along(group, key, [{ x, y: inY }, { x: inX(group[0]!), y: inY }, { x: inX(group[0]!), y: to.y }]);
+    along(group, key, [
+      { x, y: inY },
+      { x: inX(group[0]!), y: inY },
+      { x: inX(group[0]!), y: to.y },
+    ]);
   }
 
   // A name written beside the leg into its box, past the end of its leg across, runs on the side it

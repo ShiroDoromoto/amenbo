@@ -519,10 +519,18 @@ input[type="color"] {
 .slot__face:hover { color: var(--c-text); }
 .slot__face--on { background: var(--c-accent-faint); color: var(--c-accent); font-weight: 600; }
 /* What the terminal face is — the cards, the terminal, the box a line is written in and the model row.
-   It lays nothing out of its own, so the frame's column is what it was; with the picture up it is out
-   of the layout altogether, and the terminal inside it measures no size and is not refit. */
-.slot__body { display: contents; }
-.slot__body--away { display: none; }
+   It is the frame's column again, with the frame's gap, so the face lays out as it did without it; it
+   is a box of its own so that the picture has somewhere to be drawn over (`.runpic`). With the picture
+   up it stays in the layout and only dims: the terminal keeps the size it had and is not refit when
+   the face is turned, and what it goes on writing shows through the picture's lower half. The
+   picture's `z-index` is kept inside this box (`isolation`), so the panel dropped from the row above
+   (`.slot__plate`) is still drawn over the picture, as it is over the terminal. */
+.slot__body {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; gap: var(--s-1);
+  position: relative; isolation: isolate;
+}
+.slot__body--away > :not(.runpic) { opacity: 0.7; }
 /* Where a finished run is read from now (`AMB-T-5539`), standing where its moves stood: a word, since
    it goes somewhere rather than acting on the run. */
 .slot__runlink {

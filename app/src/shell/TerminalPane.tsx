@@ -1145,12 +1145,13 @@ export function TerminalPane({
             onPointerDown={onStretch}
           />
         )}
-        {run !== null && face === "picture" && <RunPicture run={run} />}
-        {/* Everything the terminal face is, kept mounted while the picture is up: the terminal is a
-            program writing into the rows it was told it has, and taking its element away would be
-            ending what draws it. Out of the layout, it has no size, and is not measured again until
-            it is back (`../talk/terminal`). */}
+        {/* Everything the terminal face is, kept mounted and in the layout while the picture is up:
+            the terminal is a program writing into the rows it was told it has, and taking its element
+            away would be ending what draws it. The picture is drawn over it and fades toward the
+            bottom, and the face under it dims, so the terminal can be followed through the picture
+            and keeps its size when the face is turned (`../talk/terminal`). */}
         <div className={`slot__body${onPicture ? " slot__body--away" : ""}`}>
+        {run !== null && face === "picture" && <RunPicture run={run} />}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}
         {run !== null && over && !running ? (

@@ -7462,11 +7462,12 @@ fn pane_state(state: Option<&str>, reason: Option<&str>) -> Result<String, Strin
     };
     let word = match state {
         "failed" => "failed",
-        // The one state that is about now, and the one the mark is drawn moving for.
-        "running" => "under way, its mark moving",
         other => run_state(other)?,
     };
     Ok(match (state, reason) {
+        // Running has no word at the end of the line: the mark in front of the name glows instead,
+        // the one state that is about now.
+        ("running", None) => ". Confirm too that the end of the name's line carries no word for where the run stands, that the mark in front of the name glows, brightening and dimming, that no band under the header says it failed, and that the control that takes the pane away cannot be pressed".to_string(),
         ("failed", Some("halted")) => format!(
             ". Confirm too that the end of the name's line says the run is {word}, and that a band under the header says it stopped at a way out, drawn as that way out's chip, with a press beside it that acknowledges the failure"
         ),
@@ -7478,7 +7479,7 @@ fn pane_state(state: Option<&str>, reason: Option<&str>) -> Result<String, Strin
             ". Confirm too that the end of the name's line says the run is {word}, and that a band under the header says it failed, with a press beside it that acknowledges the failure"
         ),
         (_, Some(_)) => return Err(format!("`reason` goes with `state: failed`, not `{state}`")),
-        ("running" | "paused", None) => format!(
+        ("paused", None) => format!(
             ". Confirm too that the end of the name's line says the run is {word}, that no band under the header says it failed, and that the control that takes the pane away cannot be pressed"
         ),
         (_, None) => format!(

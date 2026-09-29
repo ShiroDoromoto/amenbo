@@ -348,16 +348,18 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     hoisted.cards = [runCard()];
     await mount();
     await arrive();
-    expect(q(".plate__state")[0]?.hidden).toBe(false);
-    expect(q(".plate__state")[0]?.textContent).toBe(t("auto.run.running"));
-    expect(q(".plate__state")[0]?.dataset.state).toBe("running");
+    // Running has no chip: the mark in front of the name glows instead (`AMB-D-1010`).
+    expect(q(".plate__state")[0]?.hidden).toBe(true);
+    expect(q(".plate__auto")[0]?.dataset.run).toBe("on");
     const openings = hoisted.opened.length;
 
     hoisted.cards = [runCard({ status: "completed", exitName: "" })];
     await arrive();
 
+    expect(q(".plate__state")[0]?.hidden).toBe(false);
     expect(q(".plate__state")[0]?.textContent).toBe(t("auto.run.completed"));
     expect(q(".plate__state")[0]?.dataset.state).toBe("completed");
+    expect(q(".plate__auto")[0]?.dataset.run).toBe("still");
     expect(q(".slot__band")).toHaveLength(0);
     // Only the row moved: the step and its terminal are the same ones.
     expect(hoisted.opened).toHaveLength(openings);

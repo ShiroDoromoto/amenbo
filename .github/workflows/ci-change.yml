@@ -8,6 +8,9 @@ name: ci-change
 # The trigger is not widened to task branches: on a push the path filter sees only that
 # push's diff, so a branch pushed in instalments would judge each instalment alone, while
 # on a PR it sees the branch's whole diff against the merge base.
+#
+# A merge GitHub delivers no push event for gets no run here, and the next push's run does
+# not cover it. ci-change-manual.yml judges it again on main.
 on:
   push:
     branches: [main]

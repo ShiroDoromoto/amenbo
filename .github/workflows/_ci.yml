@@ -1,8 +1,9 @@
 name: _ci
 
 # The body of the merge gate. It starts nothing itself — `ci-change.yml` runs it on a
-# change, `ci-full-nightly.yml` and `ci-full-manual.yml` run it with the path gate forced
-# open. Every job lives in this one workflow, so one event fires one workflow run (with N
+# change, `ci-change-manual.yml` on a merge into main that got no push run, and
+# `ci-full-nightly.yml` and `ci-full-manual.yml` run it with the path gate forced open.
+# Every job lives in this one workflow, so one event fires one workflow run (with N
 # jobs) instead of N separate runs. Runner minutes are unchanged — each job still gets its
 # own runner — but the run list, status, and concurrency group are unified.
 #
@@ -45,6 +46,10 @@ on:
         description: run every gated job, whatever the diff touched (the nightly leg)
         type: boolean
         default: false
+      base:
+        description: the commit the path filter diffs against, in place of the event's own (ci-change-manual.yml)
+        type: string
+        default: ''
 
 # Cache writes belong to main. Every rust-cache step below restores; only a run on main saves.
 # A run on a PR reads main's entry — a run may restore from its base branch and the default one —
@@ -115,9 +120,9 @@ jobs:
       pull-requests: read
     # `full` is the one place the nightly leg is honoured: every gated job below reads these
     # outputs and nothing else, so forcing them here turns the whole workflow on without an event
-    # guard on each job. `inputs.full` is empty on push and pull_request, which is falsy, so those
-    # two keep reading the filter. Written as `and/or` rather than `||` because a filter output is
-    # the STRING "false", and a non-empty string is truthy in an expression.
+    # guard on each job. `inputs.full` is false from ci-change.yml and ci-change-manual.yml, which
+    # pass none, so those keep reading the filter. Written as `and/or` rather than `||` because a
+    # filter output is the STRING "false", and a non-empty string is truthy in an expression.
     outputs:
       rust: ${{ inputs.full && 'true' || steps.filter.outputs.rust }}
       verification: ${{ inputs.full && 'true' || steps.filter.outputs.verification }}
@@ -140,6 +145,9 @@ jobs:
           # local gate (`make gate`) reads the same file to pick the stages it runs. A layer
           # declared in one place cannot drift from the other.
           filters: .github/paths-filters.yml
+          # Set by ci-change-manual.yml alone. Left empty, the filter diffs what the event names:
+          # the merge base on a pull request, the pushed diff on a push.
+          base: ${{ inputs.base }}
 
   # Not sharded. This half of the suite runs in about 34 seconds, and a shard of it would still pay
   # the checkout, the toolchain, the cache restore and the build every runner pays whatever it runs —

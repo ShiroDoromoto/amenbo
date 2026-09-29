@@ -209,7 +209,9 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: DecisionPatch) -> Result<Decisio
 /// Returns `(decision, changed)`. `changed` is `false` on that noop, and only the real transition fires
 /// `decision.accepted`, stamped with `actor` — once and once only per decision. The event keeps that name:
 /// it is baked into `project_notify_event`'s `CHECK`, and moving the door a decision leaves by is no reason
-/// to make every subscriber relearn what to listen for (`AMB-D-918`).
+/// to make every subscriber relearn what to listen for (`AMB-D-918`). The same transition queues a
+/// `decision.decided` line for the activity ledger here, so every path that ends the writing leaves it
+/// once, and the noop leaves none.
 pub fn finish_writing(
     tx: &WriteTx<'_>,
     id: i64,
@@ -223,7 +225,29 @@ pub fn finish_writing(
     }
     let after = settle(tx, &before, decided_by)?;
     event::emit_decision_verdict(tx, &after, crate::lifecycle::name::DECISION_ACCEPTED, actor)?;
+    let line = activity_log::event::decision_decided(&after.title);
+    tx.record_activity(verdict_line(tx, &after, actor, line)?);
     Ok((after, true))
+}
+
+/// The ledger line a decision's own verdict leaves behind, queued in the transaction that wrote it
+/// ([`WriteTx::record_activity`]) and appended once that commits. The moment is the one the row was
+/// just stamped with, and the project and the title come off that same row.
+fn verdict_line(
+    tx: &WriteTx<'_>,
+    decision: &Decision,
+    actor: ActorKind,
+    event: serde_json::Value,
+) -> Result<activity_log::Entry> {
+    Ok(activity_log::Entry {
+        id: tx.mint_activity_id()?,
+        at: decision.updated_at,
+        actor: Some(actor),
+        project: Some(decision.project_id),
+        task: None,
+        decision: Some(decision.id),
+        event,
+    })
 }
 
 /// The row half of finishing the writing: the required classification is read, the writing ends, and
@@ -300,7 +324,8 @@ pub fn unmet_required_axes(conn: &rusqlite::Connection, decision: &Decision) -> 
 ///
 /// Returns `(decision, changed)`. `changed` is `false` on the idempotent noop (already `Rejected`), so
 /// the caller does not report a fresh rejection that never happened. Only the real transition fires
-/// `decision.rejected`, stamped with `actor`.
+/// `decision.rejected`, stamped with `actor`, and queues the `decision.rejected` line for the activity
+/// ledger beside it.
 pub fn reject(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<(Decision, bool)> {
     let before = live_before(tx, id)?;
     // Rejected first, and `draft` after: a rejected decision carries `draft` down too, so reading the
@@ -327,6 +352,8 @@ pub fn reject(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<(Decision, 
     };
     emit_update(tx, record::decision(&before), record::decision(&after))?;
     event::emit_decision_verdict(tx, &after, crate::lifecycle::name::DECISION_REJECTED, actor)?;
+    let line = activity_log::event::decision_rejected(&after.title);
+    tx.record_activity(verdict_line(tx, &after, actor, line)?);
     Ok((after, true))
 }
 

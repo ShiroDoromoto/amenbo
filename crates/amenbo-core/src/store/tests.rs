@@ -1381,8 +1381,8 @@ fn proposing_a_decision_is_kept_where_the_column_cannot_keep_it() {
 ///
 /// The columns cannot tell them apart: `status_changed_at` moves for either end, and `decided_at` is
 /// cleared by a reopen. Without a line of its own each end reached the timeline as a bare "updated"
-/// (`AMB-T-5054`). The line is written by the store, not by the caller, so the CLI and the GUI narrate
-/// the same moment.
+/// (`AMB-T-5054`). The op queues the line itself, not the store's door and not the caller, so every
+/// path that ends the writing narrates the same moment, and exactly once.
 #[test]
 fn every_door_a_decisions_writing_ends_by_leaves_its_line() {
     let (mut s, dir) = fresh_store("ledger-decision-ends");
@@ -1416,6 +1416,15 @@ fn every_door_a_decisions_writing_ends_by_leaves_its_line() {
     assert_eq!(line["event"]["title"], serde_json::json!("三つ目の道"));
     assert_eq!(line["decision"].as_i64(), Some(turned_down.id));
     assert_eq!(line["actor"], serde_json::json!("human"));
+
+    let count = |kind: &str, id: i64| {
+        ledger(&s)
+            .iter()
+            .filter(|l| l["event"]["kind"] == serde_json::json!(kind) && l["decision"].as_i64() == Some(id))
+            .count()
+    };
+    assert_eq!(count("decision.decided", settled.id), 1, "the op writes one line, and nothing writes it again");
+    assert_eq!(count("decision.rejected", turned_down.id), 1, "the op writes one line, and nothing writes it again");
 
     // Superseding settles nothing, so it is no such door and narrates nothing.
     let replacement = s.add_decision(new("四つ目の道")).unwrap();

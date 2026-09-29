@@ -21,7 +21,7 @@ that is **macOS-only** (it links WKWebView) — see
 [Toolchain](../CONTRIBUTING.md#toolchain) and the `make gui` / `make gui-dev` targets.
 
 Use the pinned Node (24 — see `.nvmrc` at the repo root; `mise install` or `nvm use`
-picks it up). Other scripts: `npm run build`, `npm run typecheck`,
+picks it up). Other scripts: `npm run lint`, `npm run build`, `npm run typecheck`,
 `npm test` (Vitest unit suite).
 
 ## The wiring seams

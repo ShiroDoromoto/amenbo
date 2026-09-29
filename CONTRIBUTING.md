@@ -108,7 +108,7 @@ back to the whole of `make test`:
 ```bash
 cargo install cargo-nextest            # one-time (or https://get.nexte.st)
 brew install shellcheck actionlint     # one-time (the shell gate; any package manager will do)
-make test                              # shell gate + core/cli (scale,e2e + doctests) + app crate clippy/test + GUI typecheck/build/test
+make test                              # shell gate + core/cli (scale,e2e + doctests) + app crate clippy/test + GUI lint/typecheck/build/test
 make gate                              # the same, narrowed to the layers your change touched (a path on no layer falls back to the whole of make test)
 make shell-gate                        # the shell leg on its own (every tracked *.sh and git hook, plus the shell embedded in each workflow's run:)
 cargo nextest run --features scale,e2e # core/cli only, without the doctest + GUI legs

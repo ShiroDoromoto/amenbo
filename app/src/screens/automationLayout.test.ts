@@ -7,7 +7,7 @@
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
-import { automationGraph, edgeWord, layOut, openWord, type PicGraph, type PicLine } from "./automationLayout";
+import { automationGraph, edgeWord, layOut, openWord, wordW, type PicGraph, type PicLine } from "./automationLayout";
 import type {
   AutomationDetailDto,
   AutomationEdgeDto,
@@ -93,14 +93,9 @@ const at = (picture: ReturnType<typeof layOut>, boxId: number) =>
 
 type Box = { left: number; right: number; top: number; bottom: number };
 
-/** How wide the picture guesses a word is written: a wide character twelve points, any other seven. */
-function wordWide(word: string): number {
-  return [...word].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
-}
-
 /** Where a line's words stand, as wide as the picture guesses them. */
 function wordBox(one: PicLine): Box {
-  const wide = wordWide(edgeWord(one));
+  const wide = wordW(edgeWord(one));
   const left = one.align === "end" ? one.at.x - wide : one.align === "middle" ? one.at.x - wide / 2 : one.at.x;
   return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
 }
@@ -1024,7 +1019,7 @@ describe("the picture of an automation", () => {
     // The way out and where the run goes after it, both: the ending is the half that got cut.
     const words = edgeWord(line);
     expect(words.length).toBeGreaterThan("着手できるタスクが無い".length);
-    expect(line.at.x + wordWide(words)).toBeLessThanOrEqual(picture.width);
+    expect(line.at.x + wordW(words)).toBeLessThanOrEqual(picture.width);
   });
 
   it("ties a named way out first when the ways out before it have no line", () => {
@@ -1603,7 +1598,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
     expect(left.y).toBe(right.y);
     const press = picture.opens.find((one) => one.boxId === 2)!;
     const down = picture.lines.find((one) => one.key === "edge-3")!;
-    expect(press.x + wordWide(openWord(false)) + 28).toBeLessThan(down.points[0]!.x);
+    expect(press.x + wordW(openWord(false)) + 28).toBeLessThan(down.points[0]!.x);
     expect(right.x - (left.x + left.w)).toBeGreaterThan(24);
   });
 

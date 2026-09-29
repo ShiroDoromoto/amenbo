@@ -7069,6 +7069,11 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
         ],
     },
     BuiltinWords {
+        key: "hand_back_task",
+        called: "the built-in that hands the task back to a person (back in todo, given to whoever launched the run)",
+        words: &[("完了", "the way out for having handed the task back")],
+    },
+    BuiltinWords {
         key: "fetch",
         called: "the built-in that goes and fetches (it looks at a URL, a file or a command set beforehand)",
         words: &[

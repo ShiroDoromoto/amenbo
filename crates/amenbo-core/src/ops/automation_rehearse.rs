@@ -36,6 +36,7 @@ use crate::model::{
     AutomationStoppedReason, RunDefExit, TaskStatus, ERROR_EXIT,
 };
 use crate::ops::automation_builtin_close;
+use crate::ops::automation_builtin_hand_back;
 use crate::ops::automation_report::{self, Next, Produced};
 use crate::ops::automation_run::{self, HandedAtLaunch, HandedTask, Launcher, Waiting};
 use crate::ops::automation_step::{self, Opened};
@@ -185,8 +186,8 @@ fn choose<'e>(def: &AutomationRunDef, exits: &'e [RunDefExit], seen: usize) -> R
 }
 
 /// **Put down what the step would have handed on through `exit`**, each output a placeholder of its
-/// kind — and, for the built-in that closes the task, close the one the run holds, so the next task it
-/// takes is not taken with this one still open.
+/// kind — and, for the built-ins that close the task or hand it back to a person, close the one the run
+/// holds or put it back in `todo`, so the next task it takes is not taken with this one still open.
 fn stand_in(
     tx: &WriteTx<'_>,
     run: &crate::model::AutomationRun,
@@ -224,16 +225,20 @@ fn stand_in(
             }
         }
     }
-    if def.builtin.as_deref() == Some(automation_builtin_close::CLOSE_TASK.key) {
-        let step = read::automation_run_step(tx.conn(), run_step_id)?;
-        let stretch = match step.and_then(|s| s.run_task_id) {
-            Some(id) => read::automation_run_task(tx.conn(), id)?,
-            None => None,
-        };
-        if let Some(task_id) = stretch.and_then(|s| s.task_id) {
-            if read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress) {
-                task::set_status(tx, task_id, TaskStatus::Done)?;
-            }
+    let lets_go = match def.builtin.as_deref() {
+        Some(key) if key == automation_builtin_close::CLOSE_TASK.key => Some(TaskStatus::Done),
+        Some(key) if key == automation_builtin_hand_back::HAND_BACK_TASK.key => Some(TaskStatus::Todo),
+        _ => None,
+    };
+    let Some(into) = lets_go else { return Ok(()) };
+    let step = read::automation_run_step(tx.conn(), run_step_id)?;
+    let stretch = match step.and_then(|s| s.run_task_id) {
+        Some(id) => read::automation_run_task(tx.conn(), id)?,
+        None => None,
+    };
+    if let Some(task_id) = stretch.and_then(|s| s.task_id) {
+        if read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress) {
+            task::set_status(tx, task_id, into)?;
         }
     }
     Ok(())
@@ -343,6 +348,42 @@ mod tests {
             assert!(work.prompt.as_deref().is_some_and(|p| p.contains("work on it")), "{work:?}");
             assert!(rehearsal.steps[0].prompt.is_none(), "a built-in is started on no prompt");
             assert_eq!(read::task_status(tx.conn(), real).expect("read"), Some(TaskStatus::Todo), "the real task is left alone");
+        });
+    }
+
+    /// **A picture that hands its task back to a person goes round as one that closes it** — the stand-in
+    /// puts the task back in `todo`, so the take after it is not refused for leaving it open.
+    #[test]
+    fn a_picture_that_hands_the_task_back_goes_round_and_out() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                automation::add(tx, project, NewAutomation { name: "back".into(), ..Default::default() })
+                    .expect("automation");
+            let on = AutomationPictureOwner::Automation;
+            let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
+                .expect("place take");
+            let (_, work) = mk_placed(tx, &automation, "look", "look at it", "claude");
+            let back = automation::placement_add(tx, automation.id, action(tx, "hand_back_task").expect("back").id)
+                .expect("place hand back");
+            automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
+            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
+            automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(back.id), None).expect("work → back");
+            automation::edge_add(tx, on, back.id, None, EdgeTarget::Go(take.id), None).expect("back → take");
+            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+
+            let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
+            assert_eq!(
+                walked(&rehearsal),
+                vec![
+                    ("タスクに着手する", TAKEN),
+                    ("look", DONE_EXIT),
+                    ("タスクを人に返す", DONE_EXIT),
+                    ("タスクに着手する", NONE_TO_TAKE),
+                ],
+                "{rehearsal:?}",
+            );
+            assert_eq!(rehearsal.status, AutomationRunStatus::Completed);
         });
     }
 

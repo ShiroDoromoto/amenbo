@@ -82,7 +82,7 @@ fn close(carry: &Carry<'_, '_>) -> Result<Carried> {
 
 /// **The last report an agent gave in this stretch**, or `None` where no agent's step has reported
 /// anything yet. A built-in's own line is the run's record of it, not a report on the work.
-fn last_report(tx: &WriteTx<'_>, this: &AutomationRunStep) -> Result<Option<AutomationRunStep>> {
+pub(crate) fn last_report(tx: &WriteTx<'_>, this: &AutomationRunStep) -> Result<Option<AutomationRunStep>> {
     let Some(stretch) = this.run_task_id else {
         return Ok(None);
     };
@@ -105,7 +105,7 @@ fn last_report(tx: &WriteTx<'_>, this: &AutomationRunStep) -> Result<Option<Auto
 
 /// Whether that step's report is on the task already — carried there by the step itself, which was
 /// built to report to the task.
-fn already_on_the_task(tx: &WriteTx<'_>, task_id: i64, run_step_id: i64) -> Result<bool> {
+pub(crate) fn already_on_the_task(tx: &WriteTx<'_>, task_id: i64, run_step_id: i64) -> Result<bool> {
     for id in read::task_comment_ids(tx.conn(), task_id)? {
         if read::task_comment(tx.conn(), id)?.is_some_and(|c| c.automation_run_step_id == Some(run_step_id)) {
             return Ok(true);

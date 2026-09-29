@@ -155,13 +155,9 @@ const ATTACH = 28;
 const EXIT_GAP = 28;
 /** How far a line hangs below a box before it turns into a lane. */
 const DROP = 14;
-/**
- * Where two lines leave one box for the same margin: how much lower each one on a lane further out
- * turns, and after how many they stop spreading. The one further out is also tied further from that
- * margin's side of the box — so neither crosses the other, and each reads as a line of its own.
- */
-const STAIR = 6;
-const STAIRS = 2;
+/** How far apart two lines in one margin run along the same lane at the least — closer, the one
+ *  reads as going on into the other. */
+const LANE_CLEAR = 56;
 /** Where the line in from the left margin lands on a box's top — left of any line that comes in from
  *  the row above, which lands one place after it — and, from the right margin, as far in from the
  *  right. */
@@ -257,18 +253,27 @@ export type PicLine = {
   ends?: "done" | "halt";
   /**
    * Where the way out's name is written — and, on a line that names no box, how it ends. Over the
-   * middle of the leg that runs across, over the leg a line in the margin leaves its box by just
-   * left of that box's row, under the foot of one that goes nowhere.
+   * leg that runs across, beside the leg down it turns from, over the leg a line in the margin leaves
+   * its box by just left of that box's row, under the foot of one that goes nowhere.
    */
   at: PicPoint;
   /** Which end of the words `at` is: where they start, their middle, or where they finish. */
   align: "start" | "middle" | "end";
   /**
-   * It ends on its lane, where it joins the other lines from the same margin into the same box: the
-   * line that runs on into the box carries the one arrowhead. That line is no edge, and its key is
-   * not an edge's.
+   * It ends on its lane, where it joins the other lines from the same margin into the same box — a
+   * line's leg out to the lane, or a piece of the lane up to the next joining. Only the line that runs
+   * on into the box carries the one arrowhead. The lane's pieces and that line are no edge, and their
+   * keys are not an edge's.
    */
   joins?: boolean;
+  /**
+   * The edges whose way runs along this line, where lines have joined on a lane: the one it starts as
+   * and every one that joined it further off — or, on the line into the box, all of them. A run that
+   * went down one of them is lit all the way from the leg it left by into the box (`AMB-T-5824`):
+   * lit only as far as the next line joined it, the way was lost there. Absent on a line that is one
+   * edge alone, which is `key`'s.
+   */
+  carries?: readonly number[];
   /** It is a way out nothing has been decided for yet, and no edge: it ends in the press that puts
    *  the next box on it (`PicOpen`). */
   open?: boolean;
@@ -642,7 +647,11 @@ function lanes(spans: readonly { key: string; top: number; bottom: number }[]): 
     (a, b) => a.bottom - a.top - (b.bottom - b.top) || a.top - b.top || a.key.localeCompare(b.key),
   );
   for (const span of order) {
-    const past = placed.filter((one) => one.top <= span.bottom && span.top <= one.bottom);
+    // One that ends just short of where the other starts counts as running past it: on the same lane,
+    // the two read as one line (`AMB-T-5824`).
+    const past = placed.filter(
+      (one) => one.top <= span.bottom + LANE_CLEAR && span.top <= one.bottom + LANE_CLEAR,
+    );
     const inside = past.filter((one) => span.top <= one.top && one.bottom <= span.bottom);
     let lane = inside.length === 0 ? 0 : Math.max(...inside.map((one) => one.lane)) + 1;
     while (past.some((one) => one.lane === lane)) lane++;
@@ -712,10 +721,38 @@ function wordW(exitName: string | undefined): number {
  *
  * Everything is placed with the boxes starting at x=0 and shifted right at the end by however many
  * lanes the left margin turned out to need — which is not known until every line has one.
+ *
+ * **A box that sends lines out to a margin needs the room under it for a leg each**, a row of words
+ * apart, with the line down to the next row turning under them (`AMB-T-5824`). Which margin a line
+ * goes to is decided once the rows stand, so the rows are laid out again with the room each box
+ * turned out to need, until no box needs more. So are the heights its lines down to the next row turn
+ * at, a row of words apart, which are known once its lines stand along its bottom.
  */
 export function layOut(graph: PicGraph | null): Picture {
+  let legs = new Map<number, number>();
+  let turns = new Map<number, number>();
+  for (;;) {
+    const { picture, legsOf, turnsOf } = layOutWith(graph, legs, turns);
+    const more = [...legsOf].filter(([boxId, count]) => count > (legs.get(boxId) ?? 0));
+    const lower = [...turnsOf].filter(([boxId, count]) => count > (turns.get(boxId) ?? 1));
+    if (more.length === 0 && lower.length === 0) return picture;
+    legs = new Map([...legs, ...more]);
+    turns = new Map([...turns, ...lower]);
+  }
+}
+
+/** Lay one picture out with `legs` lines leaving each box for one of the margins at the most, and
+ *  its lines down to the next row turning at `turns` heights, and say how many each box turned out
+ *  to need of each. */
+function layOutWith(
+  graph: PicGraph | null,
+  legs: ReadonlyMap<number, number>,
+  turns: ReadonlyMap<number, number>,
+): { picture: Picture; legsOf: Map<number, number>; turnsOf: Map<number, number> } {
+  const legsOf = new Map<number, number>();
+  const turnsOf = new Map<number, number>();
   const empty: Picture = { width: 0, height: 0, laps: [], nodes: [], lines: [], inserts: [], opens: [], marks: [] };
-  if (graph === null || graph.boxes.length === 0) return empty;
+  if (graph === null || graph.boxes.length === 0) return { picture: empty, legsOf, turnsOf };
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
   const nodeH = graph.boundary !== undefined ? STEP_H : NODE_H;
@@ -733,12 +770,21 @@ export function layOut(graph: PicGraph | null): Picture {
         exit.name !== box.neverLeavesBy &&
         !graph.edges.some((edge) => edge.fromId === box.id && edge.exitName === exit.name),
     );
-  // How far under a box what hangs from its ways out with nothing decided reaches: its lowest press,
-  // or the name of a line of its that goes nowhere, which hangs under every press (below). Nothing
-  // where every way out says something — and a row of those keeps the room it always had.
+  // How far under a box what hangs from it reaches. The legs of its lines out to one margin hang a row
+  // of words apart, and a line down to the next row turns under the lowest of them, so the name over
+  // its turn is not written across one (`AMB-T-5824`).
   const hangOf = (box: PicBox): number => {
+    const count = legs.get(box.id) ?? 0;
+    return Math.max(count === 0 ? 0 : DROP + (count - 1) * WORD_H, pressHangOf(box));
+  };
+  // How far what hangs from its ways out with nothing decided, and from its lines that go nowhere,
+  // reaches: its lowest press, or the name of a line of its that goes nowhere, which hangs under every
+  // press (below). A line down to the next row turns under those names: turning over them, one that
+  // turns right ran across the lines that go nowhere, standing right of it, and across their names.
+  // Nothing where every way out has a line that goes to a box — and a row of those keeps the room it
+  // always had.
+  const pressHangOf = (box: PicBox): number => {
     const undecided = undecidedOf(box).length;
-    if (undecided === 0) return 0;
     const nowhere = graph.edges.filter(
       (edge) =>
         edge.fromId === box.id &&
@@ -746,6 +792,7 @@ export function layOut(graph: PicGraph | null): Picture {
           edge.ends === "halt" ||
           (edge.ends === "exit" && !outs.some((out) => out.name === edge.exitTo))),
     ).length;
+    if (undecided === 0) return nowhere === 0 ? 0 : STUB + (nowhere - 1) * WORD_H + OVER + 4;
     const press = STUB + (undecided - 1) * OPEN_H + OVER - 4 + PRESS_H / 2;
     return nowhere === 0 ? press : Math.max(press, STUB + undecided * OPEN_H + (nowhere - 1) * WORD_H + OVER + 4);
   };
@@ -794,6 +841,9 @@ export function layOut(graph: PicGraph | null): Picture {
   // How far under each box's row the lowest thing hanging from that row reaches — what the line down
   // to the next row turns under.
   const hangUnder = new Map<number, number>();
+  // How much lower the lowest of the lines down from each box's row turns than the highest — a row of
+  // words for each height past the first one of its boxes needs.
+  const stairUnder = new Map<number, number>();
   // The mark a placement comes in by stands over everything, with a row's room under it.
   const over = graph.boundary === undefined ? 0 : IN_H + ROW_GAP;
   let y = PAD + over;
@@ -804,17 +854,24 @@ export function layOut(graph: PicGraph | null): Picture {
     const top = y;
     let rowY = top + over;
     let hang = 0;
+    let stair = 0;
     lap.rows.forEach((row, depth) => {
-      // Under a row a press hangs from, the next row stands as much lower as it hangs, so neither that
-      // row nor the lines down to it run through the press (`AMB-T-5789`). Every other row keeps its room.
-      if (depth > 0) rowY += nodeH + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2));
+      // Under a row a press, or the name of a line that goes nowhere, hangs from, the next row stands as
+      // much lower as it hangs, so neither that row nor the lines down to it run through the press
+      // (`AMB-T-5789`) or across the name. Every other row keeps its room.
+      // It stands lower again by the stair the lines down to it turn on.
+      if (depth > 0) {
+        rowY += nodeH + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2)) + stair;
+      }
       hang = Math.max(0, ...row.map((boxId) => hangOf(boxes.get(boxId)!)));
+      stair = Math.max(0, ...row.map((boxId) => ((turns.get(boxId) ?? 1) - 1) * WORD_H));
       const columns = columnsOf(row);
       const startX = rowStart(contentW, columns.w);
       row.forEach((boxId, column) => {
         const box = boxes.get(boxId)!;
         at.set(boxId, { lap: nth, row: depth });
         hangUnder.set(boxId, hang);
+        stairUnder.set(boxId, stair);
         nodes.push({
           boxId,
           // A built-in's words are drawn in the screen's language; the box's own name stays the store's.
@@ -996,6 +1053,30 @@ export function layOut(graph: PicGraph | null): Picture {
       placed.push({ toId: span.to.boxId, side, top: span.top, bottom: span.bottom });
     }
   }
+  // How many lines leave each box for each margin — a leg each, a row of words apart — and how many
+  // legs of its row stand over its first one. A leg passes under the boxes between its own and the
+  // margin, so theirs stand over it: at one height, the two ran as one line to the margin.
+  const legCount = new Map<string, number>();
+  for (const edge of edges) {
+    const side = sideOf.get(edge.id);
+    if (side === undefined) continue;
+    const key = `${side}-${edge.fromId}`;
+    legCount.set(key, (legCount.get(key) ?? 0) + 1);
+  }
+  const legsOver = new Map<string, number>();
+  /** How many legs of a box's row stand down to its lowest one for that margin. */
+  const legsTo = (key: string): number => (legsOver.get(key) ?? 0) + (legCount.get(key) ?? 1);
+  for (const [key, count] of legCount) {
+    const [side, fromId] = key.split("-") as [Side, string];
+    const from = node.get(Number(fromId))!;
+    const over = [...legCount]
+      .filter(([other]) => other.startsWith(`${side}-`))
+      .map(([other, many]) => ({ box: node.get(Number(other.slice(side.length + 1)))!, many }))
+      .filter(({ box }) => box.y === from.y && (side === "left" ? box.x < from.x : box.x > from.x))
+      .reduce((sum, { many }) => sum + many, 0);
+    legsOver.set(key, over);
+    legsOf.set(from.boxId, Math.max(legsOf.get(from.boxId) ?? 0, over + count));
+  }
   // Whether a line comes into each box from the left margin. It lands first along the box's top, so
   // a line from the row above lands after it rather than on its last leg; one from the right margin
   // lands at the far end.
@@ -1052,14 +1133,14 @@ export function layOut(graph: PicGraph | null): Picture {
   const openSlot = new Map<string, { nth: number; below: number }>();
   /** How many of its ways out each box has a line from — the places along its bottom. */
   const slots = new Map<number, number>();
-  // The first of each box's lines that go down to a neighbour — the one with nothing of its box's
-  // coming down on its left, where a name beside it can be written.
-  const firstDown = new Map<number, number>();
+  // Where a line down to a neighbour lands, which its box's lines down stand along its bottom in the
+  // order of: so none of them runs across another's leg.
+  const landsAt = (edge: AutomationEdgeDto): number => (reach(edge) === 1 ? fromAbove(node.get(toOf(edge)!)!) : 0);
   for (const box of graph.boxes) {
     const exitAt = (edge: AutomationEdgeDto) => box.exits.findIndex((exit) => exit.name === edge.exitName);
     const own = edges
       .filter((edge) => edge.fromId === box.id)
-      .sort((a, b) => reach(a) - reach(b) || exitAt(a) - exitAt(b));
+      .sort((a, b) => reach(a) - reach(b) || landsAt(a) - landsAt(b) || exitAt(a) - exitAt(b));
     // A way out with nothing decided stands after the lines that go nowhere and before the ones for
     // the right margin: it hangs down as they do, and its press runs off to the right of its words.
     const undecided = opens.filter((open) => open.boxId === box.id);
@@ -1072,11 +1153,30 @@ export function layOut(graph: PicGraph | null): Picture {
       // and under every press to its right as well.
       const below = reach(edge) === 2 ? (nowhere - 1 - seen++) * WORD_H + undecided.length * OPEN_H : 0;
       slot.set(edge.id, { nth: nth < before ? nth : nth + undecided.length, below });
-      if (reach(edge) === 1 && !firstDown.has(box.id)) firstDown.set(box.id, edge.id);
     });
     undecided.forEach((open, nth) => {
       openSlot.set(open.key, { nth: before + nth, below: (undecided.length - 1 - nth) * OPEN_H });
     });
+  }
+
+  // How many rows of words under the highest each line down to a neighbour turns (`AMB-T-5824`).
+  // Turning at one height, two ways out into the same box ran as one line, their names were written
+  // in one place, and which of them a run went down could not be read. Of a box's lines that turn
+  // left, each one further right turns a row lower, and of those that turn right each one further
+  // left: so none runs across another's leg, and each one's name has a row of its own over its turn.
+  // A line straight down counts with the ones that turn left: its name is written on its left too.
+  const turnOf = new Map<number, number>();
+  for (const box of graph.boxes) {
+    const from = node.get(box.id);
+    if (from === undefined) continue;
+    const down = edges
+      .filter((edge) => edge.fromId === box.id && reach(edge) === 1)
+      .map((edge) => ({ edge, sx: attach(from, slot.get(edge.id)!.nth), tx: landsAt(edge) }));
+    const lefts = down.filter((one) => one.tx <= one.sx).sort((a, b) => a.sx - b.sx);
+    const rights = down.filter((one) => one.tx > one.sx).sort((a, b) => b.sx - a.sx);
+    lefts.forEach((one, nth) => turnOf.set(one.edge.id, nth));
+    rights.forEach((one, nth) => turnOf.set(one.edge.id, nth));
+    turnsOf.set(box.id, Math.max(1, lefts.length, rights.length));
   }
 
   // Each way out with nothing decided hangs as a line that goes nowhere does, its name under its foot,
@@ -1133,24 +1233,28 @@ export function layOut(graph: PicGraph | null): Picture {
     const ty = to.y;
     if (neighbours(edge.fromId, toId)) {
       const tx = fromAbove(to);
-      // Under a row a press hangs from, it turns past the lowest of them.
+      // Under a row a press or the name of a line that goes nowhere hangs from, it turns past the lowest
+      // of them; and a row of words lower for each line of its box's turning the same way over it.
       const hang = hangUnder.get(edge.fromId) ?? 0;
-      const mid = Math.max(Math.round((sy + ty) / 2), hang === 0 ? 0 : sy + hang + LEG_CLEAR);
+      const stair = stairUnder.get(edge.fromId) ?? 0;
+      const top = Math.max(Math.round((sy + ty - stair) / 2), hang === 0 ? 0 : sy + hang + LEG_CLEAR);
+      const mid = top + (turnOf.get(edge.id) ?? 0) * WORD_H;
       const across = Math.round((sx + tx) / 2);
       inserts.push({ edgeId: edge.id, x: across, y: mid });
-      // A leg across shorter than the name has no room to write it over: centred there, it runs over
-      // the lines leaving beside it (`AMB-T-5675`). A line straight down has no leg at all. Either
-      // way the name goes level with the leg, on the left where the lines that go nowhere do not write
-      // theirs — but only for the first of its box's lines down to a neighbour. Any other has one of
-      // those turning at the same height on its left, so its name goes past its right end instead.
+      // The name is written over its own turn, beside its own leg, on the side it turns to: no other
+      // line of its box runs there, and it is read as that leg's. A leg across shorter than the name
+      // has no room to write it over: it runs over the lines leaving beside it (`AMB-T-5675`). A line
+      // straight down has no leg at all. Either way the name still goes in its own row over its turn,
+      // past the end of the leg on the side it turns to — on the left for a line straight down. The
+      // box's lines turning that way nearer that side turn higher, so no leg of theirs comes down there.
       const word = wordW(lineWord({ exitName: edge.exitName, builtin: from.builtin }));
       const short = Math.abs(tx - sx) < Math.max(BESIDE * 2, word + BESIDE);
-      const left = firstDown.get(edge.fromId) === edge.id && tx <= sx + BESIDE * 2;
+      const left = tx <= sx;
       const at = !short
-        ? { x: across, y: mid - OVER }
+        ? { x: left ? sx - 6 : sx + 6, y: mid - 3 }
         : left
-          ? { x: Math.min(sx, tx) - BESIDE, y: mid + 4 }
-          : { x: Math.max(sx, tx) + BESIDE, y: mid + 4 };
+          ? { x: tx - BESIDE, y: mid - 3 }
+          : { x: tx + BESIDE, y: mid - 3 };
       lines.push({
         key,
         points: [{ x: sx, y: sy }, { x: sx, y: mid }, { x: tx, y: mid }, { x: tx, y: ty }],
@@ -1159,7 +1263,7 @@ export function layOut(graph: PicGraph | null): Picture {
         exitName: edge.exitName,
         builtin: from.builtin,
         at,
-        align: !short ? "middle" : left ? "end" : "start",
+        align: left ? "end" : "start",
       });
       continue;
     }
@@ -1177,7 +1281,7 @@ export function layOut(graph: PicGraph | null): Picture {
       to,
       // The rows it runs past, however far along the stair out of its box it turns.
       top: Math.min(sy + DROP, ty - DROP),
-      bottom: Math.max(sy + DROP + STAIRS * STAIR, ty - DROP),
+      bottom: Math.max(sy + DROP + (legsTo(`${sideOf.get(edge.id)!}-${edge.fromId}`) - 1) * WORD_H, ty - DROP),
       word: wordW(exitWord({ exitName: edge.exitName, builtin: from.builtin })),
     });
   }
@@ -1222,90 +1326,90 @@ export function layOut(graph: PicGraph | null): Picture {
     const stair = outStair.get(line.key)!;
     return attach(line.from, line.side === "left" ? stair : (slots.get(line.from.boxId) ?? 1) - 1 - stair);
   };
-  const outY = (line: Aside): number => line.from.y + nodeH + DROP + Math.min(outStair.get(line.key)!, STAIRS) * STAIR;
+  // Where two lines leave one box for the same margin, each one on a lane further out turns a row of
+  // words lower and is tied further from that margin's side of the box — so neither crosses the
+  // other, and each has its name written over its own leg. Six points apart, two names side by side
+  // over two legs could not be told apart, nor which of them a run went down (`AMB-T-5824`).
+  const outY = (line: Aside): number =>
+    line.from.y + nodeH + DROP + (legsOver.get(`${line.side}-${line.from.boxId}`)! + outStair.get(line.key)!) * WORD_H;
 
   // `wordsAt`: where the name of each line in a margin is written — over the leg it leaves its box
   // by, just beside that box on the side the line goes, so it reads as that box's way out. Past the
   // outermost lane the names of every row stood in one column, apart from the boxes they belong to
   // (`AMB-T-5768`); halfway along a lane they stood beside some other box (`AMB-T-5592`). Under a
   // row, between its bottom and the legs that turn out of it, only what leaves that row passes —
-  // lines come into a box from above, and the lines to the next row turn lower — so the lanes are
-  // moved out past the names and nothing crosses them. A box with another box on that side writes
-  // its names in the gap between the two where nothing of that box's comes down through them; where
-  // something does, they go past the row's end with the rest. Names that share a place stand side by
-  // side, the innermost line's nearest its box.
+  // lines come into a box from above, and the lines to the next row turn under the lowest leg — so
+  // the lanes are moved out past the names and nothing crosses them. A box with another box on that
+  // side writes its names in the gap between the two; past the row's end otherwise. Each name has
+  // its own leg to stand over, and where a box, a line or another name stands in the way, it moves
+  // out past it: written over the name of a line down to the next row, neither could be read
+  // (`AMB-T-5824`).
   const wordsAt = new Map<string, PicPoint>();
   const wordsOut = { left: -LAP_PAD, right: contentW + LAP_PAD };
   {
-    const rows = new Map<number, Aside[]>();
-    for (const line of asides) {
-      if (line.word > 0) rows.set(line.from.y, [...(rows.get(line.from.y) ?? []), line]);
-    }
-    /** How far across a name runs, where it runs over [top, bottom]. */
-    const across = (line: PicLine, top: number, bottom: number): [number, number] | undefined => {
+    /** Left, right, top, bottom. */
+    type Rect = [number, number, number, number];
+    /** Where the words written with their foot at `y` stand, from `left` for `wide`. */
+    const wordRect = (left: number, wide: number, y: number): Rect => [left, left + wide, y - 10, y + 1];
+    const taken: Rect[] = [];
+    for (const one of [...nodes, ...spots]) taken.push([one.x, one.x + one.w, one.y, one.y + one.h]);
+    for (const line of lines) {
+      line.points.forEach((p, nth) => {
+        const q = line.points[nth + 1];
+        if (q === undefined) return;
+        const upright = p.x === q.x;
+        const w = upright ? 2 : 1;
+        taken.push([Math.min(p.x, q.x) - w, Math.max(p.x, q.x) + w, Math.min(p.y, q.y) - 1, Math.max(p.y, q.y) + 1]);
+      });
       const wide = wordW(edgeWord(line));
-      if (wide === 0 || line.at.y + 3 < top || bottom < line.at.y - 11) return undefined;
+      if (wide === 0) continue;
       const left = line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x;
-      return [left, left + wide];
-    };
-    for (const [y, row] of rows) {
-      const top = y + nodeH;
-      const bottom = top + DROP;
-      // What already stands under the row: every line coming down out of it, and every name there.
-      const taken: [number, number][] = [];
-      for (const line of lines) {
-        line.points.forEach((p, nth) => {
-          const q = line.points[nth + 1];
-          if (q !== undefined && p.x === q.x && Math.min(p.y, q.y) < bottom && top < Math.max(p.y, q.y)) {
-            taken.push([p.x - 2, p.x + 2]);
-          }
-        });
-        const words = across(line, top, bottom);
-        if (words !== undefined) taken.push(words);
+      taken.push(wordRect(left, wide, line.at.y));
+    }
+    // The legs out to the margins: down from the box, and across out past everything on that side.
+    for (const line of asides) {
+      const x = outX(line);
+      const y = outY(line);
+      taken.push([x - 2, x + 2, line.from.y + nodeH, y + 1]);
+      taken.push(line.side === "left" ? [-Infinity, x + 1, y - 1, y + 1] : [x - 1, Infinity, y - 1, y + 1]);
+    }
+    const hits = (one: Rect) =>
+      taken.find((other) => other[0] < one[1] && one[0] < other[1] && other[2] < one[3] && one[2] < other[3]);
+    const named = asides
+      .filter((line) => line.word > 0)
+      .sort((a, b) => a.from.y - b.from.y || outStair.get(a.key)! - outStair.get(b.key)! || a.edgeId - b.edgeId);
+    for (const line of named) {
+      const side = line.side;
+      // Outward: to the left on the left side, to the right on the right one.
+      const sign = side === "left" ? -1 : 1;
+      const box = line.from;
+      const row = [...nodes, ...spots].filter((one) => one.y === box.y);
+      const end = side === "left" ? Math.min(...row.map((one) => one.x)) : Math.max(...row.map((one) => one.x + one.w));
+      const inside = side === "left" ? box.x > end : box.x + box.w < end;
+      const y = outY(line) - 3;
+      const rect = (x: number) => wordRect(side === "left" ? x - line.word : x, line.word, y);
+      let x = inside ? (side === "left" ? box.x : box.x + box.w) + (sign * BESIDE) / 2 : end + (sign * BESIDE) / 2;
+      for (let hit = hits(rect(x)); hit !== undefined; hit = hits(rect(x))) {
+        const past = side === "left" ? hit[0] - BESIDE / 2 : hit[1] + BESIDE / 2;
+        if (!Number.isFinite(past)) break;
+        x = past;
       }
-      for (const line of asides) {
-        if (line.from.y === y) taken.push([outX(line) - 2, outX(line) + 2]);
-      }
-      const free = (left: number, right: number) => taken.every(([a, b]) => b < left || right < a);
-      const xs = [...nodes, ...spots].filter((one) => one.y === y);
-      for (const side of ["left", "right"] as const) {
-        // Outward: to the left on the left side, to the right on the right one.
-        const sign = side === "left" ? -1 : 1;
-        const beside = (box: PicNode) => (side === "left" ? box.x : box.x + box.w) + (sign * BESIDE) / 2;
-        const end = side === "left" ? Math.min(...xs.map((one) => one.x)) : Math.max(...xs.map((one) => one.x + one.w));
-        /** Write the names out from `x`, the nearest first; where the last one ends. */
-        const put = (names: Aside[], x: number): number => {
-          for (const line of names) {
-            wordsAt.set(line.key, { x, y: bottom - 3 });
-            taken.push(side === "left" ? [x - line.word, x] : [x, x + line.word]);
-            x += sign * (line.word + BESIDE);
-          }
-          return x - sign * BESIDE;
-        };
-        const byBox = new Map<number, Aside[]>();
-        for (const line of row
-          .filter((one) => one.side === side)
-          .sort((a, b) => outStair.get(a.key)! - outStair.get(b.key)!)) {
-          byBox.set(line.from.boxId, [...(byBox.get(line.from.boxId) ?? []), line]);
-        }
-        const rest: Aside[] = [];
-        for (const own of [...byBox.values()].sort((a, b) => sign * (b[0]!.from.x - a[0]!.from.x))) {
-          const box = own[0]!.from;
-          const wide = own.reduce((sum, line) => sum + line.word, 0) + (own.length - 1) * BESIDE;
-          const near = beside(box);
-          const far = near + sign * wide;
-          const inside = side === "left" ? box.x > end : box.x + box.w < end;
-          if (inside && free(Math.min(near, far), Math.max(near, far))) put(own, near);
-          else rest.push(...own);
-        }
-        if (rest.length === 0) continue;
-        const reached = put(rest, end + (sign * BESIDE) / 2) + (sign * LAP_PAD) / 2;
-        wordsOut[side] = side === "left" ? Math.min(wordsOut.left, reached) : Math.max(wordsOut.right, reached);
-      }
+      wordsAt.set(line.key, { x, y });
+      taken.push(rect(x));
+      const reached = x + sign * (line.word + LAP_PAD / 2);
+      wordsOut[side] = side === "left" ? Math.min(wordsOut.left, reached) : Math.max(wordsOut.right, reached);
     }
   }
   // Every outline reaches out as far as the furthest name on either side, so none of them crosses it
-  // and their edges stay in one line; the lanes start past it.
+  // and their edges stay in one line; the lanes start past it. That is the name of a line down to a
+  // neighbour too: one too long for its leg across runs out past the box it leaves.
+  for (const line of lines) {
+    const wide = wordW(edgeWord(line));
+    if (wide === 0) continue;
+    const left = line.align === "end" ? line.at.x - wide : line.align === "middle" ? line.at.x - wide / 2 : line.at.x;
+    wordsOut.left = Math.min(wordsOut.left, left - LAP_PAD / 2);
+    wordsOut.right = Math.max(wordsOut.right, left + wide + LAP_PAD / 2);
+  }
   // A press at the end of a way out that says nothing yet runs off to the right of its name, and the
   // outline reaches past it too.
   wordsOut.right = Math.max(wordsOut.right, ...pressed.map((one) => one.x + pressW + LAP_PAD / 2));
@@ -1334,8 +1438,8 @@ export function layOut(graph: PicGraph | null): Picture {
     ]),
   );
   // The lines themselves. One alone into its box runs all the way; where several go into one box from
-  // one margin, each runs only as far along the lane as the next one's joining, so no two lie over
-  // each other, and one more line takes the lane on from there into the box.
+  // one margin, each runs out to the lane and stops there. The lane is drawn a piece per stretch
+  // between two joinings, so no two lie over each other, and one more line takes it on into the box.
   const groups = new Map<string, Aside[]>();
   for (const line of asides) groups.set(intoKey(line), [...(groups.get(intoKey(line)) ?? []), line]);
   for (const [key, group] of groups) {
@@ -1346,11 +1450,14 @@ export function layOut(graph: PicGraph | null): Picture {
     // Toward where the lane turns into the box, from above and from below: each one stops where the
     // next nearer one joins.
     const stops = new Map<string, number>();
+    const carried = new Map<string, number[]>();
     for (const below of [false, true]) {
       const run = group
         .filter((line) => outY(line) > inY === below)
         .sort((a, b) => Math.abs(outY(b) - inY) - Math.abs(outY(a) - inY) || a.edgeId - b.edgeId);
       run.forEach((line, nth) => stops.set(line.key, nth + 1 < run.length ? outY(run[nth + 1]!) : inY));
+      // Each one carries on along the next nearer one's, so a line is also the way of every one further off.
+      run.forEach((line, nth) => carried.set(line.key, run.slice(0, nth + 1).map((one) => one.edgeId)));
     }
     for (const line of group) {
       const sx = outX(line);
@@ -1360,7 +1467,7 @@ export function layOut(graph: PicGraph | null): Picture {
       const stair = outStair.get(line.key)!;
       // On the lane just past the turn it takes out of its box, beside the name written there:
       // halfway along a long lane the `+` stood beside some other box, apart from its name
-      // (`AMB-T-5596`). Two lines leaving one box turn a few points apart on lanes closer than a
+      // (`AMB-T-5596`). Two lines leaving one box turn a row of words apart on lanes closer than a
       // `+` is wide, so each one further out sits a `+` further along its lane. A lane too short
       // for that keeps it halfway, a `+` lower for each lane further out. One that joins another
       // line sooner than a `+` is tall has no lane of its own to hold it, so it sits on the leg
@@ -1377,9 +1484,7 @@ export function layOut(graph: PicGraph | null): Picture {
             ? { x, y: Math.round((oy + stop) / 2) }
             : { x: x + (inward * LANE_PLUS) / 2, y: oy };
       inserts.push({ edgeId: line.edgeId, ...plus });
-      const tail = joined
-        ? [{ x, y: stop }]
-        : [{ x, y: inY }, { x: inX(line), y: inY }, { x: inX(line), y: to.y }];
+      const tail = joined ? [] : [{ x, y: inY }, { x: inX(line), y: inY }, { x: inX(line), y: to.y }];
       lines.push({
         key: line.key,
         points: [{ x: sx, y: sy }, { x: sx, y: oy }, { x, y: oy }, ...tail],
@@ -1394,16 +1499,28 @@ export function layOut(graph: PicGraph | null): Picture {
       });
     }
     if (!joined) continue;
-    const toneOf = new Set(group.map((line) => tones.get(line.key)));
-    lines.push({
-      key,
-      points: [{ x, y: inY }, { x: inX(group[0]!), y: inY }, { x: inX(group[0]!), y: to.y }],
-      back: group.every((line) => line.back),
-      leaves: group.every((line) => line.leaves) || undefined,
-      tone: toneOf.size === 1 ? [...toneOf][0] : undefined,
-      at: { x, y: inY },
-      align: "start",
-    });
+    // The lane itself, a piece per stretch between two joinings, and the line on from it into the box:
+    // each is the way of every line that has joined it so far (`PicLine.carries`). The leg each line
+    // leaves its box by stays a line of its own, so a run lights only the leg of the way out it left by.
+    const along = (carrying: readonly Aside[], piece: string, points: PicPoint[]) => {
+      const toneOf = new Set(carrying.map((line) => tones.get(line.key)));
+      lines.push({
+        key: piece,
+        points,
+        back: carrying.every((line) => line.back),
+        leaves: carrying.every((line) => line.leaves) || undefined,
+        joins: piece !== key || undefined,
+        tone: toneOf.size === 1 ? [...toneOf][0] : undefined,
+        carries: carrying.map((line) => line.edgeId),
+        at: points[0]!,
+        align: "start",
+      });
+    };
+    for (const line of group) {
+      const carrying = group.filter((one) => carried.get(line.key)!.includes(one.edgeId));
+      along(carrying, `${key}-${line.edgeId}`, [{ x, y: outY(line) }, { x, y: stops.get(line.key)! }]);
+    }
+    along(group, key, [{ x, y: inY }, { x: inX(group[0]!), y: inY }, { x: inX(group[0]!), y: to.y }]);
   }
 
   // Everything was laid out with the boxes at x=0. Shift it right by the room the left margin took:
@@ -1426,7 +1543,7 @@ export function layOut(graph: PicGraph | null): Picture {
     }),
     ...pressed.map((one) => one.x + pressW - contentW),
   );
-  return {
+  const picture: Picture = {
     width: dx + contentW + rightRoom + PAD,
     height,
     laps: outlines.map((lap) => ({ ...lap, x: lap.x + dx })),
@@ -1442,4 +1559,5 @@ export function layOut(graph: PicGraph | null): Picture {
     marks: marks.map((one) => ({ ...one, x: one.x + dx })),
     outFrame: outFrame === undefined ? undefined : { ...outFrame, x: outFrame.x + dx },
   };
+  return { picture, legsOf, turnsOf };
 }

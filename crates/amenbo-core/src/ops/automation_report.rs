@@ -156,7 +156,8 @@ pub fn take(tx: &WriteTx<'_>, run_step_id: i64, task_id: i64) -> Result<Task> {
             )))
         }
     };
-    let task = crate::ops::task::set_status(tx, task_id, TaskStatus::InProgress)?;
+    in_the_runs_project(tx, &run_step, task_id)?;
+    let task = crate::ops::task::set_status(tx, task_id, TaskStatus::InProgress, ActorKind::Ai)?;
     // The stretch is what the task belongs to: a run walks several in turn, and every step of this one
     // is about this task from here on.
     if let Some(stretch_id) = run_step.run_task_id {
@@ -183,7 +184,8 @@ pub fn take(tx: &WriteTx<'_>, run_step_id: i64, task_id: i64) -> Result<Task> {
 /// What is checked is that the id is one of this step's outputs and that what is being put down is the
 /// kind the declaration asked for — a file written into a `value` port would be a row no wire could
 /// carry and no screen could draw. An id that is not an output here is refused naming the ones that
-/// are, so the agent types it again from the list.
+/// are, so the agent types it again from the list. A task is also checked to be one of the run's
+/// project ([`in_the_runs_project`]).
 ///
 /// Putting the same output down twice replaces the first: a step that corrects itself before reporting
 /// is saying the later one is the answer, and two rows on one port would leave a wire choosing.
@@ -211,6 +213,9 @@ pub fn out(
             ),
         })
     })?;
+    if let Produced::Task(task_id) = produced {
+        in_the_runs_project(tx, &run_step, task_id)?;
+    }
     put(tx, &run_step, port, exit, produced)
 }
 
@@ -270,6 +275,25 @@ fn put(
     };
     emit_create(tx, record::automation_run_value(&written))?;
     Ok(written)
+}
+
+/// **A task a step hands on is one of the run's project**, checked here rather than by whichever side
+/// the step spoke through: the CLI, a built-in and a screen all reach [`take`] and [`out`], and a check
+/// on one of them alone would let the others hand on a task from another project.
+///
+/// A task filed in no project is let through. It belongs to no other project, and a test run hands on
+/// ones made up there ([`super::automation_rehearse`]), so no axis a project requires holds their
+/// creation.
+fn in_the_runs_project(tx: &WriteTx<'_>, run_step: &AutomationRunStep, task_id: i64) -> Result<()> {
+    let run = read::automation_run(tx.conn(), run_step.run_id)?
+        .ok_or_else(|| not_found("run", run_step.run_id))?;
+    match read::task_project_id(tx.conn(), task_id)? {
+        Some(project) if project != run.project_id => Err(Error::invalid(format!(
+            "task '{task_id}' is filed in another project than the one this run was launched from — a \
+             step hands on only tasks of its own run's project"
+        ))),
+        _ => Ok(()),
+    }
 }
 
 // ───────────────────────── done ─────────────────────────
@@ -678,7 +702,7 @@ mod tests {
             },
         )
         .expect("task");
-        crate::ops::task::finish_creating(tx, task.id).expect("finish creating")
+        crate::ops::task::finish_creating(tx, task.id, crate::model::ActorKind::Ai).expect("finish creating")
     }
 
     fn outs(tx: &WriteTx<'_>, run_step_id: i64) -> Vec<AutomationRunValue> {
@@ -748,6 +772,34 @@ mod tests {
     }
 
     #[test]
+    fn a_task_of_another_project_is_not_handed_on() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            mk_out(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first).run_step;
+            let elsewhere = mk_project(tx, "よそ");
+            let theirs = a_task(tx, elsewhere, "よそのタスク");
+
+            let refused = take(tx, step.id, theirs.id).expect_err("another project's task to work");
+            assert!(refused.to_string().contains("another project"), "{refused}");
+            let raised = out_port(tx, step.id, None, "raised");
+            let refused = out(tx, step.id, raised, Produced::Task(theirs.id))
+                .expect_err("another project's task raised");
+            assert!(refused.to_string().contains("another project"), "{refused}");
+            assert!(outs(tx, step.id).is_empty(), "nothing was put down");
+            assert_eq!(
+                read::task_status(tx.conn(), theirs.id).expect("read"),
+                Some(TaskStatus::Todo),
+                "refused before it was reserved",
+            );
+
+            let ours = a_task(tx, p.project, "うちのタスク");
+            out(tx, step.id, raised, Produced::Task(ours.id)).expect("the run's own project's task");
+        });
+    }
+
+    #[test]
     fn taking_a_task_reserves_it_and_declares_it_in_one_act() {
         with_tx(|tx| {
             let p = picture(tx, false);
@@ -782,7 +834,7 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "SCENARIO SEED — already held");
-            crate::ops::task::set_status(tx, task.id, TaskStatus::InProgress).expect("reserve");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::InProgress, crate::model::ActorKind::Ai).expect("reserve");
 
             let refused = take(tx, step.run_step.id, task.id).expect_err("already reserved");
             assert!(refused.to_string().contains("cannot reserve"), "{refused}");
@@ -1024,7 +1076,7 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "閉じる");
             take(tx, step.run_step.id, task.id).expect("take");
-            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("a person closes it");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::Done, crate::model::ActorKind::Ai).expect("a person closes it");
 
             done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.")
                 .expect("the step finishes all the same");
@@ -1051,7 +1103,7 @@ mod tests {
             let step = opened(tx, &run, &p.first);
             let task = a_task(tx, p.project, "閉じる");
             take(tx, step.run_step.id, task.id).expect("take");
-            crate::ops::task::set_status(tx, task.id, TaskStatus::Done).expect("a person closes it");
+            crate::ops::task::set_status(tx, task.id, TaskStatus::Done, crate::model::ActorKind::Ai).expect("a person closes it");
 
             done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.").expect("done");
 

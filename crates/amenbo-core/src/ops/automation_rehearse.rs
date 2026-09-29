@@ -240,7 +240,7 @@ fn stand_in(
     };
     if let Some(task_id) = stretch.and_then(|s| s.task_id) {
         if read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress) {
-            task::set_status(tx, task_id, into)?;
+            task::set_status(tx, task_id, into, ActorKind::Ai)?;
         }
     }
     Ok(())
@@ -276,7 +276,7 @@ fn made_up(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, def: &Automation
             made_in: None,
         },
     )?;
-    Ok(task::finish_creating(tx, filed.id)?.id)
+    Ok(task::finish_creating(tx, filed.id, ActorKind::Ai)?.id)
 }
 
 #[cfg(test)]
@@ -314,7 +314,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let real = mk_task_in(tx, "直すもの", Some(project));
-            crate::ops::task::set_assignee(tx, real, Some(ActorKind::Ai)).expect("give it to the AI");
+            crate::ops::task::set_assignee(tx, real, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
             let automation =
                 automation::add(tx, project, NewAutomation { name: "round".into(), ..Default::default() })
                     .expect("automation");

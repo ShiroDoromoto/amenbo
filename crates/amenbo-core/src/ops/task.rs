@@ -12,11 +12,12 @@
 
 use chrono::NaiveDate;
 
+use crate::activity_log;
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, DecisionStatus, Priority, Subtype, Task, TaskStatus,
 };
-use crate::ops::{emit_create, emit_update, place, MadeIn, Noun, Position};
+use crate::ops::{emit_create, emit_update, event, place, MadeIn, Noun, Position};
 use crate::store_engine::{read, record, WriteTx};
 use crate::view::ReserveBlocker;
 use crate::time::Timestamp;
@@ -153,6 +154,10 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
             }),
         )?;
     }
+    // The timeline's `task.created` is the moment the task is filed, while it is still being written —
+    // unlike the plugins' event, which waits for `finish_creating` (`AMB-D-557`): a person reading the
+    // timeline can see the task on the board from here on. `add` takes no actor, so the creator stands in.
+    record_line(tx, &task, task.created_by_kind, activity_log::event::task_created(&task.title))?;
     Ok(task)
 }
 
@@ -195,12 +200,15 @@ pub(crate) fn time_axis_default(
 /// This is the flag's only bite: `ready` says nothing about it, so raising one does not move a task that
 /// is already through this door, and no other operation asks again.
 ///
+/// This is also where `task.created` reaches the plugins (`AMB-D-557`): for a subscriber, the moment a
+/// task is born is the moment it can be acted on. `actor` is whoever ended the creation.
+///
 /// **It writes nothing, and that is load-bearing.** Composing the row anyway would leave `updated_at` as
 /// the one column that moved — the clock always having moved — and a task whose only change is that it was
 /// touched is a change the whole store then carries: a change-feed row, a project version, and the signal
 /// that says the project moved (`AMB-D-582`). A reader outside the store re-reads its window over a call
 /// that ended nothing.
-pub fn finish_creating(tx: &WriteTx<'_>, id: i64) -> Result<Task> {
+pub fn finish_creating(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<Task> {
     let before = live_before(tx, id)?;
     if !before.draft {
         return Ok(before);
@@ -218,6 +226,7 @@ pub fn finish_creating(tx: &WriteTx<'_>, id: i64) -> Result<Task> {
     }
     let after = Task { draft: false, updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::task(&before), record::task(&after))?;
+    event::emit_task_created(tx, &after, actor)?;
     Ok(after)
 }
 
@@ -268,6 +277,28 @@ fn live_before(tx: &WriteTx<'_>, id: i64) -> Result<Task> {
     read::task(tx.conn(), id)?.ok_or_else(|| NOUN.not_found(id.to_string()))
 }
 
+/// Queue one activity line about `task` ([`crate::activity_log`]), for the store's write door to append
+/// once this transaction commits. Queued here, at the write point, rather than by the surface that called
+/// it, so the line is there whoever wrote — the CLI, the GUI, or an automation run's own steps. The line
+/// carries the project the task is in once this write has landed.
+fn record_line(
+    tx: &WriteTx<'_>,
+    task: &Task,
+    actor: Option<ActorKind>,
+    event: serde_json::Value,
+) -> Result<()> {
+    tx.record_activity(activity_log::Entry {
+        id: tx.mint_activity_id()?,
+        at: task.updated_at,
+        actor,
+        project: task.project_id,
+        task: Some(task.id),
+        decision: None,
+        event,
+    });
+    Ok(())
+}
+
 pub fn update(tx: &WriteTx<'_>, id: i64, patch: TaskPatch) -> Result<Task> {
     let before = live_before(tx, id)?;
     let mut t = before.clone();
@@ -308,15 +339,30 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: TaskPatch) -> Result<Task> {
 /// Assign an owner, or take one away. In a single local store the assignee is a facet and nothing more:
 /// `Some(Human)` means it is for the human, `Some(Ai)` means it is for "that person's AI" (me-ai), and
 /// `None` means unassigned.
-pub fn set_assignee(tx: &WriteTx<'_>, id: i64, kind: Option<ActorKind>) -> Result<Task> {
+///
+/// `actor` is who performed the assignment, stamped onto the `task.assigned` event; the assignee that
+/// lands is `kind`, a separate thing.
+pub fn set_assignee(
+    tx: &WriteTx<'_>,
+    id: i64,
+    kind: Option<ActorKind>,
+    actor: ActorKind,
+) -> Result<Task> {
     let before = live_before(tx, id)?;
     let after = Task { assignee_kind: kind, updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::task(&before), record::task(&after))?;
+    event::emit_task_assigned(tx, &after, before.assignee_kind, actor)?;
+    // Unlike the plugins' event, the timeline narrates the unassignment too; the same facet again is no line.
+    if kind != before.assignee_kind {
+        let to_kind = kind.map(|k| k.as_str());
+        record_line(tx, &after, Some(actor), activity_log::event::task_assigned(to_kind))?;
+    }
     Ok(after)
 }
 
-pub fn set_completed(tx: &WriteTx<'_>, id: i64, completed: bool) -> Result<Task> {
-    set_status(tx, id, if completed { TaskStatus::Done } else { TaskStatus::Todo })
+/// Done / reopen — sugar over [`set_status`], and like it, the status event it fires carries `actor`.
+pub fn set_completed(tx: &WriteTx<'_>, id: i64, completed: bool, actor: ActorKind) -> Result<Task> {
+    set_status(tx, id, if completed { TaskStatus::Done } else { TaskStatus::Todo }, actor)
 }
 
 /// How an error body names its subject (the conversational reference `#12`). Read from the source of truth,
@@ -453,7 +499,10 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
 /// truth**: [`read::task_status`] and [`read::reserve_blockers`] are read **inside the same transaction** as
 /// the UPDATE, so no other writer can slip between them — a reservation another process holds, or a blocker
 /// it has finished, is already visible to this judgement.
-pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus) -> Result<Task> {
+///
+/// `actor` is the process facet, stamped onto the `task.status_changed` / `task.done` / `task.rejected`
+/// event a real transition fires; a re-set that did not move the status fires nothing.
+pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus, actor: ActorKind) -> Result<Task> {
     let now = Timestamp::now();
     // The CAS guard for the reserve transition: nothing but `todo` may move to `in_progress`.
     let current =
@@ -510,12 +559,21 @@ pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus) -> Result<Task>
         ..before.clone()
     };
     emit_update(tx, record::task(&before), record::task(&after))?;
+    event::emit_task_status(tx, &after, before.status, actor)?;
+    if status != before.status {
+        let line = activity_log::event::task_status_changed(before.status.as_str(), status.as_str());
+        record_line(tx, &after, Some(actor), line)?;
+    }
     Ok(after)
 }
 
 /// Hard-delete a task. Placement (project / order_key) lives on the task's own columns, so it goes with the row.
-pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
+///
+/// The events go out **before** the rows do (`AMB-D-405`): each is stamped with the project the task was
+/// in, which only a task that is still there can say.
+pub fn delete(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<Vec<String>> {
     let before = live_before(tx, id)?;
+    event::emit_task_subtree_deleted(tx, before.id, actor, &Timestamp::now().to_rfc3339_z())?;
     delete_subtree(tx, before.id)
 }
 
@@ -528,7 +586,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 /// polymorphic children come first of all — the task's own attachments, plus the attachments hanging off
 /// each comment, swept before that comment goes, because once the parent row is gone nobody can find them
 /// any more. Returns the blob hashes this subtree let go of — the candidates for reclamation after commit.
-pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
+pub(in crate::ops) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let mut orphaned = Vec::new();
     for comment_id in read::task_comment_ids(tx.conn(), id)? {
         orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::TaskComment, comment_id)?);
@@ -557,11 +615,14 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 /// Rehome (change project) and reorder. **Read-then-write** (scan the siblings' `order_key`s, then write the
 /// new key). All three reads — liveness, current project, siblings — happen in the same transaction as the
 /// write. Placement is by project only, and is held on the task itself.
+///
+/// A change of project fires `task.moved`, stamped with `actor`; a reorder within the project fires nothing.
 pub fn move_to(
     tx: &WriteTx<'_>,
     id: i64,
     target_project: Option<i64>,
     pos: Position,
+    actor: ActorKind,
 ) -> Result<Task> {
     let before = live_before(tx, id)?;
 
@@ -592,6 +653,11 @@ pub fn move_to(
         ..before.clone()
     };
     emit_update(tx, record::task(&before), record::task(&after))?;
+    event::emit_task_moved(tx, &after, before.project_id, actor)?;
+    if after.project_id != before.project_id {
+        let line = activity_log::event::task_moved(Some(&proj.to_string()));
+        record_line(tx, &after, Some(actor), line)?;
+    }
     Ok(after)
 }
 
@@ -643,7 +709,7 @@ mod tests {
     /// the same mapping every other write goes through.
     fn set_draft(tx: &WriteTx<'_>, id: i64, draft: bool) {
         if !draft {
-            finish_creating(tx, id).unwrap();
+            finish_creating(tx, id, crate::model::ActorKind::Ai).unwrap();
             return;
         }
         let before = live_before(tx, id).unwrap();
@@ -676,14 +742,14 @@ mod tests {
             assert!(t.draft, "a creation begins unfinished");
             assert_eq!(t.status, TaskStatus::Todo, "which is not a status — the task is todo like any other");
 
-            let finished = finish_creating(tx, t.id).unwrap();
+            let finished = finish_creating(tx, t.id, crate::model::ActorKind::Ai).unwrap();
             assert!(!finished.draft, "finishing the creation clears the premise");
             assert_eq!(finished.status, TaskStatus::Todo, "and moves nothing else");
             assert_eq!(finished.title, t.title);
 
             // Asked again it does not refuse: there is no state to protect, and saying so is the surface's
             // job rather than this one's.
-            assert!(!finish_creating(tx, t.id).unwrap().draft);
+            assert!(!finish_creating(tx, t.id, crate::model::ActorKind::Ai).unwrap().draft);
         });
     }
 
@@ -707,17 +773,17 @@ mod tests {
 
             // While the axis demands nothing, the creation finishes with the axis blank.
             let other = draft_in(tx, "先に締めたタスク", Some(pid));
-            assert!(!finish_creating(tx, other).unwrap().draft);
+            assert!(!finish_creating(tx, other, crate::model::ActorKind::Ai).unwrap().draft);
 
             crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
                 .unwrap();
 
             // Raising it does not reopen the creation that already finished — the premise is read at the
             // door and nowhere else.
-            assert!(!finish_creating(tx, other).unwrap().draft);
+            assert!(!finish_creating(tx, other, crate::model::ActorKind::Ai).unwrap().draft);
 
             // The one still open is held, and told which axis is empty.
-            let err = finish_creating(tx, tid).unwrap_err();
+            let err = finish_creating(tx, tid, crate::model::ActorKind::Ai).unwrap_err();
             assert!(
                 err.message_en().contains("プロダクト"),
                 "the refusal names the axis to fill in: {}",
@@ -727,7 +793,7 @@ mod tests {
 
             // Answer the axis and the same call goes through.
             crate::ops::dimension::set(tx, tid, value.id).unwrap();
-            assert!(!finish_creating(tx, tid).unwrap().draft);
+            assert!(!finish_creating(tx, tid, crate::model::ActorKind::Ai).unwrap().draft);
         });
     }
 
@@ -751,14 +817,14 @@ mod tests {
                 .unwrap();
 
             let loose = draft_in(tx, "どのプロジェクトにも属さない", None);
-            assert!(!finish_creating(tx, loose).unwrap().draft);
+            assert!(!finish_creating(tx, loose, crate::model::ActorKind::Ai).unwrap().draft);
         });
     }
 
     #[test]
     fn reserving_a_todo_succeeds() {
         with_task(|tx, tid| {
-            let t = set_status(tx, tid, TaskStatus::InProgress).unwrap();
+            let t = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
             assert_eq!(t.status, TaskStatus::InProgress);
         });
     }
@@ -768,8 +834,8 @@ mod tests {
         // Two reservations in a row on the same todo: the first goes through, the second is rejected as
         // AlreadyReserved (this is what stops two sessions starting the same task).
         with_task(|tx, tid| {
-            set_status(tx, tid, TaskStatus::InProgress).unwrap();
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "already_reserved");
             // The state stays in_progress — a rejection never regresses it.
             assert_eq!(status_of(tx, tid), TaskStatus::InProgress);
@@ -780,9 +846,9 @@ mod tests {
     fn releasing_to_todo_then_reserving_again_succeeds() {
         // Letting go back to `todo`, then reserving again, goes through.
         with_task(|tx, tid| {
-            set_status(tx, tid, TaskStatus::InProgress).unwrap();
-            set_status(tx, tid, TaskStatus::Todo).unwrap();
-            let t = set_status(tx, tid, TaskStatus::InProgress).unwrap();
+            set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
+            set_status(tx, tid, TaskStatus::Todo, crate::model::ActorKind::Ai).unwrap();
+            let t = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
             assert_eq!(t.status, TaskStatus::InProgress);
         });
     }
@@ -792,8 +858,8 @@ mod tests {
         // A reservation always goes via `todo`. Reserving straight from `blocked`/`done` is rejected.
         for from in [TaskStatus::Blocked, TaskStatus::Done] {
             with_task(|tx, tid| {
-                set_status(tx, tid, from).unwrap();
-                let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+                set_status(tx, tid, from, crate::model::ActorKind::Ai).unwrap();
+                let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
                 assert_eq!(err.code(), "already_reserved", "reserve from {from:?} must be rejected");
                 assert_eq!(status_of(tx, tid), from, "status unchanged on rejection");
             });
@@ -804,10 +870,10 @@ mod tests {
     fn non_reserve_transitions_are_unconditional() {
         // The other transitions (→ blocked / → done / → todo) are untouched by the CAS and never regress.
         with_task(|tx, tid| {
-            assert_eq!(set_status(tx, tid, TaskStatus::Blocked).unwrap().status, TaskStatus::Blocked);
-            assert_eq!(set_status(tx, tid, TaskStatus::Done).unwrap().status, TaskStatus::Done);
-            assert!(set_status(tx, tid, TaskStatus::Done).unwrap().completed_at.is_some());
-            assert_eq!(set_status(tx, tid, TaskStatus::Todo).unwrap().status, TaskStatus::Todo);
+            assert_eq!(set_status(tx, tid, TaskStatus::Blocked, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Blocked);
+            assert_eq!(set_status(tx, tid, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Done);
+            assert!(set_status(tx, tid, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap().completed_at.is_some());
+            assert_eq!(set_status(tx, tid, TaskStatus::Todo, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Todo);
             // done → todo drops completed_at.
             assert!(read::task(tx.conn(), tid).unwrap().unwrap().completed_at.is_none());
         });
@@ -821,14 +887,14 @@ mod tests {
             assert!(born.is_some(), "a fresh task carries its status_changed_at");
 
             // A real transition re-stamps it.
-            let reserved = set_status(tx, tid, TaskStatus::InProgress).unwrap().status_changed_at;
+            let reserved = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap().status_changed_at;
             assert!(reserved.is_some(), "reserving stamps the status clock");
 
             // An idempotent re-set to the *same* status must not move it — the reservation instant is held
             // steady while in_progress (`AMB-D-366`). done → done exercises the no-op path (in_progress →
             // in_progress is refused by the CAS).
-            let done = set_status(tx, tid, TaskStatus::Done).unwrap().status_changed_at;
-            let done_again = set_status(tx, tid, TaskStatus::Done).unwrap().status_changed_at;
+            let done = set_status(tx, tid, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap().status_changed_at;
+            let done_again = set_status(tx, tid, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap().status_changed_at;
             assert_eq!(done, done_again, "re-setting the same status leaves status_changed_at unmoved");
         });
     }
@@ -864,14 +930,14 @@ mod tests {
             let blocker = mk_task_in(tx, "do me first", Some(pid));
             crate::ops::dependency::add(tx, tid, blocker, None).unwrap();
 
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("blocker AMB-T-2 is not done"), "{}", err.message_en());
             assert_eq!(status_of(tx, tid), TaskStatus::Todo, "rejected, and the status has not moved");
 
             // Once the blocker is done the premise holds, and the reservation goes through.
-            set_status(tx, blocker, TaskStatus::Done).unwrap();
-            assert_eq!(set_status(tx, tid, TaskStatus::InProgress).unwrap().status, TaskStatus::InProgress);
+            set_status(tx, blocker, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
+            assert_eq!(set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::InProgress);
         });
     }
 
@@ -883,33 +949,33 @@ mod tests {
             // still being written: wait for it to be written to the end, or unlink it.
             let drafted = new_decision(tx, pid, "まだ議論中");
             crate::ops::decision::link(tx, drafted, tid).unwrap();
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("premise AMB-D-1 is not settled"), "{}", err.message_en());
 
             // written out: the premise is alive, so the reservation goes through.
-            crate::ops::decision::finish_writing(tx, drafted, None).unwrap();
-            set_status(tx, tid, TaskStatus::InProgress).unwrap();
-            set_status(tx, tid, TaskStatus::Todo).unwrap();
+            crate::ops::decision::finish_writing(tx, drafted, None, crate::model::ActorKind::Ai).unwrap();
+            set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
+            set_status(tx, tid, TaskStatus::Todo, crate::model::ActorKind::Ai).unwrap();
 
             // superseded: tell them to relink to the successor.
             let successor = new_decision(tx, pid, "置き換える決定");
             crate::ops::decision::supersede(tx, successor, drafted).unwrap();
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("premise AMB-D-1 was superseded by AMB-D-2"), "{}", err.message_en());
 
             // rejected: the task itself needs rethinking.
             crate::ops::decision::unlink(tx, drafted, tid).unwrap();
             let rejected = new_decision(tx, pid, "却下された案");
-            crate::ops::decision::reject(tx, rejected).unwrap();
+            crate::ops::decision::reject(tx, rejected, crate::model::ActorKind::Ai).unwrap();
             crate::ops::decision::link(tx, rejected, tid).unwrap();
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert!(err.message_en().contains("premise AMB-D-3 was rejected"), "{}", err.message_en());
 
             // Unlink the premise and the task is startable at once — that is the way out.
             crate::ops::decision::unlink(tx, rejected, tid).unwrap();
-            assert_eq!(set_status(tx, tid, TaskStatus::InProgress).unwrap().status, TaskStatus::InProgress);
+            assert_eq!(set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::InProgress);
         });
     }
 
@@ -922,7 +988,7 @@ mod tests {
         with_numbered_task(|tx, pid, tid| {
             let premise = new_decision(tx, pid, "書きかけのまま採択された決定");
             crate::ops::decision::link(tx, premise, tid).unwrap();
-            crate::ops::decision::finish_writing(tx, premise, None).unwrap();
+            crate::ops::decision::finish_writing(tx, premise, None, crate::model::ActorKind::Ai).unwrap();
 
             let before = crate::store_engine::read::decision(tx.conn(), premise).unwrap().unwrap();
             let after = crate::model::Decision { draft: true, ..before.clone() };
@@ -933,7 +999,7 @@ mod tests {
             )
             .unwrap();
 
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("premise AMB-D-1 is not settled"), "{}", err.message_en());
 
@@ -945,7 +1011,7 @@ mod tests {
                 crate::store_engine::record::decision(&before),
             )
             .unwrap();
-            assert_eq!(set_status(tx, tid, TaskStatus::InProgress).unwrap().status, TaskStatus::InProgress);
+            assert_eq!(set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::InProgress);
         });
     }
 
@@ -960,7 +1026,7 @@ mod tests {
             let proposed = new_decision(tx, pid, "まだ議論中");
             crate::ops::decision::link(tx, proposed, tid).unwrap();
 
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert_eq!(
                 err.fields().and_then(|f| f.iter().find(|(k, _)| *k == "ref").map(|(_, v)| v.to_string())),
@@ -991,11 +1057,11 @@ mod tests {
         // "Another session holds it" and "its premises are unmet" are different failures. When both hold, it
         // is the CAS that fires.
         with_numbered_task(|tx, pid, tid| {
-            set_status(tx, tid, TaskStatus::InProgress).unwrap();
+            set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
             let blocker = mk_task_in(tx, "do me first", Some(pid));
             crate::ops::dependency::add(tx, tid, blocker, None).unwrap();
 
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "already_reserved", "re-reserving an in_progress task is what the CAS rejects");
         });
     }
@@ -1006,14 +1072,14 @@ mod tests {
         // strip its reservation, and `→ todo` / `→ blocked` / `→ done` go through whatever the premises say
         // (the way to let a task go is never blocked).
         with_numbered_task(|tx, pid, tid| {
-            set_status(tx, tid, TaskStatus::InProgress).unwrap();
+            set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
             let blocker = mk_task_in(tx, "do me first", Some(pid));
             crate::ops::dependency::add(tx, tid, blocker, None).unwrap();
 
             assert_eq!(status_of(tx, tid), TaskStatus::InProgress, "a dependency added after the fact does not strip the reservation");
-            assert_eq!(set_status(tx, tid, TaskStatus::Todo).unwrap().status, TaskStatus::Todo);
-            assert_eq!(set_status(tx, tid, TaskStatus::Blocked).unwrap().status, TaskStatus::Blocked);
-            assert_eq!(set_status(tx, tid, TaskStatus::Done).unwrap().status, TaskStatus::Done);
+            assert_eq!(set_status(tx, tid, TaskStatus::Todo, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Todo);
+            assert_eq!(set_status(tx, tid, TaskStatus::Blocked, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Blocked);
+            assert_eq!(set_status(tx, tid, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Done);
         });
     }
 
@@ -1055,9 +1121,9 @@ mod tests {
             check(tx);
             crate::ops::decision::link(tx, premise, tid).unwrap();
             check(tx);
-            set_status(tx, blocker, TaskStatus::Done).unwrap();
+            set_status(tx, blocker, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
             check(tx);
-            crate::ops::decision::finish_writing(tx, premise, None).unwrap();
+            crate::ops::decision::finish_writing(tx, premise, None, crate::model::ActorKind::Ai).unwrap();
             check(tx);
             // The third premise rides the same symmetry: a start day still ahead has to hide the task
             // from the mailbox and refuse the reserve, or the two would disagree about one task.
@@ -1085,7 +1151,7 @@ mod tests {
         with_numbered_task(|tx, _pid, tid| {
             set_draft(tx, tid, true);
 
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("still being created"), "{}", err.message_en());
             assert_eq!(status_of(tx, tid), TaskStatus::Todo, "rejected, and the status has not moved");
@@ -1093,7 +1159,7 @@ mod tests {
             // Finishing the creation is the way through — the same move the message names.
             set_draft(tx, tid, false);
             assert_eq!(
-                set_status(tx, tid, TaskStatus::InProgress).unwrap().status,
+                set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap().status,
                 TaskStatus::InProgress
             );
         });
@@ -1106,13 +1172,13 @@ mod tests {
         // premise parts from them (`AMB-D-846`) — it does not merely hold the reserve back, it refuses to
         // close or stall the task at all, so the one transition left is the way back to `todo`.
         with_numbered_task(|tx, _pid, tid| {
-            set_status(tx, tid, TaskStatus::InProgress).unwrap();
+            set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
             set_draft(tx, tid, true);
 
             assert_eq!(status_of(tx, tid), TaskStatus::InProgress, "a creation reopened after the fact does not strip the reservation");
-            assert_eq!(set_status(tx, tid, TaskStatus::Todo).unwrap().status, TaskStatus::Todo);
+            assert_eq!(set_status(tx, tid, TaskStatus::Todo, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Todo);
             for refused in [TaskStatus::Blocked, TaskStatus::Done, TaskStatus::Rejected] {
-                let err = set_status(tx, tid, refused).unwrap_err();
+                let err = set_status(tx, tid, refused, crate::model::ActorKind::Ai).unwrap_err();
                 assert_eq!(err.code(), "invalid_task_status_draft", "{refused:?}");
                 assert!(err.message_en().contains("still being created"), "{}", err.message_en());
                 assert_eq!(status_of(tx, tid), TaskStatus::Todo, "refused, and the status has not moved: {refused:?}");
@@ -1120,7 +1186,7 @@ mod tests {
             // Finishing the creation is what opens them again — and a draft written in error leaves by
             // `delete`, never by a status.
             set_draft(tx, tid, false);
-            assert_eq!(set_status(tx, tid, TaskStatus::Done).unwrap().status, TaskStatus::Done);
+            assert_eq!(set_status(tx, tid, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Done);
         });
     }
 
@@ -1200,7 +1266,7 @@ mod tests {
             let tomorrow = crate::time::today() + chrono::Duration::days(1);
             update(tx, tid, TaskPatch { start_on: Some(tomorrow), ..TaskPatch::default() }).unwrap();
 
-            let err = set_status(tx, tid, TaskStatus::InProgress).unwrap_err();
+            let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "not_ready");
             assert!(err.message_en().contains("not due to start until"), "{}", err.message_en());
             assert!(err.message_en().contains("--start today"), "the way through is named: {}", err.message_en());
@@ -1210,7 +1276,7 @@ mod tests {
             update(tx, tid, TaskPatch { start_on: Some(crate::time::today()), ..TaskPatch::default() })
                 .unwrap();
             assert_eq!(
-                set_status(tx, tid, TaskStatus::InProgress).unwrap().status,
+                set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap().status,
                 TaskStatus::InProgress
             );
         });
@@ -1221,14 +1287,14 @@ mod tests {
         // Same rule as the other two premises: a start day pushed into the future does not strip a
         // reservation already held, and the other transitions stay unconditional.
         with_numbered_task(|tx, _pid, tid| {
-            set_status(tx, tid, TaskStatus::InProgress).unwrap();
+            set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
             let tomorrow = crate::time::today() + chrono::Duration::days(1);
             update(tx, tid, TaskPatch { start_on: Some(tomorrow), ..TaskPatch::default() }).unwrap();
 
             assert_eq!(status_of(tx, tid), TaskStatus::InProgress, "a start day set after the fact does not strip the reservation");
-            assert_eq!(set_status(tx, tid, TaskStatus::Todo).unwrap().status, TaskStatus::Todo);
-            assert_eq!(set_status(tx, tid, TaskStatus::Blocked).unwrap().status, TaskStatus::Blocked);
-            assert_eq!(set_status(tx, tid, TaskStatus::Done).unwrap().status, TaskStatus::Done);
+            assert_eq!(set_status(tx, tid, TaskStatus::Todo, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Todo);
+            assert_eq!(set_status(tx, tid, TaskStatus::Blocked, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Blocked);
+            assert_eq!(set_status(tx, tid, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Done);
         });
     }
 
@@ -1435,16 +1501,16 @@ mod tests {
                 )
                 .unwrap()
                 .id;
-                set_assignee(tx, id, Some(ActorKind::Ai)).unwrap();
+                set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).unwrap();
             }
-            set_assignee(tx, ready, Some(ActorKind::Ai)).unwrap();
+            set_assignee(tx, ready, Some(ActorKind::Ai), ActorKind::Ai).unwrap();
 
             // While something is ready, the mailbox is not empty and there is nothing to explain.
             assert_eq!(waiting(tx, mine), None, "a query that matched says nothing about the queue");
 
             // Empty it, and the two waiting tasks are named — the earliest day being the sooner one, not
             // the mistyped one that would otherwise be the only sign anything is wrong.
-            set_status(tx, ready, TaskStatus::Done).unwrap();
+            set_status(tx, ready, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
             assert_eq!(waiting(tx, mine), Some((2, soon)), "the empty mailbox says what it is not showing");
 
             // The waiting set is the same query's: a mailbox belonging to the human is empty with nothing
@@ -1517,7 +1583,7 @@ mod tests {
             link_decision(tx, alpha, c);
 
             for (id, why) in [(a, "the depending side"), (b, "the depended-on side"), (c, "the decision-link side")] {
-                let err = move_to(tx, id, Some(beta), Position::Bottom).unwrap_err();
+                let err = move_to(tx, id, Some(beta), Position::Bottom, crate::model::ActorKind::Ai).unwrap_err();
                 assert_eq!(err.code(), "invalid_value", "moving {why} would leave an edge across projects");
                 assert_eq!(
                     read::task(tx.conn(), id).unwrap().unwrap().project_id,
@@ -1536,7 +1602,7 @@ mod tests {
             let beta = mk_project(tx, "beta");
             let free = mk_task_in(tx, "free", Some(alpha));
 
-            let moved = move_to(tx, free, Some(beta), Position::Bottom).unwrap();
+            let moved = move_to(tx, free, Some(beta), Position::Bottom, crate::model::ActorKind::Ai).unwrap();
             assert_eq!(moved.project_id, Some(beta));
         });
     }
@@ -1551,7 +1617,7 @@ mod tests {
             let survivor = mk_task(tx, "残るタスク");
             crate::ops::comment::add_comment(tx, survivor, ActorKind::Ai, "残るコメント").unwrap();
 
-            delete(tx, tid).unwrap();
+            delete(tx, tid, crate::model::ActorKind::Ai).unwrap();
 
             assert!(read::task(tx.conn(), tid).unwrap().is_none(), "the task's row itself goes");
             assert!(read::comment_list(tx.conn(), tid).unwrap().is_empty(), "the comments go with it");
@@ -1619,7 +1685,7 @@ mod tests {
             let tid = filed_in_pane(tx, "消えるタスク", "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114");
             let survivor = filed_in_pane(tx, "残るタスク", "1f0b6d92-8c47-4a10-b3e5-5d9a7c204e6b");
 
-            delete(tx, tid).unwrap();
+            delete(tx, tid, crate::model::ActorKind::Ai).unwrap();
 
             assert!(read::task(tx.conn(), tid).unwrap().is_none(), "the task's row itself goes");
             assert!(read::task_made_in(tx.conn(), tid).unwrap().is_none(), "and the pane goes with it");
@@ -1654,7 +1720,7 @@ mod tests {
             let p = mk_project(tx, "amenbo 開発");
             let a = mk_task_in(tx, "1", Some(p)); // #1
             let _b = mk_task_in(tx, "2", Some(p)); // #2
-            delete(tx, a).unwrap(); // delete #1
+            delete(tx, a, crate::model::ActorKind::Ai).unwrap(); // delete #1
             // Deleted rows still count toward the max, so the next one is #3: #1 is never handed out again,
             // and the sequence is allowed to have holes.
             let c = mk_task_in(tx, "3", Some(p));
@@ -1752,7 +1818,7 @@ mod tests {
         with_tx(|tx| {
             let p = mk_project(tx, "amenbo 開発");
             let t = mk_task_in(tx, "a", Some(p)); // #1
-            delete(tx, t).unwrap();
+            delete(tx, t, crate::model::ActorKind::Ai).unwrap();
             // A deleted task's number no longer resolves.
             assert!(resolve_ref(tx, "#1").is_err());
         });

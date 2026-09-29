@@ -1,9 +1,8 @@
 //! The field projection of one record.
 //!
 //! This is the only place that decides **what** a mutation writes to the truth source; where it goes —
-//! which transaction it is flushed through — is [`crate::ops::emit_create`] /
-//! [`crate::ops::emit_update`]'s call. A domain operation ([`crate::ops`]) projects the record it wants
-//! to write into a [`Record`] here.
+//! which transaction it is flushed through — is [`crate::ops`]'s `emit_create` / `emit_update` call.
+//! A domain operation ([`crate::ops`]) projects the record it wants to write into a [`Record`] here.
 //!
 //! There are only two ways to record something:
 //! - **Create**: project every field of the record (the [`Record`] itself).

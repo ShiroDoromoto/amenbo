@@ -115,6 +115,32 @@ jobs:
         with:
           tool: cargo-nextest
 
+      # `make shell-gate` needs a shellcheck newer than the runner's and an actionlint the runner does
+      # not have, so a test that runs it would stop before its verdict. The same three steps as the
+      # shell job in `_rot-gates.yml`, which says why each is shaped the way it is; the shellcheck
+      # download is retried, since a release asset that comes back 5xx once would fail the run about
+      # nothing.
+      - name: Install shellcheck
+        if: ${{ inputs.test != '' }}
+        run: |
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz \
+            | tar -xJ -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-stable" >> "$GITHUB_PATH"
+
+      - uses: actions/setup-go@v7
+        if: ${{ inputs.test != '' }}
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Install actionlint
+        if: ${{ inputs.test != '' }}
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
       # The command is the input, run as typed. It reaches the shell through the environment rather
       # than through the expression, so what it says is read as a command once and not spliced into
       # the script around it.

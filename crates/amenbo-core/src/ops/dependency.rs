@@ -153,7 +153,7 @@ mod tests {
             add(tx, a, b, None).unwrap(); // b blocks a
             add(tx, b, c, None).unwrap(); // c blocks b
 
-            crate::ops::task::delete(tx, b).unwrap();
+            crate::ops::task::delete(tx, b, crate::model::ActorKind::Ai).unwrap();
             assert!(read::dependency_id(tx.conn(), a, b).unwrap().is_none(), "the edge into b");
             assert!(read::dependency_id(tx.conn(), b, c).unwrap().is_none(), "the edge out of b");
         });

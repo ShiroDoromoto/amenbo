@@ -4,8 +4,9 @@
 // **A run's pane opens on its picture**, every run and every time, and the reader's turn is kept for
 // that run's pane alone: back up after a page turn it is as they left it, and the next run opens on
 // its picture again — save while a step that may wait for a person runs, when it is turned to its
-// terminal and turned back after (`AMB-T-5776`). **The terminal face stays mounted behind the
-// picture**, out of the layout, so the program in it is not ended by looking away. An ordinary pane
+// terminal and turned back after (`AMB-T-5776`). **The terminal face stays mounted under the
+// picture**, in the layout and dimmed, so the program in it is not ended by looking away and can be
+// followed through the picture (`AMB-T-5832`). An ordinary pane
 // has no picture and no control for one.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -91,7 +92,8 @@ describe("the face a run's pane is turned to", () => {
     expect(faces().map((one) => one.textContent)).toEqual([t("auto.run.facePicture"), t("auto.run.faceTerminal")]);
     expect(pressed()).toBe(t("auto.run.facePicture"));
     expect(picture()).not.toBeNull();
-    expect(away(), "the terminal face was taken out of the page rather than put out of the layout").toBe(true);
+    expect(away(), "the terminal face under the picture was not dimmed").toBe(true);
+    expect(picture()?.parentElement?.classList.contains("slot__body"), "the picture is not drawn over the terminal face").toBe(true);
   });
 
   it("turns to the terminal and back, and keeps the turn for that run's pane", async () => {

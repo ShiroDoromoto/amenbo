@@ -150,7 +150,7 @@ mod tests {
     fn opened_wait(tx: &WriteTx<'_>, seconds: &str) -> (AutomationRun, i64) {
         let project = mk_project(tx, "amenbo");
         let task = mk_task_in(tx, "one", Some(project));
-        crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai)).expect("the AI's");
+        crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("the AI's");
         let (automation, wait) = picture(tx, project);
         automation::cfg_set(tx, wait, SECONDS, Some(seconds)).expect("answer");
         let run = launched(tx, &automation);
@@ -236,7 +236,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let task = mk_task_in(tx, "one", Some(project));
-            crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai)).expect("the AI's");
+            crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("the AI's");
             let (automation, wait) = picture(tx, project);
             for wrong in ["\"soon\"", "-5", "1.5"] {
                 let refused = automation::cfg_set(tx, wait, SECONDS, Some(wrong));

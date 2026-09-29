@@ -106,7 +106,7 @@ const HEADS: readonly Head[] = ["next", "branch", "error", "back", "leaves", "li
 
 /** A line a run walked ends in the colour it is lit in, whatever kind of line it is. */
 function headOf(line: PicLine, trail?: PicTrail): Head {
-  if (lineLit(line.key, trail)) return "lit";
+  if (lineLit(line, trail)) return "lit";
   if (line.back) return "back";
   if (line.leaves) return "leaves";
   return line.tone ?? "next";
@@ -147,10 +147,16 @@ function Legend({ inAction }: { inAction: boolean }) {
   );
 }
 
-/** Whether a line is one the run walked. The line in from the action's top mark is no edge, and never is. */
-function lineLit(key: string, trail: PicTrail | undefined): boolean {
-  if (trail === undefined || !key.startsWith("edge-")) return false;
-  return trail.edges.has(Number(key.slice("edge-".length)));
+/**
+ * Whether a line is one the run walked. Where lines have joined on a lane, it is lit for every edge
+ * whose way runs along it (`PicLine.carries`), so the way lit runs from the leg of the way out the run
+ * left by into the box. The line in from the action's top mark is no edge, and never is.
+ */
+function lineLit(line: PicLine, trail: PicTrail | undefined): boolean {
+  if (trail === undefined) return false;
+  if (line.carries !== undefined) return line.carries.some((edgeId) => trail.edges.has(edgeId));
+  if (!line.key.startsWith("edge-")) return false;
+  return trail.edges.has(Number(line.key.slice("edge-".length)));
 }
 
 export function AutomationPicture({
@@ -322,46 +328,55 @@ export function AutomationPicture({
                 rx={8}
               />
             ))}
-            {picture.lines.map((line) => {
-              const drawn = [
-                "autopic__line",
-                line.back ? "autopic__line--back" : "",
-                line.leaves ? "autopic__line--leaves" : "",
-                line.open === true ? "autopic__line--open" : "",
-                line.tone !== undefined ? `autopic__line--${line.tone}` : "",
-                lineLit(line.key, trail) ? "autopic__line--lit" : "",
-              ]
-                .filter((one) => one !== "")
-                .join(" ");
-              // The line in from the action's top mark is no edge, and puts no box in.
-              const edgeId = line.key.startsWith("edge-") ? Number(line.key.slice("edge-".length)) : undefined;
-              return (
-                <g key={line.key}>
-                  <title>{edgeWord(line)}</title>
-                  <polyline
-                    className={drawn}
-                    points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                    // Into the box it goes to. A line that goes nowhere ends in its words instead, and one
-                    // that joins others on its lane ends there.
-                    markerEnd={line.points.length > 2 && line.joins !== true ? head(headOf(line, trail)) : undefined}
-                  />
-                  {/* Last in the group, so it lies over the line it traces. */}
-                  {edgeId !== undefined && (
+            {/* The lines a run walked are drawn last: where two lines share a stretch into one box, the
+                one not walked would lie over the lit one (`AMB-T-5824`). */}
+            {[...picture.lines]
+              .sort((a, b) => Number(lineLit(a, trail)) - Number(lineLit(b, trail)))
+              .map((line) => {
+                const drawn = [
+                  "autopic__line",
+                  line.back ? "autopic__line--back" : "",
+                  line.leaves ? "autopic__line--leaves" : "",
+                  line.open === true ? "autopic__line--open" : "",
+                  line.tone !== undefined ? `autopic__line--${line.tone}` : "",
+                  lineLit(line, trail) ? "autopic__line--lit" : "",
+                ]
+                  .filter((one) => one !== "")
+                  .join(" ");
+                // The line in from the action's top mark is no edge, and puts no box in. A piece of a lane
+                // only one edge runs along yet is that edge's, and brings up its `+`.
+                const edgeId = line.key.startsWith("edge-")
+                  ? Number(line.key.slice("edge-".length))
+                  : line.carries?.length === 1
+                    ? line.carries[0]
+                    : undefined;
+                return (
+                  <g key={line.key}>
+                    <title>{edgeWord(line)}</title>
                     <polyline
-                      className="autopic__hit"
+                      className={drawn}
                       points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                      onMouseEnter={() => setNear(edgeId)}
-                      onMouseLeave={() => setNear((was) => (was === edgeId ? null : was))}
+                      // Into the box it goes to. A line that goes nowhere ends in its words instead, and one
+                      // that joins others on its lane ends there.
+                      markerEnd={line.points.length > 2 && line.joins !== true ? head(headOf(line, trail)) : undefined}
                     />
-                  )}
-                  {edgeWord(line) !== "" && (
-                    <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
-                      {edgeWord(line)}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
+                    {/* Last in the group, so it lies over the line it traces. */}
+                    {edgeId !== undefined && (
+                      <polyline
+                        className="autopic__hit"
+                        points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                        onMouseEnter={() => setNear(edgeId)}
+                        onMouseLeave={() => setNear((was) => (was === edgeId ? null : was))}
+                      />
+                    )}
+                    {edgeWord(line) !== "" && (
+                      <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
+                        {edgeWord(line)}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
           </svg>
 
           {picture.laps.map((lap) => (

@@ -292,7 +292,7 @@ mod tests {
     /// Take a task, fetch, and go on to an agent's step on what came back; nothing there goes on to
     /// close the task.
     fn picture(tx: &WriteTx<'_>, project: i64, form: &str, target: &str) -> Automation {
-        crate::ops::task::set_assignee(tx, mk_task_in(tx, "one", Some(project)), Some(ActorKind::Ai))
+        crate::ops::task::set_assignee(tx, mk_task_in(tx, "one", Some(project)), Some(ActorKind::Ai), ActorKind::Ai)
             .expect("give it to the AI");
         let automation =
             automation::add(tx, project, NewAutomation { name: "fetch".into(), ..Default::default() })

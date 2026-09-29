@@ -2,12 +2,13 @@
 //!
 //! Permanent comments go into their own table, `task_comment` ([`TaskComment`]). The other half of the
 //! timeline — system events — has no table at all: it lives only in the ledger file
-//! ([`crate::activity_log`]), so it is emitted through [`crate::store::Store::add_system_event`] with
-//! payloads from [`crate::activity_log::event`].
+//! ([`crate::activity_log`]), with payloads from [`crate::activity_log::event`]. A task's own writes
+//! queue theirs from the op ([`crate::store_engine::WriteTx::record_activity`]); the rest are written
+//! through [`crate::store::Store::add_system_event`].
 
 use crate::error::{Error, ErrorCode, Result};
 use crate::model::{ActorKind, AttachmentTarget, TaskComment};
-use crate::ops::{emit_create, emit_update, Noun};
+use crate::ops::{emit_create, emit_update, event, Noun};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -28,7 +29,8 @@ pub(crate) fn prepare_comment(text: &str) -> Result<Timestamp> {
 }
 
 /// Add a comment to a task (written to its own table, `task_comment`). The author is already resolved by the
-/// caller. The write is issued straight into the caller's [`WriteTx`].
+/// caller. The write is issued straight into the caller's [`WriteTx`], and so is the `comment.added` event,
+/// stamped with the author as its actor.
 pub fn add_comment(
     tx: &WriteTx<'_>,
     task_id: i64,
@@ -56,7 +58,8 @@ pub fn add_report_comment(
     write_comment(tx, task_id, author_kind, text, Some(run_step_id))
 }
 
-/// The one place a `task_comment` row is built, whichever door asked for it.
+/// The one place a `task_comment` row is built, whichever door asked for it — and so the one place
+/// `comment.added` fires. A decision comment is not a v1 event, so its own door does not come here.
 fn write_comment(
     tx: &WriteTx<'_>,
     task_id: i64,
@@ -77,6 +80,7 @@ fn write_comment(
         automation_run_step_id,
     };
     emit_create(tx, record::task_comment(&comment))?;
+    event::emit_comment_added(tx, &comment, author_kind)?;
     Ok(comment)
 }
 
@@ -85,10 +89,16 @@ fn write_comment(
 /// "retracted" history, and no ownership check applies either. A comment's attachments are polymorphic (no FK
 /// to hang a cascade on), so the delete op sweeps them itself ([`crate::ops::sweep_polymorphic`]) — and, as
 /// with `attach rm`, reclaiming the bytes of a blob that lost its last reference is the GC's job.
-pub fn remove_comment(tx: &WriteTx<'_>, id: i64) -> Result<bool> {
+///
+/// `actor` is the facet doing the deleting — the comment row says who *wrote* it, and that is a different
+/// person from whoever takes it back. The `comment.removed` event goes out ahead of the `DELETE`, and only
+/// for a comment that is really there: a no-op is not a change to observe, and after the `DELETE` the event
+/// could no longer say which project it was in (`AMB-D-405`).
+pub fn remove_comment(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<bool> {
     if read::task_comment(tx.conn(), id)?.is_none() {
         return Ok(false);
     }
+    event::emit_comment_removed(tx, id, actor, &Timestamp::now().to_rfc3339_z())?;
     crate::ops::sweep_polymorphic(tx, AttachmentTarget::TaskComment, id)?;
     tx.delete_record("task_comment", id)?;
     Ok(true)
@@ -134,7 +144,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(remove_comment(tx, c.id).unwrap());
+        assert!(remove_comment(tx, c.id, crate::model::ActorKind::Ai).unwrap());
         assert!(read::task_comment(tx.conn(), c.id).unwrap().is_none(), "the row itself goes (not a tombstone)");
         assert!(
             read::attachments_for_target(tx.conn(), AttachmentTarget::TaskComment, c.id).unwrap().is_empty(),
@@ -146,7 +156,7 @@ mod tests {
     fn remove_comment_is_a_noop_when_it_is_gone() {
         let e = new_engine();
         let tx = &e.write().unwrap();
-        assert!(!remove_comment(tx, 9999).unwrap());
+        assert!(!remove_comment(tx, 9999, crate::model::ActorKind::Ai).unwrap());
     }
 
     /// A post you want to fix is rewritten in place, not deleted and re-posted. The id does not change (so

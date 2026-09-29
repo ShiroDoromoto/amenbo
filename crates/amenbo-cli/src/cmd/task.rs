@@ -74,7 +74,6 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 created_by_kind: Some(flags.facet()?), at_binding_id,
                 made_in,
             }, &dimension_values).map_err(CliError::from)?;
-            emit_event(store, flags, t.id, activity_log::event::task_created(&t.title));
             // And the pane it was typed in is told, where it was typed in one (`AMB-D-897`). Left
             // after the create rather than with it: what the band under the pane counts is a task
             // that exists, and a drop box that cannot be written to must not take one away.
@@ -83,7 +82,6 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             // logical operations and therefore two transactions, so the add survives a failing assign.
             if let Some(kind) = assignee_kind {
                 store.set_task_assignee(t.id, Some(kind), flags.facet()?).map_err(CliError::from)?;
-                emit_event(store, flags, t.id, activity_log::event::task_assigned(Some(kind.as_str())));
             }
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
             warn_body(&detail.notes); // non-blocking readability hint on write (stderr)
@@ -424,9 +422,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             let before = before.map(|b| resolve_task(store, &b)).transpose().map_err(CliError::from)?;
             let after = after.map(|a| resolve_task(store, &a)).transpose().map_err(CliError::from)?;
             let pos = pos_from_keys(top, bottom, before, after)?;
-            let project_for_event = project_id.map(|pid| pid.to_string());
             let t = store.move_task(tid, project_id, pos, flags.facet()?).map_err(CliError::from)?;
-            emit_event(store, flags, tid, activity_log::event::task_moved(project_for_event.as_deref()));
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
             write_envelope(flags, "task.move", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["placement".to_string()]), false, format!("✓ Moved task: {}", task_label(t.id)));
         }
@@ -498,7 +494,6 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 .is_some_and(|t| t.assignee_kind == Some(kind));
             if !noop {
                 store.set_task_assignee(tid, Some(kind), flags.facet()?).map_err(CliError::from)?;
-                emit_event(store, flags, tid, activity_log::event::task_assigned(Some(kind.as_str())));
             }
             let detail = store.task_detail(tid).map_err(CliError::from)?;
             let to_label = if ai { " (to that person's AI)" } else { "" };
@@ -510,7 +505,6 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             let noop = store.task(tid).map_err(CliError::from)?.is_some_and(|t| t.assignee_kind.is_none());
             if !noop {
                 store.set_task_assignee(tid, None, flags.facet()?).map_err(CliError::from)?;
-                emit_event(store, flags, tid, activity_log::event::task_assigned(None));
             }
             let detail = store.task_detail(tid).map_err(CliError::from)?;
             write_envelope(flags, "task.unassign", "task", serde_json::to_value(&detail).unwrap(), Some(vec!["assignee".to_string()]), noop, format!("✓ Unassigned: {}", task_label(tid)));
@@ -638,7 +632,6 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool, re
     } else {
         store.set_task_completed(tid, false, flags.facet()?).map_err(CliError::from)?
     };
-    emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
     // Ending the task — carried out or decided against — may have made dependents ready; emit the
     // unblock signal if so.
     if t.status.is_closed() {
@@ -684,7 +677,6 @@ fn task_set_status(store: &mut Store, flags: &Flags, id: &str, status: &str) -> 
     let pc = premise_change_when(store, tid, leaving);
     let unread = comments_since_when(store, tid, leaving);
     let t = store.set_task_status(tid, new_status, flags.facet()?).map_err(CliError::from)?;
-    emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), new_status.as_str()));
     // Ending the task — carried out or decided against — may have made dependents ready; emit the
     // unblock signal if so.
     if t.status.is_closed() {
@@ -709,9 +701,6 @@ fn task_block(store: &mut Store, flags: &Flags, id: &str, reason: Option<String>
     let pc = premise_change_when(store, tid, old == TaskStatus::InProgress);
     let unread = comments_since_when(store, tid, old == TaskStatus::InProgress);
     let t = store.set_task_status(tid, TaskStatus::Blocked, flags.facet()?).map_err(CliError::from)?;
-    if old != TaskStatus::Blocked {
-        emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), "blocked"));
-    }
     // Keep the reason as a comment when there is one (under our own facet; the author argument is the trace
     // string for the audit log).
     if let Some(r) = reason.as_deref().map(str::trim).filter(|r| !r.is_empty()) {
@@ -760,7 +749,6 @@ fn task_reject(store: &mut Store, flags: &Flags, id: &str, reason: String) -> Re
     let pc = premise_change_when(store, tid, old == TaskStatus::InProgress);
     let unread = comments_since_when(store, tid, old == TaskStatus::InProgress);
     let t = store.set_task_status(tid, TaskStatus::Rejected, flags.facet()?).map_err(CliError::from)?;
-    emit_event(store, flags, tid, activity_log::event::task_status_changed(old.as_str(), t.status.as_str()));
     // A blocker decided against is a blocker no longer — dependents may have just become ready.
     emit_unblocks(store, flags, tid);
     store.add_task_comment(tid, flags.facet()?, &reason).map_err(CliError::from)?;

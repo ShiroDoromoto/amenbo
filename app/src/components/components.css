@@ -2310,10 +2310,18 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 .autopic__markname { font-weight: var(--fw-bold); }
 .autopic__markports { color: var(--c-text); }
 .autopic__line--leaves { stroke: var(--c-accent); }
-/* **A run's pane, as its picture** (`AMB-T-5775`, `../shell/RunPicture`). It takes the pane's body and
-   scrolls both ways, and the room around the sheet is half the pane each side, so a box on the edge of
-   the picture can still be brought to the middle. */
-.runpic { flex: 1; min-height: 0; display: flex; container-type: size; }
+/* **A run's pane, as its picture** (`AMB-T-5775`, `../shell/RunPicture`). It is drawn over the pane's
+   body on the frame's ground and scrolls both ways, and the room around the sheet is half the pane each
+   side, so a box on the edge of the picture can still be brought to the middle. From halfway down it
+   fades, to 0.15 at the bottom edge, so the terminal under it can be followed while the picture is up
+   (`.slot__body--away`). */
+.runpic {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; container-type: size;
+  background: var(--c-pane-frame);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 50%, rgba(0, 0, 0, 0.15) 100%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 50%, rgba(0, 0, 0, 0.15) 100%);
+}
 .runpic .autopic {
   flex: 1; max-height: none;
   overflow: scroll;

@@ -42,9 +42,10 @@ const (
 )
 
 // vmGuestAgents are the programs in the guest that answer to a catalogued agent's name ahead of a
-// run's stand-ins. `claudeGuestBin` is the one `vm up` seeds; the other two are the golden's own.
+// run's stand-ins. `claudeGuestBin` is the one `vm up` seeds; the other two are the golden's own
+// (`vm up` removes the first, but not when the host has no `claude` to seed in its place).
 var vmGuestAgents = []string{
-	vmGuestHome + "/bin/claude",
+	claudeGoldenStandIn,
 	claudeGuestBin,
 	"/opt/homebrew/bin/codex",
 }

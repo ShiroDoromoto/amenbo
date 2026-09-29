@@ -22,7 +22,7 @@ import (
 // into the clone at the moment it is raised, neither happens: the clone is thrown away, and what it
 // carries is what the host's keychain holds right now.
 //
-// **Four things have to be true before a pane opens on it**, and each was found by walking into it:
+// **Five things have to be true before a pane opens on it**, and each was found by walking into it:
 //
 //  1. the binary is there — at the host's own version, so the guest is not answering for a build
 //     the operator does not have;
@@ -33,14 +33,19 @@ import (
 //     directory of their own in front of the `PATH` and stand programs up in it under these same
 //     names: a profile that prepended would take `claude` back, and the road reading a stand-in's
 //     behaviour would be reading this install instead (measured 2026-09-14). Nothing is lost by being
-//     last — a clone carries no other `claude`, and the road that wants this one stands nothing up.
-//     `~/.zprofile` is cleared of the same directory for the same reason: the golden carries a line
-//     putting it in front, and `/etc/zprofile`'s `path_helper` has already moved what a run handed
-//     over to the back of the `PATH` by the time either file is read;
-//  3. onboarding is behind it and the folder is trusted — otherwise the first screen in the pane is
+//     last once the golden's own stand-in is gone, and the road that wants this one stands nothing
+//     up. `~/.zprofile` is cleared of the same directory for the same reason: the golden carries a
+//     line putting it in front, and `/etc/zprofile`'s `path_helper` has already moved what a run
+//     handed over to the back of the `PATH` by the time either file is read;
+//  3. the golden's own `~/bin/claude` is gone — a stand-in that prints its arguments and turns into
+//     `/bin/sh`, on a `~/bin` the golden's `~/.zprofile` puts in *front* of the `PATH`. Left there, it
+//     answers to `claude` ahead of this install, and an automation step's pane came up on a bare
+//     `sh` prompt: nothing was started, and the step went on only when somebody typed `step-done`
+//     into it by hand (measured 2026-09-29 on the dev GUI in the clone);
+//  4. onboarding is behind it and the folder is trusted — otherwise the first screen in the pane is
 //     a question, not a prompt. Trust is read up the tree, so trusting `/` covers a run's
 //     throwaway folder, whose path nothing here can know in advance;
-//  4. the login keychain holds the credential — and holds it where the *console* session can read
+//  5. the login keychain holds the credential — and holds it where the *console* session can read
 //     it. A reach over ssh has a security session of its own, which is why `claude -p` answered
 //     `Not logged in` there while the same command run through `launchctl asuser` answered the
 //     question (measured 2026-09-13).
@@ -69,6 +74,10 @@ const (
 	// `~/.local/bin` in *front*. It is cleared rather than written to: a front is what this whole
 	// arrangement exists to avoid.
 	claudeGuestProfile = vmGuestHome + "/.zprofile"
+	// claudeGoldenStandIn is the golden's own `claude`: a script that echoes its arguments and execs
+	// `/bin/sh`, standing on a directory the golden puts in front of the `PATH`. It is taken out of
+	// the clone, since a pane that finds it opens on a plain shell instead of the agent.
+	claudeGoldenStandIn = vmGuestHome + "/bin/claude"
 )
 
 // claudeSeeded is what the guest was left holding, for the line that reports it.
@@ -156,14 +165,15 @@ func hostClaudeCredentials() (string, error) {
 // Updates are off so that the version the host pinned is the version the road is walked against.
 const claudeGuestSettings = `{"hasCompletedOnboarding":true,"installMethod":"native","autoUpdates":false,"theme":"dark","projects":{"/":{"hasTrustDialogAccepted":true}}}`
 
-// guestClaude is the one reach into the guest that does all four halves, and answers with what is
-// standing there afterwards.
+// guestClaude is the one reach into the guest that does all five, and answers with what is standing
+// there afterwards.
 //
-// Two of them are conditional and two are not. The binary is installed when the version differs, so
-// a raise onto an already seeded clone is one round trip that downloads nothing. The `PATH` line is
-// taken out and written again rather than left where it is: a clone raised before the line moved to
-// the end of the `PATH` is carrying the old one, and a raise is the only thing that would ever
-// correct it.
+// The golden's stand-in is removed on every raise, along with a copy `vm verify cli` left aside, which
+// would otherwise be put back where it was. Of the other four, two are conditional and two are not.
+// The binary is installed when the version differs, so a raise onto an already seeded clone is one
+// round trip that downloads nothing. The `PATH` line is taken out and written again rather than
+// left where it is: a clone raised before the line moved to the end of the `PATH` is carrying the
+// old one, and a raise is the only thing that would ever correct it.
 //
 // **`~/.claude.json` is written every time, and written over whatever is there.** Only a file
 // already standing could be merged into, and the install puts one there itself — a first raise that
@@ -201,6 +211,7 @@ else
 fi
 sed -i '' -e '/\.local\/bin/d' %[4]s %[11]s 2>/dev/null || true
 printf '%%s\n' 'export PATH="$PATH:$HOME/.local/bin"' >> %[4]s
+rm -f %[12]s %[12]s%[13]s
 printf '%%s\n' %[6]q > %[5]s
 security unlock-keychain -p %[7]q %[8]s
 security delete-generic-password -a %[9]q -s %[10]q >/dev/null 2>&1 || true
@@ -209,7 +220,8 @@ security add-generic-password -A -a %[9]q -s %[10]q -w "$cred"
 `,
 		claudeGuestBin, version, claudeInstaller, claudeGuestShellRC,
 		claudeGuestConfig, claudeGuestSettings,
-		vmPassword, claudeGuestKeychain, vmUser, claudeService, claudeGuestProfile)
+		vmPassword, claudeGuestKeychain, vmUser, claudeService, claudeGuestProfile,
+		claudeGoldenStandIn, vmAgentAside)
 }
 
 // readGuestClaude takes the script's two markers off its output: whether this raise installed

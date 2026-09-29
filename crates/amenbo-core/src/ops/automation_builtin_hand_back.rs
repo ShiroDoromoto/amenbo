@@ -54,9 +54,9 @@ fn hand_back(carry: &Carry<'_, '_>) -> Result<Carried> {
         }
     }
     if task.status == TaskStatus::InProgress {
-        crate::ops::task::set_status(tx, task_id, TaskStatus::Todo)?;
+        crate::ops::task::set_status(tx, task_id, TaskStatus::Todo, ActorKind::Ai)?;
     }
-    crate::ops::task::set_assignee(tx, task_id, Some(ActorKind::Human))?;
+    crate::ops::task::set_assignee(tx, task_id, Some(ActorKind::Human), ActorKind::Ai)?;
     Ok(Carried { exit: DONE_EXIT, report: say(lang, "handedBack", &[("task", &named), ("title", &task.title)]) })
 }
 
@@ -73,6 +73,8 @@ mod tests {
     use crate::ops::automation_run::{launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
+    use crate::lifecycle::name::{COMMENT_ADDED, TASK_ASSIGNED, TASK_STATUS_CHANGED};
+    use crate::ops::test_support::{by_ai, events_after, outbox_head};
     use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};
     use crate::store_engine::WriteTx;
 
@@ -104,7 +106,7 @@ mod tests {
 
     fn for_ai(tx: &WriteTx<'_>, project: i64, title: &str) -> i64 {
         let id = mk_task_in(tx, title, Some(project));
-        crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai)).expect("give it to the AI");
+        crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
         id
     }
 
@@ -157,12 +159,22 @@ mod tests {
                 panic!("the work goes on to the hand back");
             };
             let second = for_ai(tx, project, "中のもの");
+            let head = outbox_head(tx);
             let Opened::Carried { next: Next::Step(take), .. } =
                 open(tx, run.id, back.id, Some(&claude)).expect("hand back")
             else {
                 panic!("a built-in is carried out, and the run goes on");
             };
             assert_eq!(take.placement_id, Some(p.take.id));
+            // The person it goes back to hears of it: each write is announced as the AI's (`AMB-D-473`).
+            assert_eq!(
+                events_after(tx, head),
+                vec![
+                    by_ai(COMMENT_ADDED, None),
+                    by_ai(TASK_STATUS_CHANGED, Some("todo")),
+                    by_ai(TASK_ASSIGNED, Some("human")),
+                ]
+            );
 
             let handed = read::task(tx.conn(), first).expect("read").expect("task");
             assert_eq!(handed.status, TaskStatus::Todo);

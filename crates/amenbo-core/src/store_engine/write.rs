@@ -26,8 +26,13 @@
 //!   record, and its ledger is a file, which cannot join a SQLite transaction. The ordering is settled:
 //!   append **after the commit succeeds** — a crash before commit means the row
 //!   never appears, a crash after commit means the row is lost. Never duplicated; it falls to the
-//!   losing side. This seam offers no hook for it precisely so an event cannot ride inside the
-//!   transaction; the caller appends once [`WriteTx::commit`] has returned `Ok`.
+//!   losing side. What the transaction holds is the *line*, not the append: an operation queues it
+//!   with [`WriteTx::record_activity`], its id minted inside the transaction
+//!   ([`WriteTx::mint_activity_id`]), and `Store::write_one` appends the queued lines once
+//!   [`WriteTx::commit`] has returned `Ok`. A rolled-back batch drops its lines with the guard.
+//!   **Only `write_one` writes them out** — a path that opens [`StoreEngine::write`] itself and commits
+//!   has nobody to append for it, so queuing a line there is a bug, and `commit` says so in a debug
+//!   build.
 //!
 //! Failure needs no ceremony: return early with `?` and the guard drops before `commit()`, rolling the
 //! whole batch back. That is what keeps a contended `SQLITE_BUSY` mid-batch from leaving a torn row
@@ -60,6 +65,10 @@ pub struct WriteTx<'a> {
     /// and kept as the text is, so changing the setting later rewrites nothing. A transaction nobody
     /// named one for — a test, a migration — writes English.
     language: String,
+    /// The activity lines this operation earned, in the order it queued them — appended to the ledger
+    /// only after the commit ([`record_activity`](Self::record_activity)). `RefCell` for the same reason
+    /// as `projects`.
+    activity: std::cell::RefCell<Vec<crate::activity_log::Entry>>,
 }
 
 impl<'a> WriteTx<'a> {
@@ -70,7 +79,13 @@ impl<'a> WriteTx<'a> {
         // rows and nothing else — a rolled-back batch leaves its collected rows behind, and they must not
         // be attributed to the next one.
         engine.take_changes();
-        Ok(WriteTx { engine, tx, projects: Default::default(), language: "en".to_string() })
+        Ok(WriteTx {
+            engine,
+            tx,
+            projects: Default::default(),
+            language: "en".to_string(),
+            activity: Default::default(),
+        })
     }
 
     /// Declare that this operation touches `project`, so [`commit`](Self::commit) moves that project's
@@ -125,6 +140,32 @@ impl<'a> WriteTx<'a> {
         self.engine.set_meta(key, value)
     }
 
+    /// Take the next activity sequence number and mark it used **in this transaction**. A ledger line
+    /// has no row in the DB, so the next `MAX(id)` would not see this id — without the high-water mark,
+    /// two lines in a row would be handed the same id, breaking the `(at, source, id)` tie-break of the
+    /// total order that merges the ledger with the comment tables. The mark commits together with the
+    /// mutation that earned the line, so an id can never be handed out while the mutation rolls back
+    /// (which would leave a gap).
+    pub fn mint_activity_id(&self) -> Result<i64> {
+        let id = super::read::next_activity_id(self.conn())?;
+        self.set_meta(super::read::ACTIVITY_HIGH_WATER, Some(&id.to_string()))?;
+        Ok(id)
+    }
+
+    /// Queue one activity line for this operation. The ledger is a file and cannot join the
+    /// transaction, so the line is held here and `Store::write_one` appends it **after** the commit
+    /// succeeds; on an earlier `?` it goes with the guard, so no line tells of a change that did not
+    /// commit. Mint its id with [`mint_activity_id`](Self::mint_activity_id) inside this transaction.
+    pub fn record_activity(&self, entry: crate::activity_log::Entry) {
+        self.activity.borrow_mut().push(entry);
+    }
+
+    /// Hand over the queued activity lines, emptying the queue — what `Store::write_one` takes just
+    /// before [`commit`](Self::commit) to append once it has returned `Ok`.
+    pub(crate) fn take_activity(&self) -> Vec<crate::activity_log::Entry> {
+        self.activity.take()
+    }
+
     /// Physically delete the `attachment` rows of `(target_type, target_id)`. See
     /// [`StoreEngine::delete_records_for_target`].
     pub fn delete_records_for_target(
@@ -155,7 +196,14 @@ impl<'a> WriteTx<'a> {
     /// commit, which is what the activity ledger does deliberately, can lose the row and leave the
     /// screen wrong). The sync version of every project this operation declared it touches rides the same
     /// drain ([`stamp_project_versions`](Self::stamp_project_versions)), for the same reason.
+    ///
+    /// Activity lines still queued here would be lost without a word — nobody appends them after this
+    /// returns — so a debug build refuses them ([`record_activity`](Self::record_activity)).
     pub fn commit(self) -> Result<()> {
+        debug_assert!(
+            self.activity.borrow().is_empty(),
+            "activity lines queued on a transaction nobody appends them for; only Store::write_one writes them out"
+        );
         self.write_change_feed()?;
         self.tx.commit().map_err(StoreEngineError::from)
     }

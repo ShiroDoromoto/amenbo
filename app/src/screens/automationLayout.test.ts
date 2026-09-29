@@ -860,6 +860,65 @@ describe("the picture of an automation", () => {
     for (const one of down) expect(one.points[1]!.y).toBeLessThan(at(picture, 4).y);
   });
 
+  it("turns a line down to the box on the right under the names of the lines that go nowhere beside it", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "タスクに着手する"),
+          step({
+            id: 2,
+            name: "PR を作ってマージする",
+            exits: [
+              { id: 70, name: "完了", outputs: [] },
+              { id: 71, name: "*", outputs: [] },
+              { id: 72, name: "main が赤", outputs: [] },
+              { id: 73, name: "CI が赤", outputs: [] },
+              { id: 74, name: "CI の不調", outputs: [] },
+            ],
+          }),
+          step({ id: 3, name: "タスクを閉じる" }),
+          step({ id: 4, name: "CI を直す" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "main が赤", ends: "halt" }),
+          edge({ id: 4, fromId: 2, exitName: "CI が赤", ends: "halt" }),
+          edge({ id: 5, fromId: 2, exitName: "CI の不調", toId: 4 }),
+        ],
+      }),
+    );
+    const line = (key: string) => picture.lines.find((one) => one.key === key)!;
+    const words = (one: PicLine) => {
+      const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+      const left = one.align === "end" ? one.at.x - wide : one.at.x;
+      return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
+    };
+    const right = line("edge-5");
+    const [sx, turn, tx] = [right.points[0]!.x, right.points[1]!.y, right.points[2]!.x];
+    expect(tx).toBeGreaterThan(sx);
+    const name = words(right);
+    for (const key of ["edge-3", "edge-4"]) {
+      const nowhere = line(key);
+      const x = nowhere.points[0]!.x;
+      // Its leg across runs under the line that goes nowhere, and under that line's name.
+      expect(x > sx && x < tx && nowhere.points[1]!.y >= turn, key).toBe(false);
+      const hung = words(nowhere);
+      expect(hung.bottom, key).toBeLessThan(turn);
+      // Its own name lies over neither the line that goes nowhere nor that line's name.
+      expect(x > name.left && x < name.right && nowhere.points[1]!.y > name.top, key).toBe(false);
+      expect(hung.left < name.right && name.left < hung.right && hung.top < name.bottom && name.top < hung.bottom, key).toBe(
+        false,
+      );
+    }
+    // Nor does its leg down into the box on the right run through a name that goes nowhere.
+    for (const key of ["edge-3", "edge-4"]) {
+      const hung = words(line(key));
+      expect(tx > hung.left && tx < hung.right && hung.bottom > turn, key).toBe(false);
+    }
+  });
+
   it("draws the error way out only where somebody drew a line from it — the legend says the rest", () => {
     const steps = [taker(1, "take"), step({ id: 2, name: "work" })];
     const plain = layOut(
@@ -979,7 +1038,7 @@ describe("the picture of an automation", () => {
     expect(line.points[0]!.x - box.x).toBe(line.points[3]!.x - at(picture, 2).x);
   });
 
-  it("writes the name of a second line down to a neighbour past its right end, off the first one's corner", () => {
+  it("writes the name of a second line down to a neighbour in a row of its own, past the end it turns to", () => {
     const picture = layOut(
       detail({
         entryPlacementId: 1,
@@ -1001,12 +1060,65 @@ describe("the picture of an automation", () => {
     );
     const first = picture.lines.find((one) => one.key === "edge-1")!;
     const second = picture.lines.find((one) => one.key === "edge-2")!;
-    // Both turn at one height; the second's leg across is shorter than its name.
-    expect(second.points[1]!.y).toBe(first.points[1]!.y);
-    expect(second.align).toBe("start");
-    const legEnd = Math.max(second.points[1]!.x, second.points[2]!.x);
-    expect(second.at.x).toBeGreaterThan(legEnd);
-    expect(second.at.x).toBeGreaterThan(Math.max(first.points[0]!.x, first.points[3]!.x));
+    // The first goes straight down; the second's leg across is shorter than its name, and turns a row
+    // of words under the first's.
+    expect(second.points[1]!.y - first.points[1]!.y).toBe(15);
+    expect(second.align).toBe("end");
+    expect(second.at.x).toBeLessThan(Math.min(second.points[1]!.x, second.points[2]!.x));
+    expect(second.at.y).toBeLessThan(second.points[1]!.y);
+    expect(second.at.y).toBeGreaterThan(first.points[1]!.y);
+    expect(first.at.y).toBeLessThan(first.points[1]!.y);
+  });
+
+  it("writes the names of two lines down too short for them each in a row of its own, over no line (AMB-T-5856)", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", {
+            exits: [
+              { id: 90, name: "完了", outputs: [port("task", "task_take")] },
+              { id: 91, name: "*", outputs: [] },
+              { id: 92, name: "やり直す", outputs: [] },
+              { id: 93, name: "もう一度やり直す", outputs: [] },
+            ],
+          }),
+          step({ id: 2, name: "work" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "やり直す", toId: 2 }),
+          edge({ id: 3, fromId: 1, exitName: "もう一度やり直す", toId: 2 }),
+        ],
+      }),
+    );
+    const down = ["edge-1", "edge-2", "edge-3"].map((key) => picture.lines.find((one) => one.key === key)!);
+    expect(down.map((one) => one.points[1]!.y - down[0]!.points[1]!.y)).toEqual([0, 15, 30]);
+    const boxes = down.map((one) => {
+      const wide = [...edgeWord(one)].reduce((sum, c) => sum + (c.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
+      expect(one.align).toBe("end");
+      expect(one.at.y).toBeLessThan(one.points[1]!.y);
+      return { key: one.key, left: one.at.x - wide, right: one.at.x, top: one.at.y - 10, bottom: one.at.y + 1 };
+    });
+    const lap = picture.laps[0]!;
+    for (const [nth, a] of boxes.entries()) {
+      // The outline round the stretch reaches past the name, so its edge does not run through it.
+      expect(a.left, a.key).toBeGreaterThan(lap.x);
+      for (const b of boxes.slice(nth + 1)) {
+        expect(a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom).toBe(false);
+      }
+      // No piece of any of the lines runs through a name.
+      for (const one of down) {
+        one.points.slice(1).forEach((to, at) => {
+          const from = one.points[at]!;
+          const [left, right] = [Math.min(from.x, to.x), Math.max(from.x, to.x)];
+          const [top, bottom] = [Math.min(from.y, to.y), Math.max(from.y, to.y)];
+          expect(left <= a.right && a.left <= right && top <= a.bottom && a.top <= bottom, `${a.key} / ${one.key}`).toBe(
+            false,
+          );
+        });
+      }
+    }
   });
 
   it("writes the name of a line straight down on its left, and staggers the + of lines side by side in the margin", () => {

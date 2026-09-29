@@ -107,7 +107,7 @@ mod tests {
         bind(tx, project, &[&app]);
         let automation = picture(tx, project);
         let task = mk_task_in(tx, "直すもの", Some(project));
-        crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai)).expect("give it to the AI");
+        crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
         let root = worktree_cut::git_root(&app).expect("root");
         let cut = worktree_cut::layout(&root, &task.to_string());
         worktree_cut::start_from_origin(&cut).expect("cut");

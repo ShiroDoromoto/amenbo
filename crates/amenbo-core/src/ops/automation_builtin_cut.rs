@@ -260,7 +260,7 @@ mod tests {
 
     fn for_ai(tx: &WriteTx<'_>, project: i64) -> i64 {
         let id = mk_task_in(tx, "直すもの", Some(project));
-        crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai)).expect("give it to the AI");
+        crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
         id
     }
 

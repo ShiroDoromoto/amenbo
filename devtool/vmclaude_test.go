@@ -47,6 +47,20 @@ func TestGuestClaudeScriptPutsThePathLineAtTheEndAndOnlyOnce(t *testing.T) {
 	}
 }
 
+// TestGuestClaudeScriptTakesTheGoldensStandInAway is the bug the dev GUI in the clone walked into:
+// the golden's `~/bin/claude` stands in front of the `PATH` and turns into `/bin/sh`, so an
+// automation step's pane opened on a plain prompt. The copy `vm verify cli` moves aside goes too,
+// since that command puts it back where it was when it ends.
+func TestGuestClaudeScriptTakesTheGoldensStandInAway(t *testing.T) {
+	script := guestClaudeScript("2.1.270")
+	if !strings.Contains(script, "rm -f "+claudeGoldenStandIn+" "+claudeGoldenStandIn+vmAgentAside+"\n") {
+		t.Errorf("the golden's stand-in is left in front of this install:\n%s", script)
+	}
+	if claudeGoldenStandIn == claudeGuestBin {
+		t.Error("the stand-in taken away is the install just seeded")
+	}
+}
+
 // TestGuestClaudeScriptWritesTheSettingsOverWhateverIsThere is the bug this shape was written
 // against. The install leaves a `~/.claude.json` of its own, so a write that stood back for a file
 // already there wrote nothing at all — and the pane's first screen was the theme question.

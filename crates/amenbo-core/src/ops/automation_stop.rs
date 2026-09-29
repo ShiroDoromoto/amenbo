@@ -242,7 +242,7 @@ fn hand_the_task_back(
 ) -> Result<()> {
     let Some(task_id) = stretch.and_then(|s| s.task_id) else { return Ok(()) };
     if read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress) {
-        crate::ops::task::set_status(tx, task_id, TaskStatus::Todo)?;
+        crate::ops::task::set_status(tx, task_id, TaskStatus::Todo, ActorKind::Ai)?;
     }
     if crate::ops::automation_report::closed(tx, task_id)? {
         return Ok(());
@@ -252,7 +252,7 @@ fn hand_the_task_back(
         crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
         return Ok(());
     }
-    crate::ops::task::set_assignee(tx, task_id, Some(ActorKind::Human))?;
+    crate::ops::task::set_assignee(tx, task_id, Some(ActorKind::Human), ActorKind::Ai)?;
     match unsaid_report(tx, run)? {
         Some((run_step_id, report)) => {
             let text = format!("{line}\n\n{report}");
@@ -562,6 +562,8 @@ mod tests {
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, Launcher};
     use crate::ops::automation_step::{Opened, Opening};
     use crate::ops::test_support::open;
+    use crate::lifecycle::name::{COMMENT_ADDED, TASK_ASSIGNED, TASK_STATUS_CHANGED};
+    use crate::ops::test_support::{by_ai, events_after, outbox_head};
     use crate::ops::test_support::{
         exit_id, mk_exit, mk_out, mk_placed, mk_project, mk_task_in, way_out, with_tx, with_tx_in,
     };
@@ -829,6 +831,30 @@ mod tests {
         });
     }
 
+    /// **The task a stop hands back is announced as the AI's** (`AMB-D-367`): back to `todo`, given to
+    /// the human, and the line on it — each the event a person's own write would fire, stamped `ai`, the
+    /// one actor a notification sends for (`AMB-D-473`). The person it goes back to hears of it.
+    #[test]
+    fn the_task_a_stop_hands_back_is_announced_as_the_ai_s() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            a_task_in_hand(tx, p.project, step.run_step.id);
+            let head = outbox_head(tx);
+
+            stop(tx, run.id, Ending::Canceled).expect("stop");
+            assert_eq!(
+                events_after(tx, head),
+                vec![
+                    by_ai(TASK_STATUS_CHANGED, Some("todo")),
+                    by_ai(TASK_ASSIGNED, Some("human")),
+                    by_ai(COMMENT_ADDED, None),
+                ]
+            );
+        });
+    }
+
     /// **The line is written in the language the write was opened in, and kept as that text**
     /// (`AMB-D-976`) — a Japanese screen does not get the one English comment.
     #[test]
@@ -863,6 +889,7 @@ mod tests {
             let task = a_task_in_hand(tx, p.project, first.run_step.id);
             done(tx, first.run_step.id, None, "Looked at it.").expect("done");
             let second = opened(tx, &run, &p.second);
+            let head = outbox_head(tx);
             let stopped = done(
                 tx,
                 second.run_step.id,
@@ -872,6 +899,15 @@ mod tests {
             .expect("done");
 
             assert!(matches!(stopped, Next::Halted(_)));
+            assert_eq!(
+                events_after(tx, head),
+                vec![
+                    by_ai(TASK_STATUS_CHANGED, Some("todo")),
+                    by_ai(TASK_ASSIGNED, Some("human")),
+                    by_ai(COMMENT_ADDED, None),
+                ],
+                "the person it is handed to hears of it, as the AI's doing",
+            );
             let after = read::task(tx.conn(), task).expect("read").expect("the task");
             assert_eq!(after.status, TaskStatus::Todo);
             assert_eq!(after.assignee_kind, Some(ActorKind::Human), "it is the person's turn");
@@ -988,7 +1024,7 @@ mod tests {
             let task = a_task_in_hand(tx, p.project, first.run_step.id);
             done(tx, first.run_step.id, None, "Looked at it.").expect("done");
             let second = opened(tx, &run, &p.second);
-            crate::ops::task::set_status(tx, task, TaskStatus::Blocked).expect("the step parks it");
+            crate::ops::task::set_status(tx, task, TaskStatus::Blocked, crate::model::ActorKind::Ai).expect("the step parks it");
             done(tx, second.run_step.id, None, "Fixed it.").expect("done");
 
             assert_eq!(status_of(tx, run.id), AutomationRunStatus::Completed);
@@ -1085,7 +1121,7 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);
             let task = a_task_in_hand(tx, p.project, step.run_step.id);
-            crate::ops::task::set_status(tx, task, TaskStatus::Done).expect("a person closes it");
+            crate::ops::task::set_status(tx, task, TaskStatus::Done, crate::model::ActorKind::Ai).expect("a person closes it");
 
             let ended = step_ended(tx, step.run_step.id).expect("step ended").expect("a run to end");
             assert_eq!(ended.run.status, AutomationRunStatus::Failed);
@@ -1103,7 +1139,7 @@ mod tests {
             let closed = a_run(tx, &p.automation);
             let step = opened(tx, &closed, &p.first);
             let task = a_task_in_hand(tx, p.project, step.run_step.id);
-            crate::ops::task::set_status(tx, task, TaskStatus::Done).expect("a person closes it");
+            crate::ops::task::set_status(tx, task, TaskStatus::Done, crate::model::ActorKind::Ai).expect("a person closes it");
             let another = a_run(tx, &p.automation);
 
             let caught = sweep(tx).expect("sweep");

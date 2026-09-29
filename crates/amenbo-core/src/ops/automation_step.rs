@@ -1547,7 +1547,7 @@ mod tests {
             crate::ops::decision::DecisionPatch { body: Some("こう直す".into()), ..Default::default() },
         )
         .expect("body");
-        crate::ops::decision::finish_writing(tx, decision, None).expect("settled");
+        crate::ops::decision::finish_writing(tx, decision, None, crate::model::ActorKind::Ai).expect("settled");
         crate::ops::decision::link(tx, decision, task).expect("link");
         let comment = crate::ops::comment::add_comment(tx, task, ActorKind::Human, "ここも見て").expect("comment");
         let file = crate::ops::attachment::add_blob(

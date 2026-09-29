@@ -6,8 +6,8 @@
 //! on [`crate::Store`] (`project_add` / `project_update` / …), and the CLI and GUI call nothing else.
 
 use crate::error::{Error, ErrorCode, Result};
-use crate::model::{Project, View};
-use crate::ops::{emit_create, emit_update, place, Noun, Position};
+use crate::model::{ActorKind, Project, View};
+use crate::ops::{emit_create, emit_update, event, place, Noun, Position};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -160,10 +160,23 @@ pub fn set_archived(tx: &WriteTx<'_>, id: i64, archived: bool) -> Result<Project
 /// halfway and live tasks are left stranded in a project that no longer exists. The subtree is read
 /// **inside that same transaction** too — read it outside and a task another writer added in between is
 /// missed.
-pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
+///
+/// **The plugin outbox gets one `task.deleted` per task the cascade carries off**, and one
+/// `comment.removed` per comment those tasks carry off with them, each stamped with `actor`. A deletion is
+/// the one event a plugin cannot recover by re-reading (there is no row left to read), so a record that
+/// vanished inside a project delete has to be as observable as one deleted on its own — leaving it silent
+/// is a generation gap, which `AMB-D-367` does not allow. They go out before the rows do, since a task
+/// carried off by its project can no longer name the project it was in (`AMB-D-405`), and they share one
+/// clock. Running them costs one runner per plugin however many there are (`AMB-D-399`).
+pub fn delete(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<Vec<String>> {
     let project_before = live_before(tx, id)?;
+    let tasks = read::task_ids_in_project(tx.conn(), id)?;
+    let at = Timestamp::now().to_rfc3339_z();
+    for task_id in &tasks {
+        event::emit_task_subtree_deleted(tx, *task_id, actor, &at)?;
+    }
     let mut orphaned = Vec::new();
-    for task_id in read::task_ids_in_project(tx.conn(), id)? {
+    for task_id in tasks {
         orphaned.extend(crate::ops::task::delete_subtree(tx, task_id)?);
     }
     for decision_id in read::decision_ids_in_project(tx.conn(), id)? {
@@ -277,7 +290,7 @@ mod tests {
             // A dependency edge between two member tasks (expected to go with them).
             crate::ops::dependency::add(tx, t1, t2, None).unwrap();
 
-            delete(tx, p).unwrap();
+            delete(tx, p, crate::model::ActorKind::Ai).unwrap();
 
             assert!(read::project(tx.conn(), p).unwrap().is_none(), "the project's own row goes");
             assert!(read::task(tx.conn(), t1).unwrap().is_none(), "member task 1 goes with it");
@@ -311,7 +324,7 @@ mod tests {
             crate::ops::dimension::set(tx, t, value.id).unwrap();
             crate::ops::dimension::set_on_decision(tx, k, value.id).unwrap();
 
-            delete(tx, p).unwrap();
+            delete(tx, p, crate::model::ActorKind::Ai).unwrap();
 
             assert!(read::project(tx.conn(), p).unwrap().is_none(), "the project's own row goes");
             assert!(read::decision(tx.conn(), k).unwrap().is_none());
@@ -343,7 +356,7 @@ mod tests {
             crate::ops::automation::set_entry(tx, automation.id, Some(placement.id)).unwrap();
             mk_run(tx, automation.id, p);
 
-            delete(tx, p).unwrap();
+            delete(tx, p, crate::model::ActorKind::Ai).unwrap();
 
             assert!(read::project(tx.conn(), p).unwrap().is_none(), "the project's own row goes");
             assert!(read::automation(tx.conn(), automation.id).unwrap().is_none());
@@ -385,7 +398,7 @@ mod tests {
             )
             .unwrap();
 
-            let orphaned = delete(tx, p).unwrap();
+            let orphaned = delete(tx, p, crate::model::ActorKind::Ai).unwrap();
 
             assert!(read::attachment(tx.conn(), attachment.id).unwrap().is_none());
             assert!(orphaned.contains(&hash), "the blob it pointed at comes back as a candidate");
@@ -420,7 +433,7 @@ mod tests {
             )
             .unwrap();
 
-            let orphaned = delete(tx, p).unwrap();
+            let orphaned = delete(tx, p, crate::model::ActorKind::Ai).unwrap();
 
             assert!(read::attachment(tx.conn(), attachment.id).unwrap().is_none());
             assert!(orphaned.contains(&hash), "the blob it pointed at comes back as a candidate");

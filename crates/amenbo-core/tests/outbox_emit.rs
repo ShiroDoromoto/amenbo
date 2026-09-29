@@ -53,6 +53,7 @@ fn filed(store: &mut Store, input: amenbo_core::ops::task::NewTask) -> i64 {
 
 fn new_decision(title: &str, project_id: i64) -> amenbo_core::ops::decision::NewDecision {
     amenbo_core::ops::decision::NewDecision {
+        proposed_by: None,
         title: title.to_string(),
         body: String::new(),
         project_id,

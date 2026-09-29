@@ -5,14 +5,13 @@ use serde_json::json;
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::{AttachmentTarget, ClassifiedSide, TaskStatus};
-use amenbo_core::{activity_log, ops, query, Store};
+use amenbo_core::{ops, query, Store};
 
 use crate::cli::*;
 use crate::cmd::arg::{body_arg, body_arg_opt};
 use crate::cmd::attach::attach_add;
 use crate::cmd::comment::{comment_line, comment_not_found, comment_section, resolve_live_decision_comment};
 use crate::cmd::labels::{decision_comment_label, decision_label, task_comment_label, task_label};
-use crate::cmd::outbox::emit_decision_event;
 use crate::cmd::place::{made_in, made_in_line, project_or_bound, resolve_dim_pairs};
 use crate::cmd::premise::{attach_revisit, note_revisit, standing_on, warn_if_premise_added_to_reserved, warn_if_unsettled_under_reserved};
 use crate::cmd::task::resolve_task;
@@ -46,10 +45,8 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let d = store.add_decision_with_dimensions(ops::decision::NewDecision {
                 title, body, project_id,
                 made_in,
+                proposed_by: flags.facet().ok(),
             }, &dimension_values).map_err(CliError::from)?;
-            // Recording it is a moment, and no column holds that moment: `status` reads `decided` from
-            // the start and `status_changed_at` is overwritten by whatever ends the writing (`AMB-T-3639`).
-            emit_decision_event(store, flags, d.id, activity_log::event::decision_proposed(&d.title));
             // And the pane it was typed in is told, for the reason `task add` says it there
             // (`AMB-D-897`).
             amenbo_core::session::made(amenbo_core::session::Side::Decision, d.id);
@@ -354,15 +351,11 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let from_decision = store.resolve_decision_comment(&comment).map_err(CliError::from)?.first().copied();
             let (did, source) = match (from_task, from_decision) {
                 (Some(a), Some(b)) => return Err(ambiguous_comment(&comment, a, b)),
-                (Some(cid), None) => (promote_task_comment(store, cid, title, project, &dim)?, task_comment_label(cid)),
-                (None, Some(cid)) => (promote_decision_comment(store, cid, title, project, &dim)?, decision_comment_label(cid)),
+                (Some(cid), None) => (promote_task_comment(store, flags, cid, title, project, &dim)?, task_comment_label(cid)),
+                (None, Some(cid)) => (promote_decision_comment(store, flags, cid, title, project, &dim)?, decision_comment_label(cid)),
                 (None, None) => return Err(comment_not_found(&comment)),
             };
-            // Promoted or filed outright, a decision is on the record the moment it exists — the line
-            // is written where the two roads meet rather than on each of them (`AMB-T-3639`).
-            let title = store.decision_detail(did).map_err(CliError::from)?.title;
-            emit_decision_event(store, flags, did, activity_log::event::decision_proposed(&title));
-            // The pane is told here for the same reason the line above is written here: a decision
+            // The pane is told where the two roads meet rather than on each of them: a decision
             // raised out of a comment was filed from this pane as much as one typed outright, and a
             // count that passed over one road would be short by exactly the decisions taken on it.
             amenbo_core::session::made(amenbo_core::session::Side::Decision, did);
@@ -462,7 +455,7 @@ fn still_to_classify(unmet: &[String], decision_id: i64) -> String {
 /// The task-comment side of `decision promote`: the comment's text becomes the body, its task's project
 /// becomes the home, and the new decision is linked back to that task — the decision is that task's
 /// premise, which is exactly what the edge says.
-fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Option<String>, dim: &[String]) -> Result<i64, CliError> {
+fn promote_task_comment(store: &mut Store, flags: &Flags, cid: i64, title: String, project: Option<String>, dim: &[String]) -> Result<i64, CliError> {
     let c = store.task_comment(cid).map_err(CliError::from)?.ok_or_else(|| comment_not_found(&task_comment_label(cid)))?;
     let task_id = c.task_id;
     let body = c.text.clone();
@@ -477,7 +470,7 @@ fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Opt
     // classify by hand. The demand for a required axis is the store's own door, one call further in.
     let value_ids = resolve_dim_pairs(store, project_id, dim, ClassifiedSide::Decision)?;
     let made_in = made_in(store);
-    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id, made_in }, &value_ids).map_err(CliError::from)?;
+    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id, made_in, proposed_by: flags.facet().ok() }, &value_ids).map_err(CliError::from)?;
     store.link_decision(d.id, task_id).map_err(CliError::from)?;
     Ok(d.id)
 }
@@ -486,7 +479,7 @@ fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Opt
 /// gives the home, but **no edge is drawn back to it**. A record raised out of a decision's comment thread
 /// is a question that turned into its own, and an automatic link would claim a relation promote cannot
 /// know. Where one does hold, its author names it — `builds-on`, `amend`, `supersede`.
-fn promote_decision_comment(store: &mut Store, cid: i64, title: String, project: Option<String>, dim: &[String]) -> Result<i64, CliError> {
+fn promote_decision_comment(store: &mut Store, flags: &Flags, cid: i64, title: String, project: Option<String>, dim: &[String]) -> Result<i64, CliError> {
     let c = store.decision_comment(cid).map_err(CliError::from)?.ok_or_else(|| comment_not_found(&decision_comment_label(cid)))?;
     let body = c.text.clone();
     let project_id = match project {
@@ -498,7 +491,7 @@ fn promote_decision_comment(store: &mut Store, cid: i64, title: String, project:
     // Resolved before the create, for the reason written on the task-comment side above.
     let value_ids = resolve_dim_pairs(store, project_id, dim, ClassifiedSide::Decision)?;
     let made_in = made_in(store);
-    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id, made_in }, &value_ids).map_err(CliError::from)?;
+    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id, made_in, proposed_by: flags.facet().ok() }, &value_ids).map_err(CliError::from)?;
     Ok(d.id)
 }
 

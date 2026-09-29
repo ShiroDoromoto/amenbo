@@ -8037,11 +8037,11 @@ mod tests {
 
         // A proposed (unsettled) decision linked after — flagged.
         let d_open =
-            decision::add(&tx, decision::NewDecision { title: "未採択".into(), body: String::new(), project_id: pid, made_in: None }).unwrap();
+            decision::add(&tx, decision::NewDecision { title: "未採択".into(), body: String::new(), project_id: pid, made_in: None, proposed_by: None }).unwrap();
         decision::link(&tx, d_open.id, held).unwrap();
         // An accepted decision linked after — a settled ground never blocks, so not a premise change.
         let d_settled =
-            decision::add(&tx, decision::NewDecision { title: "採択済み".into(), body: String::new(), project_id: pid, made_in: None }).unwrap();
+            decision::add(&tx, decision::NewDecision { title: "採択済み".into(), body: String::new(), project_id: pid, made_in: None, proposed_by: None }).unwrap();
         decision::finish_writing(&tx, d_settled.id, None, crate::model::ActorKind::Ai).unwrap();
         decision::link(&tx, d_settled.id, held).unwrap();
 
@@ -8125,7 +8125,7 @@ mod tests {
         let ground = |title: &str| {
             let d = decision::add(
                 &tx,
-                decision::NewDecision { title: title.into(), body: String::new(), project_id: pid, made_in: None },
+                decision::NewDecision { title: title.into(), body: String::new(), project_id: pid, made_in: None, proposed_by: None },
             )
             .unwrap();
             decision::finish_writing(&tx, d.id, None, crate::model::ActorKind::Ai).unwrap();
@@ -8173,7 +8173,7 @@ mod tests {
         let mk = |title: &str| {
             decision::add(
                 &tx,
-                decision::NewDecision { title: title.into(), body: String::new(), project_id: pid, made_in: None },
+                decision::NewDecision { title: title.into(), body: String::new(), project_id: pid, made_in: None, proposed_by: None },
             )
             .unwrap()
             .id

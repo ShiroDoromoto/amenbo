@@ -3403,6 +3403,7 @@ mod filter_tests {
         let d = ops::decision::add(
             tx,
             ops::decision::NewDecision {
+                proposed_by: None,
                 title: "どのレーンで焼くか".to_string(),
                 body: String::new(),
                 project_id: p,
@@ -3636,6 +3637,7 @@ mod filter_tests {
         let d = ops::decision::add(
             tx,
             ops::decision::NewDecision {
+                proposed_by: None,
                 title: "索引をどう引くか".to_string(),
                 body: String::new(),
                 project_id: pj,
@@ -3807,6 +3809,7 @@ mod filter_tests {
         ops::decision::add(
             tx,
             ops::decision::NewDecision {
+                proposed_by: None,
                 title: title.to_string(),
                 body: String::new(),
                 project_id,

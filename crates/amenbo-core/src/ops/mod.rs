@@ -473,6 +473,7 @@ pub(crate) mod test_support {
         super::decision::add(
             tx,
             super::decision::NewDecision {
+                proposed_by: None,
                 title: title.to_string(),
                 body: String::new(),
                 project_id,
@@ -533,7 +534,7 @@ mod cross_project_tests {
     fn mk_decision(tx: &WriteTx<'_>, project_id: i64, title: &str) -> i64 {
         super::decision::add(
             tx,
-            super::decision::NewDecision { project_id, title: title.to_string(), body: String::new(), made_in: None },
+            super::decision::NewDecision { project_id, title: title.to_string(), body: String::new(), made_in: None, proposed_by: None },
         )
         .expect("add decision")
         .id
@@ -709,7 +710,7 @@ mod delete_children_tests {
     fn mk_decision(tx: &WriteTx<'_>, project_id: i64, title: &str) -> i64 {
         super::decision::add(
             tx,
-            super::decision::NewDecision { project_id, title: title.to_string(), body: String::new(), made_in: None },
+            super::decision::NewDecision { project_id, title: title.to_string(), body: String::new(), made_in: None, proposed_by: None },
         )
         .expect("add decision")
         .id

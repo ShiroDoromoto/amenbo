@@ -1024,6 +1024,7 @@ fn a_value_named_at_creation_lands_with_the_task_and_beats_the_default() {
 
 fn new_decision(title: &str, project_id: i64) -> crate::ops::decision::NewDecision {
     crate::ops::decision::NewDecision {
+        proposed_by: None,
         title: title.into(),
         body: String::new(),
         project_id,
@@ -1343,7 +1344,8 @@ fn deleting_a_task_leaves_its_only_trace_in_the_ledger() {
 /// neither says who put it up or which pane they were in. So a proposal nobody ever settled is only
 /// findable if a line recorded that it was made (`AMB-T-3600`, `AMB-T-3639`). The line is keyed by
 /// the decision and by no task — the ledger's subject keys are one per entity kind, and a reader
-/// filtering on `task` must not see a decision's line.
+/// filtering on `task` must not see a decision's line. The create queues the line itself, so it is there
+/// whoever filed the decision, and there is exactly one.
 #[test]
 fn proposing_a_decision_is_kept_where_the_column_cannot_keep_it() {
     let (mut s, dir) = fresh_store("ledger-decision-proposed");
@@ -1354,14 +1356,9 @@ fn proposing_a_decision_is_kept_where_the_column_cannot_keep_it() {
             body: String::new(),
             project_id: pid,
             made_in: None,
+            proposed_by: Some(crate::model::ActorKind::Ai),
         })
         .unwrap();
-    s.add_decision_system_event(
-        crate::model::ActorKind::Ai,
-        d.id,
-        crate::activity_log::event::decision_proposed(&d.title),
-    )
-    .unwrap();
 
     let lines = ledger(&s);
     let last = lines.last().unwrap();
@@ -1371,6 +1368,11 @@ fn proposing_a_decision_is_kept_where_the_column_cannot_keep_it() {
     assert_eq!(last["task"], serde_json::Value::Null, "a decision's line names no task");
     assert_eq!(last["project"].as_i64(), Some(pid), "a line carries its own project");
     assert_eq!(last["actor"], serde_json::json!("ai"));
+    let proposed = lines
+        .iter()
+        .filter(|l| l["event"]["kind"] == serde_json::json!("decision.proposed") && l["decision"].as_i64() == Some(d.id))
+        .count();
+    assert_eq!(proposed, 1, "the create writes one line, and nothing writes it again");
 
     fs::remove_dir_all(&dir).ok();
 }
@@ -1386,6 +1388,7 @@ fn every_door_a_decisions_writing_ends_by_leaves_its_line() {
     let (mut s, dir) = fresh_store("ledger-decision-ends");
     let pid = s.project_add(project("PJ")).unwrap().id;
     let new = |title: &str| crate::ops::decision::NewDecision {
+        proposed_by: None,
         title: title.to_string(),
         body: String::new(),
         project_id: pid,
@@ -1459,9 +1462,9 @@ fn deleting_a_project_says_how_much_went_with_it() {
 
     s.project_delete(pid, crate::model::ActorKind::Ai).unwrap();
 
-    // The two creations left their own lines; the deletion adds exactly one.
-    let lines: Vec<_> =
-        ledger(&s).into_iter().filter(|l| l["event"]["kind"] != serde_json::json!("task.created")).collect();
+    // The creations left their own lines; the deletion adds exactly one.
+    let created = [serde_json::json!("task.created"), serde_json::json!("decision.proposed")];
+    let lines: Vec<_> = ledger(&s).into_iter().filter(|l| !created.contains(&l["event"]["kind"])).collect();
     assert_eq!(lines.len(), 1, "one row per project");
     assert_eq!(lines[0]["event"]["kind"], serde_json::json!("project.deleted"));
     assert_eq!(lines[0]["event"]["name"], serde_json::json!("PJ"));
@@ -1483,7 +1486,9 @@ fn deleting_a_decision_names_it_in_the_decision_key() {
 
     s.delete_decision(d.id, crate::model::ActorKind::Ai).unwrap();
 
-    let lines = ledger(&s);
+    // The creation left its own line; the deletion adds exactly one.
+    let lines: Vec<_> =
+        ledger(&s).into_iter().filter(|l| l["event"]["kind"] != serde_json::json!("decision.proposed")).collect();
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0]["event"]["kind"], serde_json::json!("decision.deleted"));
     assert_eq!(lines[0]["event"]["title"], serde_json::json!("doomed"));

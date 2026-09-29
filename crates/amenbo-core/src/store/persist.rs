@@ -806,9 +806,9 @@ impl Store {
     /// appends it **after** that commit succeeds (crash before the commit and no line appears; crash
     /// after it and the line is lost — we err towards losing a line, never towards duplicating one).
     /// The callers (CLI, GUI) invoke this after the mutation wrapper has committed. A line the
-    /// mutation itself narrates — a task created, its status, assignee or project changed — is not
-    /// written here: the op queues it in the mutation's own transaction. A failed append is only a
-    /// warning and the mutation proceeds. The line goes only into the file ledger
+    /// mutation itself narrates — a task created, its status, assignee or project changed, a decision
+    /// recorded — is not written here: the op queues it in the mutation's own transaction. A failed
+    /// append is only a warning and the mutation proceeds. The line goes only into the file ledger
     /// ([`crate::activity_log`]); all that stays in the DB is the sequence-number mark, and the event
     /// itself — who did what — is one line of JSONL. Same shape as the deletion events
     /// ([`Self::delete_task`] and friends): the only difference between this path and the deletion
@@ -828,34 +828,6 @@ impl Store {
                 project: crate::store_engine::read::task_project_id(tx.conn(), target_id)?,
                 task: Some(target_id),
                 decision: None,
-                event,
-            };
-            tx.record_activity(entry.clone());
-            Ok(entry)
-        })
-    }
-
-    /// Write one system event about a **decision** — the same path as [`Self::add_system_event`], with
-    /// the decision as the line's subject rather than a task.
-    ///
-    /// It exists because the ledger's subject keys are flat, one per entity kind
-    /// ([`crate::activity_log::Entry`]): a line about a decision carries `decision` and no `task`, and
-    /// a reader filtering on one key would otherwise never see it.
-    pub fn add_decision_system_event(
-        &mut self,
-        author_kind: crate::model::ActorKind,
-        decision_id: i64,
-        event: serde_json::Value,
-    ) -> Result<crate::activity_log::Entry> {
-        self.write_one(&[WriteTarget::Decision(decision_id)], |tx| {
-            let entry = crate::activity_log::Entry {
-                id: tx.mint_activity_id()?,
-                at: crate::time::Timestamp::now(),
-                actor: Some(author_kind),
-                // A ledger line carries its own project — a file cannot be joined against the DB.
-                project: crate::store_engine::read::decision_project_id(tx.conn(), decision_id)?,
-                task: None,
-                decision: Some(decision_id),
                 event,
             };
             tx.record_activity(entry.clone());

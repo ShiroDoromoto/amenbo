@@ -914,6 +914,7 @@ mod tests {
         crate::ops::decision::add(
             tx,
             crate::ops::decision::NewDecision {
+                proposed_by: None,
                 title: title.to_string(),
                 body: String::new(),
                 project_id,
@@ -1558,6 +1559,7 @@ mod tests {
         let d = crate::ops::decision::add(
             tx,
             crate::ops::decision::NewDecision {
+                proposed_by: None,
                 title: "前提".to_string(),
                 body: String::new(),
                 project_id,

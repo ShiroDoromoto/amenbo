@@ -968,6 +968,7 @@ mod tests {
 
             let older = s
                 .add_decision(crate::ops::decision::NewDecision {
+                    proposed_by: None,
                     title: format!("{name}: the older one"),
                     body: "why".into(),
                     project_id: project,
@@ -977,6 +978,7 @@ mod tests {
                 .id;
             let newer = s
                 .add_decision(crate::ops::decision::NewDecision {
+                    proposed_by: None,
                     title: format!("{name}: the newer one"),
                     body: "why, again".into(),
                     project_id: project,

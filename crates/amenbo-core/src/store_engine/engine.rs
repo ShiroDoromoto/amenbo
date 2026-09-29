@@ -68,6 +68,11 @@ pub enum StoreEngineError {
     /// `Storage`, the boundary would report a storage failure for a containment refusal.
     #[error("{0}")]
     OutOfReach(crate::error::Error),
+    /// A transaction queued activity lines on an engine nobody named a ledger for
+    /// ([`StoreEngine::keep_activity_in`]). Refused before the commit rather than committed without them:
+    /// the lines would otherwise be lost without a word.
+    #[error("{0} activity line(s) queued on a store engine with no activity ledger")]
+    ActivityWithoutLedger(usize),
 }
 
 impl StoreEngineError {
@@ -151,6 +156,11 @@ pub struct StoreEngine {
     /// an open because an open is not a write (`AMB-D-857`): a command that goes on to read and
     /// nothing else has no business leaving a `DELETE` behind.
     rows_since_trim: std::sync::atomic::AtomicU64,
+    /// Where the lines a transaction queues ([`super::WriteTx::record_activity`]) are appended once it
+    /// commits — the store's `activity.jsonl`, named by the `Store` that opened this engine
+    /// ([`keep_activity_in`](Self::keep_activity_in)). `None` on an engine opened on its own (a test, a
+    /// migration), which refuses a commit that queued any.
+    activity_file: Option<std::path::PathBuf>,
 }
 
 impl StoreEngine {
@@ -179,7 +189,12 @@ impl StoreEngine {
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.execute_batch("PRAGMA query_only = ON;")?;
         // No feed collection: this connection cannot write, so it has nothing to report.
-        Ok(StoreEngine { conn, changes: ChangeBuffer::default(), rows_since_trim: Default::default() })
+        Ok(StoreEngine {
+            conn,
+            changes: ChangeBuffer::default(),
+            rows_since_trim: Default::default(),
+            activity_file: None,
+        })
     }
 
     /// Open an in-memory truth-source (tests / read-only probes).
@@ -249,7 +264,19 @@ impl StoreEngine {
         install_change_hook(&conn, &changes)?;
         // Due from the start, so the first commit this engine makes trims — the bound a CLI-only store
         // would otherwise never reach (`rows_since_trim`). An engine that never writes never pays it.
-        Ok(StoreEngine { conn, changes, rows_since_trim: trim_due_at_once() })
+        Ok(StoreEngine { conn, changes, rows_since_trim: trim_due_at_once(), activity_file: None })
+    }
+
+    /// Name the activity ledger this engine's transactions append their queued lines to once they
+    /// commit. Every path that opens [`Self::write`] on this engine then carries its lines out, not only
+    /// the one that queued them through `Store::write_one`.
+    pub(crate) fn keep_activity_in(&mut self, path: std::path::PathBuf) {
+        self.activity_file = Some(path);
+    }
+
+    /// The activity ledger named with [`keep_activity_in`](Self::keep_activity_in), if any.
+    pub(crate) fn activity_file(&self) -> Option<&Path> {
+        self.activity_file.as_deref()
     }
 
     /// Borrow the read-model connection (for the read/query layer built on top of this engine).

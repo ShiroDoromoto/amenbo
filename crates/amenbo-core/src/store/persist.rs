@@ -108,10 +108,8 @@ impl Store {
     /// (`AMB-D-582`): read here, before `op`, while a row about to be deleted can still name its project
     /// and a re-homing still names both ends; stamped at the commit, and only if the batch wrote anything.
     ///
-    /// The activity lines `op` queued ([`WriteTx::record_activity`]) are appended to the ledger here,
-    /// **after** the commit succeeds, in the order they were queued — a batch that fails leaves none.
-    /// The append cannot fail the operation: the ledger is not the truth source
-    /// ([`crate::activity_log::append`]).
+    /// The activity lines `op` queued ([`WriteTx::record_activity`]) are appended to the ledger by
+    /// [`WriteTx::commit`], **after** the commit succeeds — a batch that fails leaves none.
     fn write_one<T>(
         &mut self,
         targets: &[WriteTarget],
@@ -125,11 +123,7 @@ impl Store {
             tx.touches_project(project);
         }
         let out = op(&tx)?;
-        let activity = tx.take_activity();
         tx.commit()?;
-        for entry in &activity {
-            crate::activity_log::append(&self.paths.activity_file, entry);
-        }
         Ok(out)
     }
 
@@ -2278,6 +2272,25 @@ mod tests {
             vec![(Some(ids.0), serde_json::json!("first")), (Some(ids.1), serde_json::json!("second"))]
         );
         assert!(ids.0 < ids.1, "each line takes its own number from the activity sequence");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A path that opens the store's engine itself, the way `due::emit` or `save_bindings` do, carries
+    /// its queued lines out just as `write_one` does: the store names its ledger on the engine it opens.
+    #[test]
+    fn a_write_opened_outside_write_one_still_reaches_the_ledger() {
+        let dir = amenbo_scratch::scratch("engine-write-activity");
+        let s = Store::open_at(Paths::at(dir.clone())).unwrap();
+
+        let tx = s.engine.write().unwrap();
+        let entry = line(&tx, "direct").unwrap();
+        let id = entry.id;
+        tx.record_activity(entry);
+        tx.commit().unwrap();
+
+        let lines = ledger(&s);
+        let got: Vec<_> = lines.iter().map(|l| (l["id"].as_i64(), l["event"]["title"].clone())).collect();
+        assert_eq!(got, vec![(Some(id), serde_json::json!("direct"))]);
         std::fs::remove_dir_all(&dir).ok();
     }
 

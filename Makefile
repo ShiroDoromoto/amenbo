@@ -291,7 +291,7 @@ help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
 	@echo "make install-dev  - install the dev CLI to ~/.cargo/bin/amenbo-dev (app-data: work.amenbo.amenbo-dev)"
 	@echo "make gate         - the same gate, narrowed to the layers this change touched (.github/paths-filters.yml, the file CI reads); a path on no layer falls back to the whole of make test. Nothing here decides a merge — that verdict is CI's, on the PR"
-	@echo "make test         - full gate (core/cli scale,e2e + app crate clippy/test + GUI typecheck/build/test). Kept for a deliberate local sweep; neither a merge nor a tag waits on it"
+	@echo "make test         - full gate (core/cli scale,e2e + app crate clippy/test + GUI lint/typecheck/build/test). Kept for a deliberate local sweep; neither a merge nor a tag waits on it"
 	@echo "make verify ARGS=\"...\" - run the CLI in a throwaway isolated store (leaves prod/dev app-data untouched; INIT=1 binds it first, which is what --actor ai needs; SCRIPT=<file> runs a sequence through one isolation)"
 	@echo "make lint-linux   - clippy the Linux branch (cfg(target_os=\"linux\")) in a container = the same 2 jobs as CI's lint/app-rust (make test does not see them; needs Docker)"
 	@echo "make shell-gate   - shellcheck tracked shell (scripts/, guards/, .githooks/) and actionlint the run: in workflows (automatic at the start of make test; needs shellcheck 0.10+/actionlint)"
@@ -704,7 +704,7 @@ gate:
 ## The app crate (the Tauri host, amenbo-app) is excluded from the root workspace, so the nextest/
 ## doctest above do not touch it = a core change that breaks only the GUI side is not caught by make
 ## test. The same gate as CI's app-rust + gui-web jobs (the app crate's clippy/test + GUI
-## typecheck/build/test) runs here too, catching it locally before it slips into main. The GUI tests
+## lint/typecheck/build/test) runs here too, catching it locally before it slips into main. The GUI tests
 ## are only the host-independent lightweight ones (do not add heavy features).
 ## The pre-distribution harness (verification/) is out of the root workspace for the same reason and
 ## runs here as a stage of its own too. It is the cheap end of this target — nothing there drives a
@@ -801,7 +801,7 @@ gate-app-rust:
 ## The front end stage: CI's `gui-web` job. The GUI tests are only the host-independent lightweight
 ## ones (do not add heavy features).
 gate-gui:
-	cd app && npm run typecheck && npm run build && npm test
+	cd app && npm run lint && npm run typecheck && npm run build && npm test
 	## Straight after the build that writes it: the gate reads the bundle as well as the installed
 	## packages, so it is here rather than among the file-only gates.
 	$(MAKE) --no-print-directory wasm-gate

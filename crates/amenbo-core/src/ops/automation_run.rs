@@ -1390,6 +1390,7 @@ fn launch_asking(
         project_id: automation.project_id,
         status: AutomationRunStatus::Running,
         pause_requested: false,
+        pause_before_next_task: false,
         stopped_reason: None,
         started_by_kind: by.by,
         started_at: Some(now),

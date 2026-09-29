@@ -67,7 +67,7 @@ const PAGE: usize = 20;
 /// only bounds what one read holds.
 const COUNT_PAGE: usize = 200;
 
-pub(super) const TAKE_TASK: Builtin = Builtin {
+pub(crate) const TAKE_TASK: Builtin = Builtin {
     key: "take_task",
     version: 1,
     name: "タスクに着手する",
@@ -275,21 +275,21 @@ fn with_asked(chosen: Option<String>, asked: &str) -> String {
 mod tests {
     use super::*;
     use crate::model::{
-        ActorKind, Automation, AutomationPictureOwner, AutomationPlacement, AutomationRun,
-        AutomationRunStatus, Priority, TaskStatus,
+        ActorKind, Automation, AutomationPictureOwner, AutomationPlacement, AutomationPortKind,
+        AutomationRun, AutomationRunStatus, Priority, TaskStatus,
     };
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
-        check, held_back as held_back_of, is_waiting, launch, next_def, nothing_asked, Launcher, Unmet,
-        Waiting,
+        check, held_back as held_back_of, is_waiting, launch, launch_past_the_task_checks, next_def,
+        nothing_asked, Launcher, Unmet, Waiting,
     };
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
     use crate::ops::automation_stop;
     use crate::ops::task::{self, TaskPatch};
-    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, way_out, with_tx};
+    use crate::ops::test_support::{mk_out, mk_placed, mk_project, mk_task_in, way_out, with_tx};
     use crate::store_engine::{read, WriteTx};
 
     /// An automation whose entry is the built-in. What it takes goes on to an agent's step, since a run
@@ -570,6 +570,185 @@ mod tests {
             let resumed = automation_stop::resume(tx, run.id).expect("resume");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at its entry");
             assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
+        });
+    }
+
+    /// The picture a run goes round: take a task, work on it, close it, and back to take the next —
+    /// nothing to take closes the run.
+    fn round_picture(tx: &WriteTx<'_>, project: i64) -> Automation {
+        let automation =
+            automation::add(tx, project, NewAutomation { name: "round".into(), ..Default::default() })
+                .expect("automation");
+        let on = AutomationPictureOwner::Automation;
+        let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
+            .expect("place take");
+        let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
+        let close = automation::placement_add(tx, automation.id, action(tx, "close_task").expect("close").id)
+            .expect("place close");
+        automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
+        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
+        automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
+        automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(take.id), None).expect("close → take");
+        automation::set_entry(tx, automation.id, Some(take.id)).expect("entry")
+    }
+
+    /// Report the agent's step open in this opening as done, and answer where the run went from there.
+    fn report_done(tx: &WriteTx<'_>, opening: &crate::ops::automation_step::Opening) -> Next {
+        let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&opening.run_def.exits).expect("exits");
+        let done = exits.iter().find(|e| e.name == crate::model::DONE_EXIT).map(|e| e.id);
+        crate::ops::automation_report::done(tx, opening.run_step.id, done, "done").expect("report")
+    }
+
+    /// **Launch the round, take the first task, and be asked to pause before the next while working on
+    /// it** — then close it and come back round to take the next. Answers the run, the task it worked,
+    /// and what opening the take again did.
+    fn paused_after_the_first(tx: &WriteTx<'_>, project: i64, automation: &Automation) -> (AutomationRun, i64, Opened) {
+        let claude = ["claude".to_string()];
+        let run = launched(tx, automation);
+        let Opened::Carried { next: Next::Step(work), .. } = open_entry(tx, &run) else {
+            panic!("the take goes on to the work");
+        };
+        let first = read::automation_run_task_last(tx.conn(), run.id)
+            .expect("read")
+            .and_then(|s| s.task_id)
+            .expect("the task it took");
+        let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("open the work") else {
+            panic!("the work opens a terminal");
+        };
+
+        let asked = automation_stop::pause_before_next_task(tx, project).expect("ask");
+        assert_eq!(asked.iter().map(|r| r.id).collect::<Vec<_>>(), vec![run.id]);
+        assert!(asked[0].pause_before_next_task);
+        assert_eq!(asked[0].status, AutomationRunStatus::Running, "the task under way is not cut off");
+        assert!(
+            automation_stop::pause_before_next_task(tx, project).expect("ask again").is_empty(),
+            "a run already asked is not asked twice",
+        );
+
+        let Next::Step(close) = report_done(tx, &opening) else { panic!("the work goes on to the close") };
+        let Opened::Carried { next: Next::Step(take), .. } = open(tx, run.id, close.id, Some(&claude)).expect("close")
+        else {
+            panic!("the close goes back round to the take");
+        };
+        assert_eq!(status(tx, first), TaskStatus::Done, "the task it was on is finished first");
+        let opened = open(tx, run.id, take.id, Some(&claude)).expect("open the take");
+        (run, first, opened)
+    }
+
+    /// **Asked to pause before its next task, a run finishes the one it is on and pauses where it comes
+    /// to take the next — without taking it** (`AMB-D-1009`). Picked up again, it takes the next.
+    #[test]
+    fn asked_to_pause_before_its_next_task_it_pauses_there_and_takes_it_once_resumed() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            let a = for_ai(tx, "a", project, Some(Priority::High));
+            let b = for_ai(tx, "b", project, Some(Priority::Low));
+
+            let (run, first, opened) = paused_after_the_first(tx, project, &automation);
+            assert_eq!(first, a);
+            match opened {
+                Opened::Waiting { run: paused } => {
+                    assert_eq!(paused.status, AutomationRunStatus::Paused);
+                    assert!(!paused.pause_before_next_task, "the request is spent");
+                }
+                other => panic!("the run pauses before the take, not {other:?}"),
+            }
+            assert_eq!(status(tx, b), TaskStatus::Todo, "the next task is not taken");
+            let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            assert!(!automation_stop::pauses_before_next_task(tx.conn(), &paused).expect("judge"));
+
+            let resumed = automation_stop::resume(tx, run.id).expect("resume");
+            assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
+            assert!(matches!(
+                open(tx, run.id, resumed.next.id, Some(&[])).expect("open"),
+                Opened::Carried { next: Next::Step(_), .. }
+            ));
+            assert_eq!(status(tx, b), TaskStatus::InProgress, "and the next task is taken");
+        });
+    }
+
+    /// **Canceled there, a run paused before its next task hands nothing back** — it holds no task.
+    #[test]
+    fn a_run_paused_before_its_next_task_is_canceled_with_nothing_to_hand_back() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            for_ai(tx, "a", project, Some(Priority::High));
+            let b = for_ai(tx, "b", project, Some(Priority::Low));
+
+            let (run, first, opened) = paused_after_the_first(tx, project, &automation);
+            assert!(matches!(opened, Opened::Waiting { .. }));
+            let ended = automation_stop::cancel(tx, run.id).expect("cancel");
+            assert_eq!(ended.run.status, AutomationRunStatus::Canceled);
+            assert_eq!(status(tx, first), TaskStatus::Done, "the task it finished stays finished");
+            assert_eq!(status(tx, b), TaskStatus::Todo, "and the next was never taken");
+        });
+    }
+
+    /// **A run waiting for a task to turn up pauses on its next look** (`AMB-D-1009`).
+    #[test]
+    fn a_run_waiting_for_a_task_is_paused_on_its_next_look() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+            let run = launched(tx, &automation);
+            assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
+
+            let asked = automation_stop::pause_before_next_task(tx, project).expect("ask");
+            assert_eq!(asked.len(), 1);
+            for_ai(tx, "turned up", project, None);
+            match open_entry(tx, &run) {
+                Opened::Waiting { run: paused } => assert_eq!(paused.status, AutomationRunStatus::Paused),
+                other => panic!("the pause takes hold, not {other:?}"),
+            }
+            assert!(read::automation_run_steps_of(tx.conn(), run.id).expect("steps").is_empty(), "nothing taken");
+        });
+    }
+
+    /// **A run that takes no tasks is not asked** (`AMB-D-1009`): it runs on to its end, and so does a
+    /// run of another project, or one already asked to pause at the end of its action.
+    #[test]
+    fn only_a_running_run_of_the_project_that_takes_tasks_is_asked() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let elsewhere = mk_project(tx, "other");
+            let taskless =
+                automation::add(tx, project, NewAutomation { name: "no tasks".into(), ..Default::default() })
+                    .expect("automation");
+            // A run has to start at a step that takes a task, so the entry here is one of a person's own
+            // that says it may hand one on — launched past the checks that refuse such a step.
+            let (work_action, work) = mk_placed(tx, &taskless, "work", "work on it", "claude");
+            mk_out(tx, &work_action, None, "task", AutomationPortKind::TaskTake, false);
+            automation::edge_add(tx, AutomationPictureOwner::Automation, work.id, None, EdgeTarget::Done, None)
+                .expect("done");
+            let taskless = automation::set_entry(tx, taskless.id, Some(work.id)).expect("entry");
+            let claude = ["claude".to_string()];
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                workspace_open: Some(true),
+                by: Some(ActorKind::Ai),
+            };
+            let plain = launch_past_the_task_checks(tx, taskless.id, &by).expect("launch");
+            let pausing = launched(tx, &waiting_picture(tx, project));
+            automation_stop::pause(tx, pausing.id).expect("pause");
+            let other = launched(tx, &waiting_picture(tx, elsewhere));
+
+            assert!(automation_stop::pause_before_next_task(tx, project).expect("ask").is_empty());
+            for run in [&plain, &pausing, &other] {
+                let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+                assert!(!run.pause_before_next_task, "run {} is not asked", run.id);
+            }
+
+            let Waiting::Step(entry) = next_def(tx.conn(), plain.id).expect("next") else {
+                panic!("the run stands before its entry");
+            };
+            let Opened::Ready(opening) = open(tx, plain.id, entry.id, Some(&claude)).expect("open") else {
+                panic!("the work opens a terminal");
+            };
+            let Next::Closed(ended) = report_done(tx, &opening) else { panic!("the run ends") };
+            assert_eq!(ended.run.status, AutomationRunStatus::Completed, "it ran to its end");
         });
     }
 

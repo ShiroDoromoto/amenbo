@@ -2015,6 +2015,9 @@ impl AutomationStoppedReason {
 /// `pause_requested` is the gap between the button and the pause: an action is under way and is not cut
 /// in half, so the request is recorded and the run reaches `paused` when that action ends
 /// (`AMB-D-1002`).
+///
+/// `pause_before_next_task` is the same gap, one task wide: the run goes on until it next reaches the
+/// built-in that takes a task, and reaches `paused` there without taking one (`AMB-D-1009`).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationRun {
     pub id: i64,
@@ -2024,6 +2027,9 @@ pub struct AutomationRun {
     pub project_id: i64,
     pub status: AutomationRunStatus,
     pub pause_requested: bool,
+    /// Asked to pause before it takes its next task ([`crate::ops::automation_stop::pause_before_next_task`]).
+    #[serde(default)]
+    pub pause_before_next_task: bool,
     /// Why it failed. Set only while `status` is `Failed`.
     #[serde(default)]
     pub stopped_reason: Option<AutomationStoppedReason>,

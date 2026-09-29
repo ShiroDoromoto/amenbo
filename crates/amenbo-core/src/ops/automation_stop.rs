@@ -12,6 +12,14 @@
 //! [`crate::ops::automation_report::done`], which is the only place that knows a step has finished,
 //! and it takes hold only where the line out of that step leaves the action.
 //!
+//! **Pausing between tasks is the same request, one task wide** ([`pause_before_next_task`],
+//! `AMB-D-1009`). An action ends in the middle of a task where the task spans several, so a project's
+//! runs are asked instead to stop where they next come to the built-in that takes a task — before
+//! taking one, so a run paused there holds none, and one picked up again goes on to take the next.
+//! What reads that flag is [`crate::ops::automation_step::open`], the one place that step is reached,
+//! and a run waiting there for a task to turn up is paused on its next look. A run that takes no tasks
+//! is not asked: it has no task boundary to stop at, and runs on to its end.
+//!
 //! **Canceling is for a paused run** ([`cancel`], `AMB-D-1002`). Nothing is under way then, so it ends
 //! the run at once and cuts nothing off. A run still going is refused: pause it first, or force-cancel
 //! it ([`stop`]), which ends it where it stands.
@@ -143,6 +151,7 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     after.status = ending.status();
     after.stopped_reason = ending.reason();
     after.pause_requested = false;
+    after.pause_before_next_task = false;
     after.ended_at = Some(now);
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
@@ -364,6 +373,47 @@ pub fn pause(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
     }
 }
 
+/// **Ask every run of a project to pause before it takes its next task** (`AMB-D-1009`), and answer
+/// with the runs that were asked — the ones [`pauses_before_next_task`] counts. Pressed again with
+/// nothing left to ask, it asks nobody.
+///
+/// It is not taken back: a run asked keeps the request until it pauses or ends.
+pub fn pause_before_next_task(tx: &WriteTx<'_>, project_id: i64) -> Result<Vec<AutomationRun>> {
+    if read::project(tx.conn(), project_id)?.is_none() {
+        return Err(not_found("project", project_id));
+    }
+    let mut asked = Vec::new();
+    for run_id in read::automation_run_ids_running(tx.conn())? {
+        let before = live_run(tx, run_id)?;
+        if before.project_id != project_id || !pauses_before_next_task(tx.conn(), &before)? {
+            continue;
+        }
+        let mut after = before.clone();
+        after.pause_before_next_task = true;
+        after.updated_at = Timestamp::now();
+        crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
+        asked.push(after);
+    }
+    Ok(asked)
+}
+
+/// **Whether asking a run to pause before its next task would do anything** (`AMB-D-1009`): it is
+/// `running`, it is asked for neither pause yet, and it takes tasks.
+///
+/// Whether it takes tasks is read from the steps it copied at launch, not the automation as it stands
+/// now (`AMB-D-961`).
+pub fn pauses_before_next_task(conn: &Connection, run: &AutomationRun) -> Result<bool> {
+    if run.status != AutomationRunStatus::Running || run.pause_requested || run.pause_before_next_task {
+        return Ok(false);
+    }
+    Ok(read::automation_run_defs_of(conn, run.id)?.iter().any(takes_a_task))
+}
+
+/// Whether this step is the built-in that takes a task — where a pause before the next task takes hold.
+pub(crate) fn takes_a_task(def: &AutomationRunDef) -> bool {
+    def.builtin.as_deref() == Some(crate::ops::automation_builtin_take::TAKE_TASK.key)
+}
+
 /// Put a run into `paused`: it keeps the task it is working.
 ///
 /// It does not go through [`ended`], and the difference is the whole point — a paused run has not
@@ -374,6 +424,7 @@ pub fn settle(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
     let mut after = before.clone();
     after.status = AutomationRunStatus::Paused;
     after.pause_requested = false;
+    after.pause_before_next_task = false;
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
     Ok(Ended { run: after })

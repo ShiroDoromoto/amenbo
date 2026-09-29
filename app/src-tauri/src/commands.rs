@@ -5503,9 +5503,15 @@ pub(crate) mod tests {
     /// Write the account a handover migration would have left, straight onto the store's `store_meta` —
     /// the migration itself runs on a store carried from an older version, which no test here stands up.
     fn seed_handover(raw: &str) {
+        drop(Store::open().unwrap()); // bring the store into being, as the first surface to open it would.
         let paths = amenbo_core::config::Paths::resolve().unwrap();
-        let engine = amenbo_core::store_engine::StoreEngine::open(&paths.store_file).unwrap();
-        engine.set_meta("plugins_carried_in", Some(raw)).unwrap();
+        let conn = rusqlite::Connection::open(&paths.store_file).unwrap();
+        conn.execute(
+            "INSERT INTO store_meta(key, value) VALUES('plugins_carried_in', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [raw],
+        )
+        .unwrap();
     }
 
     /// The window owes the sentence on its own, and putting the band away is what takes its turn — the

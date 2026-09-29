@@ -61,13 +61,21 @@ fn a_tick_on_a_device_with_no_store_raises_none() {
 #[test]
 fn a_tick_leaves_a_store_of_another_format_as_it_found_it() {
     use amenbo_core::model::FORMAT_VERSION;
-    use amenbo_core::store_engine::{probe_format_version, StoreEngine, META_FORMAT_VERSION};
+    use amenbo_core::store_engine::{probe_format_version, META_FORMAT_VERSION};
 
     for version in [FORMAT_VERSION - 1, FORMAT_VERSION + 1] {
         let cli = Cli::new();
         cli.run(&["init", "--name", "tester"]);
         let store = cli.home.join("store.sqlite");
-        StoreEngine::open(&store).unwrap().set_meta(META_FORMAT_VERSION, Some(&version.to_string())).unwrap();
+        let stamped = version.to_string();
+        rusqlite::Connection::open(&store)
+            .unwrap()
+            .execute(
+                "INSERT INTO store_meta(key, value) VALUES(?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [META_FORMAT_VERSION, stamped.as_str()],
+            )
+            .unwrap();
 
         let (out, code) = cli.run(&["tick", "run", "--json"]);
         assert_eq!(code, 0, "a store of another format is not the tick's failure (v{version}): {out}");

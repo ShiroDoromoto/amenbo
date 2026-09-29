@@ -184,7 +184,7 @@ fn whole_device_backup_restore_round_trips() {
 /// wholesale, so it never reads the one it replaces, and it therefore sits ahead of the open.
 #[test]
 fn restore_replaces_a_store_this_build_cannot_open() {
-    use amenbo_core::store_engine::{StoreEngine, META_FORMAT_VERSION, META_FORMAT_VERSION_SET_BY};
+    use amenbo_core::store_engine::{META_FORMAT_VERSION, META_FORMAT_VERSION_SET_BY};
 
     let cli = Cli::new();
     let p = cli.json(&["project", "add", "--name", "退避", "--json"]);
@@ -198,10 +198,16 @@ fn restore_replaces_a_store_this_build_cannot_open() {
     // Put the live store one generation past what this build opens — what a newer Amenbo's migration
     // leaves behind on a device whose other copy is still the old one.
     {
-        let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
+        let conn = rusqlite::Connection::open(cli.home.join("store.sqlite")).unwrap();
         let ahead = (amenbo_core::model::FORMAT_VERSION + 1).to_string();
-        engine.set_meta(META_FORMAT_VERSION, Some(&ahead)).unwrap();
-        engine.set_meta(META_FORMAT_VERSION_SET_BY, Some("99.0.0")).unwrap();
+        for (key, value) in [(META_FORMAT_VERSION, ahead.as_str()), (META_FORMAT_VERSION_SET_BY, "99.0.0")] {
+            conn.execute(
+                "INSERT INTO store_meta(key, value) VALUES(?1, ?2)
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [key, value],
+            )
+            .unwrap();
+        }
     }
 
     // The gate is real: an ordinary command is refused, and it names the version to use.
@@ -229,13 +235,13 @@ fn the_terminal_says_once_where_the_plugins_went() {
     let cli = Cli::new();
     cli.json(&["project", "add", "--name", "移行", "--json"]);
     {
-        let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
-        engine
-            .set_meta(
-                "plugins_carried_in",
-                Some(r#"{"plugins":["slack","viewer","worktree"],"targets":2,"projects":3,"viewer":true,"told":[]}"#),
-            )
-            .unwrap();
+        let conn = rusqlite::Connection::open(cli.home.join("store.sqlite")).unwrap();
+        conn.execute(
+            "INSERT INTO store_meta(key, value) VALUES('plugins_carried_in', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [r#"{"plugins":["slack","viewer","worktree"],"targets":2,"projects":3,"viewer":true,"told":[]}"#],
+        )
+        .unwrap();
     }
 
     let (_, err, code) = cli.run_both(&["task", "list"]);
@@ -249,7 +255,7 @@ fn the_terminal_says_once_where_the_plugins_went() {
     assert!(!again.contains("part of Amenbo now"), "said once is said: {again}");
 
     // The account itself stays — the app's window has still not had its turn.
-    let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
+    let engine = StoreEngine::open_read(&cli.home.join("store.sqlite")).unwrap();
     let held = engine.get_meta("plugins_carried_in").unwrap().expect("the row is the account");
     assert!(held.contains("\"cli\""), "the terminal is marked told, and nobody else is: {held}");
     assert!(!held.contains("\"gui\""));

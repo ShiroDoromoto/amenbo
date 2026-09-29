@@ -91,7 +91,7 @@ fn copy_tree(src: &Path, dst: &Path) {
 /// takes on startup (open → `integrity_check` → hydrate), and return its live task count. No key is
 /// needed: the truth source is plaintext SQLite.
 fn hydrated_task_count(file: &Path) -> usize {
-    let engine = StoreEngine::open(file).expect("snapshot opens");
+    let engine = StoreEngine::open_read(file).expect("snapshot opens");
     let db = hydrate_database(engine.conn()).expect("snapshot hydrates");
     db.tasks.len()
 }
@@ -320,7 +320,7 @@ fn open_at_stamps_the_format_version_at_genesis_only() {
         add_task(&mut s, "seed");
     }
     let stamped = {
-        let engine = StoreEngine::open(&db_path(&paths)).unwrap();
+        let engine = StoreEngine::open_read(&db_path(&paths)).unwrap();
         read_format_version(engine.conn()).unwrap()
     };
     assert_eq!(stamped, amenbo_core::model::FORMAT_VERSION, "opening a genesis stamps the version");
@@ -329,13 +329,13 @@ fn open_at_stamps_the_format_version_at_genesis_only() {
     // Existing store: delete the version key so it reads as absent — v0, a store predating the gate.
     // Reopening must not re-stamp it.
     {
-        let engine = StoreEngine::open(&db_path(&paths)).unwrap();
-        engine.conn().execute("DELETE FROM store_meta WHERE key = 'format_version'", []).unwrap();
-        assert_eq!(read_format_version(engine.conn()).unwrap(), 0, "absence is v0 (the compatibility baseline)");
+        let conn = rusqlite::Connection::open(db_path(&paths)).unwrap();
+        conn.execute("DELETE FROM store_meta WHERE key = 'format_version'", []).unwrap();
+        assert_eq!(read_format_version(&conn).unwrap(), 0, "absence is v0 (the compatibility baseline)");
     }
     let _ = Store::open_at(paths.clone()).unwrap();
     let after_reopen = {
-        let engine = StoreEngine::open(&db_path(&paths)).unwrap();
+        let engine = StoreEngine::open_read(&db_path(&paths)).unwrap();
         read_format_version(engine.conn()).unwrap()
     };
     assert_eq!(after_reopen, 0, "open does not touch an existing store's version (only migration stamps it)");
@@ -386,16 +386,14 @@ fn open_rejects_a_store_from_a_newer_binary_on_both_paths() {
     // Simulate a store a newer Amenbo has migrated forward: set its version one above our ceiling.
     let future = amenbo_core::model::FORMAT_VERSION + 1;
     {
-        let engine = StoreEngine::open(&db_path(&paths)).unwrap();
-        engine
-            .conn()
-            .execute(
-                "INSERT INTO store_meta(key, value) VALUES('format_version', ?1)
-                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                [future.to_string()],
-            )
-            .unwrap();
-        assert_eq!(read_format_version(engine.conn()).unwrap(), future, "set the version above the max");
+        let conn = rusqlite::Connection::open(db_path(&paths)).unwrap();
+        conn.execute(
+            "INSERT INTO store_meta(key, value) VALUES('format_version', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [future.to_string()],
+        )
+        .unwrap();
+        assert_eq!(read_format_version(&conn).unwrap(), future, "set the version above the max");
     }
 
     // Write path: a hard error, with no destructive migration and no re-stamp.
@@ -422,7 +420,7 @@ fn open_rejects_a_store_from_a_newer_binary_on_both_paths() {
     // The gate neither damages nor waves through: the store's version is still `future` — a refused
     // open does not stamp it back down to ours.
     let after = {
-        let engine = StoreEngine::open(&db_path(&paths)).unwrap();
+        let engine = StoreEngine::open_read(&db_path(&paths)).unwrap();
         read_format_version(engine.conn()).unwrap()
     };
     assert_eq!(after, future, "a refused open does not rewrite the store's version");

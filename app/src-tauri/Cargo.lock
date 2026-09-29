@@ -72,6 +72,7 @@ dependencies = [
  "objc2-user-notifications",
  "portable-pty",
  "regex",
+ "rusqlite",
  "serde",
  "serde_json",
  "tauri",

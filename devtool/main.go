@@ -85,6 +85,7 @@ Usage:
   devtool vm verify install [<path.pkg>] [--from-run <run id>]
   devtool vm verify run    <scenario.yaml>
   devtool vm verify step | log | pull | stop
+  devtool vm verify cli    [<path.pkg>] [--from-run <run id>] [--json] [<scenario>…]
 
 devgui seed  clone the shared dev store into the app-data of the task's own
              throwaway dev GUI, so the instance opens on the setup grown in the
@@ -203,7 +204,11 @@ vm verify    walk a pre-distribution screen road inside that VM. The harness is
              shots and the manifest back out; 'stop' ends a road walked away
              from, which otherwise goes on holding the screen against every
              dev GUI — a verdict is not an ending, and the evidence stays. The road itself is still walked by
-             whoever is driving — the screen tool in the guest is how.`)
+             whoever is driving — the screen tool in the guest is how.
+             'cli' runs the CLI set (verify-all) in there instead, against the
+             CLI taken out of the shipped .pkg, with the real claude and codex
+             moved aside for the length of the run and put back after it; it
+             exits with verify-all's own code.`)
 }
 
 // parseAroundID parses `fs` over args in which the task id may sit on either side of

@@ -1049,6 +1049,59 @@ devtool vm exec --shell -- '… swift /Users/admin/screen.swift click-named $PID
 devtool vm exec --shell -- '… swift /Users/admin/screen.swift set-date $PID "Due date" 2099-12-31'
 ```
 
+### `devtool vm verify cli [<path.pkg>] [--from-run <run id>] [--json] [<scenario>…]`
+
+Runs the **pre-distribution CLI set** (`verify-all`) inside that VM, against the CLI the release
+ships, with the real agents moved out of the way for the length of the run.
+
+```sh
+devtool vm verify cli ~/dist/amenbo-darwin-arm64.pkg --json          # every scenario; or --from-run <run id>
+devtool vm verify cli ~/dist/amenbo-darwin-arm64.pkg keep-a-ref-from-leaving-the-store
+```
+
+**Why the agents are moved.** A road opened with `can-start` writes stand-ins for the catalogued
+agents into a directory it puts in front of the `PATH`, then asks a pane's own shell — login *and*
+interactive zsh — which program answers to each name (`nothing_else_answers`,
+`verification/cli/src/domain/workspace.rs`). Where a real `claude` or `codex` stands ahead of the
+stand-ins, the premise stops and names the program that won. That is so on the maintainer's Mac,
+and on the clone too: `vm up` seeds the real Claude Code into it for the one screen road that needs
+the product. For v32.0.0 these three were moved aside by hand in the guest before `verify-all` was
+run; this command is that, written down:
+
+- `/Users/admin/bin/claude`
+- `/Users/admin/.local/bin/claude` — the one `vm up` seeds
+- `/opt/homebrew/bin/codex`
+
+Each is renamed to `<path>.verify-cli-aside` and **put back when the run ends** — red, green or
+Ctrl-C — because the screen road that reads a picture needs the real `claude` where it was. A run cut
+off harder than that leaves them aside; the next `vm verify cli` puts them back when it ends, and
+`vm verify run` puts them back before it starts a road. The two are not run at once: `cli` is
+refused while a road is walking, and `run` while `cli` is running.
+
+What it does, in order:
+
+1. **Takes the CLI out of the `.pkg` here** with `scripts/extract-shipped-cli.sh`, and sends the
+   bare binary — never an expanded `Amenbo.app`, which the hourly tick can start by bundle id. The
+   `.pkg` is a path or the mac artifact of `--from-run`, and one for the other architecture is
+   refused, the same way `install` takes one.
+2. **Builds `verify-all` here with `--release`** and sends it with the scenarios and the fixtures.
+   Nothing is built in the guest.
+3. **Makes this checkout's fixtures path in the guest**, as a link to the fixtures sent. The CLI
+   driver reads fixtures from the path it was compiled at and `verify-all` has no flag to say
+   otherwise, so without it the roads that `copy-fixture` would fail in there.
+4. **Moves the agents aside, runs `verify-all --bin <the shipped CLI>`, and puts them back.**
+
+- **Scenarios narrow the run** the way `verify-all`'s positional arguments do. A path in the tree or
+  a bare id both name the file of that name under `verification/scenarios/`; one that is not there is
+  refused before anything is sent. None named is the whole set, which is what a release runs.
+- **`--json`** is passed on: `verify-all`'s machine-readable roll-up goes to stdout, and devtool's own
+  lines go to stderr, so `2>/dev/null` leaves the JSON alone.
+- **The exit code is `verify-all`'s**: 0 when every scenario is green, 1 when any is red or errored,
+  2 when there was nothing to run. devtool's own failures before the run (no VM, no `.pkg`, a build
+  that failed) also exit 1, with a `devtool:` line saying which.
+- The guest's screen is not claimed: nothing here opens a window. A dev GUI can be placed in the
+  guest meanwhile.
+
 ### Host and guest drifting apart
 
 Every command that reaches the clone compares `sw_vers -productVersion` on both

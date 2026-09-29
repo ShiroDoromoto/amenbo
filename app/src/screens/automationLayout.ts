@@ -777,12 +777,14 @@ function layOutWith(
     const count = legs.get(box.id) ?? 0;
     return Math.max(count === 0 ? 0 : DROP + (count - 1) * WORD_H, pressHangOf(box));
   };
-  // How far what hangs from its ways out with nothing decided reaches: its lowest press, or the name
-  // of a line of its that goes nowhere, which hangs under every press (below). Nothing where every way
-  // out says something — and a row of those keeps the room it always had.
+  // How far what hangs from its ways out with nothing decided, and from its lines that go nowhere,
+  // reaches: its lowest press, or the name of a line of its that goes nowhere, which hangs under every
+  // press (below). A line down to the next row turns under those names: turning over them, one that
+  // turns right ran across the lines that go nowhere, standing right of it, and across their names.
+  // Nothing where every way out has a line that goes to a box — and a row of those keeps the room it
+  // always had.
   const pressHangOf = (box: PicBox): number => {
     const undecided = undecidedOf(box).length;
-    if (undecided === 0) return 0;
     const nowhere = graph.edges.filter(
       (edge) =>
         edge.fromId === box.id &&
@@ -790,6 +792,7 @@ function layOutWith(
           edge.ends === "halt" ||
           (edge.ends === "exit" && !outs.some((out) => out.name === edge.exitTo))),
     ).length;
+    if (undecided === 0) return nowhere === 0 ? 0 : STUB + (nowhere - 1) * WORD_H + OVER + 4;
     const press = STUB + (undecided - 1) * OPEN_H + OVER - 4 + PRESS_H / 2;
     return nowhere === 0 ? press : Math.max(press, STUB + undecided * OPEN_H + (nowhere - 1) * WORD_H + OVER + 4);
   };
@@ -853,8 +856,9 @@ function layOutWith(
     let hang = 0;
     let stair = 0;
     lap.rows.forEach((row, depth) => {
-      // Under a row a press hangs from, the next row stands as much lower as it hangs, so neither that
-      // row nor the lines down to it run through the press (`AMB-T-5789`). Every other row keeps its room.
+      // Under a row a press, or the name of a line that goes nowhere, hangs from, the next row stands as
+      // much lower as it hangs, so neither that row nor the lines down to it run through the press
+      // (`AMB-T-5789`) or across the name. Every other row keeps its room.
       // It stands lower again by the stair the lines down to it turn on.
       if (depth > 0) {
         rowY += nodeH + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2)) + stair;
@@ -1232,8 +1236,8 @@ function layOutWith(
     const ty = to.y;
     if (neighbours(edge.fromId, toId)) {
       const tx = fromAbove(to);
-      // Under a row a press hangs from, it turns past the lowest of them; and a row of words lower for
-      // each line of its box's turning the same way over it.
+      // Under a row a press or the name of a line that goes nowhere hangs from, it turns past the lowest
+      // of them; and a row of words lower for each line of its box's turning the same way over it.
       const hang = hangUnder.get(edge.fromId) ?? 0;
       const stair = stairUnder.get(edge.fromId) ?? 0;
       const top = Math.max(Math.round((sy + ty - stair) / 2), hang === 0 ? 0 : sy + hang + LEG_CLEAR);

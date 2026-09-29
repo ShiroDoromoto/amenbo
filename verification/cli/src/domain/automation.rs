@@ -512,6 +512,23 @@ impl Driver<'_> {
                 self.run_json(&["automation", verb, &run.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("{verb}d run {run}")))
             }
+            // Every run of a project, asked at once to pause before its next task. Nobody to ask is
+            // not a refusal: the command answers that it asked no one.
+            "pause-before-next-task" => {
+                let mut args = vec!["automation".to_string(), "pause".into(), "--before-next-task".into()];
+                if with.contains_key("project") {
+                    args.push("--project".into());
+                    args.push(self.resolve_key(with, "project")?.to_string());
+                }
+                args.push("--json".into());
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
+                let said = "automation pause --before-next-task did not report";
+                let count = v["count"].as_i64().ok_or_else(|| format!("{said} a count"))?;
+                let project = v["project_id"].as_i64().ok_or_else(|| format!("{said} a project"))?;
+                Ok(Outcome::action(format!(
+                    "asked {count} run(s) of project {project} to pause before their next task"
+                )))
+            }
             // Stopping a run now is the force-cancel: `cancel` alone takes a paused run only.
             "stop" => {
                 let run = self.resolve(with)?;
@@ -555,6 +572,14 @@ impl Driver<'_> {
                     pass = pass && got == Some(want);
                     let got = got.map_or("(none reported)".to_string(), |b| b.to_string());
                     said.push_str(&format!(", pause asked `{got}`, expected `{want}`"));
+                }
+                // The same, for the pause asked of the whole project: it waits for the run to come to
+                // the built-in that takes a task, so a run asked is still `running` until then.
+                if let Some(want) = opt_bool(with, "pause_before_next_task") {
+                    let got = row["pause_before_next_task"].as_bool();
+                    pass = pass && got == Some(want);
+                    let got = got.map_or("(none reported)".to_string(), |b| b.to_string());
+                    said.push_str(&format!(", pause before the next task asked `{got}`, expected `{want}`"));
                 }
                 // The text it was handed as it started.
                 if let Some(want) = with.get("handed").and_then(|v| v.as_str()) {

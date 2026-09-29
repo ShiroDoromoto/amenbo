@@ -4213,6 +4213,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &["file", "title", "notes", "dim"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "resume", required: &[], refs: &["target"], strings: &[], binds: false },
+    // The other pause, asked of a whole project rather than one run: every run of it that takes
+    // tasks, is running and is not yet asked to pause stops before it takes its next task, not at the
+    // end of the action under way. `project` left out is the project the store is bound to — the one
+    // an automation built without naming one belongs to. A run that takes no task is not asked.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause-before-next-task", required: &[], refs: &["project"], strings: &[], binds: false },
     // `stop` is the force-cancel: the run ends `canceled` where it stands, whatever it is in the middle
     // of. `cancel` ends a paused run only — nothing is under way in one — and a run still going is
     // refused (`invalid_value`) with the two ways on: pause it first, or force-cancel it.
@@ -4223,6 +4228,8 @@ const REGISTRY: &[OpSpec] = &[
     // `stopped_reason` is asked only of a run that is stopped, and a road that names it is saying
     // which kind of stop this was.
     // `handed` is the text the run was handed as it started, read back off the run.
+    // `pause_requested` and `pause_before_next_task` are the two pauses asked for and not yet settled
+    // — at the end of the action, and before the next task.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run", required: &["status"], refs: &["target"], strings: &["status", "stopped_reason", "handed"], binds: false },
     // The runs one automation has behind it, or the ones that worked one task — the two doors a run
     // is reached by, and the whole of what a listing of runs is (there is no listing of every run).

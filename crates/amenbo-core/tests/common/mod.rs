@@ -5,11 +5,11 @@
 //! version of the read budget — it fails CI red when a read regresses to O(total). Both must seed
 //! identically or they would measure different things, so the seed lives here and is shared by
 //! `#[path]` from the bench. Speed: the read-model is built by projecting an **in-memory** `Database`
-//! straight into an in-memory `StoreEngine` ([`store_engine::record::put_database`]) — the very
-//! mapping a real migration produces (so it cannot drift from production) — and never opens a
-//! `Store`. That skips a transaction per row, so seeding 10k tasks stays cheap enough for a unit
-//! test. The reads then run against `engine.conn()`, exactly as `Store::read_model()` serves them in
-//! production (a borrowed engine read-model). Store shape (the invariant the guard relies on): a
+//! straight into an in-memory `StoreEngine` ([`store_engine::record::seed_database`], which only the
+//! `scale` feature builds) — the very mapping a real migration produces (so it cannot drift from
+//! production) — and never opens a `Store`. That skips a transaction per row, so seeding 10k tasks
+//! stays cheap enough for a unit test. The reads then run against `engine.conn()`, exactly as
+//! `Store::read_model()` serves them in production (a borrowed engine read-model). Store shape (the invariant the guard relies on): a
 //! **fixed-size** hot carve-out independent of N, plus N "bulk" background tasks that the selective
 //! hot queries must *not* touch. So the O(result) reads stay flat as N grows, and a regression that
 //! starts scanning the bulk shows up. The carve-out is what the word search's terms
@@ -277,11 +277,7 @@ pub fn seed(bulk: usize) -> Seeded {
     let total_tasks = HOT_TASKS + IN_PROGRESS_TASKS + bulk;
 
     let engine = StoreEngine::open_in_memory().unwrap();
-    {
-        let tx = engine.write().unwrap();
-        store_engine::record::put_database(&tx, db).unwrap();
-        tx.commit().unwrap();
-    }
+    store_engine::record::seed_database(&engine, db).unwrap();
 
     Seeded { engine, project_id, total_tasks, tmp }
 }

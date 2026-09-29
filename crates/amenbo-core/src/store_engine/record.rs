@@ -833,10 +833,12 @@ pub fn automation_run_value(v: &AutomationRunValue) -> Record {
 /// and a fixture cannot drift away from it. Production writes do not come through here (an op writes one
 /// record at a time, through [`crate::ops`]'s `emit_create` / `emit_update`). What needs this is the case
 /// where **the model is built first and the reads are then tried against it**: `hydrate`'s round-trip
-/// oracle, and the scale seeding (`tests/common`) that would be O(N²) if each row went through `ops`.
-/// The device-local overview tables (bindings, read receipts, …) are not part of a `Database`, so they
-/// are not written — which is why the resulting DB **must never be swapped in as a live truth source**.
-pub fn put_database(tx: &super::WriteTx<'_>, db: &Database) -> super::Result<()> {
+/// oracle, and the scale seeding (`tests/common`, through `seed_database`) that would be O(N²) if each
+/// row went through `ops`. The device-local overview tables (bindings, read receipts, …) are not part of
+/// a `Database`, so they are not written — which is why the resulting DB **must never be swapped in as a
+/// live truth source**. It writes rows without the activity that says so, so it is `pub(crate)`.
+#[cfg_attr(not(any(test, feature = "scale")), allow(dead_code))]
+pub(crate) fn put_database(tx: &super::WriteTx<'_>, db: &Database) -> super::Result<()> {
     fn put(tx: &super::WriteTx<'_>, r: Record) -> super::Result<()> {
         tx.put_record(r.dataset, r.id, &r.fields)
     }
@@ -885,4 +887,15 @@ pub fn put_database(tx: &super::WriteTx<'_>, db: &Database) -> super::Result<()>
     // Store-level scalars have no per-record dataset, so they go to the store_meta KV table.
     tx.set_meta(super::META_SCHEMA_VERSION, Some(&db.schema_version))?;
     Ok(())
+}
+
+/// Flush `db` into `engine` in one transaction, for the scale seeding outside the crate (`tests/common`,
+/// shared by the scale guards and the read-hotpath bench). Only the `scale` feature builds it, and no
+/// product build turns that feature on.
+#[cfg(feature = "scale")]
+#[doc(hidden)]
+pub fn seed_database(engine: &super::StoreEngine, db: &Database) -> super::Result<()> {
+    let tx = engine.write()?;
+    put_database(&tx, db)?;
+    tx.commit()
 }

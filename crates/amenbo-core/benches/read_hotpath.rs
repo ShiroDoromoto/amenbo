@@ -1,5 +1,5 @@
-//! Scaling benchmark for the read hot paths. Run with `cargo bench -p amenbo-core --bench
-//! read_hotpath`. For each read it sweeps N ∈ {100, 1k, 10k} background tasks so the scaling is
+//! Scaling benchmark for the read hot paths. Run with `cargo bench -p amenbo-core --features scale
+//! --bench read_hotpath`. For each read it sweeps N ∈ {100, 1k, 10k} background tasks so the scaling is
 //! visible side by side: an O(result) read (the selective mailbox list, the AI-claim probe, the paged
 //! decision list) stays flat across N, while the by-design O(store) aggregates (store-wide activity,
 //! project overview) climb. This is the human-observation companion to the executable CI guard in

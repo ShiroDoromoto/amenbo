@@ -89,20 +89,6 @@ fn find_in_store<T>(
     Ok(None)
 }
 
-/// Emit a system event into the file ledger (same shape as the CLI's `emit_event`). The GUI actor
-/// is always human. Call it **after** the mutation wrapper has committed. Activity is not a system
-/// of record, so a failed row write must not fail the operation — warn, carry on, and err on the
-/// side of a missing line.
-///
-/// The warning goes to the diagnostic log (`AMB-D-382`), which is the one a person can be asked for.
-/// `tracing` is the perf subscriber's, and it takes `target="perf"` only and is off by default — a
-/// missing line reported there is a missing line reported nowhere.
-fn emit(store: &mut Store, target_id: i64, event: serde_json::Value) {
-    if let Err(e) = store.add_system_event(ActorKind::Human, target_id, event) {
-        log::warn!("could not record the activity event: {e}");
-    }
-}
-
 impl StartupHealthDto {
     /// Absorb the startup integrity check of an opened store. **No open computes it** — neither the
     /// read open (`open_read_at`) nor the write one (`AMB-D-857`) — because the doctor pass is
@@ -2074,7 +2060,6 @@ pub fn task_add(
             // is exactly why the create is handed this rather than reading it.
             made_in: None,
         })?;
-        emit(store, t.id, amenbo_core::activity_log::event::task_created(&t.title));
         Ok(t.id)
     })?;
     Ok(WriteAck::new(&["tasks"]).task(id))
@@ -2111,9 +2096,7 @@ pub fn task_status(id: i64, status: String) -> Result<WriteAck, CmdError> {
             .ok_or_else(|| format!("status '{status}' is not one of todo / in_progress / done / blocked / rejected"))?;
         let current = store.task(id)?.map(|t| t.status);
         if current != Some(new_status) || new_status == TaskStatus::InProgress {
-            let old = current.unwrap_or_default();
             store.set_task_status(id, new_status, ActorKind::Human)?;
-            emit(store, id, amenbo_core::activity_log::event::task_status_changed(old.as_str(), new_status.as_str()));
         }
         Ok(())
     })?;
@@ -2143,7 +2126,6 @@ pub fn task_done(id: i64, report: String) -> Result<WriteAck, CmdError> {
             return Ok(());
         }
         store.complete_task_with_report(id, Some(report), ActorKind::Human)?;
-        emit(store, id, amenbo_core::activity_log::event::task_status_changed(old.as_str(), TaskStatus::Done.as_str()));
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]).task(id))
@@ -2172,7 +2154,6 @@ pub fn task_reject(id: i64, reason: String) -> Result<WriteAck, CmdError> {
             return Ok(());
         }
         store.set_task_status(id, TaskStatus::Rejected, ActorKind::Human)?;
-        emit(store, id, amenbo_core::activity_log::event::task_status_changed(old.as_str(), TaskStatus::Rejected.as_str()));
         store.add_task_comment(id, ActorKind::Human, reason)?;
         Ok(())
     })?;
@@ -3797,8 +3778,6 @@ pub fn task_assign(id: i64, kind: Option<String>) -> Result<WriteAck, CmdError> 
         let noop = store.task(id)?.is_some_and(|t| t.assignee_kind == kind_arg);
         if !noop {
             store.set_task_assignee(id, kind_arg, ActorKind::Human)?;
-            let ev = amenbo_core::activity_log::event::task_assigned(kind_arg.map(|k| k.as_str()));
-            emit(store, id, ev);
         }
         Ok(())
     })?;
@@ -7694,7 +7673,7 @@ pub(crate) mod tests {
         };
 
         let items = task_activity(task_id, None).unwrap();
-        assert_eq!(items.len(), 2, "only this task's stories, not the other task's");
+        assert_eq!(items.len(), 3, "only this task's stories (created, the event, the comment), not the other task's");
         assert!(
             items.iter().all(|it| it.target.id == task_id),
             "every row targets the queried task"

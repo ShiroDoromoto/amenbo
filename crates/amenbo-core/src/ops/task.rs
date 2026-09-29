@@ -12,6 +12,7 @@
 
 use chrono::NaiveDate;
 
+use crate::activity_log;
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, DecisionStatus, Priority, Subtype, Task, TaskStatus,
@@ -153,6 +154,10 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
             }),
         )?;
     }
+    // The timeline's `task.created` is the moment the task is filed, while it is still being written —
+    // unlike the plugins' event, which waits for `finish_creating` (`AMB-D-557`): a person reading the
+    // timeline can see the task on the board from here on. `add` takes no actor, so the creator stands in.
+    record_line(tx, &task, task.created_by_kind, activity_log::event::task_created(&task.title))?;
     Ok(task)
 }
 
@@ -272,6 +277,28 @@ fn live_before(tx: &WriteTx<'_>, id: i64) -> Result<Task> {
     read::task(tx.conn(), id)?.ok_or_else(|| NOUN.not_found(id.to_string()))
 }
 
+/// Queue one activity line about `task` ([`crate::activity_log`]), for the store's write door to append
+/// once this transaction commits. Queued here, at the write point, rather than by the surface that called
+/// it, so the line is there whoever wrote — the CLI, the GUI, or an automation run's own steps. The line
+/// carries the project the task is in once this write has landed.
+fn record_line(
+    tx: &WriteTx<'_>,
+    task: &Task,
+    actor: Option<ActorKind>,
+    event: serde_json::Value,
+) -> Result<()> {
+    tx.record_activity(activity_log::Entry {
+        id: tx.mint_activity_id()?,
+        at: task.updated_at,
+        actor,
+        project: task.project_id,
+        task: Some(task.id),
+        decision: None,
+        event,
+    });
+    Ok(())
+}
+
 pub fn update(tx: &WriteTx<'_>, id: i64, patch: TaskPatch) -> Result<Task> {
     let before = live_before(tx, id)?;
     let mut t = before.clone();
@@ -325,6 +352,11 @@ pub fn set_assignee(
     let after = Task { assignee_kind: kind, updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::task(&before), record::task(&after))?;
     event::emit_task_assigned(tx, &after, before.assignee_kind, actor)?;
+    // Unlike the plugins' event, the timeline narrates the unassignment too; the same facet again is no line.
+    if kind != before.assignee_kind {
+        let to_kind = kind.map(|k| k.as_str());
+        record_line(tx, &after, Some(actor), activity_log::event::task_assigned(to_kind))?;
+    }
     Ok(after)
 }
 
@@ -528,6 +560,10 @@ pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus, actor: ActorKin
     };
     emit_update(tx, record::task(&before), record::task(&after))?;
     event::emit_task_status(tx, &after, before.status, actor)?;
+    if status != before.status {
+        let line = activity_log::event::task_status_changed(before.status.as_str(), status.as_str());
+        record_line(tx, &after, Some(actor), line)?;
+    }
     Ok(after)
 }
 
@@ -618,6 +654,10 @@ pub fn move_to(
     };
     emit_update(tx, record::task(&before), record::task(&after))?;
     event::emit_task_moved(tx, &after, before.project_id, actor)?;
+    if after.project_id != before.project_id {
+        let line = activity_log::event::task_moved(Some(&proj.to_string()));
+        record_line(tx, &after, Some(actor), line)?;
+    }
     Ok(after)
 }
 

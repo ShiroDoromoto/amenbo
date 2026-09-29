@@ -189,6 +189,11 @@ fn hard_erase_comment_takes_its_attachments_and_their_bytes() {
 #[test]
 fn hard_erase_decision_comment_removes_it_and_leaves_the_task_comment_of_that_id() {
     let (mut store, _task, task_comment, decision) = build();
+    // The task side's numbering also carries the task's own activity lines (its `task.created`), so
+    // the decision side is walked up to the same id with earlier, harmless comments first.
+    for _ in 1..task_comment {
+        store.add_decision_comment(decision, ActorKind::Ai, "an earlier comment").unwrap();
+    }
     let decision_comment = store
         .add_decision_comment(
             decision,

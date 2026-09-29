@@ -182,9 +182,9 @@ impl Store {
                     crate::ops::dimension::set(tx, task.id, value_id)?;
                 }
             }
-            // No `task.created` here: the creation is not over yet, and a subscriber hearing about a task
-            // nobody can pick up has nothing to do with it (`AMB-D-557`). It fires from
-            // `finish_task_creation` instead.
+            // No plugin `task.created` here: the creation is not over yet, and a subscriber hearing about a
+            // task nobody can pick up has nothing to do with it (`AMB-D-557`). It fires from
+            // `finish_task_creation` instead. The timeline's line is already queued, by `ops::task::add`.
             Ok(task)
         })
     }
@@ -815,11 +815,13 @@ impl Store {
     /// written **after** the commit succeeds (crash before the commit and no line appears; crash
     /// after it and the line is lost — we err towards losing a line, never towards duplicating one).
     /// The callers (CLI, GUI) invoke this after the mutation wrapper has committed, so that ordering
-    /// holds. A failure is warned about by the caller and the mutation proceeds. The line goes only
-    /// into the file ledger ([`crate::activity_log`]); all that stays in the DB is the sequence-number
-    /// mark, and the event itself — who did what — is one line of JSONL. Same shape as the deletion
-    /// events ([`Self::delete_task`] and friends): the only difference between this path and the
-    /// deletion path is whether the target's row survives.
+    /// holds. A line the mutation itself narrates — a task created, its status, assignee or project
+    /// changed — is not written here: the op queues it ([`WriteTx::record_activity`]) and the store's
+    /// write door appends it once the change commits. A failure is warned about by the caller and the
+    /// mutation proceeds. The line goes only into the file ledger ([`crate::activity_log`]); all that
+    /// stays in the DB is the sequence-number mark, and the event itself — who did what — is one line
+    /// of JSONL. Same shape as the deletion events ([`Self::delete_task`] and friends): the only
+    /// difference between this path and the deletion path is whether the target's row survives.
     pub fn add_system_event(
         &mut self,
         author_kind: crate::model::ActorKind,

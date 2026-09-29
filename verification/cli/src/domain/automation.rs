@@ -287,10 +287,12 @@ impl Driver<'_> {
             }
             "port-add" => {
                 // What it hangs off says which direction it is: a way out hands on, while a step or
-                // an action takes in.
-                let (owner_flag, owner, what) = match with.contains_key("step") || with.contains_key("action") {
-                    true => self.declarer(with)?,
-                    false => ("--exit", self.resolve(with)?, "way out"),
+                // an action takes in. A step or an action named with `exit` is that one's way out.
+                let exit = with.get("exit").and_then(|v| v.as_str());
+                let (owner_flag, owner, what) = match (exit, with.contains_key("step") || with.contains_key("action")) {
+                    (Some(name), _) => ("--exit", self.exit_of(with, name)?, "way out"),
+                    (None, true) => self.declarer(with)?,
+                    (None, false) => ("--exit", self.resolve(with)?, "way out"),
                 };
                 let name = req_str(with, "name")?;
                 let kind = req_str(with, "kind")?;
@@ -875,6 +877,34 @@ impl Driver<'_> {
         }
     }
 
+    /// **A step's or an action's way out, found by its name** — the id `port-add` hangs an output
+    /// on. The one every step and action is born with was never bound by `exit-add`, so a road
+    /// names it as the step or action it belongs to and the name it carries.
+    ///
+    /// Both are read off `automation action-show`, so a step's is found through the action that
+    /// holds it, and a road names that action beside the step.
+    fn exit_of(&self, with: &Args, name: &str) -> Result<i64, String> {
+        if !with.contains_key("action") {
+            return Err(format!(
+                "a way out named `{name}` is read off the action that holds it — name that one with `action:`, beside `step:` where it is a step's"
+            ));
+        }
+        let view = self.action_definition(self.resolve_key(with, "action")?)?;
+        let declarer = match with.contains_key("step") {
+            true => {
+                let step = self.resolve_key(with, "step")?;
+                rows_of(&view, "steps")
+                    .iter()
+                    .find(|one| one["step"]["id"].as_i64() == Some(step))
+                    .ok_or_else(|| format!("step {step} is not one the action holds"))?
+            }
+            false => &view,
+        };
+        exit_id_named(declarer, name).ok_or_else(|| {
+            format!("no way out `{name}` is declared there — it has {:?}", exit_names(declarer))
+        })
+    }
+
     /// The way out an edge or a wire leaves by, written the one way the command takes it:
     /// `<box>:<way out>`, where the bare `<box>:` is the unnamed one and `<box>:*` the error one. The
     /// box is a placement, or inside an action a step — the command reads which off `--in-action`.
@@ -1216,6 +1246,15 @@ fn exit_named(view: &serde_json::Value, id: Option<i64>) -> Option<String> {
         .chain(rows_of(view, "exits"))
         .find(|one| one["exit"]["id"].as_i64() == Some(id))
         .map(|one| one["exit"]["name"].as_str().unwrap_or("").to_string())
+}
+
+/// **The id of the way out a box declares under this name**, the name read the way [`exit_names`]
+/// reads it. `None` where the box declares none by that name.
+fn exit_id_named(declarer: &serde_json::Value, name: &str) -> Option<i64> {
+    rows_of(declarer, "exits")
+        .iter()
+        .find(|one| one["exit"]["name"].as_str().unwrap_or("") == name)
+        .and_then(|one| one["exit"]["id"].as_i64())
 }
 
 /// The ways out a box declares, named the way an edge names one: the error one is `*`. A way out
@@ -1591,5 +1630,17 @@ mod tests {
         twice["placements"][1]["action"]["name"] = serde_json::json!("take");
         assert!(judge_placement(1, &twice, &with("{ name: take }")).is_err());
         assert!(judge_edge(1, &Picture::Automation(twice), &with("{ from: take, to: take }")).is_err());
+    }
+
+    /// The done way out a step and an action are born with carries the same name on both, so which
+    /// one a road's `exit:` reaches is the one the box it named declares — never the other's.
+    #[test]
+    fn a_way_out_is_found_by_its_name_on_the_box_that_declares_it() {
+        let view = action();
+        let claim = &view["steps"][1];
+        assert_eq!(exit_id_named(claim, DONE_EXIT), Some(9), "the step's own");
+        assert_eq!(exit_id_named(&view, DONE_EXIT), Some(11), "the action's own");
+        assert_eq!(exit_id_named(&view, "got one"), Some(13));
+        assert_eq!(exit_id_named(claim, "found"), None, "a way out of another step is not this one's");
     }
 }

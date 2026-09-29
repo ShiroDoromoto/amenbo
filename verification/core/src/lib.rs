@@ -4173,8 +4173,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "exit-add", required: &["name"], refs: &["step", "action"], strings: &["name"], binds: true },
     // What a way out hands on, or what is taken in. Which of the two it is falls out of what it hangs
     // off, the way the command reads it: `target` is the way out, and `step` / `action` the side that
-    // takes it in — the same pair `exit-add` is declared on, for the same reason.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "port-add", required: &["name", "kind"], refs: &["target", "step", "action"], strings: &["name", "kind"], binds: true },
+    // takes it in — the same pair `exit-add` is declared on, for the same reason. With `exit` beside
+    // them it is that one's way out by name instead, which is how a road reaches the one every step
+    // and action is born with: `exit-add` never bound it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "port-add", required: &["name", "kind"], refs: &["target", "step", "action"], strings: &["name", "kind", "exit"], binds: true },
     // A setting, which **only an action declares** — and every placement of it answers on a row of its
     // own. The two are apart because the declaring and the answering are, so a road standing up "a
     // required setting nobody has answered" needs the first without the second.

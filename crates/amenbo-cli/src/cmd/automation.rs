@@ -993,6 +993,7 @@ fn hand_on(store: &mut Store, step: i64, one: &str) -> Result<AutomationRunValue
             ),
             exit: 2,
         }),
+        // A task of another project than the run's is refused by core, so a screen is held to it too.
         Some(AutomationPortKind::TaskMake) => {
             let task = resolve_task(store, text.trim()).map_err(CliError::from)?;
             store.automation_out(step, port, Produced::Task(task)).map_err(CliError::from)

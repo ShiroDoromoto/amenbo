@@ -4,8 +4,8 @@
 //! - **Concurrent writers.** SQLite's writer exclusion serialises concurrent writes to one store:
 //!   no lost update under contention, and a final reopen reads every record back intact.
 //! - **Crash injection.** Freeze the on-disk bytes (engine plus WAL/SHM sidecars) mid-flight and
-//!   reopen that snapshot: SQLite replays the WAL, every committed record is there, and it passes
-//!   `integrity_check` — i.e. a half-written truth source is never served.
+//!   reopen that snapshot: SQLite replays the WAL, every committed record is there, and opening it
+//!   read-only and hydrating it finds them all — i.e. a half-written truth source is never served.
 //! - **backup → restore round trip.** Restoring an archive over another store reproduces every
 //!   record, and it survives a reopen from disk.
 //! - **Rollback from the set-aside engine.** `restore` moves the pre-swap engine aside with a
@@ -133,8 +133,8 @@ fn concurrent_writers_are_serialized_without_loss_or_corruption() {
 
 /// Crash injection: with the live connection still open (so no clean close, no checkpoint), snapshot
 /// the on-disk bytes — engine plus WAL/SHM sidecars — and reopen that "killed mid-flight" state.
-/// SQLite replays the WAL, every committed record comes back, and it passes `integrity_check` (the
-/// startup hydrate): a half-written truth source is never served.
+/// SQLite replays the WAL, every committed record comes back, and opening it read-only and hydrating
+/// it (the startup hydrate) finds them all: a half-written truth source is never served.
 #[test]
 fn a_crash_before_checkpoint_reopens_intact_via_wal() {
     let live_base = temp_base("wal-live");
@@ -158,7 +158,7 @@ fn a_crash_before_checkpoint_reopens_intact_via_wal() {
         assert!(task_exists(&reopened, &format!("t{i}")), "committed t{i} was not restored by WAL replay");
     }
     drop(reopened);
-    // It is also complete along the startup-hydrate path (it passes the integrity check).
+    // It is also complete along the startup-hydrate path (open read-only, hydrate, count the tasks).
     assert_eq!(hydrated_task_count(&db_path(&crash_paths)), 4);
 }
 

@@ -787,14 +787,25 @@ function layOutWith(
     const count = Math.max(legs.get(`left-${box.id}`) ?? 0, legs.get(`right-${box.id}`) ?? 0);
     return Math.max(count === 0 ? 0 : DROP + (count - 1) * WORD_H, pressHangOf(box));
   };
+  // The row each box stands in, its boxes from left to right.
+  const rowHolding = new Map(
+    laps.flatMap((lap) => lap.rows.flatMap((row) => row.map((boxId) => [boxId, row] as const))),
+  );
   // How much lower than the shortest the ways out with nothing decided, and the lines that go nowhere,
-  // hang under a box whose lines out to the right margin turn as low as the press, or lower. Those
-  // legs stand right of every one of them, and a name and its press run off to the right: under the
-  // box, one ran across the legs and was not read. So they hang from the lowest leg's turn as they
-  // would from the box.
+  // hang under a box that legs out to a margin pass under as low as the press, or lower: its own lines
+  // out to the right margin, and those of the boxes of its row on its left, or the lines out to the
+  // left margin of the boxes on its right. Those legs run across under every one of them, and a name
+  // and its press run off to the right: one ran across the legs and was not read. So they hang from
+  // the lowest leg's turn as they would from the box.
   const openDrop = (box: PicBox): number => {
-    const right = legs.get(`right-${box.id}`) ?? 0;
-    const turn = right === 0 ? 0 : DROP + (right - 1) * WORD_H;
+    const row = rowHolding.get(box.id) ?? [box.id];
+    const column = row.indexOf(box.id);
+    const under = Math.max(
+      0,
+      ...row.slice(0, column + 1).map((boxId) => legs.get(`right-${boxId}`) ?? 0),
+      ...row.slice(column + 1).map((boxId) => legs.get(`left-${boxId}`) ?? 0),
+    );
+    const turn = under === 0 ? 0 : DROP + (under - 1) * WORD_H;
     return turn < STUB + OVER - 4 - PRESS_H / 2 ? 0 : turn;
   };
   // How far what hangs from its ways out with nothing decided, and from its lines that go nowhere,

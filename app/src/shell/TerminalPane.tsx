@@ -540,13 +540,18 @@ export function TerminalPane({
    *  **A pane with nothing running in it has neither** a box nor a terminal to put the keyboard in,
    *  so nothing is moved and it stays where the person left it.
    *
+   *  **Nor is anything moved in a run's pane turned to its picture.** Its terminal is still there under it, dimmed
+   *  (`AMB-T-5832`), and what is typed into it reaches the agent running there — which nobody
+   *  looking at a picture meant to type at. A press on the picture only picks the pane; the way to
+   *  the program is turning to the terminal.
+   *
    *  It comes after the emulator has had the press — that one takes the keyboard on its own
    *  mousedown, from an element inside this one — so this is the last word rather than the first.
    */
   const pressedOn = () => {
     const moving = !focused;
     onFocus(frame);
-    if (!moving) return;
+    if (!moving || onPicture) return;
     if (folded) focusTerminal(paneRef.current);
     else boxRef.current?.focus();
   };
@@ -713,9 +718,10 @@ export function TerminalPane({
   // — so the pane that should take it is the pane that has it.
   //
   // Those two are the whole of it. A pane that becomes the one being worked in later was pressed, and
-  // the press has already said where the keyboard goes (`pressedOn`).
+  // the press has already said where the keyboard goes (`pressedOn`). A run's pane turned to its
+  // picture keeps the keyboard off its terminal here too, for the reason said there.
   useEffect(() => {
-    if (live === null || !focused) return;
+    if (live === null || !focused || onPicture) return;
     if (folded) focusTerminal(paneRef.current);
     else boxRef.current?.focus();
     // `focused` is read as it stands: the two reasons are the ones said above.

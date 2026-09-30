@@ -5,7 +5,8 @@ name: ci-change-manual
 # A merge can move main without a push event: the ref moves and the pull request reads merged, but
 # no run is created. The next push's run does not cover it, because on `push` the path filter sees
 # only that push's own diff — so the missed merge's change is never judged, and main reads green.
-# scripts/watch-ci.sh stops on exactly this and names the command below.
+# `scripts/watch-ci.sh main <sha>` cannot tell this from a run that is only late, so once its
+# deadline passes with no run it stops with exit code 3 and names the command below.
 #
 # `base` is the last commit already judged — for a missed merge, its first parent. The filter then
 # diffs `base` against the head of the ref dispatched on, which covers the missed merge and every

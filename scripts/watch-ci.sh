@@ -8,6 +8,7 @@
 # background watcher once, rather than a loop to poll.
 #
 # Exit code is the verdict: 0 = green, 1 = red, or the watch itself broke and said so.
+# 2 = no mode was given. 3 = `main <sha>` waited out its deadline with no run started.
 #
 # Usage — one mode per KIND of CI, so the caller names the thing and not the filter:
 #
@@ -44,8 +45,14 @@
 # a threshold placed on a distribution the caller cannot see reads slowness as absence.
 # So a wait ends on evidence that the thing is not coming — a commit or a tag that is
 # not on the remote, a workflow that is not there, every run on the head commit finished
-# without the check, a later push to main that already has its run — and not on a clock.
-# Until then it waits, and says so as it waits.
+# without the check — and not on a clock. Until then it waits, and says so as it waits.
+#
+# `main <sha>` is the one exception. A merge can move main with no push event at all, and
+# nothing GitHub shows tells that apart from a run that is only late: the runs of other
+# pushes are registered in no reliable order, and a later merge's run has stood before an
+# earlier one's that arrived and went green. So it waits up to a deadline set well past
+# the slowest run seen to arrive, and then stops with exit code 3 and names the command
+# that judges the commit by hand.
 #
 # Progress and diagnostics go to stderr throughout. Stdout carries the id under
 # --print-id and the emitted events otherwise, so a caller may read either.
@@ -55,6 +62,7 @@
 #   AMENBO_CI_MISS_LIMIT — consecutive failed calls before the watch is called broken
 #   AMENBO_CI_APPEAR_LIMIT — rounds to wait for something to appear before giving up.
 #                  Unset, there is no deadline and the evidence above is what ends it
+#   AMENBO_CI_MAIN_DEADLINE — seconds `main <sha>` waits for its run before exit code 3
 #
 # The repository is resolved once, up front, and passed to every call afterwards, so
 # nothing in the loop reads the filesystem. A watch that outlives the directory it
@@ -67,6 +75,8 @@ POLL_SECONDS="${AMENBO_CI_POLL:-45}"       # between checks of something already
 APPEAR_SECONDS="${AMENBO_CI_APPEAR:-10}"   # between checks for a run not registered yet
 APPEAR_LIMIT="${AMENBO_CI_APPEAR_LIMIT:-}" # rounds before giving up on it; empty = no deadline
 MISS_LIMIT="${AMENBO_CI_MISS_LIMIT:-3}"    # consecutive failed calls before calling the watch broken
+# Twice the slowest push run seen to be registered after its merge, which was 23 minutes.
+MAIN_DEADLINE="${AMENBO_CI_MAIN_DEADLINE:-2700}" # seconds `main <sha>` waits for its run to start
 
 # How many rounds of the appear wait fit in a minute, so an open-ended one repeats what
 # it is waiting for about that often. A watch that has gone quiet for ten minutes cannot
@@ -130,11 +140,12 @@ fi
 #
 # The wait has no deadline, so the caller resolves the commit on the remote first and
 # hands the sha in — that answer, and not a clock, is what rules out a run that is never
-# coming. A caller that names the branch the commit was pushed to is also told when
-# GitHub has moved past it: see run_overtaken.
+# coming. A caller that names the branch the commit was pushed to is the exception: it
+# waits MAIN_DEADLINE seconds, then exits 3 with the command that judges the commit by
+# hand, since a push GitHub delivered no event for leaves no other sign.
 resolve_one() {
     local label="$1" sha="$2" workflow="$3" branch="${4:-}"
-    local tries=0 rows count newer
+    local tries=0 rows count started=$SECONDS
     while :; do
         rows=$(gh run list -R "$repo" --commit "$sha" --event push --workflow "$workflow" \
             --json databaseId,name,event,createdAt) ||
@@ -150,34 +161,12 @@ resolve_one() {
             exit 1
         fi
         tries=$((tries + 1))
-        if [ -n "$branch" ] && newer=$(run_overtaken "$sha" "$workflow" "$branch"); then
-            die "$label has no push run of $workflow, and GitHub has already started one for $newer, a later push to $branch — none is coming for this commit. That run's path filter sees only its own push, so this commit's change was never judged by it. Judge it again with: gh workflow run ci-change-manual.yml -R $repo --ref $branch -f base=\$(git rev-parse $sha^1)"
+        if [ -n "$branch" ] && [ $((SECONDS - started)) -ge "$MAIN_DEADLINE" ]; then
+            echo "✗ $label has no push run of $workflow after ${MAIN_DEADLINE}s — GitHub may never have started one. A later push's run does not cover it, since its path filter sees only its own push. Judge it with: gh workflow run ci-change-manual.yml -R $repo --ref $branch -f base=\$(git rev-parse $sha^1)" >&2
+            exit 3
         fi
         appear_wait "$tries" "$label to start a run"
     done
-}
-
-# The sha of a later push to a branch whose run GitHub has already started, printed when
-# the newest push run of the workflow there is on a descendant of this commit.
-#
-# A push can reach the branch without a push event: a merge whose ref moved and whose
-# pull request reads merged, but which GitHub delivered no event for — no push run, no
-# entry in the repository's activity, no branch deletion after it. Nothing on this side
-# can start that run again, and waiting for it is waiting forever. What says so is the
-# order GitHub keeps: runs are registered as pushes arrive, so a run already standing for
-# a later push is one this commit's run would have come before.
-#
-# Anything short of that answers nothing, and waiting is the safe way to be wrong: a call
-# that fails, the newest run being this commit's own or an older one's.
-run_overtaken() {
-    local sha="$1" workflow="$2" branch="$3" newer
-    newer=$(gh run list -R "$repo" --workflow "$workflow" --branch "$branch" --event push \
-        --limit 1 --json headSha --jq '.[0].headSha // ""' 2>/dev/null) || return 1
-    if [ -z "$newer" ] || [ "$newer" = "$sha" ]; then
-        return 1
-    fi
-    [ "$(gh api "repos/$repo/compare/$sha...$newer" --jq .status 2>/dev/null)" = ahead ] || return 1
-    echo "$newer"
 }
 
 # The newest dispatched run of a workflow on a ref, delivered once it is the right one.

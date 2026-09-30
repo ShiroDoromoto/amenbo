@@ -1622,6 +1622,7 @@ export const zhHant: Translation = {
     invalid_dimension_close_unfinished: "「{value}」上還有 {count} 個未完成的任務，而「{name}」讓任務依順序等待，所以「{value}」暫時不能關閉：請先把它們移到其他值。",
     invalid_task_required_dimension: "這個任務在 {names} 上沒有值，而本專案要求填寫。",
     invalid_task_status_draft: "{ref} 還在建立中，無法變更狀態——請先完成建立，或將其刪除。",
+    invalid_comment_task_closed: "{ref} 已關閉，已關閉的任務沒有人會再讀——請重新開啟它，或新建一個任務。",
     invalid_decision_required_dimension: "這個決定在 {names} 上沒有值，而本專案要求填寫。",
     invalid_dimension_values_unordered: "此分類的值沒有順序，無法重新排列。",
     invalid_decision_edit_rejected: "{ref} 已遭否決，遭否決的決策無法編輯。",

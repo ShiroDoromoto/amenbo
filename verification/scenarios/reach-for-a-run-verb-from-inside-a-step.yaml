@@ -160,7 +160,7 @@ steps_gui:
     with:
       target: run
       task: seed
-      command: task done <ref>
+      command: task done <ref> --report shipped
       refused: automation_outside_only
 
   # Nothing moved. A build that let the command through would have the task done.

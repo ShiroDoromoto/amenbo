@@ -1622,6 +1622,7 @@ export const hi: Translation = {
     invalid_dimension_close_unfinished: "«{value}» पर {count} अधूरे काम बचे हैं, और «{name}» अपने कामों को क्रम से प्रतीक्षा कराती है, इसलिए «{value}» अभी बंद नहीं हो सकता — पहले उन्हें किसी दूसरे मान पर ले जाएँ।",
     invalid_task_required_dimension: "इस कार्य का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
     invalid_task_status_draft: "{ref} अभी बन ही रही है, इसलिए इसकी स्थिति नहीं बदली जा सकती — पहले इसे बनाना पूरा करें, या इसे मिटा दें।",
+    invalid_comment_task_closed: "{ref} बंद हो चुकी है, और बंद कार्य को कोई नहीं पढ़ता — इसे फिर से खोलें, या नया कार्य बनाएँ।",
     invalid_decision_required_dimension: "इस निर्णय का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
     invalid_dimension_values_unordered:
       "इस श्रेणी के मानों का कोई क्रम नहीं है, इसलिए उन्हें दोबारा क्रमबद्ध नहीं किया जा सकता।",

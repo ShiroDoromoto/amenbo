@@ -1648,6 +1648,7 @@ export const ru: Translation = {
     invalid_dimension_close_unfinished: "На «{value}» осталось незавершённых задач: {count}, а «{name}» заставляет задачи ждать по порядку, поэтому «{value}» пока нельзя закрыть — сначала перенесите их на другое значение.",
     invalid_task_required_dimension: "У этой задачи нет значения в {names}, которого требует этот проект.",
     invalid_task_status_draft: "{ref} ещё создаётся, поэтому статус нельзя изменить — завершите создание или удалите задачу.",
+    invalid_comment_task_closed: "{ref} закрыта, а закрытую задачу никто не читает — откройте её снова или создайте новую задачу.",
     invalid_decision_required_dimension: "У этого решения нет значения в {names}, которого требует этот проект.",
     invalid_dimension_values_unordered: "Значения этой категории не упорядочены, поэтому их нельзя переставить.",
     invalid_decision_edit_rejected: "{ref} отклонено, а отклонённое решение нельзя редактировать.",

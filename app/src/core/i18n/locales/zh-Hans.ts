@@ -1622,6 +1622,7 @@ export const zhHans: Translation = {
     invalid_dimension_close_unfinished: "“{value}”上还有 {count} 个未完成的任务，而“{name}”让任务按顺序等待，所以“{value}”暂时不能关闭：请先把它们移到其他取值。",
     invalid_task_required_dimension: "这个任务在 {names} 上没有值，而本项目要求填写。",
     invalid_task_status_draft: "{ref} 还在创建中，无法更改状态——请先完成创建，或将其删除。",
+    invalid_comment_task_closed: "{ref} 已关闭，已关闭的任务没有人会再读——请重新打开它，或新建一个任务。",
     invalid_decision_required_dimension: "这个决定在 {names} 上没有值，而本项目要求填写。",
     invalid_dimension_values_unordered: "该分类的值没有顺序，无法重新排序。",
     invalid_decision_edit_rejected: "{ref} 已被否决，被否决的决策无法编辑。",

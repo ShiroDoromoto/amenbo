@@ -1648,6 +1648,7 @@ export const pl: Translation = {
     invalid_dimension_close_unfinished: "Na «{value}» zostało niezakończonych zadań: {count}, a «{name}» każe zadaniom czekać według kolejności, więc «{value}» nie można jeszcze zamknąć — najpierw przenieś je na inną wartość.",
     invalid_task_required_dimension: "To zadanie nie ma wartości w {names}, czego wymaga ten projekt.",
     invalid_task_status_draft: "{ref} jest wciąż tworzone, więc nie można zmienić statusu — zakończ tworzenie albo usuń zadanie.",
+    invalid_comment_task_closed: "{ref} jest zamknięte, a zamkniętego zadania nikt nie czyta — otwórz je ponownie albo utwórz nowe zadanie.",
     invalid_decision_required_dimension: "Ta decyzja nie ma wartości w {names}, czego wymaga ten projekt.",
     invalid_dimension_values_unordered: "Wartości tej kategorii nie mają kolejności, więc nie można ich przestawiać.",
     invalid_decision_edit_rejected: "{ref} została odrzucona, a odrzuconej decyzji nie można edytować.",

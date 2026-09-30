@@ -347,6 +347,8 @@ pub enum ErrorCode {
     // `not_ready`: that sentence opens with "cannot reserve", and this one is refusing to close or stall a
     // task, not to start it.
     InvalidTaskStatusDraft,
+    // A new comment on a task that is `done` or `rejected` (`AMB-D-963`).
+    InvalidCommentTaskClosed,
     InvalidDecisionRequiredDimension,
     InvalidDecisionEditRejected,
     InvalidDecisionRejectAccepted,
@@ -503,6 +505,7 @@ impl ErrorCode {
             ErrorCode::InvalidDimensionCloseUnfinished => "invalid_dimension_close_unfinished",
             ErrorCode::InvalidTaskRequiredDimension => "invalid_task_required_dimension",
             ErrorCode::InvalidTaskStatusDraft => "invalid_task_status_draft",
+            ErrorCode::InvalidCommentTaskClosed => "invalid_comment_task_closed",
             ErrorCode::InvalidDecisionRequiredDimension => "invalid_decision_required_dimension",
             ErrorCode::InvalidDecisionEditRejected => "invalid_decision_edit_rejected",
             ErrorCode::InvalidDecisionRejectAccepted => "invalid_decision_reject_accepted",
@@ -620,6 +623,7 @@ impl ErrorCode {
         ErrorCode::InvalidDimensionCloseUnfinished,
         ErrorCode::InvalidTaskRequiredDimension,
         ErrorCode::InvalidTaskStatusDraft,
+        ErrorCode::InvalidCommentTaskClosed,
         ErrorCode::InvalidDecisionRequiredDimension,
         ErrorCode::InvalidDecisionEditRejected,
         ErrorCode::InvalidDecisionRejectAccepted,
@@ -868,6 +872,7 @@ mod tests {
             "invalid_dimension_close_unfinished",
             "invalid_task_required_dimension",
             "invalid_task_status_draft",
+            "invalid_comment_task_closed",
             "invalid_decision_required_dimension",
             "invalid_decision_edit_rejected",
             "invalid_decision_reject_accepted",

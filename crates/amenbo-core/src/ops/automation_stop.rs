@@ -253,7 +253,7 @@ fn hand_the_task_back(
     if read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress) {
         crate::ops::task::set_status(tx, task_id, TaskStatus::Todo, ActorKind::Ai)?;
     }
-    if crate::ops::automation_report::closed(tx, task_id)? {
+    if crate::ops::comment::task_closed(tx, task_id)? {
         return Ok(());
     }
     let line = said(tx, run, ending)?;

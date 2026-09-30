@@ -226,7 +226,7 @@ fn an_empty_ref_resolves_to_nothing() {
 
     // Even with exactly one live task and one live decision, an empty ref does not resolve (non-zero exit).
     for empty in ["", " "] {
-        let (_, code) = cli.run(&["task", "done", empty]);
+        let (_, code) = cli.run(&["task", "done", empty, "--report", "終えた"]);
         assert_ne!(code, 0, "an empty task ref {empty:?} resolved");
         let (_, code) = cli.run(&["task", "show", empty]);
         assert_ne!(code, 0, "an empty task ref {empty:?} resolved");

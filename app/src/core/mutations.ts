@@ -420,8 +420,10 @@ export async function completeTask(id: number, report: string): Promise<void> {
   if (!t) return;
   if (t.status === "done") return; // Idempotent, and the report is not piled on a second time.
   // The report first, while the task is still open — the order core writes them in.
-  await addComment(id, text);
-  await setStatus(id, "done");
+  await asOneWrite(async () => {
+    await addComment(id, text);
+    await setStatus(id, "done");
+  });
 }
 
 /**
@@ -444,8 +446,22 @@ export async function rejectTask(id: number, reason: string): Promise<void> {
   const t = getSnapshot().tasks.find((x) => x.id === id);
   if (!t) return;
   if (t.status === "rejected") return; // Idempotent, and the reason is not piled on a second time.
-  await setStatus(id, "rejected");
-  await addComment(id, text);
+  // The reason first, while the task is still open — the order core writes them in.
+  await asOneWrite(async () => {
+    await addComment(id, text);
+    await setStatus(id, "rejected");
+  });
+}
+
+/** The mock's stand-in for core's one transaction: a write that throws leaves the snapshot as it found it. */
+async function asOneWrite(write: () => Promise<void>): Promise<void> {
+  const before = getSnapshot();
+  try {
+    await write();
+  } catch (e) {
+    applySnapshot(before);
+    throw e;
+  }
 }
 
 /**
@@ -2066,6 +2082,14 @@ export async function addComment(taskId: number, text: string): Promise<void> {
   // Core refuses a comment on a task that does not exist (foreign key), so the mock does not stack an orphan row either.
   const t = getSnapshot().tasks.find((x) => x.id === taskId);
   if (!t) return;
+  // Nor one on a closed task (`AMB-D-963`).
+  if (isClosed(t.status)) {
+    throw mockErr(
+      "invalid_comment_task_closed",
+      `cannot comment on task ${t.ref}: it is closed — reopen it with \`task reopen\`, or file a new task`,
+      { fields: { ref: t.ref } },
+    );
+  }
   mockMutate((s) => ({
     ...s,
     tasks: s.tasks.map((x) => (x.id === taskId ? { ...x, comments: x.comments + 1 } : x)),

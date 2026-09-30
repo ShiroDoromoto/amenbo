@@ -1640,6 +1640,7 @@ export const fr: Translation = {
     invalid_dimension_close_unfinished: "Il reste {count} tâche(s) non terminée(s) sur « {value} », et « {name} » fait attendre ses tâches selon son ordre, donc « {value} » ne peut pas encore être fermée : déplacez-les d'abord vers une autre valeur.",
     invalid_task_required_dimension: "Cette tâche ne porte aucune valeur sur {names}, ce que ce projet exige.",
     invalid_task_status_draft: "{ref} est encore en cours de création, son statut ne peut donc pas être modifié — terminez sa création ou supprimez-la.",
+    invalid_comment_task_closed: "{ref} est fermée, et personne ne lit une tâche fermée — rouvrez-la, ou créez une nouvelle tâche.",
     invalid_decision_required_dimension: "Cette décision ne porte aucune valeur sur {names}, ce que ce projet exige.",
     invalid_dimension_values_unordered:
       "Les valeurs de cette catégorie ne portent aucun ordre, elles ne peuvent donc pas être réordonnées.",

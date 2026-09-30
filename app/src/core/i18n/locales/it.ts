@@ -1640,6 +1640,7 @@ export const it: Translation = {
     invalid_dimension_close_unfinished: "Su «{value}» restano {count} attività non finite, e «{name}» fa attendere le sue attività secondo l'ordine, quindi «{value}» non si può ancora chiudere: spostale prima su un altro valore.",
     invalid_task_required_dimension: "Questa attività non porta alcun valore su {names}, che questo progetto richiede.",
     invalid_task_status_draft: "{ref} è ancora in fase di creazione, quindi il suo stato non può essere modificato: completa la creazione o eliminala.",
+    invalid_comment_task_closed: "{ref} è chiusa, e nessuno legge un'attività chiusa: riaprila o crea una nuova attività.",
     invalid_decision_required_dimension: "Questa decisione non porta alcun valore su {names}, che questo progetto richiede.",
     invalid_dimension_values_unordered:
       "I valori di questa categoria non hanno un ordine, quindi non si possono riordinare.",

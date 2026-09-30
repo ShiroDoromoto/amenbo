@@ -1630,6 +1630,7 @@ export const de: Translation = {
     invalid_dimension_close_unfinished: "Auf „{value}“ sind noch {count} unerledigte Aufgabe(n), und „{name}“ lässt seine Aufgaben nach der Reihenfolge warten, daher kann „{value}“ noch nicht geschlossen werden — verschiebe sie zuerst auf einen anderen Wert.",
     invalid_task_required_dimension: "Diese Aufgabe trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
     invalid_task_status_draft: "{ref} wird noch erstellt, deshalb lässt sich der Status nicht ändern — schließe die Erstellung ab, oder lösche die Aufgabe.",
+    invalid_comment_task_closed: "{ref} ist abgeschlossen, und eine abgeschlossene Aufgabe liest niemand mehr — öffne sie wieder, oder lege eine neue Aufgabe an.",
     invalid_decision_required_dimension: "Diese Entscheidung trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
     invalid_dimension_values_unordered:
       "Die Werte dieser Kategorie tragen keine Reihenfolge und lassen sich deshalb nicht umsortieren.",

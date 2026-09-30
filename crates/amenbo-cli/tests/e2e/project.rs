@@ -471,7 +471,7 @@ fn doctor_reports_a_body_pointing_at_a_ref_that_resolves_to_nothing() {
     // only the question doctor asks of it has gone away. Ending the creation comes first, since a task
     // nobody has finished writing has no status to close (`AMB-D-846`).
     cli.finish_creating(&live);
-    cli.run(&["task", "done", &live]);
+    cli.run(&["task", "done", &live, "--report", "終えた"]);
     assert!(
         dead(&cli.json(&["doctor", "--json"])).is_empty(),
         "a finished task's notes are frozen prose, so the ref that died in them is not raised",

@@ -42,10 +42,10 @@ fn full_task_lifecycle() {
     cli.finish_creating(&tid);
 
     // Completion is idempotent.
-    let done = cli.json(&["task", "done", &tid, "--json"]);
+    let done = cli.json(&["task", "done", &tid, "--report", "終えた", "--json"]);
     assert_eq!(done["task"]["completed"], true);
     assert_eq!(done["noop"], false);
-    let again = cli.json(&["task", "done", &tid, "--json"]);
+    let again = cli.json(&["task", "done", &tid, "--report", "終えた", "--json"]);
     assert_eq!(again["noop"], true);
 }
 
@@ -227,7 +227,7 @@ fn task_dependencies_drive_ready_and_unblock() {
     assert_eq!(blocked_ids, vec![bid.clone()]);
 
     // Completing a makes b ready and records task.unblocked on b.
-    cli.json(&["task", "done", &aid, "--json"]);
+    cli.json(&["task", "done", &aid, "--report", "終えた", "--json"]);
     let show_b = cli.json(&["task", "show", &bid, "--json"]);
     assert_eq!(show_b["ready"], true);
     assert!(show_b["blocked_by"].as_array().unwrap().is_empty());
@@ -291,7 +291,7 @@ fn done_asks_whether_a_task_is_closed_and_status_asks_which_way() {
     for id in &ids {
         cli.finish_creating(id);
     }
-    cli.json(&["task", "done", &ids[1], "--json"]);
+    cli.json(&["task", "done", &ids[1], "--report", "終えた", "--json"]);
     cli.json(&["task", "status", &ids[2], "rejected", "--json"]);
 
     let listed = |filter: &str| -> Vec<String> {
@@ -583,7 +583,7 @@ fn status_transitions_and_completed_stays_in_sync() {
     assert_eq!(ip["task"]["completed"], false);
 
     // The done sugar sets status=done and completed=true.
-    let done = cli.json(&["task", "done", &tid, "--json"]);
+    let done = cli.json(&["task", "done", &tid, "--report", "終えた", "--json"]);
     assert_eq!(done["task"]["status"], "done");
     assert_eq!(done["task"]["completed"], true);
 
@@ -653,7 +653,7 @@ fn rejecting_a_task_demands_a_reason_and_keeps_it_on_the_timeline() {
 
 /// `task done --report` is `task done`'s counterpart to `task reject --reason` (`AMB-D-963`): the report
 /// lands on the timeline in the same write as the transition, so it is never left to a comment after the
-/// task has closed. Optional for now — a plain `task done` still ends the task.
+/// task has closed. It is required, as `--reason` is.
 #[test]
 fn done_with_a_report_keeps_it_on_the_timeline() {
     let cli = Cli::new();
@@ -679,11 +679,49 @@ fn done_with_a_report_keeps_it_on_the_timeline() {
     assert_eq!(again["noop"], true);
     assert_eq!(cli.json(&["comment", "list", &tid, "--json"])["comments"].as_array().unwrap().len(), 1);
 
-    // Without --report, done still ends the task and writes nothing on the timeline.
+    // Without --report, done is refused, and moves nothing.
     let other = id_str(&cli.json(&["task", "add", "--title", "報告なしの完了", "--project", &pid, "--json"])["task"]["id"]);
     cli.finish_creating(&other);
-    assert_eq!(cli.json(&["task", "done", &other, "--json"])["task"]["status"], "done");
-    assert!(cli.json(&["comment", "list", &other, "--json"])["comments"].as_array().unwrap().is_empty());
+    let (err, code) = cli.run_err(&["task", "done", &other, "--json"]);
+    assert_eq!(code, 2, "done without a report is refused: {err}");
+    assert_eq!(cli.json(&["task", "show", &other, "--json"])["status"], "todo", "a refused done moves nothing");
+}
+
+/// A closed task takes no new comment (`AMB-D-963`): `comment add` on a `done` or `rejected` task is
+/// refused with `invalid_comment_task_closed`, and the hint names the two ways out. The comments already
+/// there can still be edited and deleted, and a reopened task takes comments again.
+#[test]
+fn a_closed_task_refuses_a_new_comment() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+    let done = id_str(&cli.json(&["task", "add", "--title", "終えたタスク", "--project", &pid, "--json"])["task"]["id"]);
+    let rejected = id_str(&cli.json(&["task", "add", "--title", "やめたタスク", "--project", &pid, "--json"])["task"]["id"]);
+    cli.finish_creating(&done);
+    cli.finish_creating(&rejected);
+    cli.json(&["task", "done", &done, "--report", "終えた", "--json"]);
+    cli.json(&["task", "reject", &rejected, "--reason", "やめた", "--json"]);
+
+    for tid in [&done, &rejected] {
+        let (stderr, code) = cli.run_err(&["comment", "add", tid, "--text", "閉じたあとの一言", "--json"]);
+        assert_ne!(code, 0, "a comment on a closed task is refused: {stderr}");
+        let v: Value = serde_json::from_str(stderr.trim()).unwrap_or_else(|_| panic!("error JSON: {stderr}"));
+        assert_eq!(v["error"]["code"], "invalid_comment_task_closed", "{stderr}");
+        let hint = v["error"]["hint"].as_str().unwrap_or_default();
+        assert!(hint.contains("task reopen") && hint.contains("task add"), "the hint names both ways out: {hint}");
+        let comments = cli.json(&["comment", "list", tid, "--json"]);
+        let comments = comments["comments"].as_array().unwrap();
+        assert_eq!(comments.len(), 1, "only the report or the reason is there: {comments:?}");
+
+        // The comment already there is still the writer's to fix or take back.
+        let cid = id_str(&comments[0]["id"]);
+        cli.json(&["comment", "edit", &cid, "--text", "直した", "--json"]);
+        cli.json(&["comment", "rm", &cid, "--yes", "--json"]);
+    }
+
+    // Reopened, the task takes comments again.
+    cli.json(&["task", "reopen", &done, "--json"]);
+    cli.json(&["comment", "add", &done, "--text", "開き直して書く", "--json"]);
 }
 
 /// The holder-side comment surface of `AMB-D-963`: a comment posted after a task was reserved has not been
@@ -709,7 +747,7 @@ fn comments_posted_after_reservation_surface_when_the_task_is_closed() {
     cli.json(&["comment", "add", &b, "--text", "手放す前に書いたこと", "--json"]);
 
     // Closing it: only the comment from after the reservation comes back.
-    let done = cli.json(&["task", "done", &a, "--json"]);
+    let done = cli.json(&["task", "done", &a, "--report", "終えた", "--json"]);
     let unread = done["task"]["comments_since_reserved"].as_array().unwrap_or_else(|| panic!("the key is there: {done}"));
     let texts: Vec<_> = unread.iter().map(|c| c["text"].as_str().unwrap()).collect();
     assert_eq!(texts, vec!["予約のあとに書いたこと"]);
@@ -754,7 +792,7 @@ fn a_premise_pinned_on_after_reservation_surfaces_on_show_and_completion() {
 
     // Safety net: completing the reserved task folds the same change into the envelope (under the task
     // resource, the write-envelope shape), and never blocks it.
-    let done = cli.json(&["task", "done", &a, "--json"]);
+    let done = cli.json(&["task", "done", &a, "--report", "終えた", "--json"]);
     assert_eq!(done["task"]["completed"], true);
     assert_eq!(id_str(&done["task"]["premise_change"]["added_blockers"][0]["id"]), b);
 }
@@ -895,7 +933,7 @@ fn reserving_a_not_ready_task_is_refused_with_a_way_out() {
     assert_eq!(show["status"], "todo", "a rejected reservation does not move the status");
 
     // Finishing the blocker lets the same reserve through.
-    cli.json(&["task", "done", &bid, "--actor", "ai", "--json"]);
+    cli.json(&["task", "done", &bid, "--report", "終えた", "--actor", "ai", "--json"]);
     let ok = cli.json(&["task", "status", &tid, "in_progress", "--actor", "ai", "--json"]);
     assert_eq!(ok["task"]["status"], "in_progress");
     cli.json(&["task", "status", &tid, "todo", "--actor", "ai", "--json"]);
@@ -943,7 +981,7 @@ fn a_task_still_being_created_refuses_every_status_that_closes_or_stalls_it() {
     refused(&["task", "status", &id, "blocked", "--actor", "ai", "--json"]);
     refused(&["task", "status", &id, "rejected", "--actor", "ai", "--json"]);
     // And the three commands that carry one of their own.
-    refused(&["task", "done", &id, "--actor", "ai", "--json"]);
+    refused(&["task", "done", &id, "--report", "終えた", "--actor", "ai", "--json"]);
     refused(&["task", "block", &id, "--reason", "外の都合", "--actor", "ai", "--json"]);
     refused(&["task", "reject", &id, "--reason", "やらないと決めた", "--actor", "ai", "--json"]);
 
@@ -953,7 +991,7 @@ fn a_task_still_being_created_refuses_every_status_that_closes_or_stalls_it() {
 
     // Ending the creation opens them: the same command that was refused a moment ago goes through.
     cli.finish_creating(&id);
-    assert_eq!(cli.json(&["task", "done", &id, "--actor", "ai", "--json"])["task"]["status"], "done");
+    assert_eq!(cli.json(&["task", "done", &id, "--report", "終えた", "--actor", "ai", "--json"])["task"]["status"], "done");
 }
 
 /// `task show` bundles the four things an agent must read before starting — body, notes, the
@@ -1329,7 +1367,7 @@ fn search_says_where_each_record_stands_before_the_excerpt() {
         &cli.json(&["task", "add", "--project", &pid, "--title", "掃引の下ごしらえ", "--json"])["task"]["id"],
     );
     cli.finish_creating(&over);
-    cli.json(&["task", "done", &over, "--json"]);
+    cli.json(&["task", "done", &over, "--report", "終えた", "--json"]);
 
     let did = id_str(
         &cli.json(&["decision", "add", "--project", &pid, "--title", "掃引を夜に回す", "--json"])["decision"]["id"],

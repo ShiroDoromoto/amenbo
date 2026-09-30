@@ -1622,6 +1622,7 @@ export const th: Translation = {
     invalid_dimension_close_unfinished: "ยังมีงานที่ไม่เสร็จ {count} งานอยู่ใน «{value}» และ «{name}» ให้งานรอตามลำดับ จึงยังปิด «{value}» ไม่ได้ — ย้ายงานเหล่านั้นไปค่าอื่นก่อน",
     invalid_task_required_dimension: "งานนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_task_status_draft: "{ref} ยังสร้างไม่เสร็จ จึงเปลี่ยนสถานะไม่ได้ — กรุณาสร้างให้เสร็จ หรือลบทิ้ง",
+    invalid_comment_task_closed: "{ref} ปิดไปแล้ว และไม่มีใครอ่านงานที่ปิดแล้ว — เปิดงานนี้ใหม่ หรือสร้างงานใหม่",
     invalid_decision_required_dimension: "การตัดสินใจนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_dimension_values_unordered: "ค่าของหมวดนี้ไม่มีลำดับ จึงจัดเรียงใหม่ไม่ได้",
     invalid_decision_edit_rejected: "{ref} ถูกปฏิเสธไปแล้ว และการตัดสินใจที่ถูกปฏิเสธจะแก้ไขไม่ได้",

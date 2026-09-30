@@ -411,7 +411,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             write_envelope(flags, "task.update", "task", serde_json::to_value(&detail).unwrap(), Some(changed), false, format!("✓ Updated task: {}", task_label(t.id)));
         }
         TaskCmd::FinishCreating { id } => return task_finish_creating(store, flags, &id),
-        TaskCmd::Done { id, report } => return task_complete(store, flags, &id, true, body_arg_opt(report)?),
+        TaskCmd::Done { id, report } => return task_complete(store, flags, &id, true, Some(body_arg(report)?)),
         TaskCmd::Reopen { id } => return task_complete(store, flags, &id, false, None),
         TaskCmd::Status { id, status } => return task_set_status(store, flags, &id, &status),
         TaskCmd::Block { id, reason } => return task_block(store, flags, &id, body_arg_opt(reason)?),
@@ -590,23 +590,21 @@ fn unassigned_hint(flags: &Flags, detail: &amenbo_core::view::TaskDetail) -> Opt
     ))
 }
 
-/// `task done <id> [--report <what was done>]` and `task reopen <id>`. The report is `task done`'s
-/// counterpart to `task reject --reason` (`AMB-D-963`): it lands as a comment in the same write as the
-/// transition, so the report is never left to a second command after the task has closed.
+/// `task done <id> --report <what was done>` and `task reopen <id>`. The report is `task done`'s
+/// counterpart to `task reject --reason` (`AMB-D-963`): it is required, and it lands as a comment in the
+/// same write as the transition. `report` is `Some` for `task done` and `None` for `task reopen`.
 fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool, report: Option<String>) -> Result<i32, CliError> {
-    // A `--report` given but empty is a report that says nothing — refused, as `task reject` refuses an
-    // empty reason, rather than read as "no report".
-    let report = match report.map(|r| r.trim().to_string()) {
-        Some(r) if r.is_empty() => {
-            return Err(CliError {
-                code: "invalid_value",
-                message: "--report is empty — say what was done".to_string(),
-                hint: Some("Pass the report, or `-` to read it from stdin.".to_string()),
-                exit: 2,
-            });
-        }
-        r => r,
-    };
+    // An empty `--report` passes clap (it is a value) but says nothing — refused, as `task reject` refuses
+    // an empty reason.
+    let report = report.map(|r| r.trim().to_string());
+    if report.as_deref().is_some_and(str::is_empty) {
+        return Err(CliError {
+            code: "invalid_value",
+            message: "--report is empty — say what was done".to_string(),
+            hint: Some("Pass the report, or `-` to read it from stdin.".to_string()),
+            exit: 2,
+        });
+    }
     let tid = resolve_task(store, id).map_err(CliError::from)?;
     let before = store.task(tid).map_err(CliError::from)?;
     let old = before.map(|t| t.status).unwrap_or_default();
@@ -627,10 +625,9 @@ fn task_complete(store: &mut Store, flags: &Flags, id: &str, completed: bool, re
     // after the reservation *before* the transition retires the in_progress clock they are measured against.
     let pc = premise_change_when(store, tid, completed && old == TaskStatus::InProgress);
     let unread = comments_since_when(store, tid, completed && old == TaskStatus::InProgress);
-    let t = if completed {
-        store.complete_task_with_report(tid, report.as_deref(), flags.facet()?).map_err(CliError::from)?
-    } else {
-        store.set_task_completed(tid, false, flags.facet()?).map_err(CliError::from)?
+    let t = match report.as_deref() {
+        Some(report) => store.complete_task_with_report(tid, report, flags.facet()?).map_err(CliError::from)?,
+        None => store.set_task_completed(tid, false, flags.facet()?).map_err(CliError::from)?,
     };
     // Ending the task — carried out or decided against — may have made dependents ready; emit the
     // unblock signal if so.
@@ -722,7 +719,8 @@ fn task_block(store: &mut Store, flags: &Flags, id: &str, reason: Option<String>
 /// The reason is **required**, and it is why the command exists at all: `task status <id> rejected` can
 /// reach the same state, but nothing there asks for the reasoning, which is the part worth keeping when a
 /// task is closed unfinished. It lands as a comment rather than a column of its own — the same sugar as
-/// `task block --reason` and `decision reject --reason`, so free text keeps its one home on the timeline.
+/// `task block --reason` and `decision reject --reason`, so free text keeps its one home on the timeline —
+/// written in the same write as the transition, as `task done --report` is (`AMB-D-963`).
 fn task_reject(store: &mut Store, flags: &Flags, id: &str, reason: String) -> Result<i32, CliError> {
     // An empty `--reason` passes clap (it is a value) but not the point of the flag: a rejection with no
     // reasoning is the `done`-borrowing this command was added to end.
@@ -748,10 +746,9 @@ fn task_reject(store: &mut Store, flags: &Flags, id: &str, reason: String) -> Re
     // on after the reservation before the transition retires the in_progress clock they are measured against.
     let pc = premise_change_when(store, tid, old == TaskStatus::InProgress);
     let unread = comments_since_when(store, tid, old == TaskStatus::InProgress);
-    let t = store.set_task_status(tid, TaskStatus::Rejected, flags.facet()?).map_err(CliError::from)?;
+    let t = store.reject_task_with_reason(tid, &reason, flags.facet()?).map_err(CliError::from)?;
     // A blocker decided against is a blocker no longer — dependents may have just become ready.
     emit_unblocks(store, flags, tid);
-    store.add_task_comment(tid, flags.facet()?, &reason).map_err(CliError::from)?;
     let detail = store.task_detail(t.id).map_err(CliError::from)?;
     let mut resource = serde_json::to_value(&detail).unwrap();
     attach_premise_change(&mut resource, &pc);

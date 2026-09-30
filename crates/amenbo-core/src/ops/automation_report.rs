@@ -374,7 +374,7 @@ pub fn done(
         .and_then(|s| s.task_id)
         .filter(|_| def.report_to_task && !report.trim().is_empty());
     let withheld = match owed_to {
-        Some(task_id) => closed(tx, task_id)?,
+        Some(task_id) => crate::ops::comment::task_closed(tx, task_id)?,
         None => false,
     };
 
@@ -399,12 +399,6 @@ pub fn done(
         no_task_after_all(tx, &ended, stretch.as_ref(), now)?;
     }
     whats_next(tx, &def, &ended, taken.id)
-}
-
-/// Is the task closed, so that a line on it would be read by nobody? The same test core refuses a
-/// comment by, so the run and the refusal cannot drift apart.
-pub(crate) fn closed(tx: &WriteTx<'_>, task_id: i64) -> Result<bool> {
-    Ok(read::task_status(tx.conn(), task_id)?.is_some_and(|status| status.is_closed()))
 }
 
 /// The refusal of a way out the step does not declare, carrying the ones it does as they are typed, so

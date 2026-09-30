@@ -1640,6 +1640,7 @@ export const es: Translation = {
     invalid_dimension_close_unfinished: "Quedan {count} tarea(s) sin terminar en «{value}», y «{name}» hace esperar a sus tareas según su orden, así que «{value}» aún no se puede cerrar: muévelas primero a otro valor.",
     invalid_task_required_dimension: "Esta tarea no lleva ningún valor en {names}, que este proyecto exige.",
     invalid_task_status_draft: "{ref} todavía se está creando, así que su estado no se puede cambiar: termina de crearla o elimínala.",
+    invalid_comment_task_closed: "{ref} está cerrada y nadie lee una tarea cerrada: vuelve a abrirla o crea una tarea nueva.",
     invalid_decision_required_dimension: "Esta decisión no lleva ningún valor en {names}, que este proyecto exige.",
     invalid_dimension_values_unordered:
       "Los valores de esta categoría no llevan orden, así que no se pueden reordenar.",

@@ -2125,7 +2125,7 @@ pub fn task_done(id: i64, report: String) -> Result<WriteAck, CmdError> {
             // new to report (the CLI's `task done --report` behaves the same).
             return Ok(());
         }
-        store.complete_task_with_report(id, Some(report), ActorKind::Human)?;
+        store.complete_task_with_report(id, report, ActorKind::Human)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]).task(id))
@@ -2135,7 +2135,8 @@ pub fn task_done(id: i64, report: String) -> Result<WriteAck, CmdError> {
 /// CLI's `task reject <id> --reason <why>`. `task_status` above can reach `rejected` too, and this
 /// exists for what that path cannot ask for: **the reason, which is required**. It is the part worth
 /// keeping when a task is closed unfinished, and it lands as a comment on the timeline rather than a
-/// field of its own — free text keeps its one home, exactly as the CLI has it.
+/// field of its own — free text keeps its one home, exactly as the CLI has it. The comment is written in
+/// the **same write** as the transition (core's `reject_task_with_reason`), as [`task_done`]'s report is.
 ///
 /// The pull-down is the GUI's only door to this status, and it collects the reason before it calls,
 /// so an empty one is a slip rather than a choice: it is refused here as well, and nothing is written.
@@ -2153,8 +2154,7 @@ pub fn task_reject(id: i64, reason: String) -> Result<WriteAck, CmdError> {
             // nothing new to explain (the CLI's `task reject` and `decision reject` behave the same).
             return Ok(());
         }
-        store.set_task_status(id, TaskStatus::Rejected, ActorKind::Human)?;
-        store.add_task_comment(id, ActorKind::Human, reason)?;
+        store.reject_task_with_reason(id, reason, ActorKind::Human)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]).task(id))

@@ -1623,6 +1623,7 @@ export const nl: Translation = {
     invalid_dimension_close_unfinished: "Er staan nog {count} onafgemaakte taak/taken op «{value}», en «{name}» laat zijn taken wachten volgens de volgorde, dus «{value}» kan nog niet gesloten worden — verplaats ze eerst naar een andere waarde.",
     invalid_task_required_dimension: "Deze taak draagt geen waarde op {names}, wat dit project vereist.",
     invalid_task_status_draft: "{ref} wordt nog aangemaakt, dus de status kan niet worden gewijzigd — rond het aanmaken af of verwijder de taak.",
+    invalid_comment_task_closed: "{ref} is gesloten, en een gesloten taak leest niemand meer — heropen hem, of maak een nieuwe taak aan.",
     invalid_decision_required_dimension: "Deze beslissing draagt geen waarde op {names}, wat dit project vereist.",
     invalid_dimension_values_unordered:
       "De waarden van deze categorie hebben geen volgorde en kunnen dus niet worden herschikt.",

@@ -1748,6 +1748,51 @@ describe("the picture inside an action", () => {
     expect(end.x).toBeLessThanOrEqual(gaveUp.x + gaveUp.w);
   });
 
+  /** Three steps in a row, the last two leaving the action by lines down onto two marks side by side,
+   *  the one on the right by a way out whose name is longer than its leg across. */
+  function besideMark(): PicGraph {
+    const word = "もう一度はじめからやり直すもう一度はじめからやり直す";
+    return inside({
+      boxes: [
+        step({ id: 1, name: "one", exits: [] }),
+        step({ id: 2, name: "two", exits: [{ id: 11, name: "*", outputs: [] }] }),
+        step({ id: 3, name: "three", exits: [{ id: 12, name: word, outputs: [] }] }),
+      ],
+      edges: [
+        edge({ id: 21, fromId: 2, exitName: "*", ends: "exit", exitTo: "完了" }),
+        edge({ id: 22, fromId: 3, exitName: word, ends: "exit", exitTo: "gave up" }),
+      ],
+    });
+  }
+
+  it("lays out a line from the last row down onto a way out whose name, beside the leg into the mark, runs over the leg of another", () => {
+    const picture = layOut(besideMark());
+    // Laid out with the boxes side by side, its leg across is shorter than its name, which is written
+    // beside the leg into the mark and runs over the leg of the line down onto the mark beside it. The
+    // two boxes stand further apart for it, the mark being in no row of theirs.
+    const long = picture.lines.find((one) => one.key.endsWith("22"))!;
+    const gaveUp = picture.marks.find((one) => one.exitName === "gave up")!;
+    expect(long.points[long.points.length - 1]!.y).toBe(gaveUp.y);
+    // No piece of any line runs through the name of a line between a box and a mark.
+    for (const one of picture.lines.filter((line) => line.key !== "in")) {
+      const words = wordBox(one);
+      for (const other of picture.lines) {
+        for (const piece of pieces(other)) {
+          expect(overlaps(piece, words, true), `${one.key} / ${other.key}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("draws the rows as they stand once it has laid them out as many times as it may", () => {
+    // Laid out once, the name still runs over the leg: the two boxes are not yet further apart.
+    const once = layOut(besideMark(), 1);
+    const long = once.lines.find((one) => one.key.endsWith("22"))!;
+    const other = once.lines.find((one) => one.key.endsWith("21"))!;
+    expect(pieces(other).some((piece) => overlaps(piece, wordBox(long), true))).toBe(true);
+    expect(at(once, 3).x).toBeLessThan(at(layOut(besideMark()), 3).x);
+  });
+
   it("draws no line for what the action takes in or hands out (AMB-D-1001)", () => {
     const boxes = [
       step({

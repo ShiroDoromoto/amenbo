@@ -718,6 +718,9 @@ export function wordW(exitName: string | undefined): number {
   return [...exitName].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
 }
 
+/** How many times `layOut` lays the rows out at the most. */
+const LAYOUT_ROUNDS = 16;
+
 /**
  * Lay one picture out.
  *
@@ -732,17 +735,20 @@ export function wordW(exitName: string | undefined): number {
  * between two boxes of a row, where the name of a line down past one of them runs over a leg of the
  * other, or where the name over a line's turn runs over the leg of another from its row: where the
  * name is written is known once the rows stand (`AMB-T-5880`).
+ *
+ * Standing two boxes further apart need not move a name off the leg it ran over, so the rows are laid
+ * out `rounds` times at the most, and the picture of the last is drawn as it stands.
  */
-export function layOut(graph: PicGraph | null): Picture {
+export function layOut(graph: PicGraph | null, rounds = LAYOUT_ROUNDS): Picture {
   let legs = new Map<string, number>();
   let turns = new Map<number, number>();
   let gaps = new Map<number, number>();
-  for (;;) {
+  for (let round = 1; ; round++) {
     const { picture, legsOf, turnsOf, gapsOf } = layOutWith(graph, legs, turns, gaps);
     const more = [...legsOf].filter(([key, count]) => count > (legs.get(key) ?? 0));
     const lower = [...turnsOf].filter(([boxId, count]) => count > (turns.get(boxId) ?? 1));
     const wider = [...gapsOf].filter(([boxId, gap]) => gap > (gaps.get(boxId) ?? 0));
-    if (more.length === 0 && lower.length === 0 && wider.length === 0) return picture;
+    if (round >= rounds || (more.length === 0 && lower.length === 0 && wider.length === 0)) return picture;
     legs = new Map([...legs, ...more]);
     turns = new Map([...turns, ...lower]);
     gaps = new Map([...gaps, ...wider]);

@@ -13,7 +13,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t, tf } from "../core/i18n";
 import { AutomationPicture } from "./AutomationPicture";
-import { automationGraph, layOut, type PicGraph } from "./automationLayout";
+import { automationGraph, layOut, TAKES_INSET, type PicGraph } from "./automationLayout";
 import type { AutomationDetailDto, AutomationPlacementDto } from "../bindings/bindings";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -498,6 +498,9 @@ describe("what the picture marks, as the mock draws it", () => {
     const takes = [...container.querySelectorAll<HTMLElement>(".autopic__takes")];
     expect(takes.map((one) => one.textContent)).toEqual([t("auto.step.takesTask")]);
     expect(takes[0]!.style.top).toBe(nodes()[0]!.style.top);
+    // It ends short of the box's right edge, where a line in from the right margin lands.
+    const [box, px] = [nodes()[0]!, (css: string) => parseFloat(css)];
+    expect(px(takes[0]!.style.left)).toBe(px(box.style.left) + px(box.style.width) - TAKES_INSET);
     expect(nodes()[0]!.querySelector(".autopic__lib")?.textContent).toBe(t("auto.actions.reachGlobal"));
     expect(nodes()[1]!.querySelector(".autopic__lib")?.textContent).toBe(t("auto.actions.reachProject"));
   });

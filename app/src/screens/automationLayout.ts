@@ -163,6 +163,9 @@ const LANE_CLEAR = 56;
  *  right. */
 const LAND = 12;
 const LAND_GAP = 12;
+/** How far in from a box's right edge the word over the box that takes the task ends — left of where
+ *  the line in from the right margin lands, so its arrowhead stays off the word. */
+export const TAKES_INSET = LAND * 2;
 /**
  * A way out that goes nowhere: where its `+` sits on it, how far the shortest of them runs, and how
  * much further each one to its left runs — one line of words, so every name has a row of its own.

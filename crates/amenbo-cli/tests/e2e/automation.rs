@@ -780,6 +780,33 @@ fn pause_before_next_task_asks_the_projects_runs() {
     cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 }
 
+/// **A run waiting for a task is paused by the time the asking returns** (`AMB-D-1009`) — with no
+/// watch looking on to open its step again.
+#[test]
+fn pause_before_next_task_pauses_a_run_waiting_for_a_task_at_once() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _, take) = a_picture(&cli, false);
+    cli.json(&[
+        "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
+        "--choice", "着手できるタスクが出るまで待つ", "--json",
+    ]);
+    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    let project = cli.json(&["automation", "run-show", &run, "--json"])["run"]["project_id"].to_string();
+    assert_eq!(cli.json(&["automation", "run-show", &run, "--json"])["waiting"].as_bool(), Some(true));
+
+    let asked = cli.json(&["automation", "pause", "--before-next-task", "--project", &project, "--json"]);
+    assert_eq!(asked["count"].as_u64(), Some(1), "{asked}");
+    assert_eq!(asked["automation_runs"][0]["state"].as_str(), Some("paused"), "{asked}");
+
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    assert_eq!(shown["run"]["status"].as_str(), Some("paused"), "{shown}");
+    assert_eq!(shown["run"]["pause_before_next_task"].as_bool(), Some(false), "{shown}");
+
+    let canceled = cli.json(&["automation", "cancel", &run, "--json"]);
+    assert_eq!(canceled["automation_run"]["status"].as_str(), Some("canceled"), "{canceled}");
+}
+
 /// **Only a failure is waiting to be seen** (`AMB-D-989`): a run a person stopped needs nobody, so
 /// saying it has been seen is refused, and its account says nothing about being seen. That a failure
 /// takes the mark, with whoever set it, is held by the core's own tests — a terminal has no way to make

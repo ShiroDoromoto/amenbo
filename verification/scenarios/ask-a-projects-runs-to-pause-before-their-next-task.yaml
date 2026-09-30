@@ -1,0 +1,86 @@
+# Pausing one run waits for the action under way to end, and an action can be half of one task. The
+# other pause is asked of the whole project: each run that takes tasks goes on until it next comes to
+# the built-in that takes one, and pauses there with no task in hand. A run that takes no task has
+# nothing to be cut off in the middle of, so it is not asked and goes on to its end.
+#
+# A run started at a terminal opens no step, so neither pause settles here: the run stays `running`
+# with the request on it. What the road reads is which runs were asked.
+id: ask-a-projects-runs-to-pause-before-their-next-task
+title: Asking a project to pause before the next task asks the runs that take tasks, and leaves the others running
+description: >
+  Start two runs in one project, one of an automation that takes tasks and one of an automation that
+  does not. Ask the project to pause before the next task. The run that takes tasks carries the
+  request and is still running; the other carries none.
+given:
+  # Two rather than one for `hold-a-run-and-let-it-go-again`'s reason: the premise cannot stand up a
+  # row shorter than two. The automation that takes no task runs a step, which needs an agent to start.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+
+  # The automation that takes tasks. Nothing is handed to the AI, so its filter finds none, and the
+  # way out for no task is drawn for its launch.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that takes tasks" }, as: taking }
+  - { type: action, domain: automation, op: place-add, with: { target: taking, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: taking, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+  # The automation that takes none: one action of one step, and the end.
+  - { type: action, domain: automation, op: action-add, with: { name: tidy }, as: tidy }
+  - { type: action, domain: automation, op: step-add, with: { target: tidy, name: sweep, prompt: tidy the folder }, as: sweep }
+  - { type: action, domain: automation, op: action-entry, with: { target: tidy, step: sweep } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: sweep, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that takes none" }, as: plain }
+  - { type: action, domain: automation, op: place-add, with: { target: plain, action: tidy }, as: at_tidy }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_tidy, step: sweep, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_tidy } }
+
+steps_cli:
+  # A run's steps are opened by the app, so a run is started with one up on the store.
+  - { type: action, domain: store, op: app-up }
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: taking
+    as: taking_run
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: plain
+    as: plain_run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: taking_run
+      status: running
+      pause_before_next_task: false
+
+  - type: action
+    domain: automation
+    op: pause-before-next-task
+
+  # Asked, and still running: the pause waits for the built-in that takes a task. It is not the
+  # pause at the end of the action, which is a request of its own.
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: taking_run
+      status: running
+      pause_before_next_task: true
+      pause_requested: false
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: plain_run
+      status: running
+      pause_before_next_task: false
+      pause_requested: false

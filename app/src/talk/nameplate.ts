@@ -28,7 +28,7 @@
 // every value on the line is one more thing the automation's name is cut short by. So the step has a
 // line of its own, the task count is on the task's line, which is what it counts, and a run's number
 // is written the short way (`#12`). **The lamp is not drawn on a run's pane**: its lit face says
-// output is arriving, and beside the state's own moving dot it read as a second mark saying running.
+// output is arriving, and beside the glowing mark it read as a second mark saying running.
 //
 // **Which step says the action it is inside where that says something** (`AMB-D-949`). A launch opens
 // one spot of the picture into a column of steps, so a step's name on its own does not always say
@@ -38,14 +38,17 @@
 // the step's. The step's own name is the one drawn heavier, because it is the part that changes from
 // one step to the next.
 //
-// **The run's state is on the row too** (`AMB-D-955`): running, paused, completed, failed or canceled,
-// said in the words the "running" and "history" tabs say it in (`../core/runWords`), on a chip in the
-// state's own colour. A pane outlives the step it was opened for, so without it a run that had
-// finished and one that had stopped partway looked the same — the row went on naming the last step
-// either way. **Running is drawn moving**, because it is the one state that is about now: the other
-// four are over or held, and hold still. It is last on the first line, so the pane's controls for the
-// run stand straight after it (`../shell/TerminalPane`). What a failure is waiting for is not the row's to say: it
-// is the band under the header, which has the press that answers it (`../shell/TerminalPane`).
+// **The run's state is on the row too** (`AMB-D-955`, `AMB-D-1010`): said in the words the "running"
+// and "history" tabs say it in (`../core/runWords`), on a chip in the state's own colour. A pane
+// outlives the step it was opened for, so without it a run that had finished and one that had stopped
+// partway looked the same — the row went on naming the last step either way. **Running is the one
+// state with no chip**: the mark in front of the name glows while the run is under way instead, and
+// holds still and a little faded once it is paused or over. A pause asked for and not yet settled, and
+// a run waiting for its next task, are still under way and glow, but keep their chip: without the
+// word, a press on pause looked to have done nothing. The chip is last on the first line, so the
+// pane's controls for the run stand straight after it (`../shell/TerminalPane`). What a failure is
+// waiting for is not the row's to say: it is the band under the header, which has the press that
+// answers it (`../shell/TerminalPane`).
 //
 // **A name too long for the row is elided, and given back in full by a panel of the row's own**
 // (`../styles/global.css`). A name is what the agent typed, so it is the one thing here worth a way
@@ -143,10 +146,14 @@ export type Say = {
  * are what a reader goes to next.
  */
 export type RunState = {
-  /** Which of the five it is (`AMB-D-955`) — what the mark is coloured and moved by. */
+  /** Which of the five it is (`AMB-D-955`) — what the chip is coloured by, and whether the mark in
+   *  front of the name glows. */
   readonly status: "running" | "paused" | "completed" | "failed" | "canceled";
   /** The state in one word, a pause asked for and not yet settled included. */
   readonly word: string;
+  /** The run is running and its built-in is waiting for a task, which the word says in place of
+   *  running (`../core/runWords`'s `waitingState`). */
+  readonly waiting?: true;
   /** A pause has been asked for and the step under way has not finished yet — the run is still
    *  `running`, and a second press on pause would be asking for what is already coming. */
   readonly pauseRequested: boolean;
@@ -207,7 +214,8 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   // short enough (`#12`) not to cost the name much.
   const runNo = part("no");
   // The run's state, last on the line: it is what the rest of the line is doing, and the pane's own
-  // controls for it stand straight after it (`../shell/TerminalPane`).
+  // controls for it stand straight after it (`../shell/TerminalPane`). Running says no word here: the
+  // mark glows instead.
   const state = part("state");
   host.append(row);
 
@@ -290,7 +298,8 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     // the mark is away, the run's lines are down, and the panel says only the name.
     auto.hidden = runNo.hidden = plate.run === null;
     builtin.hidden = plate.run?.builtin !== true;
-    state.hidden = plate.run?.state == null;
+    const now = plate.run?.state ?? null;
+    state.hidden = now === null || (now.status === "running" && !now.pauseRequested && !now.waiting);
     row.classList.toggle("plate--run", plate.run !== null);
     if (plate.run !== null) {
       // The run's number is the same in every language, and written the way a reader would type it
@@ -300,10 +309,14 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
       nth.textContent = plate.run.task === null ? "" : tf("face.runTask", { n: plate.run.task.seq });
       taskRef.textContent = plate.run.task?.ref ?? "";
       taskTitle.textContent = plate.run.task?.title ?? "";
-      const now = plate.run.state;
       state.textContent = now?.word ?? "";
-      if (now === null) delete state.dataset.state;
-      else state.dataset.state = now.status;
+      if (now === null) {
+        delete state.dataset.state;
+        delete auto.dataset.run;
+      } else {
+        state.dataset.state = now.status;
+        auto.dataset.run = now.status === "running" ? "on" : "still";
+      }
     }
     peekTask.textContent = plate.run?.task
       ? `${plate.run.task.ref} ${plate.run.task.title}`

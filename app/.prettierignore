@@ -1,0 +1,5 @@
+# The code is formatted by hand. Only the files below are kept in prettier's style.
+*
+!*/
+!src/screens/automationLayout.ts
+!src/screens/automationLayout.test.ts

@@ -754,6 +754,32 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_cancel_name() {
     assert!(canceled["automation_run"]["stopped_reason"].is_null(), "a cancel carries no reason");
 }
 
+/// **A project's runs are asked to pause before their next task** (`AMB-D-1009`): no run id, the
+/// project's runs that take tasks. A run already asked is not asked again, and none to ask is no error.
+#[test]
+fn pause_before_next_task_asks_the_projects_runs() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_launchable(&cli);
+    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    let project = cli.json(&["automation", "run-show", &run, "--json"])["run"]["project_id"].to_string();
+
+    let asked = cli.json(&["automation", "pause", "--before-next-task", "--project", &project, "--json"]);
+    assert_eq!(asked["count"].as_u64(), Some(1), "{asked}");
+    assert_eq!(asked["noop"].as_bool(), Some(false), "{asked}");
+    assert_eq!(asked["automation_runs"][0]["run"].to_string(), run, "{asked}");
+
+    let again = cli.json(&["automation", "pause", "--before-next-task", "--project", &project, "--json"]);
+    assert_eq!(again["count"].as_u64(), Some(0), "{again}");
+    assert_eq!(again["noop"].as_bool(), Some(true), "{again}");
+
+    // A run id and the whole project are two different askings.
+    let (refused, code) = cli.run_err(&["automation", "pause", &run, "--before-next-task", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+
+    cli.json(&["automation", "cancel", &run, "--force", "--json"]);
+}
+
 /// **Only a failure is waiting to be seen** (`AMB-D-989`): a run a person stopped needs nobody, so
 /// saying it has been seen is refused, and its account says nothing about being seen. That a failure
 /// takes the mark, with whoever set it, is held by the core's own tests — a terminal has no way to make

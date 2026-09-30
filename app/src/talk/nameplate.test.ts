@@ -115,7 +115,7 @@ describe("the row above a run's pane", () => {
     expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(false);
     // The first line holds the run and the state, nothing more (`AMB-T-5739`): the step is the
     // second line's, and the count of tasks is the task line's. The lamp is not drawn: beside the
-    // state's own dot it read as a second mark saying running.
+    // glowing mark it read as a second mark saying running.
     const row = host.querySelector(".plate") as HTMLElement;
     expect([...row.children].map((el) => el.className))
       .toEqual(["plate__dot", "plate__auto", "plate__name", "plate__no", "plate__state"]);
@@ -209,15 +209,48 @@ describe("the row above a run's pane", () => {
     const host = document.createElement("div");
     const draw = mountNameplate(host);
 
-    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status: "running", word: "実行中" } } });
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status: "paused", word: "一時停止中" } } });
     const state = host.querySelector(".plate__state") as HTMLElement;
     expect(state.hidden).toBe(false);
-    expect(state.textContent).toBe("実行中");
-    expect(state.dataset.state).toBe("running");
+    expect(state.textContent).toBe("一時停止中");
+    expect(state.dataset.state).toBe("paused");
 
     draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status: "completed", word: "完了" } } });
     expect(state.textContent).toBe("完了");
     expect(state.dataset.state).toBe("completed");
+  });
+
+  /// Running is said by the mark glowing rather than by a chip (`AMB-D-1010`).
+  it("says running by the mark glowing, and draws the mark still once the run is held or over", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+    const state = () => host.querySelector(".plate__state") as HTMLElement;
+    const auto = () => host.querySelector(".plate__auto") as HTMLElement;
+
+    draw({ name: "/work/a", dot: STILL, run: RUN });
+    expect(auto().dataset.run).toBeUndefined();
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status: "running", word: "実行中" } } });
+    expect(state().hidden).toBe(true);
+    expect(auto().dataset.run).toBe("on");
+
+    // A pause on its way, and a run waiting for its next task, are still running: the mark glows, and
+    // the chip says which.
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status: "running", word: "一時停止待ち", pauseRequested: true } } });
+    expect(state().hidden).toBe(false);
+    expect(state().textContent).toBe("一時停止待ち");
+    expect(auto().dataset.run).toBe("on");
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status: "running", word: "タスク待ち", waiting: true } } });
+    expect(state().hidden).toBe(false);
+    expect(state().textContent).toBe("タスク待ち");
+    expect(auto().dataset.run).toBe("on");
+
+    for (const status of ["paused", "completed", "failed", "canceled"] as const) {
+      draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status, word: status } } });
+      expect(state().hidden).toBe(false);
+      expect(auto().dataset.run).toBe("still");
+    }
   });
 
   it("says nothing of a run on a pane that is not one", () => {

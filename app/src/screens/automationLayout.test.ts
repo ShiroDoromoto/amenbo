@@ -7,7 +7,16 @@
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
-import { automationGraph, edgeWord, layOut, openWord, type PicGraph, type PicLine } from "./automationLayout";
+import {
+  automationGraph,
+  edgeWord,
+  layOut,
+  openWord,
+  wordLeft,
+  wordW,
+  type PicGraph,
+  type PicLine,
+} from "./automationLayout";
 import type {
   AutomationDetailDto,
   AutomationEdgeDto,
@@ -18,11 +27,10 @@ import type {
 
 let nextId = 1;
 
-function step(
-  over: Partial<AutomationPlacementDto> & { id: number; name: string },
-): AutomationPlacementDto {
+function step(over: Partial<AutomationPlacementDto> & { id: number; name: string }): AutomationPlacementDto {
   return {
-    actionId: 900 + over.id, global: false,
+    actionId: 900 + over.id,
+    global: false,
     prompt: "",
     interactive: false,
     reportToTask: false,
@@ -46,11 +54,7 @@ function step(
  * A spot that takes the next task — the one that begins a stretch. What makes it one is a
  * `task_take` **output** on a way out, which is where core looks for it.
  */
-function taker(
-  id: number,
-  name: string,
-  over: Partial<AutomationPlacementDto> = {},
-): AutomationPlacementDto {
+function taker(id: number, name: string, over: Partial<AutomationPlacementDto> = {}): AutomationPlacementDto {
   const one = step({ id, name, ...over });
   return {
     ...one,
@@ -88,20 +92,14 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
   })!;
 }
 
-const at = (picture: ReturnType<typeof layOut>, boxId: number) =>
-  picture.nodes.find((one) => one.boxId === boxId)!;
+const at = (picture: ReturnType<typeof layOut>, boxId: number) => picture.nodes.find((one) => one.boxId === boxId)!;
 
 type Box = { left: number; right: number; top: number; bottom: number };
 
-/** How wide the picture guesses a word is written: a wide character twelve points, any other seven. */
-function wordWide(word: string): number {
-  return [...word].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
-}
-
 /** Where a line's words stand, as wide as the picture guesses them. */
 function wordBox(one: PicLine): Box {
-  const wide = wordWide(edgeWord(one));
-  const left = one.align === "end" ? one.at.x - wide : one.align === "middle" ? one.at.x - wide / 2 : one.at.x;
+  const wide = wordW(edgeWord(one));
+  const left = wordLeft(one, wide);
   return { left, right: left + wide, top: one.at.y - 10, bottom: one.at.y + 1 };
 }
 
@@ -256,17 +254,18 @@ describe("the picture of an automation", () => {
   it("takes no task at a box whose settings keep it off the way out that hands one on (AMB-T-5669)", () => {
     // "File a task", answered to leave the task it files untaken: core says it never leaves by the
     // way out that takes it, so nothing is handed on there however that way out is drawn.
-    const filer = (never: string) => step({
-      id: 1,
-      name: "file one",
-      builtin: "make_task",
-      neverLeavesBy: never,
-      exits: [
-        { id: nextId++, name: "made", outputs: [port("task", "task_make")] },
-        { id: nextId++, name: "made and taken", outputs: [port("task", "task_take")] },
-        { id: nextId++, name: "*", outputs: [] },
-      ],
-    });
+    const filer = (never: string) =>
+      step({
+        id: 1,
+        name: "file one",
+        builtin: "make_task",
+        neverLeavesBy: never,
+        exits: [
+          { id: nextId++, name: "made", outputs: [port("task", "task_make")] },
+          { id: nextId++, name: "made and taken", outputs: [port("task", "task_take")] },
+          { id: nextId++, name: "*", outputs: [] },
+        ],
+      });
     const untaken = layOut(detail({ entryPlacementId: 1, placements: [filer("made and taken")] }));
     expect(untaken.laps, "a stretch was drawn for a task nobody takes").toEqual([]);
     expect(at(untaken, 1).takes, "the box was marked as taking the next task").not.toBe(true);
@@ -291,7 +290,10 @@ describe("the picture of an automation", () => {
       entryPlacementId: 1,
       placements: [
         taker(1, "take", {
-          exits: [{ id: 91, name: "完了", outputs: [port("note", "value")] }, { id: 92, name: "*", outputs: [] }],
+          exits: [
+            { id: 91, name: "完了", outputs: [port("note", "value")] },
+            { id: 92, name: "*", outputs: [] },
+          ],
         }),
         step({ id: 2, name: "work", inputs: [port("note", "value")] }),
       ],
@@ -311,7 +313,14 @@ describe("the picture of an automation", () => {
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "work" }),
-        step({ id: 3, name: "check", exits: [{ id: 93, name: "完了", outputs: [] }, { id: 94, name: "again", outputs: [] }] }),
+        step({
+          id: 3,
+          name: "check",
+          exits: [
+            { id: 93, name: "完了", outputs: [] },
+            { id: 94, name: "again", outputs: [] },
+          ],
+        }),
       ],
       edges: [
         edge({ id: 1, fromId: 1, toId: 2 }),
@@ -367,7 +376,12 @@ describe("the picture of an automation", () => {
     const one = detail({
       entryPlacementId: 1,
       placements: [
-        taker(1, "take", { exits: [{ id: 91, name: "a", outputs: [] }, { id: 92, name: "b", outputs: [] }] }),
+        taker(1, "take", {
+          exits: [
+            { id: 91, name: "a", outputs: [] },
+            { id: 92, name: "b", outputs: [] },
+          ],
+        }),
         step({ id: 2, name: "work" }),
         step({ id: 3, name: "check" }),
         step({ id: 4, name: "close" }),
@@ -397,7 +411,9 @@ describe("the picture of an automation", () => {
     // nearer joins, and the one from there on to the line into the box.
     const [far, near] = [line("edge-4"), line("edge-5")].sort((a, b) => b.points[1]!.y - a.points[1]!.y);
     const piece = (edge: PicLine) =>
-      picture.lines.find((one) => one.joins === true && one.carries !== undefined && one.points[0]!.y === edge.points.slice(-1)[0]!.y)!;
+      picture.lines.find(
+        (one) => one.joins === true && one.carries !== undefined && one.points[0]!.y === edge.points.slice(-1)[0]!.y,
+      )!;
     expect(piece(far!).points.slice(-1)[0]!.y).toBe(near!.points.slice(-1)[0]!.y);
     expect(piece(near!).points.slice(-1)[0]!.y).toBe(into.points[0]!.y);
     // What each piece carries: the line further out goes on along the nearer one's piece.
@@ -468,7 +484,10 @@ describe("the picture of an automation", () => {
     expect(lane("edge-9")).toBeLessThan(lane("edge-8"));
     // Into the third step, two lines: the one the two back join into, and the one from the row
     // above. Each lands on a place of its own, and turns down at a height of its own.
-    const joined = picture.lines.find((one) => one.key.startsWith("into-") && one.points.slice(-1)[0]!.y === picture.nodes.find((box) => box.boxId === 3)!.y)!;
+    const joined = picture.lines.find(
+      (one) =>
+        one.key.startsWith("into-") && one.points.slice(-1)[0]!.y === picture.nodes.find((box) => box.boxId === 3)!.y,
+    )!;
     const into = [joined, line("edge-2")].map((one) => one.points.slice(-2));
     expect(new Set(into.map(([, foot]) => foot!.x)).size).toBe(2);
     expect(new Set(into.map(([turn]) => turn!.y)).size).toBe(2);
@@ -480,7 +499,14 @@ describe("the picture of an automation", () => {
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "work" }),
-        step({ id: 3, name: "check", exits: [{ id: 93, name: "again", outputs: [] }, { id: 94, name: "*", outputs: [] }] }),
+        step({
+          id: 3,
+          name: "check",
+          exits: [
+            { id: 93, name: "again", outputs: [] },
+            { id: 94, name: "*", outputs: [] },
+          ],
+        }),
       ],
       edges: [
         edge({ id: 1, fromId: 1, toId: 2 }),
@@ -522,7 +548,14 @@ describe("the picture of an automation", () => {
         entryPlacementId: 1,
         placements: [
           taker(1, "take"),
-          step({ id: 2, name: "a", exits: [{ id: 21, name: "skip", outputs: [] }, { id: 22, name: "完了", outputs: [] }] }),
+          step({
+            id: 2,
+            name: "a",
+            exits: [
+              { id: 21, name: "skip", outputs: [] },
+              { id: 22, name: "完了", outputs: [] },
+            ],
+          }),
           step({ id: 3, name: "b" }),
           step({ id: 4, name: "c" }),
           step({ id: 5, name: "d", exits: [{ id: 51, name: "again", outputs: [] }] }),
@@ -539,7 +572,10 @@ describe("the picture of an automation", () => {
     );
     const line = (key: string) => picture.lines.find((one) => one.key === key)!;
     const box = (id: number) => picture.nodes.find((one) => one.boxId === id)!;
-    for (const [key, id] of [["edge-5", 2], ["edge-6", 5]] as const) {
+    for (const [key, id] of [
+      ["edge-5", 2],
+      ["edge-6", 5],
+    ] as const) {
       expect(line(key).at.y).toBeGreaterThan(box(id).y + box(id).h);
       expect(line(key).at.y).toBeLessThan(box(id).y + box(id).h + 20);
       expect(line(key).at.x).toBeLessThan(box(id).x);
@@ -548,7 +584,10 @@ describe("the picture of an automation", () => {
   });
 
   it("sends a line out of a box on the right of its row to the right margin, its name beside that box", () => {
-    const two = [{ id: 21, name: "a", outputs: [] }, { id: 22, name: "b", outputs: [] }];
+    const two = [
+      { id: 21, name: "a", outputs: [] },
+      { id: 22, name: "b", outputs: [] },
+    ];
     const picture = layOut(
       detail({
         entryPlacementId: 1,
@@ -616,7 +655,14 @@ describe("the picture of an automation", () => {
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "work" }),
-        step({ id: 3, name: "check", exits: [{ id: 93, name: "again", outputs: [] }, { id: 94, name: "*", outputs: [] }] }),
+        step({
+          id: 3,
+          name: "check",
+          exits: [
+            { id: 93, name: "again", outputs: [] },
+            { id: 94, name: "*", outputs: [] },
+          ],
+        }),
       ],
       edges: [
         edge({ id: 1, fromId: 1, toId: 2 }),
@@ -661,13 +707,39 @@ describe("the picture of an automation", () => {
       [18, "作業場所を判定する", ["git の外"]],
     ];
     const lines: [number, string, number | "done" | "halt"][] = [
-      [1, "着手した", 18], [1, "着手できるタスクが無い", "done"], [2, "完了", 3], [2, "既にある", 13],
-      [13, "完了", 2], [13, "未マージ", "halt"], [3, "完了", 4], [3, "大きすぎる", 12], [4, "完了", 6],
-      [4, "作るものが無い", 12], [4, "画面の確認が要る", 5], [5, "完了", 6], [5, "直すところあり", 4],
-      [6, "完了", 7], [6, "直すところあり", 4], [7, "完了", 12], [7, "CI が赤", 4], [8, "完了", 14],
-      [8, "起票することが無い", 11], [9, "完了", 10], [10, "完了", 11], [11, "完了", 1], [12, "完了", 8],
-      [12, "未マージ", 7], [14, "完了", 15], [15, "完了", 9], [15, "起票なし", 11], [16, "完了", 8],
-      [7, "main が赤", 4], [7, "CI の不調", 17], [17, "完了", 7], [4, "直すものが無い", 7], [18, "完了", 2],
+      [1, "着手した", 18],
+      [1, "着手できるタスクが無い", "done"],
+      [2, "完了", 3],
+      [2, "既にある", 13],
+      [13, "完了", 2],
+      [13, "未マージ", "halt"],
+      [3, "完了", 4],
+      [3, "大きすぎる", 12],
+      [4, "完了", 6],
+      [4, "作るものが無い", 12],
+      [4, "画面の確認が要る", 5],
+      [5, "完了", 6],
+      [5, "直すところあり", 4],
+      [6, "完了", 7],
+      [6, "直すところあり", 4],
+      [7, "完了", 12],
+      [7, "CI が赤", 4],
+      [8, "完了", 14],
+      [8, "起票することが無い", 11],
+      [9, "完了", 10],
+      [10, "完了", 11],
+      [11, "完了", 1],
+      [12, "完了", 8],
+      [12, "未マージ", 7],
+      [14, "完了", 15],
+      [15, "完了", 9],
+      [15, "起票なし", 11],
+      [16, "完了", 8],
+      [7, "main が赤", 4],
+      [7, "CI の不調", 17],
+      [17, "完了", 7],
+      [4, "直すものが無い", 7],
+      [18, "完了", 2],
       [18, "git の外", 16],
     ];
     const loop = detail({
@@ -693,7 +765,8 @@ describe("the picture of an automation", () => {
     const picture = layOut(loop);
     const idOf = (fromId: number, exitName: string) =>
       lines.findIndex(([from, name]) => from === fromId && name === exitName) + 1;
-    const line = (fromId: number, exitName: string) => picture.lines.find((one) => one.key === `edge-${idOf(fromId, exitName)}`)!;
+    const line = (fromId: number, exitName: string) =>
+      picture.lines.find((one) => one.key === `edge-${idOf(fromId, exitName)}`)!;
     const named = picture.lines.filter((one) => edgeWord(one) !== "");
     const level = picture.lines.flatMap((one) =>
       pieces(one)
@@ -714,14 +787,22 @@ describe("the picture of an automation", () => {
       for (const one of named) {
         const box = wordBox(one);
         const across = level.filter((seg) => overlaps(seg, box));
-        expect(across.map((seg) => seg.key), edgeWord(one)).toEqual([]);
+        expect(
+          across.map((seg) => seg.key),
+          edgeWord(one),
+        ).toEqual([]);
       }
     });
 
     it("lays no two lines over each other along a level stretch", () => {
       for (const one of level) {
-        const over = level.filter((other) => other.key !== one.key && other.y === one.y && other.left < one.right && one.left < other.right);
-        expect(over.map((other) => other.key), one.key).toEqual([]);
+        const over = level.filter(
+          (other) => other.key !== one.key && other.y === one.y && other.left < one.right && one.left < other.right,
+        );
+        expect(
+          over.map((other) => other.key),
+          one.key,
+        ).toEqual([]);
       }
     });
 
@@ -798,7 +879,10 @@ describe("the picture of an automation", () => {
       const over = level.filter(
         (other) => other.key !== one.key && other.y === one.y && other.left < one.right && one.left < other.right,
       );
-      expect(over.map((other) => other.key), one.key).toEqual([]);
+      expect(
+        over.map((other) => other.key),
+        one.key,
+      ).toEqual([]);
       // No leg across runs over another line's leg down.
       for (const other of down) {
         if (other.key === one.key) continue;
@@ -874,7 +958,10 @@ describe("the picture of an automation", () => {
       const over = level.filter(
         (other) => other.key !== one.key && other.y === one.y && other.left < one.right && one.left < other.right,
       );
-      expect(over.map((other) => other.key), one.key).toEqual([]);
+      expect(
+        over.map((other) => other.key),
+        one.key,
+      ).toEqual([]);
     }
     // The row under stands lower by the height the lower one turns at, so it still turns over it.
     for (const one of down) expect(one.points[1]!.y).toBeLessThan(at(picture, 4).y);
@@ -948,10 +1035,7 @@ describe("the picture of an automation", () => {
       detail({
         entryPlacementId: 1,
         placements: steps,
-        edges: [
-          edge({ id: 1, fromId: 1, toId: 2 }),
-          edge({ id: 2, fromId: 1, exitName: "*", ends: "halt" }),
-        ],
+        edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 1, exitName: "*", ends: "halt" })],
       }),
     );
     const error = changed.lines.filter((line) => line.exitName === "*");
@@ -1024,7 +1108,7 @@ describe("the picture of an automation", () => {
     // The way out and where the run goes after it, both: the ending is the half that got cut.
     const words = edgeWord(line);
     expect(words.length).toBeGreaterThan("着手できるタスクが無い".length);
-    expect(line.at.x + wordWide(words)).toBeLessThanOrEqual(picture.width);
+    expect(line.at.x + wordW(words)).toBeLessThanOrEqual(picture.width);
   });
 
   it("ties a named way out first when the ways out before it have no line", () => {
@@ -1064,10 +1148,7 @@ describe("the picture of an automation", () => {
           }),
           step({ id: 2, name: "work" }),
         ],
-        edges: [
-          edge({ id: 1, fromId: 1, toId: 2 }),
-          edge({ id: 2, fromId: 1, exitName: "やり直す", toId: 2 }),
-        ],
+        edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 1, exitName: "やり直す", toId: 2 })],
       }),
     );
     const first = picture.lines.find((one) => one.key === "edge-1")!;
@@ -1126,7 +1207,12 @@ describe("the picture of an automation", () => {
   });
 
   it("writes the name of a line down under its box after one down to the column on its left in a row of its own, over no line", () => {
-    for (const word of ["やり直す", "もう一度はじめからやり直す"]) {
+    // The last one is longer than a column is across, and ran over the leg into the column on the left.
+    for (const word of [
+      "やり直す",
+      "もう一度はじめからやり直す",
+      "もう一度はじめからやり直すもう一度はじめからやり直す",
+    ]) {
       const picture = layOut(
         detail({
           entryPlacementId: 1,
@@ -1177,6 +1263,222 @@ describe("the picture of an automation", () => {
         }
       }
     }
+  });
+
+  it("stands two boxes of a row further apart where the name of a line down on their right runs past the leg down from the one on the right", () => {
+    const word = "もう一度はじめからやり直すもう一度はじめからやり直す";
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({
+            id: 2,
+            name: "work",
+            exits: [
+              { id: 80, name: "完了", outputs: [] },
+              { id: 81, name: "*", outputs: [] },
+              { id: 82, name: "別", outputs: [] },
+            ],
+          }),
+          step({
+            id: 3,
+            name: "left",
+            exits: [
+              { id: 90, name: "完了", outputs: [] },
+              { id: 91, name: "*", outputs: [] },
+              { id: 92, name: word, outputs: [] },
+            ],
+          }),
+          step({ id: 4, name: "right" }),
+          step({ id: 5, name: "one" }),
+          step({ id: 6, name: "two" }),
+          step({ id: 7, name: "three" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "別", toId: 4 }),
+          edge({ id: 4, fromId: 3, toId: 5 }),
+          edge({ id: 5, fromId: 3, exitName: word, toId: 6 }),
+          edge({ id: 6, fromId: 4, toId: 7 }),
+        ],
+      }),
+    );
+    const long = picture.lines.find((one) => one.key === "edge-5")!;
+    // Its leg across is shorter than its name, which is written past its end, on its right, and is
+    // longer than a column is across.
+    expect(long.align).toBe("start");
+    expect(long.at.x).toBeGreaterThan(Math.max(long.points[1]!.x, long.points[2]!.x));
+    expect(wordBox(long).right).toBeGreaterThan(at(picture, 7).x);
+    // No piece of any line runs through a name.
+    for (const one of picture.lines) {
+      const words = wordBox(one);
+      for (const other of picture.lines) {
+        for (const piece of pieces(other)) {
+          expect(overlaps(piece, words, true), `${one.key} / ${other.key}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("stands two boxes further apart where the name of a line down on their left runs over the leg across of a line between them, and on into its name", () => {
+    const word = "もう一度はじめからやり直すもう一度はじめからやり直す";
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({
+            id: 2,
+            name: "work",
+            exits: [
+              { id: 80, name: "完了", outputs: [] },
+              { id: 81, name: "*", outputs: [] },
+              { id: 82, name: "別", outputs: [] },
+            ],
+          }),
+          step({
+            id: 3,
+            name: "left",
+            exits: [
+              { id: 90, name: "完了", outputs: [] },
+              { id: 91, name: "*", outputs: [] },
+              { id: 92, name: word, outputs: [] },
+            ],
+          }),
+          step({ id: 4, name: "right" }),
+          step({ id: 5, name: "one" }),
+          step({ id: 6, name: "two" }),
+          step({ id: 7, name: "three" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "別", toId: 4 }),
+          edge({ id: 4, fromId: 3, toId: 5 }),
+          edge({ id: 5, fromId: 3, exitName: word, toId: 6 }),
+          edge({ id: 6, fromId: 4, toId: 7 }),
+        ],
+      }),
+    );
+    const long = wordBox(picture.lines.find((one) => one.key === "edge-5")!);
+    const other = picture.lines.find((one) => one.key === "edge-6")!;
+    // The line from the box on the right turns in the same row of words as the long name.
+    const across = pieces(other)[1]!;
+    expect(across.top).toBe(across.bottom);
+    expect(across.top).toBeGreaterThanOrEqual(long.top);
+    expect(across.top).toBeLessThan(long.bottom + 15);
+    // Its leg across and its name both begin a name's room past the end of the long name.
+    expect(across.left - long.right).toBeGreaterThanOrEqual(14);
+    expect(wordBox(other).left - long.right).toBeGreaterThanOrEqual(14);
+  });
+
+  it("stands a box further out where the name over the turn of a line down from it runs over the leg of a line from the box beside it", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({
+            id: 2,
+            name: "work",
+            exits: [
+              { id: 80, name: "完了", outputs: [] },
+              { id: 81, name: "*", outputs: [] },
+              { id: 82, name: "別", outputs: [] },
+            ],
+          }),
+          step({
+            id: 3,
+            name: "left",
+            exits: [
+              { id: 90, name: "完了", outputs: [] },
+              { id: 91, name: "*", outputs: [] },
+              { id: 92, name: "差し戻し", outputs: [] },
+            ],
+          }),
+          step({
+            id: 4,
+            name: "right",
+            exits: [
+              { id: 95, name: "完了", outputs: [] },
+              { id: 96, name: "*", outputs: [] },
+              { id: 97, name: "やり直す", outputs: [] },
+            ],
+          }),
+          step({ id: 5, name: "one" }),
+          step({ id: 6, name: "two" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "別", toId: 4 }),
+          edge({ id: 4, fromId: 3, toId: 5 }),
+          edge({ id: 5, fromId: 3, exitName: "差し戻し", toId: 6 }),
+          edge({ id: 6, fromId: 4, toId: 5 }),
+          edge({ id: 7, fromId: 4, exitName: "やり直す", toId: 5 }),
+        ],
+      }),
+    );
+    const long = picture.lines.find((one) => one.key === "edge-7")!;
+    const crossing = picture.lines.find((one) => one.key === "edge-5")!;
+    // Its name is written over its own turn, and the line from the box on its left turns higher and
+    // crosses it on the way down into the box on the right.
+    expect(long.at.x).toBe(long.points[1]!.x - 6);
+    expect(crossing.points[1]!.y).toBeLessThan(long.points[1]!.y);
+    const words = wordBox(long);
+    const leg = pieces(crossing)[2]!;
+    expect(leg.top).toBeLessThan(words.top);
+    expect(leg.bottom).toBeGreaterThan(words.bottom);
+    // That leg comes down a name's room short of where the name starts.
+    expect(words.left - leg.left).toBeGreaterThanOrEqual(14);
+  });
+
+  it("stands a box further out where the name over the turn of a line down from it runs over the leg of a line from a margin", () => {
+    const exits = (id: number, names: string[]) => [
+      ...names.map((name, nth) => ({ id: id * 1000 + nth, name, outputs: [] })),
+      { id: id * 1000 + 999, name: "*", outputs: [] },
+    ];
+    const long = ["c2", "やり直す3", "b4", "もう一度やり直す5", "ok6", "a7", "差し戻し8"];
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", { exits: exits(1, ["完了", "to3", "to4"]) }),
+          step({ id: 2, name: "two" }),
+          step({ id: 3, name: "left", exits: exits(3, ["完了", ...long]) }),
+          step({ id: 4, name: "right", exits: exits(4, ["完了", "やり直す0", "retry1", "retry2"]) }),
+          taker(5, "next"),
+          step({ id: 7, name: "work", exits: exits(7, ["完了", "別0"]) }),
+          step({ id: 8, name: "check", exits: exits(8, ["完了", "c0"]) }),
+        ],
+        edges: [
+          edge({ id: 2, fromId: 1, exitName: "to3", toId: 3 }),
+          edge({ id: 3, fromId: 1, exitName: "to4", toId: 4 }),
+          edge({ id: 10, fromId: 3, toId: 5 }),
+          ...long.map((exitName, nth) => edge({ id: 13 + nth, fromId: 3, exitName, toId: 5 })),
+          edge({ id: 20, fromId: 4, toId: 5 }),
+          edge({ id: 21, fromId: 4, exitName: "やり直す0", toId: 5 }),
+          edge({ id: 22, fromId: 4, exitName: "retry1", toId: 5 }),
+          edge({ id: 23, fromId: 4, exitName: "retry2", toId: 5 }),
+          edge({ id: 25, fromId: 5, toId: 7 }),
+          edge({ id: 29, fromId: 7, exitName: "別0", toId: 2 }),
+          edge({ id: 30, fromId: 7, toId: 8 }),
+          edge({ id: 31, fromId: 8, exitName: "c0", toId: 5 }),
+        ],
+      }),
+    );
+    const named = picture.lines.find((one) => one.key === "edge-23")!;
+    const back = picture.lines.find((one) => one.key === "edge-31")!;
+    // Its name is written over its own turn, the lowest of four, over the room before the next
+    // stretch; the line back up from the margin comes down into the box below.
+    expect(named.at.x).toBe(named.points[1]!.x - 6);
+    const leg = pieces(back)[back.points.length - 2]!;
+    expect(leg.left).toBe(leg.right);
+    expect(leg.bottom).toBe(at(picture, 5).y);
+    // That leg does not come down through the name.
+    expect(overlaps(wordBox(named), leg, true)).toBe(false);
   });
 
   it("writes the name of a line straight down on its left, and staggers the + of lines side by side in the margin", () => {
@@ -1319,13 +1621,38 @@ describe("the picture of an automation", () => {
             step({ id: 2, name: "work", inputs: [port("note", "value")], exits: [out(92, "again")] }),
             step({ id: 3, name: "check", exits: [out(93, "back")] }),
           ],
-          edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, toId: 3 }), edge({ id: 3, fromId: 3, toId: 2 })],
+          edges: [
+            edge({ id: 1, fromId: 1, toId: 2 }),
+            edge({ id: 2, fromId: 2, toId: 3 }),
+            edge({ id: 3, fromId: 3, toId: 2 }),
+          ],
           wires,
         }),
       );
-    const fromSelf = wire({ id: 1, fromId: 2, fromExitName: "完了", fromPortName: "again", toId: 2, toPortName: "note" });
-    const fromAfter = wire({ id: 2, fromId: 3, fromExitName: "完了", fromPortName: "back", toId: 2, toPortName: "note" });
-    const fromBefore = wire({ id: 3, fromId: 1, fromExitName: "完了", fromPortName: "seed", toId: 2, toPortName: "note" });
+    const fromSelf = wire({
+      id: 1,
+      fromId: 2,
+      fromExitName: "完了",
+      fromPortName: "again",
+      toId: 2,
+      toPortName: "note",
+    });
+    const fromAfter = wire({
+      id: 2,
+      fromId: 3,
+      fromExitName: "完了",
+      fromPortName: "back",
+      toId: 2,
+      toPortName: "note",
+    });
+    const fromBefore = wire({
+      id: 3,
+      fromId: 1,
+      fromExitName: "完了",
+      fromPortName: "seed",
+      toId: 2,
+      toPortName: "note",
+    });
     expect(at(looped([fromSelf]), 2).unfed).toEqual(["note"]);
     expect(at(looped([fromSelf, fromAfter]), 2).unfed).toEqual(["note"]);
     expect(at(looped([fromSelf, fromAfter, fromBefore]), 2).unfed).toEqual([]);
@@ -1341,7 +1668,12 @@ describe("the inputs the start dialog hands over", () => {
         taker(1, "take"),
         taker(2, "タスクを起票する", {
           builtin: "make_task",
-          inputs: [port("タイトル", "value"), port("本文", "value"), port("選んだ分類", "value"), port("other", "value")],
+          inputs: [
+            port("タイトル", "value"),
+            port("本文", "value"),
+            port("選んだ分類", "value"),
+            port("other", "value"),
+          ],
         }),
       ].filter((one) => one.id === at || one.id === entry),
       edges: at === entry ? [] : [edge({ id: 1, fromId: entry, toId: at })],
@@ -1603,7 +1935,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
     expect(left.y).toBe(right.y);
     const press = picture.opens.find((one) => one.boxId === 2)!;
     const down = picture.lines.find((one) => one.key === "edge-3")!;
-    expect(press.x + wordWide(openWord(false)) + 28).toBeLessThan(down.points[0]!.x);
+    expect(press.x + wordW(openWord(false)) + 28).toBeLessThan(down.points[0]!.x);
     expect(right.x - (left.x + left.w)).toBeGreaterThan(24);
   });
 
@@ -1645,6 +1977,161 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
     );
     expect(picture.opens).toEqual([]);
     expect(at(picture, 2).y - (at(picture, 1).y + at(picture, 1).h)).toBe(56);
+  });
+
+  it("hangs under the lowest leg its box sends out to the right margin, its name and press across none of them", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          step({ id: 1, name: "take", exits: [{ id: 90, name: "ok", outputs: [] }] }),
+          step({ id: 2, name: "work", exits: [] }),
+          step({
+            id: 3,
+            name: "check",
+            exits: [
+              { id: 91, name: "again", outputs: [] },
+              { id: 92, name: "redo", outputs: [] },
+              { id: 93, name: "none left", outputs: [] },
+              { id: 94, name: "*", outputs: [] },
+            ],
+          }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 }),
+          edge({ id: 2, fromId: 3, exitName: "again", toId: 3 }),
+          edge({ id: 3, fromId: 3, exitName: "redo", toId: 3 }),
+        ],
+      }),
+    );
+    const box = at(picture, 3);
+    const open = picture.lines.find((one) => one.key === "open-3-none left")!;
+    const press = picture.opens.find((one) => one.boxId === 3)!;
+    const legs = picture.lines.filter((one) => one.key === "edge-2" || one.key === "edge-3");
+    // Both leave for the right margin, one turning a row lower than the other.
+    for (const leg of legs) expect(leg.points[2]!.x).toBeGreaterThan(box.x + box.w);
+    expect(new Set(legs.map((leg) => leg.points[1]!.y)).size).toBe(2);
+    const pressBox = {
+      left: press.x,
+      right: press.x + wordW(openWord(false)) + 28,
+      top: press.y - 12,
+      bottom: press.y + 12,
+    };
+    for (const piece of legs.flatMap(pieces)) {
+      expect(overlaps(wordBox(open), piece, true)).toBe(false);
+      expect(overlaps(pressBox, piece, true)).toBe(false);
+    }
+    // The name and the press still stand under the foot of their own line.
+    expect(open.at.y).toBeGreaterThan(open.points[1]!.y);
+    expect(press.y).toBeGreaterThan(open.points[1]!.y);
+  });
+
+  it("hangs the name of a line that goes nowhere under the lowest leg its box sends out to the right margin", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          step({ id: 1, name: "take", exits: [{ id: 90, name: "ok", outputs: [] }] }),
+          step({ id: 2, name: "work", exits: [] }),
+          step({
+            id: 3,
+            name: "check",
+            exits: [
+              { id: 91, name: "again", outputs: [] },
+              { id: 92, name: "redo", outputs: [] },
+              { id: 93, name: "none left", outputs: [] },
+              { id: 94, name: "*", outputs: [] },
+            ],
+          }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 }),
+          edge({ id: 2, fromId: 3, exitName: "again", toId: 3 }),
+          edge({ id: 3, fromId: 3, exitName: "redo", toId: 3 }),
+          edge({ id: 4, fromId: 3, exitName: "none left", ends: "done" }),
+        ],
+      }),
+    );
+    const box = at(picture, 3);
+    expect(picture.opens.filter((one) => one.boxId === 3)).toEqual([]);
+    const done = picture.lines.find((one) => one.key === "edge-4")!;
+    const legs = picture.lines.filter((one) => one.key === "edge-2" || one.key === "edge-3");
+    for (const leg of legs) expect(leg.points[2]!.x).toBeGreaterThan(box.x + box.w);
+    for (const piece of legs.flatMap(pieces)) expect(overlaps(wordBox(done), piece, true)).toBe(false);
+    // The name still stands under the foot of its own line.
+    expect(done.at.y).toBeGreaterThan(done.points[1]!.y);
+  });
+
+  it("hangs under the lowest leg another box of its row sends out under it to a margin, its name and press across none of them", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          step({
+            id: 1,
+            name: "take",
+            exits: [
+              { id: 90, name: "ok", outputs: [] },
+              { id: 91, name: "more", outputs: [] },
+            ],
+          }),
+          step({
+            id: 2,
+            name: "check",
+            exits: [
+              { id: 92, name: "ok", outputs: [] },
+              { id: 93, name: "none left", outputs: [] },
+              { id: 94, name: "*", outputs: [] },
+            ],
+          }),
+          step({
+            id: 3,
+            name: "work",
+            exits: [
+              { id: 95, name: "ok", outputs: [] },
+              { id: 96, name: "again", outputs: [] },
+              { id: 97, name: "redo", outputs: [] },
+              { id: 98, name: "*", outputs: [] },
+            ],
+          }),
+          step({ id: 4, name: "sort" }),
+          step({ id: 5, name: "file" }),
+          step({ id: 6, name: "send" }),
+          step({ id: 7, name: "keep" }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 }),
+          edge({ id: 2, fromId: 1, exitName: "more", toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "ok", toId: 4 }),
+          edge({ id: 4, fromId: 3, exitName: "ok", toId: 5 }),
+          edge({ id: 5, fromId: 4, toId: 6 }),
+          edge({ id: 6, fromId: 5, toId: 7 }),
+          edge({ id: 7, fromId: 3, exitName: "again", toId: 6 }),
+          edge({ id: 8, fromId: 3, exitName: "redo", toId: 6 }),
+        ],
+      }),
+    );
+    const [check, work] = [at(picture, 2), at(picture, 3)];
+    const open = picture.lines.find((one) => one.key === "open-2-none left")!;
+    const press = picture.opens.find((one) => one.boxId === 2)!;
+    const legs = picture.lines.filter((one) => one.key === "edge-7" || one.key === "edge-8");
+    // The two boxes share a row, and the legs of the right one run under the left one to the left margin.
+    expect(check.y).toBe(work.y);
+    expect(check.x).toBeLessThan(work.x);
+    for (const leg of legs) expect(leg.points[2]!.x).toBeLessThan(check.x);
+    const pressBox = {
+      left: press.x,
+      right: press.x + wordW(openWord(false)) + 28,
+      top: press.y - 12,
+      bottom: press.y + 12,
+    };
+    for (const piece of legs.flatMap(pieces)) {
+      expect(overlaps(wordBox(open), piece, true)).toBe(false);
+      expect(overlaps(pressBox, piece, true)).toBe(false);
+    }
+    // The name and the press still stand under the foot of their own line.
+    expect(open.at.y).toBeGreaterThan(open.points[1]!.y);
+    expect(press.y).toBeGreaterThan(open.points[1]!.y);
   });
 
   it("is not drawn for the way out a built-in never leaves by", () => {

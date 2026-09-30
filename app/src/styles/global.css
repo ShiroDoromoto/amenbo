@@ -63,15 +63,23 @@ textarea { resize: vertical; max-width: var(--measure-prose); }
    of the ways of saying how tall it should be reaches it (`--tap-min`, WCAG 2.2 SC 2.5.8).
 
    What a select is drawn as is the platform's: with its own appearance left on — which is what keeps
-   the caret the machine draws — WebKit takes the control's height off the font and leaves `padding`
-   and `min-height` where they are. Measured in the app: a `.btn` select stayed at 22px under
-   `min-height` and came to 24 under `height`, and the same select with its appearance turned off
-   jumped to 36 as the form padding above suddenly applied. So it is `height`, and it is said here on
-   the element rather than on each class that happens to wear one — every select is under the floor on
-   its text alone, whatever it is wearing, and the three found short were wearing three different
-   classes with one of them wearing none at all. A select that has to stand taller than this says so
-   with a height of its own. */
+   the caret the machine draws — WebKit on macOS takes the control's height off the font and leaves
+   `padding` and `min-height` where they are. Measured in the app: a `.btn` select stayed at 22px
+   under `min-height` and came to 24 under `height`, and the same select with its appearance turned
+   off jumped to 36 as the form padding above suddenly applied. So it is `height`, and it is said here
+   on the element rather than on each class that happens to wear one — every select is under the
+   floor on its text alone, whatever it is wearing, and the three found short were wearing three
+   different classes with one of them wearing none at all. A select that has to stand taller than
+   this says so with a height of its own.
+
+   **Chromium on Windows does apply the padding**, inside that same height. The form padding above
+   left 24 − 2×8 − 2×1 = 6px for a 21px line, and `.btn`'s left 14: the lower half of the text was
+   cut off. So a select has no padding above or below its text — the height already says how tall it
+   is, and the text is centred in it. It is said on `select[class]` as well, because a class that
+   pads a select and a button alike (`.btn`) is more specific than the element and would bring the
+   cut back; only the block padding is taken, so a class still says its own padding at the sides. */
 select { cursor: pointer; height: var(--tap-min); }
+select, select[class] { padding-block: 0; }
 /* A tick box is drawn by the platform and stays that way: the rule above is for boxes with a value
    typed into them, and its padding, ground and border would each take a piece of the tick. What it
    keeps from the rule is the accent, so the tick is the app's colour and not the system's. */
@@ -2953,6 +2961,23 @@ body.dragging-row { user-select: none; }
    The built-in's chip is one of them twice over: it wears `.actscope`'s `display`, and without this it
    was drawn on every step of a run (`AMB-T-5589`). */
 .plate__dot[hidden], .plate__auto[hidden], .plate__no[hidden], .plate__builtin[hidden] { display: none; }
+/* **The mark glows while the run is under way** (`AMB-D-1010`), in place of a chip saying running: its
+   edge brightens and dims at the pace the state chip's dot used to pulse at, so the page keeps one
+   rhythm. It is a glow and not a light going round the edge, because four panes side by side would
+   keep one moving at the edge of sight all day. A run paused or over does not glow, and is drawn a
+   little faded. A reader who has asked for less motion gets the glow held lit. */
+.plate__auto[data-run="on"] { animation: plate-auto-glow 1.2s ease-in-out infinite; }
+.plate__auto[data-run="still"] { opacity: 0.55; }
+@keyframes plate-auto-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c-ai) 0%, transparent); }
+  50% { box-shadow: 0 0 6px 2px color-mix(in srgb, var(--c-ai) 70%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plate__auto[data-run="on"] {
+    animation: none;
+    box-shadow: 0 0 6px 2px color-mix(in srgb, var(--c-ai) 60%, transparent);
+  }
+}
 
 /* **A run's pane is drawn in the run's colour** (`AMB-T-5428`): the frame is edged in it and the
    header is laid on its wash, so a run's pane is told from a person's at a glance across the page —
@@ -3055,9 +3080,9 @@ body.dragging-row { user-select: none; }
    reads the same on the pane and on the tab. It never shrinks: it is what a reader glancing at the
    pane is asking, and a narrow pane gives up the run's number before it.
 
-   **Running is the one that moves**: its dot pulses, because it is the one state about now — the
-   other four are over or held, and hold still. A reader who has asked for less motion gets the dot
-   held lit instead. */
+   **Running has no chip** (`AMB-D-1010`): the mark in front of the name glows instead
+   (`.plate__auto`). A run still running is on it only while a pause is on its way or its built-in
+   waits for a task, and those are drawn in the run's colour. */
 .plate__state {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; gap: var(--s-1);
@@ -3074,18 +3099,10 @@ body.dragging-row { user-select: none; }
   background: var(--state-dot, var(--state, var(--c-text-faint)));
 }
 .plate__state[data-state="running"] { --state: var(--c-ai); }
-.plate__state[data-state="running"]::before { animation: plate-running 1.2s ease-in-out infinite; }
 .plate__state[data-state="paused"] { --state: var(--c-heed); --state-bg: var(--c-heed-weak); }
 .plate__state[data-state="completed"] { --state: var(--c-text-muted); --state-dot: var(--c-done); }
 .plate__state[data-state="failed"] { --state: var(--c-stop); --state-bg: var(--c-stop-weak); }
 .plate__state[data-state="canceled"] { --state: var(--c-text-muted); }
-@keyframes plate-running {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.3; transform: scale(0.7); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .plate__state[data-state="running"]::before { animation: none; }
-}
 
 @container (max-width: 15rem) { .plate__no, .plate-run__nth { display: none; } }
 @container (max-width: 11rem) { .plate-run__title { display: none; } }

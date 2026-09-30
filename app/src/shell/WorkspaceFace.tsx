@@ -621,8 +621,8 @@ export function WorkspaceFace({
 
   /** What is running in one frame, or nothing — which is also the whole of whether that pane can be
    *  handed a path. */
-  const sessionIn = (frame: string | null) =>
-    layout.frames.find((one) => one.id === frame)?.session ?? null;
+  const sessionIn = useCallback((frame: string | null) =>
+    layout.frames.find((one) => one.id === frame)?.session ?? null, [layout.frames]);
 
   /** Put paths in front of what is running in one session, each written the way a shell reads as one
    *  thing and a space between them (`AMB-D-801`). A write that cannot land is nothing to say: the
@@ -738,6 +738,7 @@ export function WorkspaceFace({
       for (const one of all) stepArrived(one);
     });
     // Once, as the face settles: every step after that arrives by the event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settled]);
 
   /**
@@ -776,7 +777,7 @@ export function WorkspaceFace({
       setLayout((was) => focusOn(was, frame));
       landOn(frame);
     };
-  }, [layout.focus, layout.frames]);
+  }, [layout.focus, sessionIn, pasteInto, landOn]);
 
   /**
    * The other way a row of the panel reaches a pane: carried there, and let go on the one it is
@@ -994,6 +995,7 @@ export function WorkspaceFace({
       .catch(() => {});
     return () => { alive = false; };
     // `nth` is what makes the same folder asked for twice two answers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openIn?.nth, settled]);
 
   /**
@@ -1180,6 +1182,8 @@ export function WorkspaceFace({
     // What the column is holding is not touched here at all: each project's files are kept under
     // that project and the face simply draws the one it is on, so moving away leaves them where
     // they are and coming back finds them (`Reading`).
+    // Only a move to another project; a change of tab reads the rail's width where it is made (`takeRailTab`).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout.project]);
 
   // A window that has shrunk cannot leave a column with the middle's room in it. Each is measured
@@ -1472,7 +1476,7 @@ export function WorkspaceFace({
     const found = fileUnderAny(boundPaths, show.cwd, show.target);
     if (!found) return;
     openFile(found);
-  }, [show]);
+  }, [show, boundPaths, openFile]);
 
   const rail = (
     <FolderRail

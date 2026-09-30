@@ -99,7 +99,7 @@ export function runStateOf(run: AutomationRunCardDto | undefined): RunState | nu
 export function waitingState(run: AutomationRunCardDto | undefined): RunState | null {
   const state = runStateOf(run);
   if (run === undefined || state === null || state.status !== "running" || isPausing(run)) return state;
-  return { ...state, word: t("auto.run.taskWait") };
+  return { ...state, word: t("auto.run.taskWait"), waiting: true };
 }
 
 /**

@@ -938,8 +938,10 @@ function layOutWith(
         });
       });
     });
-    // Under the last row, room for what hangs lowest from it.
-    const endRoom = hang === 0 ? END_ROOM : Math.max(END_ROOM, hang + 12);
+    // Under the last row, room for what hangs lowest from it, and for the stair the lines down to the
+    // first row of the next stretch turn on, as a row stands lower for it. Without it they turned as
+    // high as the bottom of the row they leave, and a name over its turn ran under a box of that row.
+    const endRoom = (hang === 0 ? END_ROOM : Math.max(END_ROOM, hang + 12)) + stair;
     const inner = rowY + nodeH - (top + over) + endRoom;
     const height = inner + over + pad;
     if (lap.head !== null) {

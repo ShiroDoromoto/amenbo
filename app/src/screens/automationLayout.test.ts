@@ -1516,6 +1516,56 @@ describe("the picture of an automation", () => {
     expect(overlaps(wordBox(named), leg, true)).toBe(false);
   });
 
+  it("writes no name over the turn of a line down to the next stretch under a box of the row it leaves", () => {
+    const exits = (id: number, names: string[]) => [
+      ...names.map((name, nth) => ({ id: id * 1000 + nth, name, outputs: [] })),
+      { id: id * 1000 + 999, name: "*", outputs: [] },
+    ];
+    const long = ["c2", "やり直す3", "b4", "差し戻し5", "ok6", "a7", "差し戻し8"];
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take", { exits: exits(1, ["完了", "to3", "to4"]) }),
+          step({ id: 2, name: "two" }),
+          step({ id: 3, name: "left", exits: exits(3, ["完了", ...long]) }),
+          step({ id: 4, name: "right", exits: exits(4, ["完了", "やり直す0", "retry1", "retry2"]) }),
+          taker(5, "next"),
+          step({ id: 7, name: "work", exits: exits(7, ["完了", "別0"]) }),
+          step({ id: 8, name: "check", exits: exits(8, ["完了", "c0"]) }),
+        ],
+        edges: [
+          edge({ id: 2, fromId: 1, exitName: "to3", toId: 3 }),
+          edge({ id: 3, fromId: 1, exitName: "to4", toId: 4 }),
+          edge({ id: 10, fromId: 3, toId: 5 }),
+          ...long.map((exitName, nth) => edge({ id: 13 + nth, fromId: 3, exitName, toId: 5 })),
+          edge({ id: 20, fromId: 4, toId: 5 }),
+          edge({ id: 21, fromId: 4, exitName: "やり直す0", toId: 5 }),
+          edge({ id: 22, fromId: 4, exitName: "retry1", toId: 5 }),
+          edge({ id: 23, fromId: 4, exitName: "retry2", toId: 5 }),
+          edge({ id: 25, fromId: 5, toId: 7 }),
+          edge({ id: 29, fromId: 7, exitName: "別0", toId: 2 }),
+          edge({ id: 30, fromId: 7, toId: 8 }),
+          edge({ id: 31, fromId: 8, exitName: "c0", toId: 5 }),
+        ],
+      }),
+    );
+    // Every line from the two boxes down into the box that takes the next task, twelve of them, turns
+    // over the room before the next stretch, and its name is written clear of every box.
+    const next = at(picture, 5);
+    const down = picture.lines.filter((one) => {
+      const [start, end] = [one.points[0]!, one.points[one.points.length - 1]!];
+      return [3, 4].some((boxId) => start.y === at(picture, boxId).y + at(picture, boxId).h) && end.y === next.y;
+    });
+    expect(down).toHaveLength(12);
+    for (const one of down) {
+      for (const box of picture.nodes) {
+        const frame = { left: box.x, right: box.x + box.w, top: box.y, bottom: box.y + box.h };
+        expect(overlaps(wordBox(one), frame)).toBe(false);
+      }
+    }
+  });
+
   it("writes the name of a line straight down on its left, and staggers the + of lines side by side in the margin", () => {
     const picture = layOut(
       detail({

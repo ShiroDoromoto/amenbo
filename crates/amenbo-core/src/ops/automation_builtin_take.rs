@@ -686,9 +686,10 @@ mod tests {
         });
     }
 
-    /// **A run waiting for a task to turn up pauses on its next look** (`AMB-D-1009`).
+    /// **A run waiting for a task to turn up pauses as soon as it is asked** (`AMB-D-1009`): it holds
+    /// no task, so nothing waits for its next look. Picked up again, it is back at the take.
     #[test]
-    fn a_run_waiting_for_a_task_is_paused_on_its_next_look() {
+    fn a_run_waiting_for_a_task_is_paused_as_soon_as_it_is_asked() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
@@ -697,12 +698,14 @@ mod tests {
 
             let asked = automation_stop::pause_before_next_task(tx, project).expect("ask");
             assert_eq!(asked.len(), 1);
-            for_ai(tx, "turned up", project, None);
-            match open_entry(tx, &run) {
-                Opened::Waiting { run: paused } => assert_eq!(paused.status, AutomationRunStatus::Paused),
-                other => panic!("the pause takes hold, not {other:?}"),
-            }
+            assert_eq!(asked[0].status, AutomationRunStatus::Paused, "paused there and then");
+            let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            assert_eq!(paused.status, AutomationRunStatus::Paused);
+            assert!(!paused.pause_before_next_task, "nothing is left asked");
             assert!(read::automation_run_steps_of(tx.conn(), run.id).expect("steps").is_empty(), "nothing taken");
+
+            let resumed = automation_stop::resume(tx, run.id).expect("resume");
+            assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
         });
     }
 

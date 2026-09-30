@@ -818,20 +818,44 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         }
         AutomationCmd::Pause { run: None, project, .. } => {
             // Every run of the project, at the next take_task rather than the end of the action (`AMB-D-1009`).
+            // A run waiting there for a task comes back already paused.
             let pid = project_or_bound(store, project)?;
             let asked = store.automation_pause_before_next_task(pid).map_err(CliError::from)?;
-            let ids: Vec<i64> = asked.iter().map(|r| r.id).collect();
-            let line = match ids.as_slice() {
-                [] => "No run to ask: none of this project's runs takes tasks, is running and is not yet asked to pause".to_string(),
-                ids => format!(
-                    "✓ {} run(s) pause before they take their next task: {}",
-                    ids.len(),
-                    ids.iter().map(i64::to_string).collect::<Vec<_>>().join(", ")
-                ),
+            let ids_of = |paused: bool| -> Vec<String> {
+                asked
+                    .iter()
+                    .filter(|r| (r.status == AutomationRunStatus::Paused) == paused)
+                    .map(|r| r.id.to_string())
+                    .collect()
             };
-            let runs = json!(ids.iter().map(|id| json!({ "run": id, "state": "asked" })).collect::<Vec<_>>());
-            let extra = [("project_id", json!(pid)), ("count", json!(ids.len()))];
-            write_envelope_with(flags, "automation.pause", "automation_runs", runs, None, ids.is_empty(), line, &extra);
+            let (now, later) = (ids_of(true), ids_of(false));
+            let mut lines = Vec::new();
+            if !now.is_empty() {
+                lines.push(format!("✓ {} run(s) waiting for a task are paused: {}", now.len(), now.join(", ")));
+            }
+            if !later.is_empty() {
+                lines.push(format!(
+                    "✓ {} run(s) pause before they take their next task: {}",
+                    later.len(),
+                    later.join(", ")
+                ));
+            }
+            let line = match lines.is_empty() {
+                true => "No run to ask: none of this project's runs takes tasks, is running and is not yet asked to pause".to_string(),
+                false => lines.join("\n"),
+            };
+            let runs = json!(asked
+                .iter()
+                .map(|r| {
+                    let state = match r.status == AutomationRunStatus::Paused {
+                        true => "paused",
+                        false => "asked",
+                    };
+                    json!({ "run": r.id, "state": state })
+                })
+                .collect::<Vec<_>>());
+            let extra = [("project_id", json!(pid)), ("count", json!(asked.len()))];
+            write_envelope_with(flags, "automation.pause", "automation_runs", runs, None, asked.is_empty(), line, &extra);
         }
         AutomationCmd::Pause { run: Some(run), .. } => {
             let paused = store.automation_pause(run).map_err(CliError::from)?;

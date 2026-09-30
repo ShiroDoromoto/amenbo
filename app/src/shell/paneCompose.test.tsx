@@ -16,6 +16,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneEvents } from "../talk/terminal";
+import type { Say } from "../talk/nameplate";
 import { pauseBeforeTheReturn } from "../talk/terminal";
 import { t } from "../core/i18n";
 import { composeStartsOpen, setComposeStartsOpen } from "../core/composeStartsOpen";
@@ -94,8 +95,8 @@ afterEach(() => {
  * and still lose a sentence on the next page turn.
  */
 function Window(
-  { autoStart = true, put, working = true, open }:
-    { autoStart?: boolean; put?: (text: string) => void; working?: boolean; open?: boolean },
+  { autoStart = true, put, working = true, open, run = null }:
+    { autoStart?: boolean; put?: (text: string) => void; working?: boolean; open?: boolean; run?: Say | null },
 ) {
   const [written, setWritten] = useState("");
   // And whether the box is open, which is the window's too (`AMB-D-890`). Seeded from this machine's
@@ -116,6 +117,7 @@ function Window(
     start: { cwd: "/work/here" },
     autoStart,
     focused,
+    run,
     written,
     onWrite: (_frame: string, text: string) => setWritten(text),
     composeOpen,
@@ -133,10 +135,10 @@ function Window(
 /** A pane on frame 1, working in `/work/here` — the pane being worked in unless `working` says not.
  *  `open` is the window's answer about the box, for the one test that is about where that answer
  *  comes from; every other one lets the machine's habit seed it, the way the face does. */
-async function pane(autoStart = true, working = true, open?: boolean): Promise<void> {
+async function pane(autoStart = true, working = true, open?: boolean, run: Say | null = null): Promise<void> {
   await act(async () => {
     root.render(createElement(Window, {
-      autoStart, working, open, put: (text) => { hoisted.held = text; },
+      autoStart, working, open, run, put: (text) => { hoisted.held = text; },
     }));
   });
 }
@@ -661,6 +663,43 @@ describe("a press that moves the pane being worked in", () => {
 
     expect(box(), "a place with nothing running in it drew somewhere to write").toBeNull();
     expect(document.activeElement, "the keyboard was dropped on the page").toBe(elsewhere);
+    elsewhere.remove();
+  });
+});
+
+// A run's pane opens on its picture, with its terminal still under it (`AMB-T-5832`). What is typed
+// into that terminal reaches the agent running there, and nobody looking at a picture meant to type
+// at it: the way to the program is turning to the terminal.
+describe("a run's pane turned to its picture", () => {
+  const RUNNING: Say = {
+    automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false,
+    interactive: false, action: null, task: null,
+    state: { status: "running", word: "Running", pauseRequested: false, why: null, exit: null, errorExit: false, acknowledged: false },
+  };
+
+  it("leaves the keyboard where it was when the pane is pressed from another", async () => {
+    await pane(true, false, undefined, RUNNING);
+    await opened();
+    const elsewhere = document.createElement("textarea");
+    document.body.append(elsewhere);
+    elsewhere.focus();
+
+    await pressOn(slot());
+
+    expect(document.activeElement, "a press on the picture handed the keyboard to the terminal under it")
+      .toBe(elsewhere);
+    elsewhere.remove();
+  });
+
+  it("leaves the keyboard where it was when a terminal opens under it", async () => {
+    const elsewhere = document.createElement("textarea");
+    document.body.append(elsewhere);
+    elsewhere.focus();
+    await pane(true, true, undefined, RUNNING);
+
+    await opened();
+
+    expect(document.activeElement, "a terminal opening under the picture took the keyboard").toBe(elsewhere);
     elsewhere.remove();
   });
 });

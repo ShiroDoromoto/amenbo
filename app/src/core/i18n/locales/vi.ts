@@ -626,6 +626,8 @@ export const vi: Translation = {
     "face.pages": "Trang",
     "face.page": "Trang {n}",
     "face.order": "Chuyển khung sang trang khác",
+    "face.pauseAfterTask": "Tạm dừng khi xong tác vụ",
+    "face.pauseAfterTaskWaiting": "Đang chờ tạm dừng ({n})",
     "face.orderTitle": "Các khung, theo từng trang",
     "face.orderApply": "Dùng thứ tự này",
     "face.orderCancel": "Hủy",

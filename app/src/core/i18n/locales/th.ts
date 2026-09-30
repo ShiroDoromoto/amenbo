@@ -626,6 +626,8 @@ export const th: Translation = {
     "face.pages": "หน้า",
     "face.page": "หน้า {n}",
     "face.order": "ย้ายบานหน้าต่างไปหน้าอื่น",
+    "face.pauseAfterTask": "หยุดชั่วคราวเมื่องานเสร็จ",
+    "face.pauseAfterTaskWaiting": "รอหยุดชั่วคราว ({n})",
     "face.orderTitle": "บานหน้าต่าง ทีละหน้า",
     "face.orderApply": "ใช้ลำดับนี้",
     "face.orderCancel": "ยกเลิก",

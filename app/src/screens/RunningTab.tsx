@@ -33,7 +33,7 @@ import { useState, type ReactNode } from "react";
 import { acknowledgeRun, cancelRun, forceCancelRun, pauseRun, resumeRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
-import { runReasonWord, runStatusWord } from "../core/runWords";
+import { isPausing, runReasonWord, runStatusWord } from "../core/runWords";
 import { exactLabel, listLabel, whenLabel } from "../core/i18n/format";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -47,7 +47,7 @@ import type { AutomationRunCardDto } from "../bindings/bindings";
  * painted instead. Once it is over, in the history, how it ended is what the row is read for.
  */
 function stateChip(run: AutomationRunCardDto, ended: boolean): { icon: string; word: string } | null {
-  if (run.status === "running" && run.pauseRequested) return { icon: "⏸", word: runStatusWord(run) };
+  if (isPausing(run)) return { icon: "⏸", word: runStatusWord(run) };
   if (run.status === "paused") return { icon: "⏸", word: runStatusWord(run) };
   if (ended) return { icon: "", word: runStatusWord(run) };
   return null;
@@ -97,7 +97,7 @@ export function RunLine({
   const reason = run.status === "failed" ? runReasonWord(run) : null;
   const at = run.endedAt ?? run.startedAt;
   const chip = stateChip(run, ended);
-  const pausing = run.status === "running" && run.pauseRequested;
+  const pausing = isPausing(run);
   // The step as its box reads, and the action it was opened from only where that says something
   // more — a spot whose action is one step of the same name would say the one name twice.
   const step = run.stepName === undefined

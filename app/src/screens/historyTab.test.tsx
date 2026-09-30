@@ -52,6 +52,8 @@ function run(id: number): AutomationRunCardDto {
     automationName: "Morning round",
     status: "completed",
     pauseRequested: false,
+    pauseBeforeNextTask: false,
+    pausableBeforeNextTask: false,
     waiting: false,
     stepsDone: 3,
     reportWithheld: id === 1000 ? hoisted.withheld : [],

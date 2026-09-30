@@ -739,6 +739,11 @@ const ui = {
   // whole reason a drag across pages reads as one move. The pane with neither a name nor a folder is
   // one nothing has been opened in yet.
   "face.order": "Move a pane to another page",
+  // The project's pause (`app/src/shell/PauseAfterTask.tsx`): a mark with no label, and these are
+  // what hovering over it says. The first is what a press does; the second is why it cannot be
+  // pressed while the runs it asked have yet to pause.
+  "face.pauseAfterTask": "Pause after the current task",
+  "face.pauseAfterTaskWaiting": "Waiting to pause ({n})",
   "face.orderTitle": "The panes, page by page",
   "face.orderApply": "Use this order",
   "face.orderCancel": "Cancel",

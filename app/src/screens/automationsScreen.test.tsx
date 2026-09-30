@@ -797,6 +797,8 @@ describe("an automation a run is going on (AMB-D-961)", () => {
     automationName: "Morning round",
     status: "paused",
     pauseRequested: false,
+    pauseBeforeNextTask: false,
+    pausableBeforeNextTask: false,
     waiting: false,
     stepsDone: 2,
     reportWithheld: [],

@@ -64,6 +64,8 @@ function run(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
     automationName: "Morning round",
     status: "running",
     pauseRequested: false,
+    pauseBeforeNextTask: false,
+    pausableBeforeNextTask: false,
     waiting: false,
     stepsDone: 2,
     reportWithheld: [],
@@ -183,6 +185,15 @@ describe("the running tab", () => {
     await render([run({ pauseRequested: true })]);
     expect(container.querySelector(".autorun__chip")?.textContent).toBe(`⏸${t("auto.run.pausing")}`);
     expect(button(t("auto.run.pause")).disabled).toBe(true);
+  });
+
+  // Asked from the project's header, the run pauses before its next task; until then the row says
+  // it is waiting to pause, and the pause at the end of the action is still there to press.
+  it("reads a pause before the next task as waiting to pause, and still offers the pause", async () => {
+    await render([run({ pauseBeforeNextTask: true })]);
+    expect(container.querySelector(".autorun__chip")?.textContent).toBe(`⏸${t("auto.run.pausing")}`);
+    expect(container.querySelector(".autorun--pausing")).not.toBeNull();
+    expect(button(t("auto.run.pause")).disabled).toBe(false);
   });
 
   it("offers the move the state has, and to a failure only the press that acknowledges it", async () => {

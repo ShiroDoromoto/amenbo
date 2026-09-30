@@ -639,6 +639,8 @@ export const uk: Translation = {
     "face.pages": "Сторінки",
     "face.page": "Сторінка {n}",
     "face.order": "Перемістити панель на іншу сторінку",
+    "face.pauseAfterTask": "Призупинити після поточного завдання",
+    "face.pauseAfterTaskWaiting": "Чекають паузи ({n})",
     "face.orderTitle": "Панелі, сторінка за сторінкою",
     "face.orderApply": "Застосувати цей порядок",
     "face.orderCancel": "Скасувати",

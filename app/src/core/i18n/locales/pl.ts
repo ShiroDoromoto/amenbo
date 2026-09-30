@@ -639,6 +639,8 @@ export const pl: Translation = {
     "face.pages": "Strony",
     "face.page": "Strona {n}",
     "face.order": "Przenieś panel na inną stronę",
+    "face.pauseAfterTask": "Wstrzymaj po bieżącym zadaniu",
+    "face.pauseAfterTaskWaiting": "Oczekuje na wstrzymanie ({n})",
     "face.orderTitle": "Panele, strona po stronie",
     "face.orderApply": "Użyj tej kolejności",
     "face.orderCancel": "Anuluj",

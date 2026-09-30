@@ -624,6 +624,8 @@ export const hi: Translation = {
     "face.pages": "पृष्ठ",
     "face.page": "पृष्ठ {n}",
     "face.order": "किसी पैन को दूसरे पृष्ठ पर ले जाएँ",
+    "face.pauseAfterTask": "मौजूदा कार्य पूरा होने पर रोकें",
+    "face.pauseAfterTaskWaiting": "रुकने की प्रतीक्षा ({n})",
     "face.orderTitle": "पैन, पृष्ठ दर पृष्ठ",
     "face.orderApply": "यही क्रम रखें",
     "face.orderCancel": "रद्द करें",

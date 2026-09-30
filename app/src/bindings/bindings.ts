@@ -749,6 +749,17 @@ endedAt?: string,
  */
 pauseRequested: boolean, 
 /**
+ * Whether it has been asked to pause before it takes its next task, and has not yet (`AMB-D-1009`).
+ * Still `running` — the gap between the project's button and the pause
+ * ([`amenbo_core::ops::automation_stop::pause_before_next_task`]).
+ */
+pauseBeforeNextTask: boolean, 
+/**
+ * **Whether the project's button would ask it** — `running`, asked for neither pause yet, and it
+ * takes tasks ([`amenbo_core::ops::automation_stop::pauses_before_next_task`]).
+ */
+pausableBeforeNextTask: boolean, 
+/**
  * **Whether it stands before a built-in that is waiting** for something to turn up — still
  * `running`, with nothing under way (`AMB-D-969`).
  */

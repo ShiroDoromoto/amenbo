@@ -549,6 +549,7 @@ pub fn run() {
       automation::automation_history_page,
       automation::automation_run_acknowledge,
       automation::automation_run_pause,
+      automation::automation_pause_before_next_task,
       automation::automation_run_resume,
       automation::automation_run_stop,
       automation::automation_run_cancel,

@@ -628,6 +628,8 @@ export const de: Translation = {
     "face.pages": "Seiten",
     "face.page": "Seite {n}",
     "face.order": "Einen Bereich auf eine andere Seite verschieben",
+    "face.pauseAfterTask": "Nach der aktuellen Aufgabe pausieren",
+    "face.pauseAfterTaskWaiting": "Wartet auf Pause ({n})",
     "face.orderTitle": "Die Bereiche, Seite für Seite",
     "face.orderApply": "Diese Reihenfolge übernehmen",
     "face.orderCancel": "Abbrechen",

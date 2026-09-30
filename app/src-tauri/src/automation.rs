@@ -1676,6 +1676,10 @@ fn run_card(
         started_at: run.started_at.map(|at| at.to_rfc3339_z()),
         ended_at: run.ended_at.map(|at| at.to_rfc3339_z()),
         pause_requested: run.pause_requested,
+        pause_before_next_task: run.pause_before_next_task,
+        pausable_before_next_task: amenbo_core::ops::automation_stop::pauses_before_next_task(
+            conn, &run,
+        )?,
         waiting: run.status == amenbo_core::model::AutomationRunStatus::Running
             && amenbo_core::ops::automation_run::is_waiting(conn, run.id)?,
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
@@ -1837,6 +1841,17 @@ pub fn automation_step_open(
 pub fn automation_run_pause(run_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_pause(run_id)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Pause every run of a project before it takes its next task**
+/// ([`amenbo_core::ops::automation_stop::pause_before_next_task`], `AMB-D-1009`). Pressed on the
+/// project's header; not a `WriteAck` write, for the reason [`automation_run_pause`] is not.
+#[tauri::command]
+pub fn automation_pause_before_next_task(project_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_pause_before_next_task(project_id)?;
     crate::automation_watch::wake();
     Ok(())
 }

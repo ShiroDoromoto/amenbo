@@ -1207,6 +1207,17 @@ export async function pauseRun(run: number): Promise<void> {
 }
 
 /**
+ * **Ask every run of a project to pause before it takes its next task** — pressed on the project's
+ * header (`../shell/PauseAfterTask`, `AMB-D-1009`). A run that takes no task is not asked, and a run
+ * waiting for one pauses on the spot (`amenbo_core::ops::automation_stop::pause_before_next_task`).
+ * Not a `WriteAck` write, for `forceCancelRun`'s reason.
+ */
+export async function pauseBeforeNextTask(project: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_pause_before_next_task", { projectId: project });
+}
+
+/**
  * **Pick a paused run up again**, from the way out its last step left through. It opens a terminal
  * on the spot — nothing caps how many runs may be under way (`AMB-D-947`).
  *

@@ -630,6 +630,8 @@ export const ja: Translation = {
     "face.pages": "ページ",
     "face.page": "{n} ページ目",
     "face.order": "ペインを別のページへ移す",
+    "face.pauseAfterTask": "タスクが終わったら一時停止",
+    "face.pauseAfterTaskWaiting": "一時停止待ち（{n}件）",
     "face.orderTitle": "ページごとのペイン",
     "face.orderApply": "この順にする",
     "face.orderCancel": "やめる",

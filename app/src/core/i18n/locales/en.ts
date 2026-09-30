@@ -1923,6 +1923,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_dimension_close_unfinished: "{count} unfinished task(s) remain on “{value}”, and “{name}” makes its tasks wait along its order, so “{value}” cannot be closed yet — move them to another value first.",
   invalid_task_required_dimension: "This task carries no value on {names}, which this project requires.",
   invalid_task_status_draft: "{ref} is still being created, so its status cannot be changed — finish creating it, or delete it.",
+  invalid_comment_task_closed: "{ref} is closed, and nobody reads a closed task — reopen it, or file a new task.",
   invalid_decision_required_dimension: "This decision carries no value on {names}, which this project requires.",
   invalid_dimension_values_unordered: "This category's values carry no order, so they cannot be re-ordered.",
   invalid_decision_edit_rejected: "{ref} was rejected, and a rejected decision cannot be edited.",

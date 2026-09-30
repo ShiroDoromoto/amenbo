@@ -628,7 +628,7 @@ impl From<amenbo_core::Error> for CliError {
             // the next task); this one means a premise you declared is unmet (→ resolve the premise).
             // The two point in opposite directions, so keep them apart.
             E::NotReady(_) => Some(format!(
-                "A declared premise is unmet, and there is no --force. Resolve it: finish the blocker (`{cmd} task done <blocker>`) or drop the edge (`{cmd} task undepend <id> --on <blocker>`); settle the premise (`{cmd} decision finish-writing AMB-D-N`) or unlink it (`{cmd} decision link AMB-D-N <id> --unlink`); finish creating the task (`{cmd} task finish-creating <id>`)."
+                "A declared premise is unmet, and there is no --force. Resolve it: finish the blocker (`{cmd} task done <blocker> --report ...`) or drop the edge (`{cmd} task undepend <id> --on <blocker>`); settle the premise (`{cmd} decision finish-writing AMB-D-N`) or unlink it (`{cmd} decision link AMB-D-N <id> --unlink`); finish creating the task (`{cmd} task finish-creating <id>`)."
             )),
             // The refusal states the shape and stops there, which leaves the caller holding the very
             // value that failed: `git log --oneline` prints the short form, so the value nearest to hand
@@ -652,6 +652,11 @@ impl From<amenbo_core::Error> for CliError {
             // in error and `delete` is what it leaves by. `reject` is not one of them (`AMB-D-846`).
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidTaskStatusDraft) => Some(format!(
                 "A task still being created stays at `todo`. End the creation with `{cmd} task finish-creating <AMB-T-n>` and the status opens up — or, if it was written in error, remove it with `{cmd} task delete <AMB-T-n>`."
+            )),
+            // A comment on a closed task (`AMB-D-963`): the two ways out are to open the task again, or to
+            // carry what was to be said onto a task of its own.
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidCommentTaskClosed) => Some(format!(
+                "Reopen the task with `{cmd} task reopen <AMB-T-n>` and comment then, or file what you meant to say as a new task with `{cmd} task add`."
             )),
             // Lowering the flag is the other way out, and it is the one nobody thinks of while holding a
             // task they only wanted to reclassify.

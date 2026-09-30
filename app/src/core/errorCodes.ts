@@ -104,6 +104,8 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // on a draft card, so the refusal is the backstop under a window drawn before another device reopened
   // the creation.
   "invalid_task_status_draft",
+  // A new comment on a task that is `done` or `rejected` (`AMB-D-963`).
+  "invalid_comment_task_closed",
   // Its decision twin: the same flag, read at the other door a record passes through once
   // (`decision finish-writing`), and the decision pane is where that button is.
   "invalid_decision_required_dimension",

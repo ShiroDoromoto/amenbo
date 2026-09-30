@@ -282,7 +282,7 @@ fn a_decision_says_which_of_the_tasks_it_created_are_still_standing() {
         cli.json(&["decision", "link", &did, tid, "--json"]);
     }
     cli.json(&["task", "status", &doing, "in_progress", "--json"]);
-    cli.json(&["task", "done", &done, "--json"]);
+    cli.json(&["task", "done", &done, "--report", "終えた", "--json"]);
     cli.json(&["task", "status", &blocked, "blocked", "--json"]);
 
     let shown = cli.json(&["decision", "show", &did, "--json"]);

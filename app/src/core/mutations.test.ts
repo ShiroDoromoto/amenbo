@@ -253,6 +253,15 @@ describe("addComment (browser-loop mock)", () => {
     await addComment(99, "宛先なし");
     expect(getSnapshot().activity).toEqual([]);
   });
+
+  it("refuses a comment on a closed task, and writes nothing (AMB-D-963)", async () => {
+    for (const status of ["done", "rejected"] as const) {
+      seedTasks([full(10, { status })]);
+      await expect(addComment(10, "もう読まれない")).rejects.toMatchObject({ code: "invalid_comment_task_closed" });
+      expect(getSnapshot().tasks[0].comments).toBe(0);
+      expect(getSnapshot().activity).toEqual([]);
+    }
+  });
 });
 
 describe("the two days (browser-loop mock)", () => {

@@ -1010,7 +1010,7 @@ fn inside_a_step_what_moves_a_task_is_refused_and_the_task_is_left_alone() {
     let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
 
     for args in [
-        vec!["--actor", "ai", "task", "done", &t, "--json"],
+        vec!["--actor", "ai", "task", "done", &t, "--report", "終えた", "--json"],
         vec!["--actor", "ai", "task", "status", &t, "blocked", "--json"],
         vec!["--actor", "ai", "task", "assign", &t, "--to", "me", "--json"],
     ] {

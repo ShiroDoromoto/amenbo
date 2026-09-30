@@ -249,19 +249,31 @@ impl Store {
 
     /// Done with its report (`AMB-D-963`): the report lands as a comment and the task goes to `done`, in
     /// **one** transaction. The comment is written first, while the task is still open — a closed task takes
-    /// no new comment, so a report written after the transition would be refused. With no report this is
-    /// [`Self::set_task_completed`] to `done`.
+    /// no new comment, so a report written after the transition would be refused.
     pub fn complete_task_with_report(
         &mut self,
         id: i64,
-        report: Option<&str>,
+        report: &str,
         actor: crate::model::ActorKind,
     ) -> Result<crate::model::Task> {
         self.write_one(&[WriteTarget::Task(id)], |tx| {
-            if let Some(text) = report {
-                crate::ops::comment::add_comment(tx, id, actor, text)?;
-            }
+            crate::ops::comment::add_comment(tx, id, actor, report)?;
             crate::ops::task::set_completed(tx, id, true, actor)
+        })
+    }
+
+    /// Rejected with its reason (`AMB-D-397`, `AMB-D-963`): the reason lands as a comment and the task goes
+    /// to `rejected`, in **one** transaction, the comment first for the same reason as
+    /// [`Self::complete_task_with_report`].
+    pub fn reject_task_with_reason(
+        &mut self,
+        id: i64,
+        reason: &str,
+        actor: crate::model::ActorKind,
+    ) -> Result<crate::model::Task> {
+        self.write_one(&[WriteTarget::Task(id)], |tx| {
+            crate::ops::comment::add_comment(tx, id, actor, reason)?;
+            crate::ops::task::set_status(tx, id, crate::model::TaskStatus::Rejected, actor)
         })
     }
 

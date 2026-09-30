@@ -1636,6 +1636,7 @@ export const ja: Translation = {
     invalid_dimension_close_unfinished: "「{value}」には終わっていないタスクが {count} 件残っています。「{name}」は並び順でタスクを待たせるため、「{value}」はまだ閉じられません。先に別の値へ移してください。",
     invalid_task_required_dimension: "このタスクは {names} に値がありません。このプロジェクトが必須にしている分類です。",
     invalid_task_status_draft: "{ref} はまだ作成中です。ステータスは動かせません。作成を終えるか、削除してください。",
+    invalid_comment_task_closed: "{ref} は閉じています。閉じたタスクのコメントは誰も読みません。タスクを開き直すか、別のタスクを起票してください。",
     invalid_decision_required_dimension: "この決定は {names} に値がありません。このプロジェクトが必須にしている分類です。",
     invalid_dimension_values_unordered: "この分類の値は順序を持たないため、並べ替えできません。",
     invalid_decision_edit_rejected: "{ref} は却下済みです。却下された決定は編集できません。",

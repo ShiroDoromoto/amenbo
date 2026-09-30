@@ -1648,6 +1648,7 @@ export const uk: Translation = {
     invalid_dimension_close_unfinished: "На «{value}» лишилося незавершених завдань: {count}, а «{name}» змушує завдання чекати за порядком, тож «{value}» ще не можна закрити — спершу перенесіть їх на інше значення.",
     invalid_task_required_dimension: "У цього завдання немає значення в {names}, якого вимагає цей проєкт.",
     invalid_task_status_draft: "{ref} ще створюється, тому статус не можна змінити — завершіть створення або видаліть завдання.",
+    invalid_comment_task_closed: "{ref} закрито, а закрите завдання ніхто не читає — відкрийте його знову або створіть нове завдання.",
     invalid_decision_required_dimension: "У цього рішення немає значення в {names}, якого вимагає цей проєкт.",
     invalid_dimension_values_unordered: "Значення цієї категорії не впорядковані, тож переставити їх не можна.",
     invalid_decision_edit_rejected: "{ref} відхилено, а відхилене рішення не можна редагувати.",

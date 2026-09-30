@@ -1127,7 +1127,7 @@ fn a_sequential_axis_holds_tasks_until_the_values_before_theirs_close() {
 
     // Finish it, close v1, and the later task is free.
     cli.json(&["task", "status", &first, "in_progress", "--json"]);
-    cli.json(&["task", "done", &first, "--json"]);
+    cli.json(&["task", "done", &first, "--report", "終えた", "--json"]);
     cli.json(&["dimension", "value-close", "リリース", "v1", "--json"]);
     let (page, _) = cli.run(&["task", "show", &later]);
     assert!(page.contains("waiting on values: (none)"), "closing v1 released it: {page}");

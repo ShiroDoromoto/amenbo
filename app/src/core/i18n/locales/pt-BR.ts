@@ -1640,6 +1640,7 @@ export const ptBR: Translation = {
     invalid_dimension_close_unfinished: "Restam {count} tarefa(s) não concluída(s) em «{value}», e «{name}» faz suas tarefas esperarem pela ordem, então «{value}» ainda não pode ser fechado: mova-as primeiro para outro valor.",
     invalid_task_required_dimension: "Esta tarefa não carrega valor algum em {names}, que este projeto exige.",
     invalid_task_status_draft: "{ref} ainda está sendo criada, então o status não pode ser alterado — termine a criação ou exclua a tarefa.",
+    invalid_comment_task_closed: "{ref} está fechada, e ninguém lê uma tarefa fechada — reabra-a ou crie uma nova tarefa.",
     invalid_decision_required_dimension: "Esta decisão não carrega valor algum em {names}, que este projeto exige.",
     invalid_dimension_values_unordered: "Os valores desta categoria não têm ordem, então não dá para reordená-los.",
     invalid_decision_edit_rejected: "{ref} foi rejeitada, e uma decisão rejeitada não pode ser editada.",

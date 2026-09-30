@@ -1622,6 +1622,7 @@ export const vi: Translation = {
     invalid_dimension_close_unfinished: "Còn {count} công việc chưa xong trên «{value}», và «{name}» cho công việc chờ theo thứ tự, nên chưa thể đóng «{value}» — hãy chuyển chúng sang giá trị khác trước.",
     invalid_task_required_dimension: "Công việc này không mang giá trị nào ở {names}, thứ mà dự án này yêu cầu.",
     invalid_task_status_draft: "{ref} vẫn đang được tạo nên không thể đổi trạng thái — hãy hoàn tất việc tạo hoặc xóa nó.",
+    invalid_comment_task_closed: "{ref} đã đóng, và không ai đọc một công việc đã đóng — hãy mở lại nó, hoặc tạo công việc mới.",
     invalid_decision_required_dimension: "Quyết định này không mang giá trị nào ở {names}, thứ mà dự án này yêu cầu.",
     invalid_dimension_values_unordered: "Các giá trị của phân loại này không có thứ tự nên không thể sắp xếp lại.",
     invalid_decision_edit_rejected: "{ref} đã bị bác bỏ, và một quyết định bị bác bỏ thì không sửa được.",

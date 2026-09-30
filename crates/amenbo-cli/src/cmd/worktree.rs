@@ -77,7 +77,7 @@ fn finish(store: &Store, flags: &Flags, id: &str, base: Option<&str>, force: boo
         crate::output::human(flags, format!("✓ task {tid} folded up (worktree and branch {} removed)", cut.branch));
         let cmd = Paths::command_name();
         crate::output::human(flags, format!(
-            "  the task is untouched — close it with `{cmd} task done {tid}`, or hand it back with `{cmd} task status {tid} todo`",
+            "  the task is untouched — close it with `{cmd} task done {tid} --report ...`, or hand it back with `{cmd} task status {tid} todo`",
         ));
     }
     Ok(())

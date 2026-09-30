@@ -1623,6 +1623,7 @@ export const id: Translation = {
     invalid_dimension_close_unfinished: "Masih ada {count} tugas belum selesai di «{value}», dan «{name}» membuat tugasnya menunggu sesuai urutan, jadi «{value}» belum bisa ditutup — pindahkan dulu ke nilai lain.",
     invalid_task_required_dimension: "Tugas ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_task_status_draft: "{ref} masih dibuat, jadi statusnya tidak bisa diubah — selesaikan pembuatannya atau hapus tugas ini.",
+    invalid_comment_task_closed: "{ref} sudah ditutup, dan tugas yang ditutup tidak dibaca siapa pun — buka kembali, atau buat tugas baru.",
     invalid_decision_required_dimension: "Keputusan ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_dimension_values_unordered: "Nilai kategori ini tidak berurutan, jadi tidak bisa diurutkan ulang.",
     invalid_decision_edit_rejected: "{ref} sudah ditolak, dan keputusan yang ditolak tidak bisa disunting.",

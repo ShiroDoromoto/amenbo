@@ -9,7 +9,7 @@
 //! written by their door in `store/persist.rs`; the rest are written through
 //! [`crate::store::Store::add_system_event`].
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{ActorKind, AttachmentTarget, TaskComment};
 use crate::ops::{emit_create, emit_update, event, Noun};
 use crate::store_engine::{read, record, WriteTx};
@@ -61,8 +61,16 @@ pub fn add_report_comment(
     write_comment(tx, task_id, author_kind, text, Some(run_step_id))
 }
 
+/// Whether the task is closed (`done` / `rejected`), read inside the writing transaction. It is the test
+/// [`write_comment`] refuses a new comment by, and the one an automation run asks before it writes a line
+/// on its task.
+pub(crate) fn task_closed(tx: &WriteTx<'_>, task_id: i64) -> Result<bool> {
+    Ok(read::task_status(tx.conn(), task_id)?.is_some_and(|status| status.is_closed()))
+}
+
 /// The one place a `task_comment` row is built, whichever door asked for it — and so the one place
-/// `comment.added` fires. A decision comment is not a v1 event, so its own door does not come here.
+/// `comment.added` fires, and the one place a comment on a closed task is refused (`AMB-D-963`), whoever
+/// writes it. A decision comment is not a v1 event, so its own door does not come here.
 fn write_comment(
     tx: &WriteTx<'_>,
     task_id: i64,
@@ -71,6 +79,19 @@ fn write_comment(
     automation_run_step_id: Option<i64>,
 ) -> Result<TaskComment> {
     let now = prepare_comment(text)?;
+    if task_closed(tx, task_id)? {
+        let subject = read::task(tx.conn(), task_id)?
+            .as_ref()
+            .map(crate::view::display_ref)
+            .unwrap_or_else(|| format!("'{task_id}'"));
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "cannot comment on task {subject}: it is closed — reopen it with `task reopen`, or file a new task"
+            ))
+            .coded(ErrorCode::InvalidCommentTaskClosed)
+            .with("ref", subject),
+        ));
+    }
     let comment = TaskComment {
         id: read::next_activity_id(tx.conn())?,
         task_id,
@@ -189,5 +210,30 @@ mod tests {
         assert!(edit_comment(tx, c.id, "   ").is_err(), "an empty body is rejected, just as add rejects it");
         assert_eq!(read::task_comment(tx.conn(), c.id).unwrap().unwrap().text, "本文", "on rejection it stays as it was");
         assert!(edit_comment(tx, 9999, "x").is_err(), "editing a comment that is gone is not_found (unlike delete, this is no noop)");
+    }
+
+    /// A closed task (`done` / `rejected`) takes no new comment, through either door, while the comments
+    /// already on it can still be edited and deleted (`AMB-D-963`).
+    #[test]
+    fn a_closed_task_refuses_a_new_comment_but_keeps_its_old_ones_editable() {
+        use crate::model::TaskStatus;
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        for closed in [TaskStatus::Done, TaskStatus::Rejected] {
+            let tid = mk_task(tx, "閉じるタスク");
+            let c = add_comment(tx, tid, ActorKind::Human, "閉じる前").unwrap();
+            crate::ops::task::set_status(tx, tid, closed, ActorKind::Human).unwrap();
+
+            let err = add_comment(tx, tid, ActorKind::Ai, "閉じたあと").unwrap_err();
+            assert_eq!(err.code(), "invalid_comment_task_closed", "{closed:?}");
+            let err = add_report_comment(tx, tid, ActorKind::Ai, "報告", 1).unwrap_err();
+            assert_eq!(err.code(), "invalid_comment_task_closed", "{closed:?}");
+
+            edit_comment(tx, c.id, "直した").unwrap();
+            assert!(remove_comment(tx, c.id, ActorKind::Human).unwrap());
+
+            crate::ops::task::set_status(tx, tid, TaskStatus::Todo, ActorKind::Human).unwrap();
+            add_comment(tx, tid, ActorKind::Ai, "開き直したあと").unwrap();
+        }
     }
 }

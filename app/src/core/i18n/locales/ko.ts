@@ -1617,6 +1617,7 @@ export const ko: Translation = {
     invalid_dimension_close_unfinished: "«{value}»에 끝나지 않은 작업이 {count}개 남아 있고 «{name}»은 작업을 순서대로 기다리게 하므로, «{value}»는 아직 닫을 수 없습니다 — 먼저 다른 값으로 옮기세요.",
     invalid_task_required_dimension: "이 작업은 {names}에 값이 없습니다. 이 프로젝트가 필수로 두는 분류입니다.",
     invalid_task_status_draft: "{ref}은(는) 아직 작성 중이라 상태를 바꿀 수 없습니다. 작성을 마치거나 삭제하세요.",
+    invalid_comment_task_closed: "{ref}은(는) 닫힌 작업이라 아무도 댓글을 읽지 않습니다. 작업을 다시 열거나 새 작업을 만드세요.",
     invalid_decision_required_dimension: "이 결정은 {names}에 값이 없습니다. 이 프로젝트가 필수로 두는 분류입니다.",
     invalid_dimension_values_unordered: "이 분류의 값에는 순서가 없어 재정렬할 수 없습니다.",
     invalid_decision_edit_rejected: "{ref}은(는) 기각되었습니다. 기각된 결정은 편집할 수 없습니다.",

@@ -53,7 +53,7 @@
 // brought to the middle. Nothing is put in there, so no `+` is drawn, and the legend is left to the
 // build screen: what a line means is read where the picture is made.
 import { useEffect, useId, useRef, useState } from "react";
-import { edgeWord, layOut, openWord, ACTION_BOUNDARY, ERROR_EXIT, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
+import { edgeWord, layOut, openWord, ACTION_BOUNDARY, ERROR_EXIT, TAKES_INSET, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { cardIo } from "./automationWires";
@@ -446,15 +446,16 @@ export function AutomationPicture({
             ),
           )}
 
-          {/* Over the top-right corner of a box that takes the next task, outside it: inside, the
-              name and its second line have the width, and the top-left is where lines come in. */}
+          {/* Over the top-right of a box that takes the next task, outside it: inside, the name and
+              its second line have the width, and the top-left is where lines come in. It ends short of
+              the corner, where the line in from the right margin lands. */}
           {picture.nodes
             .filter((node) => node.takes === true)
             .map((node) => (
               <span
                 key={`takes-${node.boxId}`}
                 className="autopic__takes"
-                style={{ left: `${node.x + node.w}px`, top: `${node.y}px` }}
+                style={{ left: `${node.x + node.w - TAKES_INSET}px`, top: `${node.y}px` }}
               >
                 {t("auto.step.takesTask")}
               </span>

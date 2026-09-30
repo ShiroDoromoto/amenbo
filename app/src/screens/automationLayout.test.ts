@@ -13,6 +13,7 @@ import {
   layOut,
   openWord,
   wordLeft,
+  TAKES_INSET,
   wordW,
   type PicGraph,
   type PicLine,
@@ -647,6 +648,40 @@ describe("the picture of an automation", () => {
     expect(back.at.y).toBeGreaterThan(from.y + from.h);
     expect(back.at.y).toBeLessThan(from.y + from.h + 30);
     expect(back.at.y).toBeGreaterThan(over.y + over.h);
+  });
+
+  it("ends the word over the box that takes the task short of where a line in from the right margin lands", () => {
+    const picture = layOut(
+      detail({
+        entryPlacementId: 1,
+        placements: [
+          taker(1, "take"),
+          step({
+            id: 2,
+            name: "split",
+            exits: [
+              { id: 21, name: "a", outputs: [] },
+              { id: 22, name: "b", outputs: [] },
+            ],
+          }),
+          step({ id: 3, name: "left" }),
+          step({ id: 4, name: "right", exits: [{ id: 41, name: "retry", outputs: [] }] }),
+        ],
+        edges: [
+          edge({ id: 1, fromId: 1, toId: 2 }),
+          edge({ id: 2, fromId: 2, exitName: "a", toId: 3 }),
+          edge({ id: 3, fromId: 2, exitName: "b", toId: 4 }),
+          edge({ id: 5, fromId: 4, exitName: "retry", toId: 1 }),
+        ],
+      }),
+    );
+    const take = at(picture, 1);
+    const back = picture.lines.find((one) => one.key === "edge-5")!;
+    const head = back.points[back.points.length - 1]!;
+    expect(head.y).toBe(take.y);
+    // The arrowhead is six times as wide as its line, 15 on a lit one: its left edge still stands
+    // clear of the word's end.
+    expect(head.x - 15 / 2).toBeGreaterThan(take.x + take.w - TAKES_INSET);
   });
 
   it("gives two lines leaving one box for the margin a leg each", () => {

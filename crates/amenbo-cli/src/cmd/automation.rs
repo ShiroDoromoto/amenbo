@@ -235,9 +235,9 @@ struct CfgAnswer {
 }
 
 pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -> Result<i32, CliError> {
-    // What a step's terminal may not type was refused at the door, for every command alike
-    // (`crate::in_a_step`, `AMB-D-968`). The other direction — a step's own verb typed where there is
-    // no step — is `speaking_for`'s, in the arms that read the step off it.
+    // A step's terminal types every command as it is typed outside a run (`AMB-D-1011`). A step's own
+    // verb typed where there is no step is refused by `speaking_for`, in the arms that read the step
+    // off it.
     match sub {
         AutomationCmd::Add { project, name, notes } => {
             let pid = project_or_bound(store, project)?;

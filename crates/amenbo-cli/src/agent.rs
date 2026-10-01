@@ -19,7 +19,8 @@ pub fn build_index() -> Value {
     amenbo_core::agent::build_index()
 }
 
-/// The entry point inside a step of an automation run: what the step is, and the commands it reaches.
+/// The entry point inside a step of an automation run: what the step is, and the two commands that
+/// hand its work back.
 pub fn build_step() -> Value {
     amenbo_core::agent::build_step()
 }

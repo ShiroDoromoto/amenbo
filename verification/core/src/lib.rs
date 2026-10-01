@@ -4628,14 +4628,6 @@ const REGISTRY: &[OpSpec] = &[
     // A way out the step does not declare — an empty one included — is turned away with
     // `invalid_value`, nothing written and the step still running, so a road writes `refused:` on it.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "done-in-pane", required: &["report"], refs: &["target"], strings: &["report", "exit"], binds: false },
-    // **Any other command, typed in that same terminal.** Building a definition, driving a run,
-    // moving a task's status or who it is assigned to, and what a built-in does for the run all
-    // belong outside a step, and the binary turns them away there (`automation_outside_only`) — so a
-    // road writes `refused:` on this one. `command` is the words after `amenbo`, spelled by the road
-    // because which command is being reached for is the whole of the step. A `<run>` in them is a gap
-    // the operator fills from the line over the pane, and a `<ref>` one filled with the ref of the
-    // task `task` names — the store issues both numbers.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "command-in-pane", required: &["command"], refs: &["target", "task"], strings: &["command"], binds: false },
     // **The same report, typed where the run's pane is not.** A step's terminal is started by the app
     // whether or not its pane is drawn (`app/src-tauri/src/pty.rs`, `open_step`), and the three ops
     // above cannot tell that from the old way: opening the pane to type in it starts the terminal on

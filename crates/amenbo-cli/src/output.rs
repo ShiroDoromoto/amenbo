@@ -68,11 +68,6 @@ pub enum CliErrorCode {
     /// speaks about does not exist (`AMB-D-749`). It is a code of its own, and non-zero, because the
     /// alternative — a quiet success — would leave the caller believing it had spoken.
     TalkOutsideSurface,
-    /// A verb that builds an automation, or drives a run, was typed inside the terminal a run opened
-    /// for a step (`AMB-D-948`). It is the other direction of the refusal the two reporting verbs
-    /// meet outside a step, and a code of its own because what the caller does next is to type it
-    /// somewhere else.
-    AutomationOutsideOnly,
     /// `automation start` was typed while no app is up on this store (`AMB-D-995`). A step's terminal
     /// is opened by the app, so a run started then would stand `running` with nothing moving, and the
     /// next launch would end it `crashed`. It is the CLI's because the store has nothing to say about
@@ -127,7 +122,6 @@ impl CliErrorCode {
             CliErrorCode::FacetRequired => "facet_required",
             CliErrorCode::AiGuardrail => "ai_guardrail",
             CliErrorCode::TalkOutsideSurface => "talk_outside_surface",
-            CliErrorCode::AutomationOutsideOnly => "automation_outside_only",
             CliErrorCode::AppNotRunning => "app_not_running",
             CliErrorCode::WorktreeExists => "worktree_exists",
             CliErrorCode::WorktreeBranchExists => "worktree_branch_exists",
@@ -160,7 +154,6 @@ impl CliErrorCode {
         CliErrorCode::FacetRequired,
         CliErrorCode::AiGuardrail,
         CliErrorCode::TalkOutsideSurface,
-        CliErrorCode::AutomationOutsideOnly,
         CliErrorCode::AppNotRunning,
         CliErrorCode::WorktreeExists,
         CliErrorCode::WorktreeBranchExists,
@@ -205,9 +198,6 @@ fn hint_for_a_caller_with_no_terminal(dirs: &str) -> String {
         "The commands that would set a project up here — init and bind — are not served over MCP, so neither is a road you can take.\nThe folders this server works in:{listed}\nIf you meant one of those, name it in the next call. To work in *this* folder, ask the person to add it to a project in Amenbo's own window (the project's folders) — that is the only thing that opens it, and it takes no terminal."
     )
 }
-
-/// What reaches from inside a step, said where something typed there was refused.
-const STEP_REACHES: &str = "From inside a step, what reaches is step-out and step-done, the commands that read, and a comment on a task or a decision. The rest is typed in a terminal of the person's own.";
 
 impl CliError {
     pub fn confirmation_required(what: &str) -> CliError {
@@ -427,27 +417,6 @@ impl CliError {
         }
     }
 
-
-    /// **A command typed inside the terminal a run opened for a step, where it may not be typed**
-    /// (`AMB-D-968`). `command` is the one that was typed, as the registry spells it. The message names
-    /// the side it is typed on, because the caller is an agent that was told what to do and nothing
-    /// about where it is standing.
-    ///
-    /// **One code for both reasons.** Either way the command is one typed outside a run; what differs is
-    /// why, and that is the sentence ([`CliError::automation_task_is_the_runs`],
-    /// [`CliError::automation_a_built_in_does_it`]).
-    pub fn automation_outside_only(command: &str) -> CliError {
-        CliError {
-            code: CliErrorCode::AutomationOutsideOnly.as_str(),
-            message: format!(
-                "this terminal is a step of a run, and `{} {command}` is typed from outside one. Nothing was done.",
-                Paths::command_name()
-            ),
-            hint: Some(STEP_REACHES.to_string()),
-            exit: 2,
-        }
-    }
-
     /// **`automation start` with no app up on this store** (`AMB-D-995`). Nothing was started: a run
     /// accepted now would move no further than its first step, which only the app can open, and be
     /// ended `crashed` when the app next comes up — a failure whose reason the caller never sees.
@@ -461,41 +430,6 @@ impl CliError {
                 Paths::command_name()
             )),
             exit: 1,
-        }
-    }
-
-    /// **A command that moves a task's status or who it is assigned to, typed inside a step**
-    /// (`AMB-D-968`). The run takes its task, ends it and hands it to a person; a step that did any of
-    /// them itself would close a task with no commit on it, or hand it to another run that takes it
-    /// straight back. So the sentence says who moves it, and what the step does instead.
-    pub fn automation_task_is_the_runs(command: &str) -> CliError {
-        CliError {
-            code: CliErrorCode::AutomationOutsideOnly.as_str(),
-            message: format!(
-                "this terminal is a step of a run, and the run moves its task's status and who it is assigned to — `{} {command}` is not typed from here. Nothing was done.",
-                Paths::command_name()
-            ),
-            hint: Some(format!(
-                "Where a person has to decide, leave by the way out that says so with step-done. {STEP_REACHES}"
-            )),
-            exit: 2,
-        }
-    }
-
-    /// **A command one of Amenbo's built-ins carries out, typed inside a step** (`AMB-D-964`,
-    /// `AMB-D-968`) — the task's worktree, cut and folded away, and the commit the task is closed on.
-    /// The step hands on what the built-in needs and leaves the doing to it, so the sentence says that.
-    pub fn automation_a_built_in_does_it(command: &str) -> CliError {
-        let cli = Paths::command_name();
-        CliError {
-            code: CliErrorCode::AutomationOutsideOnly.as_str(),
-            message: format!(
-                "this terminal is a step of a run, and what `{cli} {command}` does a built-in does for the run. Nothing was done."
-            ),
-            hint: Some(format!(
-                "Hand on what the built-in needs with step-out — the commit's SHA, say — and leave by your way out; `{cli} automation builtin-list` says what each built-in takes. {STEP_REACHES}"
-            )),
-            exit: 2,
         }
     }
 
@@ -979,7 +913,6 @@ mod tests {
             "facet_required",
             "ai_guardrail",
             "talk_outside_surface",
-            "automation_outside_only",
             "app_not_running",
             "worktree_exists",
             "worktree_branch_exists",

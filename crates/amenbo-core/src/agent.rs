@@ -270,8 +270,7 @@ macro_rules! commands {
         /// refuse never needs a test).
         ///
         /// It holds every command the registry ([`all_commands`]) carries, not only the ones a step
-        /// names, because it is also where each one says whether a run's step may type it
-        /// ([`Cmd::in_a_step`], `AMB-D-968`). The registry is still written as text, so
+        /// names, so any of them can be named the same way. The registry is still written as text, so
         /// `the_table_and_the_registry_name_the_same_commands` holds the two against each other in
         /// both directions.
         #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -471,240 +470,6 @@ commands! {
     AutomationWireRm => "automation wire-rm",
     AutomationRunList => "automation run-list",
     AutomationRunShow => "automation run-show",
-}
-
-/// Whether a command reaches the terminal a run opened for a step. It is an allow-list: a command
-/// reaches only where [`Cmd::in_a_step`] says so, so one written down in the wrong arm, or added
-/// without thought, lands on the side that is refused rather than the one that quietly lets it
-/// through (`AMB-D-968`).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum InAStep {
-    /// One of the two that hand the step's work back. The step's entry teaches them in full.
-    HandsBack,
-    /// Reaches the step, and does not hand anything back: it reads, it writes a comment, it draws a
-    /// task's edges or sets its fields, or it is something the prompts a run is carried out on still
-    /// do for themselves.
-    Reaches,
-    /// Refused: it moves a task's status or who it is assigned to. Taking a task, ending it, and
-    /// handing it to a person are the run's, and a step that did them itself would close a task with
-    /// no commit on it, or hand it to another run that takes it straight back.
-    MovesTheTask,
-    /// Refused: one of Amenbo's built-ins does it (`AMB-D-964`) — cutting the task's worktree, folding
-    /// it away, and recording the commit the task is closed on. A step that did it itself would leave
-    /// the run holding a worktree it never cut, or a task closed on a commit it never recorded.
-    ABuiltInDoesIt,
-    /// Refused: it belongs outside a run. A step that could start a run would let a run make runs,
-    /// and one that rewrote a definition or a setting would change what comes next where the person
-    /// who started the run is not looking.
-    OutsideARun,
-}
-
-impl Cmd {
-    /// **Where each command may be typed, as a match over every one of them** — what the list a
-    /// step's entry teaches ([`build_step`]) is made from, and the refusal inside a step with it (the
-    /// CLI asks this of every command it parses, before it reads or writes anything).
-    ///
-    /// **There is no `_` arm, deliberately.** A command added to the table does not compile until
-    /// this says which side it is on.
-    pub const fn in_a_step(self) -> InAStep {
-        match self {
-            Cmd::AutomationStepOut | Cmd::AutomationStepDone => InAStep::HandsBack,
-
-            // To read where the step stands. `attach save` is on this side because it is how an agent
-            // reads an attachment; `attach open` is not, since it puts the file in front of the person.
-            Cmd::Amenbo
-            | Cmd::Agent
-            | Cmd::Version
-            | Cmd::Notify
-            | Cmd::NotifyTargetList
-            | Cmd::Config
-            | Cmd::Whoami
-            | Cmd::Status
-            | Cmd::Search
-            | Cmd::Activity
-            | Cmd::Doctor
-            | Cmd::Validate
-            | Cmd::Lint
-            | Cmd::HooksStatus
-            | Cmd::TickStatus
-            | Cmd::ProjectList
-            | Cmd::ProjectShow
-            | Cmd::DimensionList
-            | Cmd::DimensionShow
-            | Cmd::TaskList
-            | Cmd::TaskShow
-            | Cmd::TaskCommitList
-            | Cmd::CommentList
-            | Cmd::DecisionList
-            | Cmd::DecisionShow
-            | Cmd::DecisionCommentList
-            | Cmd::AttachLs
-            | Cmd::AttachShow
-            | Cmd::AttachSave
-            | Cmd::SkinList
-            | Cmd::AutomationList
-            | Cmd::AutomationShow
-            | Cmd::AutomationActionList
-            | Cmd::AutomationActionShow
-            | Cmd::AutomationBuiltinList
-            | Cmd::AutomationRunList
-            | Cmd::AutomationRunShow
-            // The timeline is the step's to write on, a task's and a decision's alike.
-            | Cmd::CommentAdd
-            | Cmd::CommentEdit
-            | Cmd::CommentAttach
-            | Cmd::DecisionCommentAdd
-            | Cmd::DecisionCommentEdit
-            | Cmd::DecisionCommentAttach
-            // What the prompts a run is carried out on still type for themselves. An entry step may
-            // file the task it then takes. `mcp` is a host's, and every call through it is this
-            // table's again, since it re-runs this executable.
-            | Cmd::TaskAdd
-            | Cmd::TaskFinishCreating
-            | Cmd::Mcp
-            // A task's edges and fields, on any task in the project as outside a run (`AMB-D-991`): a
-            // step that files several tasks has to order them and hang them on their premise. Changing
-            // the wrong one is the same risk here as anywhere, and what this table keeps from a step
-            // is the run's task's status and assignee, not these. Writing a decision stays outside:
-            // one is written only on what a person settled, and there is no person in a run.
-            | Cmd::TaskUpdate
-            | Cmd::TaskDepend
-            | Cmd::TaskUndepend
-            | Cmd::DecisionLink
-            | Cmd::DimensionSet
-            | Cmd::DimensionUnset => InAStep::Reaches,
-
-            Cmd::TaskCommitAdd
-            | Cmd::WorktreeStart
-            | Cmd::WorktreeFinish => InAStep::ABuiltInDoesIt,
-
-            Cmd::TaskStatus
-            | Cmd::TaskDone
-            | Cmd::TaskReject
-            | Cmd::TaskReopen
-            | Cmd::TaskBlock
-            | Cmd::TaskAssign
-            | Cmd::TaskUnassign => InAStep::MovesTheTask,
-
-            Cmd::Update
-            | Cmd::NotifyTargetAdd
-            | Cmd::NotifyTargetSet
-            | Cmd::NotifyTargetDefault
-            | Cmd::NotifyTargetRm
-            | Cmd::NotifyTargetCheck
-            | Cmd::NotifyTargetTest
-            | Cmd::NotifyOn
-            | Cmd::NotifyOff
-            | Cmd::NotifyUse
-            | Cmd::NotifyUnuse
-            | Cmd::NotifyTo
-            | Cmd::NotifyEvent
-            | Cmd::ViewerSetup
-            | Cmd::ViewerQr
-            | Cmd::ViewerApp
-            | Cmd::ViewerPhones
-            | Cmd::ViewerRevoke
-            | Cmd::ViewerSend
-            | Cmd::ViewerRepair
-            | Cmd::ConfigSet
-            | Cmd::Init
-            | Cmd::Bind
-            | Cmd::Unbind
-            | Cmd::SyncGuide
-            | Cmd::HooksInstall
-            | Cmd::HooksUninstall
-            | Cmd::TickInstall
-            | Cmd::TickUninstall
-            | Cmd::AgentHookSnippet
-            | Cmd::AgentHookAnswer
-            | Cmd::ProjectAdd
-            | Cmd::ProjectUpdate
-            | Cmd::ProjectMove
-            | Cmd::ProjectArchive
-            | Cmd::ProjectUnarchive
-            | Cmd::ProjectDelete
-            | Cmd::DimensionAdd
-            | Cmd::DimensionUpdate
-            | Cmd::DimensionMove
-            | Cmd::DimensionRm
-            | Cmd::DimensionValueAdd
-            | Cmd::DimensionValueUpdate
-            | Cmd::DimensionValueMove
-            | Cmd::DimensionValueClose
-            | Cmd::DimensionValueReopen
-            | Cmd::DimensionValueRm
-            | Cmd::TaskMove
-            | Cmd::TaskCommitRm
-            | Cmd::TaskDelete
-            | Cmd::CommentRm
-            | Cmd::DecisionAdd
-            | Cmd::DecisionEdit
-            | Cmd::DecisionFinishWriting
-            | Cmd::DecisionReject
-            | Cmd::DecisionReopen
-            | Cmd::DecisionDelete
-            | Cmd::DecisionSupersede
-            | Cmd::DecisionAmend
-            | Cmd::DecisionBuildsOn
-            | Cmd::DecisionUnlink
-            | Cmd::DecisionPromote
-            | Cmd::DecisionCommentRm
-            | Cmd::TaskAttach
-            | Cmd::DecisionAttach
-            | Cmd::AttachOpen
-            | Cmd::AttachRm
-            | Cmd::Export
-            | Cmd::Backup
-            | Cmd::SkinAdd
-            | Cmd::SkinUse
-            | Cmd::SkinRm
-            | Cmd::SkinValidate
-            | Cmd::SkinTemplate
-            | Cmd::SkinWriteOut
-            | Cmd::Restore
-            | Cmd::HardEraseComment
-            | Cmd::HardEraseDecisionComment
-            | Cmd::HardEraseDecision
-            | Cmd::AutomationAdd
-            | Cmd::AutomationUpdate
-            | Cmd::AutomationRm
-            | Cmd::AutomationEntryReplace
-            | Cmd::AutomationPlaceAdd
-            | Cmd::AutomationPlaceRm
-            | Cmd::AutomationStart
-            | Cmd::AutomationTestRun
-            | Cmd::AutomationPause
-            | Cmd::AutomationResume
-            | Cmd::AutomationCancel
-            | Cmd::AutomationAcknowledge
-            | Cmd::AutomationActionAdd
-            | Cmd::AutomationActionUpdate
-            | Cmd::AutomationActionEntrySet
-            | Cmd::AutomationActionScopeSet
-            | Cmd::AutomationActionRm
-            | Cmd::AutomationActionFinishCreating
-            | Cmd::AutomationActionAbandon
-            | Cmd::AutomationStepAdd
-            | Cmd::AutomationStepUpdate
-            | Cmd::AutomationStepRm
-            | Cmd::AutomationExitAdd
-            | Cmd::AutomationExitRename
-            | Cmd::AutomationExitRm
-            | Cmd::AutomationPortAdd
-            | Cmd::AutomationPortUpdate
-            | Cmd::AutomationPortRm
-            | Cmd::AutomationCfgAdd
-            | Cmd::AutomationCfgUpdate
-            | Cmd::AutomationCfgSet
-            | Cmd::AutomationAgentSet
-            | Cmd::AutomationCfgRm
-            | Cmd::AutomationEdgeAdd
-            | Cmd::AutomationEdgeUpdate
-            | Cmd::AutomationEdgeRm
-            | Cmd::AutomationWireAdd
-            | Cmd::AutomationWireRm => InAStep::OutsideARun,
-        }
-    }
 }
 
 /// Declares [`Cyc`] — the variant a step names a cold-path cycle by, and the key that cycle is
@@ -2554,30 +2319,22 @@ fn index(in_a_pane: bool) -> Value {
 /// agent to `agent --json` first. The whole entry is about working a mailbox, none of which applies
 /// in a step, and an agent reads only its head — which never reached the `automation step-*` verbs a
 /// step does need (`AMB-T-5385`). So this says the two things a step needs and nothing else: the text
-/// it was started on is the whole of its work, and these are the commands it reaches, the two that
-/// hand the work back in full. Both lists are read off [`Cmd::in_a_step`] (`AMB-D-968`), so a command
-/// moved to the other side there is taught on the other side here.
-/// `agent --command` and `agent --full` answer as they do anywhere.
+/// it was started on is the whole of its work, and the two commands that hand the work back, in full.
+/// Every other command is typed here as it is outside a run (`AMB-D-1011`), and `agent --command` and
+/// `agent --full` answer as they do anywhere.
 pub fn build_step() -> Value {
     let cli = Paths::command_name();
-    let on = |side: InAStep| Cmd::ALL.iter().filter(move |c| c.in_a_step() == side).map(|c| c.name());
-    let hand_back: Vec<Value> = on(InAStep::HandsBack)
-        .map(|name| command_spec(name).unwrap_or_else(|| json!({ "name": name })))
+    let hand_back: Vec<Value> = [Cmd::AutomationStepOut, Cmd::AutomationStepDone]
+        .iter()
+        .map(|cmd| command_spec(cmd.name()).unwrap_or_else(|| json!({ "name": cmd.name() })))
         .collect();
-    let reaches: Vec<&str> = on(InAStep::Reaches).collect();
-    let quoted = |side: InAStep| on(side).map(|name| format!("`{name}`")).collect::<Vec<String>>().join(", ");
-    let moves = quoted(InAStep::MovesTheTask);
-    let built_in = quoted(InAStep::ABuiltInDoesIt);
     json!({
         "mode": "step",
         "version": VERSION,
         "schemaVersion": SCHEMA_VERSION,
         "step": format!("This terminal is a step of an automation run. The text it started you on is the whole of this session's work: do it, then hand it back with the commands below — `{cli} automation step-out` for each thing it hands on, and `step-done` for the way out taken and the report owed whichever one it is. Take nothing from the mailbox and file no other work; opening the step after yours is the run's. Pass --actor ai on every command."),
         "commands": hand_back,
-        "reaches": {
-            "commands": reaches,
-            "note": format!("The rest of what this terminal is for: reading where the step stands, writing on a timeline, drawing a task's edges and setting its fields, and what the text you were started on has you do. Use no other command here. The ones that move a task's status or who it is assigned to ({moves}) are the run's: Amenbo moves the task's status, and if a person's judgement is needed, leave by that way out. The worktree and the commit ({built_in}) are Amenbo's built-ins': hand on what they need — the commit's SHA, say — and leave the rest to them. `{cli} agent --command <name>` prints any command's full spec."),
-        },
+        "rest": format!("Every other command is typed here as it is outside a run; `{cli} agent --command <name>` prints any command's full spec. Leave the status of the task the run is on, and who it is assigned to, to Amenbo: it moves them, and if a person's judgement is needed, leave by that way out. The worktree and the commit are Amenbo's built-ins': hand on what they need — the commit's SHA, say — and leave the rest to them."),
     })
 }
 
@@ -2769,39 +2526,16 @@ mod tests {
     /// carries what a step needs and nothing else ([`build_step`]).
     const MOST_THE_STEP_ENTRY_SAYS: usize = 8_000;
 
-    /// Discipline: the entry inside a step stays short, and teaches what the table says a step may
-    /// type — the two that hand the work back in full, the rest by name, and none that moves the
-    /// task or does what a built-in does.
+    /// Discipline: the entry inside a step stays short, and teaches the two that hand the work back
+    /// in full.
     #[test]
-    fn the_entry_inside_a_step_is_short_and_names_registered_commands() {
+    fn the_entry_inside_a_step_is_short_and_teaches_the_two_that_hand_back() {
         let entry = build_step();
         let whole = entry.to_string().len();
         assert!(
             whole <= MOST_THE_STEP_ENTRY_SAYS,
             "the entry inside a step weighs {whole} bytes, past the {MOST_THE_STEP_ENTRY_SAYS} it may",
         );
-        let reaches: Vec<&str> =
-            entry["reaches"]["commands"].as_array().expect("reaches").iter().filter_map(|c| c.as_str()).collect();
-        for name in ["task show", "comment add", "automation run-show"] {
-            assert!(reaches.contains(&name), "{name} is left with a step: {reaches:?}");
-        }
-        for name in ["task depend", "task undepend", "decision link", "dimension set", "dimension unset", "task update"] {
-            assert!(reaches.contains(&name), "a task's edges and fields are a step's to change (AMB-D-991): {reaches:?}");
-        }
-        for name in [
-            "task status",
-            "task done",
-            "task assign",
-            "automation start",
-            "worktree start",
-            "task commit-add",
-            "decision add",
-            "decision finish-writing",
-        ] {
-            assert!(!reaches.contains(&name), "{name} is not a step's to type: {reaches:?}");
-        }
-        let note = entry["reaches"]["note"].as_str().expect("note");
-        assert!(note.contains("`worktree finish`"), "the built-ins' commands are named as theirs: {note}");
         let handed_back: Vec<&str> =
             entry["commands"].as_array().expect("commands").iter().filter_map(|c| c["name"].as_str()).collect();
         assert_eq!(
@@ -3052,8 +2786,7 @@ mod tests {
     /// The other end of [`Cmd`]. A variant names the registry by a string, and the registry is
     /// written as text, so this is the one seam the type cannot close — held in both directions. A
     /// command renamed or dropped there leaves a variant pointing at nothing, and every step holding
-    /// it goes on compiling; a command added there and not here has no word on whether a run's step
-    /// may type it, which is the one thing the table exists to make every command say (`AMB-D-968`).
+    /// it goes on compiling; a command added there and not here is one no step can name.
     #[test]
     fn the_table_and_the_registry_name_the_same_commands() {
         let known: HashSet<String> = command_names().into_iter().collect();
@@ -3065,7 +2798,7 @@ mod tests {
         for name in &known {
             assert!(
                 table.contains(name.as_str()),
-                "{name:?} is registered and has no variant, so nothing says whether a step may type it"
+                "{name:?} is registered and has no variant, so no step can name it"
             );
         }
     }

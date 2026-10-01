@@ -1002,79 +1002,31 @@ fn a_step_execution_that_does_not_exist_is_refused_rather_than_guessed_at() {
     assert!(err.contains("9999"), "it names the row it was pointed at: {err}");
 }
 
-/// Inside a step's terminal, the verbs that build an automation or drive a run are refused — and the
-/// refusal says which side they are typed on (`AMB-D-948`).
-///
-/// **A run that could start a run, or rewrite the definition the next run is copied from, changes what
-/// is about to happen where the person who started it is not looking.**
+/// **Inside a step, every command is typed as it is outside a run** (`AMB-D-1011`) — what moves a
+/// task, what writes a decision, and what builds an automation alike. Nothing is refused for being
+/// typed in a step's terminal.
 #[test]
-fn inside_a_step_the_building_and_driving_verbs_are_refused() {
+fn inside_a_step_what_was_once_refused_goes_through() {
     let cli = Cli::new();
-    let p = cli.a_project();
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "one", "--json"]), "automation");
-
-    for args in [
-        vec!["automation", "start", &a, "--json"],
-        vec!["automation", "add", "--project", &p, "--name", "another", "--json"],
-        vec!["automation", "action-add", "--project", &p, "--name", "one", "--json"],
-        vec!["automation", "rm", &a, "--yes", "--json"],
-        vec!["automation", "acknowledge", "1", "--json"],
-    ] {
-        let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
-        assert_eq!(code, 2, "{args:?}: {err}");
-        assert!(err.contains("automation_outside_only"), "{args:?}: {err}");
-        assert!(err.contains("step-out"), "it names what does reach from there: {args:?}: {err}");
-    }
-}
-
-/// **Inside a step, what moves a task's status or who it is assigned to is refused**, whatever the
-/// namespace (`AMB-D-968`) — the run takes its task, ends it and hands it to a person, and the refusal
-/// says so and names the way out a step leaves by instead. The task is left where it was.
-#[test]
-fn inside_a_step_what_moves_a_task_is_refused_and_the_task_is_left_alone() {
-    let cli = Cli::new();
-    let p = cli.a_project();
+    cli.run(&["init", "--name", "tester"]);
+    // What the AI reaches is the bound project, so the task is filed there.
+    let p = cli.bound_project();
     let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
 
     for args in [
-        vec!["--actor", "ai", "task", "done", &t, "--report", "終えた", "--json"],
-        vec!["--actor", "ai", "task", "status", &t, "blocked", "--json"],
-        vec!["--actor", "ai", "task", "assign", &t, "--to", "me", "--json"],
+        vec!["--actor", "ai", "task", "status", &t, "in_progress", "--json"],
+        vec!["--actor", "ai", "decision", "add", "--title", "why", "--json"],
+        vec!["automation", "add", "--project", &p, "--name", "one", "--json"],
     ] {
-        let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
-        assert_eq!(code, 2, "{args:?}: {err}");
-        assert!(err.contains("automation_outside_only"), "{args:?}: {err}");
-        assert!(err.contains("step-done"), "it names the way a step hands a decision back: {args:?}: {err}");
+        let (out, code) = cli.run_env(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
+        assert_eq!(code, 0, "{args:?}: {out}");
     }
     let shown = cli.json(&["task", "show", &t, "--json"]);
-    assert_eq!(shown["status"], "todo", "{shown}");
+    assert_eq!(shown["status"], "in_progress", "{shown}");
 }
 
-/// **Inside a step, what one of Amenbo's built-ins does is refused** (`AMB-D-964`) — cutting the
-/// task's worktree, folding it away, recording the commit it is closed on. The refusal names the way
-/// a step hands a built-in what it needs, and no commit is recorded on the task.
-#[test]
-fn inside_a_step_what_a_built_in_does_is_refused() {
-    let cli = Cli::new();
-    let p = cli.a_project();
-    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
-    let sha = "0123456789abcdef0123456789abcdef01234567";
-
-    for args in [
-        vec!["--actor", "ai", "worktree", "start", &t, "--json"],
-        vec!["--actor", "ai", "worktree", "finish", &t, "--json"],
-        vec!["--actor", "ai", "task", "commit-add", &t, sha, "--json"],
-    ] {
-        let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
-        assert_eq!(code, 2, "{args:?}: {err}");
-        assert!(err.contains("automation_outside_only"), "{args:?}: {err}");
-        assert!(err.contains("step-out"), "it names the way a step hands a built-in what it needs: {args:?}: {err}");
-    }
-    let commits = cli.json(&["task", "commit-list", &t, "--json"]);
-    assert_eq!(commits["count"], 0, "{commits}");
-}
-
-/// The reading verbs are left with a step, so the agent carrying it out can see where it stands — and
+/// The reading verbs answer inside a step, so the agent carrying it out can see where it stands — and
 /// the action layer is among them, because the prompts moved there. `show` alone would hand back the
 /// placements and nothing of what stands at one.
 #[test]
@@ -1096,9 +1048,9 @@ fn inside_a_step_the_reading_verbs_still_answer() {
     }
 }
 
-/// **Inside a step, a task's edges and fields can still be changed** (`AMB-D-991`), on any task in the
+/// **Inside a step, a task's edges and fields can be changed** (`AMB-D-1011`), on any task in the
 /// project as outside a run — a step that files several tasks orders them and hangs them on their
-/// premise. Writing a decision stays refused: one is written only on what a person settled.
+/// premise.
 #[test]
 fn inside_a_step_a_tasks_edges_and_fields_can_be_changed() {
     let cli = Cli::new();
@@ -1126,11 +1078,6 @@ fn inside_a_step_a_tasks_edges_and_fields_can_be_changed() {
     }
     let shown = cli.json(&["task", "show", &t, "--json"]);
     assert_eq!(shown["priority"], "high", "{shown}");
-
-    let args = ["--actor", "ai", "decision", "add", "--project", &p, "--title", "another", "--json"];
-    let (err, code) = cli.run_env_err(&[("AMENBO_AUTOMATION_STEP", "1")], &args);
-    assert_eq!(code, 2, "{err}");
-    assert!(err.contains("automation_outside_only"), "{err}");
 }
 
 /// **Inside a step, `agent --json` is the step's own entry** (`AMB-T-5385`): the folder sends every

@@ -628,15 +628,6 @@ impl Instructor {
         }
     }
 
-    /// The human label a step's `task:` points at — the reading [`Self::target_label`] makes, on the
-    /// key an op that names two objects uses for the second.
-    fn task_label(&self, with: &Args) -> String {
-        match with.get("task").and_then(|v| v.as_str()) {
-            Some(name) => self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>")),
-            None => "<the task>".to_string(),
-        }
-    }
-
     /// What to call the thing a step's `target:` points at — "task" or "decision". They are opened on
     /// different pages, so an instruction that named the wrong one would send the operator to a screen
     /// the step cannot be walked on. Unbound, it falls back to "task", which is what every road that
@@ -4649,35 +4640,6 @@ impl Instructor {
                         "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo automation step-done --report \"{report}\" --actor ai` and run it, and confirm the line comes back saying the step is done."
                     ),
                 }
-            }
-            // The other side of those three: a command that builds, drives or moves the task,
-            // reached for from inside a step. What the line says is spelled out rather than left at
-            // "it was refused", because this road is about which refusal — a mistyped number is
-            // turned away too, and on a shot the two would read the same.
-            // It carries `--actor ai` as the step's own text teaches, so the facet is named and the
-            // one refusal left to meet is the step's — whichever of the two checks runs first.
-            (Domain::Automation, "command-in-pane") => {
-                let command = req(with, "command")?;
-                let mut gaps = Vec::new();
-                if command.contains("<run>") {
-                    gaps.push("the number of this run — the one the line over the pane carries — where the command says `<run>`".to_string());
-                }
-                if command.contains("<ref>") {
-                    if !with.contains_key("task") {
-                        return Err("`command` leaves a `<ref>` gap, so `task` has to name the task whose ref fills it".to_string());
-                    }
-                    gaps.push(format!(
-                        "the ref of the task \"{}\" — its `AMB-T-…` — where the command says `<ref>`",
-                        self.task_label(with)
-                    ));
-                }
-                let filling = match gaps.is_empty() {
-                    true => String::new(),
-                    false => format!(", putting {}", gaps.join(", and ")),
-                };
-                format!(
-                    "In the pane this run is drawn in, turned to its terminal (where its picture is up, press \"Terminal\" on the line over it), type `amenbo {command} --actor ai` and run it{filling}. Confirm the line that comes back says this terminal is a step of a run, and that nothing was done."
-                )
             }
             // The report made without the run's pane. The step's number is not on any screen — the
             // window hands it to the step's terminal and nowhere else — so it is read off the run's

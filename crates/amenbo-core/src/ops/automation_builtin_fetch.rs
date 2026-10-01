@@ -20,8 +20,7 @@
 //! back the same thing is decided by reading them; the place looked at narrows what it hands back
 //! instead.
 //!
-//! **The command is not a step's terminal** (`AMB-D-968`). The table of what may be typed in a step
-//! governs what an agent types there; this command was written by the person who built the automation,
+//! **The command is not a step's terminal.** It was written by the person who built the automation,
 //! and Amenbo runs it the way it runs a hook. It is started without [`crate::session::STEP_VAR`], so
 //! an Amenbo it calls is not taken for a step it has no part in.
 //!

@@ -221,8 +221,8 @@ fn advance(
 /// **End the terminal of a run that is over** — completed, failed or canceled.
 ///
 /// A step's terminal is otherwise ended only as the next step opens ([`crate::pty::end_steps_of`]), so
-/// the last one of a run would stand there after it: the agent waiting for input, still allowed the
-/// commands a step may type, over a task the run has handed back. A run ends by many roads, one of
+/// the last one of a run would stand there after it: the agent waiting for input, still typing
+/// commands, over a task the run has handed back. A run ends by many roads, one of
 /// them a `step-done` typed in another process, and this look is the one place all of them pass.
 ///
 /// A paused run keeps its terminal: it is not over, and the step it paused after may be asked why.

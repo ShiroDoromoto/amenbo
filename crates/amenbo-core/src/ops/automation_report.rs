@@ -366,9 +366,8 @@ pub fn done(
         )));
     }
 
-    // A step cannot close its task (`task done` is refused inside it), but a person can while it runs;
-    // a closed task is read by nobody, so the report stays on the run's history alone, and the history
-    // says so (`AMB-D-963`).
+    // A step or a person can close the task while the run is on it; a closed task is read by nobody,
+    // so the report stays on the run's history alone, and the history says so (`AMB-D-963`).
     let owed_to = stretch
         .as_ref()
         .and_then(|s| s.task_id)

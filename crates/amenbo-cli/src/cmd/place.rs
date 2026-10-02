@@ -152,6 +152,37 @@ pub(crate) fn resolve_bound_folder(store: &Store, project_id: i64, token: &str) 
     }
 }
 
+/// The folder a new task is worked in when `task add` names none (`AMB-D-1012`), as the binding id it
+/// carries. Typed inside one of `project_id`'s linked folders, it is that folder: the one who filed it is
+/// standing in the repository the work belongs to. Typed anywhere else — outside every binding, or in a
+/// folder linked to another project, which is never a place for this project's task — it is the
+/// project's one folder when it has one, and none when it has none. With several, which one is not ours
+/// to pick (`AMB-D-531`), so the create is refused and asks for `--at` with the folders listed.
+pub(crate) fn default_bound_folder(store: &Store, project_id: i64) -> Result<Option<i64>, CliError> {
+    let folders = store.bound_folders_of(project_id).map_err(CliError::from)?;
+    if let Some((dir, pid)) = binding_folder(store) {
+        if pid == project_id {
+            let typed = dir.to_string_lossy().to_string();
+            let canonical = amenbo_core::binding::canonical_dir(&dir).map(|p| p.to_string_lossy().to_string());
+            let here = folders
+                .iter()
+                .find(|f| f.dir == typed || canonical.as_ref().is_ok_and(|c| &f.dir == c));
+            if let Some(here) = here {
+                return Ok(Some(here.id));
+            }
+        }
+    }
+    match folders.as_slice() {
+        [] => Ok(None),
+        [one] => Ok(Some(one.id)),
+        several => Err(CliError::from(amenbo_core::Error::invalid(format!(
+            "this project has {} linked folders ({}) — pass --at <folder> to say which one the task is worked in",
+            several.len(),
+            several.iter().map(|f| f.dir.as_str()).collect::<Vec<_>>().join(", ")
+        )))),
+    }
+}
+
 /// Resolve `--dim <axis>=<value>` pairs into the value ids to file a new record under, in the order
 /// given. The axis is looked up **inside the record's own project** — axes are per-project, so a name two
 /// projects share must not resolve to the neighbour's — and the value inside that axis, the same rules

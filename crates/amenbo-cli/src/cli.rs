@@ -1310,8 +1310,9 @@ pub enum TaskCmd {
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
         /// the bound folder this task is to be worked in — one of the project's own linked folders,
-        /// named by its path or just its folder name (`--at amenbo-worker`). Only what you name
-        /// here lands: the folder the create was typed in is never taken as the default. Having one
+        /// named by its path or just its folder name (`--at amenbo-worker`). Left out, it is the
+        /// linked folder the create was typed in; typed outside one, it is the project's only folder,
+        /// none when it has none, and with several the create is refused until you name one. Having one
         /// refuses nothing — no reservation and no worktree is stopped for it
         #[arg(long, value_name = "FOLDER")]
         at: Option<String>,

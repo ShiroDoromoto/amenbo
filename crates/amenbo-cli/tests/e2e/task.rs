@@ -1481,9 +1481,9 @@ fn the_unassigned_hint_stays_quiet_where_it_would_be_noise() {
 
 /// A task can say **which of its project's linked folders it is worked in** (`AMB-D-648`). The road is
 /// `--at`, and what it takes is a folder that project has: named by its own name, since that is how the
-/// folders of one project usually differ. Only what is named lands — the folder the create was typed in is
-/// never taken as a default — and the place is read back as the path, with the binding's id beside it for
-/// whatever re-points or re-reads the folder later.
+/// folders of one project usually differ. The place is read back as the path, with the binding's id
+/// beside it for whatever re-points or re-reads the folder later. What is filled in when `--at` is left
+/// out is the next test's subject.
 ///
 /// The two ways a place ends are here too: taken off by hand (`--clear-at`), and taken away by the folder
 /// being unbound, which is the one nobody asks for.
@@ -1512,16 +1512,10 @@ fn a_task_names_one_of_its_projects_linked_folders() {
     );
     assert!(at["binding_id"].as_i64().unwrap() > 0, "with the binding's id beside it: {at}");
 
-    // A task that names none says nothing about a folder — the create's own folder is not a default.
-    let plain = cli.json(&["task", "add", "--title", "場所なし", "--project", &pid, "--json"]);
-    assert!(plain["task"]["at"].is_null(), "a place is stated or it is absent");
-
-    // The text page prints the path, and only when there is one.
+    // The text page prints the path.
     let (shown, code) = cli.run(&["task", "show", &tid]);
     assert_eq!(code, 0);
     assert!(shown.contains(&format!("folder: {}", at["dir"].as_str().unwrap())), "{shown}");
-    let (bare, _) = cli.run(&["task", "show", &id_str(&plain["task"]["id"])]);
-    assert!(!bare.contains("folder:"), "no folder, no line: {bare}");
 
     // A folder the project does not have is refused, with the folders it does have named.
     let (err, code) = cli.run_err(&["task", "update", &tid, "--at", "どこでもない", "--json"]);
@@ -1539,4 +1533,51 @@ fn a_task_names_one_of_its_projects_linked_folders() {
     cli.json(&["unbind", "--dir", &second_path, "--yes", "--json"]);
     let after = cli.json(&["task", "show", &tid, "--json"]);
     assert!(after["at"].is_null(), "an unbound folder is nobody's place: {}", after["at"]);
+}
+
+/// Left out, `--at` is filled from where the create was typed (`AMB-D-1012`): a forgotten one would
+/// otherwise say nothing at the create and stop an automation only when it takes the task and cannot
+/// tell which repository to cut a worktree in. Typed inside one of the project's linked folders, it is
+/// that folder. Typed outside them — here the test's home, which is no folder of this project — it is the
+/// project's one folder; with two, which one is not ours to pick, so the create is refused and asks for
+/// `--at`; with none, the task has no folder. A named `--at` wins over all of it.
+#[test]
+fn a_task_add_without_at_takes_the_folder_it_was_typed_in() {
+    let cli = Cli::new();
+    let first = amenbo_scratch::scratch("task-at-default-first");
+    let second = amenbo_scratch::scratch("task-at-default-second");
+    let first_path = first.to_string_lossy().to_string();
+    let second_path = second.to_string_lossy().to_string();
+    let first_name = first.file_name().unwrap().to_string_lossy().to_string();
+    let second_name = second.file_name().unwrap().to_string_lossy().to_string();
+    let p = cli.json(&["project", "add", "--name", "補うPJ", "--dir", &first_path, "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let dir_of = |v: &Value| v["task"]["at"]["dir"].as_str().map(str::to_string);
+
+    // Outside the project's folders, with one of them: that one.
+    let one = cli.json(&["task", "add", "--title", "一つなら", "--project", &pid, "--json"]);
+    assert!(dir_of(&one).is_some_and(|d| d.ends_with(&first_name)), "the only folder: {one}");
+
+    cli.json(&["bind", "--project", &pid, "--dir", &second_path, "--json"]);
+
+    // Inside one of them: the folder it was typed in, with no `--project` needed.
+    let inside = cli.json_from(&second, &["task", "add", "--title", "中で打つ", "--json"]);
+    assert!(dir_of(&inside).is_some_and(|d| d.ends_with(&second_name)), "the folder typed in: {inside}");
+
+    // A named `--at` wins over the folder it was typed in.
+    let named = cli.json_from(&second, &["task", "add", "--title", "名指し", "--at", &first_name, "--json"]);
+    assert!(dir_of(&named).is_some_and(|d| d.ends_with(&first_name)), "what is named lands: {named}");
+
+    // Outside them, with two: refused, asking for `--at` and naming both.
+    let (err, code) = cli.run_err(&["task", "add", "--title", "二つなら", "--project", &pid, "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("--at") && err.contains(&first_name) && err.contains(&second_name), "{err}");
+
+    // With none left: the task has no folder, and its page says nothing about one.
+    cli.json(&["unbind", "--dir", &second_path, "--yes", "--json"]);
+    cli.json(&["unbind", "--dir", &first_path, "--yes", "--json"]);
+    let none = cli.json(&["task", "add", "--title", "無いなら", "--project", &pid, "--json"]);
+    assert!(none["task"]["at"].is_null(), "no folder to fill it with: {none}");
+    let (bare, _) = cli.run(&["task", "show", &id_str(&none["task"]["id"])]);
+    assert!(!bare.contains("folder:"), "no folder, no line: {bare}");
 }

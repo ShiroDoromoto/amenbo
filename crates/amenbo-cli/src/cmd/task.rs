@@ -16,7 +16,7 @@ use crate::cmd::guard::guard_ai_task_delete;
 use crate::cmd::labels::{decision_label, task_label};
 use crate::cmd::place::made_in_line;
 use crate::cmd::outbox::{emit_event, emit_unblocks, newly_ready_or_warn};
-use crate::cmd::place::{made_in, project_or_bound, resolve_bound_folder, resolve_dim_pairs};
+use crate::cmd::place::{default_bound_folder, made_in, project_or_bound, resolve_bound_folder, resolve_dim_pairs};
 use crate::cmd::premise::{attach_comments_since, attach_premise_change, comments_since_when, premise_change, premise_change_lines, premise_change_when, warn_comments_since, warn_if_premise_added_to_reserved, warn_premise_change};
 use crate::output::{confirm, count_header, human, print_json, warn_body, write_envelope, CliError, Flags};
 
@@ -62,10 +62,12 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             // no task left behind to go and classify by hand.
             let dimension_values = resolve_dim_pairs(store, project_id, &dim, ClassifiedSide::Task)?;
             // Resolved before the create for the same reason `--to` and `--dim` are: a folder name that
-            // answers to nothing is an error with no task left behind to go and correct.
+            // answers to nothing is an error with no task left behind to go and correct. Left out, the
+            // folder is filled from where the create was typed (`AMB-D-1012`) — a forgotten `--at` would
+            // otherwise surface only when an automation takes the task and cannot tell which repository.
             let at_binding_id = match at {
                 Some(ref folder) => Some(resolve_bound_folder(store, project_id, folder)?),
-                None => None,
+                None => default_bound_folder(store, project_id)?,
             };
             // Read before the create and handed to it, never read inside it (`AMB-D-897`).
             let made_in = made_in(store);

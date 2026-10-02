@@ -3,7 +3,8 @@
 // A built-in is written into the store in Japanese — its name, what it does, its settings and their
 // choices, its ways out and what it hands on — and those words stay as they are: the code that
 // carries a built-in out branches on the name of the way out it leaves by. So the store's word is
-// what arrives here, and this turns it into the screen's.
+// what arrives here, and this turns it into the screen's. Its definition is written in the same
+// Japanese, the steps it takes and when it errors included, and is turned the same way.
 //
 // **Only a row that carries a built-in's key is turned.** A person's own action may use the same word
 // for a way out of its own, and that is theirs, not Amenbo's — so the key is asked for, and a word
@@ -41,6 +42,8 @@ export function builtinShown(builtin: AutomationBuiltinDto): AutomationBuiltinDt
     ...builtin,
     name: word(builtin.name),
     does: word(builtin.does),
+    steps: builtin.steps.map(word),
+    halts: builtin.halts.map(word),
     settings: builtin.settings.map((one) => ({ ...one, name: word(one.name) })),
     inputs: builtin.inputs.map((one) => ({ ...one, name: word(one.name) })),
     exits: builtin.exits.map((one) => ({

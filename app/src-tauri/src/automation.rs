@@ -285,6 +285,8 @@ pub fn automation_builtin_page() -> Result<Vec<AutomationBuiltinDto>, CmdError> 
             key: one.key.to_string(),
             name: one.name.to_string(),
             does: one.does.to_string(),
+            steps: one.steps.iter().map(|line| line.to_string()).collect(),
+            halts: one.halts.iter().map(|line| line.to_string()).collect(),
             settings: one
                 .settings
                 .iter()

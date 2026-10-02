@@ -74,6 +74,15 @@ pub struct Builtin {
     pub name: &'static str,
     /// What it does, in a sentence a person building with it reads.
     pub does: &'static str,
+    /// **What it does, in the order it does it** — a sentence a step, drawn under [`Builtin::does`]
+    /// where one is opened, so a reader sees what the run will do there without its code. Words a
+    /// reader weighs and nothing the code reads: changing them is not a new [`Builtin::version`].
+    pub steps: &'static [&'static str],
+    /// **When it leaves by the error way out** — a sentence a cause. With no line from that way out, the
+    /// run halts there and calls a person (`AMB-D-966`), so this is when a placed one stops a run. Each
+    /// is written from the reason the code gives when it leaves that way (`auto.say.bi.*`), so the two
+    /// say the same thing. Like [`Builtin::steps`], not a new version.
+    pub halts: &'static [&'static str],
     /// The settings it reads, answered where it is placed.
     pub settings: &'static [BuiltinSetting],
     /// What it takes in.
@@ -891,6 +900,8 @@ mod tests {
         version: 1,
         name: "Stamp",
         does: "hands on what it was given, stamped",
+        steps: &["reads the note", "hands it on, stamped"],
+        halts: &[],
         settings: &[BuiltinSetting {
             name: "stamp",
             kind: AutomationCfgKind::Text,
@@ -922,6 +933,8 @@ mod tests {
         version: 1,
         name: "Falls",
         does: "never finishes",
+        steps: &[],
+        halts: &["always"],
         settings: &[],
         ins: &[],
         exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
@@ -1238,6 +1251,7 @@ mod tests {
                 .collect();
             let mut words: std::collections::BTreeSet<String> =
                 [builtin.name, builtin.does].into_iter().map(str::to_string).collect();
+            words.extend(builtin.steps.iter().chain(builtin.halts).map(|line| line.to_string()));
             for setting in builtin.settings {
                 words.insert(setting.name.to_string());
                 if let Some(options) = setting.options {

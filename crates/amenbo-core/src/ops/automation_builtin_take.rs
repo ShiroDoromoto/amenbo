@@ -72,6 +72,12 @@ pub(crate) const TAKE_TASK: Builtin = Builtin {
     version: 1,
     name: "タスクに着手する",
     does: "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする",
+    steps: &[
+        "設定の絞り込みに合うタスクのうち、未着手で着手できるものを、並び順どおりに探す。絞り込みが空なら、AI が担当のタスクを探す",
+        "先頭のタスクから予約して進行中にし、「着手した」から出てそのタスクを渡す。ほかで先に予約されたタスクは飛ばして、次を試す",
+        "1件も予約できなければ「着手できるタスクが無い」から出る。設定で待つと決めてあれば、着手できるタスクが出るまで待つ",
+    ],
+    halts: &[],
     settings: &[
         BuiltinSetting { name: FILTER, kind: AutomationCfgKind::TaskFilter, required: false, options: None },
         BuiltinSetting {

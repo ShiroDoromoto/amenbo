@@ -3402,6 +3402,11 @@ pub struct AutomationBuiltinDto {
     pub(crate) name: String,
     /// What it does, in a sentence a person building with it reads.
     pub(crate) does: String,
+    /// What it does, in the order it does it — a sentence a step.
+    pub(crate) steps: Vec<String>,
+    /// When it leaves by the error way out — a sentence a cause. With no line from that way out, the
+    /// run halts there and calls a person.
+    pub(crate) halts: Vec<String>,
     /// The settings it reads, answered where it is placed. None carries an answer.
     pub(crate) settings: Vec<AutomationCfgDto>,
     pub(crate) inputs: Vec<AutomationPortDto>,

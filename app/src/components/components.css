@@ -1937,6 +1937,11 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 .actdecl__key { font-size: var(--fs-xs); color: var(--c-text-faint); }
 .actdecl__chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
 .actdecl__none { font-size: var(--fs-xs); color: var(--c-text-faint); }
+/* A built-in's steps and the causes it errors on: sentences rather than chips, so the key beside them
+   stands at their top (`../screens/AutomationBuiltinScreen`). */
+.actdecl__key--top { align-self: start; }
+.actdecl__list { margin: 0; padding-inline-start: 1.4em; font-size: var(--fs-body); }
+.actdecl__then { margin: var(--s-1) 0 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* A declared port, setting or way out, coloured by what it carries (the picture's own colours). */
 .actport {
   --tone: var(--c-edge);

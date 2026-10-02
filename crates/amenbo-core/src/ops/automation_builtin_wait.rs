@@ -33,6 +33,13 @@ pub(super) const WAIT: Builtin = Builtin {
     version: 1,
     name: "待つ",
     does: "設定した時間だけ待ってから、「完了」から出る",
+    steps: &[
+        "設定の時間・分・秒を足した長さだけ、ステップを開いたまま待つ",
+        "時間が来たら「完了」から出る。待っているあいだの一時停止は待ち終わってから効き、停止はすぐに効く",
+    ],
+    halts: &[
+        "設定の時間・分・秒のどれかが、0 以上の整数ではない",
+    ],
     settings: &[
         BuiltinSetting { name: HOURS, kind: AutomationCfgKind::Number, required: false, options: None },
         BuiltinSetting { name: MINUTES, kind: AutomationCfgKind::Number, required: false, options: None },

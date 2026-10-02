@@ -2071,7 +2071,7 @@ fn all_commands() -> Value {
             json!([{ "name": "<id>", "help": "action id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation action-show 7"])),
-        cmd("automation builtin-list", "Amenbo's built-ins: steps it carries out itself — no terminal, no agent, no prompt. Each with its key, what it does, the settings it reads, what it takes in and the ways out it leaves by, with what each hands on. They are defined in Amenbo and cannot be edited; `automation place-add --builtin` puts one on a picture, as an action of its own; it is never a step inside an action somebody wrote.",
+        cmd("automation builtin-list", "Amenbo's built-ins: steps it carries out itself — no terminal, no agent, no prompt. Each with its key, what it does and the steps it takes to do it in order, the settings it reads, what it takes in, the ways out it leaves by, with what each hands on, and when it leaves by the error way out instead (`halts`). They are defined in Amenbo and cannot be edited; `automation place-add --builtin` puts one on a picture, as an action of its own; it is never a step inside an action somebody wrote.",
             json!([{ "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation builtin-list --json"])),
         cmd("automation action-update", "Renames a library action, or rewrites what it is for. Only the fields given change. The prompt is its step's, and `automation step-update` is where that is rewritten.",

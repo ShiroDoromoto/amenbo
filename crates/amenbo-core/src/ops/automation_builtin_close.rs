@@ -32,6 +32,17 @@ pub(crate) const CLOSE_TASK: Builtin = Builtin {
     version: 1,
     name: "タスクを閉じる",
     does: "いま扱っているタスクを完了にする。コミットを受け取ったら、その SHA も記録する",
+    steps: &[
+        "いま扱っているタスクを読む。既に完了なら、何もせずに「完了」から出る",
+        "コミットを受け取ったら、その SHA をタスクに記録する",
+        "このタスクで AI が最後に出した報告を、タスクのコメントに残す。既に残っていれば、もう一度は残さない",
+        "タスクを完了にして、「完了」から出る",
+    ],
+    halts: &[
+        "この実行がまだタスクを扱っていない",
+        "タスクが却下されている",
+        "受け取ったコミットが、省略しない小文字の16進の SHA ではない",
+    ],
     settings: &[],
     ins: &[BuiltinPort { name: COMMIT, kind: AutomationPortKind::Value, required: false }],
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],

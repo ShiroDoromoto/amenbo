@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // One built-in, opened (`AMB-D-964`).
 //
-// What these guard: **it draws the definition** — what it does, its settings, its inputs and its ways
-// out with what each hands on — **and says it is read, not changed**, with no press on it that writes;
+// What these guard: **it draws the definition** — what it does and in what order, its settings, its
+// inputs, its ways out with what each hands on and the error way out, and when it leaves by that one —
+// **and says it is read, not changed**, with no press on it that writes;
 // and **an action build screen opened on a built-in's action lands here** rather than on steps nobody
 // can edit.
 import { act, createElement } from "react";
@@ -14,14 +15,16 @@ const take: AutomationBuiltinDto = {
   key: "task_take",
   name: "Take a task",
   does: "reserves the first task the filter finds",
+  steps: ["looks for tasks", "reserves the first"],
+  halts: ["the store refuses"],
   settings: [{ name: "filter", kind: "taskfilter", required: true }],
   inputs: [{ name: "hint", kind: "value", required: false }],
   exits: [{ name: "taken", outputs: [{ name: "task", kind: "task_take", required: true }] }, { name: "完了", outputs: [] }],
   usedBy: 2,
 };
 
-const bare: AutomationBuiltinDto = { ...take, settings: [], inputs: [], exits: [] };
-/** Whether the built-in is drawn with nothing on any of its three rows. */
+const bare: AutomationBuiltinDto = { ...take, steps: [], halts: [], settings: [], inputs: [], exits: [] };
+/** Whether the built-in is drawn with nothing on any of its rows. */
 let empty = false;
 
 const hoisted = vi.hoisted(() => ({ action: null as AutomationActionDetailDto | null }));
@@ -70,6 +73,23 @@ describe("a built-in, opened", () => {
     }
   });
 
+  it("draws the steps it takes in order, and when it leaves by the error way out", async () => {
+    await act(async () => {
+      root.render(createElement(AutomationBuiltinScreen, { builtinKey: "task_take", onBack: back }));
+    });
+    const lists = [...container.querySelectorAll(".actdecl__list")];
+    expect(lists.map((one) => [...one.querySelectorAll("li")].map((li) => li.textContent))).toEqual([
+      ["looks for tasks", "reserves the first"],
+      ["the store refuses"],
+    ]);
+    expect(lists[0]!.tagName).toBe("OL");
+    const text = container.textContent ?? "";
+    expect(text).toContain(t("auto.builtin.steps"));
+    expect(text).toContain(t("auto.builtin.halts"));
+    expect(text).toContain(t("auto.builtin.haltsThen"));
+    expect(container.querySelector(".actport--error")?.textContent).toBe(t("auto.pic.errorExit"));
+  });
+
   it("says it is read, and offers nothing but the way back", async () => {
     await act(async () => {
       root.render(createElement(AutomationBuiltinScreen, { builtinKey: "task_take", onBack: back }));
@@ -89,13 +109,15 @@ describe("a built-in, opened", () => {
     expect(container.querySelector("button")?.textContent?.trim()).toBe(t("auto.builtin.back"));
   });
 
-  it("draws a dash on every row with nothing in it, the ways out included", async () => {
+  it("draws a dash on every row with nothing in it, the error way out with no other, and no line after no halts", async () => {
     empty = true;
     await act(async () => {
       root.render(createElement(AutomationBuiltinScreen, { builtinKey: "task_take", onBack: back }));
     });
     const none = [...container.querySelectorAll(".actdecl__none")].map((one) => one.textContent);
-    expect(none).toEqual(["—", "—", "—"]);
+    expect(none).toEqual(["—", "—", "—", "—"]);
+    expect(container.textContent).not.toContain(t("auto.builtin.haltsThen"));
+    expect(container.querySelectorAll(".actport--error")).toHaveLength(1);
   });
 
   it("is where the build screen of a built-in's action lands", async () => {

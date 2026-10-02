@@ -480,6 +480,8 @@ describe("the built-ins", () => {
     key: "task_take",
     name: "Take a task",
     does: "reserves the first task the filter finds",
+    steps: [],
+    halts: [],
     settings: [],
     inputs: [],
     exits: [{ name: "taken", outputs: [] }],

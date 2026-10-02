@@ -14,6 +14,11 @@
 // receives and its ways out. The library panel shows only the last two under a picked row, the same
 // way for a built-in as for an action of one's own (`./AutomationLibraryPanel`).
 //
+// **So is what it does inside** (`AMB-T-5932`). An action of one's own opens on its steps; a built-in
+// has none to draw, so the steps it takes are written out in their place, and so is when it leaves by
+// the error way out — the one a run halts and calls a person at where nothing is drawn from it. That
+// way out is among its ways out too, as it is on every step.
+//
 // **The lock says it, not a sentence** (`AMB-T-5525`): the reach chip and the lock beside it are
 // what tell a reader nothing here is theirs to change, and a screen with no field in it bears that
 // out. The way back is "back", because this screen is opened from the list and from an action's build
@@ -24,21 +29,34 @@ import { builtinShown } from "../core/builtinWords";
 import { t } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import { ExitMark, LockMark, ReachChip, usedCount } from "./automationParts";
+import { ERROR_EXIT } from "./automationLayout";
 import { CFG_KINDS } from "./automationPanel";
 import { kindLabel } from "./automationPortKinds";
 import type { AutomationBuiltinDto } from "../bindings/bindings";
 
 /**
- * What a built-in reads, takes and leaves by — the three rows a reader weighs before placing one. It
- * draws the words it is handed, so it is handed them in the screen's language (`builtinShown`).
+ * What a built-in does in order, what it reads, takes and leaves by, and when it errors — the rows a
+ * reader weighs before placing one. It draws the words it is handed, so it is handed them in the
+ * screen's language (`builtinShown`).
  *
- * **A row with nothing in it is a dash, on every row alike** — the ways out included, so all three
- * rows keep one shape whether or not the definition fills them.
+ * **A row with nothing in it is a dash, on every row alike**, so the rows keep one shape whether or
+ * not the definition fills them. The ways out always end on the error way out, which every step
+ * carries; under the causes it is left by, a line says what follows where nothing is drawn from it.
  */
 export function BuiltinDecl({ builtin }: { builtin: AutomationBuiltinDto }) {
   const none = <span className="actdecl__none">—</span>;
   return (
     <div className="actdecl__rows">
+      <span className="actdecl__key actdecl__key--top">{t("auto.builtin.steps")}</span>
+      {builtin.steps.length === 0 ? (
+        none
+      ) : (
+        <ol className="actdecl__list">
+          {builtin.steps.map((one) => (
+            <li key={one}>{one}</li>
+          ))}
+        </ol>
+      )}
       <span className="actdecl__key">{t("auto.step.cfg")}</span>
       <span className="actdecl__chips">
         {builtin.settings.length === 0
@@ -69,12 +87,26 @@ export function BuiltinDecl({ builtin }: { builtin: AutomationBuiltinDto }) {
       </span>
       <span className="actdecl__key">{t("auto.step.exits")}</span>
       <span className="actdecl__chips">
-        {builtin.exits.length === 0
-          ? none
-          : builtin.exits.map((one) => (
-              <ExitMark key={one.name} name={one.name} outputs={one.outputs.map((out) => out.name)} />
-            ))}
+        {builtin.exits.map((one) => (
+          <ExitMark key={one.name} name={one.name} outputs={one.outputs.map((out) => out.name)} />
+        ))}
+        <ExitMark name={ERROR_EXIT} />
       </span>
+      <span className="actdecl__key actdecl__key--top">{t("auto.builtin.halts")}</span>
+      <div>
+        {builtin.halts.length === 0 ? (
+          none
+        ) : (
+          <>
+            <ul className="actdecl__list">
+              {builtin.halts.map((one) => (
+                <li key={one}>{one}</li>
+              ))}
+            </ul>
+            <p className="actdecl__then">{t("auto.builtin.haltsThen")}</p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

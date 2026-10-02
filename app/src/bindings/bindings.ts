@@ -343,6 +343,15 @@ export type AutomationBuiltinDto = { key: string, name: string,
  */
 does: string, 
 /**
+ * What it does, in the order it does it — a sentence a step.
+ */
+steps: Array<string>, 
+/**
+ * When it leaves by the error way out — a sentence a cause. With no line from that way out, the
+ * run halts there and calls a person.
+ */
+halts: Array<string>, 
+/**
  * The settings it reads, answered where it is placed. None carries an answer.
  */
 settings: Array<AutomationCfgDto>, inputs: Array<AutomationPortDto>, 

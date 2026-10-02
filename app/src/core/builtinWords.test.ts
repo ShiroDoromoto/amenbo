@@ -41,6 +41,8 @@ describe("a built-in's words", () => {
       key: "take_task",
       name: "タスクに着手する",
       does: "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする",
+      steps: ["1件も予約できなければ「着手できるタスクが無い」から出る。設定で待つと決めてあれば、着手できるタスクが出るまで待つ"],
+      halts: [],
       settings: [{ name: "絞り込み", kind: "taskfilter", required: false }],
       inputs: [],
       exits: [
@@ -53,6 +55,9 @@ describe("a built-in's words", () => {
     expect(shown.key).toBe("take_task");
     expect(shown.usedBy).toBe(2);
     expect(shown.name).toBe("Take a task");
+    expect(shown.steps).toEqual([
+      "If none can be reserved, it leaves by “No task to take”. If the setting says to wait, it waits until a task that can be taken turns up",
+    ]);
     expect(shown.settings.map((one) => one.name)).toEqual(["Filter"]);
     expect(shown.exits.map((one) => one.name)).toEqual(["Took a task", "No task to take"]);
     expect(shown.exits[0].outputs.map((one) => one.name)).toEqual(["Task"]);

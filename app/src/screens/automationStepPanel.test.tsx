@@ -631,7 +631,7 @@ describe("the panel of one spot", () => {
   /// of them rather than moving it to some other spot.
   it("offers the start's own panel the built-ins a run starts at, and changes it to the one picked", async () => {
     const builtin = (key: string, name: string): AutomationBuiltinDto =>
-      ({ key, name, does: "", settings: [], inputs: [], exits: [], usedBy: 0 });
+      ({ key, name, does: "", steps: [], halts: [], settings: [], inputs: [], exits: [], usedBy: 0 });
     hoisted.builtins = [
       builtin("fetch", "Fetch"),
       builtin("close_task", "Close the task"),

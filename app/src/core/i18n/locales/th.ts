@@ -323,6 +323,7 @@ export const th: Translation = {
     "compose.new": "งานใหม่", "compose.titlePh": "ชื่อเรื่อง",
     "compose.notes": "บันทึก (Markdown, ไม่บังคับ)", "compose.notesPh": "เขียนบันทึกเป็น Markdown… (ไม่บังคับ)",
     "compose.hint": "Enter เพื่อสร้าง · Esc เพื่อยกเลิก", "compose.cancel": "ยกเลิก", "compose.create": "สร้าง",
+    "compose.folder": "โฟลเดอร์ทำงาน", "compose.folderPick": "เลือกหนึ่งโฟลเดอร์…",
     "smartview.inbox": "กล่องเข้า @ฉัน", "smartview.activity": "ความเคลื่อนไหว",
     "smartview.due": "กำหนดส่ง",
     "smartview.automations": "ออโตเมชัน",

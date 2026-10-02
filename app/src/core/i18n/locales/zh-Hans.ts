@@ -321,6 +321,7 @@ export const zhHans: Translation = {
     "compose.new": "新建任务", "compose.titlePh": "标题",
     "compose.notes": "备注（Markdown，可选）", "compose.notesPh": "用 Markdown 写备注…（可选）",
     "compose.hint": "回车创建 · Esc 取消", "compose.cancel": "取消", "compose.create": "创建",
+    "compose.folder": "工作文件夹", "compose.folderPick": "请选择…",
     "smartview.inbox": "收件箱 @我", "smartview.activity": "动态",
     "smartview.due": "期限",
     "smartview.automations": "自动化",

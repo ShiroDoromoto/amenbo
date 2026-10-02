@@ -326,6 +326,7 @@ export const ru: Translation = {
     "compose.new": "Новая задача", "compose.titlePh": "Заголовок",
     "compose.notes": "Заметки (Markdown, необязательно)", "compose.notesPh": "Пишите заметки в Markdown… (необязательно)",
     "compose.hint": "Enter — создать · Esc — отмена", "compose.cancel": "Отмена", "compose.create": "Создать",
+    "compose.folder": "Рабочая папка", "compose.folderPick": "Выберите…",
     "smartview.inbox": "Входящие @я", "smartview.activity": "Активность",
     "smartview.due": "Сроки",
     "smartview.automations": "Автоматизации",

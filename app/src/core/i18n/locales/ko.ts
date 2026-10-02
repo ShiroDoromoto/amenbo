@@ -320,6 +320,7 @@ export const ko: Translation = {
     "compose.new": "새 작업", "compose.titlePh": "제목",
     "compose.notes": "메모(마크다운, 선택)", "compose.notesPh": "마크다운으로 메모를 쓰세요…(선택)",
     "compose.hint": "Enter로 만들기 · Esc로 취소", "compose.cancel": "취소", "compose.create": "만들기",
+    "compose.folder": "작업 폴더", "compose.folderPick": "선택하세요…",
     "smartview.inbox": "받은 편지함 @나", "smartview.activity": "활동",
     "smartview.due": "기한",
     "smartview.automations": "오토메이션",

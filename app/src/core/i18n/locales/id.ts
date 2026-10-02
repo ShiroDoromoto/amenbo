@@ -323,6 +323,7 @@ export const id: Translation = {
     "compose.new": "Tugas baru", "compose.titlePh": "Judul",
     "compose.notes": "Catatan (Markdown, opsional)", "compose.notesPh": "Tulis catatan dalam Markdown… (opsional)",
     "compose.hint": "Enter untuk membuat · Esc untuk batal", "compose.cancel": "Batal", "compose.create": "Buat",
+    "compose.folder": "Folder kerja", "compose.folderPick": "Pilih salah satu…",
     "smartview.inbox": "Kotak masuk @saya", "smartview.activity": "Aktivitas",
     "smartview.due": "Tenggat",
     "smartview.automations": "Otomasi",

@@ -321,6 +321,7 @@ export const tr: Translation = {
     "compose.new": "Yeni iş", "compose.titlePh": "Başlık",
     "compose.notes": "Notlar (Markdown, isteğe bağlı)", "compose.notesPh": "Notları Markdown ile yazın… (isteğe bağlı)",
     "compose.hint": "Oluşturmak için Enter · vazgeçmek için Esc", "compose.cancel": "Vazgeç", "compose.create": "Oluştur",
+    "compose.folder": "Çalışma klasörü", "compose.folderPick": "Birini seçin…",
     "smartview.inbox": "Gelen kutusu @ben", "smartview.activity": "Hareketler",
     "smartview.due": "Tarih",
     "smartview.automations": "Otomasyonlar",

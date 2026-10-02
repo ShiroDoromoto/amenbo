@@ -321,6 +321,7 @@ export const nl: Translation = {
     "compose.new": "Nieuwe taak", "compose.titlePh": "Titel",
     "compose.notes": "Notities (Markdown, optioneel)", "compose.notesPh": "Schrijf notities in Markdown… (optioneel)",
     "compose.hint": "Enter maakt aan · Esc annuleert", "compose.cancel": "Annuleren", "compose.create": "Aanmaken",
+    "compose.folder": "Werkmap", "compose.folderPick": "Kies er een…",
     "smartview.inbox": "Postvak @mij", "smartview.activity": "Activiteit",
     "smartview.due": "Deadline",
     "smartview.automations": "Automatiseringen",

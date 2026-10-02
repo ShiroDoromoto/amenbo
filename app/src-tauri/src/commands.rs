@@ -2037,6 +2037,9 @@ pub fn watch_store(app: tauri::AppHandle) {
 /// The two days are optional and normally absent — a task is registered with a title and filled in
 /// afterwards — but they are taken here as well, so that someone who already knows when the work is due,
 /// or when it may start, does not have to file the task and then go back into it to say so.
+///
+/// `at` is the folder the task is worked in, as [`project_bound_folders`] lists it; see
+/// [`folder_to_file_in`] for what is filled in when it is left out.
 #[tauri::command]
 pub fn task_add(
     project_id: Option<i64>,
@@ -2044,8 +2047,10 @@ pub fn task_add(
     notes: Option<String>,
     due: Option<String>,
     start: Option<String>,
+    at: Option<String>,
 ) -> Result<WriteAck, CmdError> {
     let id = with_store_mut(|store| {
+        let at_binding_id = folder_to_file_in(store, project_id, at.as_deref())?;
         let t = store.add_task(amenbo_core::ops::task::NewTask {
             title,
             project_id,
@@ -2054,7 +2059,7 @@ pub fn task_add(
             priority: None,
             notes: notes.unwrap_or_default(),
             created_by_kind: Some(ActorKind::Human),
-            at_binding_id: None,
+            at_binding_id,
             // No pane made this: the window is where a person files a task, not a session
             // (`AMB-D-897`). A GUI opened from inside a pane inherits that pane's variables, which
             // is exactly why the create is handed this rather than reading it.
@@ -2063,6 +2068,38 @@ pub fn task_add(
         Ok(t.id)
     })?;
     Ok(WriteAck::new(&["tasks"]).task(id))
+}
+
+/// The folder a task filed from the window is worked in (`AMB-D-1012`). The window stands in no linked
+/// folder, so nothing is read from where it was opened: a folder named is that one, and it has to be one
+/// of the project's own; left out, it is the project's one folder when it has one and none when it has
+/// none. With several, which one is not ours to pick (`AMB-D-531`) — the compose pane asks before it
+/// gets here, so a create reaching this without one is refused rather than filed somewhere.
+fn folder_to_file_in(store: &Store, project_id: Option<i64>, at: Option<&str>) -> Result<Option<i64>, CmdError> {
+    let at = at.map(str::trim).filter(|a| !a.is_empty());
+    let Some(project_id) = project_id else {
+        return match at {
+            Some(_) => Err(CmdError::from("a task in the inbox has no folder to be worked in".to_string())),
+            None => Ok(None),
+        };
+    };
+    let folders = store.bound_folders_of(project_id)?;
+    if let Some(at) = at {
+        return folders
+            .iter()
+            .find(|f| f.dir == at)
+            .map(|f| Some(f.id))
+            .ok_or_else(|| CmdError::from(format!("{at} is not a folder linked to this project")));
+    }
+    match folders.as_slice() {
+        [] => Ok(None),
+        [one] => Ok(Some(one.id)),
+        several => Err(CmdError::from(format!(
+            "this project has {} linked folders ({}) — choose the one the task is worked in",
+            several.len(),
+            several.iter().map(|f| f.dir.as_str()).collect::<Vec<_>>().join(", ")
+        ))),
+    }
 }
 
 /// Finish creating a task — the second stage of the creation [`task_add`] began (`AMB-D-554`). It clears
@@ -5997,8 +6034,8 @@ pub(crate) mod tests {
                 .id
         };
 
-        let blocker = task_add(Some(project_id), "先行".into(), None, None, None).unwrap().tasks[0];
-        let dependent = task_add(Some(project_id), "後続".into(), None, None, None).unwrap().tasks[0];
+        let blocker = task_add(Some(project_id), "先行".into(), None, None, None, None).unwrap().tasks[0];
+        let dependent = task_add(Some(project_id), "後続".into(), None, None, None, None).unwrap().tasks[0];
         finish_creating(blocker);
         finish_creating(dependent);
         {
@@ -6058,7 +6095,7 @@ pub(crate) mod tests {
             let v2 = store.dimension_value_add(axis, "v2", None, None).unwrap().id;
             (p, axis, v1, v2)
         };
-        let task = task_add(Some(project_id), "後の段".into(), None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "後の段".into(), None, None, None, None).unwrap().tasks[0];
         finish_creating(task);
         task_set_dimension_value(task, v2).unwrap();
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
@@ -6103,7 +6140,7 @@ pub(crate) mod tests {
                 .id
         };
 
-        let task = task_add(Some(project_id), "実装".into(), None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "実装".into(), None, None, None, None).unwrap().tasks[0];
         finish_creating(task);
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
@@ -6161,7 +6198,7 @@ pub(crate) mod tests {
                 .id
         };
 
-        let task = task_add(Some(project_id), "実装".into(), None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "実装".into(), None, None, None, None).unwrap().tasks[0];
         finish_creating(task);
         let did = decision_add(project_id, "決めごと".into(), Some("結論".into()), None).unwrap().decisions[0];
         decision_set_link(did, task, true).unwrap();
@@ -6207,7 +6244,7 @@ pub(crate) mod tests {
                 .unwrap()
                 .id
         };
-        let task = task_add(Some(project_id), "やり終えた作業".into(), None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "やり終えた作業".into(), None, None, None, None).unwrap().tasks[0];
         finish_creating(task);
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
@@ -6255,7 +6292,7 @@ pub(crate) mod tests {
                 .unwrap()
                 .id
         };
-        let task = task_add(Some(project_id), "やらないと決めた作業".into(), None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "やらないと決めた作業".into(), None, None, None, None).unwrap().tasks[0];
         // A creation still open has no status to close (`AMB-D-846`), and the reason is what is under test.
         finish_creating(task);
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
@@ -6306,7 +6343,7 @@ pub(crate) mod tests {
             p.id
         };
 
-        let ack = task_add(Some(project_id), "結線テスト".into(), None, None, None).unwrap();
+        let ack = task_add(Some(project_id), "結線テスト".into(), None, None, None, None).unwrap();
         assert_eq!(ack.tasks.len(), 1, "task_add returns the new task id");
         assert!(ack.scopes.contains(&"tasks"), "task_add invalidates the task lists");
         let id = ack.tasks[0];
@@ -6361,7 +6398,7 @@ pub(crate) mod tests {
         let proj = proj_snap.projects.iter().find(|p| p.id == project_id).unwrap();
         assert!(proj.dimensions.iter().any(|d| d.name == "軸2"), "dimension added");
 
-        let del_id = task_add(Some(project_id), "消す対象".into(), None, None, None).unwrap().tasks[0];
+        let del_id = task_add(Some(project_id), "消す対象".into(), None, None, None, None).unwrap().tasks[0];
         let ack = task_delete(del_id).unwrap();
         assert_eq!(ack.tasks, vec![del_id], "delete acks the removed task");
         assert!(card(del_id).is_none(), "deleted task drops from the list");
@@ -6388,7 +6425,7 @@ pub(crate) mod tests {
         assert!(snap.activity.iter().any(|a| a.kind == "system" && a.event.as_ref().map(|e| e.kind == "task.assigned").unwrap_or(false)), "assigned event emitted");
 
         let sig_before = store_signature();
-        let _ = task_add(Some(project_id), "シグネチャ確認".into(), None, None, None).unwrap();
+        let _ = task_add(Some(project_id), "シグネチャ確認".into(), None, None, None, None).unwrap();
         assert!(!sig_before.version.is_empty(), "store signature is answered when a store exists");
         assert_ne!(store_signature(), sig_before, "a write advances the store signature");
 
@@ -6426,6 +6463,7 @@ pub(crate) mod tests {
             None,
             Some("2099-12-31".into()),
             Some("2099-01-01".into()),
+            None,
         )
         .unwrap()
         .tasks[0];
@@ -6498,7 +6536,7 @@ pub(crate) mod tests {
         };
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
-        let id = task_add(Some(project_id), "作りかけ".into(), None, None, None).unwrap().tasks[0];
+        let id = task_add(Some(project_id), "作りかけ".into(), None, None, None, None).unwrap().tasks[0];
         let t = card(id);
         assert!(t.draft, "a creation lands unfinished");
         assert!(!t.ready, "which is the fourth premise holding the reservation back");
@@ -6615,8 +6653,8 @@ pub(crate) mod tests {
         decision_supersede(head, old).unwrap();
         decision_amend(head, partial).unwrap();
         decision_builds_on(head, premise).unwrap();
-        let shipped = task_add(Some(project_id), "整数キーへ移行".into(), None, None, None).unwrap().tasks[0];
-        let pending = task_add(Some(project_id), "GUI を追従させる".into(), None, None, None).unwrap().tasks[0];
+        let shipped = task_add(Some(project_id), "整数キーへ移行".into(), None, None, None, None).unwrap().tasks[0];
+        let pending = task_add(Some(project_id), "GUI を追従させる".into(), None, None, None, None).unwrap().tasks[0];
         decision_set_link(head, shipped, true).unwrap();
         decision_set_link(head, pending, true).unwrap();
         // A creation still open has no status to close (`AMB-D-846`); what the card reads is the link.
@@ -6680,7 +6718,7 @@ pub(crate) mod tests {
 
         provision_project("PJ").unwrap();
         let project_id = snapshot().unwrap().projects[0].id;
-        let tid = task_add(Some(project_id), "コメントを消す".into(), None, None, None).unwrap().tasks[0];
+        let tid = task_add(Some(project_id), "コメントを消す".into(), None, None, None, None).unwrap().tasks[0];
 
         let _ = comment_add(tid, "誤投稿".into()).unwrap();
         let _ = comment_add(tid, "残すコメント".into()).unwrap();
@@ -6714,7 +6752,7 @@ pub(crate) mod tests {
 
         provision_project("PJ").unwrap();
         let project_id = snapshot().unwrap().projects[0].id;
-        let tid = task_add(Some(project_id), "コメントを直す".into(), None, None, None).unwrap().tasks[0];
+        let tid = task_add(Some(project_id), "コメントを直す".into(), None, None, None, None).unwrap().tasks[0];
         let _ = comment_add(tid, "誤字のある投稿".into()).unwrap();
 
         let posted: Vec<ActivityItemDto> =
@@ -6917,7 +6955,7 @@ pub(crate) mod tests {
             .unwrap();
             p.id
         };
-        let task_id = task_add(Some(project_id), "添付親タスク".into(), None, None, None).unwrap().tasks[0];
+        let task_id = task_add(Some(project_id), "添付親タスク".into(), None, None, None, None).unwrap().tasks[0];
         comment_add(task_id, "添付を付けるコメント".into()).unwrap();
         let comment_id = {
             let store = Store::open().unwrap();
@@ -7443,7 +7481,7 @@ pub(crate) mod tests {
         };
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next();
 
-        let id = task_add(Some(project_id), "軸テスト".into(), None, None, None).unwrap().tasks[0];
+        let id = task_add(Some(project_id), "軸テスト".into(), None, None, None, None).unwrap().tasks[0];
         assert_eq!(card(id).unwrap().project_id, Some(project_id));
 
         let ack = task_set_dimension_value(id, v1).unwrap();
@@ -7488,7 +7526,7 @@ pub(crate) mod tests {
             p.id
         };
 
-        let ack = task_add(Some(project_id), "空PJタスク".into(), None, None, None).unwrap();
+        let ack = task_add(Some(project_id), "空PJタスク".into(), None, None, None, None).unwrap();
         assert!(ack.scopes.contains(&"tasks"), "task_add invalidates the board lists");
         let task_id = ack.tasks[0];
 
@@ -7499,6 +7537,61 @@ pub(crate) mod tests {
         let card = tasks_by_ids(vec![task_id]).unwrap().into_iter().next().unwrap();
         assert_eq!(card.project_id, Some(project_id), "belongs to the project");
         assert_eq!(card.r#ref, "AMB-T-1", "the task is numbered");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The folder a task filed from the window is worked in (`AMB-D-1012`): a project's one folder is
+    /// filled in unasked, a project with several refuses the create until one is named, and the one named
+    /// is the one the task gets — as long as it is the project's own.
+    #[test]
+    fn task_add_fills_in_the_folder_only_when_there_is_one_to_fill_in() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-task-at");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let (one, two, _) = {
+            let mut store = Store::open().unwrap();
+            let mut add = |name: &str| {
+                store
+                    .project_add(amenbo_core::ops::project::NewProject {
+                        name: name.into(),
+                        view: View::Board,
+                        notes: String::new(),
+                        color: None,
+                    })
+                    .unwrap()
+                    .id
+            };
+            let ids = (add("一つ"), add("二つ"), add("よそ"));
+            let mut reg = store.bindings();
+            reg.record_project_ref(ids.0, "/work/one");
+            reg.record_project_ref(ids.1, "/work/app");
+            reg.record_project_ref(ids.1, "/work/mobile");
+            reg.record_project_ref(ids.2, "/work/other");
+            store.save_bindings(&reg).unwrap();
+            ids
+        };
+        let at = |id: i64| Store::open().unwrap().task_detail(id).unwrap().at.map(|f| f.dir);
+
+        let id = task_add(Some(one), "一つの方".into(), None, None, None, None).unwrap().tasks[0];
+        assert_eq!(at(id).as_deref(), Some("/work/one"), "the one folder is filled in unasked");
+
+        assert!(
+            task_add(Some(two), "選ばずに".into(), None, None, None, None).is_err(),
+            "with two folders, which one is not ours to pick"
+        );
+        let id = task_add(Some(two), "選んで".into(), None, None, None, Some("/work/mobile".into())).unwrap().tasks[0];
+        assert_eq!(at(id).as_deref(), Some("/work/mobile"), "the folder named is the one the task gets");
+
+        assert!(
+            task_add(Some(two), "よその".into(), None, None, None, Some("/work/other".into())).is_err(),
+            "another project's folder is no place of this task's"
+        );
+        assert!(
+            task_add(None, "受信箱".into(), None, None, None, Some("/work/one".into())).is_err(),
+            "a task in the inbox has no folder"
+        );
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -7743,7 +7836,7 @@ pub(crate) mod tests {
         let tmp = amenbo_scratch::scratch("app-m5");
         std::env::set_var("AMENBO_HOME", &tmp);
 
-        let id = task_add(None, "受信箱D".into(), None, None, None).unwrap().tasks[0];
+        let id = task_add(None, "受信箱D".into(), None, None, None, None).unwrap().tasks[0];
         task_assign(id, Some("human".into())).unwrap();
         assert!(mailbox_comment_tasks().unwrap().is_empty(), "no comments = no membership");
 
@@ -7794,7 +7887,7 @@ pub(crate) mod tests {
 
         assert!(mailbox_triggered_at(vec![]).unwrap().is_empty(), "empty input is empty");
 
-        let id = task_add(None, "triggeredAt".into(), None, None, None).unwrap().tasks[0];
+        let id = task_add(None, "triggeredAt".into(), None, None, None, None).unwrap().tasks[0];
 
         let get = |ids: Vec<i64>| -> Option<String> {
             mailbox_triggered_at(ids).unwrap().into_iter().find(|(i, _)| *i == id).map(|(_, at)| at)
@@ -7945,7 +8038,7 @@ pub(crate) mod tests {
         assert!(empty.rows.is_empty() && !empty.expired, "empty when unchanged (not expired)");
         assert_eq!(empty.cursor, start, "when empty, the cursor stays as passed");
 
-        let task = task_add(Some(project_id), "実装".into(), None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "実装".into(), None, None, None, None).unwrap().tasks[0];
         let after_add = changes_since(start, None).unwrap();
         assert!(
             after_add.rows.iter().any(|r| r.dataset == "task" && r.row_id == task && r.op == "insert"),

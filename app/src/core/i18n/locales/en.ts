@@ -1858,6 +1858,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_misanswered_cfg: "{step}: the setting “{cfg}” is answered with something it does not take",
   not_ready_automation_cfg_not_found: "{step}: the setting “{cfg}” names “{line}”, which this project does not have",
   not_ready_automation_cfg_value_closed: "{step}: the setting “{cfg}” names “{line}”, a value that is closed",
+  not_ready_automation_folder_unchosen: "{step}: the setting “{cfg}” is empty, and this project has {count} linked folders — write which one",
   not_ready_automation_agent_unchosen: "{step}: no agent is chosen",
   not_ready_automation_agent_missing: "{step}: this machine cannot start “{agent}”",
   // Said of the model rather than of the agent, which the step's own row already names. Only ever
@@ -1876,6 +1877,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_make_task_task_not_in_project: "“Existing tasks it depends on” names {line}, which is not in this project",
   invalid_make_task_decision_not_in_project: "“Decisions to link” names {line}, which is not in this project",
   invalid_make_task_folder_unknown: "“Working folder” names {folder}, which is not one of this project’s linked folders",
+  invalid_make_task_folder_unchosen: "“Working folder” is empty, and this project has {count} linked folders — write which one the task is worked in",
   invalid_make_task_classify_not_axis_value: "“Classification” reads one axis=value a line, and “{line}” is not one",
   invalid_make_task_chosen_not_axis_value: "“Chosen classification” reads one axis=value a line, and “{line}” is not one",
   invalid_make_task_axis_not_offered: "“Chosen classification” names the axis “{axis}”, which “Axes the AI chooses on” does not offer",

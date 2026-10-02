@@ -35,8 +35,9 @@
 //! **A setting it cannot follow files nothing.** A built-in that falls over leaves by the error way out
 //! inside the transaction that opened its step, and nothing takes back what it wrote before that — so
 //! every refusal the writes would raise is asked first ([`refusal`]): a task, a decision or a folder it
-//! cannot find in this run's project, a classification it cannot find or may not use, a required axis
-//! left empty, a task to depend on that would keep the new one from being taken.
+//! cannot find in this run's project, the folder left empty with several linked to fill it from, a
+//! classification it cannot find or may not use, a required axis left empty, a task to depend on that
+//! would keep the new one from being taken.
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{ActorKind, AttachmentTarget, AutomationCfgKind, AutomationPortKind, Priority};
@@ -82,7 +83,8 @@ pub const AI_AXES: &str = "AI に選ばせる軸";
 pub const DEPENDS_ON_TASKS: &str = "依存させる既存のタスク";
 /// The setting that names decisions to link it to, one a line.
 pub const DECISIONS: &str = "リンクする決定";
-/// The setting that names the folder it is worked in — one of this project's linked folders.
+/// The setting that names the folder it is worked in — one of this project's linked folders. Left
+/// empty, it is the project's one folder, if it has just one ([`folder`]).
 pub const FOLDER: &str = "作業フォルダ";
 /// The setting that says who it is given to.
 pub const ASSIGNEE: &str = "担当";
@@ -406,17 +408,43 @@ fn named_one(
 /// **The folder [`FOLDER`] names**, as one of this run's project's linked folders — by its path as
 /// recorded, or as it resolves on this machine. A task's folder is one of its own project's
 /// (`AMB-D-648`).
+///
+/// **Left empty, it is the project's one folder** (`AMB-D-1012`): a run files from no folder of its own,
+/// so there is nowhere it was filed to fill it from. With no folder linked the task has none; with
+/// several, which one is not ours to pick (`AMB-D-531`), so it files nothing ([`folder_unwritten`]).
 fn folder(carry: &Carry<'_, '_>) -> Result<Option<i64>> {
-    let Some(written) = choice(carry, FOLDER)? else {
-        return Ok(None);
-    };
-    folder_named(carry.tx.conn(), carry.run.project_id, &written).map(Some)
+    let conn = carry.tx.conn();
+    match choice(carry, FOLDER)? {
+        Some(written) => folder_named(conn, carry.run.project_id, &written).map(Some),
+        None => folder_unwritten(conn, carry.run.project_id),
+    }
+}
+
+/// **The folder of `project_id`'s a task is filed in when [`FOLDER`] is left empty** ([`folder`]).
+fn folder_unwritten(conn: &rusqlite::Connection, project_id: i64) -> Result<Option<i64>> {
+    match linked_folders(conn, project_id)?.as_slice() {
+        [] => Ok(None),
+        [one] => Ok(Some(one.id)),
+        several => Err(Error::Invalid(
+            Msg::new(format!(
+                "'{FOLDER}' is left empty, and this project has {} linked folders — write which one the task \
+                 is worked in",
+                several.len()
+            ))
+            .coded(ErrorCode::InvalidMakeTaskFolderUnchosen)
+            .with("count", several.len()),
+        )),
+    }
+}
+
+/// **The folders linked to `project_id`.**
+fn linked_folders(conn: &rusqlite::Connection, project_id: i64) -> Result<Vec<crate::binding::BoundFolder>> {
+    Ok(crate::overview::bound_folders(conn)?.into_iter().filter(|f| f.project_id == project_id).collect())
 }
 
 /// **The linked folder of `project_id`'s that `written` names** ([`folder`]).
 fn folder_named(conn: &rusqlite::Connection, project_id: i64, written: &str) -> Result<i64> {
-    let folders: Vec<_> =
-        crate::overview::bound_folders(conn)?.into_iter().filter(|f| f.project_id == project_id).collect();
+    let folders = linked_folders(conn, project_id)?;
     let canonical = crate::binding::canonical_dir(written).ok().map(|p| p.to_string_lossy().to_string());
     folders
         .iter()
@@ -676,6 +704,24 @@ pub(crate) fn closed_values(
         }
     }
     Ok(closed)
+}
+
+/// **How many folders `project_id` has linked, when [`FOLDER`] is left empty where it is placed
+/// (`placement`) and there are too many to fill it from** (`AMB-D-1012`, `AMB-D-987`). The built-in
+/// files nothing then ([`folder_unwritten`]), so the launch check names it first. It is asked again when
+/// the built-in is carried out: a folder can be linked or unlinked in between.
+pub(crate) fn folder_unchosen(
+    conn: &rusqlite::Connection,
+    placement: &crate::model::AutomationPlacement,
+    project_id: i64,
+) -> Result<Option<usize>> {
+    let settings = crate::ops::automation_run::settings_of(conn, placement)?;
+    // An answer that is not the JSON text it is kept as is the settings check's to refuse, not this one's.
+    if !matches!(answered(&settings, FOLDER), Ok(None)) {
+        return Ok(None);
+    }
+    let count = linked_folders(conn, project_id)?.len();
+    Ok((count > 1).then_some(count))
 }
 
 /// Whether a lookup came back saying there is nothing there — not found, not written as one, or naming
@@ -1086,6 +1132,73 @@ mod tests {
                 assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
             });
         }
+    }
+
+    /// Links `dirs` to the picture's project, as its folders.
+    fn linked(tx: &WriteTx<'_>, p: &Picture, dirs: &[&str]) {
+        let mut reg = crate::binding::Registry::default();
+        reg.project_dirs.entry(p.project).or_default().extend(dirs.iter().map(|dir| dir.to_string()));
+        crate::overview::write_bindings(tx, &reg).expect("bind");
+    }
+
+    /// **With the folder left empty, the task is filed in the project's one folder** (`AMB-D-1012`), and
+    /// in none when the project has none.
+    #[test]
+    fn a_folder_left_empty_is_the_projects_one_folder_or_none() {
+        for dirs in [&["/work/here"][..], &[][..]] {
+            with_tx(|tx| {
+                let p = picture(tx);
+                linked(tx, &p, dirs);
+                let binding = crate::overview::bound_folders(tx.conn()).expect("folders").first().map(|f| f.id);
+                let (_, _, run_step_id, _) = carried(tx, &p, false);
+                let (filed, _) = handed(tx, run_step_id);
+                assert_eq!(filed.at_binding_id, binding, "{dirs:?}");
+            });
+        }
+    }
+
+    /// **With the folder left empty and several folders linked, it files nothing** (`AMB-D-1012`): which
+    /// one is not its to pick.
+    #[test]
+    fn a_folder_left_empty_among_several_files_nothing() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            linked(tx, &p, &["/work/here", "/work/there"]);
+            let (_, first, run_step_id, next) = carried(tx, &p, false);
+            assert!(matches!(next, Next::Halted(_)), "{next:?}");
+            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+            assert_eq!(ran.exit_id, way_out(tx, run_step_id, crate::model::ERROR_EXIT));
+            assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
+        });
+    }
+
+    /// **The launch check names a folder left empty among several** (`AMB-D-987`) — and not one written,
+    /// nor one left empty with a single folder to fill it from.
+    #[test]
+    fn the_launch_check_names_a_folder_left_empty_among_several() {
+        let startable = ["claude".to_string()];
+        let unchosen = |tx: &WriteTx<'_>, p: &Picture| -> Vec<(String, String, usize, Option<String>, i64)> {
+            check(tx.conn(), p.automation.id, Some(&startable), nothing_asked())
+                .expect("check")
+                .into_iter()
+                .filter_map(|unmet| match unmet {
+                    Unmet::FolderUnchosen { step, cfg, count, builtin, placement } => {
+                        Some((step, cfg, count, builtin, placement))
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        with_tx(|tx| {
+            let p = picture(tx);
+            linked(tx, &p, &["/work/here"]);
+            assert!(unchosen(tx, &p).is_empty(), "one folder fills it");
+            linked(tx, &p, &["/work/here", "/work/there"]);
+            let named = ("タスクを起票する".to_string(), FOLDER.to_string(), 2, Some(KEY.to_string()), p.make.id);
+            assert_eq!(unchosen(tx, &p), vec![named]);
+            answer(tx, &p, FOLDER, "/work/there");
+            assert!(unchosen(tx, &p).is_empty(), "a folder written is the one");
+        });
     }
 
     /// **The launch check names each line of a setting that names what this project does not have**

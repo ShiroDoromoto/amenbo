@@ -190,8 +190,10 @@ amenbo task finish-creating <n>            # each one, once it is written (<n> i
 # Every id is the number amenbo shows you: task AMB-T-<n> is `<n>`, decision AMB-D-<n> is `<n>`
 amenbo task depend <n> --on <m>            # <n> waits on <m> (dependency, not a subtask)
 # A project may have several folders linked to it. Say which one a task is worked in
-# (`--at` on add or update, `--clear-at` to take it back) — only what you name lands,
-# and it refuses nothing: nothing is stopped for being worked somewhere else
+# (`--at` on add or update, `--clear-at` to take it back). Left out on add, it is the
+# linked folder you typed it in, or the project's only folder; with several and typed
+# outside them all, add asks for `--at`. It refuses nothing: nothing is stopped for
+# being worked somewhere else
 amenbo task add --title "Fix the mail face" --project "Website refresh" --at website-mailer
 # A task ends one of two ways. Work you carried out ends at `done`, with a report of
 # what was done — it lands on the timeline as a comment, in the same write as the end

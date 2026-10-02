@@ -74,8 +74,8 @@ pub struct NewTask {
     /// The creator's facet. Left unset, the creator is unknown (and treated as "not authored by the AI").
     pub created_by_kind: Option<ActorKind>,
     /// The bound folder this task is worked in, already resolved to a binding id (`AMB-D-648`). Left
-    /// unset, the task names no folder — the place is stated or it is absent, never taken from where the
-    /// create was typed.
+    /// unset, the task names no folder. The create reads nothing of where it was typed: filling it from
+    /// there when `--at` is left out (`AMB-D-1012`) is the caller's to do before it calls.
     pub at_binding_id: Option<i64>,
     /// The session this was filed from ([`MadeIn`], `AMB-D-897`), or `None` for a task filed outside the
     /// talk window. Stated by the caller for the same reason `at_binding_id` is — the create reads

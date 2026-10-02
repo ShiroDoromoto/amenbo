@@ -2999,6 +2999,14 @@ body.dragging-row { user-select: none; }
    between the first two, apart from the state and at another height. So every control is held to the
    first line's height, and the first line is drawn that tall. */
 .slot--run .slot__bar > :not(.slot__plate) { height: var(--plate-line); }
+/* **A narrow run pane wraps its controls under the header rather than over it** (`AMB-T-5950`). The
+   row is measured with `container-type`, so its words never ask for room, and its chips never shrink:
+   at half a page the controls took the whole row and the chips were drawn on top of them. The row is
+   held wide enough for the mark, the name, the run's number and the state, and what does not fit beside
+   it goes to a line of its own, at the right where it stood. */
+.slot--run .slot__bar { flex-wrap: wrap; }
+.slot--run .slot__plate { flex: 1 1 16rem; min-width: min(16rem, 100%); }
+.slot--run .slot__faces { margin-inline-start: auto; }
 
 /* The name row on a run's pane is the run's: the automation and where it has got to, in its colour.
    It gives up its bottom margin to the task's line under it, the two being one block over the

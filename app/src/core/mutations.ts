@@ -286,13 +286,18 @@ function sysItem(taskId: number, title: string, event: EventDto): ActivityItem {
   return sysRow({ type: "task", id: taskId, title, live: event.kind !== "task.deleted" }, event);
 }
 
-/** Returns the id of the task just created, so the caller can open its detail pane. Null if it cannot be resolved. */
+/**
+ * Returns the id of the task just created, so the caller can open its detail pane. Null if it cannot be resolved.
+ * `at` is the folder the task is worked in, as `fetchBoundFolders` lists it; left out, core fills in a
+ * project's one folder and refuses a project with several.
+ */
 export async function addTask(
   projectId: number | null,
   title: string,
   notes?: string,
   due?: string | null,
   start?: string | null,
+  at?: string | null,
 ): Promise<number | null> {
   if (inTauri()) {
     // Pass a project and core places the task there so it lands on that board; its
@@ -300,7 +305,7 @@ export async function addTask(
     // (unfiled) task. task_add's WriteAck carries the new task among its affected ids (commands.rs),
     // so we apply the ack and lift the id out of it.
     const ack = await invoke<WriteAck>("task_add", {
-      projectId, title, notes: notes ?? null, due: due ?? null, start: start ?? null,
+      projectId, title, notes: notes ?? null, due: due ?? null, start: start ?? null, at: at ?? null,
     });
     applyAck(ack);
     return ack.tasks[0] ?? null;

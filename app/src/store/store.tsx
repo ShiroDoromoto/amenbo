@@ -24,6 +24,7 @@ interface Store {
     notes?: string,
     due?: string | null,
     start?: string | null,
+    at?: string | null,
   ): Promise<number | null>;
   /**
    * Move a task's status. `rejected` is the one value that carries a reason, and it is required — the
@@ -189,7 +190,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const store: Store = useMemo(() => ({
     listActivity() { return activity; },
 
-    addTask(projectId, title, notes, due, start) { return runResult(mut.addTask(projectId, title, notes, due, start)); },
+    addTask(projectId, title, notes, due, start, at) { return runResult(mut.addTask(projectId, title, notes, due, start, at)); },
     setStatus(id, status, text) {
       // The fork on the way down: each terminal goes through the write that also keeps its text — the
       // reason for a rejection, the report for a completion — so no surface can reach either one and

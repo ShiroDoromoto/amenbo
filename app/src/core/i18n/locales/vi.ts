@@ -323,6 +323,7 @@ export const vi: Translation = {
     "compose.new": "Việc mới", "compose.titlePh": "Tiêu đề",
     "compose.notes": "Ghi chú (Markdown, không bắt buộc)", "compose.notesPh": "Viết ghi chú bằng Markdown… (không bắt buộc)",
     "compose.hint": "Enter để tạo · Esc để huỷ", "compose.cancel": "Huỷ", "compose.create": "Tạo",
+    "compose.folder": "Thư mục làm việc", "compose.folderPick": "Chọn một thư mục…",
     "smartview.inbox": "Hộp thư @tôi", "smartview.activity": "Hoạt động",
     "smartview.due": "Hạn chót",
     "smartview.automations": "Tự động hoá",

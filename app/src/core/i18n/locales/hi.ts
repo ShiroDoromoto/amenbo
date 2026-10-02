@@ -321,6 +321,7 @@ export const hi: Translation = {
     "compose.new": "नया काम", "compose.titlePh": "शीर्षक",
     "compose.notes": "नोट (Markdown, वैकल्पिक)", "compose.notesPh": "Markdown में नोट लिखें… (वैकल्पिक)",
     "compose.hint": "बनाने के लिए Enter · रद्द के लिए Esc", "compose.cancel": "रद्द करें", "compose.create": "बनाएँ",
+    "compose.folder": "कार्य फ़ोल्डर", "compose.folderPick": "एक चुनें…",
     "smartview.inbox": "इनबॉक्स @मैं", "smartview.activity": "गतिविधि",
     "smartview.due": "नियत तिथि",
     "smartview.automations": "ऑटोमेशन",

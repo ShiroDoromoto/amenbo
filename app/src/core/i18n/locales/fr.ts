@@ -325,6 +325,7 @@ export const fr: Translation = {
     "compose.new": "Nouvelle tâche", "compose.titlePh": "Titre",
     "compose.notes": "Notes (Markdown, facultatif)", "compose.notesPh": "Écrivez des notes en Markdown… (facultatif)",
     "compose.hint": "Entrée pour créer · Échap pour annuler", "compose.cancel": "Annuler", "compose.create": "Créer",
+    "compose.folder": "Dossier de travail", "compose.folderPick": "Choisissez-en un…",
     "smartview.inbox": "Boîte @moi", "smartview.activity": "Activité",
     "smartview.due": "Échéance",
     "smartview.automations": "Automatisations",

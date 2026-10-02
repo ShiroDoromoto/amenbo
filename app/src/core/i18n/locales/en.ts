@@ -343,6 +343,7 @@ const ui = {
   "compose.new": "New task", "compose.titlePh": "Title",
   "compose.notes": "Notes (Markdown, optional)", "compose.notesPh": "Write notes in Markdown… (optional)",
   "compose.hint": "Enter to create · Esc to cancel", "compose.cancel": "Cancel", "compose.create": "Create",
+  "compose.folder": "Working folder", "compose.folderPick": "Choose one…",
   // smart views (sidebar shows inbox/activity/due; archive is the header for the board-opened list)
   "smartview.inbox": "Inbox @me", "smartview.activity": "Activity",
   "smartview.due": "Due",

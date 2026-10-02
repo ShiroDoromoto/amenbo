@@ -326,6 +326,7 @@ export const uk: Translation = {
     "compose.new": "Нове завдання", "compose.titlePh": "Заголовок",
     "compose.notes": "Нотатки (Markdown, необов'язково)", "compose.notesPh": "Напишіть нотатки в Markdown… (необов'язково)",
     "compose.hint": "Enter створює · Esc скасовує", "compose.cancel": "Скасувати", "compose.create": "Створити",
+    "compose.folder": "Робоча папка", "compose.folderPick": "Виберіть…",
     "smartview.inbox": "Вхідні @я", "smartview.activity": "Активність",
     "smartview.due": "Терміни",
     "smartview.automations": "Автоматизації",

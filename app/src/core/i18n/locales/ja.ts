@@ -322,6 +322,7 @@ export const ja: Translation = {
     "compose.new": "新規タスク", "compose.titlePh": "タイトル",
     "compose.notes": "メモ（Markdown・任意）", "compose.notesPh": "Markdown で概要を書く…（任意）",
     "compose.hint": "Enter で作成 · Esc で取消", "compose.cancel": "取消", "compose.create": "作成",
+    "compose.folder": "作業フォルダ", "compose.folderPick": "選んでください",
     // smart views (sidebar shows inbox/activity/due; archive is the header for the board-opened list)
     "smartview.inbox": "受信箱 @自分", "smartview.activity": "アクティビティ",
     "smartview.due": "期日",

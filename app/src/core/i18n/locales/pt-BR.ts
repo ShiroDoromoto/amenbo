@@ -326,6 +326,7 @@ export const ptBR: Translation = {
     "compose.new": "Nova tarefa", "compose.titlePh": "Título",
     "compose.notes": "Anotações (Markdown, opcional)", "compose.notesPh": "Escreva anotações em Markdown… (opcional)",
     "compose.hint": "Enter para criar · Esc para cancelar", "compose.cancel": "Cancelar", "compose.create": "Criar",
+    "compose.folder": "Pasta de trabalho", "compose.folderPick": "Escolha uma…",
     "smartview.inbox": "Caixa de entrada @eu", "smartview.activity": "Atividade",
     "smartview.due": "Prazo",
     "smartview.automations": "Automações",

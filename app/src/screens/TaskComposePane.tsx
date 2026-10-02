@@ -4,6 +4,7 @@ import { DateField } from "../components/atoms";
 import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
+import { useBoundFolders } from "../core/boundFolders";
 
 // Creating a new task in the right pane: enter a title plus notes (Markdown) and create it. Where it is created is
 // chosen by the caller (the plus in a column header). A task only gets placed in a project; classification (assigning
@@ -27,20 +28,27 @@ export function TaskComposePane({
   // known when it is filed. Neither is required — a task still registers on a title alone.
   const [due, setDue] = useState<string | null>(null);
   const [start, setStart] = useState<string | null>(null);
+  // The folder the task is worked in (`AMB-D-1012`). Asked only when the project has several: with one,
+  // core fills it in, and with none there is nothing to fill in. Which of several is not ours to pick
+  // (`AMB-D-531`), so nothing is chosen until the person chooses.
+  const folders = useBoundFolders(projectId);
+  const choosing = folders.all.length >= 2;
+  const [at, setAt] = useState("");
+  const canCreate = title.trim() !== "" && (!choosing || at !== "");
 
-  // Dirty whenever there is input (title, notes, or either day). On unmount, always drop it back to false.
+  // Dirty whenever there is input (title, notes, either day, or a chosen folder). On unmount, always drop it back to false.
   useEffect(() => {
-    onDirtyChange?.(title.trim() !== "" || notes.trim() !== "" || due !== null || start !== null);
+    onDirtyChange?.(title.trim() !== "" || notes.trim() !== "" || due !== null || start !== null || at !== "");
     return () => onDirtyChange?.(false);
-  }, [title, notes, due, start, onDirtyChange]);
+  }, [title, notes, due, start, at, onDirtyChange]);
 
   // The button, Enter and Cmd+Enter all come here, and a second of any of them before the answer is dropped:
   // each one that got through would file a task of its own.
   const { busy, run } = useSingleFlight();
   const submit = () => {
-    if (!title.trim()) return;
+    if (!canCreate) return;
     run(async () => {
-      const newId = await store.addTask(projectId, title.trim(), notes.trim() || undefined, due, start);
+      const newId = await store.addTask(projectId, title.trim(), notes.trim() || undefined, due, start, choosing ? at : null);
       onCreated(newId);
     });
   };
@@ -88,12 +96,21 @@ export function TaskComposePane({
           <span className="detail__flabel">{t("date.start")}</span>
           <DateField label={t("date.start")} value={start} onChange={setStart} />
         </div>
+        {choosing && (
+          <div className="detail__field">
+            <span className="detail__flabel">{t("compose.folder")}</span>
+            <select className="btn" aria-label={t("compose.folder")} value={at} onChange={(e) => setAt(e.target.value)}>
+              <option value="" disabled>{t("compose.folderPick")}</option>
+              {folders.all.map((f) => <option value={f.path} key={f.path}>{f.path}</option>)}
+            </select>
+          </div>
+        )}
 
         <div className="writebox__actions" style={{ marginTop: "var(--s-2)" }}>
           <span className="meta">{t("compose.hint")}</span>
           <span>
             <button className="btn" onClick={onCancel}>{t("compose.cancel")}</button>
-            <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={busy || !title.trim()} onClick={submit}>{t("compose.create")}</button>
+            <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={busy || !canCreate} onClick={submit}>{t("compose.create")}</button>
           </span>
         </div>
       </div>

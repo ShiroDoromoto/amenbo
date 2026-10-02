@@ -321,6 +321,7 @@ export const zhHant: Translation = {
     "compose.new": "新增任務", "compose.titlePh": "標題",
     "compose.notes": "備註（Markdown，選填）", "compose.notesPh": "用 Markdown 寫備註…（選填）",
     "compose.hint": "Enter 建立 · Esc 取消", "compose.cancel": "取消", "compose.create": "建立",
+    "compose.folder": "工作資料夾", "compose.folderPick": "請選擇…",
     "smartview.inbox": "收件匣 @我", "smartview.activity": "動態",
     "smartview.due": "期限",
     "smartview.automations": "自動化",

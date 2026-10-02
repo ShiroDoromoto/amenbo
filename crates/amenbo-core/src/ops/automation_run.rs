@@ -109,6 +109,10 @@ pub enum Unmet {
     /// the line of it that does (`AMB-D-987`). The built-in files no task under a closed value, and would
     /// halt the run there.
     CfgValueClosed { step: String, cfg: String, line: String, builtin: Option<String>, placement: i64 },
+    /// The folder setting `cfg` of the built-in that files a task left empty, in a project with `count`
+    /// linked folders (`AMB-D-1012`). Which one the task is worked in is not the built-in's to pick, so it
+    /// would file nothing and halt the run there.
+    FolderUnchosen { step: String, cfg: String, count: usize, builtin: Option<String>, placement: i64 },
     /// A step nobody has been chosen to carry out where its action is placed (`AMB-D-960`). A pane
     /// opened on it would have no agent to start.
     AgentUnchosen { step: String, placement: i64 },
@@ -195,6 +199,12 @@ impl Unmet {
             Unmet::CfgValueClosed { step, cfg, line, .. } => {
                 format!("the setting '{cfg}' of '{step}' names '{line}', a value that is closed")
             }
+            Unmet::FolderUnchosen { step, cfg, count, .. } => {
+                format!(
+                    "the setting '{cfg}' of '{step}' is left empty, and this project has {count} linked folders \
+                     — write which one the task is worked in"
+                )
+            }
             Unmet::AgentUnchosen { step, .. } => {
                 format!("nobody is chosen to carry out '{step}' where its action is placed")
             }
@@ -251,6 +261,7 @@ impl Unmet {
             Unmet::MisansweredCfg { .. } => ErrorCode::NotReadyAutomationMisansweredCfg,
             Unmet::CfgNotFound { .. } => ErrorCode::NotReadyAutomationCfgNotFound,
             Unmet::CfgValueClosed { .. } => ErrorCode::NotReadyAutomationCfgValueClosed,
+            Unmet::FolderUnchosen { .. } => ErrorCode::NotReadyAutomationFolderUnchosen,
             Unmet::AgentUnchosen { .. } => ErrorCode::NotReadyAutomationAgentUnchosen,
             Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
             Unmet::ModelMissing { .. } => ErrorCode::NotReadyAutomationModelMissing,
@@ -293,6 +304,9 @@ impl Unmet {
             Unmet::CfgNotFound { step, cfg, line, .. } | Unmet::CfgValueClosed { step, cfg, line, .. } => {
                 msg.with("step", step).with("cfg", cfg).with("line", line)
             }
+            Unmet::FolderUnchosen { step, cfg, count, .. } => {
+                msg.with("step", step).with("cfg", cfg).with("count", count)
+            }
             Unmet::AgentUnchosen { step, .. } => msg.with("step", step),
             Unmet::AgentMissing { step, agent, .. } => msg.with("step", step).with("agent", agent),
             Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
@@ -325,6 +339,7 @@ impl Unmet {
             | Unmet::MisansweredCfg { placement, .. }
             | Unmet::CfgNotFound { placement, .. }
             | Unmet::CfgValueClosed { placement, .. }
+            | Unmet::FolderUnchosen { placement, .. }
             | Unmet::AgentUnchosen { placement, .. }
             | Unmet::AgentMissing { placement, .. }
             | Unmet::ModelMissing { placement, .. }
@@ -355,6 +370,7 @@ impl Unmet {
             | Unmet::MisansweredCfg { builtin, .. }
             | Unmet::CfgNotFound { builtin, .. }
             | Unmet::CfgValueClosed { builtin, .. }
+            | Unmet::FolderUnchosen { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
             Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
             _ => None,
@@ -625,6 +641,18 @@ pub fn check(
                     step: name.clone(),
                     cfg: classify.to_string(),
                     line,
+                    builtin: builtin.clone(),
+                    placement: placement.id,
+                });
+            }
+            let folder = crate::ops::automation_builtin_make::FOLDER;
+            if let Some(count) =
+                crate::ops::automation_builtin_make::folder_unchosen(conn, placement, automation.project_id)?
+            {
+                unmet.push(Unmet::FolderUnchosen {
+                    step: name.clone(),
+                    cfg: folder.to_string(),
+                    count,
                     builtin: builtin.clone(),
                     placement: placement.id,
                 });
@@ -1340,6 +1368,7 @@ pub(crate) fn launch_past_the_setting_checks(
                 | Unmet::HandsOnTaskTaken { .. }
                 | Unmet::CfgNotFound { .. }
                 | Unmet::CfgValueClosed { .. }
+                | Unmet::FolderUnchosen { .. }
         )
     })
 }

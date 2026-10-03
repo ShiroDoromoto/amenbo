@@ -1,0 +1,124 @@
+# A script step leaves by the error way out whenever what its program came to does not hold: it
+# could not be started, it ended with an exit code other than 0, it wrote no `output.json`, wrote one that is not JSON, named a way out the step does not declare, left out an
+# output the way out it named requires, or was still running at its timeout. Each of the seven is a
+# step here, and the error way out of each leads on to the next, while every other way out of every
+# one of them stops the run for a person. So the run only completes if all seven left by the error way
+# out — a build that let one of them through by a way out it named, or by the done one, stops there.
+#
+# The program that cannot be started is the one case the launch check would otherwise keep off the
+# road: a program with no file at its path is refused before the run starts. So it is there at the
+# launch, and the step before it takes it away — the one whose program ends with code 3.
+#
+# The timeout is the shortest a step takes, one minute, and comes last, so the road waits for it once.
+id: see-a-script-step-leave-by-the-error-way-out
+title: A script step whose program does not end the way a step owes leaves by the error way out, whichever way it fails
+description: >
+  Start a run that takes a task and then walks one action of seven script steps, each of whose
+  programs fails in its own way: it ends with code 3, cannot be started, writes no output.json,
+  writes one that is not JSON, names a way out nobody declared, leaves out the value its way out
+  requires, and runs past its one-minute timeout. Each step's error way out leads to the next, and
+  the last one's out of the action to closing the task, while every other way out stops the run.
+  With nothing typed, the run's pane ends up saying the run completed.
+given:
+  # The program every step starts, and a second copy of it for the step that cannot be started — the
+  # one the step before it takes away once the launch check has seen it there.
+  - { type: action, domain: repo, op: copy-fixture, with: { from: script/leave-by.sh, path: script/leave-by.sh, executable: true } }
+  - { type: action, domain: repo, op: copy-fixture, with: { from: script/leave-by.sh, path: script/taken-away.sh, executable: true } }
+
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the scripts fail on }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
+
+  - { type: action, domain: automation, op: action-add, with: { name: misbehave }, as: misbehave }
+  - { type: action, domain: automation, op: step-add, with: { target: misbehave, name: ends with 3, program_at: script/leave-by.sh, args: [end-with, "3", taken-away.sh] }, as: ends_badly }
+  - { type: action, domain: automation, op: step-add, with: { target: misbehave, name: cannot start, program_at: script/taken-away.sh, args: [leave, 完了] }, as: cannot_start }
+  - { type: action, domain: automation, op: step-add, with: { target: misbehave, name: writes nothing, program_at: script/leave-by.sh, args: [write-nothing] }, as: writes_nothing }
+  - { type: action, domain: automation, op: step-add, with: { target: misbehave, name: writes no JSON, program_at: script/leave-by.sh, args: [write-garbled] }, as: writes_garbled }
+  - { type: action, domain: automation, op: step-add, with: { target: misbehave, name: names another way out, program_at: script/leave-by.sh, args: [leave, elsewhere] }, as: names_another }
+  - { type: action, domain: automation, op: step-add, with: { target: misbehave, name: leaves out why, program_at: script/leave-by.sh, args: [leave, red] }, as: leaves_out }
+  - { type: action, domain: automation, op: step-add, with: { target: misbehave, name: runs too long, program_at: script/leave-by.sh, args: [wait, "600"], timeout_minutes: 1 }, as: runs_long }
+  - { type: action, domain: automation, op: action-entry, with: { target: misbehave, step: ends_badly } }
+
+  # The one way out a program is let to name, and what it owes: "red" with a value under `why`.
+  - { type: action, domain: automation, op: exit-add, with: { step: leaves_out, name: red }, as: leaves_out_red }
+  - { type: action, domain: automation, op: port-add, with: { target: leaves_out_red, name: why, kind: value, required: true } }
+
+  # Each error way out leads to the next step, and the last one's out of the action by its done way out.
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: ends_badly, exit: "*", to: cannot_start } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: cannot_start, exit: "*", to: writes_nothing } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: writes_nothing, exit: "*", to: writes_garbled } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: writes_garbled, exit: "*", to: names_another } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: names_another, exit: "*", to: leaves_out } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: leaves_out, exit: "*", to: runs_long } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: runs_long, exit: "*", exit_to: "" } }
+
+  # Every other way out stops the run for a person.
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: ends_badly, halt: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: cannot_start, halt: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: writes_nothing, halt: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: writes_garbled, halt: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: names_another, halt: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: leaves_out, halt: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: leaves_out, exit: red, halt: true } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: runs_long, halt: true } }
+
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — seven scripts that fail" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: misbehave }, as: at_misbehave }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_misbehave } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_misbehave, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # Nothing is typed: the seven programs run and end by themselves, the last a minute after it starts,
+  # and the task is closed once they have. The wait gives that minute room.
+  - type: action
+    domain: task
+    op: wait-field
+    with:
+      target: seed
+      field: status
+      equals: done
+      seconds: 120
+
+  # A run that let any of them out by another way out would say it failed, stopped for a person.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      state: completed
+      present: true

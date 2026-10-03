@@ -1091,6 +1091,8 @@ const REGISTRY: &[OpSpec] = &[
     // number — so a road that opens one has something in it to read, and no two of them are the
     // same file twice.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-many", required: &["path", "count"], refs: &[], strings: &["path", "content", "dir"], binds: false },
+    // `executable: true` lets the copy be run as a program — the shelf's bytes come over without the
+    // permission to execute, and a script step's program is refused at launch without it.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path", "dir"], binds: false },
     // And bytes too big to keep on a shelf. A road about what a provider does with a **large**
     // picture needs one of a named size, and the smallest that walks such a road is over four
@@ -4132,14 +4134,20 @@ const REGISTRY: &[OpSpec] = &[
     // reads the library finds the same row wearing the other reach. On a screen the press is on the
     // row of the "actions" tab, whatever project the pulldown has picked.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-scope", required: &["target", "reach"], refs: &["target", "project"], strings: &["reach"], binds: false },
-    // A step inside an action (`target`): its own prompt. Who carries it out is not the step's — it is
-    // chosen where the action is placed (`agent-set`).
+    // A step inside an action (`target`): its own prompt, or the program a script step starts (below).
+    // Who carries a prompt out is not the step's — it is chosen where the action is placed (`agent-set`).
     //
     // What a step is handed besides its prompt is on unless somebody turns it off: the task the run
     // is on, part by part (`task_notes`, `task_decisions` and `task_comments` — its notes, the
     // decisions linked to it and its comments), and the run's story so far (`history`). A road writes
     // `false` for the one it means to leave out, and names none for the step every other road builds.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-add", required: &["target", "name", "prompt"], refs: &["target"], strings: &["name", "prompt", "work_dir_ref"], binds: true },
+    //
+    // **A script step** runs a program instead of a prompt, so it names `program_at` in place of
+    // `prompt` — one of the two, never both and never neither. The program is a file an earlier `repo`
+    // step wrote into the run's own folder (`copy-fixture` with `executable: true`), named by its path
+    // there, and the driver hands the command the full path the step needs. `args` are its arguments,
+    // each a string handed on as it is, and `timeout_minutes` how long it may run.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "step-add", required: &["target", "name"], refs: &["target"], strings: &["name", "prompt", "work_dir_ref", "program_at"], binds: true },
     // Turning any of those four back on or off on a step already there (`target`), the rest of it
     // left alone — or whether it may stop and wait for a person (`interactive`), which is what turns a
     // run's pane to its terminal while it runs. A road names at least one of them, since a rewrite
@@ -5219,7 +5227,8 @@ impl Scenario {
             // something to ask before it can go out, `in_action` whether a way out, an edge or a
             // wire is drawn inside an action rather than on an automation, and `task_notes`,
             // `task_decisions`, `task_comments` and `history` whether a step is handed each part of the
-            // task the run is on and the run's story so far.
+            // task the run is on and the run's story so far, and `executable` whether a fixture's copy
+            // may be run as a program.
             // The query, in whichever of its two spellings — one of them, never both and never
             // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
             // step naming a shape for one is a step that means a number and left the record out.
@@ -5237,6 +5246,34 @@ impl Scenario {
                 if let Some(v) = step.with().get("spelled") {
                     if !matches!(v.as_str(), Some("bare" | "hash")) {
                         errs.push(at(i, "`spelled` must be `bare` (`12`) or `hash` (`#12`)".to_string()));
+                    }
+                }
+            }
+
+            // What a step runs, a prompt or a program — one of them, never both and never neither.
+            // What a program is handed is the program's alone, so a step with a prompt names neither.
+            if step.domain() == Domain::Automation && step.op() == "step-add" {
+                let prompt = step.with().contains_key("prompt");
+                let program = step.with().contains_key("program_at");
+                if prompt && program {
+                    errs.push(at(i, "a step runs a prompt or a program — name `prompt` or `program_at`, not both".to_string()));
+                } else if !prompt && !program {
+                    errs.push(at(i, "what the step runs is missing — write `prompt`, or `program_at` naming the program a script step starts".to_string()));
+                }
+                for key in ["args", "timeout_minutes"] {
+                    if !program && step.with().contains_key(key) {
+                        errs.push(at(i, format!("`{key}` is what a script step's program is handed, so it belongs with `program_at`")));
+                    }
+                }
+                if let Some(v) = step.with().get("args") {
+                    let words = v.as_sequence().is_some_and(|args| args.iter().all(|a| a.as_str().is_some()));
+                    if !words {
+                        errs.push(at(i, "`args` is a list of strings, one per argument".to_string()));
+                    }
+                }
+                if let Some(v) = step.with().get("timeout_minutes") {
+                    if v.as_i64().is_none() {
+                        errs.push(at(i, "`timeout_minutes` is a whole number of minutes".to_string()));
                     }
                 }
             }
@@ -5305,6 +5342,7 @@ impl Scenario {
                 "history",
                 "interactive",
                 "pressable",
+                "executable",
             ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
@@ -5807,6 +5845,33 @@ steps_cli:
         );
         assert!(errs("name: nothing").contains("what is placed is missing"), "neither places nothing");
         assert!(errs("action: ghost").contains("does not resolve"), "an action is a binding like any other");
+    }
+
+    /// A step runs a prompt or, as a script step, a program, and a road names one of them. Neither is
+    /// `required` on its own, so this is the check that keeps a road from building a step that runs
+    /// nothing — or both — and from handing a prompt the arguments only a program takes.
+    #[test]
+    fn a_step_runs_a_prompt_or_a_program_and_not_both_or_neither() {
+        let road = |with: &str| {
+            format!(
+                "id: x\ntitle: y\ngiven:\n  - {{ type: action, domain: automation, op: action-add, with: {{ name: take }}, as: take }}\n  - {{ type: action, domain: automation, op: step-add, with: {{ target: take, name: look, {with} }} }}\nsteps_cli:\n  - {{ type: assert, domain: automation, op: run, with: {{ status: running }} }}\n"
+            )
+        };
+        let errs = |with: &str| {
+            load_str(&road(with)).unwrap().validate().unwrap_err().iter().map(|e| e.message.clone()).collect::<Vec<_>>().join(" / ")
+        };
+
+        load_str(&road("prompt: look")).unwrap().validate().expect("a prompt alone is a step");
+        load_str(&road("program_at: script/leave-by.sh, args: [leave, \"3\"], timeout_minutes: 1"))
+            .unwrap()
+            .validate()
+            .expect("a program with its arguments is the other one");
+
+        assert!(errs("prompt: look, program_at: script/leave-by.sh").contains("not both"), "both at once runs two things");
+        assert!(errs("work_dir_ref: here").contains("what the step runs is missing"), "neither runs nothing");
+        assert!(errs("prompt: look, args: [leave]").contains("belongs with `program_at`"), "a prompt takes no arguments");
+        assert!(errs("program_at: script/leave-by.sh, args: [leave, 3]").contains("a list of strings"), "an argument is a word");
+        assert!(errs("program_at: script/leave-by.sh, timeout_minutes: soon").contains("whole number"), "a timeout is minutes");
     }
 
     /// A number written into one record's text is how a road shows that a number is still asked as a

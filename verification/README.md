@@ -763,7 +763,9 @@ leaves the press refused and the run paused, with the note over the running tab'
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
 about an automation but the one that makes one from the list opens on a definition that is already
 there, so a premise builds all three layers — the action, the steps inside it, and the placement on
-the picture. Answering a setting is
+the picture. A script step is built the same way, with `program_at` in place of `prompt`: the
+program is a file a `copy-fixture` put in the run's own folder, and it is the app that starts it, so
+a road with one walks the screen alone and reads where the run went off its pane. Answering a setting is
 not among them, and neither is declaring one: both are moves a reader makes, on the rows the panel
 takes them on or behind the flags the command does.
 **What a step of a run types is the screen's too** (`out-in-pane` / `done-in-pane`):
@@ -814,7 +816,7 @@ wrote. The files land in the run's own throwaway space and go with it.
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `write-many` puts `count` of
 them there at once, `copy-fixture` puts one
-there from `fixtures/`, `write-picture` draws one of a named size in `megabytes`, and `git-init`
+there from `fixtures/` (with `executable: true`, one a script step can start as its program), `write-picture` draws one of a named size in `megabytes`, and `git-init`
 makes the folder a git repository, which is the only way the
 hook slots are real enough to write into. That one takes the same `dir` the first two do, and a road
 reading what git says about a folder on screen needs it: the colours are drawn on the face of the

@@ -141,19 +141,33 @@ impl Driver<'_> {
                     req_str(with, "reach")?
                 )))
             }
-            // A step inside an action, carrying its own prompt — the one layer that is a terminal.
+            // A step inside an action, carrying its own prompt — the one layer that is a terminal — or,
+            // as a script step, the program it starts instead. The program is a file in the run's own
+            // folder, and the command takes it by its full path.
             "step-add" => {
                 let action = self.resolve(with)?;
                 let name = req_str(with, "name")?;
-                let mut args: Vec<String> = vec![
-                    "automation".into(),
-                    "step-add".into(),
-                    action.to_string(),
-                    "--name".into(),
-                    name.into(),
-                    "--prompt".into(),
-                    req_str(with, "prompt")?.into(),
-                ];
+                let mut args: Vec<String> =
+                    vec!["automation".into(), "step-add".into(), action.to_string(), "--name".into(), name.into()];
+                match with.get("program_at").and_then(|v| v.as_str()) {
+                    Some(program) => {
+                        args.push("--program".into());
+                        args.push(self.in_session(program)?.to_string_lossy().into_owned());
+                        for arg in with.get("args").and_then(|v| v.as_sequence()).into_iter().flatten() {
+                            let arg = arg.as_str().ok_or("`args` is a list of strings, one per argument")?;
+                            args.push("--arg".into());
+                            args.push(arg.into());
+                        }
+                        if with.contains_key("timeout_minutes") {
+                            args.push("--timeout-minutes".into());
+                            args.push(req_i64(with, "timeout_minutes")?.to_string());
+                        }
+                    }
+                    None => {
+                        args.push("--prompt".into());
+                        args.push(req_str(with, "prompt")?.into());
+                    }
+                }
                 if let Some(v) = with.get("work_dir_ref").and_then(|v| v.as_str()) {
                     args.push("--work-dir".into());
                     args.push(v.to_string());

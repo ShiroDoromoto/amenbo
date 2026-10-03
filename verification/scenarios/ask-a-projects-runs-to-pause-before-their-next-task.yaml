@@ -13,7 +13,7 @@ description: >
   request and is still running; the other carries none.
 given:
   # Two rather than one for `hold-a-run-and-let-it-go-again`'s reason: the premise cannot stand up a
-  # row shorter than two. The automation that takes no task runs a step, which needs an agent to start.
+  # row shorter than two.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
 
   # The automation that takes tasks. Nothing is handed to the AI, so its filter finds none, and the
@@ -25,19 +25,19 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
 
-  # The automation that takes none: one action of one step, and the end.
-  - { type: action, domain: automation, op: action-add, with: { name: tidy }, as: tidy }
-  - { type: action, domain: automation, op: step-add, with: { target: tidy, name: sweep, prompt: tidy the folder }, as: sweep }
-  - { type: action, domain: automation, op: action-entry, with: { target: tidy, step: sweep } }
-  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: sweep, exit_to: "" } }
+  # The automation that takes none: a fetch, and the end whatever it brings back. What it looks at is
+  # answered on the road: answering is a move a road makes.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that takes none" }, as: plain }
-  - { type: action, domain: automation, op: place-add, with: { target: plain, action: tidy }, as: at_tidy }
-  - { type: action, domain: automation, op: agent-set, with: { target: at_tidy, step: sweep, agent: claude-code } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_tidy } }
+  - { type: action, domain: automation, op: place-add, with: { target: plain, builtin: fetch }, as: at_fetch }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_fetch, exit: 取ってきた } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_fetch, exit: 見つからない } }
 
 steps_cli:
   # A run's steps are opened by the app, so a run is started with one up on the store.
   - { type: action, domain: store, op: app-up }
+
+  - { type: action, domain: automation, op: cfg-set, with: { target: at_fetch, name: 形式, choice: コマンド } }
+  - { type: action, domain: automation, op: cfg-set, with: { target: at_fetch, name: 見に行く先, text: "echo nothing to see" } }
 
   - type: action
     domain: automation

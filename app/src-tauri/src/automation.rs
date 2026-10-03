@@ -499,7 +499,6 @@ pub fn automation_step_edit(
             task_notes,
             task_decisions,
             task_comments,
-            None,
         )?;
         Ok(())
     })?;
@@ -540,7 +539,6 @@ pub fn automation_step_add(
         show_notes: true,
         show_decisions: true,
         show_comments: true,
-        script: None,
     };
     with_store_mut(|store| {
         let first = read::automation_action_step_ids(store.read_model().conn(), action_id)?.is_empty();
@@ -650,7 +648,6 @@ pub fn automation_action_step_insert(
         show_notes: true,
         show_decisions: true,
         show_comments: true,
-        script: None,
     };
     with_store_mut(|store| {
         store.automation_step_insert(edge_id, new, &exits, &ports)?;

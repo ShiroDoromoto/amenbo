@@ -1687,7 +1687,6 @@ fn snapshot(
         prompt: step.builtin.is_none().then(|| step.prompt.clone()),
         builtin: step.builtin.clone(),
         builtin_version,
-        script: step.script.clone(),
         agent: chosen.agent,
         model: chosen.model,
         interactive: step.interactive,
@@ -3042,7 +3041,7 @@ mod tests {
                 .expect("stop");
             automation::action_update(tx, action.id, Some("取り直す"), None)
                 .expect("edit the definition once the run is over");
-            automation::step_update(tx, step.id, None, Some("take another"), None, None, None, None, None, None, None, None)
+            automation::step_update(tx, step.id, None, Some("take another"), None, None, None, None, None, None, None)
             .expect("rewrite the prompt once the run is over");
             let copy = copy_of_it(tx);
             assert_eq!(copy.name, "直す", "the copy is what the run reads from here on");

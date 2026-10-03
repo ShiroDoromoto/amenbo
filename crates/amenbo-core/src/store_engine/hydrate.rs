@@ -24,7 +24,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use rusqlite::{Connection, Row};
 
 use super::schema::col;
-use super::sql::{Col, ColType, Int, NotNull, Nullability, Nullable, Read, Text};
+use super::sql::{Col, ColType, NotNull, Nullability, Nullable, Read, Text};
 use super::Result;
 use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Automation, AutomationAction,
@@ -40,7 +40,7 @@ use crate::model::{
     Dimension, DimensionAppliesTo, DimensionCardinality,
     DimensionRole, DimensionValue, NotifyKind, NotifyTarget, Priority,
     ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret, SecretArea,
-    Project, StepScript, Subtype, Task, TaskComment, TaskCommit, TaskDependency, TaskMadeIn,
+    Project, Subtype, Task, TaskComment, TaskCommit, TaskDependency, TaskMadeIn,
     TaskDimensionValue, TaskStatus, View,
 };
 use crate::time::Timestamp;
@@ -103,28 +103,6 @@ fn enum_opt<T>(
         Some(s) => f(&s).map(Some).ok_or_else(|| bad(format!("unknown {} value {s:?}", c.name()))),
         None => Ok(None),
     }
-}
-
-/// The script a step is, read off its three columns: `None` where no program is written. The arguments
-/// are a JSON array, and `''` — the column's default, on a row written before there were scripts — reads
-/// as none.
-fn script(
-    r: &Row,
-    program: Col<Text, Nullable>,
-    args: Col<Text, NotNull>,
-    timeout_minutes: Col<Int, Nullable>,
-) -> rusqlite::Result<Option<StepScript>> {
-    let Some(program) = get(r, program)? else {
-        return Ok(None);
-    };
-    let raw = get(r, args)?;
-    let args = match raw.as_str() {
-        "" => Vec::new(),
-        json => serde_json::from_str(json).map_err(|e| bad(format!("bad script_args {json:?}: {e}")))?,
-    };
-    let timeout_minutes = get(r, timeout_minutes)?
-        .ok_or_else(|| bad(format!("script {program:?} has no script_timeout_minutes")))?;
-    Ok(Some(StepScript { program, args, timeout_minutes }))
 }
 
 /// `(created_at, updated_at)` — the audit pair every record carries, named through its own table's
@@ -563,7 +541,6 @@ pub(super) fn automation_action_step_row(r: &Row) -> rusqlite::Result<Automation
         name: get(r, C.name)?,
         prompt: get(r, C.prompt)?,
         builtin: get(r, C.builtin)?,
-        script: script(r, C.script_program, C.script_args, C.script_timeout_minutes)?,
         interactive: get(r, C.interactive)?,
         work_dir_ref: get(r, C.work_dir_ref)?,
         report_to_task: get(r, C.report_to_task)?,
@@ -700,7 +677,6 @@ pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunD
         prompt: get(r, C.prompt)?,
         builtin: get(r, C.builtin)?,
         builtin_version: get(r, C.builtin_version)?,
-        script: script(r, C.script_program, C.script_args, C.script_timeout_minutes)?,
         agent: get(r, C.agent)?,
         model: get(r, C.model)?,
         interactive: get(r, C.interactive)?,

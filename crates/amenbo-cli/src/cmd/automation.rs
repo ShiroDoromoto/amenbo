@@ -482,7 +482,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 show_notes: !no_task_notes,
                 show_decisions: !no_task_decisions,
                 show_comments: !no_task_comments,
-                script: None,
             };
             let s = store.automation_step_add(action, new).map_err(CliError::from)?;
             write_envelope(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Added step: {} ({})", s.name, s.id));
@@ -494,7 +493,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 false => work_dir.as_deref().map(Some),
             };
             let s = store
-                .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history, task_notes, task_decisions, task_comments, None)
+                .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history, task_notes, task_decisions, task_comments)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.step-update", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Updated step: {} ({})", s.name, s.id));
         }

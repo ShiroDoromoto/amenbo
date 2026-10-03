@@ -1117,7 +1117,6 @@ mod tests {
                 None,
                 None,
                 None,
-                None,
             )
             .expect("point the step at it");
             let run = a_run(tx, &p.automation);
@@ -1525,7 +1524,7 @@ mod tests {
     fn a_step_told_to_go_without_the_story_is_not_given_it() {
         with_tx(|tx| {
             let p = picture(tx, true, true);
-            automation::step_update(tx, p.second.id, None, None, None, None, None, Some(false), None, None, None, None)
+            automation::step_update(tx, p.second.id, None, None, None, None, None, Some(false), None, None, None)
             .expect("history off");
             let run = a_run(tx, &p.automation);
             let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
@@ -1622,7 +1621,6 @@ mod tests {
                 Some(false),
                 Some(false),
                 Some(false),
-                None,
             )
             .expect("task off");
             let (task, _, _, _) = a_task_with_its_context(tx, &p);
@@ -1656,7 +1654,6 @@ mod tests {
                 None,
                 Some(false),
                 Some(false),
-                None,
             )
             .expect("decisions and comments off");
             let (task, _, _, _) = a_task_with_its_context(tx, &p);

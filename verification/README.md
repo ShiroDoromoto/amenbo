@@ -797,8 +797,9 @@ placed: a folder a road **moved** is named again afterwards — `folder rebind`'
 vanished`'s `gone:`, `folder repointed`'s `previously:` — to say which binding is meant, and placing
 it would put back the very path the move took away, which is the whole state those steps are about.
 Those names are answered from what the run moved instead. A folder name also travels outside the
-`folder` domain: `task update`'s `at:` and `task worked-in`'s `dir:` name which of a project's folders
-a task is worked in, and are placed and read the same way the `folder` steps' are.
+`folder` domain: `task create`'s and `task update`'s `at:` and `task worked-in`'s `dir:` name which
+of a project's folders a task is worked in, and are placed and read the same way the `folder` steps'
+are.
 
 A **`store` action that writes a file** binds it through the same `as:` an object is bound by, and
 what the name then holds is the file: `restore` names the archive it puts back the way any step names

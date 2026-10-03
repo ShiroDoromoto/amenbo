@@ -426,7 +426,9 @@ const REGISTRY: &[OpSpec] = &[
     // `dimension` / `value` classify it as it is created — the flag the create itself carries, which
     // is a different road from filing the record and classifying it afterwards: what the two name is
     // written in one transaction, so there is no moment where the record exists unclassified.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], refs: &["project"], strings: &["title", "dimension", "value"], binds: true },
+    // `at` names which of the project's folders the work is done in — a project on two or more
+    // folders refuses a create that leaves it out.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], refs: &["project"], strings: &["title", "dimension", "value", "at"], binds: true },
     // The other half of that creation. Between the two the task is on the board and in every listing,
     // out of the mailbox and refused a reservation, so a road that means to hand work over walks this
     // step — and one that reserves has to, or it meets the guard instead. It names the task and

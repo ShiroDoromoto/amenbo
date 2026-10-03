@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use amenbo_core::frames::{FrameName, FrameNames, NamedBy, SavedLayout, SavedPane};
 
@@ -91,12 +91,12 @@ impl TalkFace {
     /// uuid, and OpenCode handed that would refuse to start. Which provider the handle belongs to is
     /// the agent on the row it came back on — the row this frame was last written down as.
     pub fn comes_back_on(&self, frame: &str, agent: &str) -> Option<String> {
-        let kept = self.kept.lock().expect("kept layout lock");
+        let kept = self.kept.lock().unwrap_or_else(PoisonError::into_inner);
         let pane = kept.as_ref()?.panes.iter().find(|pane| pane.id == frame)?;
         if pane.agent.as_deref() != Some(agent) {
             return None;
         }
-        self.hints.lock().expect("resume hints lock").get(frame).cloned()
+        self.hints.lock().unwrap_or_else(PoisonError::into_inner).get(frame).cloned()
     }
 
     /// The model this frame is on, where one was written down **for this provider**.
@@ -109,12 +109,12 @@ impl TalkFace {
     /// ([`comes_back_on`](Self::comes_back_on)): a model name means nothing away from the agent it
     /// was chosen for, and one of the six answers with a spelling no other would take.
     pub fn model_on(&self, frame: &str, agent: &str) -> Option<String> {
-        let kept = self.kept.lock().expect("kept layout lock");
+        let kept = self.kept.lock().unwrap_or_else(PoisonError::into_inner);
         let pane = kept.as_ref()?.panes.iter().find(|pane| pane.id == frame)?;
         if pane.agent.as_deref() != Some(agent) {
             return None;
         }
-        self.models.lock().expect("pane models lock").get(frame).cloned()
+        self.models.lock().unwrap_or_else(PoisonError::into_inner).get(frame).cloned()
     }
 
     /// Write down the model a pane is answering on — the name that went on its launch line as it was
@@ -125,13 +125,13 @@ impl TalkFace {
     /// the row is cleared rather than left naming a model the pane is no longer on.
     pub fn opened_on(&self, frame: &str, model: Option<String>) {
         {
-            let mut models = self.models.lock().expect("pane models lock");
+            let mut models = self.models.lock().unwrap_or_else(PoisonError::into_inner);
             match model {
                 Some(model) => models.insert(frame.to_string(), model),
                 None => models.remove(frame),
             };
         }
-        let Some(layout) = self.layout.lock().expect("talk layout lock").clone() else {
+        let Some(layout) = self.layout.lock().unwrap_or_else(PoisonError::into_inner).clone() else {
             return;
         };
         if let Err(e) = keep(self, &layout) {
@@ -142,7 +142,7 @@ impl TalkFace {
     /// Every handle written down in this run — what a pane reading one back out of a provider's own
     /// list has to pick around ([`amenbo_core::agent_sessions::newest_in`]).
     pub fn resume_hints(&self) -> Vec<String> {
-        self.hints.lock().expect("resume hints lock").values().cloned().collect()
+        self.hints.lock().unwrap_or_else(PoisonError::into_inner).values().cloned().collect()
     }
 
     /// The providers whose panes will **not** be in their conversation on the next run, in the order
@@ -167,11 +167,11 @@ impl TalkFace {
     /// holds no handle and is counted, which is what it is: asked in that moment, the pane has no
     /// way in, and the reading failing outright is the same state that never resolves.
     pub fn without_a_way_back(&self) -> Vec<&'static str> {
-        let layout = self.layout.lock().expect("talk layout lock");
+        let layout = self.layout.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(layout) = layout.as_ref() else {
             return Vec::new();
         };
-        let hints = self.hints.lock().expect("resume hints lock");
+        let hints = self.hints.lock().unwrap_or_else(PoisonError::into_inner);
         let mut named: Vec<&'static str> = Vec::new();
         for frame in &layout.frames {
             let Some(launch) = frame.agent.as_deref().and_then(amenbo_core::harness::find_launch)
@@ -201,8 +201,8 @@ impl TalkFace {
     /// window has sent its arrangement and has no reason to send another. Where no arrangement has
     /// been sent yet there is no row to write onto, and the window's first one carries it.
     pub fn resumed_from(&self, frame: &str, handle: String) {
-        self.hints.lock().expect("resume hints lock").insert(frame.to_string(), handle);
-        let Some(layout) = self.layout.lock().expect("talk layout lock").clone() else {
+        self.hints.lock().unwrap_or_else(PoisonError::into_inner).insert(frame.to_string(), handle);
+        let Some(layout) = self.layout.lock().unwrap_or_else(PoisonError::into_inner).clone() else {
             return;
         };
         if let Err(e) = keep(self, &layout) {
@@ -220,7 +220,7 @@ impl TalkFace {
     /// belong to refuses it in the same breath — which is the one way a reader can tell a
     /// conversation that is gone from one that is still there ([`gave_up`](Self::gave_up)).
     pub fn opens_again(&self, pane: &str, handle: String) {
-        self.reopening.lock().expect("reopening lock").insert(pane.to_string(), handle);
+        self.reopening.lock().unwrap_or_else(PoisonError::into_inner).insert(pane.to_string(), handle);
     }
 
     /// The way back a record put on this frame, taken off as the pane opens (`AMB-D-897`).
@@ -231,7 +231,7 @@ impl TalkFace {
     /// ([`gave_up`](Self::gave_up)); what asking would cost is every reopen refusing itself, since
     /// there is no answer to ask for.
     pub fn taken_from_a_record(&self, frame: &str) -> Option<String> {
-        self.reopening.lock().expect("reopening lock").remove(frame)
+        self.reopening.lock().unwrap_or_else(PoisonError::into_inner).remove(frame)
     }
 
     /// Take back the way into a frame, where what was written down leads nowhere
@@ -244,10 +244,10 @@ impl TalkFace {
     /// pane on it and is refused in the same breath. Nothing gets better on the run after that, so
     /// the row is cleared and the pane comes up on a session of its own instead.
     pub fn gave_up(&self, frame: &str) {
-        if self.hints.lock().expect("resume hints lock").remove(frame).is_none() {
+        if self.hints.lock().unwrap_or_else(PoisonError::into_inner).remove(frame).is_none() {
             return;
         }
-        let Some(layout) = self.layout.lock().expect("talk layout lock").clone() else {
+        let Some(layout) = self.layout.lock().unwrap_or_else(PoisonError::into_inner).clone() else {
             return;
         };
         if let Err(e) = keep(self, &layout) {
@@ -260,7 +260,7 @@ impl TalkFace {
 /// it has at once.
 #[tauri::command]
 pub fn frame_names(face: tauri::State<'_, TalkFace>) -> Vec<FrameNameDto> {
-    named(face.names.lock().expect("frame names lock").all())
+    named(face.names.lock().unwrap_or_else(PoisonError::into_inner).all())
 }
 
 /// The providers of the panes that will not come back into their conversation
@@ -289,11 +289,11 @@ pub fn name_frame(
     name: String,
     by: NamedBy,
 ) -> Vec<FrameNameDto> {
-    let now = named(face.names.lock().expect("frame names lock").name(&frame, &name, by));
+    let now = named(face.names.lock().unwrap_or_else(PoisonError::into_inner).name(&frame, &name, by));
     // And the name goes down on that pane's row, where it is read back from on the next run. The
     // write is made from here because a naming moves nothing else: the window sends the arrangement
     // as the *shape* of the face changes, and what a pane is called is not part of that shape.
-    if let Some(layout) = face.layout.lock().expect("talk layout lock").clone() {
+    if let Some(layout) = face.layout.lock().unwrap_or_else(PoisonError::into_inner).clone() {
         let _ = keep(&face, &layout);
     }
     now
@@ -331,7 +331,7 @@ pub fn frame_on_model(face: tauri::State<'_, TalkFace>, frame: String, model: Op
 /// model, a place nothing has been opened in, and a frame nobody has ever written one for.
 #[tauri::command]
 pub fn frame_model(face: tauri::State<'_, TalkFace>, frame: String) -> Option<String> {
-    face.models.lock().expect("pane models lock").get(&frame).cloned()
+    face.models.lock().unwrap_or_else(PoisonError::into_inner).get(&frame).cloned()
 }
 
 /// The arrangement of the talk window, as this run has it — and where it has none yet, the panes and
@@ -347,7 +347,7 @@ pub fn frame_model(face: tauri::State<'_, TalkFace>, frame: String) -> Option<St
 /// (`app/src/talk/layout.ts`).
 #[tauri::command]
 pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayoutDto>, CmdError> {
-    if let Some(live) = face.layout.lock().expect("talk layout lock").clone() {
+    if let Some(live) = face.layout.lock().unwrap_or_else(PoisonError::into_inner).clone() {
         return Ok(Some(live));
     }
     Ok(open_store_read()?.saved_layout()?.map(|kept| {
@@ -398,7 +398,7 @@ pub fn save_talk_layout(
     face: tauri::State<'_, TalkFace>,
     layout: TalkLayoutDto,
 ) -> Result<(), CmdError> {
-    *face.layout.lock().expect("talk layout lock") = Some(layout.clone());
+    *face.layout.lock().unwrap_or_else(PoisonError::into_inner) = Some(layout.clone());
     keep(&face, &layout)
 }
 
@@ -413,9 +413,9 @@ fn seed(face: &TalkFace, kept: &SavedLayout) {
     if face.seeded.swap(true, Ordering::SeqCst) {
         return;
     }
-    let mut names = face.names.lock().expect("frame names lock");
-    let mut hints = face.hints.lock().expect("resume hints lock");
-    let mut models = face.models.lock().expect("pane models lock");
+    let mut names = face.names.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut hints = face.hints.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut models = face.models.lock().unwrap_or_else(PoisonError::into_inner);
     for pane in &kept.panes {
         if let Some(name) = &pane.name {
             names.name(&pane.id, &name.name, name.by);
@@ -427,7 +427,7 @@ fn seed(face: &TalkFace, kept: &SavedLayout) {
             models.insert(pane.id.clone(), model.clone());
         }
     }
-    *face.kept.lock().expect("kept layout lock") = Some(kept.clone());
+    *face.kept.lock().unwrap_or_else(PoisonError::into_inner) = Some(kept.clone());
 }
 
 /// Write down what outlives the run, where anything in it has moved.
@@ -448,11 +448,11 @@ fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
         std::thread::spawn(crate::pane_home::rotate);
     }
     let keeping = SavedLayout { project: layout.project, panes: panes_of(face, layout) };
-    if face.kept.lock().expect("kept layout lock").as_ref() == Some(&keeping) {
+    if face.kept.lock().unwrap_or_else(PoisonError::into_inner).as_ref() == Some(&keeping) {
         return Ok(());
     }
     open_store()?.save_layout(&keeping)?;
-    *face.kept.lock().expect("kept layout lock") = Some(keeping);
+    *face.kept.lock().unwrap_or_else(PoisonError::into_inner) = Some(keeping);
     Ok(())
 }
 
@@ -473,15 +473,15 @@ fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) -> bool {
     let here: std::collections::BTreeSet<&str> =
         layout.frames.iter().map(|frame| frame.id.as_str()).collect();
     let mut a_home_went = false;
-    face.hints.lock().expect("resume hints lock").retain(|frame, handle| {
+    face.hints.lock().unwrap_or_else(PoisonError::into_inner).retain(|frame, handle| {
         if here.contains(frame.as_str()) {
             return true;
         }
         a_home_went |= crate::pane_home::forget(std::path::Path::new(handle));
         false
     });
-    face.models.lock().expect("pane models lock").retain(|frame, _| here.contains(frame.as_str()));
-    face.names.lock().expect("frame names lock").retain(|frame| here.contains(frame));
+    face.models.lock().unwrap_or_else(PoisonError::into_inner).retain(|frame, _| here.contains(frame.as_str()));
+    face.names.lock().unwrap_or_else(PoisonError::into_inner).retain(|frame| here.contains(frame));
     a_home_went
 }
 
@@ -492,9 +492,9 @@ fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) -> bool {
 /// to a project and is drawn on that project's page, so one with nowhere to be put back is one no
 /// window could draw again.
 fn panes_of(face: &TalkFace, layout: &TalkLayoutDto) -> Vec<SavedPane> {
-    let names = face.names.lock().expect("frame names lock");
-    let hints = face.hints.lock().expect("resume hints lock");
-    let models = face.models.lock().expect("pane models lock");
+    let names = face.names.lock().unwrap_or_else(PoisonError::into_inner);
+    let hints = face.hints.lock().unwrap_or_else(PoisonError::into_inner);
+    let models = face.models.lock().unwrap_or_else(PoisonError::into_inner);
     layout
         .frames
         .iter()

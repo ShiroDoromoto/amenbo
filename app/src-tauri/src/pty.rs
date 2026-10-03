@@ -39,7 +39,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::Engine as _;
 use portable_pty::{native_pty_system, ChildKiller, MasterPty, PtySize};
@@ -346,7 +346,7 @@ impl Terminals {
     /// whether there is anything to lose — a count is that, and it can be had without copying the
     /// registry the way [`pty_sessions`] does.
     pub fn open(&self) -> usize {
-        self.0.lock().expect("terminals lock").len()
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).len()
     }
 }
 
@@ -513,11 +513,11 @@ impl Pane {
         match &said.statement {
             Statement::Briefed => self.briefed.store(true, Ordering::Relaxed),
             Statement::Name(name) => {
-                *self.named.lock().expect("pane named lock") = Some(name.clone());
+                *self.named.lock().unwrap_or_else(PoisonError::into_inner) = Some(name.clone());
             }
             Statement::Made { side, id } => {
                 let one = SessionMadeDto { kind: side.word(), id: *id };
-                let mut made = self.made.lock().expect("pane made lock");
+                let mut made = self.made.lock().unwrap_or_else(PoisonError::into_inner);
                 if !made.iter().any(|held| held.kind == one.kind && held.id == one.id) {
                     made.push(one);
                 }
@@ -536,20 +536,20 @@ impl Pane {
 
     /// The sentence has been left in this pane's input box for a person to send.
     fn leave(&self, instruction: String) {
-        *self.unsent.lock().expect("pane unsent lock") = Some(instruction);
+        *self.unsent.lock().unwrap_or_else(PoisonError::into_inner) = Some(instruction);
     }
 
     /// Take the sentence that was left, if one still is. **Taken rather than read**, so the pane has
     /// nothing owed the moment it goes out and a second press finds nothing to send.
     fn take_unsent(&self) -> Option<String> {
-        self.unsent.lock().expect("pane unsent lock").take()
+        self.unsent.lock().unwrap_or_else(PoisonError::into_inner).take()
     }
 
     /// Whether the opening sentence is still on its way into this pane — either a thread is handing
     /// it over, or it is sitting in the input box waiting for a person's Enter.
     fn opening(&self) -> bool {
         self.opening.load(Ordering::Relaxed)
-            || self.unsent.lock().expect("pane unsent lock").is_some()
+            || self.unsent.lock().unwrap_or_else(PoisonError::into_inner).is_some()
     }
 
     /// Say whether the opening sentence is in flight. Set before the thread starts and cleared when
@@ -561,7 +561,7 @@ impl Pane {
     /// This pane's provider is to be told it is called `line`. Answers whether a thread has to be
     /// started — false where one is already carrying names into this pane and will pick this up.
     fn rename_to(&self, line: String) -> bool {
-        let mut renaming = self.renaming.lock().expect("pane renaming lock");
+        let mut renaming = self.renaming.lock().unwrap_or_else(PoisonError::into_inner);
         renaming.owed = Some(line);
         if renaming.running {
             return false;
@@ -573,7 +573,7 @@ impl Pane {
     /// The next name to carry, or `None` — which also puts the thread down, under the one lock, so a
     /// naming arriving in that moment either replaces the name or starts a thread and never neither.
     fn next_rename(&self) -> Option<String> {
-        let mut renaming = self.renaming.lock().expect("pane renaming lock");
+        let mut renaming = self.renaming.lock().unwrap_or_else(PoisonError::into_inner);
         let next = renaming.owed.take();
         if next.is_none() {
             renaming.running = false;
@@ -589,25 +589,25 @@ impl Pane {
     /// been superseded and then type it in. [`next_rename`](Pane::next_rename) is what picks the
     /// newer one up.
     fn rename_owed(&self) -> bool {
-        self.renaming.lock().expect("pane renaming lock").owed.is_some()
+        self.renaming.lock().unwrap_or_else(PoisonError::into_inner).owed.is_some()
     }
 
     /// No more names will be carried into this pane — the terminal went, or the pane never came free
     /// of its opening sentence.
     fn rename_over(&self) {
-        let mut renaming = self.renaming.lock().expect("pane renaming lock");
+        let mut renaming = self.renaming.lock().unwrap_or_else(PoisonError::into_inner);
         renaming.owed = None;
         renaming.running = false;
     }
 
     /// The window the chunks are going to right now.
     fn target(&self) -> String {
-        self.target.lock().expect("pane target lock").clone()
+        self.target.lock().unwrap_or_else(PoisonError::into_inner).clone()
     }
 
     /// Send what follows to this window instead.
     fn point_at(&self, label: &str) {
-        *self.target.lock().expect("pane target lock") = label.to_owned();
+        *self.target.lock().unwrap_or_else(PoisonError::into_inner) = label.to_owned();
     }
 
     /// Add a chunk to the tail, dropping the oldest bytes once it is over the cap, and answer where
@@ -618,8 +618,8 @@ impl Pane {
     /// as an event, and would draw it twice; taking the same two locks in the same order in both
     /// places is what leaves the chunk on exactly one side of the handover.
     fn keep(&self, bytes: &[u8]) -> String {
-        self.drawn.lock().expect("pane drawn lock").push(bytes);
-        self.recent.lock().expect("pane recent lock").push(bytes);
+        self.drawn.lock().unwrap_or_else(PoisonError::into_inner).push(bytes);
+        self.recent.lock().unwrap_or_else(PoisonError::into_inner).push(bytes);
         self.target()
     }
 
@@ -630,8 +630,8 @@ impl Pane {
     /// program writing to the width it already had, and a run opened for a size nothing is being
     /// written at would hand the next pane a fold that never happened.
     fn resized(&self, at: Size) {
-        self.drawn.lock().expect("pane drawn lock").resized(at);
-        self.recent.lock().expect("pane recent lock").at = at;
+        self.drawn.lock().unwrap_or_else(PoisonError::into_inner).resized(at);
+        self.recent.lock().unwrap_or_else(PoisonError::into_inner).at = at;
     }
 
     /// The pane as it stands, for a reader that is not a pane ([`crate::handover::Look`]).
@@ -647,13 +647,13 @@ impl Pane {
     /// there would find nothing and read a program that has been taking pastes for an hour as one
     /// that takes none ([`Modes`]).
     fn look(&self) -> crate::handover::Look {
-        let recent = self.recent.lock().expect("pane recent lock");
+        let recent = self.recent.lock().unwrap_or_else(PoisonError::into_inner);
         let (tail, takes_paste) = (recent.bytes(), recent.modes.takes_paste());
         drop(recent);
         crate::handover::Look {
             tail,
             takes_paste,
-            drawn: self.drawn.lock().expect("pane drawn lock").contents(),
+            drawn: self.drawn.lock().unwrap_or_else(PoisonError::into_inner).contents(),
         }
     }
 
@@ -676,7 +676,7 @@ impl Pane {
     /// box they came in is read forwards only — so they ride out here beside the bytes, which is the
     /// one moment a pane asks the session what it missed (`AMB-T-5196`).
     fn adopt(&self, label: &str) -> PtyAdoptDto {
-        let recent = self.recent.lock().expect("pane recent lock");
+        let recent = self.recent.lock().unwrap_or_else(PoisonError::into_inner);
         self.point_at(label);
         let encode = |bytes: Vec<u8>| base64::engine::general_purpose::STANDARD.encode(bytes);
         let modes = recent.modes.bytes();
@@ -698,8 +698,8 @@ impl Pane {
         drop(recent);
         PtyAdoptDto {
             replay,
-            name: self.named.lock().expect("pane named lock").clone(),
-            made: self.made.lock().expect("pane made lock").clone(),
+            name: self.named.lock().unwrap_or_else(PoisonError::into_inner).clone(),
+            made: self.made.lock().unwrap_or_else(PoisonError::into_inner).clone(),
         }
     }
 }
@@ -994,7 +994,7 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
     pane.handing_over(true);
     std::thread::spawn(move || {
         let open = |app: &tauri::AppHandle| {
-            app.state::<Terminals>().0.lock().expect("terminals lock").contains_key(&session)
+            app.state::<Terminals>().0.lock().unwrap_or_else(PoisonError::into_inner).contains_key(&session)
         };
         let ended = crate::handover::hand_over(
             &instruction,
@@ -1006,7 +1006,7 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
             || open(&app).then(|| pane.look()),
             |bytes| {
                 let terminals = app.state::<Terminals>();
-                let mut open = terminals.0.lock().expect("terminals lock");
+                let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
                 let Some(terminal) = open.get_mut(&session) else { return false };
                 terminal.writer.write_all(bytes).and_then(|()| terminal.writer.flush()).is_ok()
             },
@@ -1054,7 +1054,7 @@ const RENAME_TRIES: usize = 1200;
 fn rename_pane(app: tauri::AppHandle, session: String, pane: Arc<Pane>) {
     std::thread::spawn(move || {
         let open = |app: &tauri::AppHandle| {
-            app.state::<Terminals>().0.lock().expect("terminals lock").contains_key(&session)
+            app.state::<Terminals>().0.lock().unwrap_or_else(PoisonError::into_inner).contains_key(&session)
         };
         while let Some(line) = pane.next_rename() {
             // The opening sentence first. A pane that never comes free of it is one this has nothing
@@ -1083,7 +1083,7 @@ fn rename_pane(app: tauri::AppHandle, session: String, pane: Arc<Pane>) {
                 || open(&app).then(|| pane.look()),
                 |bytes| {
                     let terminals = app.state::<Terminals>();
-                    let mut open = terminals.0.lock().expect("terminals lock");
+                    let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
                     let Some(terminal) = open.get_mut(&session) else { return false };
                     terminal.writer.write_all(bytes).and_then(|()| terminal.writer.flush()).is_ok()
                 },
@@ -1388,7 +1388,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
 
     let opened_in = folder.as_ref().map(|f| f.to_string_lossy().into_owned());
 
-    terminals.0.lock().expect("terminals lock").insert(
+    terminals.0.lock().unwrap_or_else(PoisonError::into_inner).insert(
         session.clone(),
         Terminal {
             folder,
@@ -1439,7 +1439,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
             .state::<Terminals>()
             .0
             .lock()
-            .expect("terminals lock")
+            .unwrap_or_else(PoisonError::into_inner)
             .remove(&id)
             .is_some();
         // A program that ended by itself within moments of starting never got as far as a session,
@@ -1510,7 +1510,7 @@ fn answer_cursor(app: &tauri::AppHandle, session: &str, times: usize) {
         return;
     }
     let terminals = app.state::<Terminals>();
-    let mut open = terminals.0.lock().expect("terminals lock");
+    let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
     let Some(terminal) = open.get_mut(session) else {
         return;
     };
@@ -1601,7 +1601,7 @@ pub fn pty_paste_image(
 ) -> Result<String, CmdError> {
     let dir = match &session {
         Some(session) => {
-            if !terminals.0.lock().expect("terminals lock").contains_key(session) {
+            if !terminals.0.lock().unwrap_or_else(PoisonError::into_inner).contains_key(session) {
                 return Err(gone(session));
             }
             paste_box(session)
@@ -1707,7 +1707,7 @@ fn listen(app: tauri::AppHandle, session: String, pane: Arc<Pane>, dir: std::pat
                 .state::<Terminals>()
                 .0
                 .lock()
-                .expect("terminals lock")
+                .unwrap_or_else(PoisonError::into_inner)
                 .contains_key(&session);
             // A drop box that cannot be read is silence, not an error: it is watched while it is being
             // written to, and the next look is 200ms away.
@@ -1839,7 +1839,7 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
         terminals
             .0
             .lock()
-            .expect("terminals lock")
+            .unwrap_or_else(PoisonError::into_inner)
             .iter()
             .map(|(session, terminal)| {
                 (
@@ -1889,14 +1889,14 @@ pub fn pty_attach(
     terminals: tauri::State<'_, Terminals>,
     session: String,
 ) -> Result<PtyAdoptDto, CmdError> {
-    let open = terminals.0.lock().expect("terminals lock");
+    let open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
     let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
     Ok(terminal.pane.adopt(window.label()))
 }
 
 /// Whether the terminal of this session is still running.
 pub fn is_open(app: &tauri::AppHandle, session: &str) -> bool {
-    app.state::<Terminals>().0.lock().expect("terminals lock").contains_key(session)
+    app.state::<Terminals>().0.lock().unwrap_or_else(PoisonError::into_inner).contains_key(session)
 }
 
 /// How large a step's terminal is started, before any pane has measured it. The pane that takes it up
@@ -1914,7 +1914,7 @@ const STEP_SIZE: Size = (120, 32);
 pub fn end_steps_of(app: &tauri::AppHandle, run: i64) {
     let terminals = app.state::<Terminals>();
     let before: Vec<Terminal> = {
-        let mut open = terminals.0.lock().expect("terminals lock");
+        let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
         let of_run: Vec<String> =
             open.iter().filter(|(_, one)| one.run == Some(run)).map(|(id, _)| id.clone()).collect();
         of_run.iter().filter_map(|id| open.remove(id)).collect()
@@ -1931,7 +1931,7 @@ pub fn end_steps_of(app: &tauri::AppHandle, run: i64) {
 /// (`crate::automation_watch`).
 pub fn runs_with_steps(app: &tauri::AppHandle) -> Vec<i64> {
     let open = app.state::<Terminals>();
-    let open = open.0.lock().expect("terminals lock");
+    let open = open.0.lock().unwrap_or_else(PoisonError::into_inner);
     let mut runs: Vec<i64> = open.values().filter_map(|one| one.run).collect();
     runs.sort_unstable();
     runs.dedup();
@@ -2001,7 +2001,7 @@ pub fn pty_close(terminals: tauri::State<'_, Terminals>, session: String) -> Res
     let mut terminal = terminals
         .0
         .lock()
-        .expect("terminals lock")
+        .unwrap_or_else(PoisonError::into_inner)
         .remove(&session)
         .ok_or_else(|| gone(&session))?;
     terminal.killer.kill().map_err(failed)
@@ -2015,7 +2015,7 @@ pub fn pty_write(
     session: String,
     data: String,
 ) -> Result<(), CmdError> {
-    let mut open = terminals.0.lock().expect("terminals lock");
+    let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
     let terminal = open.get_mut(&session).ok_or_else(|| gone(&session))?;
     terminal
         .writer
@@ -2061,7 +2061,7 @@ pub fn pty_brief(
     terminals: tauri::State<'_, Terminals>,
     session: String,
 ) -> Result<(), CmdError> {
-    let mut open = terminals.0.lock().expect("terminals lock");
+    let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
     let terminal = open.get_mut(&session).ok_or_else(|| gone(&session))?;
     if terminal.pane.briefed() {
         return Ok(());
@@ -2078,7 +2078,7 @@ pub fn pty_brief(
         std::thread::sleep(crate::handover::SUBMIT_AFTER);
         // A terminal that ended in the meantime has nothing left to send into.
         let terminals = app.state::<Terminals>();
-        let mut open = terminals.0.lock().expect("terminals lock");
+        let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(terminal) = open.get_mut(&session) {
             let _ = terminal
                 .writer
@@ -2129,7 +2129,7 @@ pub fn pty_rename(
     name: String,
 ) -> Result<(), CmdError> {
     let (line, pane) = {
-        let open = terminals.0.lock().expect("terminals lock");
+        let open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
         let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
         let Some(line) = rename_line(terminal.agent.as_deref(), &name) else { return Ok(()) };
         (line, Arc::clone(&terminal.pane))
@@ -2152,7 +2152,7 @@ pub fn pty_resize(
     cols: u16,
     rows: u16,
 ) -> Result<(), CmdError> {
-    let open = terminals.0.lock().expect("terminals lock");
+    let open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
     let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
     terminal
         .master

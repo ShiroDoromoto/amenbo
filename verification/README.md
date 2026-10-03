@@ -753,9 +753,13 @@ with, a screen the sentence left under the row. The list the sidebar opens is a 
 no terminal lists every project's automations: a row naming its project (`every-listed`), the start
 beside it (`start-from-list`), the row opening its build screen on that same screen (`every-open`), and the
 pulldown over the tabs narrowing it to one project or every one (`narrow`). So is a definition
-held by a run: on either build screen a band per run holding it is drawn over a picture that takes no
-write (`held-by`, `present: false` once the run is over), and the band's press goes to the run's pane
-(`held-go`) — the terminal's half is the refusal itself, `refused: conflict` on the write.
+a run is going on: on either build screen a band per run is drawn over a picture that still takes
+writes (`held-by`, `present: false` once the run is over), and the band's press goes to the run's pane
+(`held-go`) — the terminal's half is the write going through. What is written reaches a run paused
+before its next task when it is picked up again (`pause-before-next-task`, the ‖ on the workspace's
+header, then `press-run` with `press: resume`), and a definition the launch check would turn away
+leaves the press refused and the run paused, with the note over the running tab's rows saying why
+(`not-ready-note`).
 **The verbs that build a definition stand a world up** rather than being walked: every screen road
 about an automation but the one that makes one from the list opens on a definition that is already
 there, so a premise builds all three layers — the action, the steps inside it, and the placement on

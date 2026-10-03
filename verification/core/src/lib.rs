@@ -4214,11 +4214,16 @@ const REGISTRY: &[OpSpec] = &[
     // of which only the name crosses. Handed nothing, the run starts as it always has.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &["file", "title", "notes", "dim"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
+    // A run paused at the end of an action goes on from the copy it has. One paused before its next
+    // task is copied down afresh from the automation as it now stands and starts at that copy's
+    // entry — checked first as a launch is, and refused (`not_ready_automation`) with the run left
+    // paused when the check finds anything unmet.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "resume", required: &[], refs: &["target"], strings: &[], binds: false },
     // The other pause, asked of a whole project rather than one run: every run of it that takes
     // tasks, is running and is not yet asked to pause stops before it takes its next task, not at the
     // end of the action under way. `project` left out is the project the store is bound to — the one
-    // an automation built without naming one belongs to. A run that takes no task is not asked.
+    // an automation built without naming one belongs to. A run that takes no task is not asked. On a
+    // screen it is the ‖ on the workspace's header, and asks the project the workspace shows.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause-before-next-task", required: &[], refs: &["project"], strings: &[], binds: false },
     // `stop` is the force-cancel: the run ends `canceled` where it stands, whatever it is in the middle
     // of. `cancel` ends a paused run only — nothing is under way in one — and a run still going is
@@ -4700,16 +4705,21 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "narrow", required: &[], refs: &["project"], strings: &[], binds: false },
     //
     // **A definition a run is going on, on its build screen** — an automation's or a library
-    // action's, whichever is open. While a run of it is running or paused, core refuses every rewrite,
-    // and the screen holds itself shut: the runs holding it are listed over the picture, nothing on
-    // the picture adds a box, and the panel's fields are shut. A screen road alone: the terminal's is
-    // the refusal itself (`update` / `action-update` with `refused: conflict`).
+    // action's, whichever is open. A run of it that is running or paused is named in a band over the
+    // picture, and the definition under it still takes writes: the run goes on from the copy it took,
+    // and what is written reaches it at the next start or at a resume from the pause before its next
+    // task. A screen road alone: the terminal's half is the write going through.
     //
-    // `target` is the run the list names. `present: false` is the release — nothing listed, and the
-    // writes offered again — and names no run.
+    // `target` is the run the band names. `present: false` is the band gone once the run is over, and
+    // names no run.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "held-by", required: &[], refs: &["target"], strings: &[], binds: false },
-    // Pressing a run's row in that list, which goes to the pane it is drawn in — where it is stopped.
+    // Pressing the band's press that opens the run's pane, where it is drawn.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "held-go", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // The note a press on the running tab leaves over its rows when the automation (`target`) is not
+    // ready to start — what a resume from the pause before the next task is refused with, since it
+    // checks the definition as it now stands the way a launch does. `reason` is one of the launch
+    // check's codes, as `launch` names them. A screen road alone: the terminal's is the refusal itself.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "not-ready-note", required: &["target"], refs: &["target"], strings: &["reason"], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

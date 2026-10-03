@@ -4718,8 +4718,17 @@ impl Instructor {
                 false => "On the automations screen, in the pulldown over its tabs, choose its first line — the one that takes in every project. The list under the tabs is every project's again."
                     .to_string(),
             },
-            // A row of the runs holding the open build screen's definition. The row is the running
-            // tab's own line, so it goes where that line goes: the pane the run is drawn in.
+            // The project's own pause, the ‖ on the workspace's header. It carries no label: what it
+            // does is said on hover, which is how the operator knows it from the pane's pause.
+            (Domain::Automation, "pause-before-next-task") => match with.contains_key("project") {
+                true => format!(
+                    "In the workspace, with the project \"{}\" shown, press the ‖ on the header whose hover says it pauses after the current task.",
+                    self.key_label(with, "project")
+                ),
+                false => "In the workspace, press the ‖ on the header whose hover says it pauses after the current task.".to_string(),
+            },
+            // A band of the runs going on the open build screen's definition. Its press is the running
+            // tab's row's own, so it goes where that row goes: the pane the run is drawn in.
             (Domain::Automation, "held-go") => {
                 "On the build screen, in the band over the picture that says this run is using it, press the button that opens its pane. Confirm the workspace comes forward on the pane the run is drawn in.".to_string()
             }
@@ -6542,15 +6551,25 @@ impl Instructor {
                 self.key_label(with, "project")
             ),
             // The build screen of a definition a run is going on — an automation's or an action's,
-            // whichever the road has open. Held, it names the run and offers no write; released, the
-            // list is gone and the writes are back.
+            // whichever the road has open. The band names the run, and the definition under it still
+            // takes writes; once the run is over the band is gone.
             (Domain::Automation, "held-by") => match present(with) {
                 true => match with.contains_key("target") {
-                    true => "On the build screen, confirm a band marked with a lock is drawn over the picture, saying this run is using it, with a press that opens its pane and the two its state has — pause and force-cancel for a run going, resume and cancel for a paused one. Confirm the definition is only read: no line on the picture offers a box to put in, nothing adds one above it, and every field in the panel a box opens is shut.".to_string(),
-                    false => return Err("`held-by` names the run it lists — give it `target`, or say `present: false`".to_string()),
+                    true => "On the build screen, confirm a band is drawn over the picture, saying this run is using it, with a press that opens its pane and the two its state has — pause and force-cancel for a run going, resume and cancel for a paused one. Confirm the definition still takes writes under it: the lines on the picture offer a box to put in, and the fields in the panel a box opens can be changed.".to_string(),
+                    false => return Err("`held-by` names the run its band says — give it `target`, or say `present: false`".to_string()),
                 },
-                false => "On the build screen, confirm no band over the picture says a run is using it, and the definition takes writes again: the lines on the picture offer a box to put in, and the fields in the panel a box opens can be changed.".to_string(),
+                false => "On the build screen, confirm no band over the picture says a run is using it.".to_string(),
             },
+            // The note a refused press leaves over the running tab's rows. Which automation it names is
+            // the road's, and why is said as the launch check's reason, which the note lists.
+            (Domain::Automation, "not-ready-note") => format!(
+                "On the running tab, confirm a note over the rows says \"{}\" is not ready to start{}.",
+                self.target_label(with),
+                match arg_str(with, "reason") {
+                    Some(reason) => format!(", and that one of the reasons it gives is {}", launch_reason(reason)?),
+                    None => String::new(),
+                }
+            ),
             // A built-in opened to be read. What it declares is listed as names on its rows, and the
             // rows are the whole of it: nothing on the screen writes, so the way back is the one press.
             (Domain::Automation, "builtin-read") => {
@@ -9233,6 +9252,13 @@ steps_gui:
     domain: automation
     op: scope-refusal-names
     with: { target: act, reach: project, names: auto }
+  - type: action
+    domain: automation
+    op: pause-before-next-task
+  - type: assert
+    domain: automation
+    op: not-ready-note
+    with: { target: auto, reason: open_exit }
   - type: assert
     domain: automation
     op: held-by
@@ -9266,9 +9292,16 @@ steps_gui:
             "the action made from the list is said with its reach",
         );
         let n = lines.len();
-        assert!(lines[n - 3].contains("using it") && lines[n - 3].contains("only read"), "{}", lines[n - 3]);
+        assert!(lines[n - 5].contains("‖") && lines[n - 5].contains("after the current task"), "{}", lines[n - 5]);
+        assert!(
+            lines[n - 4].contains("\"Morning round\" is not ready to start")
+                && lines[n - 4].contains("nothing is set to happen after one of a box's ways out"),
+            "{}",
+            lines[n - 4]
+        );
+        assert!(lines[n - 3].contains("using it") && lines[n - 3].contains("still takes writes"), "{}", lines[n - 3]);
         assert!(lines[n - 2].contains("opens its pane") && lines[n - 2].contains("pane the run is drawn in"), "{}", lines[n - 2]);
-        assert!(lines[n - 1].contains("no band") && lines[n - 1].contains("takes writes again"), "{}", lines[n - 1]);
+        assert!(lines[n - 1].contains("no band"), "{}", lines[n - 1]);
     }
 
     /// A reason under the build screen's head is pressed by its code and the box it names, and a
@@ -9514,10 +9547,10 @@ steps_gui:
         assert!(line.contains("going to hold at the end of the action it is on"), "{line}");
     }
 
-    /// `held-by` lists a run, so a road reading the hold names which one; only the release names
-    /// none.
+    /// `held-by` reads the band a run is named in, so a road reading it names which run; only the
+    /// band gone names none.
     #[test]
-    fn held_by_names_the_run_it_lists() {
+    fn held_by_names_the_run_its_band_says() {
         let ins = Instructor::new();
         let mut with = Args::new();
         assert!(ins.assert(Domain::Automation, "held-by", &with).is_err());

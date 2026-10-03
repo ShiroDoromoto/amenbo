@@ -2010,6 +2010,38 @@ impl AutomationStoppedReason {
     }
 }
 
+/// **Which of the two pauses a paused run stopped at** — carried only by a
+/// [`AutomationRunStatus::Paused`] run.
+///
+/// It is stored because the request that brought the pause about is spent by it: both
+/// `pause_requested` and `pause_before_next_task` are cleared when the run reaches `paused`, and the
+/// two pauses are not picked up again alike (`AMB-D-1015`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationPauseKind {
+    /// At the end of an action (`AMB-D-1002`): the run may be partway through a task.
+    EndOfAction,
+    /// Before the built-in that takes a task (`AMB-D-1009`): the run holds no task.
+    BeforeNextTask,
+}
+
+impl AutomationPauseKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationPauseKind::EndOfAction => "end_of_action",
+            AutomationPauseKind::BeforeNextTask => "before_next_task",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationPauseKind> {
+        match s {
+            "end_of_action" => Some(AutomationPauseKind::EndOfAction),
+            "before_next_task" => Some(AutomationPauseKind::BeforeNextTask),
+            _ => None,
+        }
+    }
+}
+
 /// **One launch of one automation.**
 ///
 /// `pause_requested` is the gap between the button and the pause: an action is under way and is not cut
@@ -2018,6 +2050,9 @@ impl AutomationStoppedReason {
 ///
 /// `pause_before_next_task` is the same gap, one task wide: the run goes on until it next reaches the
 /// built-in that takes a task, and reaches `paused` there without taking one (`AMB-D-1009`).
+///
+/// Reaching `paused` spends both requests; `pause_kind` is what is left of them — which of the two the
+/// run stopped at (`AMB-D-1015`).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationRun {
     pub id: i64,
@@ -2030,6 +2065,9 @@ pub struct AutomationRun {
     /// Asked to pause before it takes its next task ([`crate::ops::automation_stop::pause_before_next_task`]).
     #[serde(default)]
     pub pause_before_next_task: bool,
+    /// Which pause it stopped at. Set only while `status` is `Paused`.
+    #[serde(default)]
+    pub pause_kind: Option<AutomationPauseKind>,
     /// Why it failed. Set only while `status` is `Failed`.
     #[serde(default)]
     pub stopped_reason: Option<AutomationStoppedReason>,

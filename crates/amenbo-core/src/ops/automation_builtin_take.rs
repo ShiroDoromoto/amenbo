@@ -568,12 +568,18 @@ mod tests {
                 Opened::Waiting { run: paused } => {
                     assert_eq!(paused.status, AutomationRunStatus::Paused);
                     assert!(!paused.pause_requested);
+                    assert_eq!(
+                        paused.pause_kind,
+                        Some(crate::model::AutomationPauseKind::EndOfAction),
+                        "the run itself was asked to pause, not to pause before its next task",
+                    );
                 }
                 other => panic!("the pause takes hold, not {other:?}"),
             }
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
 
             let resumed = automation_stop::resume(tx, run.id).expect("resume");
+            assert_eq!(resumed.run.pause_kind, None, "a running run is stopped at neither");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at its entry");
             assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
         });
@@ -657,6 +663,11 @@ mod tests {
                 Opened::Waiting { run: paused } => {
                     assert_eq!(paused.status, AutomationRunStatus::Paused);
                     assert!(!paused.pause_before_next_task, "the request is spent");
+                    assert_eq!(
+                        paused.pause_kind,
+                        Some(crate::model::AutomationPauseKind::BeforeNextTask),
+                        "but which pause it was is kept",
+                    );
                 }
                 other => panic!("the run pauses before the take, not {other:?}"),
             }
@@ -666,6 +677,7 @@ mod tests {
 
             let resumed = automation_stop::resume(tx, run.id).expect("resume");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
+            assert_eq!(resumed.run.pause_kind, None);
             assert!(matches!(
                 open(tx, run.id, resumed.next.id, Some(&[])).expect("open"),
                 Opened::Carried { next: Next::Step(_), .. }
@@ -687,6 +699,7 @@ mod tests {
             assert!(matches!(opened, Opened::Waiting { .. }));
             let ended = automation_stop::cancel(tx, run.id).expect("cancel");
             assert_eq!(ended.run.status, AutomationRunStatus::Canceled);
+            assert_eq!(ended.run.pause_kind, None, "a run that is over is paused at neither");
             assert_eq!(status(tx, first), TaskStatus::Done, "the task it finished stays finished");
             assert_eq!(status(tx, b), TaskStatus::Todo, "and the next was never taken");
         });
@@ -708,6 +721,7 @@ mod tests {
             let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(paused.status, AutomationRunStatus::Paused);
             assert!(!paused.pause_before_next_task, "nothing is left asked");
+            assert_eq!(paused.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
             assert!(read::automation_run_steps_of(tx.conn(), run.id).expect("steps").is_empty(), "nothing taken");
 
             let resumed = automation_stop::resume(tx, run.id).expect("resume");

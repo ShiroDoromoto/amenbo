@@ -1420,6 +1420,7 @@ fn launch_asking(
         status: AutomationRunStatus::Running,
         pause_requested: false,
         pause_before_next_task: false,
+        pause_kind: None,
         stopped_reason: None,
         started_by_kind: by.by,
         started_at: Some(now),

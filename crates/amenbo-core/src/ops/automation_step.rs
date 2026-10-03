@@ -27,7 +27,7 @@ use crate::error::{Error, Result};
 use std::collections::BTreeSet;
 use crate::idref::{self, RefKind};
 use crate::model::{
-    AttachmentTarget, AutomationCfgKind, AutomationPortDirection, AutomationPortKind, AutomationRun,
+    AttachmentTarget, AutomationCfgKind, AutomationPauseKind, AutomationPortDirection, AutomationPortKind, AutomationRun,
     AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
     AutomationStoppedReason, RunDefCfg, RunDefExit, RunDefIn, RunDefPort, ERROR_EXIT,
 };
@@ -196,7 +196,7 @@ fn open_as(
     // **A run asked to pause before its next task pauses here, without taking one** (`AMB-D-1009`).
     // Nothing is written but the pause, so picking it up again opens this step afresh.
     if run.pause_before_next_task && super::automation_stop::takes_a_task(&def) {
-        let run = super::automation_stop::settle(tx, run)?.run;
+        let run = super::automation_stop::settle(tx, run, AutomationPauseKind::BeforeNextTask)?.run;
         return Ok(Opened::Waiting { run });
     }
 
@@ -232,7 +232,7 @@ fn open_as(
     // on each look (`super::automation_builtin::Waits`).
     if !rehearsing && super::automation_builtin::waiting(conn, &run, &def)? {
         let run = match run.pause_requested {
-            true => super::automation_stop::settle(tx, run)?.run,
+            true => super::automation_stop::settle(tx, run, AutomationPauseKind::EndOfAction)?.run,
             false => run,
         };
         return Ok(Opened::Waiting { run });

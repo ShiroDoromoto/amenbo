@@ -2309,15 +2309,16 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__line--leaves { stroke: var(--c-accent); }
 /* **A run's pane, as its picture** (`AMB-T-5775`, `../shell/RunPicture`). It is drawn over the pane's
    body on the frame's ground and scrolls both ways, and the room around the sheet is half the pane each
-   side, so a box on the edge of the picture can still be brought to the middle. From halfway down it
-   fades, to 0.15 at the bottom edge, so the terminal under it can be followed while the picture is up
-   (`.slot__body--away`). */
+   side, so a box on the edge of the picture can still be brought to the middle. Its bottom 5rem, about
+   five lines of the terminal, is clear and the 3rem above that fades into the picture, so the terminal
+   under it can be followed while the picture is up (`.slot__body--away`). The clear band is a length
+   rather than a share of the pane, so the same few lines show however tall the pane is. */
 .runpic {
   position: absolute; inset: 0; z-index: 1;
   display: flex; container-type: size;
   background: var(--c-pane-frame);
-  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 50%, rgba(0, 0, 0, 0.15) 100%);
-  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 50%, rgba(0, 0, 0, 0.15) 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 8rem), transparent calc(100% - 5rem));
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 8rem), transparent calc(100% - 5rem));
 }
 .runpic .autopic {
   flex: 1; max-height: none;

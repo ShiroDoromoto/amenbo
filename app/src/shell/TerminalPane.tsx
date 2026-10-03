@@ -1164,8 +1164,8 @@ export function TerminalPane({
         )}
         {/* Everything the terminal face is, kept mounted and in the layout while the picture is up:
             the terminal is a program writing into the rows it was told it has, and taking its element
-            away would be ending what draws it. The picture is drawn over it and fades toward the
-            bottom, and the face under it dims, so the terminal can be followed through the picture
+            away would be ending what draws it. The picture is drawn over it and is clear in its bottom
+            5rem, and the face under it dims, so the terminal can be followed through the picture
             and keeps its size when the face is turned (`../talk/terminal`). */}
         <div className={`slot__body${onPicture ? " slot__body--away" : ""}`}>
         {run !== null && face === "picture" && <RunPicture run={run} />}

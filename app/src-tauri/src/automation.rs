@@ -1865,10 +1865,15 @@ pub fn automation_pause_before_next_task(project_id: i64) -> Result<(), CmdError
 /// what the run has already done ([`amenbo_core::ops::automation_run::next_def`]), the same answer
 /// `resume` worked out to decide whether it could go on at all. Opening it here would be that answer
 /// arrived at twice.
+///
+/// The agents and the models are asked here as a launch asks them ([`automation_launch`]): a run
+/// paused before its next task is copied down afresh and checked as a launch is.
 #[tauri::command]
 pub fn automation_run_resume(run_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
-    store.automation_resume(run_id)?;
+    let startable = amenbo_core::wake::startable_ids(&store.config);
+    let offered = crate::agent_models::offered_here();
+    store.automation_resume(run_id, startable.as_deref(), &offered)?;
     crate::automation_watch::wake();
     Ok(())
 }

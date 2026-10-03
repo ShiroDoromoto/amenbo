@@ -31,10 +31,12 @@ given:
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one whose step is placed on a model" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   # The second of the two, rather than the first: the first stands beside the agent's own default, and
   # a road placed on it would pass on a build that started the step on the default.
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: do, agent: claude-code, model: scenario-model-02 } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_work } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 

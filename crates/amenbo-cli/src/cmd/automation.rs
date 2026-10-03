@@ -26,7 +26,7 @@ use amenbo_core::model::{
 use amenbo_core::model::AttachmentTarget;
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::model::AutomationPictureOwner;
-use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewStep};
+use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewScript, NewStep};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{HandedAtLaunch, HandedFile, Launcher};
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
@@ -467,8 +467,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_action_abandon(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-abandon", "automation_action", json!({ "id": id, "abandoned": true }), None, false, format!("✓ Gave up action: {id}"));
         }
-        AutomationCmd::StepAdd { action, name, prompt, interactive, work_dir, report_to_task, no_history, no_task_notes, no_task_decisions, no_task_comments } => {
-            let prompt = body_arg(prompt)?;
+        AutomationCmd::StepAdd { action, name, prompt, program, args, timeout_minutes, interactive, work_dir, report_to_task, no_history, no_task_notes, no_task_decisions, no_task_comments } => {
+            // A script step runs its program, not a prompt, so it may be written without one.
+            let prompt = body_arg_opt(prompt)?.unwrap_or_default();
             let new = NewStep {
                 name,
                 prompt,
@@ -482,19 +483,24 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 show_notes: !no_task_notes,
                 show_decisions: !no_task_decisions,
                 show_comments: !no_task_comments,
-                script: None,
+                script: program.map(|program| NewScript { program, args, timeout_minutes }),
             };
             let s = store.automation_step_add(action, new).map_err(CliError::from)?;
             write_envelope(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Added step: {} ({})", s.name, s.id));
         }
-        AutomationCmd::StepUpdate { id, name, prompt, interactive, work_dir, clear_work_dir, report_to_task, history, task_notes, task_decisions, task_comments } => {
+        AutomationCmd::StepUpdate { id, name, prompt, interactive, work_dir, clear_work_dir, report_to_task, history, task_notes, task_decisions, task_comments, program, args, timeout_minutes, clear_script } => {
             let prompt = body_arg_opt(prompt)?;
             let work_dir = match clear_work_dir {
                 true => Some(None),
                 false => work_dir.as_deref().map(Some),
             };
+            // Core writes a script whole, so `--program` carries the arguments and the timeout with it.
+            let script = match clear_script {
+                true => Some(None),
+                false => program.map(|program| Some(NewScript { program, args, timeout_minutes })),
+            };
             let s = store
-                .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history, task_notes, task_decisions, task_comments, None)
+                .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history, task_notes, task_decisions, task_comments, script)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.step-update", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Updated step: {} ({})", s.name, s.id));
         }

@@ -1962,16 +1962,26 @@ pub enum AutomationCmd {
     },
     /// Add a step to a library action. One step is one terminal, and it carries its own prompt; who
     /// carries it out is chosen where the action is placed (`agent-set`). Where the action is placed
-    /// already, the new step starts out there with the default agent, as a placed step does
+    /// already, the new step starts out there with the default agent, as a placed step does. With
+    /// `--program` the step is a script instead, and runs that program rather than a prompt
     StepAdd {
         /// action id
         action: i64,
         /// what this step is called
         #[arg(long)]
         name: String,
-        /// the prompt this step runs on (`-` reads it from stdin)
-        #[arg(long)]
-        prompt: String,
+        /// the prompt this step runs on (`-` reads it from stdin); a script step needs none
+        #[arg(long, required_unless_present = "program")]
+        prompt: Option<String>,
+        /// make this step a script: the program it starts, by its full path
+        #[arg(long, value_name = "PATH")]
+        program: Option<String>,
+        /// one argument handed to the program as it is, with no shell in between — repeat it for each
+        #[arg(long = "arg", value_name = "ARG", requires = "program", allow_hyphen_values = true)]
+        args: Vec<String>,
+        /// how long the program may run before it is stopped, 1 to 360 minutes (30 unless given)
+        #[arg(long, value_name = "MINUTES", requires = "program")]
+        timeout_minutes: Option<i64>,
         /// let this step wait for a person
         #[arg(long)]
         interactive: bool,
@@ -2031,6 +2041,19 @@ pub enum AutomationCmd {
         /// whether this step is handed the comments on the task the run is on (`--task-comments true|false`)
         #[arg(long)]
         task_comments: Option<bool>,
+        /// make this step a script, or rewrite its script: the program it starts, by its full path. The
+        /// script is written whole, so arguments and the timeout not given again are gone
+        #[arg(long, value_name = "PATH", conflicts_with = "clear_script")]
+        program: Option<String>,
+        /// one argument handed to the program as it is, with no shell in between — repeat it for each
+        #[arg(long = "arg", value_name = "ARG", requires = "program", allow_hyphen_values = true)]
+        args: Vec<String>,
+        /// how long the program may run before it is stopped, 1 to 360 minutes (30 unless given)
+        #[arg(long, value_name = "MINUTES", requires = "program")]
+        timeout_minutes: Option<i64>,
+        /// stop this step being a script, so an agent carries it out on its prompt
+        #[arg(long)]
+        clear_script: bool,
     },
     /// Delete a step with its declarations and every edge and wire naming it — confirms unless -y
     StepRm {

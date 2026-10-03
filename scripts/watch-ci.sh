@@ -9,6 +9,8 @@
 #
 # Exit code is the verdict: 0 = green, 1 = red, or the watch itself broke and said so.
 # 2 = no mode was given. 3 = `main <sha>` waited out its deadline with no run started.
+# 5 = what was being watched read the same for AMENBO_CI_STALL seconds; the state it was
+# stuck in is printed last. Nothing is decided: read it, and watch again if it is fine.
 #
 # Usage — one mode per KIND of CI, so the caller names the thing and not the filter:
 #
@@ -63,6 +65,8 @@
 #   AMENBO_CI_APPEAR_LIMIT — rounds to wait for something to appear before giving up.
 #                  Unset, there is no deadline and the evidence above is what ends it
 #   AMENBO_CI_MAIN_DEADLINE — seconds `main <sha>` waits for its run before exit code 3
+#   AMENBO_CI_STALL — seconds a run, a pull request or a check may read the same before
+#                  exit code 5. Resolving an id is not timed by it
 #
 # The repository is resolved once, up front, and passed to every call afterwards, so
 # nothing in the loop reads the filesystem. A watch that outlives the directory it
@@ -77,11 +81,33 @@ APPEAR_LIMIT="${AMENBO_CI_APPEAR_LIMIT:-}" # rounds before giving up on it; empt
 MISS_LIMIT="${AMENBO_CI_MISS_LIMIT:-3}"    # consecutive failed calls before calling the watch broken
 # Twice the slowest push run seen to be registered after its merge, which was 23 minutes.
 MAIN_DEADLINE="${AMENBO_CI_MAIN_DEADLINE:-2700}" # seconds `main <sha>` waits for its run to start
+# Past the slowest run seen from start to finish, a release tag's at 90 minutes, so even a
+# run whose jobs all end together has moved before this runs out.
+STALL_SECONDS="${AMENBO_CI_STALL:-7200}" # seconds what is watched may read the same before exit code 5
 
 # How many rounds of the appear wait fit in a minute, so an open-ended one repeats what
 # it is waiting for about that often. A watch that has gone quiet for ten minutes cannot
 # be told from one that died, and saying it once at the start is that.
 SAY_EVERY=$(( APPEAR_SECONDS > 0 ? (60 + APPEAR_SECONDS - 1) / APPEAR_SECONDS : 1 ))
+
+# The watch loops below list the ways a watch should end, and a way that is not on the list
+# would otherwise be waited on in silence. So each also hands its state to `stalled` every
+# round, and gives up with exit code 5 once that has not changed for STALL_SECONDS.
+stall_state="" stall_since=$SECONDS
+stalled() {
+    if [ "$1" != "$stall_state" ]; then
+        stall_state=$1
+        stall_since=$SECONDS
+        return 1
+    fi
+    [ $((SECONDS - stall_since)) -ge "$STALL_SECONDS" ]
+}
+
+# Print the state a watch was stuck in, before it returns 5.
+stall_out() {
+    echo "unchanged for ${STALL_SECONDS}s:"
+    echo "$stall_state"
+}
 
 usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; }
 
@@ -231,6 +257,8 @@ watch_run() {
             echo "$fail"
         fi
         prev=$fail
+        stalled "$(jq -r '"run \(.status) \(.conclusion)",
+            ((.jobs // [])[] | "  \(.name): \(.status) \(.conclusion)")' <<< "$st")" && { stall_out; return 5; }
         status=$(jq -r .status <<< "$st")
         # A re-run reopens the same id, and it reaches the jobs before it reaches the
         # run: for a window after `gh run rerun`, the run still reads `completed`
@@ -311,6 +339,8 @@ watch_pr() {
             [ "$checks" != "$prevck" ] && echo "checks not read: ${checks:-no output}"
             prevck=$checks
         fi
+        stalled "pull request $pr: $state $ms
+$(checks_state "$checks")" && { stall_out; return 5; }
         sleep "$POLL_SECONDS"
     done
 }
@@ -337,6 +367,11 @@ head_runs_settled() {
     [ "$(jq 'length' <<< "$rows")" -gt 0 ] || return 1
     [ "$(jq '[.[] | select(.status != "completed")] | length' <<< "$rows")" = 0 ] || return 1
     echo "every run on $sha has finished without it"
+}
+
+# One line per check, for `stalled`; output that is not a list of checks is kept as it is.
+checks_state() {
+    jq -er '.[] | "  \(.name): \(.bucket)"' <<< "$1" 2>/dev/null || echo "  ${1:-no output}"
 }
 
 # Watch one named check on a pull request until it settles, and report what it settled
@@ -368,6 +403,8 @@ watch_check() {
         # no signal, and its output is read for what it is: a JSON array is an answer,
         # anything else is nothing to go on this round.
         checks=$(gh pr checks "$pr" -R "$repo" --json name,bucket 2>&1) || :
+        stalled "check \"$name\" on pull request $pr:
+$(checks_state "$checks")" && { stall_out; return 5; }
         if rows=$(jq -ec --arg n "$name" 'map(select(.name == $n))' <<< "$checks" 2>/dev/null); then
             count=$(jq 'length' <<< "$rows")
             if [ "$count" -gt 1 ]; then

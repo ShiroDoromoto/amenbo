@@ -771,7 +771,7 @@ line then names the declared ones and the step stays running, which the pane is 
 not its pane is drawn, and opening the pane to type in it would start one on the spot either way. So
 it is typed at a plain shell in whatever pane is up, with the step the window would have named put
 into the environment by hand — the run's number off its row on the running tab, the step's off
-`run-show`.
+`run-show`. Both are typed as `human`, since that shell may sit in another project than the run's.
 `acknowledge-in-shell` says a failed run has been seen with `automation acknowledge`, typed at a
 plain shell in whatever pane is up rather than pressed on the run's row or its pane — the road a
 person's AI takes when it says so for them. The run's number comes off its row on the running tab, as

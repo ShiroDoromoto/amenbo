@@ -4648,6 +4648,9 @@ impl Instructor {
             //
             // It leaves by the done way out alone: any other is typed by its id, and the step's
             // own text — the one place the ids are listed — is in the pane this road leaves shut.
+            //
+            // Both lines carry `--actor human`: the shell that is up may sit in another project than
+            // the run's, and the AI's facet reaches only the project its folder is tied to.
             (Domain::Automation, "done-outside-pane") => {
                 if arg_str(with, "exit").is_some() {
                     return Err(
@@ -4656,7 +4659,7 @@ impl Instructor {
                     );
                 }
                 format!(
-                    "Without opening the pane this run is drawn in, read the run's number off its row on the running tab of the automations the sidebar opens. Then, in the plain shell of the pane that is up in the workspace, type `amenbo automation run-show <run> --json --actor ai`, putting that number where the command says `<run>`, and take the `id` under `step` in the last entry of `steps` — the step still running. Type `AMENBO_AUTOMATION_STEP=<step> amenbo automation step-done --report \"{}\" --actor ai` with that id where the command says `<step>`, run it, and confirm the line comes back saying the step is done.",
+                    "Without opening the pane this run is drawn in, read the run's number off its row on the running tab of the automations the sidebar opens. Then, in the plain shell of the pane that is up in the workspace, type `amenbo automation run-show <run> --json --actor human`, putting that number where the command says `<run>`, and take the `id` under `step` in the last entry of `steps` — the step still running. Type `AMENBO_AUTOMATION_STEP=<step> amenbo automation step-done --report \"{}\" --actor human` with that id where the command says `<step>`, run it, and confirm the line comes back saying the step is done.",
                     req(with, "report")?
                 )
             }

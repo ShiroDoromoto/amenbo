@@ -42,6 +42,12 @@ steps_gui:
     domain: workspace
     op: show-face
     with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
       face: tasks
 
   - type: action

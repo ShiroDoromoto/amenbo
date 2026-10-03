@@ -125,6 +125,11 @@ impl Driver<'_> {
                 let bytes = std::fs::read(&src)
                     .map_err(|e| format!("could not read the fixture {}: {e}", src.display()))?;
                 std::fs::write(&full, &bytes).map_err(|e| format!("could not write {path}: {e}"))?;
+                // A program a script step starts, which the launch check refuses without the
+                // permission to execute — and the bytes alone do not carry it.
+                if opt_bool(with, "executable") == Some(true) {
+                    executable(&full)?;
+                }
                 Ok(Outcome::action(format!(
                     "copied the fixture {from} to {} ({} bytes)",
                     full.display(),
@@ -718,6 +723,21 @@ fn symlink(target: &Path, at: &Path) -> Result<(), String> {
             at.display(),
         )
     })
+}
+
+/// Let `at` be run as a program.
+///
+/// On Windows whether a file runs is its extension's to say, so there is nothing to set.
+#[cfg(unix)]
+fn executable(at: &Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(at, std::fs::Permissions::from_mode(0o755))
+        .map_err(|e| format!("could not let {} be run: {e}", at.display()))
+}
+
+#[cfg(windows)]
+fn executable(_at: &Path) -> Result<(), String> {
+    Ok(())
 }
 
 /// A valid PNG of at least `bytes`, filled with noise.

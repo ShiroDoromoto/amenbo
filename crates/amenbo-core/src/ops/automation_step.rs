@@ -517,6 +517,8 @@ fn new_execution(
         exit_id: None,
         report: String::new(),
         report_withheld: false,
+        stdout_tail: String::new(),
+        stderr_tail: String::new(),
         status: AutomationRunStepStatus::Running,
         started_at: Some(now),
         ended_at: None,

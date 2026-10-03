@@ -1149,7 +1149,35 @@ pub const STEPS: &[Step] = &[
         // copy already there is not one.
         apply: Apply::Custom(give_the_steps_a_script),
     },
+    Step {
+        to: 90,
+        name: "add the tails of a script step's standard output and standard error to automation_run_step",
+        // `AMB-D-1016`. A script step's run keeps the last of what it wrote to each, so a failed run can
+        // be read.
+        //
+        // **Seeded with nothing.** No build before this one could run a script, so every step already
+        // run leaves both at ''.
+        apply: Apply::Custom(keep_the_tails_of_a_script),
+    },
 ];
+
+/// v90: `stdout_tail` and `stderr_tail` on `automation_run_step` — the last of what a script step wrote
+/// to its standard output and its standard error (`AMB-D-1016`).
+///
+/// **Each column is appended only where it is missing**, v68's guard and for v53's reason. The rows
+/// already there are left at `''`.
+fn keep_the_tails_of_a_script(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let columns = column_names(tx, "automation_run_step")?;
+    for column in ["stdout_tail", "stderr_tail"] {
+        if !columns.iter().any(|c| c == column) {
+            tx.execute_batch(&format!(
+                "ALTER TABLE automation_run_step ADD COLUMN {column} TEXT NOT NULL DEFAULT '';"
+            ))?;
+        }
+    }
+    Ok(())
+}
 
 /// v89: `script_program`, `script_args` and `script_timeout_minutes` on `automation_action_step` and
 /// `automation_run_def` — the script a step is (`AMB-D-1016`).
@@ -9598,6 +9626,46 @@ mod tests {
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v90: every step already run that an upgrade brings in has empty tails, and the two columns take
+    /// a tail once one is written.
+    #[test]
+    fn every_step_already_run_has_no_tails() {
+        let dir = scratch("step-tails");
+        let engine = store_at(&dir, 89);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, name, agent) VALUES (1, 1, 'read', 'claude');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, seq, report, status) VALUES
+                     (1, 1, 1, 1, 'Read it.', 'done');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let tails: (String, String) = engine
+            .conn()
+            .query_row(
+                "SELECT stdout_tail, stderr_tail FROM automation_run_step WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(tails, (String::new(), String::new()));
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation_run_step SET stdout_tail = 'ok', stderr_tail = 'no tests to run' WHERE id = 1",
+                [],
+            )
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

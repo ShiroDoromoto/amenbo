@@ -556,11 +556,13 @@ input[type="color"] {
 .slot__runlink:hover { color: var(--c-text); }
 
 /* **What a failed run is waiting for** (`../shell/TerminalPane`, `AMB-T-5529`), on a band between the
-   header and the terminal, in the stop colour. One line: why it stopped, and the press that answers
-   it at the far end. */
+   header and the terminal, in the stop colour. One line where the pane is wide enough: why it
+   stopped, and the press that answers it at the far end. In a narrow pane the presses wrap under the
+   reason, still at the far end, rather than run past the pane's edge (`AMB-T-5965`): the reason, with
+   its mark, is held wide enough to read a few words. */
 .slot__band {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: var(--s-2);
+  display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--s-1) var(--s-2);
   margin: 0 calc(-1 * var(--s-1));
   padding: var(--s-1) var(--s-2);
   font-size: var(--fs-md);
@@ -572,7 +574,7 @@ input[type="color"] {
   border-top: var(--border-w) var(--border-style) var(--c-stop);
 }
 .slot__band-why {
-  flex: 1 1 auto; min-width: 0;
+  flex: 1 1 8rem; min-width: 0;
   display: inline-flex; align-items: center; gap: var(--s-1);
   overflow: hidden; text-overflow: ellipsis;
 }

@@ -25,7 +25,8 @@ import (
 // **They come back when the run ends**, red, green or interrupted — the screen road that reads a
 // picture needs the real `claude` standing where it was. A run cut off before it could put them back
 // leaves them aside under the same name with vmAgentAside on the end; the next `vm verify cli` puts
-// them back when it ends, and `vm verify run` puts them back before it starts a road.
+// them back when it ends, and `vm verify run` puts them back before it starts a road — and then moves
+// codex aside again for the length of that road (vmRoadAgents).
 //
 // The harness is not changed, the same bargain `vm verify install` strikes: it is built here with
 // `--release`, sent, and run in there with `--bin` naming the shipped CLI.
@@ -47,8 +48,16 @@ const (
 var vmGuestAgents = []string{
 	claudeGoldenStandIn,
 	claudeGuestBin,
-	"/opt/homebrew/bin/codex",
+	vmGuestCodex,
 }
+
+// vmGuestCodex is the golden's own `codex`.
+const vmGuestCodex = "/opt/homebrew/bin/codex"
+
+// vmRoadAgents are the ones a screen road has out of the way. Only codex: the road that reads a
+// picture asks the real `claude` (`claudeGuestBin`) and opens no `can-start`, and `vm up` has already
+// removed `claudeGoldenStandIn` wherever it seeded that `claude`.
+var vmRoadAgents = []string{vmGuestCodex}
 
 // vmVerifyCLI sends the shipped CLI, the harness, the scenarios and the fixtures, moves the agents
 // aside, runs `verify-all` and answers with the code it ended with — which is the roll-up a release
@@ -98,6 +107,9 @@ func vmVerifyCLI(pkg, fromRun string, scenarios []string, asJSON bool) (int, err
 		filepath.Join(root, "verification", "scenarios"),
 		filepath.Join(root, "verification", "fixtures"),
 	}
+	if _, err := sshRun(ip, vmVerifyClearCommand()); err != nil {
+		return 0, fmt.Errorf("clearing the scenarios and fixtures sent before: %w", err)
+	}
 	if err := vmPush(send, vmGuestHome+"/"); err != nil {
 		return 0, err
 	}
@@ -119,7 +131,7 @@ func vmVerifyCLI(pkg, fromRun string, scenarios []string, asJSON bool) (int, err
 	}
 	defer func() {
 		if _, err := sshRun(ip, vmAgentsBackCommand(vmGuestAgents)); err != nil {
-			logf("  verify  : warning — the agents did not go back (%v); `devtool vm verify cli` or `vm verify run` puts them back", err)
+			logf("  verify  : warning — the agents did not go back (%v); the next `devtool vm verify cli` or `vm verify run` puts them back", err)
 			return
 		}
 		logf("  verify  : the agents are back in %s", vmCloneName)

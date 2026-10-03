@@ -523,7 +523,6 @@ export function AutomationStepPanel({
   onRemoved,
   onOpenAction,
   onPlaceNext,
-  readOnly = false,
 }: {
   automation: AutomationDetailDto | null;
   /** The spot the picture is showing as pressed, or nothing while none is. */
@@ -534,11 +533,6 @@ export function AutomationStepPanel({
   onOpenAction: (actionId: number) => void;
   /** Open the library aimed at one way out of this spot that says nothing yet. */
   onPlaceNext?: (exitName: string) => void;
-  /**
-   * Hold every write shut — a run is going on the automation (`AMB-D-961`). The press that goes to the
-   * action stays live: it writes nothing, and it is where a reader goes to read what the steps carry.
-   */
-  readOnly?: boolean;
 }) {
   const placement = automation?.placements.find((one) => one.id === placementId) ?? null;
   const action = useAutomationAction(placement?.actionId ?? null);
@@ -577,8 +571,7 @@ export function AutomationStepPanel({
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
       {/* The action, read: nothing on the card takes a value, and the one press goes to where it is
-          written. Outside the fieldset, so a run holding the automation still lets a reader go and
-          read it (`AMB-D-961`). */}
+          written. */}
       <div className="autoplace__action">
         <span className="autoplace__icon" aria-hidden="true">
           <Icon name="gear" />
@@ -601,7 +594,7 @@ export function AutomationStepPanel({
         </button>
       </div>
 
-      <fieldset className="autostep__writes" disabled={readOnly}>
+      <div className="autostep__writes">
         {isEntry && placement.builtin !== undefined && (
           <EntryRow automationId={automation.id} current={placement.builtin} run={run} />
         )}
@@ -646,9 +639,7 @@ export function AutomationStepPanel({
                   exitName={one.name}
                   run={run}
                   head={<ExitMark name={one.name} builtin={placement.builtin} />}
-                  onPlaceNext={
-                    readOnly || onPlaceNext === undefined ? undefined : () => onPlaceNext(one.name)
-                  }
+                  onPlaceNext={onPlaceNext && (() => onPlaceNext(one.name))}
                 />
               </li>
             ))}
@@ -676,7 +667,7 @@ export function AutomationStepPanel({
             </button>
           </div>
         )}
-      </fieldset>
+      </div>
     </div>
   );
 }

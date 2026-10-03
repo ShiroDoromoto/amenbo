@@ -199,6 +199,9 @@ func vmVerifyInstall(pkg, fromRun string) error {
 		filepath.Join(root, "verification", "fixtures"),
 		filepath.Join(root, "scripts", "screen.swift"),
 	}
+	if _, err := sshRun(ip, vmVerifyClearCommand()); err != nil {
+		return fmt.Errorf("clearing the scenarios and fixtures sent before: %w", err)
+	}
 	if err := vmPush(send, vmGuestHome+"/"); err != nil {
 		return err
 	}
@@ -606,13 +609,24 @@ func vmVerifyRun(scenario string) error {
 	if _, err := sshRun(ip, vmAgentsBackCommand(vmGuestAgents)); err != nil {
 		return fmt.Errorf("putting back the agents a CLI run moved aside: %w", err)
 	}
+	// Then codex goes aside for the road, for the reason `vm verify cli` moves it: a road that opens
+	// with `can-start` stops on its premise when the golden's real `codex` answers ahead of the
+	// stand-in. The road outlives this command, so it comes back when the road is over —
+	// vmVerifyStop, or vmVerifyAwait seeing the harness gone.
+	if _, err := sshRun(ip, vmAgentsAsideCommand(vmRoadAgents)); err != nil {
+		return fmt.Errorf("moving codex aside: %w", err)
+	}
 
 	// A previous run's app is taken down first. The harness takes its own down when it ends, and
 	// the one case it cannot is the one that matters here: a run somebody stopped part-way leaves a
 	// window on screen that the next run's shots would have in front of them.
 	_, _ = sshRun(ip, "pkill -f "+vmVerifyBin+" || true; pkill -f "+vmGuestApp+" || true")
+	if _, err := sshRun(ip, vmForgetWindowShape); err != nil {
+		return fmt.Errorf("forgetting the window shape a previous run left: %w", err)
+	}
 
 	if _, err := sshRun(ip, vmVerifyStartCommand(guestScenario)); err != nil {
+		vmRoadAgentsBack(ip)
 		return fmt.Errorf("starting the run: %w", err)
 	}
 	logf("  verify  : %s walking in %s", filepath.Base(scenario), vmCloneName)
@@ -624,6 +638,27 @@ func vmVerifyRun(scenario string) error {
 	}
 	return vmVerifyLogTail(20)
 }
+
+// vmRoadAgentsBack puts back what vmVerifyRun moved aside for a road. A failure is only said: the
+// road is over either way, and the next `vm verify run` or `vm verify cli` puts them back.
+func vmRoadAgentsBack(ip string) {
+	if _, err := sshRun(ip, vmAgentsBackCommand(vmRoadAgents)); err != nil {
+		logf("  verify  : warning — codex did not go back (%v); the next `devtool vm verify run` or `vm verify cli` puts it back", err)
+	}
+}
+
+// vmForgetWindowShape takes the app's window shape out of the guest's localStorage, so every run
+// starts on one window. The shape is kept there rather than in the store, so the throwaway store a
+// run stands up does not reset it: a road that splits the workspace into a window of its own leaves
+// the next run's app opening two, and the harness gives up on it with `the app put no window on
+// screen within 60s`.
+//
+// It is done here and not in the harness because the harness also runs on the host, where the
+// localStorage is shared, by bundle identifier, with the user's own app. The guest is a clone that is
+// thrown away. It is sent after the previous app is taken down, so nothing writes the shape back.
+const vmForgetWindowShape = `dir=` + vmGuestHome + `/Library/WebKit/work.amenbo.app/WebsiteData
+[ -d "$dir" ] || exit 0
+find "$dir" -name localstorage.sqlite3 -exec sqlite3 -cmd '.timeout 5000' {} "DELETE FROM ItemTable WHERE key='amenbo.windowShape'" \;`
 
 // vmVerifyStartCommand is the one line the guest is sent to put a run on its screen: the keychain
 // opened, then the harness started on the scenario with the app it is to drive.
@@ -690,6 +725,7 @@ func vmVerifyAwait(ip string, from int, budget time.Duration) error {
 			return nil
 		}
 		if !vmRoadWalking(ip) {
+			vmRoadAgentsBack(ip)
 			return nil // the run is over; whatever it ended on is in the log
 		}
 		if time.Now().After(deadline) {
@@ -787,10 +823,20 @@ func vmVerifyStop() error {
 	if _, err := sshRun(ip, "pkill -f "+vmVerifyBin+" || true; pkill -f "+vmGuestApp+" || true"); err != nil {
 		return fmt.Errorf("taking the road down: %w", err)
 	}
+	// Whether or not a road was walking: one that ended on its own before anybody looked left codex
+	// aside too.
+	vmRoadAgentsBack(ip)
 	if !walking {
 		logf("  verify  : no road was walking in %s", vmCloneName)
 		return nil
 	}
 	logf("  verify  : the road in %s is over — its evidence is still there (`devtool vm verify pull`)", vmCloneName)
 	return nil
+}
+
+// vmVerifyClearCommand removes the scenarios and fixtures an earlier send left in the guest. A send
+// copies over what is there and leaves alone what this checkout no longer has, and a harness that
+// walks the whole folder would count those leftovers as its own.
+func vmVerifyClearCommand() string {
+	return "rm -rf " + shq(vmGuestHome+"/scenarios") + " " + shq(vmVerifyFixtures)
 }

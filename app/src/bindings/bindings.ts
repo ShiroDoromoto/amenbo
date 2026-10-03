@@ -315,8 +315,8 @@ exits: Array<AutomationExitDto>, inputs: Array<AutomationPortDto>,
  */
 settings: Array<AutomationCfgDto>, 
 /**
- * **The runs holding this action** — those going on any automation that places it, whichever
- * project that automation is in (`AMB-D-961`). Read for [`AutomationDetailDto::held_by`]'s reason.
+ * **The runs going on this action** — those of any automation that places it, whichever project
+ * that automation is in. Read for [`AutomationDetailDto::held_by`]'s reason.
  */
 heldBy: Array<AutomationRunCardDto>, 
 /**
@@ -474,9 +474,9 @@ export type AutomationDetailDto = { id: number, projectId: number, name: string,
  */
 entryPlacementId?: number, archived: boolean, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
 /**
- * **The runs holding this definition** — its own that are running or paused (`AMB-D-961`). While
- * there is one, core refuses every rewrite, so the build screen holds its fields shut and names
- * these, each with the way to its pane. Empty while nothing is going.
+ * **The runs going on this definition** — its own that are running or paused. The definition is
+ * written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen
+ * names these, each with the way to its pane. Empty while nothing is going.
  */
 heldBy: Array<AutomationRunCardDto>, };
 

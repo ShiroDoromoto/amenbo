@@ -347,7 +347,8 @@ describe("a global action", () => {
   it("opens a step with the fields open", async () => {
     await render();
     await act(async () => { nodes()[0].click(); });
-    expect(container.querySelector<HTMLFieldSetElement>(".actpanel__body")?.disabled).toBe(false);
+    expect(container.querySelector(".actpanel__body")).not.toBeNull();
+    expect(container.querySelector("fieldset:disabled")).toBeNull();
   });
 });
 
@@ -371,7 +372,7 @@ function heldRun(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
   };
 }
 
-describe("an action a run is going on (AMB-D-961)", () => {
+describe("an action a run is going on (AMB-D-1015)", () => {
   const goToRun = vi.fn();
   async function renderHeld(runs: AutomationRunCardDto[] = [heldRun()]) {
     hoisted.action = action({ heldBy: runs });
@@ -379,7 +380,7 @@ describe("an action a run is going on (AMB-D-961)", () => {
       root.render(
         createElement(AutomationActionBuildScreen, {
           id: 4,
-            onBack: () => undefined,
+          onBack: () => undefined,
           onGoToRun: goToRun,
         }),
       );
@@ -395,25 +396,25 @@ describe("an action a run is going on (AMB-D-961)", () => {
     expect(goToRun).toHaveBeenCalledWith(2, 31);
   });
 
-  // "Edit" keeps its word while a run holds it; the panel it opens is what is shut (`AMB-T-5526`).
-  it("opens what it is for and its steps to be read, with the fields shut", async () => {
+  it("opens what it is for and its steps with the fields open", async () => {
     await renderHeld();
     await act(async () => {
       buttons().find((one) => one.textContent === t("auto.act.edit"))!.click();
     });
-    expect(noteBox().closest("fieldset")?.disabled).toBe(true);
+    expect(noteBox().closest("fieldset")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>(".actpanel__titlein")?.readOnly).toBe(false);
     await act(async () => { nodes()[0].click(); });
-    expect(container.querySelector<HTMLFieldSetElement>(".actpanel__body")?.disabled).toBe(true);
+    expect(container.querySelector("fieldset:disabled")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>(".actpanel__titlein")?.readOnly).toBe(false);
   });
 
-  it("offers no way to add a step, and does not say it is changed from the sidebar", async () => {
+  it("offers adding a step, with no lock on the band or the head", async () => {
     await renderHeld();
-    expect(has(t("auto.act.stepAdd"))).toBe(false);
-    // The held band carries its own lock; the one that says "changed from the sidebar" is the head's.
-    expect(container.querySelector('.actbuild__head [data-icon="lock"]')).toBeNull();
+    expect(has(t("auto.act.stepAdd"))).toBe(true);
+    expect(container.querySelector('[data-icon="lock"]')).toBeNull();
   });
 
-  it("says nothing of runs, and holds nothing shut, while none is going", async () => {
+  it("says nothing of runs while none is going", async () => {
     await renderHeld([]);
     expect(container.querySelector(".autoheld")).toBeNull();
     expect(has(t("auto.act.edit"))).toBe(true);

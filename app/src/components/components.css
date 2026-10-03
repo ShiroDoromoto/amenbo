@@ -1733,10 +1733,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoswitch__track input:checked + i::after { transform: translateX(14px); }
 .autoswitch__track input:checked:dir(rtl) + i::after { transform: translateX(-14px); }
 .autoswitch__track input:focus-visible + i { outline: 2px solid var(--c-accent); outline-offset: 2px; }
-/* On and held: the entry stays where it is until another step takes it. Shut with the whole panel
-   (a disabled fieldset), it reads as not to be pressed. */
+/* On and held: the entry stays where it is until another step takes it. */
 .autoswitch__track input:disabled { cursor: default; }
-fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 /* One declared row: what is read, and the "⋯" at its far end that opens what changes it. */
 .autodecl { display: flex; flex-direction: column; gap: var(--s-1); }
 .autodecl__row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }
@@ -2036,9 +2034,7 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 }
 .actpanel__close:hover { color: var(--c-text); }
 .actpanel__body {
-  display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
-  /* A fieldset, so that one attribute can shut the whole body; none of its own frame is wanted. */
-  margin: 0; border: 0; min-width: 0;
+  display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); min-width: 0;
 }
 /* The press that removes what the panel shows, at its foot. */
 .actpanel__foot { display: flex; gap: var(--s-3); font-size: var(--fs-md); }
@@ -2091,9 +2087,8 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
   margin-inline-end: var(--s-2); font-family: var(--font-mono); font-size: var(--fs-xs);
   font-weight: var(--fw-normal); color: var(--c-text-muted); font-variant-numeric: tabular-nums;
 }
-/* The runs holding the definition open on either build screen (`../screens/AutomationHeldBy`): one
-   band a run, in the heed colour — the lock, which run on which step, and the two presses that end
-   the hold. */
+/* The runs going on the definition open on either build screen (`../screens/AutomationHeldBy`): one
+   band a run, in the heed colour — which run on which step, and the presses that pause or end it. */
 .autoheld {
   display: flex; flex-direction: column; gap: var(--s-1);
   border-block-end: var(--border-w) var(--border-style) var(--c-rule);
@@ -2106,11 +2101,8 @@ fieldset:disabled .autoswitch { cursor: default; opacity: .6; }
 .autoheld__step { margin-inline-start: var(--s-2); color: var(--c-text-muted); }
 .autoheld__step::before { content: "("; }
 .autoheld__step::after { content: ")"; }
-/* The placement panel's writes, shut as one while a run holds the automation; the press to the action
-   stays outside it. A fieldset for that one attribute, with none of its own frame. */
-.autostep__writes {
-  display: flex; flex-direction: column; gap: var(--s-3); margin: 0; padding: 0; border: 0; min-width: 0;
-}
+/* The placement panel's writes, under the card that goes to the action. */
+.autostep__writes { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
 .autolaunch {
   display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-2) var(--s-3);
   border-block-end: var(--border-w) var(--border-style) var(--c-rule);

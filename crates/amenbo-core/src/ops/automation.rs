@@ -5129,7 +5129,7 @@ mod rewritten_under_a_run {
     fn paused(tx: &WriteTx<'_>, run: &AutomationRun) -> AutomationRun {
         automation_stop::pause(tx, run.id).expect("pause");
         let pausing = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
-        automation_stop::settle(tx, pausing).expect("settle");
+        automation_stop::settle(tx, pausing, crate::model::AutomationPauseKind::EndOfAction).expect("settle");
         let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
         assert_eq!(paused.status, AutomationRunStatus::Paused);
         paused

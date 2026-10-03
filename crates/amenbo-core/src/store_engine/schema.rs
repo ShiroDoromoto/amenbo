@@ -1261,6 +1261,10 @@ datasets! {
     // `pause_before_next_task` is the same gap, one task wide: the run reaches `paused` where it next
     // comes to the built-in that takes a task, without taking one (`AMB-D-1009`).
     //
+    // `pause_kind` is which of those two a paused run stopped at, kept because reaching `paused`
+    // clears both requests and the two are picked up again differently (`AMB-D-1015`). Set only while
+    // `status = 'paused'`.
+    //
     // `stopped_reason` is why it failed, and it is stored because it cannot be derived: the records
     // show a crash (that step execution is left `failed`) and say nothing about a loop that ran out
     // of turns, an agent that was not there, or an input nothing filled. Set only while
@@ -1274,6 +1278,7 @@ datasets! {
         status: enum_col("running", "paused", "completed", "failed", "canceled"),
         pause_requested: bool_col,
         pause_before_next_task: bool_col,
+        pause_kind: enum_opt("end_of_action", "before_next_task"),
         stopped_reason: enum_opt("crashed", "max_times", "no_agent", "no_input", "no_way_on", "halted", "left_task_open"),
         started_by_kind: actor_kind,
         started_at: ts_opt,

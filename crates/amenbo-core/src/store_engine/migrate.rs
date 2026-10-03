@@ -1128,7 +1128,35 @@ pub const STEPS: &[Step] = &[
         // for it.
         apply: Apply::Custom(give_the_runs_a_pause_before_next_task),
     },
+    Step {
+        to: 88,
+        name: "add automation_run.pause_kind, which of the two pauses a paused run stopped at",
+        // `AMB-D-1015`. Reaching `paused` clears both requests, and a run paused before its next task is
+        // picked up again differently from one paused at the end of an action.
+        //
+        // **Seeded: `end_of_action` on every paused run, and nothing on the rest.** A run paused by an
+        // older build cannot be told apart, and the end of an action is the pause that goes on from the
+        // snapshot it already has — the one that is right for either.
+        apply: Apply::Custom(say_which_pause_a_run_stopped_at),
+    },
 ];
+
+/// v88: `automation_run.pause_kind` — which of the two pauses a paused run stopped at (`AMB-D-1015`).
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason. **Every run already paused
+/// stopped at the end of an action**, as far as anything after this reads it: which pause it was is
+/// not written anywhere, and that one is picked up again from the snapshot the run already has.
+fn say_which_pause_a_run_stopped_at(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run")?.iter().any(|c| c == "pause_kind") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run ADD COLUMN pause_kind TEXT \
+             CHECK(pause_kind IN ('end_of_action', 'before_next_task'));
+             UPDATE automation_run SET pause_kind = 'end_of_action' WHERE status = 'paused';",
+        )?;
+    }
+    Ok(())
+}
 
 /// v87: `automation_run.pause_before_next_task` — a run asked to pause before it takes its next task
 /// (`AMB-D-1009`).
@@ -9537,6 +9565,36 @@ mod tests {
         assert!(
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v88: every run an upgrade brings in paused is paused at the end of an action — the pause that goes
+    /// on from the snapshot it has — and every other run is paused at neither.
+    #[test]
+    fn every_run_already_paused_is_paused_at_the_end_of_an_action() {
+        let dir = scratch("pause-kind");
+        let engine = store_at(&dir, 87);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES
+                     (1, 1, 1, 'running'), (2, 1, 1, 'paused'), (3, 1, 1, 'completed');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let mut stmt = engine.conn().prepare("SELECT pause_kind FROM automation_run ORDER BY id").unwrap();
+        let kinds: Vec<Option<String>> =
+            stmt.query_map([], |r| r.get::<_, Option<String>>(0)).unwrap().map(|v| v.unwrap()).collect();
+        assert_eq!(kinds, vec![None, Some("end_of_action".to_string()), None]);
+        assert!(
+            engine.conn().execute("UPDATE automation_run SET pause_kind = 'later' WHERE id = 2", []).is_err(),
+            "only the two pauses go in"
         );
         std::fs::remove_dir_all(&dir).ok();
     }

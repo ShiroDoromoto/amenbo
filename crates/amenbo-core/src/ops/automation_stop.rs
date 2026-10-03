@@ -140,9 +140,10 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// nobody. It fails instead, with [`AutomationStoppedReason::LeftTaskOpen`], and the task is handed back
 /// as any failure's is.
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
-    let ending = if ending == Ending::Completed
-        && left_open(tx, read::automation_run_task_last(tx.conn(), before.id)?.as_ref())?
-    {
+    // Read before the stretch is closed below: whether it was already ended is what says the run
+    // handed its task back on the way.
+    let stretch = read::automation_run_task_last(tx.conn(), before.id)?;
+    let ending = if ending == Ending::Completed && left_open(tx, stretch.as_ref())? {
         Ending::Failed(AutomationStoppedReason::LeftTaskOpen)
     } else {
         ending
@@ -159,7 +160,7 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
 
     close_step(tx, before.id, ending, now)?;
-    let stretch = close_stretch(tx, before.id, now)?;
+    close_stretch(tx, stretch.as_ref(), now)?;
     if ending.cut_short() {
         hand_the_task_back(tx, &after, stretch.as_ref(), ending)?;
     }
@@ -169,10 +170,16 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
 /// **Whether a stretch's task is still in progress** — reserved by the run and not closed by anything
 /// since. A stretch with no task in it, or none at all, has nothing left open.
 ///
+/// **A stretch already ended has let its task go** — the run handed it back
+/// ([`crate::ops::automation_builtin_hand_back`]). What it is in now is whoever reserved it since, not
+/// this run's to answer for.
+///
 /// Asked where the run is about to leave the stretch behind: at its end ([`ended`]) and where a step
 /// opens the next one ([`crate::ops::automation_step::open`]).
 pub fn left_open(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>) -> Result<bool> {
-    let Some(task_id) = stretch.and_then(|s| s.task_id) else { return Ok(false) };
+    let Some(task_id) = stretch.filter(|s| s.ended_at.is_none()).and_then(|s| s.task_id) else {
+        return Ok(false);
+    };
     Ok(read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress))
 }
 
@@ -202,28 +209,18 @@ fn close_step(tx: &WriteTx<'_>, run_id: i64, ending: Ending, now: Timestamp) -> 
     )
 }
 
-/// Close the stretch the run was in, and answer which one it was. A stretch already closed is left
-/// alone: a run that ended between two tasks has nothing open.
-fn close_stretch(
-    tx: &WriteTx<'_>,
-    run_id: i64,
-    now: Timestamp,
-) -> Result<Option<AutomationRunTask>> {
-    let Some(before) = read::automation_run_task_last(tx.conn(), run_id)? else {
-        return Ok(None);
-    };
-    if before.ended_at.is_some() {
-        return Ok(Some(before));
-    }
+/// Close the stretch the run was in. A stretch already closed is left alone: a run that handed its task
+/// back has nothing open.
+fn close_stretch(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>, now: Timestamp) -> Result<()> {
+    let Some(before) = stretch.filter(|s| s.ended_at.is_none()) else { return Ok(()) };
     let mut ended = before.clone();
     ended.ended_at = Some(now);
     ended.updated_at = now;
     crate::ops::emit_update(
         tx,
-        record::automation_run_task(&before),
+        record::automation_run_task(before),
         record::automation_run_task(&ended),
-    )?;
-    Ok(Some(ended))
+    )
 }
 
 /// Give the task the run was working back, and say on it what became of the run.
@@ -245,13 +242,20 @@ fn close_stretch(
 ///
 /// What the person reads there is the report of the step that stopped, under the line: that is where
 /// the agent said what it needs, and the line alone says only that it stopped.
+///
+/// **A stretch already ended handed its task back before the run stopped**
+/// ([`crate::ops::automation_builtin_hand_back`]), so it is not handed back twice. Another run or a
+/// session may have reserved it since, and its state and comments are theirs. `stretch` is read before
+/// [`ended`] closes it, so this tells that apart from the close the ending itself makes.
 fn hand_the_task_back(
     tx: &WriteTx<'_>,
     run: &AutomationRun,
     stretch: Option<&AutomationRunTask>,
     ending: Ending,
 ) -> Result<()> {
-    let Some(task_id) = stretch.and_then(|s| s.task_id) else { return Ok(()) };
+    let Some(task_id) = stretch.filter(|s| s.ended_at.is_none()).and_then(|s| s.task_id) else {
+        return Ok(());
+    };
     if read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress) {
         crate::ops::task::set_status(tx, task_id, TaskStatus::Todo, ActorKind::Ai)?;
     }
@@ -1252,6 +1256,54 @@ mod tests {
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Todo));
             let walked = read::automation_run_steps_of(tx.conn(), run.id).expect("steps");
             assert_eq!(walked.len(), 2, "nothing was opened for the step that would have taken one");
+        });
+    }
+
+    /// **A task the run handed back is not handed back again when the run is stopped** — a session
+    /// reserved it in between, and it stays theirs: in progress, with no line from this run on it.
+    #[test]
+    fn stopping_after_the_task_was_handed_back_leaves_it_to_whoever_took_it_since() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = automation::add(
+                tx,
+                project,
+                NewAutomation { name: "人に返す".into(), ..Default::default() },
+            )
+            .expect("add automation");
+            let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
+            let (_, second) = mk_placed(tx, &automation, "まとめる", "sum up", "claude");
+            mk_out(tx, &first_action, None, "タスク", AutomationPortKind::TaskTake, true);
+            let back = automation::placement_add(
+                tx,
+                automation.id,
+                crate::ops::automation_builtin::action(tx, "hand_back_task").expect("hand back").id,
+            )
+            .expect("place hand back");
+            let on = crate::model::AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, first.id, None, EdgeTarget::Go(back.id), None).expect("→ back");
+            automation::edge_add(tx, on, back.id, None, EdgeTarget::Go(second.id), None).expect("→ second");
+            automation::edge_add(tx, on, second.id, None, EdgeTarget::Done, None).expect("closes");
+            let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+
+            let run = a_run(tx, &automation);
+            let step = opened(tx, &run, &first);
+            let task = a_task_in_hand(tx, project, step.run_step.id);
+            done(tx, step.run_step.id, None, "Not ours.").expect("done");
+            let Opened::Carried { .. } =
+                open(tx, run.id, def_of(tx, &run, &back).id, None).expect("hand back")
+            else {
+                panic!("the hand back is carried out");
+            };
+            crate::ops::task::set_status(tx, task, TaskStatus::InProgress, ActorKind::Human)
+                .expect("a session reserves it");
+            let said_before = comments_on(tx, task);
+            opened(tx, &run, &second);
+
+            let after = stop(tx, run.id, Ending::Canceled).expect("stop");
+            assert_eq!(after.run.status, AutomationRunStatus::Canceled);
+            assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::InProgress));
+            assert_eq!(comments_on(tx, task), said_before, "no line from the run that let it go");
         });
     }
 

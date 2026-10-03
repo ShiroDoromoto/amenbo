@@ -16,7 +16,13 @@ name: check-branch-manual
 #   gh workflow run check-branch-manual.yml -f branch=task/<id> \
 #     -f test='cargo nextest run -p amenbo-core some_filter'
 #   gh workflow run check-branch-manual.yml -f branch=task/<id> \
+#     -f test='cargo test --manifest-path app/src-tauri/Cargo.toml some_filter'
+#   gh workflow run check-branch-manual.yml -f branch=task/<id> \
 #     -f verify_args='task list --json' -f verify_init=true
+#
+# The Tauri host crate sits outside the workspace, so `-p` cannot name it: name it by
+# `--manifest-path app/src-tauri/Cargo.toml`. That path in the command is also what sets up the
+# system libs and sidecars it needs.
 #
 # The answer is the log (`gh run view <run> --log`). With `verify_keep` the two throwaway dirs —
 # the store's home and the CWD — are uploaded as an artifact, which is what `KEEP=1` meant on a

@@ -199,6 +199,9 @@ func vmVerifyInstall(pkg, fromRun string) error {
 		filepath.Join(root, "verification", "fixtures"),
 		filepath.Join(root, "scripts", "screen.swift"),
 	}
+	if _, err := sshRun(ip, vmVerifyClearCommand()); err != nil {
+		return fmt.Errorf("clearing the scenarios and fixtures sent before: %w", err)
+	}
 	if err := vmPush(send, vmGuestHome+"/"); err != nil {
 		return err
 	}
@@ -809,4 +812,11 @@ func vmVerifyStop() error {
 	}
 	logf("  verify  : the road in %s is over — its evidence is still there (`devtool vm verify pull`)", vmCloneName)
 	return nil
+}
+
+// vmVerifyClearCommand removes the scenarios and fixtures an earlier send left in the guest. A send
+// copies over what is there and leaves alone what this checkout no longer has, and a harness that
+// walks the whole folder would count those leftovers as its own.
+func vmVerifyClearCommand() string {
+	return "rm -rf " + shq(vmGuestHome+"/scenarios") + " " + shq(vmVerifyFixtures)
 }

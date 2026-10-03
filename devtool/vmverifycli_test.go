@@ -98,6 +98,16 @@ func TestVerifyCLIScenariosNamesTheGuestCopy(t *testing.T) {
 	}
 }
 
+// TestClearRemovesWhatAnEarlierSendLeft pins what goes before a send: the scenarios and fixtures
+// folders in the guest, so a scenario this checkout no longer has is not walked.
+func TestClearRemovesWhatAnEarlierSendLeft(t *testing.T) {
+	cmd := vmVerifyClearCommand()
+	want := "rm -rf " + shq(vmGuestHome+"/scenarios") + " " + shq(vmVerifyFixtures)
+	if cmd != want {
+		t.Errorf("clear command:\n got %s\nwant %s", cmd, want)
+	}
+}
+
 // TestFixturesLinkPointsTheCompiledPathAtTheSentOnes pins where the fixtures are found: the harness
 // reads them from the path it was compiled at, so that path in the guest leads to what was sent.
 func TestFixturesLinkPointsTheCompiledPathAtTheSentOnes(t *testing.T) {

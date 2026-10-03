@@ -1030,14 +1030,16 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
   color: var(--c-text-muted); font-size: var(--fs-xs); text-align: center;
 }
 
-/* The press that unfolds them. It is quiet — the row above it is what the frame is about — and it is
-   not one of the pills: what it does is show more of the row, not choose anything. */
-.slot__more {
+/* The frame's text presses: the one that unfolds the row, and the small errands beside it (asking
+   the machine again, adding, editing or dropping a command, leaving the form). They are quiet — the
+   row above them is what the frame is about — and they are not pills: none of them chooses anything.
+   Named apart from the header's `.slot__more`, which is drawn the other way. */
+.slot__link {
   flex: 0 0 auto;
   padding: 0; border: 0; background: none;
   color: var(--c-text-muted); font-size: var(--fs-xs); text-decoration: underline;
 }
-.slot__more:hover { color: var(--c-text); }
+.slot__link:hover { color: var(--c-text); }
 
 /* The reader's own commands, under the choices (`AMB-D-794`). It is a quiet block: what the frame is
    for is opening a terminal, and registering one is the rarer errand of somebody whose tool the

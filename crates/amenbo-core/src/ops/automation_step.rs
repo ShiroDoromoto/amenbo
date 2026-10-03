@@ -29,8 +29,9 @@ use crate::idref::{self, RefKind};
 use crate::model::{
     AttachmentTarget, AutomationCfgKind, AutomationPauseKind, AutomationPortDirection, AutomationPortKind, AutomationRun,
     AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStoppedReason, RunDefCfg, RunDefExit, RunDefIn, RunDefPort, ERROR_EXIT,
+    AutomationStoppedReason, RunDefCfg, RunDefExit, RunDefIn, RunDefPort, StepScript, ERROR_EXIT,
 };
+use crate::ops::automation_script::Given;
 use crate::ops::automation_stop::Ended;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -87,6 +88,50 @@ pub enum Opened {
     /// thread that keeps runs going ends it once its time has come
     /// ([`super::automation_builtin::time_up`]).
     Holding { run_step_id: i64 },
+    /// **The step is a script** (`AMB-D-1016`): its execution is written down and its inputs are
+    /// gathered, and no terminal is opened. Its program is run on this outside any transaction
+    /// ([`super::automation_script::run`]), and what came of it is written down by
+    /// [`super::automation_report::script_ran`].
+    Script(Box<ScriptOpening>),
+}
+
+/// What a script step's program is started on.
+#[derive(Clone, Debug)]
+pub struct ScriptOpening {
+    /// The execution row this step is being run under, as [`Opening::run_step`] is.
+    pub run_step: AutomationRunStep,
+    /// The program, its arguments and its timeout, as the step stood at launch.
+    pub script: StepScript,
+    /// Each input that stands ready, under the name its port was declared with.
+    pub ins: Vec<(String, ScriptIn)>,
+}
+
+/// One input of a script step, as the run holds it. A file is named by its bytes in the blob store,
+/// which this transaction cannot reach: [`ScriptOpening::given`] reads them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ScriptIn {
+    /// A value as it is, or the `AMB-T-<n>` of a task.
+    Text(String),
+    /// A file attached to the run, by its name and its content address.
+    File { filename: String, blob_hash: String },
+}
+
+impl ScriptOpening {
+    /// **The inputs as the program is handed them**, a file's bytes read out of `blobs`.
+    pub fn given(&self, blobs: &crate::blob::BlobStore) -> Result<Vec<(String, Given)>> {
+        self.ins
+            .iter()
+            .map(|(name, input)| {
+                let given = match input {
+                    ScriptIn::Text(text) => Given::Text(text.clone()),
+                    ScriptIn::File { filename, blob_hash } => {
+                        Given::File { name: filename.clone(), bytes: blobs.read(blob_hash)? }
+                    }
+                };
+                Ok::<_, Error>((name.clone(), given))
+            })
+            .collect()
+    }
 }
 
 /// `<what> '<id>' not found`, the uncoded refusal the automation entities take
@@ -163,8 +208,9 @@ fn open_as(
     // as its work takes — an agent uninstalled in the middle of one leaves every step after it with
     // nothing to open. A run left `running` on that would hold its task for the rest of the session,
     // so it is ended here with the reason that says which of the five this is.
-    // A built-in names no agent: Amenbo carries it out itself.
-    if let (Some(startable), None) = (startable, def.builtin.as_ref()) {
+    // A built-in names no agent: Amenbo carries it out itself. Nor does a script: its program is
+    // what is started.
+    if let (Some(startable), None, None) = (startable, def.builtin.as_ref(), def.script.as_ref()) {
         if !startable.iter().any(|id| id == &def.agent) {
             let stopped = gave_up(tx, run)?;
             return Ok(Opened::NoAgent { run: stopped.run, agent: def.agent });
@@ -248,8 +294,12 @@ fn open_as(
     for found in &handed {
         write_in(tx, &run_step, found, now)?;
     }
-    if rehearsing && def.builtin.is_some() {
+    if rehearsing && (def.builtin.is_some() || def.script.is_some()) {
         return Ok(Opened::Ready(Box::new(Opening { run_step, run_def: def, text: String::new(), folder: None })));
+    }
+    if let Some(script) = def.script.clone() {
+        let ins = script_ins(tx, &handed)?;
+        return Ok(Opened::Script(Box::new(ScriptOpening { run_step, script, ins })));
     }
     // A built-in that holds its step open is not carried out: it stands under way until the watch
     // ends it (`AMB-D-983`).
@@ -310,6 +360,42 @@ fn working_folder(def: &AutomationRunDef, handed: &[Handed]) -> Result<Option<St
         return Ok(answer.value.as_deref().map(unquoted));
     }
     Ok(handed.iter().find(|one| one.port.name == name).and_then(|one| one.from.value.clone()))
+}
+
+/// **What a script step is handed**, input by input. A value is its text and a task its `AMB-T-<n>`, as
+/// the prompt of an agent's step spells them. A file is named by the bytes it holds, and a link
+/// attached in place of one is handed as its URL. A file that is gone is left out, as an input with
+/// nothing in it is.
+fn script_ins(tx: &WriteTx<'_>, handed: &[Handed]) -> Result<Vec<(String, ScriptIn)>> {
+    let mut ins = Vec::new();
+    for one in handed {
+        let input = match one.port.kind {
+            AutomationPortKind::Value => ScriptIn::Text(one.from.value.clone().unwrap_or_default()),
+            AutomationPortKind::File => {
+                let held = match one.from.attachment_id {
+                    Some(id) => read::attachment(tx.conn(), id)?,
+                    None => None,
+                };
+                match held {
+                    Some(held) => match (held.blob_hash, held.url) {
+                        (Some(blob_hash), _) => ScriptIn::File {
+                            filename: held.filename.unwrap_or_else(|| "file".to_string()),
+                            blob_hash,
+                        },
+                        (None, Some(url)) => ScriptIn::Text(url),
+                        (None, None) => continue,
+                    },
+                    None => continue,
+                }
+            }
+            AutomationPortKind::TaskTake | AutomationPortKind::TaskMake => match one.from.task_id {
+                Some(id) => ScriptIn::Text(idref::task(id)),
+                None => continue,
+            },
+        };
+        ins.push((one.port.name.clone(), input));
+    }
+    Ok(ins)
 }
 
 /// One setting's answer as the text it says. A setting's value is JSON (`automation_cfg.value`), so a
@@ -1033,6 +1119,7 @@ mod tests {
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
             Opened::Carried { .. } | Opened::Waiting { .. } | Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
+            Opened::Script(_) => panic!("not a script"),
         }
     }
 
@@ -1436,6 +1523,7 @@ mod tests {
                 Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
                 Opened::Carried { .. } | Opened::Waiting { .. } | Opened::Holding { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
+                Opened::Script(_) => panic!("not a script"),
             }
             assert_eq!(
                 read::automation_run_steps_of(tx.conn(), run.id).expect("read").len(),
@@ -1462,6 +1550,7 @@ mod tests {
                 Opened::Ready(_) => panic!("nothing here can start claude"),
                 Opened::Carried { .. } | Opened::Waiting { .. } | Opened::Holding { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
+                Opened::Script(_) => panic!("not a script"),
                 Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
                 Opened::NoAgent { run: stopped, agent } => {
                     assert_eq!(agent, "claude");
@@ -1706,5 +1795,192 @@ mod tests {
             let refused = open(tx, stopped.run.id, def, None).expect_err("a failed run opens nothing");
             assert!(refused.to_string().contains("failed"), "{refused}");
         });
+    }
+
+    // ───────────────────────── a script step ─────────────────────────
+
+    /// **The picture with its second spot a script** (`AMB-D-1016`): it leaves by the done way out,
+    /// optionally handing on a file `log`, or by "red", which requires a value `count` and calls a
+    /// person. The program is the test binary itself, a file this machine runs on every OS, so the
+    /// launch check lets it through; it is never started here.
+    fn a_script_step(tx: &WriteTx<'_>) -> (Picture, AutomationRun) {
+        let p = picture(tx, true, true);
+        let step = crate::ops::test_support::only_step(tx, &p.second_action);
+        let program = std::env::current_exe().expect("the test binary").to_string_lossy().into_owned();
+        let script = automation::NewScript { program, args: Vec::new(), timeout_minutes: None };
+        automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, Some(Some(script)))
+            .expect("make it a script");
+        mk_exit(tx, &p.second_action, "red");
+        mk_out(tx, &p.second_action, Some("red"), "count", AutomationPortKind::Value, true);
+        mk_out(tx, &p.second_action, None, "log", AutomationPortKind::File, false);
+        automation::edge_add(tx, AutomationPictureOwner::Automation, p.second.id, Some("red"), EdgeTarget::Halt, None)
+            .expect("red calls a person");
+        let task = crate::ops::test_support::mk_task_in(tx, "スクリプトで見る", Some(p.automation.project_id));
+        let run = a_run(tx, &p.automation);
+        let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+        crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
+        reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+        (p, run)
+    }
+
+    /// Open the script step of [`a_script_step`] on a machine that can start no agent at all: a script
+    /// starts its program, so it is not judged on one.
+    fn open_the_script(tx: &WriteTx<'_>, p: &Picture, run: &AutomationRun) -> ScriptOpening {
+        let none: Vec<String> = Vec::new();
+        match open(tx, run.id, def_of(tx, run, &p.second).id, Some(&none)).expect("open") {
+            Opened::Script(opening) => *opening,
+            other => panic!("a script step opens no terminal, not {other:?}"),
+        }
+    }
+
+    /// What a program came to, printing `out` and `err`.
+    fn ran(ended: crate::ops::automation_script::Ended) -> crate::ops::automation_script::Ran {
+        crate::ops::automation_script::Ran { ended, stdout_tail: "out\n".into(), stderr_tail: "err\n".into() }
+    }
+
+    /// A program that ended with exit code 0 and wrote `output`.
+    fn wrote(output: serde_json::Value) -> crate::ops::automation_script::Ran {
+        ran(crate::ops::automation_script::Ended::Wrote { output, files: Vec::new() })
+    }
+
+    /// The outputs a step execution put down, by their port's name.
+    fn put_down(tx: &WriteTx<'_>, run_step: &AutomationRunStep) -> Vec<(String, AutomationRunValue)> {
+        let def = read::automation_run_def(tx.conn(), run_step.run_def_id).expect("read").expect("def");
+        read::automation_run_values_of(tx.conn(), run_step.id)
+            .expect("values")
+            .into_iter()
+            .filter(|v| v.direction == AutomationPortDirection::Out)
+            .map(|v| (def.port_name(v.port_id).expect("a declared port"), v))
+            .collect()
+    }
+
+    /// **A script step is opened without a terminal and handed what its wires carry** — and is not
+    /// judged on an agent, which it names none of.
+    #[test]
+    fn a_script_step_opens_without_a_terminal_and_is_handed_its_inputs() {
+        with_tx(|tx| {
+            let (p, run) = a_script_step(tx);
+            let opening = open_the_script(tx, &p, &run);
+            assert_eq!(opening.run_step.status, AutomationRunStepStatus::Running);
+            assert_eq!(opening.ins, vec![("note".to_string(), ScriptIn::Text("the note".to_string()))]);
+            assert_eq!(opening.script.program, std::env::current_exe().expect("exe").to_string_lossy());
+            let given = opening.given(&crate::blob::BlobStore::at(std::env::temp_dir())).expect("given");
+            assert_eq!(given, vec![("note".to_string(), Given::Text("the note".to_string()))]);
+        });
+    }
+
+    /// **The way out `output.json` names is the one the step leaves by**, with the outputs listed under
+    /// it, its report, and the end of what the program printed.
+    #[test]
+    fn a_script_leaves_by_the_way_out_its_output_names() {
+        with_tx(|tx| {
+            let (p, run) = a_script_step(tx);
+            let opening = open_the_script(tx, &p, &run);
+            let output = serde_json::json!({
+                "version": 1, "exit": "red", "outs": {"count": "3", "unknown": "x"}, "report": "3 failed",
+            });
+            let next = crate::ops::automation_report::script_ran(tx, opening.run_step.id, &wrote(output), &[])
+                .expect("recorded");
+            assert!(matches!(next, crate::ops::automation_report::Next::Halted(_)), "{next:?}");
+            let ended = read::automation_run_step(tx.conn(), opening.run_step.id).expect("read").expect("row");
+            assert_eq!(ended.status, AutomationRunStepStatus::Done);
+            assert_eq!(ended.exit_id, crate::ops::test_support::way_out(tx, ended.id, "red"));
+            assert_eq!(ended.report, "3 failed");
+            assert_eq!((ended.stdout_tail.as_str(), ended.stderr_tail.as_str()), ("out\n", "err\n"));
+            let values = put_down(tx, &ended);
+            assert_eq!(values.len(), 1, "an output the way out does not declare is not read");
+            assert_eq!(values[0].0, "count");
+            assert_eq!(values[0].1.value.as_deref(), Some("3"));
+            assert_eq!(values[0].1.exit_id, ended.exit_id);
+        });
+    }
+
+    /// **A file the program left is attached to the step and handed on**, and a report left out is said
+    /// for it.
+    #[test]
+    fn a_file_a_script_left_is_attached_and_handed_on() {
+        with_tx(|tx| {
+            let (p, run) = a_script_step(tx);
+            let opening = open_the_script(tx, &p, &run);
+            let blob = crate::blob::BlobRef { hash: "b".repeat(64), size_bytes: 5 };
+            let output = serde_json::json!({"version": 1, "exit": crate::model::DONE_EXIT, "outs": {"log": "log.txt"}});
+            let next = crate::ops::automation_report::script_ran(
+                tx,
+                opening.run_step.id,
+                &wrote(output),
+                &[("log.txt".to_string(), blob)],
+            )
+            .expect("recorded");
+            assert!(matches!(next, crate::ops::automation_report::Next::Closed(_)), "{next:?}");
+            let ended = read::automation_run_step(tx.conn(), opening.run_step.id).expect("read").expect("row");
+            assert_eq!(ended.exit_id, crate::ops::test_support::way_out(tx, ended.id, crate::model::DONE_EXIT));
+            assert_eq!(ended.report, format!("The script left through \"{}\".", crate::model::DONE_EXIT));
+            let values = put_down(tx, &ended);
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0].0, "log");
+            let held = read::attachment(tx.conn(), values[0].1.attachment_id.expect("a file"))
+                .expect("read")
+                .expect("the attachment");
+            assert_eq!(held.target_type, AttachmentTarget::AutomationRunStep);
+            assert_eq!(held.target_id, ended.id);
+            assert_eq!(held.filename.as_deref(), Some("log.txt"));
+            assert_eq!(held.blob_hash, Some("b".repeat(64)));
+            assert_eq!(held.size_bytes, Some(5));
+        });
+    }
+
+    /// An exit status that says the program ended with `code`.
+    fn exit_code(code: i32) -> std::process::ExitStatus {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            std::process::ExitStatus::from_raw(code << 8)
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::ExitStatusExt;
+            std::process::ExitStatus::from_raw(code as u32)
+        }
+    }
+
+    /// **Each of the six ways a script can fail leaves by the error way out** (`AMB-D-1016`) — not
+    /// started, past its timeout, ended other than with 0, no `output.json` or one that does not read, a
+    /// way out the step does not declare, a required output left out — with the reason in the report,
+    /// the end of what it printed kept, and nothing it listed put down.
+    #[test]
+    fn a_script_that_fails_any_of_six_ways_leaves_by_the_error_way_out() {
+        use crate::ops::automation_script::Ended as Came;
+        let cases = vec![
+            ("not started", ran(Came::NotStarted("No such file".into())), "could not be started: No such file"),
+            ("timed out", ran(Came::TimedOut), "still running after 30 minutes"),
+            ("failed", ran(Came::Failed(exit_code(4))), "exit code 4"),
+            ("no output", ran(Came::NoOutput), "wrote no output.json"),
+            ("not json", ran(Came::NotJson("expected value".into())), "not JSON: expected value"),
+            ("no version", wrote(serde_json::json!({"exit": "red", "outs": {"count": "1"}})), "\"version\" is not 1"),
+            (
+                "undeclared",
+                wrote(serde_json::json!({"version": 1, "exit": "blue", "outs": {"count": "1"}})),
+                "names a way out \"blue\" the step does not declare",
+            ),
+            (
+                "required left out",
+                wrote(serde_json::json!({"version": 1, "exit": "red", "outs": {"log": "x"}})),
+                "leaves out what leaving through \"red\" requires: \"count\"",
+            ),
+        ];
+        for (case, came, why) in cases {
+            with_tx(|tx| {
+                let (p, run) = a_script_step(tx);
+                let opening = open_the_script(tx, &p, &run);
+                let next = crate::ops::automation_report::script_ran(tx, opening.run_step.id, &came, &[])
+                    .expect("recorded");
+                assert!(matches!(next, crate::ops::automation_report::Next::Halted(_)), "{case}: {next:?}");
+                let ended = read::automation_run_step(tx.conn(), opening.run_step.id).expect("read").expect("row");
+                assert_eq!(ended.exit_id, crate::ops::test_support::way_out(tx, ended.id, ERROR_EXIT), "{case}");
+                assert!(ended.report.contains(why), "{case}: {}", ended.report);
+                assert_eq!((ended.stdout_tail.as_str(), ended.stderr_tail.as_str()), ("out\n", "err\n"), "{case}");
+                assert!(put_down(tx, &ended).is_empty(), "{case}");
+            });
+        }
     }
 }

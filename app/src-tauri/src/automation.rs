@@ -2081,6 +2081,15 @@ fn open_one(
             let (project, builtin) = builtin_of_step(store, run_id, run_step_id)?;
             (project, None, Some(builtin), Vec::new())
         }
+        // A script step (`AMB-D-1016`): its execution stands under way, and no terminal is opened for
+        // it. Its program is not started from here, so only the log says it was opened.
+        Opened::Script(script) => {
+            log::info!("run {run_id} opened script step {} ({})", script.run_step.id, script.script.program);
+            let run = read::automation_run(store.read_model().conn(), run_id)?.ok_or_else(|| {
+                CmdError::from(amenbo_core::error::Error::not_found(format!("run '{run_id}' not found")))
+            })?;
+            (run.project_id, None, None, Vec::new())
+        }
     };
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
     // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,

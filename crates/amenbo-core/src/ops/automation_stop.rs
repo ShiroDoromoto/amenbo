@@ -735,6 +735,7 @@ mod tests {
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
             Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
+            Opened::Script(_) => panic!("not a script"),
         }
     }
 
@@ -1583,6 +1584,7 @@ mod tests {
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
             Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
+            Opened::Script(_) => panic!("not a script"),
         }
     }
 

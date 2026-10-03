@@ -1667,6 +1667,31 @@ impl Store {
         )
     }
 
+    /// **A script step's program has ended**: write down what it came to, and answer with what the run
+    /// does next, as [`Self::automation_done`] does ([`crate::ops::automation_report::script_ran`]).
+    ///
+    /// The files it left are put in the blob store first, outside the transaction, as an attachment's
+    /// bytes always are. One that no output names stays unreferenced, and the sweep collects it
+    /// ([`Self::gc_blobs`]).
+    pub fn automation_script_ran(
+        &mut self,
+        run_step_id: i64,
+        ran: &crate::ops::automation_script::Ran,
+    ) -> Result<crate::ops::automation_report::Next> {
+        let blobs = self.blobs();
+        let kept = match &ran.ended {
+            crate::ops::automation_script::Ended::Wrote { files, .. } => files
+                .iter()
+                .map(|(name, bytes)| Ok::<_, crate::error::Error>((name.clone(), blobs.ingest_bytes(bytes)?)))
+                .collect::<Result<Vec<_>>>()?,
+            _ => Vec::new(),
+        };
+        self.write_one(
+            &[WriteTarget::AttachTo(crate::model::AttachmentTarget::AutomationRunStep, run_step_id)],
+            |tx| crate::ops::automation_report::script_ran(tx, run_step_id, ran, &kept),
+        )
+    }
+
     /// **End a held step whose time has come** — the built-in that waits (`AMB-D-983`) — by its done
     /// way out, and answer with what the run does next, as [`Self::automation_done`] does
     /// ([`crate::ops::automation_builtin::time_up`]).

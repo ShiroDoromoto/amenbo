@@ -3246,6 +3246,7 @@ mod tests {
                 }
                 crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
                 crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
+                crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
             };
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
 
@@ -3350,6 +3351,7 @@ mod tests {
             }
             crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
+            crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
         };
         let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
         crate::ops::automation_report::take(tx, opening.run_step.id, task).expect("take");

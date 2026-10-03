@@ -1964,8 +1964,8 @@ pub fn is_open(app: &tauri::AppHandle, session: &str) -> bool {
 const STEP_SIZE: Size = (120, 32);
 
 /// **End the terminal of a run's step before**, where one is still standing — as a step's terminal is
-/// started ([`open_step`]), as a built-in is carried out in its place (`crate::automation`), which
-/// takes the run's pane over from it just the same, and once the run is over
+/// started ([`open_step`]), as a built-in is carried out or a script is run in its place
+/// (`crate::automation`), which takes the run's pane over from it just the same, and once the run is over
 /// (`crate::automation_watch`).
 ///
 /// It is taken out of the registry before it is killed, the way [`pty_close`] does, so its ending

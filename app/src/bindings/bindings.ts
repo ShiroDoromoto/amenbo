@@ -430,7 +430,12 @@ exitName?: string,
  * **When a built-in that holds its step open stops waiting** — the built-in that waits
  * (`AMB-D-983`), as an RFC3339 instant. Absent on every other built-in, and once it has ended.
  */
-heldUntil?: string, };
+heldUntil?: string, 
+/**
+ * **The program a script step runs** (`AMB-D-1016`), by the full path its step was written
+ * with. Absent on a built-in: a card that carries it is a script's, not one Amenbo carries out.
+ */
+program?: string, };
 
 /**
  * **One automation in the list** — what the "automations" tab draws a row from.

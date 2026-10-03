@@ -19,6 +19,9 @@
 // **A built-in being carried out says what it does** (`AMB-T-5753`), in the words the library reads
 // it with. It has no terminal, and a turning mark alone says only that something is happening.
 //
+// **A script step's card says which program is running** (`AMB-D-1016`), by its path as the step was
+// written with it: the program is the project's own, so there are no library words for what it does.
+//
 // **A built-in that has been carried out shows the way out it left by** (`AMB-T-5506`), as the mark the
 // picture draws that way out with: the run goes on from there, and which way it went is what a reader
 // watching the pane asks next.
@@ -54,6 +57,9 @@ export function BuiltinCard({ builtin, run = null }: { builtin: BuiltinRun; run?
       {builtin.waiting && held !== null && held.tasks > 0 && <HeldBack held={held} />}
       {builtin.waiting && <p className="slot__builtin-next">{t("auto.run.body.taskWaitNext")}</p>}
       {does !== null && <p className="slot__builtin-does">{does}</p>}
+      {!builtin.finished && builtin.program !== undefined && (
+        <code className="slot__builtin-program">{builtin.program}</code>
+      )}
       {!builtin.finished && builtin.heldUntil !== undefined && (
         <span className="slot__builtin-until">{tf("auto.run.heldUntil", { at: exactLabel(builtin.heldUntil) })}</span>
       )}

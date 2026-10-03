@@ -9,7 +9,8 @@
 //! **It is not where the truth is.** What a run is doing is in the store, written by the ops that do
 //! it; this thread only asks and opens. It dies with the app, and a run that was under way when that
 //! happened is swept on the way back up (`AMB-T-5274`) — so nothing is kept here that a restart would
-//! have to rebuild.
+//! have to rebuild. So does the thread a script step's program runs on (`crate::automation`): a run
+//! whose script was running is swept the same way, failed as a crash (`AMB-D-961`).
 //!
 //! **What one look costs.** One read of the runs that are running, and one read per run of what it is
 //! waiting for — a few more where a step is under way, for whether it is a wait whose time has come
@@ -97,8 +98,9 @@ pub fn watch(app: tauri::AppHandle) {
 
 /// **Stop what a previous launch left standing**, once, before this one acts on any run.
 ///
-/// A run's steps are terminals of the app, so a `running` row on the way up is a record of what was
-/// true before rather than of anything going on now: left alone it holds a task nobody is working.
+/// A run's steps are terminals and threads of the app, so a `running` row on the way up is a record of
+/// what was true before rather than of anything going on now: left alone it holds a task nobody is
+/// working.
 ///
 /// **Nobody is told.** What a person needs to find is the task, and stopping a run hands that back
 /// to `todo` with a comment saying how far it got — which is where they work, and it is there

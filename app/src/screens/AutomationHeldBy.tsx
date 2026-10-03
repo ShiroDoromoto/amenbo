@@ -1,18 +1,14 @@
-// **The runs holding a definition**, drawn over a build screen while there is one (`AMB-D-961`).
+// **The runs going on a definition**, drawn over a build screen while there is one.
 //
-// Core refuses every rewrite of an automation, or of an action placed on one, while a run of it is
-// running or paused. A screen that went on offering its fields would let a reader press and then be
-// refused, so both build screens hold their fields shut for as long as this list is not empty
-// (`./AutomationBuildScreen`, `./AutomationActionBuildScreen`).
+// A definition is written while a run of it is running or paused, and the run goes on from the
+// snapshot it took at its start (`AMB-D-1015`). What is written here reaches it only at the next
+// start, or at a resume from a pause at a task's end — so the runs are named where the writing is
+// done (`./AutomationBuildScreen`, `./AutomationActionBuildScreen`).
 //
-// **Held shut is a mark, and the way out is a button.** Each run is one band: the lock, which run —
-// of which automation, over an action — and on which step, and the moves that end the hold where it
-// is read: go to the pane the run is drawn in, or act on the run here with the two moves its state
-// has (`AMB-D-1002`) — a run going is paused or force-cancelled, a paused one picked up again or
-// cancelled. A sentence explaining that cancelling the run frees the definition is what the cancel
-// button already says.
+// Each run is one band: which run — of which automation, over an action — and on which step, the way
+// to the pane it is drawn in, and the two moves its state has (`AMB-D-1002`) — a run going is paused
+// or force-cancelled, a paused one picked up again or cancelled.
 import { useState } from "react";
-import { LockMark } from "./automationParts";
 import { cancelRun, forceCancelRun, pauseRun, resumeRun } from "../core/automations";
 import { builtinWord } from "../core/builtinWords";
 import { errText, t, tf } from "../core/i18n";
@@ -26,7 +22,7 @@ export function AutomationHeldBy({
 }: {
   runs: readonly AutomationRunCardDto[];
   /** Whether each band names the automation the run is of — on an action's build screen, where the
-   *  runs holding it can be of any automation it is placed on. */
+   *  runs going on it can be of any automation it is placed on. */
   withAutomation?: boolean;
   /** Go to the pane a run is drawn in. Absent where there is no workspace face to send anybody to. */
   onGoToRun?: (project: number, run: number) => void;
@@ -55,7 +51,6 @@ export function AutomationHeldBy({
       <ul className="autoheld__runs">
         {runs.map((run) => (
           <li key={run.run} className="autoheld__run">
-            <LockMark />
             <span className="autoheld__what">
               {tf("auto.held.by", { run: run.run })}
               {withAutomation && <span className="autoheld__of">{run.automationName}</span>}

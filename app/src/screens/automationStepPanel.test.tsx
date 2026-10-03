@@ -291,21 +291,6 @@ describe("the panel of one spot", () => {
     expect(opened).toHaveBeenCalledWith(4);
   });
 
-  it("holds every write shut while a run holds the automation, and still goes to the action (AMB-D-961)", async () => {
-    const opened = vi.fn();
-    await render({ automation: detail(), placementId: 1, onOpenAction: opened, readOnly: true });
-    const press = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (one) => one.textContent?.startsWith(t("auto.place.open")),
-    )!;
-    expect(press.closest("fieldset")).toBeNull();
-    await act(async () => press.click());
-    expect(opened).toHaveBeenCalledWith(4);
-    const remove = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (one) => one.textContent === t("auto.step.placementRemove"),
-    )!;
-    expect(remove.closest("fieldset")?.disabled).toBe(true);
-  });
-
   it("says an action with nothing in it cannot be started until it is built", async () => {
     await render({ automation: detail(), placementId: 1 });
     expect(container.textContent).toContain(t("auto.place.empty"));
@@ -605,8 +590,6 @@ describe("the panel of one spot", () => {
 
     const said = detail({ edges: [{ id: 5, fromId: 1, exitName: "完了", ends: "done" }] });
     await render({ automation: said, placementId: 1, onPlaceNext: placeNext });
-    expect(offers()).toHaveLength(0);
-    await render({ automation: detail(), placementId: 1, onPlaceNext: placeNext, readOnly: true });
     expect(offers()).toHaveLength(0);
   });
 

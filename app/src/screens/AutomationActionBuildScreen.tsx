@@ -32,10 +32,10 @@
 // automation is the same action the library lists, and whether it can be changed is its own — not the
 // screen's it was reached from.
 //
-// **An action a run is going on is read, not written, for as long as the run goes** (`AMB-D-961`). Core
-// refuses every rewrite of it while a run of an automation placing it is running or paused, so the
-// screen holds itself shut, and names those runs over the picture
-// with the way to each one's pane (`./AutomationHeldBy`).
+// **An action a run is going on is written all the same** (`AMB-D-1015`). A run of an automation
+// placing it goes on from the snapshot it took at its start, and what is written here is what the
+// next start takes. Those runs are named over the picture with the way to each one's pane
+// (`./AutomationHeldBy`).
 //
 // **A built-in's action is read as its definition** (`./AutomationBuiltinScreen`). Its rows are Amenbo's
 // own and core refuses every edit of them (`AMB-D-964`), so a box on a picture opening one lands on the
@@ -122,12 +122,10 @@ function PlacedOn({
 function TitleInput({
   title,
   label,
-  readOnly,
   onRename,
 }: {
   title: string;
   label: string;
-  readOnly: boolean;
   onRename: (to: string) => void;
 }) {
   const [name, setName] = useDraft(title);
@@ -136,7 +134,6 @@ function TitleInput({
       className="actpanel__titlein"
       aria-label={tf("auto.act.nameOf", { place: label })}
       value={name}
-      readOnly={readOnly}
       onChange={(e) => setName(e.target.value)}
       onBlur={() => name.trim() !== "" && name !== title && onRename(name)}
     />
@@ -153,7 +150,6 @@ export function Panel({
   title,
   onRename,
   onClose,
-  readOnly = false,
   children,
 }: {
   place: string;
@@ -163,8 +159,6 @@ export function Panel({
    *  text — is the box it is typed in, so the name is not asked for again as a field under it. */
   onRename?: (to: string) => void;
   onClose: () => void;
-  /** Hold every field and press in the body shut — the head's close stays live. */
-  readOnly?: boolean;
   children: ReactNode;
 }) {
   const pane = usePaneSlot();
@@ -187,7 +181,6 @@ export function Panel({
             key={String(title)}
             title={String(title)}
             label={place}
-            readOnly={readOnly}
             onRename={onRename}
           />
         )}
@@ -200,9 +193,7 @@ export function Panel({
           <Icon name="close" />
         </button>
       </div>
-      {/* A disabled fieldset shuts every control under it, the panels' own included, without
-          each of them having to be told. */}
-      <fieldset className="actpanel__body" disabled={readOnly}>{children}</fieldset>
+      <div className="actpanel__body">{children}</div>
     </aside>
   );
   if (pane === null) return panel;
@@ -234,14 +225,13 @@ export function AutomationActionBuildScreen({
   headLead?: ReactNode;
   /** A press at the far end of the head, after "Edit". */
   headEnd?: ReactNode;
-  /** Go to the pane a run holding this action is drawn in. */
+  /** Go to the pane a run going on this action is drawn in. */
   onGoToRun?: (project: number, run: number) => void;
   /** Go to the build screen of an automation this action is placed on. Absent, the names are read
    *  and not pressed. */
   onGoToAutomation?: (project: number, automation: number) => void;
 }) {
   const action = useAutomationAction(id);
-  const readOnly = (action?.heldBy.length ?? 0) > 0;
   // What the panel is showing: a pressed step, the action itself, its input or its output — or
   // nothing, until one is pressed. An action opens on the picture, and a place picked for the reader
   // would be one they did not choose. The one exception is a step they chose elsewhere: the one a
@@ -306,8 +296,6 @@ export function AutomationActionBuildScreen({
             <ReachChip global={action.global} />
             <span className="actdecl__used">{usedCount(action.usedBy)}</span>
             {saved.head}
-            {/* "Edit" whether or not a run holds it: held, the panel it opens is shut, which is where
-                a reader finds out — the head does not change its word for it. */}
             <button
               type="button"
               className={part === "about" ? "btn btn--on actbuild__edit" : "btn actbuild__edit"}
@@ -327,7 +315,7 @@ export function AutomationActionBuildScreen({
 
       <div className="actbuild__canvashead">
         <span className="actbuild__sec">{t("auto.act.stepsPlace")}</span>
-        {action !== null && action.steps.length > 0 && !readOnly && (
+        {action !== null && action.steps.length > 0 && (
           <button
             type="button"
             className="btn"
@@ -343,14 +331,12 @@ export function AutomationActionBuildScreen({
           insertLabel={t("auto.act.insert")}
           selectedBoxId={step ?? undefined}
           onPickBox={pickBox}
-          onInsert={readOnly ? undefined : (edgeId) => setAdding({ picture: "action", edgeId })}
-          onOpenExit={
-            readOnly ? undefined : ({ boxId, exitName }) => setAdding({ picture: "action", fromId: boxId, exitName })
-          }
+          onInsert={(edgeId) => setAdding({ picture: "action", edgeId })}
+          onOpenExit={({ boxId, exitName }) => setAdding({ picture: "action", fromId: boxId, exitName })}
           selectedPart={part === "in" || part === "out" ? part : undefined}
           onPickPart={pickPart}
         />
-        {action !== null && action.steps.length === 0 && !readOnly && (
+        {action !== null && action.steps.length === 0 && (
           <button
             type="button"
             className="btn btn--primary"
@@ -371,7 +357,6 @@ export function AutomationActionBuildScreen({
             part === "about" ? (to) => void run(editAutomationAction(action.id, { name: to })) : undefined
           }
           onClose={() => setPart(null)}
-          readOnly={readOnly}
         >
           {part === "about" ? (
             <>
@@ -411,19 +396,14 @@ export function AutomationActionBuildScreen({
           title={pressed.name}
           onRename={(to) => void run(editAutomationStep(pressed.id, { name: to }))}
           onClose={() => setStep(null)}
-          readOnly={readOnly}
         >
           <AutomationActionStepPanel
             action={action}
             stepId={step}
             onRemoved={() => setStep(null)}
-            onPutNext={
-              readOnly
-                ? undefined
-                : (exitName) => {
-                    if (step !== null) setAdding({ picture: "action", fromId: step, exitName });
-                  }
-            }
+            onPutNext={(exitName) => {
+              if (step !== null) setAdding({ picture: "action", fromId: step, exitName });
+            }}
           />
         </Panel>
       )}

@@ -457,8 +457,10 @@ pub fn settle(tx: &WriteTx<'_>, before: AutomationRun, kind: AutomationPauseKind
 ///   it, with `startable` and `models` as [`crate::ops::automation_run::Launcher`] takes them; one that
 ///   does not pass is refused, and the run stays paused.
 /// - **Paused at the end of an action**, it goes on from the copy it has, at the step the way out the
-///   last step left through leads to. A run whose copy leads nowhere from there fails rather than
-///   resumes.
+///   last step left through leads to — never from the automation as it stands now, since it may be in
+///   the middle of a task and the step it stood at may be gone from it. A run whose copy leads nowhere
+///   from there fails rather than resumes. A run paused before the pause was kept on it (`None`) is
+///   taken as this one: it may hold a task as well.
 pub fn resume(
     tx: &WriteTx<'_>,
     run_id: i64,
@@ -476,7 +478,7 @@ pub fn resume(
         Some(AutomationPauseKind::BeforeNextTask) => {
             crate::ops::automation_run::copy_down_again(tx, &before, startable, models)?
         }
-        _ => match next_after_the_pause(tx.conn(), &before)? {
+        Some(AutomationPauseKind::EndOfAction) | None => match next_after_the_pause(tx.conn(), &before)? {
             Some(next) => next,
             None => {
                 ended(tx, before, Ending::Failed(AutomationStoppedReason::NoWayOn))?;
@@ -892,6 +894,49 @@ mod tests {
             assert_eq!(after.status, AutomationRunStatus::Running);
             assert_eq!(after.pause_kind, None, "a running run is stopped at neither");
             assert_eq!(next.step_id, Some(p.second.id), "it goes on where it left off");
+        });
+    }
+
+    /// **Picked up after pausing at the end of an action, a run goes on from the copy it launched with,
+    /// not from the automation rewritten since** (`AMB-D-1015`): nothing is copied down, and the step it
+    /// opens next is the one written before.
+    #[test]
+    fn resuming_after_the_end_of_an_action_keeps_the_copy_it_has() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            a_task_in_hand(tx, p.project, step.run_step.id);
+            pause(tx, run.id).expect("pause");
+            done(tx, step.run_step.id, None, "Looked at it.").expect("done");
+            let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            let second = def_of(tx, &run, &p.second);
+            automation::step_update(
+                tx,
+                second.step_id.expect("the fix's step"),
+                None,
+                Some("fix it another way"),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("rewrite the fix");
+
+            let Resumed { run: after, next } =
+                resume(tx, run.id, None, crate::ops::automation_run::nothing_asked()).expect("resume");
+            assert_eq!(after.status, AutomationRunStatus::Running);
+            assert_eq!(next.id, second.id, "the step after the one it paused on, from the copy it has");
+            assert_eq!(next.prompt.as_deref(), Some("fix"), "the fix as it was written at launch");
+            assert_eq!(
+                read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(),
+                launched_with.len(),
+                "nothing is copied down afresh",
+            );
         });
     }
 

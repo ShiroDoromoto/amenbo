@@ -2028,7 +2028,7 @@ fn all_commands() -> Value {
                    { "name": "--project <name|id>", "help": "project, with --before-next-task (defaults to the bound project)" },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation pause 7 --actor ai", "amenbo automation pause --before-next-task --actor ai"])),
-        cmd("automation resume", "Picks a paused run up again, from the way out the step before it left through.",
+        cmd("automation resume", "Picks a paused run up again. A run paused at the end of an action goes on from the copy it launched with, from the way out the step before it left through — the automation rewritten since is not used, since the run may be in the middle of a task. A run paused before its next task (`automation pause --before-next-task`) starts again from the entry of the automation as it stands now, after the same checks a launch makes; one that does not pass them is refused and stays paused.",
             json!([{ "name": "<run>", "help": "run id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation resume 7 --actor ai"])),

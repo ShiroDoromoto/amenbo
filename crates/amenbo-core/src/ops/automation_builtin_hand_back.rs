@@ -15,6 +15,11 @@
 //! closes a task keeps it ([`crate::ops::automation_builtin_close`]): that is where the agent said why the
 //! task is a person's. It is not written twice where that step already carried it onto the task.
 //!
+//! **The stretch ends here**, not where the run next takes a task or stops. Back in `todo`, the task is
+//! any run's or session's to reserve at once (`AMB-D-139`), and from then on what it is in is theirs: a
+//! run that takes its next task, or ends, does not answer for it as one it left open, nor hand it back a
+//! second time ([`crate::ops::automation_stop`]).
+//!
 //! It leaves by the done way out. A task already closed is left as it is and leaves the same way; no
 //! task at all leaves by the error way out.
 
@@ -23,7 +28,8 @@ use crate::model::{ActorKind, TaskStatus, DONE_EXIT};
 use crate::ops::automation_builtin::{Builtin, BuiltinExit, Carried, Carry, Work};
 use crate::ops::automation_builtin_close::{already_on_the_task, last_report};
 use crate::run_wording::builtin as say;
-use crate::store_engine::read;
+use crate::store_engine::{read, record};
+use crate::time::Timestamp;
 
 pub(crate) const HAND_BACK_TASK: Builtin = Builtin {
     key: "hand_back_task",
@@ -66,7 +72,22 @@ fn hand_back(carry: &Carry<'_, '_>) -> Result<Carried> {
         crate::ops::task::set_status(tx, task_id, TaskStatus::Todo, ActorKind::Ai)?;
     }
     crate::ops::task::set_assignee(tx, task_id, Some(ActorKind::Human), ActorKind::Ai)?;
+    end_stretch(carry)?;
     Ok(Carried { exit: DONE_EXIT, report: say(lang, "handedBack", &[("task", &named), ("title", &task.title)]) })
+}
+
+/// Close the stretch this step is in, the one the task was taken in.
+fn end_stretch(carry: &Carry<'_, '_>) -> Result<()> {
+    let Some(stretch_id) = carry.run_step.run_task_id else { return Ok(()) };
+    let Some(before) = read::automation_run_task(carry.tx.conn(), stretch_id)? else { return Ok(()) };
+    if before.ended_at.is_some() {
+        return Ok(());
+    }
+    let now = Timestamp::now();
+    let mut ended = before.clone();
+    ended.ended_at = Some(now);
+    ended.updated_at = now;
+    crate::ops::emit_update(carry.tx, record::automation_run_task(&before), record::automation_run_task(&ended))
 }
 
 #[cfg(test)]
@@ -77,7 +98,7 @@ mod tests {
     };
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN, WAIT, WHEN_NONE};
     use crate::ops::automation_report::{self, Next};
     use crate::ops::automation_run::{launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
@@ -95,7 +116,8 @@ mod tests {
         work: AutomationPlacement,
     }
 
-    fn picture(tx: &WriteTx<'_>, project: i64) -> Picture {
+    /// `waits` sets the take to wait for a task rather than end the run where there is none.
+    fn picture(tx: &WriteTx<'_>, project: i64, waits: bool) -> Picture {
         let automation =
             automation::add(tx, project, NewAutomation { name: "hand back".into(), ..Default::default() })
                 .expect("automation");
@@ -106,7 +128,11 @@ mod tests {
         let back = automation::placement_add(tx, automation.id, action(tx, "hand_back_task").expect("back").id)
             .expect("place hand back");
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
+        if waits {
+            automation::cfg_set(tx, take.id, WHEN_NONE, Some(&format!("\"{WAIT}\""))).expect("wait");
+        } else {
+            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
+        }
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(back.id), None).expect("work → back");
         automation::edge_add(tx, on, back.id, None, EdgeTarget::Go(take.id), None).expect("back → take");
         let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
@@ -135,7 +161,7 @@ mod tests {
     fn it_hands_the_task_to_a_person_and_the_run_takes_the_next() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let p = picture(tx, project);
+            let p = picture(tx, project, false);
             let first = for_ai(tx, project, "外のもの");
             let claude = ["claude".to_string()];
             let by = Launcher {
@@ -204,6 +230,104 @@ mod tests {
                 .into_iter()
                 .any(|s| s.status == AutomationRunStepStatus::Failed);
             assert!(!failed, "nothing on the way failed");
+        });
+    }
+
+    fn launched(tx: &WriteTx<'_>, p: &Picture) -> crate::model::AutomationRun {
+        let claude = ["claude".to_string()];
+        let by = Launcher {
+            startable: Some(&claude),
+            models: nothing_asked(),
+            workspace_open: Some(true),
+            by: Some(ActorKind::Ai),
+        };
+        launch(tx, p.automation.id, &by).expect("launch")
+    }
+
+    fn entry_of(tx: &WriteTx<'_>, run_id: i64) -> i64 {
+        read::automation_run_defs_of(tx.conn(), run_id)
+            .expect("defs")
+            .into_iter()
+            .find(|d| d.entry)
+            .expect("the entry")
+            .id
+    }
+
+    /// Launch the picture, take the one task there is, look at it, and hand it back — leaving the run
+    /// before its take again. Answers the run and the take's step.
+    fn handed_back(tx: &WriteTx<'_>, p: &Picture) -> (crate::model::AutomationRun, i64) {
+        let claude = ["claude".to_string()];
+        let run = launched(tx, p);
+        let Opened::Carried { next: Next::Step(work), .. } =
+            open(tx, run.id, entry_of(tx, run.id), Some(&claude)).expect("take")
+        else {
+            panic!("the take goes on to the work");
+        };
+        let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("open the work") else {
+            panic!("the work opens a terminal");
+        };
+        let Next::Step(back) =
+            automation_report::done(tx, opening.run_step.id, None, "Not ours.").expect("report")
+        else {
+            panic!("the work goes on to the hand back");
+        };
+        let Opened::Carried { next: Next::Step(take), .. } =
+            open(tx, run.id, back.id, Some(&claude)).expect("hand back")
+        else {
+            panic!("the hand back goes on to the take");
+        };
+        (run, take.id)
+    }
+
+    /// **Another run that takes the handed-back task at once does not fail this one** — the task is no
+    /// longer this run's, so coming to the end with it in progress leaves nothing open of its own.
+    #[test]
+    fn a_task_another_run_takes_at_once_is_not_one_this_run_left_open() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let p = picture(tx, project, false);
+            let task = for_ai(tx, project, "外のもの");
+            let (a, take) = handed_back(tx, &p);
+
+            crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Human).expect("to the AI");
+            let b = launched(tx, &p);
+            let Opened::Carried { next: Next::Step(_), .. } =
+                open(tx, b.id, entry_of(tx, b.id), Some(&["claude".to_string()])).expect("take")
+            else {
+                panic!("the other run takes the task");
+            };
+            let held = read::automation_run_task_last(tx.conn(), b.id).expect("read").expect("stretch");
+            assert_eq!(held.task_id, Some(task), "the other run holds it");
+
+            let Opened::Carried { next: Next::Closed(ended), .. } =
+                open(tx, a.id, take, Some(&[])).expect("take again")
+            else {
+                panic!("with nothing left to take, the run comes to its end");
+            };
+            assert_eq!(ended.run.status, AutomationRunStatus::Completed, "{:?}", ended.run.stopped_reason);
+            assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::InProgress));
+            let b = read::automation_run(tx.conn(), b.id).expect("read").expect("run");
+            assert_eq!(b.status, AutomationRunStatus::Running, "the other run still holds it");
+        });
+    }
+
+    /// **A run waiting for its next task does not fail when the one it handed back is reserved** — the
+    /// take that waits is not asked about a task this run has let go of.
+    #[test]
+    fn a_run_waiting_to_take_is_not_failed_by_a_reservation_of_what_it_handed_back() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let p = picture(tx, project, true);
+            let task = for_ai(tx, project, "外のもの");
+            let (run, take) = handed_back(tx, &p);
+
+            crate::ops::task::set_status(tx, task, TaskStatus::InProgress, ActorKind::Human)
+                .expect("a session reserves it");
+            match open(tx, run.id, take, Some(&[])).expect("take again") {
+                Opened::Waiting { run } => assert_eq!(run.status, AutomationRunStatus::Running),
+                other => panic!("with nothing to take it waits, not {other:?}"),
+            }
+            assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::InProgress));
         });
     }
 }

@@ -44,7 +44,8 @@ use crate::model::{
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
-    AutomationWire, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, DONE_EXIT, ERROR_EXIT,
+    AutomationWire, StepScript, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
+    ERROR_EXIT, MAX_SCRIPT_TIMEOUT_MINUTES,
 };
 use crate::ops::{automation_builtin, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -1599,6 +1600,17 @@ pub struct NewStep {
     pub show_notes: bool,
     pub show_decisions: bool,
     pub show_comments: bool,
+    /// The script the step is, or `None` for a step an agent carries out (`AMB-D-1016`).
+    pub script: Option<NewScript>,
+}
+
+/// A script as it is written: the timeout may be left out, and then it is
+/// [`DEFAULT_SCRIPT_TIMEOUT_MINUTES`].
+#[derive(Clone, Debug)]
+pub struct NewScript {
+    pub program: String,
+    pub args: Vec<String>,
+    pub timeout_minutes: Option<i64>,
 }
 
 impl NewStep {
@@ -1614,8 +1626,32 @@ impl NewStep {
             show_notes: true,
             show_decisions: true,
             show_comments: true,
+            script: None,
         }
     }
+}
+
+/// A script as it may be saved (`AMB-D-1016`). The program is named by its full path, wherever it is —
+/// the folder it would be looked up from is not the step's to know. An argument is one line, because
+/// that is how they are written down. The timeout is between 1 and [`MAX_SCRIPT_TIMEOUT_MINUTES`]
+/// minutes.
+fn checked_script(new: NewScript) -> Result<StepScript> {
+    if !std::path::Path::new(&new.program).is_absolute() {
+        return Err(Error::invalid(format!(
+            "a script's program is named by its full path, and '{}' is not one",
+            new.program
+        )));
+    }
+    if new.args.iter().any(|arg| arg.contains(['\n', '\r'])) {
+        return Err(Error::invalid("a script's argument is one line — put each on a line of its own"));
+    }
+    let timeout_minutes = new.timeout_minutes.unwrap_or(DEFAULT_SCRIPT_TIMEOUT_MINUTES);
+    if !(1..=MAX_SCRIPT_TIMEOUT_MINUTES).contains(&timeout_minutes) {
+        return Err(Error::invalid(format!(
+            "a script's timeout is 1 to {MAX_SCRIPT_TIMEOUT_MINUTES} minutes, not {timeout_minutes}"
+        )));
+    }
+    Ok(StepScript { program: new.program, args: new.args, timeout_minutes })
 }
 
 /// The library action a placement may stand on has to be within reach of the automation's project: its
@@ -1641,6 +1677,7 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
     let action = live_action(tx, action_id)?;
     not_built_in(tx, Def::Action(action_id))?;
     let name = checked_name("step", &new.name)?;
+    let script = new.script.map(checked_script).transpose()?;
     let sibs = read::automation_action_step_siblings(tx.conn(), action_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
     let now = Timestamp::now();
@@ -1651,6 +1688,7 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
         name,
         prompt: new.prompt,
         builtin: None,
+        script,
         interactive: new.interactive,
         work_dir_ref: new.work_dir_ref,
         report_to_task: new.report_to_task,
@@ -1781,7 +1819,8 @@ fn write_step(
     Ok(step)
 }
 
-/// Change a step. Only the `Some` fields are written.
+/// Change a step. Only the `Some` fields are written. `script` turns the step into a script, or with
+/// `Some(None)` back into a step an agent carries out; it is written whole.
 #[allow(clippy::too_many_arguments)]
 pub fn step_update(
     tx: &WriteTx<'_>,
@@ -1795,6 +1834,7 @@ pub fn step_update(
     show_notes: Option<bool>,
     show_decisions: Option<bool>,
     show_comments: Option<bool>,
+    script: Option<Option<NewScript>>,
 ) -> Result<AutomationStep> {
     let before = live_step(tx, id)?;
     not_built_in(tx, Def::Step(id))?;
@@ -1825,6 +1865,9 @@ pub fn step_update(
     }
     if let Some(show_comments) = show_comments {
         after.show_comments = show_comments;
+    }
+    if let Some(script) = script {
+        after.script = script.map(checked_script).transpose()?;
     }
     after.updated_at = Timestamp::now();
     emit_update(
@@ -4809,6 +4852,113 @@ mod tests {
         });
     }
 
+    /// A program named by its full path, wherever this machine keeps one.
+    fn a_program() -> String {
+        std::env::temp_dir().join("check.sh").to_string_lossy().into_owned()
+    }
+
+    fn a_script(timeout_minutes: Option<i64>) -> NewScript {
+        NewScript {
+            program: a_program(),
+            args: vec!["--filter".into(), "a b".into(), String::new()],
+            timeout_minutes,
+        }
+    }
+
+    /// `AMB-D-1016`: a script step keeps its program, its arguments as they were written — spaces and
+    /// an empty one included — and its timeout, and reads back as it was saved.
+    #[test]
+    fn a_script_step_reads_back_as_it_was_saved() {
+        with_tx(|tx| {
+            let action = action_add(tx, None, "確かめる", "").expect("add action");
+            let step = step_add(
+                tx,
+                action.id,
+                NewStep { script: Some(a_script(Some(90))), ..NewStep::new("CI を待つ", "") },
+            )
+            .expect("add a script step");
+            let saved = StepScript {
+                program: a_program(),
+                args: vec!["--filter".into(), "a b".into(), String::new()],
+                timeout_minutes: 90,
+            };
+            assert_eq!(step.script.as_ref(), Some(&saved));
+            assert_eq!(live_step(tx, step.id).unwrap().script, Some(saved));
+
+            let agents = step_add(tx, action.id, NewStep::new("読む", "read")).expect("add step");
+            assert_eq!(live_step(tx, agents.id).unwrap().script, None, "a step an agent carries out is not one");
+        });
+    }
+
+    /// A script whose timeout is not written runs for the default, and one over the ceiling, or under a
+    /// minute, is refused.
+    #[test]
+    fn a_script_runs_for_thirty_minutes_unless_told_and_never_past_six_hours() {
+        with_tx(|tx| {
+            let action = action_add(tx, None, "確かめる", "").expect("add action");
+            let script = |t| NewStep { script: Some(a_script(t)), ..NewStep::new("待つ", "") };
+            let step = step_add(tx, action.id, script(None)).expect("add a script step");
+            assert_eq!(step.script.map(|s| s.timeout_minutes), Some(DEFAULT_SCRIPT_TIMEOUT_MINUTES));
+            assert_eq!(DEFAULT_SCRIPT_TIMEOUT_MINUTES, 30);
+            assert_eq!(MAX_SCRIPT_TIMEOUT_MINUTES, 360);
+            step_add(tx, action.id, script(Some(MAX_SCRIPT_TIMEOUT_MINUTES))).expect("six hours is allowed");
+            for refused in [MAX_SCRIPT_TIMEOUT_MINUTES + 1, 0, -5] {
+                assert!(
+                    matches!(step_add(tx, action.id, script(Some(refused))), Err(Error::Invalid(_))),
+                    "{refused} minutes"
+                );
+            }
+        });
+    }
+
+    /// A program not named by its full path is refused, and so is an argument of more than one line.
+    #[test]
+    fn a_script_names_its_program_by_its_full_path_and_one_argument_a_line() {
+        with_tx(|tx| {
+            let action = action_add(tx, None, "確かめる", "").expect("add action");
+            for program in ["check.sh", "scripts/check.sh", ""] {
+                let new = NewScript { program: program.into(), args: Vec::new(), timeout_minutes: None };
+                assert!(
+                    matches!(
+                        step_add(tx, action.id, NewStep { script: Some(new), ..NewStep::new("待つ", "") }),
+                        Err(Error::Invalid(_))
+                    ),
+                    "{program:?}"
+                );
+            }
+            let two_lines = NewScript { program: a_program(), args: vec!["a\nb".into()], timeout_minutes: None };
+            assert!(matches!(
+                step_add(tx, action.id, NewStep { script: Some(two_lines), ..NewStep::new("待つ", "") }),
+                Err(Error::Invalid(_))
+            ));
+        });
+    }
+
+    /// A step is turned into a script and back by rewriting it, and the rest of it is left as it was.
+    #[test]
+    fn a_step_is_turned_into_a_script_and_back() {
+        with_tx(|tx| {
+            let action = action_add(tx, None, "確かめる", "").expect("add action");
+            let step = step_add(tx, action.id, NewStep::new("待つ", "wait")).expect("add step");
+            let update = |script| {
+                step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script)
+            };
+            update(Some(Some(a_script(None)))).expect("make it a script");
+            let read = live_step(tx, step.id).unwrap();
+            assert_eq!(read.script.map(|s| s.timeout_minutes), Some(DEFAULT_SCRIPT_TIMEOUT_MINUTES));
+            assert_eq!(read.prompt, "wait");
+
+            update(None).expect("leave the script alone");
+            assert!(live_step(tx, step.id).unwrap().script.is_some());
+
+            let refused = NewScript { timeout_minutes: Some(361), ..a_script(None) };
+            assert!(matches!(update(Some(Some(refused))), Err(Error::Invalid(_))));
+
+            update(Some(None)).expect("back to an agent's step");
+            assert_eq!(live_step(tx, step.id).unwrap().script, None);
+        });
+    }
+
     /// `AMB-T-5517`: deleting the entry hands it to the first of the steps left, in list order — not
     /// to the oldest, and not to none.
     #[test]
@@ -5220,7 +5370,7 @@ mod rewritten_under_a_run {
         );
         not_held(
             "rewrite a step",
-            step_update(tx, step.id, None, Some("again"), None, None, None, None, None, None, None),
+            step_update(tx, step.id, None, Some("again"), None, None, None, None, None, None, None, None),
         );
         not_held("reorder a step", step_move(tx, step.id, Position::Bottom));
         not_held("delete a step", step_delete(tx, step.id));
@@ -5312,7 +5462,7 @@ mod rewritten_under_a_run {
                 let moved = action_set_scope(tx, p.first_action.id, None).expect("to the device");
                 assert_eq!(moved.project_id, None);
                 let step = only_step(tx, &p.first_action);
-                step_update(tx, step.id, None, Some("look again"), None, None, None, None, None, None, None)
+                step_update(tx, step.id, None, Some("look again"), None, None, None, None, None, None, None, None)
                     .expect("rewrite a step");
 
                 assert_eq!(copied(tx, &run), before);

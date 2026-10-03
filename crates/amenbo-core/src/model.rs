@@ -1636,6 +1636,13 @@ pub const DONE_EXIT: &str = "完了";
 /// already capped.
 pub const DEFAULT_MAX_TIMES: i64 = 10;
 
+/// How long a script step's program may run when its timeout is not written ([`StepScript`]), in
+/// minutes.
+pub const DEFAULT_SCRIPT_TIMEOUT_MINUTES: i64 = 30;
+
+/// The longest a script step's timeout may be written as, in minutes: six hours.
+pub const MAX_SCRIPT_TIMEOUT_MINUTES: i64 = 360;
+
 /// **The action itself, standing on its own picture** — what an [`AutomationWire`] names at the end
 /// that crosses the action's edge. A wire out of it hands an input the action declares to a step
 /// inside; a wire into it fills an output declared on the way out the run is leaving by.
@@ -1752,6 +1759,10 @@ pub struct AutomationStep {
     /// it out where the step is opened ([`crate::ops::automation_builtin`]).
     #[serde(default)]
     pub builtin: Option<String>,
+    /// **The script this step is**, or `None` for a step that is not one (`AMB-D-1016`) — the third way a
+    /// step is carried out, beside an agent and a built-in. A step is never both a script and a built-in.
+    #[serde(default)]
+    pub script: Option<StepScript>,
     /// May this step wait for a person? A step that does not say so is not left standing on one.
     #[serde(default)]
     pub interactive: bool,
@@ -1779,6 +1790,22 @@ pub struct AutomationStep {
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+/// **What a script step starts** (`AMB-D-1016`): a program, by its full path, and the arguments it is
+/// given. Where the program lives is not limited, because what the person's machine has is not known.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StepScript {
+    /// The program, by its full path.
+    pub program: String,
+    /// One argument per entry, handed to the program as it is: no shell is in between, so nothing in
+    /// one is expanded or split.
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// How long the program may run before it is stopped, in minutes —
+    /// [`DEFAULT_SCRIPT_TIMEOUT_MINUTES`] unless written, and never more than
+    /// [`MAX_SCRIPT_TIMEOUT_MINUTES`].
+    pub timeout_minutes: i64,
 }
 
 /// **Who carries one step out at one placement** — chosen where the action is placed, step by step
@@ -2130,6 +2157,9 @@ pub struct AutomationRunDef {
     /// behave as the definition this copy's ways out were written from.
     #[serde(default)]
     pub builtin_version: Option<i64>,
+    /// The script the step was, or `None` for one that was not ([`StepScript`]).
+    #[serde(default)]
+    pub script: Option<StepScript>,
     pub agent: String,
     #[serde(default)]
     pub model: Option<String>,

@@ -686,6 +686,7 @@ fn left_by<'a>(
             let minutes = def.script.as_ref().map_or(0, |s| s.timeout_minutes);
             return Err(format!("the program was still running after {minutes} minutes, and was stopped"));
         }
+        Came::Stopped => return Err("the program was stopped before it ended".to_string()),
         Came::Failed(status) => {
             return Err(match status.code() {
                 Some(code) => format!("the program ended with exit code {code}"),

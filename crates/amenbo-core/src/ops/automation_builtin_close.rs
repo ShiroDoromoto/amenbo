@@ -270,7 +270,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project);
-            automation::step_update(tx, p.work_step, None, None, None, None, Some(true), None, None, None, None)
+            automation::step_update(tx, p.work_step, None, None, None, None, Some(true), None, None, None, None, None)
                 .expect("report to the task");
             let task = for_ai(tx, project);
 
@@ -311,7 +311,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project);
-            automation::step_update(tx, p.work_step, None, None, None, None, Some(true), None, None, None, None)
+            automation::step_update(tx, p.work_step, None, None, None, None, Some(true), None, None, None, None, None)
                 .expect("report to the task");
             for_ai(tx, project);
             let head = outbox_head(tx);

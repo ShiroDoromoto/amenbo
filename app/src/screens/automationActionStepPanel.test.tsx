@@ -14,7 +14,8 @@
 // a switch, on and held at the step it names**; **an input declared is joined to the output of the same
 // name on a step before it, said with a press that takes it back** (`AMB-T-5799`); **a script step
 // is written with a command, arguments and a timeout in place of the prompt, and switching back to an
-// AI clears it** (`AMB-D-1016`); and **deleting asks first**, taking the panel's selection with it.
+// AI clears it** (`AMB-D-1016`), **showing the `input.json` and each way out's `output.json` it
+// declares, each copied by its press**; and **deleting asks first**, taking the panel's selection with it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -349,6 +350,47 @@ describe("how the step is carried out", () => {
     await render({ action: action({ steps: [step({ script })] }), stepId: 11, onRemoved: () => undefined });
     await act(async () => button(t("auto.step.byAi")).click());
     expect(hoisted.editStep).toHaveBeenCalledWith(11, { script: null });
+  });
+
+  it("shows no handoff on an AI's step", async () => {
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
+    expect(container.textContent).not.toContain(t("auto.step.handoff"));
+  });
+
+  it("shows the input.json and each way out's output.json the step declares, the error one aside", async () => {
+    const declared = step({
+      script,
+      inputs: [{ name: "run ID", kind: "value", required: true }],
+      exits: [
+        { id: 10, name: "完了", outputs: [] },
+        { id: 12, name: "red", outputs: [{ name: "failures", kind: "file", required: true }] },
+        { id: 19, name: "*", outputs: [] },
+      ],
+    });
+    await render({ action: action({ steps: [declared] }), stepId: 11, onRemoved: () => undefined });
+    const samples = [...container.querySelectorAll(".autostep__sample")];
+    expect(samples.map((one) => one.querySelector(".autostep__samplehead > span")!.textContent)).toEqual([
+      "input.json",
+      tf("auto.step.handoffExit", { name: "完了" }),
+      tf("auto.step.handoffExitRequired", { name: "red", names: "failures" }),
+    ]);
+    expect(JSON.parse(samples[0].querySelector("pre")!.textContent!)).toEqual({ version: 1, ins: { "run ID": "…" } });
+    expect(JSON.parse(samples[2].querySelector("pre")!.textContent!)).toEqual({
+      version: 1,
+      exit: "red",
+      outs: { failures: "…" },
+      report: "…",
+    });
+  });
+
+  it("copies a sample on its press", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await render({ action: action({ steps: [step({ script })] }), stepId: 11, onRemoved: () => undefined });
+    const first = container.querySelector(".autostep__sample")!;
+    await act(async () => first.querySelector("button")!.click());
+    expect(writeText).toHaveBeenCalledWith(first.querySelector("pre")!.textContent);
+    expect(first.querySelector("button")!.textContent).toBe(t("auto.step.sampleCopied"));
   });
 });
 

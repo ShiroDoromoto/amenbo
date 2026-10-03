@@ -1794,6 +1794,18 @@ button.feed__target:hover { color: var(--c-accent); }
 .autostep__pair--top > .autostep__label { padding-block-start: var(--s-1); }
 .autostep__mono { font-family: var(--font-mono); font-size: var(--fs-md); }
 .autostep__hint { font-size: var(--fs-xs); color: var(--c-text-faint); }
+/* A JSON sample a script step's program is handed or writes, under the line that names it and its
+   copy press. */
+.autostep__sample {
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-sunken-pic) var(--c-sunken); min-width: 0;
+}
+.autostep__samplehead {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2);
+  padding: var(--s-1) var(--s-2) 0; font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.autostep__sample pre { margin: 0; padding: var(--s-1) var(--s-2) var(--s-2); overflow-x: auto; font-size: var(--fs-xs); }
+.autostep__errs { margin: var(--s-1) 0 0; padding-left: 1.2em; }
 /* The automations an action is placed on, by name; a press goes to one. */
 .actplaced { display: flex; flex-wrap: wrap; gap: var(--s-1); }
 .actplaced__one {

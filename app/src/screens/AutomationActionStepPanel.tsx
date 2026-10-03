@@ -27,6 +27,11 @@
 // runs. A script step has no prompt to write and nothing to hand an AI, so those are drawn for an AI's
 // step alone; its inputs, ways out and wires are the same either way, and stay through a switch.
 //
+// **A script step shows what its program is handed and what it writes back** (`AMB-D-1016`): an
+// `input.json` built from the inputs declared, and an `output.json` for each way out, each with a
+// press that copies it (`./automationScriptSample`). They follow the declarations, so a name changed
+// above is the name the sample says.
+//
 // **A refusal is drawn, once, at the top**, for `./AutomationStepPanel`'s reason: every press here
 // can be refused by core — a name already taken, the error way out, a line that leaves the picture —
 // and the last refusal stands where the reader is looking.
@@ -44,7 +49,7 @@ import {
   setAutomationWire,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
-import { errText, t, tf } from "../core/i18n";
+import { errText, listLabel, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import { ErrorNote } from "../components/ErrorNote";
 import { RunBy } from "./automationRunBy";
@@ -55,6 +60,7 @@ import { ExitMark } from "./automationParts";
 import { choiceKey, sameNameBefore, wireChoices, wireInto } from "./automationWires";
 import { AutomationOutputAdd } from "./AutomationOutputAdd";
 import { PORT_KINDS } from "./automationPortKinds";
+import { inputSample, outputSamples } from "./automationScriptSample";
 import type {
   AutomationActionDetailDto,
   AutomationExitDto,
@@ -319,6 +325,66 @@ function ScriptFields({ step, run }: { step: AutomationStepDto; run: Run }) {
   );
 }
 
+/** One sample of JSON under the line that names it, with the press that copies it. */
+function Sample({ caption, text }: { caption: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch { /* where the clipboard is unavailable, quietly skip */ }
+  };
+  return (
+    <div className="autostep__sample">
+      <div className="autostep__samplehead">
+        <span>{caption}</span>
+        <button type="button" className="btn" onClick={() => void copy()}>
+          {copied ? t("auto.step.sampleCopied") : t("auto.step.sampleCopy")}
+        </button>
+      </div>
+      <pre className="autostep__mono">{text}</pre>
+    </div>
+  );
+}
+
+/**
+ * What the program is handed on its way in and writes on its way out, and when the step leaves by
+ * the error way out instead.
+ */
+function ScriptHandoff({ step }: { step: AutomationStepDto }) {
+  return (
+    <Sec title={t("auto.step.handoff")}>
+      <p className="autostep__said">{t("auto.step.handoffIn")}</p>
+      <Sample caption="input.json" text={inputSample(step.inputs)} />
+      <span className="autostep__hint">{t("auto.step.handoffInHint")}</span>
+      <p className="autostep__said">{t("auto.step.handoffOut")}</p>
+      {outputSamples(step.exits).map((one) => (
+        <Sample
+          key={one.exit}
+          caption={
+            one.required.length === 0
+              ? tf("auto.step.handoffExit", { name: one.exit })
+              : tf("auto.step.handoffExitRequired", { name: one.exit, names: listLabel(one.required) })
+          }
+          text={one.text}
+        />
+      ))}
+      <span className="autostep__hint">{t("auto.step.handoffOutHint")}</span>
+      <div className="autostep__said">
+        {t("auto.step.handoffError")}
+        <ul className="autostep__errs">
+          <li>{t("auto.step.handoffErrStart")}</li>
+          <li>{t("auto.step.handoffErrTimeout")}</li>
+          <li>{t("auto.step.handoffErrCode")}</li>
+          <li>{t("auto.step.handoffErrOutput")}</li>
+          <li>{t("auto.step.handoffErrExit")}</li>
+        </ul>
+      </div>
+    </Sec>
+  );
+}
+
 export function AutomationActionStepPanel({
   action,
   stepId,
@@ -528,7 +594,9 @@ export function AutomationActionStepPanel({
           ))}
       </DeclSec>
 
-      {!byScript && (
+      {byScript ? (
+        <ScriptHandoff step={step} />
+      ) : (
         <Sec title={t("auto.give.title")}>
           <GiveToggles step={step} run={run} />
         </Sec>

@@ -28,6 +28,13 @@ impl Driver<'_> {
                     args.push("--dim".into());
                     args.push(format!("{dim}={}", req_str(with, "value")?));
                 }
+                // Which of the project's folders the work is done in, named the same way `update`
+                // names it. A project on two or more folders refuses a create that leaves it out.
+                if with.contains_key("at") {
+                    let dir = self.folder_named(req_str(with, "at")?)?;
+                    args.push("--at".into());
+                    args.push(dir.to_string_lossy().into_owned());
+                }
                 let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 let id = v["task"]["id"].as_i64().ok_or("task add did not report an id")?;
                 if let Some(name) = bind {

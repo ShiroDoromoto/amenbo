@@ -7,9 +7,9 @@
 # enforced: naming one refuses nothing later — no reservation, no worktree — so what there is to read
 # back is the task's own answer about where it is worked, and the two ways that answer goes away.
 #
-# It only ever says what a reader typed. A task filed in one folder about work done in another is
-# ordinary, so the folder the create was standing in is never taken as a default — which is why the
-# road reads "no folder" off a task nobody said anything about, before it says anything.
+# With two folders standing side by side, the create has to say which one: the folder it was typed
+# in is no answer, so a create that leaves the folder out is refused. The road files its task naming
+# one, and reads that back before it moves the answer anywhere.
 #
 # The one refusal is what makes the answer worth reading: the folder has to be one this project
 # offers. A device holds several projects and each may hold several folders, so a folder is a name a
@@ -20,8 +20,8 @@
 id: say-which-folder-the-work-is-done-in
 title: A task says which of its project's folders the work is done in — carried when named, gone when cleared, and gone with the folder
 description: >
-  Stand a project on two folders, file a task in it, and read back that it names neither. Say which
-  folder the work is done in and read it off the task; say the other one and read the answer follow.
+  Stand a project on two folders, file a task in it naming one, and read that folder off the task.
+  Say the other one and read the answer follow; say the first again and read it come back.
   Name a folder belonging to another project on the device and watch it refused. Then take the answer
   away twice over — once by clearing the field, and once by unbinding the folder out from under it,
   which is the same absence arrived at from the other side.
@@ -61,16 +61,16 @@ steps_cli:
     with:
       title: SCENARIO SEED — worked in one of two places
       project: pj
+      at: checkout
     as: card
 
-  # Nothing was said, so nothing is carried. The create was typed somewhere, and that somewhere is not
-  # an answer — this is the read that says so.
+  # The folder the create named is the one the task carries.
   - type: assert
     domain: task
     op: worked-in
     with:
       target: card
-      present: false
+      dir: checkout
 
   - type: action
     domain: task
@@ -86,8 +86,8 @@ steps_cli:
       target: card
       dir: spare
 
-  # Moved to the other of the project's folders — the answer is a choice among them, and it is the
-  # last thing said that stands.
+  # Moved back to the first of the project's folders — the answer is a choice among them, and it is
+  # the last thing said that stands.
   - type: action
     domain: task
     op: update

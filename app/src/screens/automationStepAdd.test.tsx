@@ -6,11 +6,12 @@
 // What these guard: **inside an action there is no library to pick from** (`AMB-D-949`) and the press
 // goes through that picture's own door — the line it was opened from, or the action itself where
 // there is no line yet (`AMB-T-5315`); **the two roads are named apart**, and only the one on a line
-// draws where it goes (`AMB-T-5526`); **what the dialog took — a name and a prompt — is what is
-// sent**; **nothing is sent until the dialog has what a step cannot be made without**, and **a step
-// refused is said on the dialog, which stays open with what was typed** (`AMB-T-5809`); **an action
-// made on the spot is asked a name and a library and nothing else**, under a small picture of where
-// it goes and starting from the name the library was searched with, lands where it was asked for,
+// draws where it goes (`AMB-T-5526`); **what the dialog took — a name and a prompt, or a name and a
+// command for a script (`AMB-D-1016`) — is what is sent**; **nothing is sent until the dialog has
+// what a step cannot be made without**, and **a step refused is said on the dialog, which stays open
+// with what was typed** (`AMB-T-5809`); **an action made on the spot is asked a name and a library
+// and nothing else**, under a small picture of where it goes and starting from the name the library
+// was searched with, lands where it was asked for,
 // and hands its id on so the screen can go and build it; and, for what a way out hands on, **the name
 // starts on the way out's own and stops following once somebody writes their own** — but only where
 // that way out hands on nothing yet — asked in a row inside the way out's card rather than a dialog.
@@ -99,6 +100,22 @@ describe("putting a step in inside an action", () => {
     expect(boxes()).toHaveLength(1);
     expect(selects()).toHaveLength(0);
     expect(document.body.querySelectorAll("textarea")).toHaveLength(1);
+  });
+
+  it("asks a command in place of the prompt for a script, and sends it as the step's script", async () => {
+    await open({ picture: "action", actionId: 4 });
+    await act(async () => button(t("auto.step.byScript")).click());
+    expect(button(t("auto.step.byScript")).getAttribute("aria-pressed")).toBe("true");
+    expect(document.body.querySelector("textarea")).toBeNull();
+    await typeInto(boxes()[0]!, "CI を待つ");
+    expect(button(t("auto.act.addPut")).disabled).toBe(true);
+    await typeInto(boxes()[1]!, "/usr/bin/python3");
+    await act(async () => button(t("auto.act.addPut")).click());
+    expect(hoisted.add).toHaveBeenCalledWith(4, {
+      name: "CI を待つ",
+      prompt: "",
+      script: { program: "/usr/bin/python3", args: [] },
+    });
   });
 
   it("says it puts one in, and draws where, only on a line", async () => {

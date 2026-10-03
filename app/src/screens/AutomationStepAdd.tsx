@@ -17,9 +17,11 @@
 // the new step, and the new step goes on to whatever that way out used to reach
 // (`amenbo_core::ops::automation::step_insert`) — one act.
 //
-// **It asks a name and a prompt, and nothing else.** A step is made with one way out, "done"
-// (`AMB-T-5516`), and what else it declares — more ways out, what it takes in, how it is run — is
-// written on the panel a reader lands on the moment this closes, one row at a time.
+// **It asks a name and a prompt, and nothing else** — or, for a step a script carries out
+// (`AMB-D-1016`), a name and the command in place of the prompt. A step is made with one way out,
+// "done" (`AMB-T-5516`), and what else it declares — more ways out, what it takes in, how it is run, a
+// script's arguments and timeout — is written on the panel a reader lands on the moment this closes,
+// one row at a time.
 //
 // **Only its two buttons close it** (`AMB-T-5363`). A press on the backdrop or Escape would throw away
 // a prompt half written, and nothing here keeps it — so neither is a way out, and the reader leaves
@@ -38,6 +40,7 @@ import {
 } from "../core/automations";
 import { errText, t } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
+import { RunBy } from "./automationRunBy";
 
 /**
  * Where the new step goes: onto a line inside the action, after a way out that says nothing yet, or
@@ -60,18 +63,22 @@ export function AutomationStepAdd({
 }) {
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [byScript, setByScript] = useState(false);
+  const [program, setProgram] = useState("");
   // After a way out the step goes somewhere as well, so the dialog draws where as it does on a line.
   const onLine = !("actionId" in into);
 
   const [putting, setPutting] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
 
-  const ready = name.trim() !== "" && prompt.trim() !== "" && !putting;
+  const ready = name.trim() !== "" && (byScript ? program : prompt).trim() !== "" && !putting;
   const put = async () => {
     if (!ready) return;
     setPutting(true);
     setRefused(null);
-    const step = { name: name.trim(), prompt: prompt.trim() };
+    const step = byScript
+      ? { name: name.trim(), prompt: "", script: { program: program.trim(), args: [] } }
+      : { name: name.trim(), prompt: prompt.trim() };
     try {
       await ("edgeId" in into
         ? insertAutomationActionStep(into.edgeId, step)
@@ -106,15 +113,28 @@ export function AutomationStepAdd({
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </label>
 
-        <label className="autostep__field">
-          <span className="autostep__label">{t("auto.step.prompt")}</span>
-          <textarea
-            className="autostep__prompt"
-            rows={5}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-          />
-        </label>
+        <div className="autostep__field">
+          <span className="autostep__label">{t("auto.step.howRuns")}</span>
+          <RunBy script={byScript} onChange={setByScript} />
+        </div>
+
+        {byScript ? (
+          <label className="autostep__field">
+            <span className="autostep__label">{t("auto.step.program")}</span>
+            <input className="autostep__mono" value={program} onChange={(e) => setProgram(e.target.value)} />
+            <span className="autostep__hint">{t("auto.step.programHint")}</span>
+          </label>
+        ) : (
+          <label className="autostep__field">
+            <span className="autostep__label">{t("auto.step.prompt")}</span>
+            <textarea
+              className="autostep__prompt"
+              rows={5}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+            />
+          </label>
+        )}
 
         <div className="buttonrow">
           <button type="button" className="btn btn--primary" disabled={!ready} onClick={() => void put()}>

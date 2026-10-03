@@ -48,7 +48,7 @@ use amenbo_core::model::{
     AutomationPortKind, AutomationPortOwner, AutomationRunStatus,
     AutomationWire,
 };
-use amenbo_core::ops::automation::{ActionShelf, EdgeTarget, NewAutomation, NewStep};
+use amenbo_core::ops::automation::{ActionShelf, EdgeTarget, NewAutomation, NewScript, NewStep};
 use amenbo_core::ops::automation_builtin;
 use amenbo_core::ops::automation_rehearse::Cut;
 use amenbo_core::ops::automation_run::{self, Unmet};
@@ -68,7 +68,7 @@ use crate::dto::{
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunStartedDto, AutomationRunTaskDto,
-    AutomationRunTrailDto, AutomationStepDto,
+    AutomationRunTrailDto, AutomationStepDto, AutomationStepScriptDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
@@ -468,6 +468,9 @@ pub fn automation_action_abandon(id: i64) -> Result<WriteAck, CmdError> {
 /// `work_dir` is a field with a third answer: written, cleared, or left alone. The pair of arguments
 /// says which — `clear_work_dir` beats a `work_dir` beside it — rather than a single
 /// `Option<Option<..>>`, which does not cross the IPC boundary as a shape a screen can write.
+///
+/// The script is the same (`AMB-D-1016`): `clear_script` makes the step one an AI carries out again,
+/// and a `program` writes the script whole, with the arguments and the timeout beside it.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn automation_step_edit(
@@ -482,11 +485,19 @@ pub fn automation_step_edit(
     task_notes: Option<bool>,
     task_decisions: Option<bool>,
     task_comments: Option<bool>,
+    program: Option<String>,
+    args: Option<Vec<String>>,
+    timeout_minutes: Option<i64>,
+    clear_script: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
     let work_dir = match (clear_work_dir, work_dir.as_deref()) {
         (Some(true), _) => Some(None),
         (_, Some(name)) => Some(Some(name)),
         _ => None,
+    };
+    let script = match clear_script {
+        Some(true) => Some(None),
+        _ => new_script(program, args, timeout_minutes).map(Some),
     };
     with_store_mut(|store| {
         store.automation_step_update(
@@ -500,7 +511,7 @@ pub fn automation_step_edit(
             task_notes,
             task_decisions,
             task_comments,
-            None,
+            script,
         )?;
         Ok(())
     })?;
@@ -524,6 +535,9 @@ pub fn automation_step_add(
     name: String,
     prompt: String,
     interactive: bool,
+    program: Option<String>,
+    args: Option<Vec<String>>,
+    timeout_minutes: Option<i64>,
     exits: Vec<String>,
     inputs: Vec<(String, String, bool)>,
 ) -> Result<WriteAck, CmdError> {
@@ -541,7 +555,7 @@ pub fn automation_step_add(
         show_notes: true,
         show_decisions: true,
         show_comments: true,
-        script: None,
+        script: new_script(program, args, timeout_minutes),
     };
     with_store_mut(|store| {
         let first = read::automation_action_step_ids(store.read_model().conn(), action_id)?.is_empty();
@@ -620,6 +634,17 @@ fn action_shelf(word: &str) -> Result<ActionShelf, CmdError> {
     }
 }
 
+/// The script a step is written with, as the screen sends it: a step with a `program` runs it, and one
+/// without is carried out by an AI. Whether the program is a full path and the timeout is in range is
+/// core's to say ([`amenbo_core::ops::automation::step_add`]).
+fn new_script(
+    program: Option<String>,
+    args: Option<Vec<String>>,
+    timeout_minutes: Option<i64>,
+) -> Option<NewScript> {
+    program.map(|program| NewScript { program, args: args.unwrap_or_default(), timeout_minutes })
+}
+
 /// **Put a step in on a line inside an action** — the one road by which a step joins a picture
 /// already drawn: the way out that was pressed comes to point at the new step, and the new step goes
 /// on to whatever that way out used to reach ([`amenbo_core::ops::automation::step_insert`]).
@@ -634,6 +659,9 @@ pub fn automation_action_step_insert(
     name: String,
     prompt: String,
     interactive: bool,
+    program: Option<String>,
+    args: Option<Vec<String>>,
+    timeout_minutes: Option<i64>,
     exits: Vec<String>,
     inputs: Vec<(String, String, bool)>,
 ) -> Result<WriteAck, CmdError> {
@@ -651,7 +679,7 @@ pub fn automation_action_step_insert(
         show_notes: true,
         show_decisions: true,
         show_comments: true,
-        script: None,
+        script: new_script(program, args, timeout_minutes),
     };
     with_store_mut(|store| {
         store.automation_step_insert(edge_id, new, &exits, &ports)?;
@@ -672,6 +700,9 @@ pub fn automation_action_step_insert_at_exit(
     name: String,
     prompt: String,
     interactive: bool,
+    program: Option<String>,
+    args: Option<Vec<String>>,
+    timeout_minutes: Option<i64>,
     exits: Vec<String>,
     inputs: Vec<(String, String, bool)>,
 ) -> Result<WriteAck, CmdError> {
@@ -681,6 +712,7 @@ pub fn automation_action_step_insert_at_exit(
     }
     let mut new = NewStep::new(&name, &prompt);
     new.interactive = interactive;
+    new.script = new_script(program, args, timeout_minutes);
     with_store_mut(|store| {
         store.automation_step_insert_at_exit(from_id, exit_name.as_deref(), new, &exits, &ports)?;
         Ok(())
@@ -2413,6 +2445,11 @@ fn step_dto(view: automation_view::StepView) -> AutomationStepDto {
         prompt: step.prompt,
         interactive: step.interactive,
         work_dir_ref: step.work_dir_ref,
+        script: step.script.map(|script| AutomationStepScriptDto {
+            program: script.program,
+            args: script.args,
+            timeout_minutes: script.timeout_minutes,
+        }),
         report_to_task: step.report_to_task,
         show_history: step.show_history,
         show_notes: step.show_notes,

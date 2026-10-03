@@ -443,6 +443,21 @@ export function useAutomationAction(id: number | null): AutomationActionDetailDt
 }
 
 /**
+ * **The program a script step runs** (`AMB-D-1016`), as a screen writes it. `timeoutMinutes` left out
+ * is core's default. Whether the program is a full path and the timeout is in range is core's to say.
+ */
+export type StepScript = { program: string; args: readonly string[]; timeoutMinutes?: number };
+
+/** A script as the commands take it — three arguments, all `null` for a step an AI carries out. */
+function scriptArgs(script: StepScript | undefined) {
+  return {
+    program: script?.program ?? null,
+    args: script === undefined ? null : [...script.args],
+    timeoutMinutes: script?.timeoutMinutes ?? null,
+  };
+}
+
+/**
  * **Add a step to an action**, with the ways out and the inputs it is written with.
  *
  * It is the one way into an action whose picture is empty — every other way in is a line to put a
@@ -455,6 +470,7 @@ export async function addAutomationStep(
     name: string;
     prompt: string;
     interactive?: boolean;
+    script?: StepScript;
     exits?: readonly string[];
     inputs?: readonly { name: string; kind: string; required: boolean }[];
   },
@@ -465,6 +481,7 @@ export async function addAutomationStep(
     name: step.name,
     prompt: step.prompt,
     interactive: step.interactive ?? false,
+    ...scriptArgs(step.script),
     exits: [...(step.exits ?? [])],
     inputs: (step.inputs ?? []).map((one) => [one.name, one.kind, one.required]),
   });
@@ -483,6 +500,7 @@ export async function insertAutomationActionStep(
     name: string;
     prompt: string;
     interactive?: boolean;
+    script?: StepScript;
     exits?: readonly string[];
     inputs?: readonly { name: string; kind: string; required: boolean }[];
   },
@@ -493,6 +511,7 @@ export async function insertAutomationActionStep(
     name: step.name,
     prompt: step.prompt,
     interactive: step.interactive ?? false,
+    ...scriptArgs(step.script),
     exits: [...(step.exits ?? [])],
     inputs: (step.inputs ?? []).map((one) => [one.name, one.kind, one.required]),
   });
@@ -509,6 +528,7 @@ export async function insertAutomationActionStepAtExit(
     name: string;
     prompt: string;
     interactive?: boolean;
+    script?: StepScript;
     exits?: readonly string[];
     inputs?: readonly { name: string; kind: string; required: boolean }[];
   },
@@ -520,6 +540,7 @@ export async function insertAutomationActionStepAtExit(
     name: step.name,
     prompt: step.prompt,
     interactive: step.interactive ?? false,
+    ...scriptArgs(step.script),
     exits: [...(step.exits ?? [])],
     inputs: (step.inputs ?? []).map((one) => [one.name, one.kind, one.required]),
   });
@@ -555,7 +576,8 @@ export async function setAutomationActionEntry(
  * (`chooseAutomationAgent`, `AMB-D-960`).
  *
  * `workDir` takes `null` to mean a step that names no folder, as against not being passed, which
- * leaves it alone.
+ * leaves it alone. `script` is the same: `null` makes the step one an AI carries out, and a script is
+ * written whole.
  */
 export async function editAutomationStep(
   id: number,
@@ -569,6 +591,7 @@ export async function editAutomationStep(
     taskNotes?: boolean;
     taskDecisions?: boolean;
     taskComments?: boolean;
+    script?: StepScript | null;
   },
 ): Promise<void> {
   if (!inTauri()) return;
@@ -584,6 +607,8 @@ export async function editAutomationStep(
     taskNotes: patch.taskNotes ?? null,
     taskDecisions: patch.taskDecisions ?? null,
     taskComments: patch.taskComments ?? null,
+    ...scriptArgs(patch.script ?? undefined),
+    clearScript: patch.script === null,
   });
 }
 

@@ -1139,7 +1139,39 @@ pub const STEPS: &[Step] = &[
         // snapshot it already has — the one that is right for either.
         apply: Apply::Custom(say_which_pause_a_run_stopped_at),
     },
+    Step {
+        to: 89,
+        name: "add the script a step is — its program, its arguments and its timeout — to automation_action_step and automation_run_def",
+        // `AMB-D-1016`. A step is carried out by an agent, by a built-in, or now by a program Amenbo
+        // starts, and a run's copy keeps the script as it stood at launch (`AMB-D-961`).
+        //
+        // **Seeded with nothing.** No build before this one could write a script, so every step and every
+        // copy already there is not one.
+        apply: Apply::Custom(give_the_steps_a_script),
+    },
 ];
+
+/// v89: `script_program`, `script_args` and `script_timeout_minutes` on `automation_action_step` and
+/// `automation_run_def` — the script a step is (`AMB-D-1016`).
+///
+/// **Each column is appended only where it is missing**, v68's guard and for v53's reason. The rows
+/// already there are left as no script: NULL, `''` and NULL.
+fn give_the_steps_a_script(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for table in ["automation_action_step", "automation_run_def"] {
+        let columns = column_names(tx, table)?;
+        for (column, ddl) in [
+            ("script_program", "TEXT"),
+            ("script_args", "TEXT NOT NULL DEFAULT ''"),
+            ("script_timeout_minutes", "BIGINT"),
+        ] {
+            if !columns.iter().any(|c| c == column) {
+                tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {ddl};"))?;
+            }
+        }
+    }
+    Ok(())
+}
 
 /// v88: `automation_run.pause_kind` — which of the two pauses a paused run stopped at (`AMB-D-1015`).
 ///
@@ -9566,6 +9598,53 @@ mod tests {
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v89: every step and every run's copy of one an upgrade brings in is not a script, and the three
+    /// columns take a script once one is written.
+    #[test]
+    fn every_step_already_written_is_not_a_script() {
+        let dir = scratch("step-script");
+        let engine = store_at(&dir, 88);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_action (id, name) VALUES (1, 'review');
+                 INSERT INTO automation_action_step (id, action_id, name, prompt) VALUES (1, 1, 'read', 'Read it.');
+                 INSERT INTO automation_run_def (id, run_id, name, agent) VALUES (1, 1, 'read', 'claude');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        for table in ["automation_action_step", "automation_run_def"] {
+            let (program, args, timeout): (Option<String>, String, Option<i64>) = engine
+                .conn()
+                .query_row(
+                    &format!(
+                        "SELECT script_program, script_args, script_timeout_minutes FROM {table} WHERE id = 1"
+                    ),
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .unwrap();
+            assert_eq!((program, args.as_str(), timeout), (None, "", None), "{table}");
+            engine
+                .conn()
+                .execute(
+                    &format!(
+                        "UPDATE {table} SET script_program = '/usr/bin/env', script_args = '[\"true\"]', \
+                         script_timeout_minutes = 30 WHERE id = 1"
+                    ),
+                    [],
+                )
+                .unwrap();
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 

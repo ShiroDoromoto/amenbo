@@ -1116,6 +1116,13 @@ datasets! {
         // A built-in step opens no terminal: Amenbo carries it out where the step is opened. Its ways
         // out and ports are written from the definition and cannot be edited.
         builtin: col(OPT),
+        // The program a script step starts, by its full path, or NULL for a step that is not one
+        // (`AMB-D-1016`). A script step is neither an agent's nor a built-in. Its arguments are a JSON
+        // array of strings, each handed to the program as it is with no shell in between, and its
+        // timeout is in minutes; both are left at '' and NULL on a step that is not a script.
+        script_program: col(OPT),
+        script_args: col(REQ),
+        script_timeout_minutes: col(INT_OPT),
         interactive: bool_col,
         work_dir_ref: col(OPT),
         report_to_task: bool_col,
@@ -1320,6 +1327,10 @@ datasets! {
         // That built-in's version, copied with it (`AMB-D-1000`) — what its code reads to behave as the
         // definition the copy's ways out were written from.
         builtin_version: col(INT_OPT),
+        // The script the step was, copied with it: its program, its arguments and its timeout.
+        script_program: col(OPT),
+        script_args: col(REQ),
+        script_timeout_minutes: col(INT_OPT),
         agent: col(REQ),
         model: col(OPT),
         interactive: bool_col,

@@ -11,8 +11,9 @@
 //! The program is started by its path with its arguments as they are written — no shell is in between,
 //! so nothing in one is expanded or split. The two variables are set on that process alone, which its
 //! children inherit, and it is started without [`crate::session::STEP_VAR`] so an Amenbo it calls is not
-//! taken for a step it has no part in. One still running at its timeout is killed; its children are not
-//! reached from here.
+//! taken for a step it has no part in. It is started in a group of its own ([`crate::sys::ProcessGroup`]),
+//! and one still running at its timeout, or when its caller says it is to stop, is killed with every
+//! process it started.
 //!
 //! **Nothing is written to the store.** A program may run for hours ([`MAX_SCRIPT_TIMEOUT_MINUTES`]), so
 //! this runs outside any transaction, and what came back is [`Ran`] for the caller to check against the
@@ -70,6 +71,8 @@ pub enum Ended {
     NotStarted(String),
     /// It was still running at its timeout, and was killed.
     TimedOut,
+    /// Its caller said it was to stop while it was still running, and it was killed.
+    Stopped,
     /// It ended other than with exit code 0.
     Failed(ExitStatus),
     /// It ended with exit code 0 and wrote no `output.json`.
@@ -84,18 +87,22 @@ pub enum Ended {
     },
 }
 
-/// **Run `script` once**, handing it `given`, and stop it at its timeout.
-pub fn run(script: &StepScript, given: &[(String, Given)]) -> Ran {
+/// **Run `script` once**, handing it `given`, and stop it at its timeout or as soon as `stop` answers
+/// `true` — asked every [`STOP_EVERY`] while it runs.
+pub fn run(script: &StepScript, given: &[(String, Given)], stop: impl FnMut() -> bool) -> Ran {
     let minutes = u64::try_from(script.timeout_minutes).unwrap_or(0);
-    run_until(script, given, Duration::from_secs(minutes * 60))
+    run_until(script, given, Duration::from_secs(minutes * 60), stop)
 }
 
-fn run_until(script: &StepScript, given: &[(String, Given)], timeout: Duration) -> Ran {
+/// How often a running program's caller is asked whether it is to stop.
+pub const STOP_EVERY: Duration = Duration::from_secs(1);
+
+fn run_until(script: &StepScript, given: &[(String, Given)], timeout: Duration, stop: impl FnMut() -> bool) -> Ran {
     let dir = match folder() {
         Ok(dir) => dir,
         Err(e) => return not_started(e.to_string()),
     };
-    let ran = run_in(&dir, script, given, timeout);
+    let ran = run_in(&dir, script, given, timeout, stop);
     let _ = std::fs::remove_dir_all(&dir);
     ran
 }
@@ -114,7 +121,13 @@ fn folder() -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
-fn run_in(dir: &Path, script: &StepScript, given: &[(String, Given)], timeout: Duration) -> Ran {
+fn run_in(
+    dir: &Path,
+    script: &StepScript,
+    given: &[(String, Given)],
+    timeout: Duration,
+    mut stop: impl FnMut() -> bool,
+) -> Ran {
     let input = match write_input(dir, given) {
         Ok(input) => input,
         Err(e) => return not_started(e.to_string()),
@@ -133,31 +146,45 @@ fn run_in(dir: &Path, script: &StepScript, given: &[(String, Given)], timeout: D
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let mut child = match command.spawn() {
-        Ok(child) => child,
+    let (mut child, group) = match crate::sys::ProcessGroup::start(&mut command) {
+        Ok(started) => started,
         Err(e) => return not_started(e.to_string()),
     };
     let stdout = Tail::drain(child.stdout.take());
     let stderr = Tail::drain(child.stderr.take());
     let deadline = Instant::now() + timeout;
+    let mut asked = Instant::now();
     let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
-            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                break None;
+        let cut = match child.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) if Instant::now() < deadline => {
+                if asked.elapsed() >= STOP_EVERY {
+                    asked = Instant::now();
+                    if stop() {
+                        Ended::Stopped
+                    } else {
+                        continue;
+                    }
+                } else {
+                    std::thread::sleep(Duration::from_millis(20));
+                    continue;
+                }
             }
-        }
+            _ => Ended::TimedOut,
+        };
+        group.kill();
+        let _ = child.kill();
+        let _ = child.wait();
+        break Err(cut);
     };
     // A child the program left running may still hold its pipes open, so the readers are waited for
-    // only until the deadline, and what they have read by then is what is kept.
+    // only until the deadline, and what they have read by then is what is kept. One that was stopped
+    // went with its group, and its pipes closed with it.
     let (stdout_tail, stderr_tail) = (stdout.until(deadline), stderr.until(deadline));
     let ended = match status {
-        None => Ended::TimedOut,
-        Some(status) if !status.success() => Ended::Failed(status),
-        Some(_) => read_output(&out, &output),
+        Err(cut) => cut,
+        Ok(status) if !status.success() => Ended::Failed(status),
+        Ok(_) => read_output(&out, &output),
     };
     Ran { ended, stdout_tail, stderr_tail }
 }
@@ -261,7 +288,7 @@ mod tests {
     fn a_program_that_is_not_there_is_not_started() {
         let dir = amenbo_scratch::scratch("script-not-there");
         let missing = dir.join("no-such-program");
-        let ran = run(&script(&missing.to_string_lossy(), &[]), &[]);
+        let ran = run(&script(&missing.to_string_lossy(), &[]), &[], || false);
         assert!(matches!(ran.ended, Ended::NotStarted(_)), "{:?}", ran.ended);
     }
 
@@ -298,7 +325,7 @@ mod tests {
                 ("title".to_string(), Given::Text("hello".to_string())),
                 ("report".to_string(), Given::File { name: "a.txt".to_string(), bytes: b"read me".to_vec() }),
             ];
-            let ran = run(&sh(body), &given);
+            let ran = run(&sh(body), &given, || false);
             let Ended::Wrote { output, files } = &ran.ended else { panic!("{:?} / {}", ran.ended, ran.stderr_tail) };
             assert_eq!(output["exit"], "done");
             let input: serde_json::Value = serde_json::from_str(&ran.stdout_tail).expect("input.json is JSON");
@@ -311,14 +338,14 @@ mod tests {
 
         #[test]
         fn arguments_reach_the_program_without_a_shell() {
-            let ran = run(&script("/bin/echo", &["$HOME", "a b"]), &[]);
+            let ran = run(&script("/bin/echo", &["$HOME", "a b"]), &[], || false);
             assert_eq!(ran.stdout_tail, "$HOME a b\n");
             assert!(matches!(ran.ended, Ended::NoOutput), "{:?}", ran.ended);
         }
 
         #[test]
         fn a_program_that_ends_other_than_with_zero_failed() {
-            let ran = run(&sh("echo said >&2; echo '{}' > \"$AMENBO_OUTPUT\"; exit 4"), &[]);
+            let ran = run(&sh("echo said >&2; echo '{}' > \"$AMENBO_OUTPUT\"; exit 4"), &[], || false);
             let Ended::Failed(status) = ran.ended else { panic!("{:?}", ran.ended) };
             assert_eq!(status.code(), Some(4));
             assert_eq!(ran.stderr_tail, "said\n");
@@ -326,22 +353,60 @@ mod tests {
 
         #[test]
         fn output_that_is_not_json_is_told_apart() {
-            let ran = run(&sh("echo 'not json' > \"$AMENBO_OUTPUT\""), &[]);
+            let ran = run(&sh("echo 'not json' > \"$AMENBO_OUTPUT\""), &[], || false);
             assert!(matches!(ran.ended, Ended::NotJson(_)), "{:?}", ran.ended);
         }
 
+        /// A program that prints where its `input.json` is, starts a child that would outlive it, prints
+        /// the child's pid, and waits.
+        const WITH_A_CHILD: &str = "echo \"$AMENBO_INPUT\"; sleep 30 & echo $!; wait";
+
+        /// The folder and the child's pid, from what [`WITH_A_CHILD`] printed.
+        fn printed(stdout: &str) -> (PathBuf, libc::pid_t) {
+            let mut lines = stdout.lines();
+            let folder = folder_of(lines.next().expect("the input path"));
+            let pid = lines.next().expect("the child's pid").trim().parse().expect("a pid");
+            (folder, pid)
+        }
+
+        /// Is the process `pid` gone — given a few seconds, since a killed orphan is collected by the OS.
+        fn gone(pid: libc::pid_t) -> bool {
+            let until = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < until {
+                // SAFETY: signal 0 only asks whether the process is there.
+                if unsafe { libc::kill(pid, 0) } != 0 {
+                    return true;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            false
+        }
+
         #[test]
-        fn a_program_still_running_at_its_timeout_is_killed_and_its_folder_removed() {
+        fn a_program_still_running_at_its_timeout_is_killed_with_its_children_and_its_folder_removed() {
             let started = Instant::now();
-            let ran = run_until(&sh("echo \"$AMENBO_INPUT\"; exec sleep 30"), &[], Duration::from_millis(500));
+            let ran = run_until(&sh(WITH_A_CHILD), &[], Duration::from_millis(500), || false);
             assert!(matches!(ran.ended, Ended::TimedOut), "{:?}", ran.ended);
             assert!(started.elapsed() < Duration::from_secs(10));
-            assert!(!folder_of(&ran.stdout_tail).exists(), "the folder is removed");
+            let (folder, child) = printed(&ran.stdout_tail);
+            assert!(gone(child), "the child went with the program");
+            assert!(!folder.exists(), "the folder is removed");
+        }
+
+        #[test]
+        fn a_program_its_caller_stops_is_killed_with_its_children_and_its_folder_removed() {
+            let started = Instant::now();
+            let ran = run_until(&sh(WITH_A_CHILD), &[], Duration::from_secs(60), || true);
+            assert!(matches!(ran.ended, Ended::Stopped), "{:?}", ran.ended);
+            assert!(started.elapsed() < Duration::from_secs(10));
+            let (folder, child) = printed(&ran.stdout_tail);
+            assert!(gone(child), "the child went with the program");
+            assert!(!folder.exists(), "the folder is removed");
         }
 
         #[test]
         fn only_the_end_of_what_it_printed_is_kept() {
-            let ran = run(&sh("i=0; while [ $i -lt 2000 ]; do echo line $i; i=$((i+1)); done"), &[]);
+            let ran = run(&sh("i=0; while [ $i -lt 2000 ]; do echo line $i; i=$((i+1)); done"), &[], || false);
             assert!(ran.stdout_tail.len() <= TAIL_BYTES);
             assert!(ran.stdout_tail.ends_with("line 1999\n"), "{}", ran.stdout_tail);
         }

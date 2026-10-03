@@ -2296,8 +2296,9 @@ pub(crate) fn time_up(app: &tauri::AppHandle, run_id: i64) -> Result<bool, CmdEr
 /// [`open_one`] started for it.
 ///
 /// The card is told again, ended, with the way out it left by, and the watch is woken to open the next
-/// step — the road [`time_up`] takes. Where the step is no longer under way when the program ends — the
-/// run was stopped or cancelled meanwhile — core refuses the write, and only the log says so.
+/// step — the road [`time_up`] takes. Where the step stops being under way while the program runs — the
+/// run was force-cancelled, or ended some other way — the program is stopped with every process it
+/// started ([`still_running`]), core refuses the write, and only the log says so.
 ///
 /// An input whose file cannot be read out of the blob store is a program that could not be started,
 /// and leaves by the error way out like one — rather than leaving the step under way with nothing
@@ -2310,7 +2311,7 @@ fn run_script(app: &tauri::AppHandle, run_id: i64, script: &amenbo_core::ops::au
     let run_step_id = script.run_step.id;
     let given = crate::commands::open_store_read().and_then(|store| Ok(script.given(&store.blobs())?));
     let ran = match given {
-        Ok(given) => automation_script::run(&script.script, &given),
+        Ok(given) => automation_script::run(&script.script, &given, || !still_running(run_step_id)),
         Err(e) => Ran {
             ended: Ended::NotStarted(format!("its inputs could not be read: {}", e.message_en)),
             stdout_tail: String::new(),
@@ -2328,6 +2329,18 @@ fn run_script(app: &tauri::AppHandle, run_id: i64, script: &amenbo_core::ops::au
             crate::automation_watch::wake();
         }
         Err(e) => log::warn!("script step {run_step_id} of run {run_id} ended and was not written down: {e:?}"),
+    }
+}
+
+/// **Is a script step still under way**, read from the store each time — so a run ended from anywhere,
+/// a force-cancel from the CLI among them, stops the program and every process it started. A store that
+/// cannot be read is taken as still running: the program then runs on to its end or its timeout.
+fn still_running(run_step_id: i64) -> bool {
+    let Ok(store) = crate::commands::open_store_read() else { return true };
+    match read::automation_run_step(store.read_model().conn(), run_step_id) {
+        Ok(Some(step)) => step.status == amenbo_core::model::AutomationRunStepStatus::Running,
+        Ok(None) => false,
+        Err(_) => true,
     }
 }
 

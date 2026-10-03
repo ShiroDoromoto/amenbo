@@ -44,6 +44,100 @@ pub fn command(program: impl AsRef<OsStr>) -> Command {
     cmd
 }
 
+/// **A program and every process it starts**, held so they can be stopped together (`AMB-D-1016`).
+///
+/// Killing a program alone leaves whatever it started running — a test runner's workers, a build's
+/// compilers — still writing to files and to the outside after the step they belong to was stopped. So
+/// the program is started in a group of its own and the whole group is what is stopped:
+///
+/// - **macOS and Linux** — a process group. [`Self::start`] puts the program at the head of a new one,
+///   which its children join unless they leave it on purpose, and [`Self::kill`] sends `SIGKILL` to the
+///   group.
+/// - **Windows** — a Job Object. The program is assigned to a job of its own as soon as it is started,
+///   its children are put in the same job by the OS, and [`Self::kill`] terminates the job. A child the
+///   program starts in the moment between its start and that assignment is not in the job.
+///
+/// Nothing here stops the group by itself: a program that ends on its own leaves anything it started
+/// running, as it would anywhere else.
+pub struct ProcessGroup {
+    #[cfg(unix)]
+    pgid: libc::pid_t,
+    #[cfg(windows)]
+    job: windows_sys::Win32::Foundation::HANDLE,
+}
+
+// SAFETY: the job handle is a kernel handle owned by this value alone; Windows allows it to be used and
+// closed from any thread.
+#[cfg(windows)]
+unsafe impl Send for ProcessGroup {}
+
+impl ProcessGroup {
+    /// Start `command` in a group of its own.
+    pub fn start(command: &mut Command) -> std::io::Result<(std::process::Child, ProcessGroup)> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            let child = command.process_group(0).spawn()?;
+            let pgid = libc::pid_t::try_from(child.id()).map_err(std::io::Error::other)?;
+            Ok((child, ProcessGroup { pgid }))
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            use windows_sys::Win32::Foundation::CloseHandle;
+            use windows_sys::Win32::System::JobObjects::{AssignProcessToJobObject, CreateJobObjectW};
+            // SAFETY: an unnamed job with default security; a null answer is a failure, read from the OS.
+            let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+            if job.is_null() {
+                return Err(std::io::Error::last_os_error());
+            }
+            let mut child = match command.spawn() {
+                Ok(child) => child,
+                Err(e) => {
+                    // SAFETY: `job` was opened above and is closed once.
+                    unsafe { CloseHandle(job) };
+                    return Err(e);
+                }
+            };
+            // SAFETY: both handles are live — `job` was opened above, and `child` owns its process handle.
+            if unsafe { AssignProcessToJobObject(job, child.as_raw_handle()) } == 0 {
+                let e = std::io::Error::last_os_error();
+                let _ = child.kill();
+                let _ = child.wait();
+                // SAFETY: `job` was opened above and is closed once.
+                unsafe { CloseHandle(job) };
+                return Err(e);
+            }
+            Ok((child, ProcessGroup { job }))
+        }
+    }
+
+    /// Stop every process in the group at once.
+    pub fn kill(&self) {
+        #[cfg(unix)]
+        // SAFETY: `killpg` takes a process group id and a signal, and touches no memory of ours.
+        unsafe {
+            libc::killpg(self.pgid, libc::SIGKILL);
+        }
+        #[cfg(windows)]
+        // SAFETY: `job` is live until this value is dropped.
+        unsafe {
+            windows_sys::Win32::System::JobObjects::TerminateJobObject(self.job, 1);
+        }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for ProcessGroup {
+    fn drop(&mut self) {
+        // SAFETY: `job` was opened by `start` and is closed only here. Without `KILL_ON_JOB_CLOSE`,
+        // closing it leaves the processes in it as they are.
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(self.job);
+        }
+    }
+}
+
 /// Keep a write to a plugin's stdin from ending Amenbo with `SIGPIPE` when the plugin closes that pipe
 /// early — the Linux half of the guard. Call it on the thread that does the write.
 ///

@@ -46,7 +46,7 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
     AutomationWire, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, DONE_EXIT, ERROR_EXIT,
 };
-use crate::ops::{automation_builtin, automation_view, emit_create, emit_update, place, Position};
+use crate::ops::{automation_builtin, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -125,58 +125,20 @@ fn live_wire(tx: &WriteTx<'_>, id: i64) -> Result<AutomationWire> {
     read::automation_wire(tx.conn(), id)?.ok_or_else(|| not_found("wire", id))
 }
 
-// ───────────────────────────── a definition a run is going on ─────────────────────────────
+// ───────────────────────────── a definition built into Amenbo ─────────────────────────────
 
 /// The definition an op is about to rewrite: an automation's picture, a library action's insides, or
 /// what one step of an action declares.
+///
+/// A run going on it does not stop the rewrite (`AMB-D-1015`): the run works from the copy it took at
+/// launch, and the new definition is read at the next launch.
 #[derive(Clone, Copy, Debug)]
 enum Def {
-    Automation(i64),
+    Automation,
     Action(i64),
-    /// One step's own declarations — its fields, its ways out and its ports. It is the action's for the
-    /// runs that hold it, and the step's own for whether it is a built-in.
+    /// One step's own declarations — its fields, its ways out and its ports. It is the step's own for
+    /// whether it is a built-in, and its action's after that.
     Step(i64),
-}
-
-/// **A definition a run is going on is not rewritten** (`AMB-D-961`) — not while a run launched from it
-/// is `running` or `paused`, since a paused one can be picked up again.
-///
-/// The run works from the copy it took at launch, so a rewrite would not steer it; what it would do is
-/// leave the picture a person reads saying something the run is not doing. Refusing is also what keeps
-/// the run side simple: nothing there has to reconcile the copy with a definition that moved under it.
-///
-/// An action is in use wherever it is placed, on any project's automation — a device-wide action placed
-/// by another project is held by that project's run all the same. The refusal names the runs, since
-/// ending them is the way to edit again. Running a run — pausing, resuming, stopping — is not a rewrite
-/// of the definition and never comes here.
-fn not_under_a_run(tx: &WriteTx<'_>, def: Def) -> Result<()> {
-    #[cfg(test)]
-    if PAST_THE_GUARD.with(std::cell::Cell::get) {
-        return Ok(());
-    }
-    not_built_in(tx, def)?;
-    let def = match def {
-        Def::Step(id) => Def::Action(live_step(tx, id)?.action_id),
-        other => other,
-    };
-    // The same answer a build screen reads to hold its fields shut, so the two cannot disagree.
-    let runs = match def {
-        Def::Automation(id) => automation_view::run_ids_holding_automation(tx.conn(), id)?,
-        Def::Action(id) | Def::Step(id) => automation_view::run_ids_holding_action(tx.conn(), id)?,
-    };
-    if runs.is_empty() {
-        return Ok(());
-    }
-    let what = match def {
-        Def::Automation(id) => format!("automation '{}'", live_automation(tx, id)?.name),
-        Def::Action(id) | Def::Step(id) => format!("action '{}'", live_action(tx, id)?.name),
-    };
-    let named = runs.iter().map(i64::to_string).collect::<Vec<_>>().join(", ");
-    Err(Error::conflict(format!(
-        "{what} is in use by run {named}, which is running or paused — its definition cannot change \
-         until the run ends. Cancel it with `automation cancel <run>` once it is paused, or \
-         `automation cancel <run> --force` now, or let it finish, then edit."
-    )))
 }
 
 /// **A built-in is not rewritten by hand** (`AMB-D-964`). Its ways out, its outputs and its settings are
@@ -192,7 +154,7 @@ fn not_under_a_run(tx: &WriteTx<'_>, def: Def) -> Result<()> {
 /// that build a built-in get past this.
 fn not_built_in(tx: &WriteTx<'_>, def: Def) -> Result<()> {
     let refused = match def {
-        Def::Automation(_) => None,
+        Def::Automation => None,
         Def::Action(id) => {
             let action = live_action(tx, id)?;
             action.builtin.map(|_| format!("action '{}'", action.name))
@@ -214,22 +176,6 @@ fn not_built_in(tx: &WriteTx<'_>, def: Def) -> Result<()> {
              and cannot be edited"
         ))),
     }
-}
-
-#[cfg(test)]
-thread_local! {
-    static PAST_THE_GUARD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// **Rewrite a definition a run is going on, for a test.** A store written by a build that let the
-/// definition be edited under a run can still hold a run whose picture moved, and the run side goes on
-/// answering for that shape; this is how its tests draw it now that no op will.
-#[cfg(test)]
-pub(crate) fn past_the_guard<T>(rewrite: impl FnOnce() -> T) -> T {
-    PAST_THE_GUARD.with(|g| g.set(true));
-    let out = rewrite();
-    PAST_THE_GUARD.with(|g| g.set(false));
-    out
 }
 
 /// The definition a way out, or what declares one, belongs to: a step's is its action's, an action's
@@ -261,14 +207,17 @@ fn def_of_port_owner(tx: &WriteTx<'_>, owner_kind: AutomationPortOwner, owner_id
 fn def_of_cfg_owner(tx: &WriteTx<'_>, owner_kind: AutomationCfgOwner, owner_id: i64) -> Result<Def> {
     Ok(match owner_kind {
         AutomationCfgOwner::Action => Def::Action(owner_id),
-        AutomationCfgOwner::Placement => Def::Automation(live_placement(tx, owner_id)?.automation_id),
+        AutomationCfgOwner::Placement => {
+            live_placement(tx, owner_id)?;
+            Def::Automation
+        }
     })
 }
 
 /// The definition a line is drawn in.
 fn def_of_picture(owner_kind: AutomationPictureOwner, owner_id: i64) -> Def {
     match owner_kind {
-        AutomationPictureOwner::Automation => Def::Automation(owner_id),
+        AutomationPictureOwner::Automation => Def::Automation,
         AutomationPictureOwner::Action => Def::Action(owner_id),
     }
 }
@@ -386,9 +335,8 @@ fn delete_exit_row(tx: &WriteTx<'_>, exit_id: i64) -> Result<()> {
 /// `renamed` is a value renamed in the same stroke. Its way out is renamed rather than deleted and
 /// written again, so the lines an automation hangs on it stay (`AMB-D-961`).
 ///
-/// **Written past both guards.** What it writes is Amenbo's own, from the axis, so the guard that
-/// refuses a person's edit to a built-in is not for it; and a run works from the copy it took at
-/// launch, so an axis that moves while a run holds the action has nothing of the run's to disturb.
+/// **Written past the guard.** What it writes is Amenbo's own, from the axis, so the guard that refuses
+/// a person's edit to a built-in is not for it.
 pub(crate) fn builtin_exits_follow(
     tx: &WriteTx<'_>,
     action_id: i64,
@@ -583,7 +531,7 @@ pub fn action_update(
     note: Option<&str>,
 ) -> Result<AutomationAction> {
     let before = live_action(tx, id)?;
-    not_under_a_run(tx, Def::Action(id))?;
+    not_built_in(tx, Def::Action(id))?;
     let mut after = before.clone();
     if let Some(name) = name {
         after.name = checked_name("action", name)?;
@@ -604,7 +552,7 @@ pub fn action_set_entry(
     step_id: Option<i64>,
 ) -> Result<AutomationAction> {
     let before = live_action(tx, action_id)?;
-    not_under_a_run(tx, Def::Action(action_id))?;
+    not_built_in(tx, Def::Action(action_id))?;
     if let Some(step_id) = step_id {
         let step = live_step(tx, step_id)?;
         if step.action_id != action_id {
@@ -721,7 +669,7 @@ pub fn action_set_scope(
     if before.project_id == project_id {
         return Ok(before);
     }
-    not_under_a_run(tx, Def::Action(id))?;
+    not_built_in(tx, Def::Action(id))?;
     if let Some(project_id) = project_id {
         if read::project(tx.conn(), project_id)?.is_none() {
             return Err(crate::ops::project::NOUN.not_found(project_id.to_string()));
@@ -797,7 +745,7 @@ fn automations_placing_outside(
 /// nothing, and what should stand there instead is not this op's to guess.
 pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let action = live_action(tx, id)?;
-    not_under_a_run(tx, Def::Action(id))?;
+    not_built_in(tx, Def::Action(id))?;
     let users = read::automation_placement_ids_using_action(tx.conn(), id)?;
     if !users.is_empty() {
         return Err(Error::Invalid(
@@ -875,7 +823,6 @@ pub fn action_abandon(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 fn take_off_as_before(tx: &WriteTx<'_>, placement_id: i64) -> Result<()> {
     let owner_kind = AutomationPictureOwner::Automation;
     let placement = live_placement(tx, placement_id)?;
-    not_under_a_run(tx, Def::Automation(placement.automation_id))?;
     let done = box_exit(tx, owner_kind, placement_id, None)?;
     let onward = read::automation_edge_for_exit(tx.conn(), owner_kind, placement_id, done.id)?
         .filter(|edge| edge.to_id != Some(placement_id));
@@ -938,8 +885,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
 
 /// Change an automation's name, notes, or whether it is archived. Only the `Some` fields are
 /// written. Archiving takes nothing away: it is what keeps an automation nobody launches any more out
-/// of the lists. Like every rewrite it is refused while a run of the automation is going
-/// ([`not_under_a_run`]).
+/// of the lists. A run of the automation going on does not stop it.
 pub fn update(
     tx: &WriteTx<'_>,
     id: i64,
@@ -948,7 +894,6 @@ pub fn update(
     archived: Option<bool>,
 ) -> Result<Automation> {
     let before = live_automation(tx, id)?;
-    not_under_a_run(tx, Def::Automation(id))?;
     let mut after = before.clone();
     if let Some(name) = name {
         after.name = checked_name("automation", name)?;
@@ -1001,7 +946,6 @@ pub(crate) fn set_entry(
 /// Write which placement a run opens first, `None` for none. What may be named is the callers' to ask.
 fn name_entry(tx: &WriteTx<'_>, automation_id: i64, placement_id: Option<i64>) -> Result<Automation> {
     let before = live_automation(tx, automation_id)?;
-    not_under_a_run(tx, Def::Automation(automation_id))?;
     let mut after = before.clone();
     after.entry_placement_id = placement_id;
     after.updated_at = Timestamp::now();
@@ -1026,7 +970,6 @@ fn name_entry(tx: &WriteTx<'_>, automation_id: i64, placement_id: Option<i64>) -
 /// ([`placement_add`]).
 pub fn entry_replace(tx: &WriteTx<'_>, automation_id: i64, key: &str) -> Result<AutomationPlacement> {
     let automation = live_automation(tx, automation_id)?;
-    not_under_a_run(tx, Def::Automation(automation_id))?;
     if !automation_builtin::starts_a_run(key) {
         return Err(not_an_entry(key));
     }
@@ -1085,7 +1028,6 @@ fn not_an_entry(what: &str) -> Error {
 /// Archiving is what takes such an automation out of the way.
 pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let automation = live_automation(tx, id)?;
-    not_under_a_run(tx, Def::Automation(id))?;
     let runs = read::automation_run_ids(tx.conn(), id)?;
     if !runs.is_empty() {
         return Err(Error::Invalid(
@@ -1173,7 +1115,6 @@ pub fn placement_add(
     action_id: i64,
 ) -> Result<AutomationPlacement> {
     let automation = live_automation(tx, automation_id)?;
-    not_under_a_run(tx, Def::Automation(automation_id))?;
     checked_action(tx, &automation, action_id)?;
     if !read::automation_placement_ids(tx.conn(), automation_id)?.is_empty() {
         return put_placement(tx, &automation, action_id);
@@ -1467,7 +1408,6 @@ fn hang_on_exit(
 /// from the entry along the edges, and no order here reaches it.
 pub fn placement_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationPlacement> {
     let before = live_placement(tx, id)?;
-    not_under_a_run(tx, Def::Automation(before.automation_id))?;
     let sibs = read::automation_placement_siblings(tx.conn(), before.automation_id, Some(id))?;
     let mut after = before.clone();
     after.order_key = place(&sibs, &pos)?;
@@ -1485,7 +1425,6 @@ pub fn placement_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automa
 /// next thing placed is the entry again.
 pub fn placement_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let placement = live_placement(tx, id)?;
-    not_under_a_run(tx, Def::Automation(placement.automation_id))?;
     let automation = live_automation(tx, placement.automation_id)?;
     if automation.entry_placement_id == Some(id) {
         let others = read::automation_placement_ids(tx.conn(), automation.id)?.len() - 1;
@@ -1529,7 +1468,6 @@ pub fn placement_step_set(
     model: Option<&str>,
 ) -> Result<AutomationPlacementStep> {
     let placement = live_placement(tx, placement_id)?;
-    not_under_a_run(tx, Def::Automation(placement.automation_id))?;
     checked_step_of_placement(tx, &placement, step_id)?;
     if let Some(key) = live_step(tx, step_id)?.builtin {
         return Err(Error::invalid(format!(
@@ -1619,7 +1557,6 @@ pub fn placement_step_default(
 /// nothing to take back, and that is not an error.
 pub fn placement_step_clear(tx: &WriteTx<'_>, placement_id: i64, step_id: i64) -> Result<()> {
     let placement = live_placement(tx, placement_id)?;
-    not_under_a_run(tx, Def::Automation(placement.automation_id))?;
     checked_step_of_placement(tx, &placement, step_id)?;
     if let Some(chosen) = read::automation_placement_step_for(tx.conn(), placement_id, step_id)? {
         tx.delete_record("automation_placement_step", chosen.id)?;
@@ -1701,7 +1638,7 @@ fn checked_action(tx: &WriteTx<'_>, automation: &Automation, action_id: i64) -> 
 /// is the one a placement opens first, and an action with steps never stands there without one.
 pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<AutomationStep> {
     let action = live_action(tx, action_id)?;
-    not_under_a_run(tx, Def::Action(action_id))?;
+    not_built_in(tx, Def::Action(action_id))?;
     let name = checked_name("step", &new.name)?;
     let sibs = read::automation_action_step_siblings(tx.conn(), action_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
@@ -1859,7 +1796,7 @@ pub fn step_update(
     show_comments: Option<bool>,
 ) -> Result<AutomationStep> {
     let before = live_step(tx, id)?;
-    not_under_a_run(tx, Def::Step(id))?;
+    not_built_in(tx, Def::Step(id))?;
     let mut after = before.clone();
     if let Some(name) = name {
         after.name = checked_name("step", name)?;
@@ -1901,7 +1838,7 @@ pub fn step_update(
 /// the entry along the edges, and no order here reaches it.
 pub fn step_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationStep> {
     let before = live_step(tx, id)?;
-    not_under_a_run(tx, Def::Action(before.action_id))?;
+    not_built_in(tx, Def::Action(before.action_id))?;
     let sibs = read::automation_action_step_siblings(tx.conn(), before.action_id, Some(id))?;
     let mut after = before.clone();
     after.order_key = place(&sibs, &pos)?;
@@ -1922,7 +1859,7 @@ pub fn step_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationS
 /// with no entry, and an action with nothing to open is refused at the launch check.
 pub fn step_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let step = live_step(tx, id)?;
-    not_under_a_run(tx, Def::Action(step.action_id))?;
+    not_built_in(tx, Def::Action(step.action_id))?;
     let action = live_action(tx, step.action_id)?;
     // `entry_step_id` is `RESTRICT`, and that check bites at the statement rather than at the commit —
     // so the reference is moved off the row before the row goes, not after.
@@ -1973,7 +1910,7 @@ pub fn exit_add(
     name: Option<&str>,
 ) -> Result<AutomationExit> {
     checked_declarer(tx, owner_kind, owner_id)?;
-    not_under_a_run(tx, def_of_declarer(tx, owner_kind, owner_id)?)?;
+    not_built_in(tx, def_of_declarer(tx, owner_kind, owner_id)?)?;
     let name = checked_exit_name(name.unwrap_or(DONE_EXIT))?;
     if read::automation_exit_by_name(tx.conn(), owner_kind, owner_id, Some(&name))?.is_some() {
         return Err(exit_taken(&name));
@@ -2000,7 +1937,7 @@ fn exit_taken(name: &str) -> Error {
 /// **A way out keeps a name**: `None` is refused, since a way out with none is drawn blank on its line.
 pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<AutomationExit> {
     let before = live_exit(tx, id)?;
-    not_under_a_run(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
+    not_built_in(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
     if before.name == ERROR_EXIT {
         return Err(Error::invalid(
             "the error way out's name is fixed — every step and every action is read as carrying it",
@@ -2027,7 +1964,7 @@ pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<Auto
 /// Reorder a way out within its owner's list.
 pub fn exit_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationExit> {
     let before = live_exit(tx, id)?;
-    not_under_a_run(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
+    not_built_in(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
     let sibs =
         read::automation_exit_siblings(tx.conn(), before.owner_kind, before.owner_id, Some(id))?;
     let mut after = before.clone();
@@ -2042,7 +1979,7 @@ pub fn exit_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationE
 /// anyone wrote one.
 pub fn exit_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let exit = live_exit(tx, id)?;
-    not_under_a_run(tx, def_of_declarer(tx, exit.owner_kind, exit.owner_id)?)?;
+    not_built_in(tx, def_of_declarer(tx, exit.owner_kind, exit.owner_id)?)?;
     if exit.name == ERROR_EXIT {
         return Err(Error::invalid(
             "the error way out cannot be deleted — every step and every action carries one",
@@ -2116,7 +2053,7 @@ pub(crate) fn declare_port(
             ))
         }
     }
-    not_under_a_run(tx, def_of_port_owner(tx, owner_kind, owner_id)?)?;
+    not_built_in(tx, def_of_port_owner(tx, owner_kind, owner_id)?)?;
     if read::automation_port_by_name(tx.conn(), owner_kind, owner_id, direction, &name)?.is_some() {
         let (said, code) = match direction {
             AutomationPortDirection::In => ("input", ErrorCode::InvalidAutomationInputTaken),
@@ -2160,7 +2097,7 @@ pub fn port_update(
     required: Option<bool>,
 ) -> Result<AutomationPort> {
     let before = live_port(tx, id)?;
-    not_under_a_run(tx, def_of_port_owner(tx, before.owner_kind, before.owner_id)?)?;
+    not_built_in(tx, def_of_port_owner(tx, before.owner_kind, before.owner_id)?)?;
     let mut after = before.clone();
     if let Some(name) = name {
         let name = checked_name("port", name)?;
@@ -2192,7 +2129,7 @@ pub fn port_update(
 /// Reorder a port within its owner's list for that direction.
 pub fn port_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationPort> {
     let before = live_port(tx, id)?;
-    not_under_a_run(tx, def_of_port_owner(tx, before.owner_kind, before.owner_id)?)?;
+    not_built_in(tx, def_of_port_owner(tx, before.owner_kind, before.owner_id)?)?;
     let sibs = read::automation_port_siblings(
         tx.conn(),
         before.owner_kind,
@@ -2211,7 +2148,7 @@ pub fn port_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationP
 /// carries nothing.
 pub fn port_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let port = live_port(tx, id)?;
-    not_under_a_run(tx, def_of_port_owner(tx, port.owner_kind, port.owner_id)?)?;
+    not_built_in(tx, def_of_port_owner(tx, port.owner_kind, port.owner_id)?)?;
     delete_port_row(tx, id)
 }
 
@@ -2239,7 +2176,7 @@ pub fn cfg_add(
     options: Option<&str>,
 ) -> Result<AutomationCfg> {
     live_action(tx, action_id)?;
-    not_under_a_run(tx, Def::Action(action_id))?;
+    not_built_in(tx, Def::Action(action_id))?;
     let name = checked_name("setting", name)?;
     checked_options(kind, options)?;
     if read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Action, action_id, &name)?.is_some()
@@ -2398,7 +2335,7 @@ pub fn cfg_update(
     options: Option<Option<&str>>,
 ) -> Result<AutomationCfg> {
     let before = live_cfg(tx, id)?;
-    not_under_a_run(tx, def_of_cfg_owner(tx, before.owner_kind, before.owner_id)?)?;
+    not_built_in(tx, def_of_cfg_owner(tx, before.owner_kind, before.owner_id)?)?;
     let mut after = before.clone();
     if let Some(name) = name {
         let name = checked_name("setting", name)?;
@@ -2483,7 +2420,6 @@ pub fn cfg_set(
     value: Option<&str>,
 ) -> Result<AutomationCfg> {
     let placement = live_placement(tx, placement_id)?;
-    not_under_a_run(tx, Def::Automation(placement.automation_id))?;
     let name = checked_name("setting", name)?;
     let declared =
         read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Action, placement.action_id, &name)?;
@@ -2550,7 +2486,7 @@ fn filter_names_what_is_there(tx: &WriteTx<'_>, kind: AutomationCfgKind, value: 
 /// Reorder a setting within its owner's list.
 pub fn cfg_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationCfg> {
     let before = live_cfg(tx, id)?;
-    not_under_a_run(tx, def_of_cfg_owner(tx, before.owner_kind, before.owner_id)?)?;
+    not_built_in(tx, def_of_cfg_owner(tx, before.owner_kind, before.owner_id)?)?;
     let sibs = read::automation_cfg_siblings(tx.conn(), before.owner_kind, before.owner_id, Some(id))?;
     let mut after = before.clone();
     after.order_key = place(&sibs, &pos)?;
@@ -2562,7 +2498,7 @@ pub fn cfg_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationCf
 /// Delete a setting — the action's declaration, or one placement's answer to it.
 pub fn cfg_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let cfg = live_cfg(tx, id)?;
-    not_under_a_run(tx, def_of_cfg_owner(tx, cfg.owner_kind, cfg.owner_id)?)?;
+    not_built_in(tx, def_of_cfg_owner(tx, cfg.owner_kind, cfg.owner_id)?)?;
     tx.delete_record("automation_cfg", id)?;
     Ok(())
 }
@@ -2750,7 +2686,7 @@ pub fn edge_add(
     max_times: Option<i64>,
 ) -> Result<AutomationEdge> {
     let owner_id = box_picture(tx, owner_kind, from_id)?;
-    not_under_a_run(tx, def_of_picture(owner_kind, owner_id))?;
+    not_built_in(tx, def_of_picture(owner_kind, owner_id))?;
     let exit = box_exit(tx, owner_kind, from_id, exit_name)?;
     let (ends, to_id, exit_to) = target.parts();
     if let Some(to_id) = to_id {
@@ -2801,7 +2737,7 @@ pub fn edge_update(
     max_times: Option<Option<i64>>,
 ) -> Result<AutomationEdge> {
     let before = live_edge(tx, id)?;
-    not_under_a_run(tx, def_of_picture(before.owner_kind, before.owner_id))?;
+    not_built_in(tx, def_of_picture(before.owner_kind, before.owner_id))?;
     let mut after = before.clone();
     if let Some(target) = target {
         let (ends, to_id, exit_to) = target.parts();
@@ -2841,7 +2777,7 @@ pub fn edge_update(
 /// the run and calling a person, and for any other means the run has nowhere to go.
 pub fn edge_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let edge = live_edge(tx, id)?;
-    not_under_a_run(tx, def_of_picture(edge.owner_kind, edge.owner_id))?;
+    not_built_in(tx, def_of_picture(edge.owner_kind, edge.owner_id))?;
     tx.delete_record("automation_edge", id)?;
     Ok(())
 }
@@ -2919,7 +2855,7 @@ pub fn draw_wire(
     to_port_name: &str,
 ) -> Result<(AutomationWire, bool)> {
     let owner_id = wire_picture(tx, owner_kind, from_id, to_id)?;
-    not_under_a_run(tx, def_of_picture(owner_kind, owner_id))?;
+    not_built_in(tx, def_of_picture(owner_kind, owner_id))?;
     let mut from_exit_id = None;
     let out = if from_id == ACTION_BOUNDARY {
         if from_exit_name.is_some() {
@@ -3036,7 +2972,7 @@ pub fn draw_wire(
 /// Delete a wire. The box then reads nothing on that input unless another wire lands on it.
 pub fn wire_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let wire = live_wire(tx, id)?;
-    not_under_a_run(tx, def_of_picture(wire.owner_kind, wire.owner_id))?;
+    not_built_in(tx, def_of_picture(wire.owner_kind, wire.owner_id))?;
     tx.delete_record("automation_wire", id)?;
     Ok(())
 }
@@ -5131,14 +5067,15 @@ mod tests {
     }
 }
 
-/// **A definition a run is going on is held** (`AMB-D-961`): every op that rewrites one is refused
-/// while a run launched from it is `running` or `paused`, and lets go once the run has ended.
+/// **A definition a run is going on is rewritten all the same** (`AMB-D-1015`): no op that rewrites one
+/// refuses because a run launched from it is `running` or `paused`, and the run goes on with the copy it
+/// took at launch.
 #[cfg(test)]
-mod held_by_a_run {
+mod rewritten_under_a_run {
     use super::*;
     use crate::model::{AutomationRun, AutomationRunStatus};
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
-    use crate::ops::automation_stop::{self, Ending};
+    use crate::ops::automation_stop;
     use crate::ops::test_support::{mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
 
     /// Two spots joined by an edge and a wire, each action carrying a way out, an input, an output and
@@ -5189,15 +5126,40 @@ mod held_by_a_run {
         launch(tx, automation.id, &launcher).expect("launch")
     }
 
-    /// The refusal a held definition answers with: a conflict naming the run that holds it.
-    fn held<T: std::fmt::Debug>(what: &str, run: &AutomationRun, result: Result<T>) {
-        let err = result.expect_err(what);
-        assert_eq!(err.code(), "conflict", "{what}: {err}");
-        assert!(err.to_string().contains(&format!("run {}", run.id)), "{what}: {err}");
+    fn paused(tx: &WriteTx<'_>, run: &AutomationRun) -> AutomationRun {
+        automation_stop::pause(tx, run.id).expect("pause");
+        let pausing = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+        automation_stop::settle(tx, pausing, crate::model::AutomationPauseKind::EndOfAction).expect("settle");
+        let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+        assert_eq!(paused.status, AutomationRunStatus::Paused);
+        paused
     }
 
-    /// Every rewrite of either definition — the automation's picture and the actions placed on it.
-    fn every_rewrite(tx: &WriteTx<'_>, p: &Picture, run: &AutomationRun) {
+    /// One copy a run took at launch: its name, prompt, agent, ways out, inputs, settings and whether it
+    /// is the entry.
+    type Copy = (String, Option<String>, String, String, String, String, bool);
+
+    /// What a run copied at launch, without the ways back to the live definition — those let go of a
+    /// placement or a step that is taken off.
+    fn copied(tx: &WriteTx<'_>, run: &AutomationRun) -> Vec<Copy> {
+        read::automation_run_defs_of(tx.conn(), run.id)
+            .expect("read")
+            .into_iter()
+            .map(|d| (d.name, d.prompt, d.agent, d.exits, d.ins, d.cfg, d.entry))
+            .collect()
+    }
+
+    /// Not refused for the run: it goes through, or it is refused for a reason of its own.
+    fn not_held<T: std::fmt::Debug>(what: &str, result: Result<T>) {
+        if let Err(err) = result {
+            assert_ne!(err.code(), "conflict", "{what}: {err}");
+        }
+    }
+
+    /// Every rewrite of either definition — the automation's picture and the actions placed on it. One
+    /// rewrite can take away what a later one names, so a later one may be refused for that; none is
+    /// refused for the run.
+    fn every_rewrite(tx: &WriteTx<'_>, p: &Picture) {
         let step = only_step(tx, &p.first_action);
         let action = p.first_action.id;
         let found = read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action, Some("found"))
@@ -5207,71 +5169,67 @@ mod held_by_a_run {
             .expect("read")[0];
         let inner_edge = read::automation_edge_ids(tx.conn(), AutomationPictureOwner::Action, action)
             .expect("read")[0];
+        let inner_wire = read::automation_wire_ids(tx.conn(), AutomationPictureOwner::Action, action)
+            .expect("read")[0];
         let answer =
             read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, p.first.id, "depth")
                 .expect("read")
                 .expect("the answer");
 
         // The automation's picture.
-        held("rename", run, update(tx, p.automation.id, Some("別名"), None, None));
-        held("archive", run, update(tx, p.automation.id, None, None, Some(true)));
-        held("entry", run, entry_replace(tx, p.automation.id, "fetch"));
-        held("delete", run, delete(tx, p.automation.id));
-        held("place", run, placement_add(tx, p.automation.id, p.second_action.id));
-        held("place on a line", run, placement_insert(tx, p.onward.id, p.second_action.id));
-        held(
+        not_held("rename", update(tx, p.automation.id, Some("別名"), None, None));
+        not_held("archive", update(tx, p.automation.id, None, None, Some(true)));
+        not_held("entry", entry_replace(tx, p.automation.id, "fetch"));
+        not_held("delete", delete(tx, p.automation.id));
+        not_held("place", placement_add(tx, p.automation.id, p.second_action.id));
+        not_held("place on a line", placement_insert(tx, p.onward.id, p.second_action.id));
+        not_held(
             "place new on a line",
-            run,
             placement_insert_new(tx, p.onward.id, ActionShelf::Project, "新しい"),
         );
-        held("reorder a placement", run, placement_move(tx, p.first.id, Position::Bottom));
-        held("take a placement off", run, placement_delete(tx, p.first.id));
-        held("answer a setting", run, cfg_set(tx, p.first.id, "depth", Some("\"deep\"")));
-        held("rewrite an answer", run, cfg_update(tx, answer.id, None, None, Some(true), None));
-        held("reorder an answer", run, cfg_move(tx, answer.id, Position::Top));
-        held("take an answer off", run, cfg_delete(tx, answer.id));
-        held("choose an agent", run, placement_step_set(tx, p.first.id, step.id, "codex", None));
-        held("take the agent back", run, placement_step_clear(tx, p.first.id, step.id));
-        held(
+        not_held("reorder a placement", placement_move(tx, p.first.id, Position::Bottom));
+        not_held("take a placement off", placement_delete(tx, p.first.id));
+        not_held("answer a setting", cfg_set(tx, p.first.id, "depth", Some("\"deep\"")));
+        not_held("rewrite an answer", cfg_update(tx, answer.id, None, None, Some(true), None));
+        not_held("reorder an answer", cfg_move(tx, answer.id, Position::Top));
+        not_held("take an answer off", cfg_delete(tx, answer.id));
+        not_held("choose an agent", placement_step_set(tx, p.first.id, step.id, "codex", None));
+        not_held("take the agent back", placement_step_clear(tx, p.first.id, step.id));
+        not_held(
             "draw a line",
-            run,
             edge_add(tx, AutomationPictureOwner::Automation, p.first.id, Some(ERROR_EXIT), EdgeTarget::Done, None),
         );
-        held("redraw a line", run, edge_update(tx, p.onward.id, Some(EdgeTarget::Done), None));
-        held("rub a line out", run, edge_delete(tx, p.onward.id));
-        held(
+        not_held("redraw a line", edge_update(tx, p.onward.id, Some(EdgeTarget::Done), None));
+        not_held("rub a line out", edge_delete(tx, p.onward.id));
+        not_held(
             "wire",
-            run,
             wire_add(tx, AutomationPictureOwner::Automation, p.first.id, Some("found"), "note", p.first.id, "note"),
         );
-        held("unwire", run, wire_delete(tx, p.wire.id));
+        not_held("unwire", wire_delete(tx, p.wire.id));
 
         // An action placed on it.
-        held("rename the action", run, action_update(tx, action, Some("別名"), None));
-        held("the action's entry", run, action_set_entry(tx, action, None));
-        held("move the action's reach", run, action_set_scope(tx, action, None));
-        held("delete the action", run, action_delete(tx, action));
-        held("add a step", run, step_add(tx, action, NewStep::new("もう一つ", "again")));
-        held(
+        not_held("rename the action", action_update(tx, action, Some("別名"), None));
+        not_held("the action's entry", action_set_entry(tx, action, None));
+        not_held("move the action's reach", action_set_scope(tx, action, None));
+        not_held("delete the action", action_delete(tx, action));
+        not_held("add a step", step_add(tx, action, NewStep::new("もう一つ", "again")));
+        not_held(
             "add a step on a line",
-            run,
             step_insert(tx, inner_edge, NewStep::new("もう一つ", "again"), &[], &[]),
         );
-        held(
+        not_held(
             "rewrite a step",
-            run,
             step_update(tx, step.id, None, Some("again"), None, None, None, None, None, None, None),
         );
-        held("reorder a step", run, step_move(tx, step.id, Position::Bottom));
-        held("delete a step", run, step_delete(tx, step.id));
-        held("add a way out", run, exit_add(tx, AutomationOwner::Action, action, Some("other")));
-        held("add a step's way out", run, exit_add(tx, AutomationOwner::Step, step.id, Some("other")));
-        held("rename a way out", run, exit_rename(tx, found.id, Some("seen")));
-        held("reorder a way out", run, exit_move(tx, found.id, Position::Top));
-        held("delete a way out", run, exit_delete(tx, found.id));
-        held(
+        not_held("reorder a step", step_move(tx, step.id, Position::Bottom));
+        not_held("delete a step", step_delete(tx, step.id));
+        not_held("add a way out", exit_add(tx, AutomationOwner::Action, action, Some("other")));
+        not_held("add a step's way out", exit_add(tx, AutomationOwner::Step, step.id, Some("other")));
+        not_held("rename a way out", exit_rename(tx, found.id, Some("seen")));
+        not_held("reorder a way out", exit_move(tx, found.id, Position::Top));
+        not_held("delete a way out", exit_delete(tx, found.id));
+        not_held(
             "add an output",
-            run,
             port_add(
                 tx,
                 AutomationPortOwner::Exit,
@@ -5282,9 +5240,8 @@ mod held_by_a_run {
                 false,
             ),
         );
-        held(
+        not_held(
             "add an input",
-            run,
             port_add(
                 tx,
                 AutomationPortOwner::Step,
@@ -5295,133 +5252,70 @@ mod held_by_a_run {
                 false,
             ),
         );
-        held("rewrite a port", run, port_update(tx, note, Some("memo"), None, None));
-        held("reorder a port", run, port_move(tx, note, Position::Top));
-        held("delete a port", run, port_delete(tx, note));
-        held(
+        not_held("rewrite a port", port_update(tx, note, Some("memo"), None, None));
+        not_held("reorder a port", port_move(tx, note, Position::Top));
+        not_held("delete a port", port_delete(tx, note));
+        not_held(
             "declare a setting",
-            run,
             cfg_add(tx, action, "breadth", AutomationCfgKind::Text, false, None),
         );
-        held("rewrite a setting", run, cfg_update(tx, p.cfg.id, Some("width"), None, None, None));
-        held("reorder a setting", run, cfg_move(tx, p.cfg.id, Position::Top));
-        held("delete a setting", run, cfg_delete(tx, p.cfg.id));
-        held(
+        not_held("rewrite a setting", cfg_update(tx, p.cfg.id, Some("width"), None, None, None));
+        not_held("reorder a setting", cfg_move(tx, p.cfg.id, Position::Top));
+        not_held("delete a setting", cfg_delete(tx, p.cfg.id));
+        not_held(
             "draw a line inside",
-            run,
             edge_add(tx, AutomationPictureOwner::Action, step.id, Some(ERROR_EXIT), EdgeTarget::Halt, None),
         );
-        held("redraw a line inside", run, edge_update(tx, inner_edge, None, Some(Some(3))));
-        held("rub a line out inside", run, edge_delete(tx, inner_edge));
-        let inner_wire = read::automation_wire_ids(tx.conn(), AutomationPictureOwner::Action, action)
-            .expect("read")[0];
-        held("unwire inside", run, wire_delete(tx, inner_wire));
+        not_held("redraw a line inside", edge_update(tx, inner_edge, None, Some(Some(3))));
+        not_held("rub a line out inside", edge_delete(tx, inner_edge));
+        not_held("unwire inside", wire_delete(tx, inner_wire));
     }
 
     #[test]
-    fn every_rewrite_is_refused_while_a_run_is_running_or_paused_and_allowed_once_it_ends() {
+    fn no_rewrite_is_refused_while_a_run_is_running_and_the_run_keeps_its_copy() {
         with_tx(|tx| {
             let p = picture(tx);
             let run = launched(tx, &p.automation);
-            every_rewrite(tx, &p, &run);
-
-            automation_stop::pause(tx, run.id).expect("pause");
-            let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
-            automation_stop::settle(tx, paused, crate::model::AutomationPauseKind::EndOfAction).expect("settle");
-            let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
-            assert_eq!(paused.status, AutomationRunStatus::Paused);
-            every_rewrite(tx, &p, &paused);
-
-            automation_stop::stop(tx, run.id, Ending::Canceled).expect("stop");
-            update(tx, p.automation.id, Some("別名"), None, None).expect("the automation is free");
-            action_update(tx, p.first_action.id, Some("別名"), None).expect("its action is free");
+            let before = copied(tx, &run);
+            every_rewrite(tx, &p);
+            assert_eq!(copied(tx, &run), before);
         });
     }
 
-    /// **The order of a list is not a definition.** Where an automation or an action sits among its
-    /// neighbours in the sidebar and the library is nothing a run reads.
     #[test]
-    fn reordering_the_sidebar_or_the_library_is_not_held() {
+    fn no_rewrite_is_refused_while_a_run_is_paused_and_the_run_keeps_its_copy() {
         with_tx(|tx| {
             let p = picture(tx);
-            launched(tx, &p.automation);
-            move_to(tx, p.automation.id, Position::Top).expect("the sidebar's order");
-            action_move(tx, p.first_action.id, Position::Top).expect("the library's order");
+            let run = paused(tx, &launched(tx, &p.automation));
+            let before = copied(tx, &run);
+            every_rewrite(tx, &p);
+            assert_eq!(copied(tx, &run), before);
         });
     }
 
-    /// **A device-wide action is held by any project's run.** Placed by another project's automation,
-    /// it is that project's run the refusal names.
+    /// **Renaming, archiving and moving an action's reach are written**, not only left unrefused, while a
+    /// run is running and while it is paused.
     #[test]
-    fn a_device_wide_action_is_held_by_the_run_of_whichever_project_placed_it() {
-        with_tx(|tx| {
-            let p = picture(tx);
-            action_set_scope(tx, p.second_action.id, None).expect("to the device");
-            let elsewhere = mk_project(tx, "other");
-            let theirs = add(tx, elsewhere, NewAutomation { name: "よそ".into(), ..Default::default() })
-                .expect("add");
-            let placed = placement_add_by_hand(tx, theirs.id, p.second_action.id).expect("placed there too");
-            let step = only_step(tx, &p.second_action);
-            placement_step_set(tx, placed.id, step.id, "claude", None).expect("chosen there too");
-            edge_add(tx, AutomationPictureOwner::Automation, placed.id, None, EdgeTarget::Done, None)
-                .expect("edge");
-            set_entry(tx, theirs.id, Some(placed.id)).expect("entry");
-            let run = launched(tx, &theirs);
+    fn rename_archive_and_scope_are_written_while_a_run_is_running_or_paused() {
+        for pause in [false, true] {
+            with_tx(|tx| {
+                let p = picture(tx);
+                let run = launched(tx, &p.automation);
+                let run = if pause { paused(tx, &run) } else { run };
+                let before = copied(tx, &run);
 
-            held("the action", &run, action_update(tx, p.second_action.id, Some("別名"), None));
-            update(tx, p.automation.id, Some("別名"), None, None)
-                .expect("this project's automation has no run going");
-        });
-    }
+                let renamed = update(tx, p.automation.id, Some("別名"), None, None).expect("rename");
+                assert_eq!(renamed.name, "別名");
+                let archived = update(tx, p.automation.id, None, None, Some(true)).expect("archive");
+                assert!(archived.archived);
+                let moved = action_set_scope(tx, p.first_action.id, None).expect("to the device");
+                assert_eq!(moved.project_id, None);
+                let step = only_step(tx, &p.first_action);
+                step_update(tx, step.id, None, Some("look again"), None, None, None, None, None, None, None)
+                    .expect("rewrite a step");
 
-    /// **No op that rewrites a definition forgets to ask.** Each `pub fn` here either asks
-    /// [`not_under_a_run`] itself, or is named below with the reason it need not.
-    #[test]
-    fn every_op_that_rewrites_a_definition_asks_whether_a_run_is_going_on_it() {
-        let source = include_str!("automation.rs");
-        let ops = &source[..source.find("#[cfg(test)]\nmod tests").expect("the tests")];
-        let need_not = [
-            // Born with nothing launched from it yet.
-            "action_add",
-            "add",
-            // The order of a list, not a definition.
-            "action_move",
-            "move_to",
-            // Only through ops that ask: `action_add` then `step_add`, `placement_add`,
-            // `placement_step_set`, `step_add`.
-            "action_from_prompt",
-            "placement_insert",
-            "placement_insert_new",
-            "placement_insert_at_exit",
-            "placement_insert_new_at_exit",
-            "placement_steps_default",
-            "placement_step_default",
-            "step_insert",
-            "step_insert_at_exit",
-            // Only through `placement_insert_at_exit` and `edge_add`, which ask.
-            "close_after_filed",
-            // Only through `declare_port`, which asks.
-            "port_add",
-            // Only through `draw_wire`, which asks.
-            "wire_add",
-            // Reads a picture handed to it and writes nothing.
-            "lines_back",
-            // Reads an answer handed to it and writes nothing.
-            "answer_misfit",
-            // A flag the launch check reads, on an action no run can have been launched through.
-            "action_finish_creating",
-            // Only through `placement_delete` and `action_delete`, which ask.
-            "action_abandon",
-        ];
-        let mut forgot = Vec::new();
-        for (at, _) in ops.match_indices("\npub fn ") {
-            let rest = &ops[at + "\npub fn ".len()..];
-            let name = &rest[..rest.find(['(', '<']).expect("a signature")];
-            let body = &rest[..rest.find("\n}\n").expect("the end of the fn")];
-            if !body.contains("not_under_a_run(") && !need_not.contains(&name) {
-                forgot.push(name.to_string());
-            }
+                assert_eq!(copied(tx, &run), before);
+            });
         }
-        assert!(forgot.is_empty(), "these ops rewrite a definition without asking: {forgot:?}");
     }
 }

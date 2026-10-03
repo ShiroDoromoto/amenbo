@@ -277,9 +277,8 @@ pub fn automations_placing(conn: &Connection, action_id: i64) -> Result<Vec<i64>
 }
 
 /// **The runs holding an automation's definition** — its own that are `running` or `paused`, in id
-/// order (`AMB-D-961`). While there is one, every rewrite of the automation is refused
-/// ([`super::automation`]), and a build screen reads the same answer to hold its fields shut and name
-/// the runs a reader would have to end.
+/// order. Core does not refuse a rewrite for them (`AMB-D-1015`); a build screen reads this answer to
+/// name the runs going on the definition it shows.
 pub fn run_ids_holding_automation(conn: &Connection, id: i64) -> Result<Vec<i64>> {
     let mut runs = read::automation_run_ids_under_way(conn, id)?;
     runs.sort_unstable();

@@ -395,17 +395,15 @@ input[type="color"] {
 /* What is said about this terminal, and the one control a running pane has. One row, because ending
    it is the last thing there is to say about it. */
 .slot__bar { display: flex; align-items: center; gap: var(--s-2); }
-/* The row above the pane is asked how much room it has, so it can give its places up one at a time as
-   the pane narrows (see `.plate` below). The question is asked of this box rather than of the window:
-   what decides whether the words are readable is the pane, and the same row is drawn in the split-out
-   window, where the window's own width is the pane's. */
+/* The line above the pane. It takes the room the controls leave, and never asks for more: a name
+   longer than that is elided (`.plate__name`). */
 .slot__plate {
-  flex: 1; min-width: 0; container-type: inline-size;
+  flex: 1; min-width: 0;
   /* The box the panel under the row is measured against, and the one thing that decides whether the
-     panel is drawn over the terminal or under it. `container-type` already makes this the containing
-     block an absolute child is placed in; what it does not do is order this box against the pane
-     below, whose emulator puts up layers of its own. `1` is above those and below the surface a drag
-     is caught on (`.slot__handing`), which has to stay over everything while a file hangs on it. */
+     panel is drawn over the terminal or under it: the pane below has an emulator that puts up layers
+     of its own. `1` is above those and below the surface a drag is caught on (`.slot__handing`), which
+     has to stay over everything while a file hangs on it. A run's pane hands both to its whole header
+     (`.slot--run .slot__bar`). */
   position: relative; z-index: 1;
 }
 /* The whole of the row, unelided, dropped under it while a pointer is on it (`../talk/nameplate`).
@@ -3001,14 +2999,26 @@ body.dragging-row { user-select: none; }
    between the first two, apart from the state and at another height. So every control is held to the
    first line's height, and the first line is drawn that tall. */
 .slot--run .slot__bar > :not(.slot__plate) { height: var(--plate-line); }
-/* **A narrow run pane wraps its controls under the header rather than over it** (`AMB-T-5950`). The
-   row is measured with `container-type`, so its words never ask for room, and its chips never shrink:
-   at half a page the controls took the whole row and the chips were drawn on top of them. The row is
-   held wide enough for the mark, the name, the run's number and the state, and what does not fit beside
-   it goes to a line of its own, at the right where it stood. */
-.slot--run .slot__bar { flex-wrap: wrap; }
-.slot--run .slot__plate { flex: 1 1 16rem; min-width: min(16rem, 100%); }
+/* **The controls keep the first line however narrow the pane, and the two lines under it take the
+   whole width** (`AMB-T-5995`). The header's three lines are laid out as the bar's own items rather
+   than in a box of their own: the first line takes what the controls leave and elides the name to fit,
+   and the step's and the task's lines are put after the controls, a whole line each — so they run under
+   the controls too, and no fourth line is ever drawn. Taking the box out of the layout takes its
+   stacking and the panel's place with it, so the bar holds both. */
+.slot--run .slot__bar {
+  flex-wrap: wrap; row-gap: 0;
+  position: relative; z-index: 1;
+  container: runbar / inline-size;
+}
+.slot--run .slot__plate { display: contents; }
+.slot--run .slot__plate--behind { display: none; }
+.slot--run .plate { flex: 1 1 0; min-width: 0; }
+.slot--run :is(.plate-step, .plate-run) { order: 1; flex: 0 0 100%; min-width: 0; }
+/* With the controls on the right even where the row has nothing to say. */
 .slot--run .slot__faces { margin-inline-start: auto; }
+/* The panel drops from a pointer on any of the three lines — the box they were in, which the rule for
+   an ordinary pane asks about, is no longer drawn. */
+.slot--run :is(.plate, .plate-step, .plate-run):hover ~ .plate-peek:not([hidden]) { display: block; }
 
 /* The name row on a run's pane is the run's: the automation and where it has got to, in its colour.
    It gives up its bottom margin to the task's line under it, the two being one block over the
@@ -3023,8 +3033,8 @@ body.dragging-row { user-select: none; }
 
 /* Which run, after the name (`../talk/nameplate`): `#12`.
 
-   **The pane is what decides how much of it is drawn**, not the window: the row is measured against
-   `.slot__plate`, and a pane a sixth of the page wide holds fewer words than the same row in the
+   **The pane is what decides how much of it is drawn**, not the window: the header is measured
+   (`runbar`), and a pane a sixth of the page wide holds fewer words than the same header in the
    split-out window. The run's number is the first thing given up whole. */
 .plate__no { flex: 0 0 auto; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--c-text-muted); }
 .plate__into { color: var(--c-text-faint); font-weight: 400; }
@@ -3114,5 +3124,17 @@ body.dragging-row { user-select: none; }
 .plate__state[data-state="failed"] { --state: var(--c-stop); --state-bg: var(--c-stop-weak); }
 .plate__state[data-state="canceled"] { --state: var(--c-text-muted); }
 
-@container (max-width: 15rem) { .plate__no, .plate-run__nth { display: none; } }
-@container (max-width: 11rem) { .plate-run__title { display: none; } }
+/* The header is measured whole, controls and all: the run's number goes once the controls leave the
+   first line too little room for it beside the name, and the task's title once its own line is that
+   narrow. */
+@container runbar (max-width: 28rem) {
+  .plate__no, .plate-run__nth { display: none; }
+  /* The room around the controls goes too, to the name: at a third of the page the controls alone
+     left it half a letter, and a name squeezed to nothing reads as no name at all. The controls
+     themselves stay whole. */
+  .slot--run .plate { padding-inline: var(--s-1) 0; }
+  .slot--run .slot__face { padding-inline: var(--s-1); }
+  .slot--run .slot__runacts { margin-inline-start: 0; }
+  .slot--run :is(.panesize, .slot__more, .slot__end) { padding-inline: 2px; }
+}
+@container runbar (max-width: 11rem) { .plate-run__title { display: none; } }

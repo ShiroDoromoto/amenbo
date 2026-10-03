@@ -5327,7 +5327,7 @@ mod held_by_a_run {
 
             automation_stop::pause(tx, run.id).expect("pause");
             let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
-            automation_stop::settle(tx, paused).expect("settle");
+            automation_stop::settle(tx, paused, crate::model::AutomationPauseKind::EndOfAction).expect("settle");
             let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
             assert_eq!(paused.status, AutomationRunStatus::Paused);
             every_rewrite(tx, &p, &paused);

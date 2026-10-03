@@ -40,7 +40,7 @@
 use crate::error::{Error, Result};
 use rusqlite::Connection;
 use crate::model::{
-    ActorKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStepStatus,
+    ActorKind, AutomationPauseKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStepStatus,
     AutomationRunTask, AutomationStoppedReason, TaskStatus,
 };
 use crate::run_wording::Reached;
@@ -153,6 +153,7 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     after.stopped_reason = ending.reason();
     after.pause_requested = false;
     after.pause_before_next_task = false;
+    after.pause_kind = None;
     after.ended_at = Some(now);
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
@@ -392,7 +393,7 @@ pub fn pause_before_next_task(tx: &WriteTx<'_>, project_id: i64) -> Result<Vec<A
             continue;
         }
         if waits_to_take_a_task(tx.conn(), run_id)? {
-            asked.push(settle(tx, before)?.run);
+            asked.push(settle(tx, before, AutomationPauseKind::BeforeNextTask)?.run);
             continue;
         }
         let mut after = before.clone();
@@ -433,12 +434,17 @@ pub(crate) fn takes_a_task(def: &AutomationRunDef) -> bool {
 /// It does not go through [`ended`], and the difference is the whole point — a paused run has not
 /// ended. `ended_at` stays empty, the task stays reserved, and nothing is written on it, because there
 /// is nothing to tell somebody yet.
-pub fn settle(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
+///
+/// **The caller says which pause this is**, and the run keeps it (`AMB-D-1015`): the requests are
+/// cleared here, so they no longer tell. It is the pause that took hold — a run asked for both stops
+/// at whichever it reaches first.
+pub fn settle(tx: &WriteTx<'_>, before: AutomationRun, kind: AutomationPauseKind) -> Result<Ended> {
     let now = Timestamp::now();
     let mut after = before.clone();
     after.status = AutomationRunStatus::Paused;
     after.pause_requested = false;
     after.pause_before_next_task = false;
+    after.pause_kind = Some(kind);
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
     Ok(Ended { run: after })
@@ -468,6 +474,7 @@ pub fn resume(tx: &WriteTx<'_>, run_id: i64) -> Result<Resumed> {
     let now = Timestamp::now();
     let mut after = before.clone();
     after.status = AutomationRunStatus::Running;
+    after.pause_kind = None;
     after.updated_at = now;
     if after.started_at.is_none() {
         after.started_at = Some(now);
@@ -746,7 +753,7 @@ mod tests {
             let running = a_run(tx, &p.automation);
             let paused = a_run(tx, &p.automation);
             let stopped = a_run(tx, &p.automation);
-            settle(tx, paused.clone()).expect("pause");
+            settle(tx, paused.clone(), AutomationPauseKind::EndOfAction).expect("pause");
             ended(tx, stopped.clone(), Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
             let live: Vec<i64> = read::automation_runs_live(tx.conn())
                 .expect("live")
@@ -857,9 +864,16 @@ mod tests {
             a_task_in_hand(tx, p.project, step.run_step.id);
             pause(tx, run.id).expect("pause");
             done(tx, step.run_step.id, None, "Looked at it.").expect("done");
+            let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+            assert_eq!(
+                paused.pause_kind,
+                Some(AutomationPauseKind::EndOfAction),
+                "it stopped at the end of the action",
+            );
 
             let Resumed { run: after, next } = resume(tx, run.id).expect("resume");
             assert_eq!(after.status, AutomationRunStatus::Running);
+            assert_eq!(after.pause_kind, None, "a running run is stopped at neither");
             assert_eq!(next.step_id, Some(p.second.id), "it goes on where it left off");
         });
     }

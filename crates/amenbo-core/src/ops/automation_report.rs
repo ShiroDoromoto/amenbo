@@ -20,7 +20,7 @@
 
 use crate::error::{Error, Result};
 use crate::model::{
-    ActorKind, AttachmentTarget, AutomationPictureOwner, AutomationPortDirection,
+    ActorKind, AttachmentTarget, AutomationPauseKind, AutomationPictureOwner, AutomationPortDirection,
     AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStep,
     AutomationRunStepStatus, AutomationRunTask, AutomationRunValue, AutomationStoppedReason,
     RunDefExit, RunDefLine, RunDefPort, Task, TaskStatus, DONE_EXIT, ERROR_EXIT,
@@ -490,7 +490,7 @@ fn whats_next(
                 return Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::MaxTimes)?));
             }
             if run.pause_requested && leaves_the_action(&line) {
-                return Ok(Next::Paused(automation_stop::settle(tx, run)?));
+                return Ok(Next::Paused(automation_stop::settle(tx, run, AutomationPauseKind::EndOfAction)?));
             }
             Ok(Next::Step(next))
         }

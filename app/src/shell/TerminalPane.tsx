@@ -1054,8 +1054,10 @@ export function TerminalPane({
             already watching; once pressed the band stays to say why, with nothing left to press. */}
         {run?.state?.status === "failed" && (
           <div className="slot__band slot__band--fail" role="status">
-            <Icon name="warning" />
+            {/* The mark rides inside the reason, so a narrow pane that wraps the band never leaves it
+                on a line of its own (`AMB-T-5965`). */}
             <span className="slot__band-why">
+              <Icon name="warning" />
               {run.state.exit !== null
                 ? stoppedAt(run.state.exit, run.state.errorExit)
                 : run.state.why ?? run.state.word}

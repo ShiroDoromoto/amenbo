@@ -1024,6 +1024,11 @@ between one hand-over and the next.
 - A previous run's app is taken down first. The harness takes its own down when it ends, and the one
   case it cannot is the one that matters: a run somebody stopped part-way leaves a window that the
   next run's shots would have in front of them.
+- **The app's window shape is forgotten before the road starts.** The app keeps it in the guest's
+  localStorage (`amenbo.windowShape`), outside the throwaway store, so a road that splits the
+  workspace into a window of its own leaves the next run's app opening two — and the harness gives up
+  with `the app put no window on screen within 60s`. It is done here and not in the harness: on the
+  host that localStorage is shared, by bundle identifier, with the user's own app.
 
 **`step`** sends one line and waits for the harness to say something next. **The steps come from a
 file that is appended to, not from a pipe somebody holds** — the harness's stdin is `tail -n 0 -f`

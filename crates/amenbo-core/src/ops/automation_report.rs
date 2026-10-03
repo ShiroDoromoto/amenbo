@@ -581,6 +581,207 @@ fn named(exit: &str) -> String {
     }
 }
 
+// ───────────────────────── a script's run ─────────────────────────
+
+/// The version of `output.json` this reads.
+const OUTPUT_VERSION: u64 = 1;
+
+/// **What a script step's program came to, checked against the step and written down**
+/// (`AMB-D-1016`): the end of what it printed, then the way out `output.json` names, the outputs it
+/// lists under it, and its report — the way out ending the step as [`done`] ends an agent's.
+///
+/// **Anything that does not hold leaves by the error way out**, the report saying why: a program that
+/// could not be started, ran past its timeout, ended other than with exit code 0, wrote no
+/// `output.json` or one that is not JSON in the shape `{"version":1,"exit":…,"outs":{…},"report":…}`,
+/// named a way out the step does not declare, or left out an output that way out requires. Nothing it
+/// listed is put down then: an output is checked whole before any is written.
+///
+/// `output.json` names a way out and its outputs by name, the way the step was built, and they are
+/// matched to the run's copy of the step here (`AMB-D-961`). A value is a string; a file is the name of
+/// one the program left beside `output.json`, attached to this execution; a task is its `AMB-T-<n>`.
+/// An output the way out does not declare is not read. A report left out or blank is said for it: a
+/// step owes one.
+///
+/// `kept` is each file the program left, already in the blob store by its name — put there before the
+/// transaction, as an attachment's bytes always are ([`crate::ops::attachment`]).
+pub fn script_ran(
+    tx: &WriteTx<'_>,
+    run_step_id: i64,
+    ran: &crate::ops::automation_script::Ran,
+    kept: &[(String, crate::blob::BlobRef)],
+) -> Result<Next> {
+    let run_step = live_execution(tx, run_step_id)?;
+    let def = def_of(tx, &run_step)?;
+    let exits = exits_of(&def)?;
+    let mut tailed = run_step.clone();
+    tailed.stdout_tail = ran.stdout_tail.clone();
+    tailed.stderr_tail = ran.stderr_tail.clone();
+    tailed.updated_at = Timestamp::now();
+    crate::ops::emit_update(tx, record::automation_run_step(&run_step), record::automation_run_step(&tailed))?;
+
+    let (exit_id, report) = match left_by(tx, &tailed, &def, &exits, ran, kept) {
+        Ok(left) => {
+            for (port, what) in &left.outs {
+                let produced = match what {
+                    Listed::Value(value) => Produced::Value(value),
+                    Listed::File { name, blob } => {
+                        let size = i64::try_from(blob.size_bytes).unwrap_or(i64::MAX);
+                        let held = crate::ops::attachment::add_blob(
+                            tx,
+                            AttachmentTarget::AutomationRunStep,
+                            tailed.id,
+                            &blob.hash,
+                            name,
+                            crate::blob::mime_from_filename(name),
+                            size,
+                            ActorKind::Ai,
+                        )?;
+                        Produced::File(held.id)
+                    }
+                    Listed::Task(id) => Produced::Task(*id),
+                };
+                put(tx, &tailed, port, left.exit, produced)?;
+            }
+            (left.exit.id, left.report)
+        }
+        Err(why) => {
+            let error = exits
+                .iter()
+                .find(|e| e.name == ERROR_EXIT)
+                .ok_or_else(|| Error::invalid("the step carries no error way out"))?;
+            (error.id, why)
+        }
+    };
+    done(tx, run_step_id, Some(exit_id), &report)
+}
+
+/// What `output.json` was found to say, once it has held.
+struct Left<'a> {
+    exit: &'a RunDefExit,
+    outs: Vec<(&'a RunDefPort, Listed)>,
+    report: String,
+}
+
+/// One output as `output.json` listed it, read as its port's kind.
+enum Listed {
+    Value(String),
+    File { name: String, blob: crate::blob::BlobRef },
+    Task(i64),
+}
+
+/// **Read what the program came to against the step**, or say why it does not hold — the sentence
+/// the error way out is reported with.
+fn left_by<'a>(
+    tx: &WriteTx<'_>,
+    run_step: &AutomationRunStep,
+    def: &AutomationRunDef,
+    exits: &'a [RunDefExit],
+    ran: &crate::ops::automation_script::Ran,
+    kept: &[(String, crate::blob::BlobRef)],
+) -> std::result::Result<Left<'a>, String> {
+    use crate::ops::automation_script::Ended as Came;
+    let output = match &ran.ended {
+        Came::NotStarted(why) => return Err(format!("the program could not be started: {why}")),
+        Came::TimedOut => {
+            let minutes = def.script.as_ref().map_or(0, |s| s.timeout_minutes);
+            return Err(format!("the program was still running after {minutes} minutes, and was stopped"));
+        }
+        Came::Failed(status) => {
+            return Err(match status.code() {
+                Some(code) => format!("the program ended with exit code {code}"),
+                None => format!("the program ended without an exit code ({status})"),
+            })
+        }
+        Came::NoOutput => return Err("the program ended with exit code 0 and wrote no output.json".to_string()),
+        Came::NotJson(why) => return Err(format!("output.json is not JSON: {why}")),
+        Came::Wrote { output, .. } => output,
+    };
+    let unshaped = |what: &str| format!("output.json is not in the shape {{\"version\":1,\"exit\":…}}: {what}");
+    if output.get("version").and_then(|v| v.as_u64()) != Some(OUTPUT_VERSION) {
+        return Err(unshaped("\"version\" is not 1"));
+    }
+    let Some(exit) = output.get("exit").and_then(|v| v.as_str()) else {
+        return Err(unshaped("\"exit\" is not a string"));
+    };
+    let outs = match output.get("outs") {
+        None | Some(serde_json::Value::Null) => serde_json::Map::new(),
+        Some(serde_json::Value::Object(outs)) => outs.clone(),
+        Some(_) => return Err(unshaped("\"outs\" is not an object")),
+    };
+    let report = match output.get("report") {
+        None | Some(serde_json::Value::Null) => String::new(),
+        Some(serde_json::Value::String(report)) => report.clone(),
+        Some(_) => return Err(unshaped("\"report\" is not a string")),
+    };
+    let Some(taken) = exits.iter().find(|e| e.name == exit) else {
+        let declared: Vec<String> = exits.iter().map(|e| named(&e.name)).collect();
+        return Err(format!(
+            "output.json names a way out \"{exit}\" the step does not declare — the ones it does: {}",
+            declared.join(", ")
+        ));
+    };
+
+    let mut listed = Vec::new();
+    let mut missing = Vec::new();
+    for port in &taken.outs {
+        let Some(said) = outs.get(&port.name).filter(|v| !v.is_null()) else {
+            if port.required {
+                missing.push(format!("\"{}\"", port.name));
+            }
+            continue;
+        };
+        let Some(said) = said.as_str() else {
+            return Err(format!("output \"{}\" is not a string", port.name));
+        };
+        let what = match port.kind {
+            AutomationPortKind::Value => Listed::Value(said.to_string()),
+            AutomationPortKind::File => {
+                let name = std::path::Path::new(said)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let Some((_, blob)) = kept.iter().find(|(file, _)| *file == name) else {
+                    return Err(format!(
+                        "output \"{}\" names a file \"{said}\" the program did not leave beside output.json",
+                        port.name
+                    ));
+                };
+                Listed::File { name, blob: blob.clone() }
+            }
+            AutomationPortKind::TaskMake => {
+                let Ok(id) = crate::idref::strip(crate::idref::RefKind::Task, said).parse::<i64>() else {
+                    return Err(format!("output \"{}\" is not a task (AMB-T-<n>): \"{said}\"", port.name));
+                };
+                let found = read::task(tx.conn(), id).map_err(|e| e.to_string())?;
+                if found.is_none() {
+                    return Err(format!("output \"{}\" names task AMB-T-{id}, which is not there", port.name));
+                }
+                in_the_runs_project(tx, run_step, id).map_err(|e| e.to_string())?;
+                Listed::Task(id)
+            }
+            AutomationPortKind::TaskTake => {
+                return Err(format!(
+                    "output \"{}\" is the task the run works, which a built-in takes and a script does not",
+                    port.name
+                ))
+            }
+        };
+        listed.push((port, what));
+    }
+    if !missing.is_empty() {
+        return Err(format!(
+            "output.json leaves out what leaving through {} requires: {}",
+            named(&taken.name),
+            missing.join(", ")
+        ));
+    }
+    let report = match report.trim().is_empty() {
+        true => format!("The script left through {}.", named(&taken.name)),
+        false => report,
+    };
+    Ok(Left { exit: taken, outs: listed, report })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -675,6 +876,7 @@ mod tests {
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
             Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
+            Opened::Script(_) => panic!("not a script"),
         }
     }
 

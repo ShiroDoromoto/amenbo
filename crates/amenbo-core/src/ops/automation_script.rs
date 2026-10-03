@@ -16,8 +16,9 @@
 //!
 //! **Nothing is written to the store.** A program may run for hours ([`MAX_SCRIPT_TIMEOUT_MINUTES`]), so
 //! this runs outside any transaction, and what came back is [`Ran`] for the caller to check against the
-//! step's exits and ports and to record. Whatever happened, the folder is gone by the time it returns:
-//! the files a program left are read into [`Ran`] first.
+//! step's exits and ports and to record ([`crate::ops::automation_report::script_ran`]). Whatever
+//! happened, the folder is gone by the time it returns: the files a program left are read into [`Ran`]
+//! first.
 //!
 //! [`MAX_SCRIPT_TIMEOUT_MINUTES`]: crate::model::MAX_SCRIPT_TIMEOUT_MINUTES
 

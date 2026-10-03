@@ -26,7 +26,8 @@
 //! is copied into `automation_run_def` at launch — one column of them, each saying which placement it
 //! was opened from, with the wires joined to each input resolved into it — so editing the automation
 //! afterwards cannot change what a run already under way is doing, and a run stays readable months
-//! later when the automation it came from has moved on.
+//! later when the automation it came from has moved on. The one exception is a run paused before its
+//! next task: picking it up copies the automation down onto it again (`AMB-D-1015`, [`copy_down_again`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1432,17 +1433,66 @@ fn launch_asking(
         updated_at: now,
     };
     emit_create(tx, record::automation_run(&run))?;
-    for placement in read::automation_placements_of(tx.conn(), automation_id)? {
+    copy_down(tx, run.id, &automation, now)?;
+    Ok(run)
+}
+
+/// **Copy every step of `automation` down onto the run** — [`snapshot`] for each step of each
+/// placement, at launch and again where a run paused before its next task is picked up (`AMB-D-1015`).
+///
+/// **The entry's copy is written first**, so a run's copies fall into one run of rows per time they
+/// were taken, each starting at its entry ([`current_defs`]). The rows of an earlier copy are kept:
+/// the executions opened from them still point at them.
+fn copy_down(tx: &WriteTx<'_>, run_id: i64, automation: &Automation, now: Timestamp) -> Result<()> {
+    let mut steps = Vec::new();
+    for placement in read::automation_placements_of(tx.conn(), automation.id)? {
         let opens_first =
             read::automation_action(tx.conn(), placement.action_id)?.and_then(|a| a.entry_step_id);
         for step in steps_opened_by(tx.conn(), placement.action_id)? {
             let entry = automation.entry_placement_id == Some(placement.id) && opens_first == Some(step.id);
-            if let Some(def) = snapshot(tx, run.id, &placement, &step, entry, now)? {
-                emit_create(tx, record::automation_run_def(&def))?;
-            }
+            steps.push((placement.clone(), step, entry));
         }
     }
-    Ok(run)
+    steps.sort_by_key(|(_, _, entry)| !entry);
+    for (placement, step, entry) in steps {
+        if let Some(def) = snapshot(tx, run_id, &placement, &step, entry, now)? {
+            emit_create(tx, record::automation_run_def(&def))?;
+        }
+    }
+    Ok(())
+}
+
+/// **Copy the automation down onto a run paused before its next task, afresh** (`AMB-D-1015`), and
+/// answer the copy of its entry — where the run picks up.
+///
+/// The new copy is checked first, as a launch checks it ([`launch_asking`]): an archived automation, or
+/// one [`check`] finds anything unmet in, is refused, and nothing is written.
+pub(crate) fn copy_down_again(
+    tx: &WriteTx<'_>,
+    run: &AutomationRun,
+    startable: Option<&[String]>,
+    models: &ModelsHere,
+) -> Result<AutomationRunDef> {
+    let automation: Automation = read::automation(tx.conn(), run.automation_id)?
+        .ok_or_else(|| not_found("automation", run.automation_id))?;
+    if automation.archived {
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "automation '{}' is archived — bring it back before picking up run '{}'",
+                automation.name, run.id
+            ))
+            .coded(ErrorCode::InvalidAutomationArchived)
+            .with("automation", &automation.name),
+        ));
+    }
+    let unmet = check(tx.conn(), automation.id, startable, models)?;
+    if !unmet.is_empty() {
+        return Err(not_ready(&automation.name, &unmet));
+    }
+    copy_down(tx, run.id, &automation, Timestamp::now())?;
+    entry_def(tx.conn(), run.id)?.ok_or_else(|| {
+        Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
+    })
 }
 
 /// **Whether the entry reads what was handed over at launch**, and the task to file where it files one.
@@ -1791,25 +1841,41 @@ fn wired_into(
     Ok(out)
 }
 
-/// The copy a run took of one step of one placement.
+/// **The copies a run reads from now** — the last time the automation was copied down onto it
+/// ([`copy_down`]): from its last entry copy on.
+///
+/// A run carrying a single entry copy reads all of its copies. That is every run copied down once, and
+/// it covers one launched before the entry's copy was written first.
+pub(crate) fn current_defs(conn: &Connection, run_id: i64) -> Result<Vec<AutomationRunDef>> {
+    let mut defs = read::automation_run_defs_of(conn, run_id)?;
+    if defs.iter().filter(|def| def.entry).count() > 1 {
+        if let Some(from) = defs.iter().rposition(|def| def.entry) {
+            defs.drain(..from);
+        }
+    }
+    Ok(defs)
+}
+
+/// The copy a run took of one step of one placement, the last time it was copied down.
 fn copy_of(
     conn: &Connection,
     run_id: i64,
     placement_id: i64,
     step_id: i64,
 ) -> Result<Option<AutomationRunDef>> {
-    Ok(read::automation_run_defs_of(conn, run_id)?
+    Ok(current_defs(conn, run_id)?
         .into_iter()
         .find(|def| def.placement_id == Some(placement_id) && def.step_id == Some(step_id)))
 }
 
-/// **The spot a run starts at** — the copy marked at launch as the step the automation's entry placement
-/// opened first ([`AutomationRunDef::entry`]), or `None` where the run carries no such copy.
+/// **The spot a run starts at** — the copy marked as the step the automation's entry placement opened
+/// first ([`AutomationRunDef::entry`]), the last time it was copied down, or `None` where the run
+/// carries no such copy.
 pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
     if read::automation_run(conn, run_id)?.is_none() {
         return Err(not_found("run", run_id));
     }
-    Ok(read::automation_run_defs_of(conn, run_id)?.into_iter().find(|def| def.entry))
+    Ok(current_defs(conn, run_id)?.into_iter().find(|def| def.entry))
 }
 
 /// **What follows one way out of one step**, as the step's copy says ([`RunDefExit::then`]) — resolved
@@ -1895,8 +1961,9 @@ pub enum Waiting {
 ///
 /// A run that is `running` is either carrying a step out or standing between two of them, and only the
 /// second is anybody's to act on. So this answers a step in exactly two cases — a run that has just
-/// been launched and has no execution yet, where the answer is the entry ([`entry_def`]); and a run
-/// whose last execution has reported, where the answer is read off the way out it took.
+/// been launched and has no execution yet, or was copied down again as it was picked up and has none
+/// from the new copy, where the answer is the entry ([`entry_def`]); and a run whose last execution has
+/// reported, where the answer is read off the way out it took.
 ///
 /// **It derives rather than remembers**, because the report already wrote down everything it takes:
 /// the execution carries the way out, and the step's copy says what follows one
@@ -1920,6 +1987,12 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     };
     if last.status == AutomationRunStepStatus::Running {
         return Ok(Waiting::Nothing);
+    }
+    // A step opened from an earlier copy is behind a run copied down again as it was picked up
+    // (`AMB-D-1015`), which starts afresh at the new copy's entry.
+    if current_defs(conn, run_id)?.first().is_some_and(|first| last.run_def_id < first.id) {
+        return Ok(entry_def(conn, run_id)?
+            .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))));
     }
     // Everything below is a run standing between two steps. A way out that closed or halted the run
     // would have done so in the report that took it, so a run still `running` here is standing

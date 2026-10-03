@@ -2100,7 +2100,8 @@ pub struct AutomationRun {
 }
 
 /// **The step as it was at launch** — one record per step of the automation, written when the run is
-/// created and never rewritten.
+/// created and never rewritten. A run paused before its next task is copied down again as it is picked
+/// up (`AMB-D-1015`); the new records are added after the old ones, which are kept.
 ///
 /// This is what makes a run readable months later: the automation it came from has moved on, and these
 /// columns still say what was actually asked. The three JSON fields hold what has no column of its own —

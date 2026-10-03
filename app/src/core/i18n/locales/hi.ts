@@ -1635,6 +1635,8 @@ export const hi: Translation = {
     not_ready_automation_agent_unchosen: "{step}: कोई एजेंट नहीं चुना गया",
     not_ready_automation_agent_missing: "{step}: यह मशीन “{agent}” को शुरू नहीं कर सकती।",
     not_ready_automation_model_missing: "{step}: यहाँ इसका एजेंट “{model}” मॉडल नहीं देता।",
+    not_ready_automation_script_missing: "{step}: “{program}” पर कोई फ़ाइल नहीं है।",
+    not_ready_automation_script_not_executable: "{step}: “{program}” को चलाने की अनुमति नहीं है — फ़ाइल को चलाने की अनुमति दें।",
     not_ready_automation_task_left_open: "{step}: “{exit}” के बाद यह कार्य बंद किए बिना “{to}” पर जाता है, जो अगला कार्य लेता है",
     not_ready_automation_task_left_open_at_end: "{step}: “{exit}” के बाद कार्य बंद किए बिना रन ख़त्म हो जाता है",
     not_ready_automation_hands_on_task_taken: "{step}: “{exit}” रन का कार्य आगे देता है, जिसे सिर्फ़ बिल्ट-इन ले सकता है — इससे पहले “कार्य लें” या “कार्य बनाएँ” रखें",

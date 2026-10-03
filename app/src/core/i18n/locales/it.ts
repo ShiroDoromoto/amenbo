@@ -1653,6 +1653,8 @@ export const it: Translation = {
     not_ready_automation_agent_unchosen: "{step}: non è stato scelto alcun agente",
     not_ready_automation_agent_missing: "{step}: questa macchina non può avviare «{agent}»",
     not_ready_automation_model_missing: "{step}: il suo agente qui non offre il modello «{model}»",
+    not_ready_automation_script_missing: "{step}: non c’è nessun file in «{program}»",
+    not_ready_automation_script_not_executable: "{step}: «{program}» non ha il permesso di esecuzione — dai al file il permesso di essere eseguito",
     not_ready_automation_task_left_open: "{step}: dopo «{exit}» passa a «{to}», che prende un’altra attività, con questa ancora aperta",
     not_ready_automation_task_left_open_at_end: "{step}: dopo «{exit}» l’esecuzione finisce con l’attività ancora aperta",
     not_ready_automation_hands_on_task_taken: "{step}: «{exit}» passa l’attività dell’esecuzione, che solo un passo integrato può prendere; metti «Prendi un’attività» o «Crea un’attività» prima",

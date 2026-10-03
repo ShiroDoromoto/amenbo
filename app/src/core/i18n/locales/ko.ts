@@ -1631,6 +1631,8 @@ export const ko: Translation = {
     not_ready_automation_agent_unchosen: "{step}: 에이전트를 고르지 않았습니다",
     not_ready_automation_agent_missing: "{step}: 이 컴퓨터에서 “{agent}”을(를) 시작할 수 없습니다",
     not_ready_automation_model_missing: "{step}: 여기의 에이전트는 “{model}” 모델을 제공하지 않습니다",
+    not_ready_automation_script_missing: "{step}: “{program}”에 파일이 없습니다",
+    not_ready_automation_script_not_executable: "{step}: “{program}”에 실행 권한이 없습니다",
     not_ready_automation_task_left_open: "{step}: “{exit}” 이후 작업을 닫지 않은 채 “{to}”(으)로 가서 다음 작업을 가져옵니다",
     not_ready_automation_task_left_open_at_end: "{step}: “{exit}” 이후 작업을 닫지 않은 채 실행이 끝납니다",
     not_ready_automation_hands_on_task_taken: "{step}: “{exit}”에서 실행이 맡은 작업을 넘기지만, 그 작업은 내장 단계만 가져올 수 있습니다. 앞에 “작업 가져오기”나 “작업 만들기”를 두세요",

@@ -1635,6 +1635,8 @@ export const vi: Translation = {
     not_ready_automation_agent_unchosen: "{step}: chưa chọn tác nhân",
     not_ready_automation_agent_missing: "{step}: máy này không chạy được “{agent}”",
     not_ready_automation_model_missing: "{step}: tác nhân ở đây không có mô hình “{model}”",
+    not_ready_automation_script_missing: "{step}: không có tệp nào ở “{program}”",
+    not_ready_automation_script_not_executable: "{step}: “{program}” không có quyền thực thi — hãy cấp quyền chạy cho tệp",
     not_ready_automation_task_left_open: "{step}: sau “{exit}” chuyển sang “{to}” để nhận công việc khác trong khi công việc này vẫn còn mở",
     not_ready_automation_task_left_open_at_end: "{step}: sau “{exit}” lượt chạy kết thúc trong khi công việc vẫn còn mở",
     not_ready_automation_hands_on_task_taken: "{step}: “{exit}” chuyển tiếp công việc của lượt chạy, mà chỉ bước dựng sẵn mới nhận được — hãy đặt “Nhận việc” hoặc “Tạo việc” trước nó",

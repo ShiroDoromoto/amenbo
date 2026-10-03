@@ -1661,6 +1661,8 @@ export const pl: Translation = {
     not_ready_automation_agent_unchosen: "{step}: nie wybrano agenta",
     not_ready_automation_agent_missing: "{step}: ta maszyna nie może uruchomić „{agent}”",
     not_ready_automation_model_missing: "{step}: tutejszy agent nie oferuje modelu „{model}”",
+    not_ready_automation_script_missing: "{step}: pod „{program}” nie ma pliku",
+    not_ready_automation_script_not_executable: "{step}: „{program}” nie ma uprawnień do wykonania — nadaj plikowi uprawnienie wykonywania",
     not_ready_automation_task_left_open: "{step}: po „{exit}” przechodzi do „{to}”, który pobiera kolejne zadanie, choć to jest wciąż otwarte",
     not_ready_automation_task_left_open_at_end: "{step}: po „{exit}” przebieg się kończy, choć zadanie jest wciąż otwarte",
     not_ready_automation_hands_on_task_taken: "{step}: „{exit}” przekazuje zadanie przebiegu, które może pobrać tylko krok wbudowany — wstaw przed nim „Pobierz zadanie” lub „Utwórz zadanie”",

@@ -1653,6 +1653,8 @@ export const fr: Translation = {
     not_ready_automation_agent_unchosen: "{step} : aucun agent n’est choisi",
     not_ready_automation_agent_missing: "{step} : cette machine ne peut pas lancer « {agent} »",
     not_ready_automation_model_missing: "{step} : son agent ici ne propose pas le modèle « {model} »",
+    not_ready_automation_script_missing: "{step} : aucun fichier à « {program} »",
+    not_ready_automation_script_not_executable: "{step} : « {program} » n’a pas le droit d’être exécuté — donnez au fichier la permission d’exécution",
     not_ready_automation_task_left_open: "{step} : après « {exit} », on passe à « {to} », qui prend une autre tâche, alors que celle-ci est encore ouverte",
     not_ready_automation_task_left_open_at_end: "{step} : après « {exit} », l’exécution se termine alors que la tâche est encore ouverte",
     not_ready_automation_hands_on_task_taken: "{step} : « {exit} » transmet la tâche de l’exécution, que seule une étape intégrée peut prendre ; placez « Prendre une tâche » ou « Créer une tâche » avant",

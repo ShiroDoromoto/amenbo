@@ -163,6 +163,8 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_agent_unchosen",
   "not_ready_automation_agent_missing",
   "not_ready_automation_model_missing",
+  "not_ready_automation_script_missing",
+  "not_ready_automation_script_not_executable",
   "not_ready_automation_task_left_open",
   "not_ready_automation_task_left_open_at_end",
   "not_ready_automation_hands_on_task_taken",

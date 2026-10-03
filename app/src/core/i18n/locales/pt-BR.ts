@@ -1653,6 +1653,8 @@ export const ptBR: Translation = {
     not_ready_automation_agent_unchosen: "{step}: nenhum agente foi escolhido",
     not_ready_automation_agent_missing: "{step}: esta máquina não consegue iniciar “{agent}”",
     not_ready_automation_model_missing: "{step}: o agente aqui não oferece o modelo “{model}”",
+    not_ready_automation_script_missing: "{step}: não há arquivo em “{program}”",
+    not_ready_automation_script_not_executable: "{step}: “{program}” não tem permissão de execução — dê ao arquivo permissão para ser executado",
     not_ready_automation_task_left_open: "{step}: depois de “{exit}” segue para “{to}”, que pega outra tarefa, com esta ainda aberta",
     not_ready_automation_task_left_open_at_end: "{step}: depois de “{exit}” a execução termina com a tarefa ainda aberta",
     not_ready_automation_hands_on_task_taken: "{step}: “{exit}” passa adiante a tarefa da execução, que só uma etapa integrada pode pegar; coloque “Pegar uma tarefa” ou “Criar uma tarefa” antes",

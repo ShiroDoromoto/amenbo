@@ -1661,6 +1661,8 @@ export const ru: Translation = {
     not_ready_automation_agent_unchosen: "{step}: не выбран агент",
     not_ready_automation_agent_missing: "{step}: эта машина не может запустить «{agent}»",
     not_ready_automation_model_missing: "{step}: агент здесь не предлагает модель «{model}»",
+    not_ready_automation_script_missing: "{step}: по пути «{program}» нет файла",
+    not_ready_automation_script_not_executable: "{step}: у «{program}» нет права на выполнение — дайте файлу право на запуск",
     not_ready_automation_task_left_open: "{step}: после «{exit}» переходит к «{to}», который берёт следующую задачу, а эта ещё не закрыта",
     not_ready_automation_task_left_open_at_end: "{step}: после «{exit}» запуск завершается, а задача ещё не закрыта",
     not_ready_automation_hands_on_task_taken: "{step}: «{exit}» передаёт задачу запуска, а взять её может только встроенный шаг — поставьте перед ним «Взять задачу» или «Создать задачу»",

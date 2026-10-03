@@ -1636,6 +1636,8 @@ export const id: Translation = {
     not_ready_automation_agent_unchosen: "{step}: belum ada agen yang dipilih",
     not_ready_automation_agent_missing: "{step}: mesin ini tidak bisa menjalankan “{agent}”",
     not_ready_automation_model_missing: "{step}: agennya di sini tidak menyediakan model “{model}”",
+    not_ready_automation_script_missing: "{step}: tidak ada berkas di “{program}”",
+    not_ready_automation_script_not_executable: "{step}: “{program}” tidak diizinkan dijalankan — beri berkas itu izin eksekusi",
     not_ready_automation_task_left_open: "{step}: setelah “{exit}” lanjut ke “{to}”, yang mengambil tugas lain, padahal tugas ini masih terbuka",
     not_ready_automation_task_left_open_at_end: "{step}: setelah “{exit}” run berakhir padahal tugasnya masih terbuka",
     not_ready_automation_hands_on_task_taken: "{step}: “{exit}” meneruskan tugas run, padahal hanya bawaan yang bisa mengambilnya — taruh “Ambil tugas” atau “Buat tugas” sebelumnya",

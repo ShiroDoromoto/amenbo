@@ -6865,8 +6865,10 @@ impl Instructor {
                     (None, Some(key)) => builtin_words(key)?.called.to_string(),
                     _ => return Err("a step is named by `name`, or by `builtin` for a built-in's key — one of the two".to_string()),
                 };
+                // A built-in left without `exit` leaves by the done way out, said as what it is — the
+                // interface draws its word in the machine's language.
                 let exit = match (arg_str(with, "builtin"), arg_str(with, "exit")) {
-                    (Some(_), None) => format!("its way out \"{DONE_EXIT}\""),
+                    (Some(key), None) => builtin_words(key)?.word(DONE_EXIT)?.to_string(),
                     _ => way_out_of(with, "builtin")?,
                 };
                 let mut said = format!(
@@ -9408,6 +9410,7 @@ steps_gui:
   - { type: assert, domain: automation, op: test-pane-ended, with: { ended: completed } }
   - { type: assert, domain: automation, op: test-pane, with: { step: 1, total: 2, builtin: close_task, box: work } }
   - { type: action, domain: automation, op: test-move, with: { press: up } }
+  - { type: assert, domain: automation, op: test-pane, with: { step: 2, total: 2, builtin: close_task } }
 "#);
         let mut ins = Instructor::new();
         let steps = s.steps(Driver::Gui);
@@ -9422,6 +9425,8 @@ steps_gui:
         assert!(ins.render(&steps[4]).expect("renders").contains("all the way to the end"));
         assert!(ins.render(&steps[5]).is_err(), "a built-in is its own box");
         assert!(ins.render(&steps[6]).is_err(), "next / prev only");
+        let close = ins.render(&steps[7]).expect("renders");
+        assert!(close.contains("the way out for having closed the task") && !close.contains("\"完了\""), "{close}");
     }
 
     /// A run's pane goes to the ledger two ways, and the picture's says which box it

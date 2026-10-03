@@ -147,10 +147,11 @@ pub fn automation_add(project_id: i64, name: String) -> Result<WriteAck, CmdErro
 /// **Rename an automation, rewrite its notes, or put it out of the way.** Only what is `Some` is
 /// written.
 ///
-/// Archiving takes nothing away, and like every rewrite it is refused while a run of the automation is
-/// going ([`amenbo_core::ops::automation::update`]). It is what keeps a definition nobody launches any
-/// more out of a reader's way, so the row stays in the list carrying the mark rather than leaving
-/// it — which is why `automation_page` goes on answering with archived ones in it.
+/// Archiving takes nothing away, and like every rewrite it goes through while a run of the automation
+/// is going — the run keeps the copy it started with ([`amenbo_core::ops::automation::update`]). It
+/// is what keeps a definition nobody launches any more out of a reader's way, so the row stays in the
+/// list carrying the mark rather than leaving it — which is why `automation_page` goes on answering
+/// with archived ones in it.
 ///
 /// The preamble is not one of the three. It is what Amenbo puts at the head of every launch rather
 /// than anything this automation holds ([`amenbo_core::agents::preamble`]).

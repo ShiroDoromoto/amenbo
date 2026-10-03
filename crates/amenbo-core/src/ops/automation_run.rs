@@ -3155,8 +3155,7 @@ mod tests {
     /// **A run goes on by its copies, whatever the picture has become** (`AMB-D-961`). What follows a
     /// way out was copied at launch, so a picture moved under the run — the spot it left taken off, the
     /// line out of it pointed at an ending, or at a placement added since — changes nothing about where
-    /// it goes next. No op moves a definition a run is going on; a store written before that was held
-    /// can, and the run still reads only what it launched with.
+    /// it goes next (`AMB-D-1015`).
     #[test]
     fn a_run_goes_on_by_its_copies_whatever_the_picture_has_become() {
         with_tx(|tx| {
@@ -3168,18 +3167,18 @@ mod tests {
             };
             assert_eq!(waits_for(tx), "読む");
 
-            automation::past_the_guard(|| automation::edge_update(tx, onward.id, Some(EdgeTarget::Halt), None))
+            automation::edge_update(tx, onward.id, Some(EdgeTarget::Halt), None)
                 .expect("point it at an ending");
             assert_eq!(waits_for(tx), "読む", "the line it copied still leads on");
 
-            let (_, late) = automation::past_the_guard(|| mk_placed(tx, &automation, "直す", "fix it", "claude"));
-            automation::past_the_guard(|| automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None))
+            let (_, late) = mk_placed(tx, &automation, "直す", "fix it", "claude");
+            automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None)
                 .expect("point it at a new placement");
             assert_eq!(waits_for(tx), "読む", "a placement added since is not in its copies");
 
-            automation::past_the_guard(|| automation::edge_delete(tx, onward.id)).expect("delete the edge");
+            automation::edge_delete(tx, onward.id).expect("delete the edge");
             // The entry comes off last (`AMB-D-977`), so the spot taken off is the one added since.
-            automation::past_the_guard(|| automation::placement_delete(tx, late.id))
+            automation::placement_delete(tx, late.id)
                 .expect("take the placement off");
             assert_eq!(waits_for(tx), "読む", "nor is a line or a spot taken off");
         });

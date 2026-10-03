@@ -58,17 +58,8 @@ function useDraft(value: string): [string, (next: string) => void] {
  * A blank name is not written: core refuses one, and the box goes back to the stored name rather than
  * drawing that refusal. Any other refusal is drawn under the box, since the head stands outside the
  * body where the panel's refusal is.
- *
- * `readOnly` shuts it while a run holds the definition — the head is outside the panel's fieldset, so
- * the fieldset does not shut it.
  */
-export function AutomationNameField({
-  automation,
-  readOnly = false,
-}: {
-  automation: AutomationDetailDto;
-  readOnly?: boolean;
-}) {
+export function AutomationNameField({ automation }: { automation: AutomationDetailDto }) {
   const [name, setName] = useDraft(automation.name);
   const [refused, setRefused] = useState<string | null>(null);
 
@@ -91,7 +82,6 @@ export function AutomationNameField({
         className="actpanel__titleinput"
         aria-label={t("auto.about.name")}
         value={name}
-        disabled={readOnly}
         onChange={(e) => setName(e.target.value)}
         onBlur={commit}
       />

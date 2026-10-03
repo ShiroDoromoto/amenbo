@@ -3450,9 +3450,9 @@ pub struct AutomationDetailDto {
     pub(crate) placements: Vec<AutomationPlacementDto>,
     pub(crate) edges: Vec<AutomationEdgeDto>,
     pub(crate) wires: Vec<AutomationWireDto>,
-    /// **The runs holding this definition** — its own that are running or paused (`AMB-D-961`). While
-    /// there is one, core refuses every rewrite, so the build screen holds its fields shut and names
-    /// these, each with the way to its pane. Empty while nothing is going.
+    /// **The runs going on this definition** — its own that are running or paused. The definition is
+    /// written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen
+    /// names these, each with the way to its pane. Empty while nothing is going.
     pub(crate) held_by: Vec<AutomationRunCardDto>,
 }
 
@@ -3582,8 +3582,8 @@ pub struct AutomationActionDetailDto {
     /// The declarations alone — an action's rows carry no answer, which is the placement's
     /// (`automation_cfg_answer`).
     pub(crate) settings: Vec<AutomationCfgDto>,
-    /// **The runs holding this action** — those going on any automation that places it, whichever
-    /// project that automation is in (`AMB-D-961`). Read for [`AutomationDetailDto::held_by`]'s reason.
+    /// **The runs going on this action** — those of any automation that places it, whichever project
+    /// that automation is in. Read for [`AutomationDetailDto::held_by`]'s reason.
     pub(crate) held_by: Vec<AutomationRunCardDto>,
     /// **The automations that place it**, each once, in id order — the ones `used_by` counts. Named
     /// rather than counted, so the panel shows where a rewrite here lands and goes to each of them.

@@ -40,7 +40,7 @@ use std::io::{Read, Write};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{mpsc, Arc, Mutex, PoisonError};
 
 use base64::Engine as _;
 use portable_pty::{native_pty_system, ChildKiller, MasterPty, PtySize};
@@ -348,6 +348,21 @@ impl Terminals {
     /// registry the way [`pty_sessions`] does.
     pub fn open(&self) -> usize {
         self.0.lock().unwrap_or_else(PoisonError::into_inner).len()
+    }
+
+    /// The way into this session's keystrokes, or `None` once the terminal is gone.
+    ///
+    /// Taken out under the lock and used after it is let go: a write that does not return — a
+    /// program that stopped reading, a pipe that filled — is then this session's alone, and the
+    /// registry every other pane reaches through stays free.
+    fn keys(&self, session: &str) -> Option<mpsc::Sender<Vec<u8>>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).get(session).map(|t| t.keys.clone())
+    }
+
+    /// Hand these bytes to the session's writing thread, and answer whether it took them: `false` for
+    /// a terminal that is gone, and for one whose thread has stopped writing.
+    fn send(&self, session: &str, bytes: Vec<u8>) -> bool {
+        self.keys(session).is_some_and(|keys| keys.send(bytes).is_ok())
     }
 }
 
@@ -745,8 +760,9 @@ pub struct Terminal {
     agent: Option<String>,
     /// The master side, kept for one purpose: telling the terminal how large the pane is.
     master: Box<dyn MasterPty + Send>,
-    /// The keystrokes side. Writing to the master is what a key press is.
-    writer: Box<dyn Write + Send>,
+    /// The keystrokes side: what is sent here is written to the master, in order, by a thread that
+    /// belongs to this session alone ([`write_keys`]). Writing to the master is what a key press is.
+    keys: mpsc::Sender<Vec<u8>>,
     /// The way to end the program, kept apart from the child itself: the child belongs to the thread
     /// draining the terminal, which waits on it and must not be reached for from anywhere else.
     ///
@@ -1027,12 +1043,7 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
             crate::handover::Terms::Opening,
             || pane.briefed(),
             || open(&app).then(|| pane.look()),
-            |bytes| {
-                let terminals = app.state::<Terminals>();
-                let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
-                let Some(terminal) = open.get_mut(&session) else { return false };
-                terminal.writer.write_all(bytes).and_then(|()| terminal.writer.flush()).is_ok()
-            },
+            |bytes| app.state::<Terminals>().send(&session, bytes.to_vec()),
             || std::thread::sleep(SETTLE),
         );
         // Said once, at the end. Which of the three happened is the one thing a person reading a pane
@@ -1104,12 +1115,7 @@ fn rename_pane(app: tauri::AppHandle, session: String, pane: Arc<Pane>) {
                 // waits out a dialogue could otherwise spend ten minutes on a name nothing shows.
                 || pane.rename_owed(),
                 || open(&app).then(|| pane.look()),
-                |bytes| {
-                    let terminals = app.state::<Terminals>();
-                    let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
-                    let Some(terminal) = open.get_mut(&session) else { return false };
-                    terminal.writer.write_all(bytes).and_then(|()| terminal.writer.flush()).is_ok()
-                },
+                |bytes| app.state::<Terminals>().send(&session, bytes.to_vec()),
                 || std::thread::sleep(SETTLE),
             );
             log::debug!("rename for session {session}: {ended:?}");
@@ -1417,7 +1423,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
             folder,
             agent: agent_id.clone(),
             master: pair.master,
-            writer,
+            keys: write_keys(session.clone(), writer),
             killer,
             pane: Arc::clone(&pane),
             started_at,
@@ -1439,7 +1445,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
     }
 
     listen(app.clone(), session.clone(), Arc::clone(&pane), drop_box);
-    // Once the terminal is in the registry, which is where the hand-over reaches for the writer. It
+    // Once the terminal is in the registry, which is where the hand-over reaches for the keys. It
     // may well start before the drain thread below has put anything in the tail it reads; a pane
     // holding nothing is one it waits on rather than writes into (see the handover module).
     if let Some(instruction) = started.and_then(|s| s.hand_over) {
@@ -1525,22 +1531,37 @@ fn drain(app: &tauri::AppHandle, session: &str, pane: &Pane, mut reader: Box<dyn
 
 /// Tell the terminal where its cursor is, as many times as it asked.
 ///
-/// The writer lives in the registry rather than with the thread reading, so this reaches for it
+/// The keys live in the registry rather than with the thread reading, so this reaches for them
 /// there. Contending for that lock costs nothing: on the operating system that asks, it asks once,
 /// as the terminal starts.
 fn answer_cursor(app: &tauri::AppHandle, session: &str, times: usize) {
     if times == 0 {
         return;
     }
-    let terminals = app.state::<Terminals>();
-    let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
-    let Some(terminal) = open.get_mut(session) else {
-        return;
-    };
-    for _ in 0..times {
-        let _ = terminal.writer.write_all(CURSOR_ANSWER);
-    }
-    let _ = terminal.writer.flush();
+    app.state::<Terminals>().send(session, CURSOR_ANSWER.repeat(times));
+}
+
+/// Start the thread that writes this session's keystrokes, and hand back the way into it.
+///
+/// **A write to a terminal can stop and not come back.** A program that stops reading leaves the
+/// pipe into it full, and on Windows a pane whose output nobody drains stops taking input after a
+/// few kilobytes. Written from under the registry's lock, that write held every pane still — and
+/// written from the main thread, the whole window (`AMB-T-5972`). Here it holds this thread only.
+///
+/// The thread ends when the last way into it is dropped, which is the terminal leaving the registry,
+/// or when a write fails. A write that fails, or panics, leaves the receiving end dropped, so what is
+/// sent after it is refused rather than queued for nobody.
+fn write_keys(session: String, mut writer: Box<dyn Write + Send>) -> mpsc::Sender<Vec<u8>> {
+    let (keys, typed) = mpsc::channel::<Vec<u8>>();
+    std::thread::spawn(move || {
+        for bytes in typed {
+            if let Err(e) = writer.write_all(&bytes).and_then(|()| writer.flush()) {
+                log::warn!("session {session} stopped taking keystrokes: {e}");
+                return;
+            }
+        }
+    });
+    keys
 }
 
 /// How long a drop box nobody has written to is left alone before it is swept. Long enough that it can
@@ -2038,13 +2059,14 @@ pub fn pty_write(
     session: String,
     data: String,
 ) -> Result<(), CmdError> {
-    let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
-    let terminal = open.get_mut(&session).ok_or_else(|| gone(&session))?;
-    terminal
-        .writer
-        .write_all(data.as_bytes())
-        .and_then(|()| terminal.writer.flush())
-        .map_err(failed)
+    let keys = terminals.keys(&session).ok_or_else(|| gone(&session))?;
+    keys.send(data.into_bytes()).map_err(|_| stopped())
+}
+
+/// The refusal for a terminal that is still open but no longer takes keystrokes — its writing thread
+/// met a write that failed ([`write_keys`]).
+fn stopped() -> CmdError {
+    failed("the terminal no longer takes keystrokes")
 }
 
 /// Send the opening sentence this pane is still owed, now that a person has pressed Enter in it.
@@ -2084,30 +2106,20 @@ pub fn pty_brief(
     terminals: tauri::State<'_, Terminals>,
     session: String,
 ) -> Result<(), CmdError> {
-    let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
-    let terminal = open.get_mut(&session).ok_or_else(|| gone(&session))?;
-    if terminal.pane.briefed() {
-        return Ok(());
-    }
-    let Some(instruction) = terminal.pane.take_unsent() else { return Ok(()) };
-    let bytes = crate::handover::paste_owed(&instruction);
-    terminal
-        .writer
-        .write_all(&bytes)
-        .and_then(|()| terminal.writer.flush())
-        .map_err(failed)?;
-    drop(open);
+    let (keys, instruction) = {
+        let open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
+        if terminal.pane.briefed() {
+            return Ok(());
+        }
+        let Some(instruction) = terminal.pane.take_unsent() else { return Ok(()) };
+        (terminal.keys.clone(), instruction)
+    };
+    keys.send(crate::handover::paste_owed(&instruction)).map_err(|_| stopped())?;
     std::thread::spawn(move || {
         std::thread::sleep(crate::handover::SUBMIT_AFTER);
         // A terminal that ended in the meantime has nothing left to send into.
-        let terminals = app.state::<Terminals>();
-        let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(terminal) = open.get_mut(&session) {
-            let _ = terminal
-                .writer
-                .write_all(crate::handover::SUBMIT)
-                .and_then(|()| terminal.writer.flush());
-        }
+        app.state::<Terminals>().send(&session, crate::handover::SUBMIT.to_vec());
     });
     Ok(())
 }

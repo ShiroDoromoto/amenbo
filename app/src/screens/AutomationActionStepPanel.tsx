@@ -23,11 +23,16 @@
 // the panel's head (`./AutomationActionBuildScreen`), the entry is a switch, a declaration is a chip
 // with its "⋯", and a way out is a card (`./automationDeclParts`).
 //
+// **A step is carried out by an AI or by a script** (`AMB-D-1016`), switched at the top of how it
+// runs. A script step has no prompt to write and nothing to hand an AI, so those are drawn for an AI's
+// step alone; its inputs, ways out and wires are the same either way, and stay through a switch.
+//
 // **A refusal is drawn, once, at the top**, for `./AutomationStepPanel`'s reason: every press here
 // can be refused by core — a name already taken, the error way out, a line that leaves the picture —
 // and the last refusal stands where the reader is looking.
 import { useState } from "react";
 import {
+  type StepScript,
   clearAutomationWire,
   declareAutomationExit,
   declareAutomationInput,
@@ -42,6 +47,7 @@ import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
 import { ErrorNote } from "../components/ErrorNote";
+import { RunBy } from "./automationRunBy";
 import { ACTION_BOUNDARY, actionGraph, ERROR_EXIT, fed, pictureOrder } from "./automationLayout";
 import { DeclEdit, choicesOfKinds, exitLabel, NextRow, useDraft, type Run } from "./automationPanel";
 import { DeclItem, DeclSec, ExitEdit, OutputPlus, PortChip, Sec, Switch } from "./automationDeclParts";
@@ -225,6 +231,94 @@ function GiveToggles({ step, run }: { step: AutomationStepDto; run: Run }) {
   );
 }
 
+/** Arguments as the box holds them — one to a line, with the empty lines left out. */
+function argLines(text: string): string[] {
+  return text.split(/\r?\n/).filter((one) => one !== "");
+}
+
+/**
+ * The program a script step runs, its arguments and its timeout, each written on the step when the
+ * caret leaves its box.
+ *
+ * **A script is written whole**, so every box sends all three. Until a step has a script, a box left
+ * with no command writes nothing: the switch to a script opens these boxes, and a script with no
+ * program is not one core keeps. Whether the command is a full path and the timeout is in range is
+ * core's to say, and its refusal is drawn at the top like any other.
+ */
+function ScriptFields({ step, run }: { step: AutomationStepDto; run: Run }) {
+  const [program, setProgram] = useDraft(step.script?.program ?? "");
+  const [args, setArgs] = useDraft((step.script?.args ?? []).join("\n"));
+  const [minutes, setMinutes] = useDraft(step.script === undefined ? "" : String(step.script.timeoutMinutes));
+
+  const write = () => {
+    if (step.script === undefined && program.trim() === "") return;
+    const script: StepScript = {
+      program: program.trim(),
+      args: argLines(args),
+      timeoutMinutes: minutes.trim() === "" ? undefined : Number(minutes),
+    };
+    const now = step.script;
+    if (
+      now !== undefined &&
+      now.program === script.program &&
+      now.timeoutMinutes === script.timeoutMinutes &&
+      now.args.join("\n") === script.args.join("\n")
+    ) {
+      return;
+    }
+    void run(editAutomationStep(step.id, { script }));
+  };
+
+  return (
+    <>
+      <div className="autostep__pair autostep__pair--top">
+        <span className="autostep__label">{t("auto.step.program")}</span>
+        <div className="autostep__field">
+          <input
+            className="autostep__mono"
+            aria-label={t("auto.step.program")}
+            value={program}
+            onChange={(e) => setProgram(e.target.value)}
+            onBlur={write}
+          />
+          <span className="autostep__hint">{t("auto.step.programHint")}</span>
+        </div>
+      </div>
+      <div className="autostep__pair autostep__pair--top">
+        <span className="autostep__label">{t("auto.step.args")}</span>
+        <div className="autostep__field">
+          <textarea
+            className="autostep__mono"
+            aria-label={t("auto.step.args")}
+            rows={4}
+            value={args}
+            onChange={(e) => setArgs(e.target.value)}
+            onBlur={write}
+          />
+          <span className="autostep__hint">{t("auto.step.argsHint")}</span>
+        </div>
+      </div>
+      <div className="autostep__pair autostep__pair--top">
+        <span className="autostep__label">{t("auto.step.timeout")}</span>
+        <div className="autostep__field">
+          <span className="autostep__limit">
+            <input
+              type="number"
+              min={1}
+              aria-label={t("auto.step.timeout")}
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              onBlur={write}
+            />
+            {t("auto.step.minutes")}
+          </span>
+          <span className="autostep__hint">{t("auto.step.timeoutHint")}</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function AutomationActionStepPanel({
   action,
   stepId,
@@ -244,6 +338,9 @@ export function AutomationActionStepPanel({
   // The way out whose card has the row open that declares one more thing it hands on.
   const [adding, setAdding] = useState<number | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  // The step switched to a script that has none written yet: its boxes stand open until the command
+  // is, since core keeps no script without a program.
+  const [scriptOpen, setScriptOpen] = useState<number | null>(null);
   // The input just joined to the output of the same name before it, said until the next write.
   const [joined, setJoined] = useState<{ input: string; no: number; step: string; port: string } | null>(null);
 
@@ -263,6 +360,13 @@ export function AutomationActionStepPanel({
   }
 
   const isEntry = action.entryStepId === step.id;
+  const byScript = step.script !== undefined || scriptOpen === step.id;
+  // Back to an AI clears a script that was written; one only opened has nothing to clear.
+  const runBy = (script: boolean) => {
+    if (script === byScript) return;
+    setScriptOpen(script ? step.id : null);
+    if (!script && step.script !== undefined) void run(editAutomationStep(step.id, { script: null }));
+  };
   // Where the working folder may be taken from: what the action is answered with where it is placed,
   // and what reaches this step from inside. A name, never a path — the answer is written on the
   // placement.
@@ -293,16 +397,60 @@ export function AutomationActionStepPanel({
         onChange={(to) => to && void run(setAutomationActionEntry(action.id, step.id))}
       />
 
-      <Sec title={t("auto.step.prompt")}>
-        <textarea
-          className="autostep__prompt"
-          aria-label={t("auto.step.prompt")}
-          rows={6}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onBlur={() => prompt !== step.prompt && void run(editAutomationStep(step.id, { prompt }))}
+      <Sec title={t("auto.step.howRuns")}>
+        <RunBy script={byScript} onChange={runBy} />
+        {byScript && <ScriptFields key={step.id} step={step} run={run} />}
+        <label className="autostep__pair">
+          <span className="autostep__label">{t("auto.step.folder")}</span>
+          <select
+            value={step.workDirRef ?? ""}
+            onChange={(e) =>
+              void run(
+                editAutomationStep(step.id, {
+                  workDir: e.target.value === "" ? null : e.target.value,
+                }),
+              )
+            }
+          >
+            <option value="">{t("auto.step.folderNone")}</option>
+            {step.workDirRef !== undefined && !folderNames.includes(step.workDirRef) && (
+              <option value={step.workDirRef}>{step.workDirRef}</option>
+            )}
+            {folderNames.map((one) => (
+              <option key={one} value={one}>
+                {one}
+              </option>
+            ))}
+          </select>
+        </label>
+        {!byScript && (
+          <Switch
+            label={t("auto.step.interactive")}
+            checked={step.interactive}
+            onChange={(to) => void run(editAutomationStep(step.id, { interactive: to }))}
+          />
+        )}
+        {/* What a closed task gets instead is said where it happens — the run's history — rather
+            than under this switch (`AMB-D-963`). */}
+        <Switch
+          label={t("auto.step.reportToTask")}
+          checked={step.reportToTask}
+          onChange={(to) => void run(editAutomationStep(step.id, { reportToTask: to }))}
         />
       </Sec>
+
+      {!byScript && (
+        <Sec title={t("auto.step.prompt")}>
+          <textarea
+            className="autostep__prompt"
+            aria-label={t("auto.step.prompt")}
+            rows={6}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onBlur={() => prompt !== step.prompt && void run(editAutomationStep(step.id, { prompt }))}
+          />
+        </Sec>
+      )}
 
       <DeclSec
         title={t("auto.decl.inputs")}
@@ -380,47 +528,11 @@ export function AutomationActionStepPanel({
           ))}
       </DeclSec>
 
-      <Sec title={t("auto.give.title")}>
-        <GiveToggles step={step} run={run} />
-      </Sec>
-
-      <Sec title={t("auto.step.howRuns")}>
-        <label className="autostep__pair">
-          <span className="autostep__label">{t("auto.step.folder")}</span>
-          <select
-            value={step.workDirRef ?? ""}
-            onChange={(e) =>
-              void run(
-                editAutomationStep(step.id, {
-                  workDir: e.target.value === "" ? null : e.target.value,
-                }),
-              )
-            }
-          >
-            <option value="">{t("auto.step.folderNone")}</option>
-            {step.workDirRef !== undefined && !folderNames.includes(step.workDirRef) && (
-              <option value={step.workDirRef}>{step.workDirRef}</option>
-            )}
-            {folderNames.map((one) => (
-              <option key={one} value={one}>
-                {one}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Switch
-          label={t("auto.step.interactive")}
-          checked={step.interactive}
-          onChange={(to) => void run(editAutomationStep(step.id, { interactive: to }))}
-        />
-        {/* What a closed task gets instead is said where it happens — the run's history — rather
-            than under this switch (`AMB-D-963`). */}
-        <Switch
-          label={t("auto.step.reportToTask")}
-          checked={step.reportToTask}
-          onChange={(to) => void run(editAutomationStep(step.id, { reportToTask: to }))}
-        />
-      </Sec>
+      {!byScript && (
+        <Sec title={t("auto.give.title")}>
+          <GiveToggles step={step} run={run} />
+        </Sec>
+      )}
 
       <div className="actpanel__foot">
         <button type="button" className="btn btn--danger" onClick={() => void remove()}>

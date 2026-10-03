@@ -12,8 +12,9 @@
 // neither renamed nor removed; **the task is handed on unless its toggle is let up**
 // (`AMB-D-965`); **a row to declare one more is there only after the section's add**; **the entry is
 // a switch, on and held at the step it names**; **an input declared is joined to the output of the same
-// name on a step before it, said with a press that takes it back** (`AMB-T-5799`); and **deleting asks
-// first**, taking the panel's selection with it.
+// name on a step before it, said with a press that takes it back** (`AMB-T-5799`); **a script step
+// is written with a command, arguments and a timeout in place of the prompt, and switching back to an
+// AI clears it** (`AMB-D-1016`); and **deleting asks first**, taking the panel's selection with it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -288,6 +289,67 @@ describe("the panel of one step", () => {
       expect(hoisted.editStep).toHaveBeenCalledWith(11, patch);
     },
   );
+});
+
+describe("how the step is carried out", () => {
+  const script = { program: "/bin/sh", args: ["-c", "echo hi"], timeoutMinutes: 30 };
+  /** The box a script field is written in, by its label. */
+  const field = (key: "auto.step.program" | "auto.step.args" | "auto.step.timeout") =>
+    container.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[aria-label="${t(key)}"]`);
+  const leave = (box: Element) =>
+    act(async () => box.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+
+  it("draws an AI's step with its prompt and what it is handed, and no command", async () => {
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
+    expect(button(t("auto.step.byAi")).getAttribute("aria-pressed")).toBe("true");
+    expect(field("auto.step.program")).toBeNull();
+    expect(container.querySelector(`[aria-label="${t("auto.step.prompt")}"]`)).not.toBeNull();
+    expect(button(t("auto.give.history"))).toBeDefined();
+  });
+
+  it("draws a script step with its command, arguments and timeout, and no prompt", async () => {
+    await render({ action: action({ steps: [step({ script })] }), stepId: 11, onRemoved: () => undefined });
+    expect(button(t("auto.step.byScript")).getAttribute("aria-pressed")).toBe("true");
+    expect(field("auto.step.program")!.value).toBe("/bin/sh");
+    expect(field("auto.step.args")!.value).toBe("-c\necho hi");
+    expect(field("auto.step.timeout")!.value).toBe("30");
+    expect(container.querySelector(`[aria-label="${t("auto.step.prompt")}"]`)).toBeNull();
+    expect(buttons().some((one) => one.textContent === t("auto.give.history"))).toBe(false);
+    expect(container.textContent).not.toContain(t("auto.step.interactive"));
+    expect(container.textContent).toContain(t("auto.step.reportToTask"));
+  });
+
+  it("writes the script whole when the caret leaves a box, an argument to a line", async () => {
+    await render({ action: action({ steps: [step({ script })] }), stepId: 11, onRemoved: () => undefined });
+    const args = field("auto.step.args")!;
+    await typeInto(args, "-c\n\necho bye\n");
+    await leave(args);
+    expect(hoisted.editStep).toHaveBeenCalledWith(11, {
+      script: { program: "/bin/sh", args: ["-c", "echo bye"], timeoutMinutes: 30 },
+    });
+  });
+
+  it("writes nothing on the switch to a script until the command is written", async () => {
+    await render({ action: action(), stepId: 11, onRemoved: () => undefined });
+    await act(async () => button(t("auto.step.byScript")).click());
+    expect(hoisted.editStep).not.toHaveBeenCalled();
+    expect(container.querySelector(`[aria-label="${t("auto.step.prompt")}"]`)).toBeNull();
+    const timeout = field("auto.step.timeout")!;
+    await leave(timeout);
+    expect(hoisted.editStep).not.toHaveBeenCalled();
+    const program = field("auto.step.program")!;
+    await typeInto(program, "/usr/bin/python3");
+    await leave(program);
+    expect(hoisted.editStep).toHaveBeenCalledWith(11, {
+      script: { program: "/usr/bin/python3", args: [], timeoutMinutes: undefined },
+    });
+  });
+
+  it("clears the script on the switch back to an AI", async () => {
+    await render({ action: action({ steps: [step({ script })] }), stepId: 11, onRemoved: () => undefined });
+    await act(async () => button(t("auto.step.byAi")).click());
+    expect(hoisted.editStep).toHaveBeenCalledWith(11, { script: null });
+  });
 });
 
 describe("what happens after a way out", () => {

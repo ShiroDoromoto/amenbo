@@ -932,7 +932,11 @@ export type AutomationStepDto = { id: number, name: string, prompt: string, inte
 /**
  * The name of the setting or the input the working folder is taken from — a name, not a path.
  */
-workDirRef?: string, reportToTask: boolean, showHistory: boolean, showNotes: boolean, showDecisions: boolean, showComments: boolean, exits: Array<AutomationExitDto>, 
+workDirRef?: string, 
+/**
+ * The program the step runs instead of an AI (`AMB-D-1016`), absent on a step an AI carries out.
+ */
+script?: AutomationStepScriptDto, reportToTask: boolean, showHistory: boolean, showNotes: boolean, showDecisions: boolean, showComments: boolean, exits: Array<AutomationExitDto>, 
 /**
  * What this step takes in, in declaration order.
  */
@@ -1028,6 +1032,12 @@ folder?: string,
  * Whether this step may stop and wait for a person (`automation_action_step.interactive`).
  */
 interactive: boolean, };
+
+/**
+ * **The program a script step starts**, by its full path, with the arguments handed to it as they
+ * are and how long it may run.
+ */
+export type AutomationStepScriptDto = { program: string, args: Array<string>, timeoutMinutes: number, };
 
 /**
  * **What a test run found** ([`amenbo_core::ops::automation_rehearse::Rehearsal`]) — every step it

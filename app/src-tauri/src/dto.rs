@@ -3621,6 +3621,10 @@ pub struct AutomationStepDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) work_dir_ref: Option<String>,
+    /// The program the step runs instead of an AI (`AMB-D-1016`), absent on a step an AI carries out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) script: Option<AutomationStepScriptDto>,
     pub(crate) report_to_task: bool,
     pub(crate) show_history: bool,
     pub(crate) show_notes: bool,
@@ -3629,6 +3633,18 @@ pub struct AutomationStepDto {
     pub(crate) exits: Vec<AutomationExitDto>,
     /// What this step takes in, in declaration order.
     pub(crate) inputs: Vec<AutomationPortDto>,
+}
+
+/// **The program a script step starts**, by its full path, with the arguments handed to it as they
+/// are and how long it may run.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationStepScriptDto {
+    pub(crate) program: String,
+    pub(crate) args: Vec<String>,
+    #[ts(type = "number")]
+    pub(crate) timeout_minutes: i64,
 }
 
 /// **A way out of a spot**, and what leaving through it hands on.

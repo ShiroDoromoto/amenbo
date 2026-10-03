@@ -1788,6 +1788,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .autogive__tog--on { border-color: var(--c-accent); color: var(--c-accent-text); background: var(--c-accent-weak); }
 /* A word and its control side by side — the working folder, the reach. */
 .autostep__pair { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: center; gap: var(--s-2); }
+/* A script step's boxes (`AMB-D-1016`): the label stays level with the box's first line rather than
+   the middle of a box and the hint under it. */
+.autostep__pair--top { align-items: start; }
+.autostep__pair--top > .autostep__label { padding-block-start: var(--s-1); }
+.autostep__mono { font-family: var(--font-mono); font-size: var(--fs-md); }
+.autostep__hint { font-size: var(--fs-xs); color: var(--c-text-faint); }
 /* The automations an action is placed on, by name; a press goes to one. */
 .actplaced { display: flex; flex-wrap: wrap; gap: var(--s-1); }
 .actplaced__one {

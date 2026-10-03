@@ -2255,7 +2255,7 @@ fn all_commands() -> Value {
                    { "name": "--limit <n>", "help": "max count (newest first)" },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation run-list --task AMB-T-123", "amenbo automation run-list --automation 3 --limit 5"])),
-        cmd("automation run-show", "One run in full: every step it ran in the order it ran them, grouped by the task each stretch of the run was about — which way out each step left through, how long it stood, what it was handed and what it handed on, and the whole of what it reported. The report is not cut short: a run read back months later is read for exactly that. A step that went looking for a task and found none belongs to no stretch and is written out on its own.",
+        cmd("automation run-show", "One run in full: every step it ran in the order it ran them, grouped by the task each stretch of the run was about — which way out each step left through, how long it stood, what it was handed and what it handed on, and the whole of what it reported. The report is not cut short: a run read back months later is read for exactly that. A script step also shows the end of what its program printed to stdout and to stderr, so a failed one can be read. A step that went looking for a task and found none belongs to no stretch and is written out on its own.",
             json!([{ "name": "<id>", "help": "run id", "required": true },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation run-show 7"])),

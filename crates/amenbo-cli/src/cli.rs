@@ -2317,7 +2317,7 @@ pub enum AutomationCmd {
         limit: Option<usize>,
     },
     /// One run in full: every step it ran, the way out each took, how long it stood, what it handed on,
-    /// and the whole of what it reported
+    /// the whole of what it reported, and the end of what a script step printed
     RunShow {
         /// run id
         id: i64,

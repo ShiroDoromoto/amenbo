@@ -1931,6 +1931,8 @@ const err: Partial<Record<ErrorCode, string>> = {
   // drawn for an agent that has said what it offers, so "does not offer" is an answer and not a
   // silence (`app/src-tauri/src/agent_models.rs`).
   not_ready_automation_model_missing: "{step}: its agent here does not offer the model “{model}”",
+  not_ready_automation_script_missing: "{step}: there is no file at “{program}”",
+  not_ready_automation_script_not_executable: "{step}: “{program}” is not allowed to be executed — give the file permission to run",
   not_ready_automation_task_left_open: "{step}: “{exit}” goes on to “{to}”, which takes another task, with this one still open",
   not_ready_automation_task_left_open_at_end: "{step}: “{exit}” ends the run with the task still open",
   not_ready_automation_hands_on_task_taken: "{step}: “{exit}” hands on the task the run works, which only a built-in takes — put “Take a task” or “File a task” before it",

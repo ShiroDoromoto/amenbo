@@ -1650,6 +1650,8 @@ export const ja: Translation = {
     not_ready_automation_agent_unchosen: "{step}：エージェントを選んでいない",
     not_ready_automation_agent_missing: "{step}：「{agent}」は手元に無い",
     not_ready_automation_model_missing: "{step}：ここのエージェントはモデル「{model}」を持っていない",
+    not_ready_automation_script_missing: "{step}：「{program}」にファイルが無い",
+    not_ready_automation_script_not_executable: "{step}：「{program}」に実行の権限が無い",
     not_ready_automation_task_left_open: "{step}：出口「{exit}」から、タスクを閉じないまま「{to}」へ進んで次のタスクに着手する",
     not_ready_automation_task_left_open_at_end: "{step}：出口「{exit}」から、タスクを閉じないまま実行が終わる",
     not_ready_automation_hands_on_task_taken: "{step}：出口「{exit}」がタスクを渡すことになっている。実行が扱うタスクを用意できるのは組み込みだけなので、前に「タスクに着手する」か「タスクを起票する」を置く",

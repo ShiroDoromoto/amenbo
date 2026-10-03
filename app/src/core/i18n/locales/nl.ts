@@ -1635,6 +1635,8 @@ export const nl: Translation = {
     not_ready_automation_agent_unchosen: "{step}: er is geen agent gekozen",
     not_ready_automation_agent_missing: "{step}: deze machine kan ‘{agent}’ niet starten",
     not_ready_automation_model_missing: "{step}: de agent hier biedt het model ‘{model}’ niet aan",
+    not_ready_automation_script_missing: "{step}: er staat geen bestand op ‘{program}’",
+    not_ready_automation_script_not_executable: "{step}: ‘{program}’ mag niet worden uitgevoerd — geef het bestand uitvoerrechten",
     not_ready_automation_task_left_open: "{step}: na ‘{exit}’ gaat het door naar ‘{to}’, dat een volgende taak oppakt terwijl deze nog open is",
     not_ready_automation_task_left_open_at_end: "{step}: na ‘{exit}’ eindigt de run terwijl de taak nog open is",
     not_ready_automation_hands_on_task_taken: "{step}: ‘{exit}’ geeft de taak van de run door, die alleen een ingebouwde stap kan oppakken — zet ‘Taak oppakken’ of ‘Taak aanmaken’ ervoor",

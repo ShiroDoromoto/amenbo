@@ -1636,6 +1636,8 @@ export const zhHans: Translation = {
     not_ready_automation_agent_unchosen: "{step}：未选择智能体",
     not_ready_automation_agent_missing: "{step}：这台机器启动不了“{agent}”",
     not_ready_automation_model_missing: "{step}：这里的智能体不提供“{model}”模型",
+    not_ready_automation_script_missing: "{step}：“{program}”处没有文件",
+    not_ready_automation_script_not_executable: "{step}：“{program}”没有执行权限",
     not_ready_automation_task_left_open: "{step}：从“{exit}”出发，任务还没关闭就进入“{to}”去领取下一个任务",
     not_ready_automation_task_left_open_at_end: "{step}：从“{exit}”出发，任务还没关闭运行就结束了",
     not_ready_automation_hands_on_task_taken: "{step}：“{exit}”会传出运行正在处理的任务，但只有内置步骤能领取任务，请在前面放“领取任务”或“创建任务”",

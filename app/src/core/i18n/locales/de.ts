@@ -1642,6 +1642,8 @@ export const de: Translation = {
     not_ready_automation_agent_unchosen: "{step}: Kein Agent gewählt",
     not_ready_automation_agent_missing: "{step}: Dieser Rechner kann „{agent}“ nicht starten",
     not_ready_automation_model_missing: "{step}: Der Agent hier bietet das Modell „{model}“ nicht an",
+    not_ready_automation_script_missing: "{step}: Unter „{program}“ liegt keine Datei",
+    not_ready_automation_script_not_executable: "{step}: „{program}“ darf nicht ausgeführt werden – gib der Datei die Ausführungsberechtigung",
     not_ready_automation_task_left_open: "{step}: Nach „{exit}“ geht es zu „{to}“, das eine weitere Aufgabe übernimmt, während diese noch offen ist",
     not_ready_automation_task_left_open_at_end: "{step}: Nach „{exit}“ endet der Lauf, während die Aufgabe noch offen ist",
     not_ready_automation_hands_on_task_taken: "{step}: „{exit}“ gibt die Aufgabe des Laufs weiter, die nur ein eingebauter Schritt übernehmen kann – stelle „Aufgabe übernehmen“ oder „Aufgabe anlegen“ davor",

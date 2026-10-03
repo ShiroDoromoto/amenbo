@@ -1635,6 +1635,8 @@ export const tr: Translation = {
     not_ready_automation_agent_unchosen: "{step}: ajan seçilmedi",
     not_ready_automation_agent_missing: "{step}: bu makine “{agent}” başlatamıyor",
     not_ready_automation_model_missing: "{step}: buradaki ajan “{model}” modelini sunmuyor",
+    not_ready_automation_script_missing: "{step}: “{program}” konumunda dosya yok",
+    not_ready_automation_script_not_executable: "{step}: “{program}” için çalıştırma izni yok — dosyaya çalıştırma izni ver",
     not_ready_automation_task_left_open: "{step}: “{exit}” sonrasında bu görev kapanmadan başka bir görev alan “{to}” adımına geçiliyor",
     not_ready_automation_task_left_open_at_end: "{step}: “{exit}” sonrasında görev kapanmadan çalıştırma bitiyor",
     not_ready_automation_hands_on_task_taken: "{step}: “{exit}” çalıştırmanın görevini aktarıyor, ama görevi yalnızca yerleşik bir adım alabilir — önüne “Görev al” ya da “Görev oluştur” koyun",

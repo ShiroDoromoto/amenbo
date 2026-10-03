@@ -283,13 +283,13 @@ fn made_up(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, def: &Automation
 mod tests {
     use super::*;
     use crate::model::{Automation, AutomationPictureOwner, DONE_EXIT};
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewScript};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_close::COMMIT;
     use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, WHAT_THEN};
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::automation_run::nothing_asked;
-    use crate::ops::test_support::{mk_closed_after, mk_out, mk_placed, mk_project, mk_task_in, with_tx};
+    use crate::ops::test_support::{mk_closed_after, mk_out, mk_placed, mk_project, mk_task_in, only_step, with_tx};
 
     fn walk(tx: &WriteTx<'_>, automation: &Automation, handed: &HandedAtLaunch) -> Rehearsal {
         let claude = ["claude".to_string()];
@@ -447,6 +447,43 @@ mod tests {
             assert_eq!(rehearsal.steps[1].name, "plan", "{rehearsal:?}");
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed, "{rehearsal:?}");
             assert_eq!(rehearsal.cut, None);
+        });
+    }
+
+    /// **A script whose program is not there is refused before the walk** (`AMB-D-1016`) — the test run
+    /// goes through the launch check, so it is turned down where a launch would be.
+    #[test]
+    fn a_script_whose_program_is_not_there_is_refused_before_the_walk() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                automation::add(tx, project, NewAutomation { name: "script".into(), ..Default::default() })
+                    .expect("automation");
+            let on = AutomationPictureOwner::Automation;
+            let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
+                .expect("place take");
+            let (work_action, work) = mk_placed(tx, &automation, "work", "", "claude");
+            let program = std::env::temp_dir().join("amenbo-no-such-folder").join("check.sh");
+            let script =
+                NewScript { program: program.to_string_lossy().into_owned(), args: Vec::new(), timeout_minutes: None };
+            let step = only_step(tx, &work_action);
+            let script = Some(Some(script));
+            automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script)
+                .expect("make it a script");
+            automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
+            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
+            mk_closed_after(tx, &automation, work.id, None);
+            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+
+            let claude = ["claude".to_string()];
+            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let Err(Error::NotReady(msg)) = rehearse(tx, automation.id, &by, &HandedAtLaunch::default()) else {
+                panic!("a test run is refused where a launch would be")
+            };
+            assert_eq!(
+                msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
+                vec![Some(crate::error::ErrorCode::NotReadyAutomationScriptMissing)],
+            );
         });
     }
 }

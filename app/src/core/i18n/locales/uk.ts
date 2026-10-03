@@ -1661,6 +1661,8 @@ export const uk: Translation = {
     not_ready_automation_agent_unchosen: "{step}: не обрано агента",
     not_ready_automation_agent_missing: "{step}: ця машина не може запустити «{agent}»",
     not_ready_automation_model_missing: "{step}: тутешній агент не пропонує модель «{model}»",
+    not_ready_automation_script_missing: "{step}: за шляхом «{program}» немає файлу",
+    not_ready_automation_script_not_executable: "{step}: «{program}» не має права на виконання — дайте файлу право на запуск",
     not_ready_automation_task_left_open: "{step}: після «{exit}» переходить до «{to}», який бере наступне завдання, а це ще не закрите",
     not_ready_automation_task_left_open_at_end: "{step}: після «{exit}» запуск завершується, а завдання ще не закрите",
     not_ready_automation_hands_on_task_taken: "{step}: «{exit}» передає завдання запуску, а взяти його може лише вбудований крок — поставте перед ним «Взяти завдання» або «Створити завдання»",

@@ -1636,6 +1636,8 @@ export const zhHant: Translation = {
     not_ready_automation_agent_unchosen: "{step}：未選擇代理",
     not_ready_automation_agent_missing: "{step}：這台機器啟動不了「{agent}」",
     not_ready_automation_model_missing: "{step}：這裡的代理不提供「{model}」模型",
+    not_ready_automation_script_missing: "{step}：「{program}」處沒有檔案",
+    not_ready_automation_script_not_executable: "{step}：「{program}」沒有執行權限",
     not_ready_automation_task_left_open: "{step}：從「{exit}」出發，任務還沒關閉就進入「{to}」去領取下一個任務",
     not_ready_automation_task_left_open_at_end: "{step}：從「{exit}」出發，任務還沒關閉執行就結束了",
     not_ready_automation_hands_on_task_taken: "{step}：「{exit}」會傳出執行正在處理的任務，但只有內建步驟能領取任務，請在前面放「領取任務」或「建立任務」",

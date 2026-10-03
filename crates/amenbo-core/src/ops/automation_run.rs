@@ -126,6 +126,13 @@ pub enum Unmet {
     /// Only raised for an agent that has already been asked what it offers, and that answered with a
     /// list ([`ModelsHere`]).
     ModelMissing { step: String, agent: String, model: String, placement: i64 },
+    /// A script step whose program has no file at its path (`AMB-D-1016`). The path is checked for
+    /// being a full one when it is saved; whether a file stands there is asked here, since it can be
+    /// moved after that, or the automation launched on another machine.
+    ScriptMissing { step: String, program: String, placement: i64 },
+    /// A script step whose program is a file this machine will not run — on macOS and Linux, one with
+    /// no permission to execute. The step would fail to start once the run is away.
+    ScriptNotExecutable { step: String, program: String, placement: i64 },
     /// A line a run could walk while it holds the task it took, and that goes on to take another one
     /// (`to` naming where) or ends the run (`to` `None`) without the task being closed or a person being
     /// called on the way (`AMB-D-967`). The task would be left in progress with no run holding it.
@@ -215,6 +222,15 @@ impl Unmet {
             Unmet::ModelMissing { step, agent, model, .. } => {
                 format!("'{step}' asks for the model '{model}', which '{agent}' here does not offer")
             }
+            Unmet::ScriptMissing { step, program, .. } => {
+                format!("'{step}' runs '{program}', and there is no file there")
+            }
+            Unmet::ScriptNotExecutable { step, program, .. } => {
+                format!(
+                    "'{step}' runs '{program}', which is not allowed to be executed — give it permission \
+                     (chmod +x)"
+                )
+            }
             Unmet::LeavesTaskOpen { step, exit, to, .. } => {
                 let from = format!("{} of '{step}'", named(exit));
                 match to {
@@ -266,6 +282,8 @@ impl Unmet {
             Unmet::AgentUnchosen { .. } => ErrorCode::NotReadyAutomationAgentUnchosen,
             Unmet::AgentMissing { .. } => ErrorCode::NotReadyAutomationAgentMissing,
             Unmet::ModelMissing { .. } => ErrorCode::NotReadyAutomationModelMissing,
+            Unmet::ScriptMissing { .. } => ErrorCode::NotReadyAutomationScriptMissing,
+            Unmet::ScriptNotExecutable { .. } => ErrorCode::NotReadyAutomationScriptNotExecutable,
             Unmet::LeavesTaskOpen { to: Some(_), .. } => ErrorCode::NotReadyAutomationTaskLeftOpen,
             Unmet::LeavesTaskOpen { to: None, .. } => ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
             Unmet::HandsOnTaskTaken { .. } => ErrorCode::NotReadyAutomationHandsOnTaskTaken,
@@ -311,6 +329,9 @@ impl Unmet {
             Unmet::AgentUnchosen { step, .. } => msg.with("step", step),
             Unmet::AgentMissing { step, agent, .. } => msg.with("step", step).with("agent", agent),
             Unmet::ModelMissing { step, model, .. } => msg.with("step", step).with("model", model),
+            Unmet::ScriptMissing { step, program, .. } | Unmet::ScriptNotExecutable { step, program, .. } => {
+                msg.with("step", step).with("program", program)
+            }
             Unmet::LeavesTaskOpen { step, exit, to, to_builtin, .. } => {
                 let msg = msg.with("step", step).with("exit", exit);
                 let msg = match to {
@@ -344,6 +365,8 @@ impl Unmet {
             | Unmet::AgentUnchosen { placement, .. }
             | Unmet::AgentMissing { placement, .. }
             | Unmet::ModelMissing { placement, .. }
+            | Unmet::ScriptMissing { placement, .. }
+            | Unmet::ScriptNotExecutable { placement, .. }
             | Unmet::LeavesTaskOpen { placement, .. }
             | Unmet::HandsOnTaskTaken { placement, .. }
             | Unmet::SplitAxisGone { placement, .. } => Some(*placement),
@@ -521,7 +544,8 @@ fn not_found(what: &str, id: i64) -> Error {
 /// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
 /// inside that nothing reaches stop a run just as surely as the same gaps on the automation's picture
 /// ([`inside`]). The agent and the model are asked of each step as it is placed here — they are chosen
-/// where the action is placed, step by step (`AMB-D-960`).
+/// where the action is placed, step by step (`AMB-D-960`). A script step is asked instead whether its
+/// program is a file this machine can run (`AMB-D-1016`).
 ///
 /// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade. `models` is
 /// [`Launcher::models`], and an agent it says nothing about leaves that step's model check unmade.
@@ -673,6 +697,11 @@ pub fn check(
         push_new(&mut unmet, inside(conn, placement, &steps, entry_id, &live, &by_id)?);
         // A built-in names no agent and no model: Amenbo carries it out itself (`AMB-D-964`).
         for step in steps.iter().filter(|step| step.builtin.is_none()) {
+            // Nor does a script: its program is what is started, so that is what is asked about.
+            if let Some(script) = &step.script {
+                push_new(&mut unmet, unrunnable(&script.program, &step.name, placement.id).into_iter().collect());
+                continue;
+            }
             let mut found = Vec::new();
             let Some(chosen) = read::automation_placement_step_for(conn, placement.id, step.id)? else {
                 found.push(Unmet::AgentUnchosen { step: step.name.clone(), placement: placement.id });
@@ -706,6 +735,28 @@ pub fn check(
     }
     push_new(&mut unmet, leaves_task_open(conn, &live, &by_id)?);
     Ok(unmet)
+}
+
+/// **Why the program of a script step could not be started here**, or `None` when it could
+/// (`AMB-D-1016`): no file at the path, or — on macOS and Linux — a file with no execute permission.
+/// Windows runs a file by what it is rather than by a permission, so there a file standing there is
+/// enough.
+fn unrunnable(program: &str, step: &str, placement: i64) -> Option<Unmet> {
+    let (step, program) = (step.to_string(), program.to_string());
+    let meta = match std::fs::metadata(&program) {
+        Ok(meta) if meta.is_file() => meta,
+        _ => return Some(Unmet::ScriptMissing { step, program, placement }),
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if meta.permissions().mode() & 0o111 == 0 {
+            return Some(Unmet::ScriptNotExecutable { step, program, placement });
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = meta;
+    None
 }
 
 /// **The lines that leave a taken task open** (`AMB-D-967`), walked from every way out that hands a
@@ -1623,7 +1674,8 @@ fn not_ready(name: &str, unmet: &[Unmet]) -> Error {
 /// **A step nobody is chosen for is not copied**, and `None` says so. The launch check refuses a run
 /// that could open one ([`Unmet::AgentUnchosen`]), so the only such step left here stands on a
 /// placement no run reaches — copied, it would need an agent it does not have. A built-in is copied
-/// with nobody named and no prompt: Amenbo carries it out itself (`AMB-D-964`).
+/// with nobody named and no prompt: Amenbo carries it out itself (`AMB-D-964`). A script is copied with
+/// nobody named too: its program is what is started (`AMB-D-1016`).
 ///
 /// No cycle can be met here: an action places no action (`AMB-D-949`), so opening a placement goes one
 /// level down and stops. A loop drawn inside an action is a way back between its steps, walked at run
@@ -1637,13 +1689,15 @@ fn snapshot(
     now: Timestamp,
 ) -> Result<Option<AutomationRunDef>> {
     let conn = tx.conn();
-    // A built-in is carried out by Amenbo, so nobody was chosen for it and its copy names nobody.
-    let chosen = match &step.builtin {
-        Some(_) => AutomationPlacementStep::default(),
-        None => match read::automation_placement_step_for(conn, placement.id, step.id)? {
+    // A built-in is carried out by Amenbo and a script by its program, so nobody was chosen for either
+    // and its copy names nobody.
+    let chosen = if step.builtin.is_some() || step.script.is_some() {
+        AutomationPlacementStep::default()
+    } else {
+        match read::automation_placement_step_for(conn, placement.id, step.id)? {
             Some(chosen) => chosen,
             None => return Ok(None),
-        },
+        }
     };
     let mut exits = Vec::new();
     for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
@@ -2115,7 +2169,7 @@ pub fn trail(conn: &Connection, run_id: i64) -> Result<Trail> {
 mod tests {
     use super::*;
     use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewStep};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewScript, NewStep};
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::test_support::{exit_id, mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
 
@@ -2776,6 +2830,87 @@ mod tests {
                 msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
                 vec![Some(ErrorCode::NotReadyAutomationAgentUnchosen)],
             );
+        });
+    }
+
+    /// Turn the one step `action` holds into a script that runs `program` (`AMB-D-1016`).
+    fn runs_a_script(tx: &WriteTx<'_>, action: &AutomationAction, program: &std::path::Path) {
+        let step = only_step(tx, action);
+        let script =
+            NewScript { program: program.to_string_lossy().into_owned(), args: Vec::new(), timeout_minutes: None };
+        let script = Some(Some(script));
+        automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script)
+            .expect("make it a script");
+    }
+
+    /// A folder of its own under the system's temporary one, for the program a test points a script at.
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("amenbo-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("make the folder");
+        dir
+    }
+
+    /// **A script step is asked whether its program is there, and not who carries it out**
+    /// (`AMB-D-1016`): nobody is chosen for it, and only a path with no file is refused — a folder
+    /// standing there included.
+    #[test]
+    fn a_script_whose_program_is_not_there_is_refused_and_no_agent_is_asked_for() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let dir = scratch("script-missing");
+            let program = dir.join("check.sh");
+            runs_a_script(tx, &action, &program);
+            automation::placement_step_clear(tx, placement.id, only_step(tx, &action).id).expect("nobody chosen");
+            let missing = vec![Unmet::ScriptMissing {
+                step: "直す".into(),
+                program: program.to_string_lossy().into_owned(),
+                placement: placement.id,
+            }];
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), missing);
+            std::fs::create_dir(&program).expect("a folder where the program should be");
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), missing);
+            let err = launch(tx, automation.id, &here(&claude())).expect_err("refused");
+            let Error::NotReady(msg) = err else { panic!("a launch that cannot go ahead is not_ready") };
+            assert_eq!(
+                msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
+                vec![Some(ErrorCode::NotReadyAutomationScriptMissing)],
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+        });
+    }
+
+    /// **A program this machine will not run is refused, and one it will launches** — on macOS and
+    /// Linux, a file with no permission to execute.
+    #[cfg(unix)]
+    #[test]
+    fn a_script_whose_program_is_not_executable_is_refused_until_it_is() {
+        use std::os::unix::fs::PermissionsExt;
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let dir = scratch("script-not-executable");
+            let program = dir.join("check.sh");
+            std::fs::write(&program, "#!/bin/sh\n").expect("write the program");
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o644)).expect("not executable");
+            runs_a_script(tx, &action, &program);
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::ScriptNotExecutable {
+                    step: "直す".into(),
+                    program: program.to_string_lossy().into_owned(),
+                    placement: placement.id,
+                }],
+            );
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("executable");
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            automation::placement_step_clear(tx, placement.id, only_step(tx, &action).id).expect("nobody chosen");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![],
+                "a script needs nobody chosen to carry it out",
+            );
+            launch(tx, automation.id, &here(&claude())).expect("launches");
+            let _ = std::fs::remove_dir_all(&dir);
         });
     }
 

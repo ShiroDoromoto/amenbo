@@ -1635,6 +1635,8 @@ export const th: Translation = {
     not_ready_automation_agent_unchosen: "{step}: ยังไม่ได้เลือกเอเจนต์",
     not_ready_automation_agent_missing: "{step}: เครื่องนี้เริ่ม “{agent}” ไม่ได้",
     not_ready_automation_model_missing: "{step}: เอเจนต์ที่นี่ไม่มีโมเดล “{model}”",
+    not_ready_automation_script_missing: "{step}: ไม่มีไฟล์ที่ “{program}”",
+    not_ready_automation_script_not_executable: "{step}: “{program}” ไม่มีสิทธิ์ให้รัน — ให้สิทธิ์รันกับไฟล์นั้น",
     not_ready_automation_task_left_open: "{step}: หลัง “{exit}” จะไปที่ “{to}” ซึ่งรับงานถัดไป ทั้งที่งานนี้ยังไม่ปิด",
     not_ready_automation_task_left_open_at_end: "{step}: หลัง “{exit}” การรันจะจบทั้งที่งานยังไม่ปิด",
     not_ready_automation_hands_on_task_taken: "{step}: “{exit}” ส่งต่องานของการรัน แต่มีแค่ขั้นตอนในตัวเท่านั้นที่รับงานได้ ให้วาง “รับงาน” หรือ “สร้างงาน” ไว้ก่อน",

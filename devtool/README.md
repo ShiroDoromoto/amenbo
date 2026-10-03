@@ -965,7 +965,8 @@ rather than being driven from outside: a pid held on this side would name a proc
 What is added is the four things a run in there needs and a run here does not.
 
 **`install`** sends and installs the shipped build, the harness, the scenarios, the fixtures and the
-screen tool.
+screen tool. The scenarios and fixtures folders in the guest are removed first, so a scenario this
+checkout no longer has is not left there.
 
 - **The build is a path, or `--from-run <run id>`** — the mac artifact of a CI run, never the
   release's download URL: a release download is counted, and a development one cannot be subtracted
@@ -1104,7 +1105,9 @@ What it does, in order:
    `.pkg` is a path or the mac artifact of `--from-run`, and one for the other architecture is
    refused, the same way `install` takes one.
 2. **Builds `verify-all` here with `--release`** and sends it with the scenarios and the fixtures.
-   Nothing is built in the guest.
+   Nothing is built in the guest. The scenarios and fixtures folders in the guest are removed
+   first: `verify-all` walks the whole folder, and a scenario this checkout no longer has would
+   count as one of its own.
 3. **Makes this checkout's fixtures path in the guest**, as a link to the fixtures sent. The CLI
    driver reads fixtures from the path it was compiled at and `verify-all` has no flag to say
    otherwise, so without it the roads that `copy-fixture` would fail in there.

@@ -107,6 +107,9 @@ func vmVerifyCLI(pkg, fromRun string, scenarios []string, asJSON bool) (int, err
 		filepath.Join(root, "verification", "scenarios"),
 		filepath.Join(root, "verification", "fixtures"),
 	}
+	if _, err := sshRun(ip, vmVerifyClearCommand()); err != nil {
+		return 0, fmt.Errorf("clearing the scenarios and fixtures sent before: %w", err)
+	}
 	if err := vmPush(send, vmGuestHome+"/"); err != nil {
 		return 0, err
 	}

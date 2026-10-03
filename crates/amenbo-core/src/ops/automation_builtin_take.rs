@@ -578,7 +578,7 @@ mod tests {
             }
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
 
-            let resumed = automation_stop::resume(tx, run.id).expect("resume");
+            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
             assert_eq!(resumed.run.pause_kind, None, "a running run is stopped at neither");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at its entry");
             assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
@@ -675,7 +675,7 @@ mod tests {
             let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert!(!automation_stop::pauses_before_next_task(tx.conn(), &paused).expect("judge"));
 
-            let resumed = automation_stop::resume(tx, run.id).expect("resume");
+            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
             assert_eq!(resumed.run.pause_kind, None);
             assert!(matches!(
@@ -683,6 +683,87 @@ mod tests {
                 Opened::Carried { next: Next::Step(_), .. }
             ));
             assert_eq!(status(tx, b), TaskStatus::InProgress, "and the next task is taken");
+        });
+    }
+
+    /// **Picked up after pausing before its next task, a run is copied down afresh from the automation as
+    /// it stands now, and starts at the new copy's entry** (`AMB-D-1015`). The copy it launched with is
+    /// kept: the steps it opened from it still point at it.
+    #[test]
+    fn picked_up_before_its_next_task_a_run_goes_on_the_automation_as_it_stands_now() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            for_ai(tx, "a", project, Some(Priority::High));
+            let b = for_ai(tx, "b", project, Some(Priority::Low));
+            let (run, _, opened) = paused_after_the_first(tx, project, &automation);
+            assert!(matches!(opened, Opened::Waiting { .. }));
+            let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            let last_copied = launched_with.last().expect("a copy").id;
+            let work = launched_with.iter().find(|d| d.name == "work").expect("the work's copy");
+            let work_step = work.step_id.expect("the work's step");
+            automation::step_update(
+                tx,
+                work_step,
+                None,
+                Some("work on it again"),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("rewrite the work");
+
+            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
+            assert_eq!(resumed.run.status, AutomationRunStatus::Running);
+            assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "at the new copy's entry");
+            assert!(resumed.next.id > last_copied, "copied down afresh");
+            let Waiting::Step(waiting) = next_def(tx.conn(), run.id).expect("next") else {
+                panic!("the run stands before a step");
+            };
+            assert_eq!(waiting.id, resumed.next.id, "the new copy's entry, not the take it paused before");
+            let kept = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            assert_eq!(kept.len(), launched_with.len() * 2, "the copy it launched with is kept");
+            for step in read::automation_run_steps_of(tx.conn(), run.id).expect("steps") {
+                assert!(step.run_def_id <= last_copied, "what it opened before points at the old copy");
+            }
+
+            let Opened::Carried { next: Next::Step(next), .. } =
+                open(tx, run.id, resumed.next.id, Some(&[])).expect("open")
+            else {
+                panic!("the take goes on to the work");
+            };
+            assert_eq!(status(tx, b), TaskStatus::InProgress, "the next task is taken");
+            assert!(next.id > last_copied, "on the new copy");
+            assert_eq!(next.prompt.as_deref(), Some("work on it again"), "the work as it was rewritten");
+        });
+    }
+
+    /// **A run paused before its next task is not picked up on an automation that would not launch**
+    /// (`AMB-D-1015`): the resume is refused, nothing is copied down, and the run stays paused.
+    #[test]
+    fn a_run_is_not_picked_up_on_an_automation_that_would_not_launch() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            for_ai(tx, "a", project, Some(Priority::High));
+            let (run, _, _) = paused_after_the_first(tx, project, &automation);
+            let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
+            automation::set_entry(tx, automation.id, None).expect("no entry");
+
+            let refused = automation_stop::resume(tx, run.id, None, nothing_asked()).expect_err("refused");
+            assert!(matches!(refused, crate::error::Error::NotReady(_)), "{refused:?}");
+            let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            assert_eq!(paused.status, AutomationRunStatus::Paused, "it stays paused");
+            assert_eq!(paused.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
+            assert_eq!(
+                read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(),
+                copies,
+                "nothing is copied down",
+            );
         });
     }
 
@@ -724,7 +805,7 @@ mod tests {
             assert_eq!(paused.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
             assert!(read::automation_run_steps_of(tx.conn(), run.id).expect("steps").is_empty(), "nothing taken");
 
-            let resumed = automation_stop::resume(tx, run.id).expect("resume");
+            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
         });
     }

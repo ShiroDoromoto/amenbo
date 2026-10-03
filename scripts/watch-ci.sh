@@ -9,6 +9,7 @@
 #
 # Exit code is the verdict: 0 = green, 1 = red, or the watch itself broke and said so.
 # 2 = no mode was given. 3 = `main <sha>` waited out its deadline with no run started.
+# 4 = `pr` saw every check finish green and the pull request still open, and stopped.
 # 5 = what was being watched read the same for AMENBO_CI_STALL seconds; the state it was
 # stuck in is printed last. Nothing is decided: read it, and watch again if it is fine.
 #
@@ -65,6 +66,7 @@
 #   AMENBO_CI_APPEAR_LIMIT — rounds to wait for something to appear before giving up.
 #                  Unset, there is no deadline and the evidence above is what ends it
 #   AMENBO_CI_MAIN_DEADLINE — seconds `main <sha>` waits for its run before exit code 3
+#   AMENBO_CI_STUCK_ROUNDS — rounds `pr` sees the same settled state before exit code 4
 #   AMENBO_CI_STALL — seconds a run, a pull request or a check may read the same before
 #                  exit code 5. Resolving an id is not timed by it
 #
@@ -81,6 +83,7 @@ APPEAR_LIMIT="${AMENBO_CI_APPEAR_LIMIT:-}" # rounds before giving up on it; empt
 MISS_LIMIT="${AMENBO_CI_MISS_LIMIT:-3}"    # consecutive failed calls before calling the watch broken
 # Twice the slowest push run seen to be registered after its merge, which was 23 minutes.
 MAIN_DEADLINE="${AMENBO_CI_MAIN_DEADLINE:-2700}" # seconds `main <sha>` waits for its run to start
+STUCK_ROUNDS="${AMENBO_CI_STUCK_ROUNDS:-3}" # rounds a settled, still-open pull request is given to land
 # Past the slowest run seen from start to finish, a release tag's at 90 minutes, so even a
 # run whose jobs all end together has moved before this runs out.
 STALL_SECONDS="${AMENBO_CI_STALL:-7200}" # seconds what is watched may read the same before exit code 5
@@ -287,9 +290,9 @@ watch_run() {
     done
 }
 
-# Watch a pull request until it lands, or until one of its checks goes red. Three
-# things are worth a line: a check that failed, a merge that now needs a hand, and the
-# landing itself.
+# Watch a pull request until it lands, until one of its checks goes red, or until it
+# sits green without landing. Four things are worth a line: a check that failed, a merge
+# that now needs a hand, a green pull request that is not merging, and the landing itself.
 #
 # A failed check ends the watch. A required check that is red does not clear on its
 # own — the pull request cannot land until someone pushes a fix — so watching on is
@@ -297,11 +300,20 @@ watch_run() {
 # reach a caller reading through a pipe only once the process ends, the red that was
 # already detected would not even be shown. A re-run is what clears a flaky check, and
 # starting another watch after it is the caller's, as it is for `run`.
+#
+# A pull request whose checks have all finished green and that is still open ends the
+# watch too, with exit code 4 and the state `gh pr view` gave. Without auto-merge on it
+# nothing is going to merge it, so that ends it at once. With auto-merge on, GitHub
+# takes a moment to act, so it ends once the same merge state and the same check results
+# have been seen for STUCK_ROUNDS rounds: BLOCKED, BEHIND or UNKNOWN on a green pull
+# request is otherwise a wait with nothing said. "Finished" needs both the checks read
+# with none pending and every run on the head commit completed — no checks at all, the
+# window after a push, or `ci / all green` not yet created, is not finished.
 watch_pr() {
-    local pr="$1" miss=0 prevms="" prevck="" v state ms checks fail
+    local pr="$1" miss=0 prevms="" prevck="" stuck=0 prevsettled="" v state ms checks fail settled
     echo "watching pull request $pr  https://github.com/$repo/pull/$pr"
     while :; do
-        if ! v=$(gh pr view "$pr" -R "$repo" --json state,mergeStateStatus 2>&1); then
+        if ! v=$(gh pr view "$pr" -R "$repo" --json state,mergeStateStatus,autoMergeRequest 2>&1); then
             miss=$((miss + 1))
             [ "$miss" -ge "$MISS_LIMIT" ] && { echo "watch broken: $v"; return 1; }
             sleep "$POLL_SECONDS"
@@ -335,6 +347,20 @@ watch_pr() {
                 | "FAIL \(.name) (\(.bucket))") | sort | join("\n")' <<< "$checks" 2>/dev/null); then
             prevck=""
             [ -n "$fail" ] && { echo "$fail"; return 1; }
+            if [ "$(jq 'length > 0 and all(.bucket != "pending")' <<< "$checks")" = true ] \
+                && head_runs_settled "$pr" > /dev/null; then
+                if [ "$(jq -r '.autoMergeRequest == null' <<< "$v")" = true ]; then
+                    echo "settled but not merging: $v"
+                    return 4
+                fi
+                settled="$ms $(jq -c 'sort_by(.name)' <<< "$checks")"
+                [ "$settled" = "$prevsettled" ] && stuck=$((stuck + 1)) || stuck=1
+                prevsettled=$settled
+                [ "$stuck" -ge "$STUCK_ROUNDS" ] && { echo "settled but not merging: $v"; return 4; }
+            else
+                stuck=0
+                prevsettled=""
+            fi
         else
             [ "$checks" != "$prevck" ] && echo "checks not read: ${checks:-no output}"
             prevck=$checks

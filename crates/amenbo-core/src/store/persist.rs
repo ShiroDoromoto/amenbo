@@ -1698,13 +1698,17 @@ impl Store {
         })
     }
 
-    /// **Pick a paused run up again**, from the way out the step before it left through.
+    /// **Pick a paused run up again** ([`crate::ops::automation_stop::resume`]). `startable` and
+    /// `models` are a launch's ([`crate::ops::automation_run::Launcher`]): a run paused before its next
+    /// task is copied down afresh and checked as a launch is.
     pub fn automation_resume(
         &mut self,
         run_id: i64,
+        startable: Option<&[String]>,
+        models: &crate::ops::automation_run::ModelsHere,
     ) -> Result<crate::ops::automation_stop::Resumed> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_stop::resume(tx, run_id)
+            crate::ops::automation_stop::resume(tx, run_id, startable, models)
         })
     }
 

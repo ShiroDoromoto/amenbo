@@ -872,7 +872,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             write_envelope(flags, "automation.pause", "automation_run", value, None, false, line);
         }
         AutomationCmd::Resume { run } => {
-            let Resumed { run: r, next } = store.automation_resume(run).map_err(CliError::from)?;
+            // Asked as a launch asks them: a run paused before its next task is checked afresh.
+            let known = startable(store);
+            let models = amenbo_core::ops::automation_run::nothing_asked();
+            let Resumed { run: r, next } =
+                store.automation_resume(run, known.as_deref(), models).map_err(CliError::from)?;
             let value = json!({ "run": r.id, "state": "running", "step": next.id });
             let line = format!("✓ Run {} picks up at {} ({})", r.id, next.name, next.id);
             write_envelope(flags, "automation.resume", "automation_run", value, None, false, line);

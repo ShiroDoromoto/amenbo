@@ -415,13 +415,13 @@ fn waits_to_take_a_task(conn: &Connection, run_id: i64) -> Result<bool> {
 /// **Whether asking a run to pause before its next task would do anything** (`AMB-D-1009`): it is
 /// `running`, it is asked for neither pause yet, and it takes tasks.
 ///
-/// Whether it takes tasks is read from the steps it copied at launch, not the automation as it stands
-/// now (`AMB-D-961`).
+/// Whether it takes tasks is read from the steps it copied, the last time it copied them, not the
+/// automation as it stands now (`AMB-D-961`).
 pub fn pauses_before_next_task(conn: &Connection, run: &AutomationRun) -> Result<bool> {
     if run.status != AutomationRunStatus::Running || run.pause_requested || run.pause_before_next_task {
         return Ok(false);
     }
-    Ok(read::automation_run_defs_of(conn, run.id)?.iter().any(takes_a_task))
+    Ok(crate::ops::automation_run::current_defs(conn, run.id)?.iter().any(takes_a_task))
 }
 
 /// Whether this step is the built-in that takes a task — where a pause before the next task takes hold.
@@ -450,13 +450,21 @@ pub fn settle(tx: &WriteTx<'_>, before: AutomationRun, kind: AutomationPauseKind
     Ok(Ended { run: after })
 }
 
-/// **Pick a paused run up again**, from the way out the last step left through.
+/// **Pick a paused run up again** — how depends on which pause it stopped at (`AMB-D-1015`).
 ///
-/// The picture is walked live, the way every other walk of it is: which step comes next is the shape of
-/// the automation rather than anything the pause wrote down. A run whose last step left through a way
-/// out that now decides nothing is stopped rather than resumed — the same answer the report door gives,
-/// since the picture was edited underneath it either way.
-pub fn resume(tx: &WriteTx<'_>, run_id: i64) -> Result<Resumed> {
+/// - **Paused before its next task**, it holds no task, so it is copied down afresh from the automation
+///   as it stands now and starts at the new copy's entry. The new copy is checked as a launch checks
+///   it, with `startable` and `models` as [`crate::ops::automation_run::Launcher`] takes them; one that
+///   does not pass is refused, and the run stays paused.
+/// - **Paused at the end of an action**, it goes on from the copy it has, at the step the way out the
+///   last step left through leads to. A run whose copy leads nowhere from there fails rather than
+///   resumes.
+pub fn resume(
+    tx: &WriteTx<'_>,
+    run_id: i64,
+    startable: Option<&[String]>,
+    models: &crate::ops::automation_run::ModelsHere,
+) -> Result<Resumed> {
     let before = live_run(tx, run_id)?;
     if before.status != AutomationRunStatus::Paused {
         return Err(Error::invalid(format!(
@@ -464,12 +472,20 @@ pub fn resume(tx: &WriteTx<'_>, run_id: i64) -> Result<Resumed> {
             before.status.as_str()
         )));
     }
-    let Some(next) = next_after_the_pause(tx.conn(), &before)? else {
-        ended(tx, before, Ending::Failed(AutomationStoppedReason::NoWayOn))?;
-        return Err(Error::invalid(format!(
-            "run '{run_id}' cannot go on: what followed the step it paused after is no longer in the \
-             picture, so it has failed"
-        )));
+    let next = match before.pause_kind {
+        Some(AutomationPauseKind::BeforeNextTask) => {
+            crate::ops::automation_run::copy_down_again(tx, &before, startable, models)?
+        }
+        _ => match next_after_the_pause(tx.conn(), &before)? {
+            Some(next) => next,
+            None => {
+                ended(tx, before, Ending::Failed(AutomationStoppedReason::NoWayOn))?;
+                return Err(Error::invalid(format!(
+                    "run '{run_id}' cannot go on: what followed the step it paused after is no longer \
+                     in the picture, so it has failed"
+                )));
+            }
+        },
     };
     let now = Timestamp::now();
     let mut after = before.clone();
@@ -871,7 +887,8 @@ mod tests {
                 "it stopped at the end of the action",
             );
 
-            let Resumed { run: after, next } = resume(tx, run.id).expect("resume");
+            let Resumed { run: after, next } =
+                resume(tx, run.id, None, crate::ops::automation_run::nothing_asked()).expect("resume");
             assert_eq!(after.status, AutomationRunStatus::Running);
             assert_eq!(after.pause_kind, None, "a running run is stopped at neither");
             assert_eq!(next.step_id, Some(p.second.id), "it goes on where it left off");

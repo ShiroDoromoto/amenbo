@@ -949,7 +949,8 @@ impl Store {
         Ok(crate::store_engine::read::automation_run_steps_of(self.engine.conn(), run_id)?)
     }
 
-    /// The steps one run copied down at launch — what each execution was asked to do.
+    /// The steps one run copied down — at launch, and again each time it was picked up after pausing
+    /// before its next task — what each execution was asked to do.
     pub fn automation_run_defs(&self, run_id: i64) -> Result<Vec<crate::model::AutomationRunDef>> {
         self.reachable(&format!("automation run #{run_id}"), |c| {
             super::owner::automation_run(c, run_id)

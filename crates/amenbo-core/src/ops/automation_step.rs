@@ -622,7 +622,7 @@ fn choices_for(tx: &WriteTx<'_>, def: &AutomationRunDef) -> Result<Vec<Choices>>
         return Ok(Vec::new());
     };
     let mut out: Vec<Choices> = Vec::new();
-    for reader in read::automation_run_defs_of(conn, def.run_id)? {
+    for reader in super::automation_run::current_defs(conn, def.run_id)? {
         if reader.builtin.as_deref() != Some(super::automation_builtin_make::MAKE_TASK.key) {
             continue;
         }

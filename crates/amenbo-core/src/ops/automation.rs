@@ -131,7 +131,8 @@ fn live_wire(tx: &WriteTx<'_>, id: i64) -> Result<AutomationWire> {
 /// what one step of an action declares.
 ///
 /// A run going on it does not stop the rewrite (`AMB-D-1015`): the run works from the copy it took at
-/// launch, and the new definition is read at the next launch.
+/// launch, and the new definition is read at the next launch, or when a run paused before its next
+/// task is resumed and copies it down afresh.
 #[derive(Clone, Copy, Debug)]
 enum Def {
     Automation,
@@ -1059,8 +1060,8 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 
 /// Delete one run and everything filed under it — the values each step execution carried, the
 /// executions themselves with whatever was attached to them, the tasks the run worked on, and the step
-/// snapshots it took at launch. Returns the blob hashes those attachments pointed at, for the caller to
-/// reclaim once the transaction commits.
+/// snapshots it took at launch and on each resume that copied it down afresh. Returns the blob hashes
+/// those attachments pointed at, for the caller to reclaim once the transaction commits.
 ///
 /// **Nothing refuses this, and nothing calls it but the project delete.** A run is the record of what
 /// happened, so there is no reason to reach for it while the project it is filed under is still there —

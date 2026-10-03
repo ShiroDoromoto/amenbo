@@ -37,6 +37,7 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::{Read, Write};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -370,30 +371,52 @@ const SCROLLBACK: usize = 0;
 /// It costs about 155 KB a pane and takes about 28 µs per chunk to feed; what it saves is the
 /// hand-over's half-second look, which searched a quarter of a megabyte and now searches a screen
 /// (`AMB-T-5076`).
-struct Drawn(vt100::Parser);
+///
+/// **The emulator can panic on what a program writes, and a panic here is caught and the screen
+/// started again.** vt100 0.16.2 unwraps its way off the grid when a wide character folds on a
+/// screen one row high, and on some cursor moves at other sizes. Left to run, that panic ends the
+/// thread draining the terminal — the pane hears nothing more and never hears it close — and
+/// poisons the lock, so the next resize takes the app down with it. A screen started again at the
+/// size it was at loses what it held, and the next frame the program draws fills it back in.
+struct Drawn {
+    parser: vt100::Parser,
+    /// The size the screen is at, held here because a parser that panicked cannot be asked.
+    at: Size,
+}
 
 impl Drawn {
     fn new(at: Size) -> Self {
-        let (cols, rows) = held(at);
-        Self(vt100::Parser::new(rows, cols, SCROLLBACK))
+        Self { parser: parser(at), at }
     }
 
     /// Take in a chunk, the same bytes [`Recent::push`] is given.
     fn push(&mut self, bytes: &[u8]) {
-        self.0.process(bytes);
+        if catch_unwind(AssertUnwindSafe(|| self.parser.process(bytes))).is_err() {
+            self.parser = parser(self.at);
+        }
     }
 
     /// Say what size the terminal is now. The screen is that many cells, so unlike the tail there is
     /// nothing here that belongs to an older size: what was drawn at the last one is refolded.
     fn resized(&mut self, at: Size) {
+        self.at = at;
         let (cols, rows) = held(at);
-        self.0.screen_mut().set_size(rows, cols);
+        let resize = || self.parser.screen_mut().set_size(rows, cols);
+        if catch_unwind(AssertUnwindSafe(resize)).is_err() {
+            self.parser = parser(at);
+        }
     }
 
     /// The screen as text, one row per line.
     fn contents(&self) -> String {
-        self.0.screen().contents()
+        self.parser.screen().contents()
     }
+}
+
+/// An empty screen of that size.
+fn parser(at: Size) -> vt100::Parser {
+    let (cols, rows) = held(at);
+    vt100::Parser::new(rows, cols, SCROLLBACK)
 }
 
 /// A size with no zero in it. A terminal of no width has no cells to draw in, and the emulator
@@ -2417,6 +2440,35 @@ mod tests {
         pane.keep(b"drawn");
 
         assert!(pane.look().drawn.contains("drawn"));
+    }
+
+    /// A wide character folding on a screen one row high panics vt100 0.16.2. The screen is started
+    /// again and the pane goes on taking output, resizing and being looked at, rather than leaving
+    /// its lock poisoned for the next resize to fall over.
+    #[test]
+    fn a_wide_character_on_a_screen_one_row_high_does_not_end_the_pane() {
+        let inputs: [(Size, Vec<u8>); 4] = [
+            ((80, 1), format!("{}あ", "a".repeat(79)).into_bytes()),
+            ((40, 1), "日本語".repeat(30).into_bytes()),
+            ((2, 1), "aあ".as_bytes().to_vec()),
+            ((0, 0), "あ".as_bytes().to_vec()),
+        ];
+        for (at, bytes) in inputs {
+            let pane = Pane::new("main", at);
+            pane.keep(&bytes);
+            pane.keep(b"x");
+            pane.resized(OPENED_AT);
+            pane.keep(b"after");
+
+            assert!(pane.look().drawn.contains("after"), "{at:?}");
+        }
+
+        let pane = Pane::new("main", OPENED_AT);
+        pane.resized((2, 1));
+        pane.keep("日本語".as_bytes());
+        pane.resized(OPENED_AT);
+        pane.keep(b"after");
+        assert!(pane.look().drawn.contains("after"));
     }
 
     /// A terminal nobody has written in yet hands over nothing at all — there is no run to read and

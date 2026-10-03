@@ -1293,8 +1293,10 @@ datasets! {
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is
-    // created and never rewritten. This is what makes a run readable months later: the automation it
-    // came from has moved on, and the columns here still say what was actually asked.
+    // created and never rewritten. A run paused before its next task is copied down again as it is
+    // picked up (`AMB-D-1015`); the new rows are added after the old ones, which are kept. This is what
+    // makes a run readable months later: the automation it came from has moved on, and the columns
+    // here still say what was actually asked.
     //
     // The three JSON columns hold what has no columns of its own — the ways out and each one's ports,
     // the step's inputs, and the settings' answers. They are read back as a whole, never queried

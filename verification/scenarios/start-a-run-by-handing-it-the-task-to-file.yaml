@@ -28,6 +28,10 @@ given:
   - { type: action, domain: dimension, op: create, with: { name: 職種 } }
   - { type: action, domain: dimension, op: value-add, with: { dimension: 職種, value: エンジニア } }
 
+  # A board with no task shows only the first-run guide, not the way into the axes the screen road
+  # opens to require one.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — a task so the board shows its toolbar } }
+
   # File and take, close.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one handed a task to file" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: make_task }, as: at_make }

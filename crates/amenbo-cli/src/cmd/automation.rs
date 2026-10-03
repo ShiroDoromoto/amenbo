@@ -1480,7 +1480,8 @@ fn render_run(
 
 /// One step execution: which step it was, how it left, how long it stood, what it carried, and the
 /// whole of what it said. The report is written out in full — a run read back months later is read for
-/// exactly this, and a snippet would send the reader somewhere else to finish the sentence.
+/// exactly this, and a snippet would send the reader somewhere else to finish the sentence. A script
+/// step's last output follows, as much of it as was kept.
 fn render_move(
     store: &mut Store,
     flags: &Flags,
@@ -1509,7 +1510,22 @@ fn render_move(
     if m.report_withheld {
         human(flags, "      (not left on the task: it was closed)");
     }
+    for line in tail_lines("stdout", &m.stdout_tail).into_iter().chain(tail_lines("stderr", &m.stderr_tail)) {
+        human(flags, line);
+    }
     Ok(())
+}
+
+/// The end of what a script step printed to one stream, under the stream's name, so a failed run can be
+/// read from the terminal (`AMB-D-1016`). Nothing where it printed nothing, which is every step that is
+/// not a script.
+fn tail_lines(stream: &str, tail: &str) -> Vec<String> {
+    if tail.trim().is_empty() {
+        return Vec::new();
+    }
+    std::iter::once(format!("      {stream} (the end of it):"))
+        .chain(tail.lines().map(|line| format!("      > {line}")))
+        .collect()
 }
 
 /// How a way out is spoken of in a sentence: by its name, and the error one as what it is. A step
@@ -1566,5 +1582,20 @@ fn span(from: Option<Timestamp>, to: Option<Timestamp>) -> String {
         (Some(from), Some(to)) => format!("{} → {}", from.to_rfc3339_z(), to.to_rfc3339_z()),
         (Some(from), None) => format!("{} → still going", from.to_rfc3339_z()),
         (None, _) => "not started".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tail_lines;
+
+    #[test]
+    fn a_tail_is_written_under_its_stream_and_nothing_is_written_for_none() {
+        assert_eq!(
+            tail_lines("stderr", "error: no tests to run\nexit 4\n"),
+            ["      stderr (the end of it):", "      > error: no tests to run", "      > exit 4"],
+        );
+        assert!(tail_lines("stdout", "").is_empty());
+        assert!(tail_lines("stdout", "\n  \n").is_empty());
     }
 }

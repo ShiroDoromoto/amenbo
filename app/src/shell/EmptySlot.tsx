@@ -475,7 +475,7 @@ export function EmptySlot({
           {unreached && (
             <>
               <p className="slot__note" role="status">{t("face.startsUnchecked")}</p>
-              <button className="slot__more" onClick={() => void recheck()}>
+              <button className="slot__link" onClick={() => void recheck()}>
                 {t("face.startsRecheck")}
               </button>
             </>
@@ -484,7 +484,7 @@ export function EmptySlot({
               take more of the frame than the two that work. It is a press and not a choice, so it is
               outside the group — a button among radios is read as one of them. */}
           {!unreached && rows.missing.length > 0 && (
-            <button className="slot__more" aria-expanded={shown} onClick={() => setShown(!shown)}>
+            <button className="slot__link" aria-expanded={shown} onClick={() => setShown(!shown)}>
               {tf("face.moreStarts", { n: rows.missing.length })}
             </button>
           )}
@@ -504,7 +504,7 @@ export function EmptySlot({
                           composed, so a reader who cannot read it cannot judge it. */}
                       <code className="slot__ownline">{one.line}</code>
                       <button
-                        className="slot__more"
+                        className="slot__link"
                         onClick={() => {
                           setFailed(null);
                           setDraft({ id: one.id, name: one.label, line: one.line ?? "" });
@@ -512,7 +512,7 @@ export function EmptySlot({
                       >
                         {t("face.startEdit")}
                       </button>
-                      <button className="slot__more" onClick={() => void drop(one.id)}>
+                      <button className="slot__link" onClick={() => void drop(one.id)}>
                         {t("face.startRemove")}
                       </button>
                     </li>
@@ -522,7 +522,7 @@ export function EmptySlot({
             )}
             {draft === null ? (
               <button
-                className="slot__more"
+                className="slot__link"
                 onClick={() => { setFailed(null); setDraft({ id: null, name: "", line: "" }); }}
               >
                 {t("face.startAdd")}
@@ -567,7 +567,7 @@ export function EmptySlot({
                   >
                     {t("face.startSave")}
                   </button>
-                  <button type="button" className="slot__more" onClick={() => setDraft(null)}>
+                  <button type="button" className="slot__link" onClick={() => setDraft(null)}>
                     {t("face.startCancel")}
                   </button>
                 </div>

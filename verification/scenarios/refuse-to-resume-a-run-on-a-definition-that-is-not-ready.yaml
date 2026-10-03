@@ -1,0 +1,83 @@
+# Picking a run up again after the pause before its next task starts it on the definition as it now
+# stands, so that definition is checked first the way a launch checks it. One the check turns away is
+# refused at the resume, and the run stays paused — nothing of it is lost, and once the definition is
+# mended the same run is picked up.
+#
+# A screen road alone: a run started at a terminal opens nothing, so its pause never settles there.
+id: refuse-to-resume-a-run-on-a-definition-that-is-not-ready
+title: A run paused before its next task is not resumed on a definition that is not ready, and stays paused
+description: >
+  Start a run whose first box waits for a task, with none to take, and pause the project's runs
+  before their next task from the workspace's header. On the automation's build screen, say nothing
+  about what happens after the first box finds no task, and read the start held back for it. Resume
+  the run from the running tab: it is refused, the note over the rows says why, and the run is still
+  paused. Say again that finding no task ends the run, and resume it: the same run is running again.
+given:
+  # The built-in that takes a task, and the one that closes it. Nothing is handed to the AI, so its
+  # filter finds no task; the road sets it to wait, so the run waits with nothing under way.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one left unready while paused" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+steps_gui:
+  - { type: action, domain: workspace, op: show-face, with: { face: workspace } }
+  - { type: action, domain: workspace, op: show-face, with: { face: tasks } }
+  - { type: action, domain: automation, op: screen, with: { tab: automations } }
+  - { type: action, domain: automation, op: open, with: { target: auto } }
+
+  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
+  - type: action
+    domain: automation
+    op: answer-choice
+    with:
+      builtin: take_task
+      setting: 着手できるタスクが無いとき
+      value: 着手できるタスクが出るまで待つ
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  # The project's pause. The run is waiting for a task, so it is paused on the spot.
+  - { type: action, domain: workspace, op: show-face, with: { face: workspace } }
+  - { type: action, domain: automation, op: pause-before-next-task }
+
+  - { type: action, domain: workspace, op: show-face, with: { face: tasks } }
+  - { type: action, domain: automation, op: screen, with: { tab: running } }
+  - { type: assert, domain: automation, op: run-row, with: { target: run, state: paused } }
+
+  # Rebuilt into one a launch would turn away: nothing is said after the way out for no task.
+  - { type: action, domain: automation, op: screen, with: { tab: automations } }
+  - { type: action, domain: automation, op: open, with: { target: auto } }
+  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
+  - { type: action, domain: automation, op: set-next, with: { builtin: take_task, exit: 着手できるタスクが無い } }
+  - { type: assert, domain: automation, op: launch, with: { ready: false, reason: open_exit } }
+
+  # Refused for what the check found, and the run is left where it was.
+  - { type: action, domain: automation, op: screen, with: { tab: running } }
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: resume
+      refused: not_ready_automation
+  - { type: assert, domain: automation, op: not-ready-note, with: { target: auto, reason: open_exit } }
+  - { type: assert, domain: automation, op: run-row, with: { target: run, state: paused } }
+
+  # Mended, and the same run is picked up.
+  - { type: action, domain: automation, op: screen, with: { tab: automations } }
+  - { type: action, domain: automation, op: open, with: { target: auto } }
+  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
+  - { type: action, domain: automation, op: set-next, with: { builtin: take_task, exit: 着手できるタスクが無い, ends: done } }
+  - { type: assert, domain: automation, op: launch, with: { ready: true } }
+
+  - { type: action, domain: automation, op: screen, with: { tab: running } }
+  - { type: action, domain: automation, op: press-run, with: { target: run, press: resume } }
+  - { type: assert, domain: automation, op: run-row, with: { target: run, state: running } }

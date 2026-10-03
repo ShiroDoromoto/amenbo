@@ -1,22 +1,21 @@
-# A run works from the copy of its definition it took at the start, and while it is running or paused
-# the definition it came from is held: nothing about the automation, or about an action placed on it,
-# can be rewritten until the run ends. The refusal and the release are one road because they are read
-# against each other — a build that refused every edit, or none, would pass either half on its own.
-id: keep-a-definition-still-while-a-run-of-it-is-going
-title: A definition a run is going on refuses to be edited, and takes edits again once the run is stopped
+# A run works from the copy of its definition it took at the start, so the definition it came from is
+# not held while the run is running or paused: the automation is renamed and archived, and the action
+# placed on it renamed, with the run still going on from its copy. On the screen the run is named over
+# the picture it is going on, and the picture still takes writes.
+id: edit-a-definition-while-a-run-of-it-is-going
+title: A definition a run is going on is still edited, and the run goes on
 description: >
-  Start a run, then try to rename the automation, archive it, and rename the action placed on it —
-  each is refused as a conflict while the run is going. Stop the run, and the same renames go
-  through. On the screen the same hold is read rather than pressed into: the automation's build
-  screen and the action's list the run over the picture and offer no write, the run's row goes to its
-  pane, and once the run is stopped the list is gone and the writes are back.
+  Start a run, then rename the automation, archive it, and rename the action placed on it — each goes
+  through, and the run is still running. On the screen the automation's build screen and the action's
+  name the run over the picture and still take writes, the run's band goes to its pane, and once the
+  run is stopped the band is gone.
 given:
   # Two rather than one because the terminal's premise stands its programs up in front of the
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
   # The task the built-in the run starts at takes on the screen, so the run goes on to the step after
-  # it and stays there while the definition is tried.
-  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the held run works }, as: seed }
+  # it and stays there while the definition is written.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run works }, as: seed }
   - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
   - { type: action, domain: task, op: finish-creating, with: { target: seed } }
   # The built-in that takes a task, one action of one step after it, and every way out decided — the
@@ -28,7 +27,7 @@ given:
   - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to hold still" }, as: auto }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one edited under a run" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
@@ -58,14 +57,13 @@ steps_cli:
       status: running
 
   # The automation's own fields, archiving included: an archived automation is still the one the run
-  # is filed under and working from.
+  # is filed under, and archiving stops nothing already running.
   - type: action
     domain: automation
     op: update
     with:
       target: auto
       name: SCENARIO SEED — renamed under a run
-      refused: conflict
 
   - type: action
     domain: automation
@@ -73,17 +71,22 @@ steps_cli:
     with:
       target: auto
       archived: true
-      refused: conflict
 
-  # An action placed on it is held too — the run copied its steps at the start, and the library
-  # definition is what a person reads as the one being run.
+  # An action placed on it is written too — the run copied its steps at the start.
   - type: action
     domain: automation
     op: action-update
     with:
       target: take
       name: take, renamed under a run
-      refused: conflict
+
+  # None of it reached the run, which goes on from its copy.
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: running
 
   - type: action
     domain: automation
@@ -97,21 +100,6 @@ steps_cli:
     with:
       target: run
       status: canceled
-
-  # Once the run is over nothing holds the definition, and the same edits go through.
-  - type: action
-    domain: automation
-    op: update
-    with:
-      target: auto
-      name: SCENARIO SEED — renamed once the run ended
-
-  - type: action
-    domain: automation
-    op: action-update
-    with:
-      target: take
-      name: take, renamed once the run ended
 
 steps_gui:
   - type: action
@@ -146,14 +134,22 @@ steps_gui:
     as: run
 
   # The automation's own build screen, which the start was pressed on: the run is named over the
-  # picture, and nothing on it can be written.
+  # picture, and the picture still takes writes.
   - type: assert
     domain: automation
     op: held-by
     with:
       target: run
 
-  # The action placed on it is held by the same run, read from the library's side.
+  - type: action
+    domain: automation
+    op: update
+    with:
+      target: auto
+      name: SCENARIO SEED — renamed under a run
+
+  # The action placed on it is named with the same run, read from the library's side, and is written
+  # too.
   - type: action
     domain: automation
     op: screen
@@ -172,13 +168,21 @@ steps_gui:
     with:
       target: run
 
-  # The row names the way out of the hold: the pane the run is drawn in, where it is stopped.
+  - type: action
+    domain: automation
+    op: action-update
+    with:
+      target: take
+      name: take, renamed under a run
+
+  # The band goes to the pane the run is drawn in.
   - type: action
     domain: automation
     op: held-go
     with:
       target: run
 
+  # Neither write reached the run, which goes on from its copy.
   - type: action
     domain: workspace
     op: show-face
@@ -191,6 +195,13 @@ steps_gui:
     with:
       tab: running
 
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: running
+
   - type: action
     domain: automation
     op: press-run
@@ -198,7 +209,7 @@ steps_gui:
       target: run
       press: stop
 
-  # Once the run is over nothing holds the definition, and both build screens take writes again.
+  # Once the run is over, nothing is named over either picture.
   - type: action
     domain: automation
     op: screen

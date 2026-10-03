@@ -53,3 +53,19 @@ func TestVerifyStartKeepsTheScenarioItWasGiven(t *testing.T) {
 		}
 	}
 }
+
+// TestForgetWindowShapeReachesTheAppsLocalStorage pins where the shape is taken from: the app's own
+// localStorage under its bundle identifier, and only the shape's key. A guest that has never run the
+// app has no such folder, and that is not a failure.
+func TestForgetWindowShapeReachesTheAppsLocalStorage(t *testing.T) {
+	for _, want := range []string{
+		vmGuestHome + "/Library/WebKit/work.amenbo.app/WebsiteData",
+		"localstorage.sqlite3",
+		"DELETE FROM ItemTable WHERE key='amenbo.windowShape'",
+		`[ -d "$dir" ] || exit 0`,
+	} {
+		if !strings.Contains(vmForgetWindowShape, want) {
+			t.Errorf("the forget command does not carry %q:\n%s", want, vmForgetWindowShape)
+		}
+	}
+}

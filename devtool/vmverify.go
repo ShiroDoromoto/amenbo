@@ -611,6 +611,9 @@ func vmVerifyRun(scenario string) error {
 	// the one case it cannot is the one that matters here: a run somebody stopped part-way leaves a
 	// window on screen that the next run's shots would have in front of them.
 	_, _ = sshRun(ip, "pkill -f "+vmVerifyBin+" || true; pkill -f "+vmGuestApp+" || true")
+	if _, err := sshRun(ip, vmForgetWindowShape); err != nil {
+		return fmt.Errorf("forgetting the window shape a previous run left: %w", err)
+	}
 
 	if _, err := sshRun(ip, vmVerifyStartCommand(guestScenario)); err != nil {
 		return fmt.Errorf("starting the run: %w", err)
@@ -624,6 +627,19 @@ func vmVerifyRun(scenario string) error {
 	}
 	return vmVerifyLogTail(20)
 }
+
+// vmForgetWindowShape takes the app's window shape out of the guest's localStorage, so every run
+// starts on one window. The shape is kept there rather than in the store, so the throwaway store a
+// run stands up does not reset it: a road that splits the workspace into a window of its own leaves
+// the next run's app opening two, and the harness gives up on it with `the app put no window on
+// screen within 60s`.
+//
+// It is done here and not in the harness because the harness also runs on the host, where the
+// localStorage is shared, by bundle identifier, with the user's own app. The guest is a clone that is
+// thrown away. It is sent after the previous app is taken down, so nothing writes the shape back.
+const vmForgetWindowShape = `dir=` + vmGuestHome + `/Library/WebKit/work.amenbo.app/WebsiteData
+[ -d "$dir" ] || exit 0
+find "$dir" -name localstorage.sqlite3 -exec sqlite3 -cmd '.timeout 5000' {} "DELETE FROM ItemTable WHERE key='amenbo.windowShape'" \;`
 
 // vmVerifyStartCommand is the one line the guest is sent to put a run on its screen: the keychain
 // opened, then the harness started on the scenario with the app it is to drive.

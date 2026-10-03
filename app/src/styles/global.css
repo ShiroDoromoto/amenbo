@@ -534,7 +534,7 @@ input[type="color"] {
    It is the frame's column again, with the frame's gap, so the face lays out as it did without it; it
    is a box of its own so that the picture has somewhere to be drawn over (`.runpic`). With the picture
    up it stays in the layout and only dims: the terminal keeps the size it had and is not refit when
-   the face is turned, and what it goes on writing shows through the picture's lower half. The
+   the face is turned, and what it goes on writing shows through the picture's bottom 5rem. The
    picture's `z-index` is kept inside this box (`isolation`), so the panel dropped from the row above
    (`.slot__plate`) is still drawn over the picture, as it is over the terminal. */
 .slot__body {

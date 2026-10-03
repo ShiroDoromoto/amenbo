@@ -1455,15 +1455,29 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
     let id = session.clone();
     let app = app.clone();
     std::thread::spawn(move || {
-        drain(&app, &id, &pane, reader);
+        // A drain that panics has left the program running and the pane open, so it is caught here
+        // and ended the way `pty_close` ends one — entry out, then kill — or the wait below would
+        // never return and nothing after it would run. Where `pty_close` already took the entry,
+        // the program is ending at someone's hand and there is nothing left to do here.
+        let mut broke = false;
+        if catch_unwind(AssertUnwindSafe(|| drain(&app, &id, &pane, reader))).is_err() {
+            log::error!("the drain for session {id} panicked; ending its program");
+            let terminals = app.state::<Terminals>();
+            let taken = terminals.0.lock().unwrap_or_else(PoisonError::into_inner).remove(&id);
+            if let Some(mut terminal) = taken {
+                let _ = terminal.killer.kill();
+                broke = true;
+            }
+        }
         // Reap the program before the pane is told, so nothing is left behind for the length of a
         // round trip to the webview. What it ended with goes on with the ending: for nearly every
         // program the screen is the whole of why it stopped, and the one exception is a provider
         // that stopped over a file Amenbo pointed somewhere else, whose own message then names a
         // home the reader will never see again (`crate::dto::PtyClosedDto`).
         let code = child.wait().ok().and_then(|it| i32::try_from(it.exit_code()).ok());
-        // Whether the registry still held it says who ended it: `pty_close` takes the entry out
-        // before it kills, so an entry still here is a program that ended on its own.
+        // Whether the registry still held it says who ended it: `pty_close`, like the panic above,
+        // takes the entry out before it kills, so an entry still here is a program that ended on its
+        // own.
         let itself = app
             .state::<Terminals>()
             .0
@@ -1484,8 +1498,9 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
         }
         // A step's program that ended by itself, where the step has not reported, fails its run now
         // rather than leaving it at "running" until the next startup (`AMB-D-961`). One Amenbo ended
-        // — the next step taking the place, or a person force-cancelling the run — is not this.
-        if let Some(run_step) = run_step.filter(|_| itself) {
+        // — the next step taking the place, or a person force-cancelling the run — is not this. One
+        // ended over a panicking drain is: nobody chose to end it, and it will not report now.
+        if let Some(run_step) = run_step.filter(|_| itself || broke) {
             crate::automation::step_program_ended(run_step);
         }
         let ending = PtyClosedDto { session: id.clone(), code, no_way_back };

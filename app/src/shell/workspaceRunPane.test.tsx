@@ -701,6 +701,19 @@ describe("a built-in on a run's pane", () => {
     expect(q(".slot__builtin-does")).toHaveLength(0);
   });
 
+  it("names the program a script step runs, and does not call it a built-in (AMB-D-1016)", async () => {
+    await mount();
+    const script = builtin({ name: "眠る", key: "", program: "/opt/tools/sleep.sh" });
+    await arrive({ step: undefined, builtin: script });
+
+    expect(card()).toHaveLength(1);
+    expect(q(".plate__builtin")[0]?.hidden).toBe(true);
+    expect(q(".slot__builtin-program")[0]?.textContent).toBe("/opt/tools/sleep.sh");
+
+    await arrive({ step: undefined, builtin: { ...script, finished: true, exitName: "完了" } });
+    expect(q(".slot__builtin-program")).toHaveLength(0);
+  });
+
   it("stops saying it waits once the run waiting is stopped, and says where it stopped (AMB-T-5753)", async () => {
     const went: unknown[][] = [];
     const nav: RefNav = { openRuns: (...args) => went.push(["runs", ...args]) };

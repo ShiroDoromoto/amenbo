@@ -4041,6 +4041,11 @@ pub struct AutomationBuiltinRunDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) held_until: Option<String>,
+    /// **The program a script step runs** (`AMB-D-1016`), by the full path its step was written
+    /// with. Absent on a built-in: a card that carries it is a script's, not one Amenbo carries out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) program: Option<String>,
 }
 
 /// **One step of a run, as its pane draws it.**

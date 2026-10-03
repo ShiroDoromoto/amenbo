@@ -926,6 +926,7 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) { .slot__builtin-spin { animation: none; } }
 .slot__builtin-done { color: var(--c-done); font-size: var(--fs-xl); font-weight: 700; line-height: 1; }
 .slot__builtin-until { color: var(--c-text-muted); font-variant-numeric: tabular-nums; }
+.slot__builtin-program { max-width: 40em; color: var(--c-text-muted); overflow-wrap: anywhere; }
 /* The words on a run's pane with no terminal (`../shell/BuiltinCard`, `../shell/RunBody`): the state
    first, then what it waits for or does, then what the reader can do — each a line of its own, kept to
    a width a sentence reads at. */

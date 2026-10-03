@@ -1987,6 +1987,7 @@ fn open_one(
         });
     }
     let opened = store.automation_step_open(run_id, def_id, startable.as_deref())?;
+    let mut script_to_run = None;
     let (project, step, builtin, missing) = match opened {
         Opened::Ready(ready) => {
             let def = &ready.run_def;
@@ -2082,13 +2083,16 @@ fn open_one(
             (project, None, Some(builtin), Vec::new())
         }
         // A script step (`AMB-D-1016`): its execution stands under way, and no terminal is opened for
-        // it. Its program is not started from here, so only the log says it was opened.
+        // it. Its program runs on a thread of its own (`run_script`) — it may take hours, and nothing
+        // here waits for it — and the pane stands on its card until it ends, as on a held built-in's.
         Opened::Script(script) => {
-            log::info!("run {run_id} opened script step {} ({})", script.run_step.id, script.script.program);
-            let run = read::automation_run(store.read_model().conn(), run_id)?.ok_or_else(|| {
-                CmdError::from(amenbo_core::error::Error::not_found(format!("run '{run_id}' not found")))
-            })?;
-            (run.project_id, None, None, Vec::new())
+            let run_step_id = script.run_step.id;
+            log::info!("run {run_id} opened script step {run_step_id} ({})", script.script.program);
+            let (project, builtin) = builtin_of_step(store, run_id, run_step_id)?;
+            // The card takes the pane over from the step before, as a built-in's does.
+            crate::pty::end_steps_of(app, run_id);
+            script_to_run = Some(script);
+            (project, None, Some(builtin), Vec::new())
         }
     };
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
@@ -2102,6 +2106,12 @@ fn open_one(
     }
     let dto = AutomationStepOpenDto { run: run_id, project, step, builtin, missing };
     tell(app, dto.clone());
+    // Started only once its card has been told under way, so a program that ends at once is not told
+    // ended before it.
+    if let Some(script) = script_to_run {
+        let app = app.clone();
+        std::thread::spawn(move || run_script(&app, run_id, &script));
+    }
     Ok(dto)
 }
 
@@ -2164,12 +2174,14 @@ fn builtin_about_to(
         looks_for: None,
         exit_name: None,
         held_until: None,
+        program: def.script.as_ref().map(|s| s.program.clone()),
     }))
 }
 
 /// **A built-in's step as its card draws it**, read off the execution — carried out, or held open
 /// until its time comes (`AMB-D-983`). A held step is not finished and says when it ends; one that
-/// has ended says the way out it left by.
+/// has ended says the way out it left by. A script step's card is drawn by this too (`AMB-D-1016`),
+/// with no key and the program it runs: under way while that runs, and finished once it has ended.
 fn builtin_of_step(
     store: &amenbo_core::Store,
     run_id: i64,
@@ -2208,6 +2220,7 @@ fn builtin_of_step(
         looks_for: None,
         exit_name: left_by(&def, run_step.exit_id),
         held_until,
+        program: def.script.as_ref().map(|s| s.program.clone()),
     }))
 }
 
@@ -2277,6 +2290,45 @@ pub(crate) fn time_up(app: &tauri::AppHandle, run_id: i64) -> Result<bool, CmdEr
     tell(app, AutomationStepOpenDto { run: run_id, project, step: None, builtin: Some(builtin), missing: Vec::new() });
     crate::automation_watch::wake();
     Ok(true)
+}
+
+/// **Run a script step's program and write down what it came to** (`AMB-D-1016`), on the thread
+/// [`open_one`] started for it.
+///
+/// The card is told again, ended, with the way out it left by, and the watch is woken to open the next
+/// step — the road [`time_up`] takes. Where the step is no longer under way when the program ends — the
+/// run was stopped or cancelled meanwhile — core refuses the write, and only the log says so.
+///
+/// An input whose file cannot be read out of the blob store is a program that could not be started,
+/// and leaves by the error way out like one — rather than leaving the step under way with nothing
+/// running it.
+///
+/// Nothing here outlives the app: a step whose program was running when it went down is failed as a
+/// crash on the way back up (`crate::automation_watch`).
+fn run_script(app: &tauri::AppHandle, run_id: i64, script: &amenbo_core::ops::automation_step::ScriptOpening) {
+    use amenbo_core::ops::automation_script::{self, Ended, Ran};
+    let run_step_id = script.run_step.id;
+    let given = crate::commands::open_store_read().and_then(|store| Ok(script.given(&store.blobs())?));
+    let ran = match given {
+        Ok(given) => automation_script::run(&script.script, &given),
+        Err(e) => Ran {
+            ended: Ended::NotStarted(format!("its inputs could not be read: {}", e.message_en)),
+            stdout_tail: String::new(),
+            stderr_tail: String::new(),
+        },
+    };
+    let told = crate::commands::open_store().and_then(|mut store| {
+        store.automation_script_ran(run_step_id, &ran)?;
+        builtin_of_step(&store, run_id, run_step_id)
+    });
+    match told {
+        Ok((project, builtin)) => {
+            log::info!("run {run_id} ran script step {run_step_id}");
+            tell(app, AutomationStepOpenDto { run: run_id, project, step: None, builtin: Some(builtin), missing: Vec::new() });
+            crate::automation_watch::wake();
+        }
+        Err(e) => log::warn!("script step {run_step_id} of run {run_id} ended and was not written down: {e:?}"),
+    }
 }
 
 /// **Where a step that names no folder is carried out**: the folder its project is bound to.

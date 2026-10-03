@@ -1758,7 +1758,9 @@ export function WorkspaceFace({
                       automationId: on.automation,
                       placement: on.placement ?? null,
                       box: null,
-                      builtin: builtin !== undefined,
+                      // A script step stands on a card too, but it runs the project's own program and
+                      // is not one Amenbo carries out, so the row does not call it a built-in.
+                      builtin: builtin !== undefined && builtin.program === undefined,
                       interactive: step?.interactive ?? false,
                       // Which spot of the picture this step was opened from, said by the action
                       // standing there (`AMB-D-949`). Null where that spot has since been taken off.

@@ -96,6 +96,13 @@ type Face = "picture" | "terminal";
 const faces = new Map<number, Face>();
 
 /**
+ * How many of the terminal's last rows show through a run's picture (`.runpic`). Counted in rows
+ * rather than a length, so the same lines show whatever the pane's size; eight leaves three to five
+ * lines of output above a CLI's own input line.
+ */
+const CLEAR_ROWS = 8;
+
+/**
  * One slot of the workspace: a frame, and the terminal in it when there is one.
  *
  * **A frame is a place, so an empty one is not nothing.** It is a slot on this page with a way to
@@ -302,6 +309,7 @@ export function TerminalPane({
   // How many rows the terminal is drawing, as the emulator last measured it (`../talk/terminal`).
   // It is what turns the floor below into pixels, and it is 0 only before a terminal has said.
   const paneRows = useRef(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
   // The height of one line in the box, taken while nothing is written in it. It is read rather than
   // computed from the line-height, so a font that rounds its lines differently is still one line.
   const oneLine = useRef(0);
@@ -440,6 +448,38 @@ export function TerminalPane({
     watch.observe(face);
     return () => watch.disconnect();
   }, [live]);
+
+  /**
+   * Measure how much of the bottom of a run's picture is to be clear (`.runpic`): the band and the
+   * box under the terminal, and {@link CLEAR_ROWS} of its rows above them. It is written onto the
+   * body as `--runpic-clear`. A row's height is the emulator's, worked out from the rows it said it
+   * draws, as the box's floor is (`../talk/terminal`). Until it has said, the picture keeps its own
+   * length.
+   */
+  const clearBand = () => {
+    const body = bodyRef.current;
+    const face = paneRef.current;
+    if (body === null || face === null || paneRows.current === 0) return;
+    const at = face.getBoundingClientRect();
+    const under = body.getBoundingClientRect().bottom - at.bottom;
+    body.style.setProperty("--runpic-clear", `${under + (at.height / paneRows.current) * CLEAR_ROWS}px`);
+  };
+  const clearing = useRef(clearBand);
+  clearing.current = clearBand;
+
+  // The box opening, folding or growing moves the terminal's bottom, and so does the pane changing
+  // size; each is the terminal changing height, so watching it and the body is enough.
+  useEffect(() => {
+    if (!onPicture) return;
+    const body = bodyRef.current;
+    const face = paneRef.current;
+    if (body === null || face === null) return;
+    clearing.current();
+    const watch = new ResizeObserver(() => clearing.current());
+    watch.observe(body);
+    watch.observe(face);
+    return () => watch.disconnect();
+  }, [onPicture, running, live]);
 
   /** Send what has been written to the program in the pane, as the person's own line
    *  (`../talk/terminal`), and empty the box behind it. */
@@ -631,6 +671,7 @@ export function TerminalPane({
       sized: (_cols, rows) => {
         paneRows.current = rows;
         fitting.current();
+        clearing.current();
       },
       // The window's own title is not the pane's to say — a face holds several panes, in either of
       // the windows it is drawn in. The name goes to the store, and what draws it is the line above
@@ -1164,10 +1205,11 @@ export function TerminalPane({
         )}
         {/* Everything the terminal face is, kept mounted and in the layout while the picture is up:
             the terminal is a program writing into the rows it was told it has, and taking its element
-            away would be ending what draws it. The picture is drawn over it and is clear in its bottom
-            5rem, and the face under it dims, so the terminal can be followed through the picture
-            and keeps its size when the face is turned (`../talk/terminal`). */}
-        <div className={`slot__body${onPicture ? " slot__body--away" : ""}`}>
+            away would be ending what draws it. The picture is drawn over it and is clear over the
+            band, the box and the terminal's last eight rows (`clearBand`), and the face under it dims,
+            so the terminal can be followed through the picture and keeps its size when the face is
+            turned (`../talk/terminal`). */}
+        <div ref={bodyRef} className={`slot__body${onPicture ? " slot__body--away" : ""}`}>
         {run !== null && face === "picture" && <RunPicture run={run} />}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}

@@ -28,7 +28,7 @@ use crate::model::{
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
-    Project, ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret, StepScript,
+    Project, ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret,
     Task,
     TaskComment, TaskCommit, TaskDependency, TaskDimensionValue, TaskMadeIn,
 };
@@ -85,18 +85,6 @@ fn kv(n: i64) -> Value {
 }
 fn kv_opt(n: &Option<i64>) -> Value {
     n.map(Value::Integer).unwrap_or(Value::Null)
-}
-/// The three columns a script is written to — its program, its arguments as a JSON array, and its
-/// timeout — or NULL, `''` and NULL for a step that is not one.
-fn script_values(script: &Option<StepScript>) -> [Value; 3] {
-    match script {
-        Some(s) => [
-            tv(&s.program),
-            tv(&serde_json::to_string(&s.args).expect("a list of strings always serializes")),
-            iv(s.timeout_minutes),
-        ],
-        None => [Value::Null, tv(""), Value::Null],
-    }
 }
 fn tsv(t: &Timestamp) -> Value {
     tv(&t.to_rfc3339_z())
@@ -591,7 +579,6 @@ pub fn automation_placement_step(p: &AutomationPlacementStep) -> Record {
 }
 
 pub fn automation_action_step(s: &AutomationStep) -> Record {
-    let [script_program, script_args, script_timeout_minutes] = script_values(&s.script);
     Record::new(
         "automation_action_step",
         s.id,
@@ -601,9 +588,6 @@ pub fn automation_action_step(s: &AutomationStep) -> Record {
                 ("name", tv(&s.name)),
                 ("prompt", tv(&s.prompt)),
                 ("builtin", ov(&s.builtin)),
-                ("script_program", script_program),
-                ("script_args", script_args),
-                ("script_timeout_minutes", script_timeout_minutes),
                 ("interactive", bv(s.interactive)),
                 ("work_dir_ref", ov(&s.work_dir_ref)),
                 ("report_to_task", bv(s.report_to_task)),
@@ -750,7 +734,6 @@ pub fn automation_run(r: &AutomationRun) -> Record {
 }
 
 pub fn automation_run_def(d: &AutomationRunDef) -> Record {
-    let [script_program, script_args, script_timeout_minutes] = script_values(&d.script);
     Record::new(
         "automation_run_def",
         d.id,
@@ -763,9 +746,6 @@ pub fn automation_run_def(d: &AutomationRunDef) -> Record {
                 ("prompt", ov(&d.prompt)),
                 ("builtin", ov(&d.builtin)),
                 ("builtin_version", d.builtin_version.map(iv).unwrap_or(Value::Null)),
-                ("script_program", script_program),
-                ("script_args", script_args),
-                ("script_timeout_minutes", script_timeout_minutes),
                 ("agent", tv(&d.agent)),
                 ("model", ov(&d.model)),
                 ("interactive", bv(d.interactive)),

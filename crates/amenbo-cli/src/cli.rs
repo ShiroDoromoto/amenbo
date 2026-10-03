@@ -2381,7 +2381,9 @@ pub enum AutomationCmd {
         #[arg(long, requires = "before_next_task")]
         project: Option<String>,
     },
-    /// Pick a paused run up again, from the way out the step before it left through
+    /// Pick a paused run up again. One paused at the end of an action goes on from its copy, from the
+    /// way out the step before it left through; one paused with `pause --before-next-task` takes the
+    /// automation as it stands now and starts over from its entry, refused if `start` would refuse it
     Resume {
         /// run id
         run: i64,

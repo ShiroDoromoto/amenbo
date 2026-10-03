@@ -1029,6 +1029,12 @@ between one hand-over and the next.
   workspace into a window of its own leaves the next run's app opening two — and the harness gives up
   with `the app put no window on screen within 60s`. It is done here and not in the harness: on the
   host that localStorage is shared, by bundle identifier, with the user's own app.
+- **The golden's `codex` is moved aside for the road**, for the reason `vm verify cli` (below)
+  moves it: a road opened with `can-start` stops on its premise when `/opt/homebrew/bin/codex`
+  answers ahead of the stand-in (v33.0.0 met this on its second screen road, and the name was changed
+  by hand in the guest). Only `codex` — the road that reads a picture asks the real `claude`, and
+  opens no `can-start`. It goes to `<path>.verify-cli-aside` after whatever a CLI run left aside is put
+  back, and **comes back when the road is over**: at `stop`, or when a `step` finds the harness gone.
 
 **`step`** sends one line and waits for the harness to say something next. **The steps come from a
 file that is appended to, not from a pipe somebody holds** — the harness's stdin is `tail -n 0 -f`
@@ -1040,7 +1046,7 @@ advancing.
 what a red one is read by, and they are of no use inside a machine that is thrown away.
 
 **`stop`** ends a road. It takes down the two `run` takes down before it starts — the harness and the
-app the road opened — and leaves the evidence and the log where they are.
+app the road opened — puts `codex` back, and leaves the evidence and the log where they are.
 
 - **A verdict is not an ending.** The harness goes on holding after it has said red or green: it is
   still on stdin, waiting for a line that is not coming. Its process is what says a road is walking,
@@ -1087,7 +1093,8 @@ run; this command is that, written down:
 Each is renamed to `<path>.verify-cli-aside` and **put back when the run ends** — red, green or
 Ctrl-C — because the screen road that reads a picture needs the real `claude` where it was. A run cut
 off harder than that leaves them aside; the next `vm verify cli` puts them back when it ends, and
-`vm verify run` puts them back before it starts a road. The two are not run at once: `cli` is
+`vm verify run` puts them back before it starts a road, then moves `codex` aside again for that
+road alone. The two are not run at once: `cli` is
 refused while a road is walking, and `run` while `cli` is running.
 
 What it does, in order:

@@ -29,6 +29,23 @@ func TestAgentsBackIsTheMirror(t *testing.T) {
 	}
 }
 
+// TestRoadMovesCodexAsideAndLeavesClaude pins what a screen road has out of the way: the golden's
+// `codex`, which stops a `can-start` premise, and not the seeded `claude`, which the road that reads
+// a picture asks.
+func TestRoadMovesCodexAsideAndLeavesClaude(t *testing.T) {
+	aside := vmAgentsAsideCommand(vmRoadAgents)
+	if !strings.Contains(aside, "mv "+shq("/opt/homebrew/bin/codex")+" "+shq("/opt/homebrew/bin/codex"+vmAgentAside)) {
+		t.Errorf("codex is not moved aside for a road:\n%s", aside)
+	}
+	if strings.Contains(aside, claudeGuestBin) {
+		t.Errorf("a road moves the seeded claude aside:\n%s", aside)
+	}
+	back := vmAgentsBackCommand(vmRoadAgents)
+	if !strings.Contains(back, "mv "+shq("/opt/homebrew/bin/codex"+vmAgentAside)+" "+shq("/opt/homebrew/bin/codex")) {
+		t.Errorf("codex is not put back after a road:\n%s", back)
+	}
+}
+
 // TestAgentsMoveLeavesWhatIsAlreadyThere is the half that makes both safe to repeat. A run cut off
 // before the put-back leaves the aside name standing, and moving again over it would throw the real
 // program away; a program put back by hand in the meantime is not overwritten on the way back.

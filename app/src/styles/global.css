@@ -489,29 +489,50 @@ input[type="color"] {
 .slot__end:hover:not(:disabled) { color: var(--c-text); }
 /* A run's pane while its run is going or held: the press is drawn, and cannot be made. */
 .slot__end:disabled { opacity: 0.3; }
-/* **A run's moves on its pane** (`../shell/TerminalPane`, `AMB-T-5507`): pause or resume, and stop.
-   Marks rather than words (`AMB-T-5529`), standing straight after the state they act on, so the row's
-   words are left to the automation's name. Drawn as quietly as the controls beside them — a face split
-   four ways draws this row four times. They never shrink: a narrow pane gives up the name before them. */
+/* **A run's moves on its pane** (`../shell/TerminalPane`, `AMB-T-5507`): one mark standing straight
+   after the state it acts on (`../shell/RunActs`), so the row's words are left to the automation's
+   name. It never shrinks: a narrow pane gives up the name before it. */
 .slot__runacts {
   flex: 0 0 auto;
-  display: inline-flex; align-items: center; gap: var(--s-1);
+  display: inline-flex; align-items: center;
   margin-inline-start: var(--s-1);
 }
-.slot__runact {
-  flex: 0 0 auto;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 1.6rem;
-  padding: 1px 0;
+/* **A run's moves as one mark** (`../shell/RunActs`): the state it is in — two bars going, the
+   triangle held — and a small caret saying a list opens behind it. Drawn as quietly as the controls
+   beside it, on the pane, the "running" tab and a build screen's band alike. */
+.runacts { flex: 0 0 auto; display: inline-flex; }
+.runacts__mark {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 1px 4px 1px 6px;
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1; cursor: pointer;
 }
-.slot__runact:hover:not(:disabled) { color: var(--c-text); }
-.slot__runact:disabled { opacity: 0.4; }
-/* Stop is the one of the two that cannot be taken back, so it is drawn in the stop colour. */
-.slot__runact--stop { color: var(--c-stop); border-color: var(--c-stop); }
-.slot__runact--stop:hover:not(:disabled) { color: var(--c-stop); background: var(--c-stop-weak); }
+.runacts__mark:hover, .runacts__mark[aria-expanded="true"] { color: var(--c-text); }
+.runacts__caret { display: inline-flex; }
+.runacts__caret .icon { width: 10px; height: 10px; }
+/* The list is the size list's surface (`.panesize__list`), its moves laid down one under another. */
+.runacts__list {
+  position: fixed; z-index: 20;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--s-1);
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
+  border-radius: var(--r-md); box-shadow: var(--shadow-md);
+}
+.runacts__one {
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm);
+  background: none; color: var(--c-text-muted); font: inherit; font-size: var(--fs-xs);
+  text-align: start; white-space: nowrap; cursor: pointer;
+}
+.runacts__one:hover:not(:disabled) { background: var(--c-hover); color: var(--c-text); }
+.runacts__one:disabled { opacity: 0.45; cursor: default; }
+/* Force cancel and cancel are the moves that cannot be taken back, so they stand past a rule in the
+   stop colour. */
+.runacts__one--stop { color: var(--c-stop); }
+.runacts__one--stop:hover:not(:disabled) { background: var(--c-stop-weak); color: var(--c-stop); }
+.runacts__sep { height: 1px; margin: 2px var(--s-1); background: var(--c-rule); }
 /* The picture or the terminal, on a run's pane (`AMB-T-5775`): two words joined into one control, the
    one up filled in. */
 .slot__faces {

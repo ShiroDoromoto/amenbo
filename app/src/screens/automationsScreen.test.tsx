@@ -51,6 +51,7 @@ vi.mock("../core/automations", () => ({
   forceCancelRun: hoisted.stop,
   cancelRun: hoisted.cancel,
   pauseRun: async () => {},
+  pauseBeforeNextTask: async () => {},
   resumeRun: async () => {},
   // The "running" tab reads it. What that tab draws is its own test (`./runningTab.test.tsx`); here
   // it is the tab being reachable that matters.
@@ -821,12 +822,19 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     expect(goToRun).toHaveBeenCalledWith(1, 31);
   });
 
+  /** The moves behind the band's run mark (`../shell/RunActs`), drawn on the page's body once it is opened. */
+  async function bandMoves(): Promise<HTMLButtonElement[]> {
+    await act(async () => { container.querySelector<HTMLButtonElement>(".autoheld .runacts__mark")!.click(); });
+    return [...document.body.querySelectorAll<HTMLButtonElement>(".runacts__one")];
+  }
+
   it("force-cancels a going run from the band", async () => {
     hoisted.stop.mockClear();
     await openHeld([{ ...run, status: "running" }]);
-    const stop = container.querySelector<HTMLButtonElement>(".autoheld .btn--danger");
+    const moves = await bandMoves();
+    expect(moves.some((b) => b.textContent === t("auto.run.pauseAfterAction"))).toBe(true);
+    const stop = moves.find((b) => b.classList.contains("runacts__one--stop"));
     expect(stop?.textContent).toBe(t("auto.run.forceCancel"));
-    expect(buttons().some((b) => b.textContent === t("auto.run.pause"))).toBe(true);
     await act(async () => { stop?.click(); });
     expect(hoisted.stop).toHaveBeenCalledWith(31);
   });
@@ -836,9 +844,10 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     hoisted.stop.mockClear();
     hoisted.cancel.mockClear();
     await openHeld([{ ...run, status: "paused" }]);
-    const cancel = container.querySelector<HTMLButtonElement>(".autoheld .btn--danger");
+    const moves = await bandMoves();
+    expect(moves.some((b) => b.textContent === t("auto.run.resume"))).toBe(true);
+    const cancel = moves.find((b) => b.classList.contains("runacts__one--stop"));
     expect(cancel?.textContent).toBe(t("auto.run.cancel"));
-    expect(buttons().some((b) => b.textContent === t("auto.run.resume"))).toBe(true);
     await act(async () => { cancel?.click(); });
     expect(hoisted.cancel).toHaveBeenCalledWith(31);
     expect(hoisted.stop).not.toHaveBeenCalled();

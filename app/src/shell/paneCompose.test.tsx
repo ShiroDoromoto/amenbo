@@ -674,7 +674,7 @@ describe("a run's pane turned to its picture", () => {
   const RUNNING: Say = {
     automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false,
     interactive: false, action: null, task: null,
-    state: { status: "running", word: "Running", pauseRequested: false, why: null, exit: null, errorExit: false, acknowledged: false },
+    state: { status: "running", word: "Running", pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, why: null, exit: null, errorExit: false, acknowledged: false },
   };
 
   it("leaves the keyboard where it was when the pane is pressed from another", async () => {

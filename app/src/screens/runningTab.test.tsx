@@ -34,6 +34,7 @@ vi.mock("../core/automations", () => ({
   useLiveRuns: () => hoisted.runs,
   useAutomation: (id: number | null) => (id === null ? null : hoisted.detail),
   pauseRun: (run: number) => move(`pause ${run}`),
+  pauseBeforeNextTask: (run: number) => move(`pause-before-next-task ${run}`),
   resumeRun: (run: number) => move(`resume ${run}`),
   forceCancelRun: (run: number) => move(`force-cancel ${run}`),
   cancelRun: (run: number) => move(`cancel ${run}`),
@@ -93,9 +94,13 @@ async function render(runs: AutomationRunCardDto[], projectId: number | null = n
       onGoToRun: (project: number, one: number) => { went.push({ project, run: one }); },
     }));
   });
+  // A run's moves are behind its mark (`../shell/RunActs`), and the list is drawn on the page's body.
+  await act(async () => {
+    container.querySelectorAll<HTMLButtonElement>(".runacts__mark").forEach((mark) => mark.click());
+  });
 }
 
-const buttons = () => [...container.querySelectorAll<HTMLButtonElement>("button")];
+const buttons = () => [...document.body.querySelectorAll<HTMLButtonElement>("button")];
 function button(label: string): HTMLButtonElement {
   const found = buttons().find((b) => b.textContent?.includes(label));
   if (!found) throw new Error(`no button labelled ${label}`);
@@ -184,16 +189,31 @@ describe("the running tab", () => {
   it("reads a pause that has been asked for as neither running nor paused", async () => {
     await render([run({ pauseRequested: true })]);
     expect(container.querySelector(".autorun__chip")?.textContent).toBe(`⏸${t("auto.run.pausing")}`);
-    expect(button(t("auto.run.pause")).disabled).toBe(true);
+    expect(button(t("auto.run.pauseAfterAction")).disabled).toBe(true);
   });
 
-  // Asked from the project's header, the run pauses before its next task; until then the row says
+  // Asked to pause before its next task, the run goes on until then; meanwhile the row says
   // it is waiting to pause, and the pause at the end of the action is still there to press.
   it("reads a pause before the next task as waiting to pause, and still offers the pause", async () => {
     await render([run({ pauseBeforeNextTask: true })]);
     expect(container.querySelector(".autorun__chip")?.textContent).toBe(`⏸${t("auto.run.pausing")}`);
     expect(container.querySelector(".autorun--pausing")).not.toBeNull();
-    expect(button(t("auto.run.pause")).disabled).toBe(false);
+    expect(button(t("auto.run.pauseAfterAction")).disabled).toBe(false);
+  });
+
+  // The pause before the next task is the run's own (`AMB-D-1019`): offered to a run that takes tasks,
+  // and once asked for, said as waiting and not asked again.
+  it("pauses this run once its task is over, and says it is waiting for that", async () => {
+    await render([run({ pausableBeforeNextTask: true })]);
+    await act(async () => { button(t("auto.run.pauseAfterTask")).click(); });
+    expect(hoisted.moved).toEqual(["pause-before-next-task 4"]);
+
+    await render([run({ pauseBeforeNextTask: true })]);
+    expect(button(t("auto.run.pauseAfterTaskWaiting")).disabled).toBe(true);
+    expect(button(t("auto.run.pauseAfterAction")).disabled).toBe(false);
+
+    await render([run()]);
+    expect(button(t("auto.run.pauseAfterTask")).disabled).toBe(true);
   });
 
   it("offers the move the state has, and to a failure only the press that acknowledges it", async () => {
@@ -202,18 +222,19 @@ describe("the running tab", () => {
     await render([run({ status: "paused" })]);
     expect(labels()).toContain(t("auto.run.resume"));
     expect(labels()).toContain(t("auto.run.cancel"));
-    expect(labels()).not.toContain(t("auto.run.pause"));
+    expect(labels()).not.toContain(t("auto.run.pauseAfterAction"));
     expect(labels()).not.toContain(t("auto.run.forceCancel"));
 
     await render([run({ status: "running" })]);
-    expect(labels()).toContain(t("auto.run.pause"));
+    expect(labels()).toContain(t("auto.run.pauseAfterAction"));
+    expect(labels()).toContain(t("auto.run.pauseAfterTask"));
     expect(labels()).toContain(t("auto.run.forceCancel"));
     expect(labels()).not.toContain(t("auto.run.cancel"));
 
     await render([run({ status: "failed", stoppedReason: "crashed" })]);
     expect(labels()).not.toContain(t("auto.run.forceCancel"));
     expect(labels()).not.toContain(t("auto.run.cancel"));
-    expect(labels()).not.toContain(t("auto.run.pause"));
+    expect(labels()).not.toContain(t("auto.run.pauseAfterAction"));
     // Not acknowledged yet: the row is painted rather than chipped, and says why.
     expect(container.querySelector(".autorun--failed")).not.toBeNull();
     expect(container.querySelector(".autorun__dot")?.getAttribute("aria-label")).toBe(t("auto.run.failed"));
@@ -254,7 +275,7 @@ describe("the running tab", () => {
   it("says out loud when a press was refused", async () => {
     hoisted.refuse = { code: "invalid_value", message_en: "run '9' is done — it is over already" };
     await render([run({ run: 9 })]);
-    await act(async () => { button(t("auto.run.pause")).click(); });
+    await act(async () => { button(t("auto.run.pauseAfterAction")).click(); });
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("it is over already");
   });
 });

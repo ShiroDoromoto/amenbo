@@ -6555,7 +6555,7 @@ impl Instructor {
             // takes writes; once the run is over the band is gone.
             (Domain::Automation, "held-by") => match present(with) {
                 true => match with.contains_key("target") {
-                    true => "On the build screen, confirm a band is drawn over the picture, saying this run is using it, with a press that opens its pane and the two its state has — pause and force-cancel for a run going, resume and cancel for a paused one. Confirm the definition still takes writes under it: the lines on the picture offer a box to put in, and the fields in the panel a box opens can be changed.".to_string(),
+                    true => "On the build screen, confirm a band is drawn over the picture, saying this run is using it, with a press that opens its pane and one mark whose list holds the moves its state has — the pause at the end of the action, the pause once the task is over and force-cancel for a run going, resume and cancel for a paused one. Confirm the definition still takes writes under it: the lines on the picture offer a box to put in, and the fields in the panel a box opens can be changed.".to_string(),
                     false => return Err("`held-by` names the run its band says — give it `target`, or say `present: false`".to_string()),
                 },
                 false => "On the build screen, confirm no band over the picture says a run is using it.".to_string(),
@@ -7403,14 +7403,16 @@ fn launch_reason(reason: &str) -> Result<&'static str, String> {
     })
 }
 
-/// What a row of the "running" tab is pressed for.
+/// What a row of the "running" tab is pressed for. A run's moves sit in the list behind its one mark —
+/// two bars while it is going, a triangle while it is held, each with a small caret — and are picked
+/// from there.
 fn run_press(press: &str) -> Result<&'static str, String> {
     Ok(match press {
         "open" => "press the row itself — the workspace comes forward with that run's pane picked out",
-        "pause" => "press the control that holds the run",
-        "resume" => "press the control that picks it up again",
-        "stop" => "press the control that force-cancels it. A question asks first, saying that changes made part way through and the worktree may be left behind — answer it with the press that goes through with it",
-        "cancel" => "press the control that cancels it — the run is paused, so it ends on the spot and nothing asks first",
+        "pause" => "open the list behind the run's mark and pick the one that pauses it once the action under way is over",
+        "resume" => "open the list behind the run's mark and pick the one that picks it up again",
+        "stop" => "open the list behind the run's mark and pick the one that force-cancels it. A question asks first, saying that changes made part way through and the worktree may be left behind — answer it with the press that goes through with it",
+        "cancel" => "open the list behind the run's mark and pick the one that cancels it — the run is paused, so it ends on the spot and nothing asks first",
         "picture" => "press \"Picture\", turning its body to the automation's picture",
         "terminal" => "press \"Terminal\", turning its body to the terminal",
         other => {
@@ -7511,7 +7513,7 @@ fn run_state(state: &str) -> Result<&'static str, String> {
 fn row_state(state: &str) -> Result<&'static str, String> {
     Ok(match state {
         "running" => "under way — the dot in front of its name in the colour of work going on, and no chip beside the name",
-        "pausing" => "going to hold at the end of the action it is on — a chip beside its name saying it is pausing, and the pause press greyed out",
+        "pausing" => "going to hold at the end of the action it is on — a chip beside its name saying it is pausing, and in the list behind its mark the pause at the end of the action greyed out",
         "paused" => "held — a chip beside its name saying it is paused",
         "failed" => "failed, waiting for somebody to acknowledge it — the whole row painted in the stop colour, with the press that acknowledges it beside it",
         "completed" | "canceled" => {

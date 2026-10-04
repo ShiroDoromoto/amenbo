@@ -34,6 +34,8 @@ const hoisted = vi.hoisted(() => ({
   canceled: [] as number[],
   /** The runs the pane asked to be paused, in order. */
   paused: [] as number[],
+  /** The runs the pane asked to be paused before their next task, in order. */
+  pausedBeforeTask: [] as number[],
   /** The runs the pane asked to be picked up again, in order. */
   resumed: [] as number[],
   /** The failed runs the pane said were seen, in order. */
@@ -96,6 +98,10 @@ vi.mock("../core/automations", async (importOriginal) => ({
   },
   pauseRun: (run: number) => {
     hoisted.paused.push(run);
+    return Promise.resolve();
+  },
+  pauseBeforeNextTask: (run: number) => {
+    hoisted.pausedBeforeTask.push(run);
     return Promise.resolve();
   },
   resumeRun: (run: number) => {
@@ -225,6 +231,7 @@ beforeEach(() => {
   hoisted.stopped = [];
   hoisted.canceled = [];
   hoisted.paused = [];
+  hoisted.pausedBeforeTask = [];
   hoisted.resumed = [];
   hoisted.acknowledged = [];
   hoisted.says = true;
@@ -464,26 +471,43 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     expect(q(".slot__exit")).toHaveLength(0);
   });
 
+  /** The pane's run mark, and the moves its list holds once it is opened — drawn on the page's body. */
+  const mark = () => q(".slot__runacts .runacts__mark");
+  async function moves(): Promise<HTMLButtonElement[]> {
+    await act(async () => { mark()[0]!.click(); });
+    return [...document.body.querySelectorAll<HTMLButtonElement>(".runacts__one")];
+  }
+  async function pick(one: HTMLButtonElement) {
+    await act(async () => {
+      one.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
   it("pauses and force-cancels a going run from its pane, named in the running tab's words", async () => {
     // A reader watching a run is in its pane, and had to go to the running tab to act on it
-    // (`AMB-T-5507`). They are marks, named for a reader who cannot see them (`AMB-T-5529`). A run
-    // going is paused or force-cancelled (`AMB-D-1002`), and force-cancelling keeps the pane.
-    hoisted.cards = [runCard()];
+    // (`AMB-T-5507`). The moves are behind one mark (`./RunActs`): a run going is paused at the end
+    // of the action or of the task, or force-cancelled (`AMB-D-1002`, `AMB-D-1019`), and
+    // force-cancelling keeps the pane.
+    hoisted.cards = [runCard({ pausableBeforeNextTask: true })];
     await mount();
     await arrive();
-    const acts = () => q(".slot__runact");
-    expect(acts().map((b) => b.getAttribute("aria-label"))).toEqual([t("auto.run.pause"), t("auto.run.forceCancel")]);
+    expect(mark()[0]?.querySelector('[data-icon="pause"]')).not.toBeNull();
+    expect((await moves()).map((b) => b.textContent)).toEqual([
+      t("auto.run.pauseAfterAction"),
+      t("auto.run.pauseAfterTask"),
+      t("auto.run.forceCancel"),
+    ]);
+    // Opening the list moves nothing.
+    expect(hoisted.paused).toEqual([]);
 
-    await act(async () => {
-      acts()[0]!.click();
-      await new Promise((r) => setTimeout(r, 0));
-    });
+    await pick((await moves())[0]!);
     expect(hoisted.paused).toEqual([7]);
 
-    await act(async () => {
-      acts()[1]!.click();
-      await new Promise((r) => setTimeout(r, 0));
-    });
+    await pick((await moves())[1]!);
+    expect(hoisted.pausedBeforeTask).toEqual([7]);
+
+    await pick((await moves())[2]!);
     expect(hoisted.stopped).toEqual([7]);
     expect(panes()).toHaveLength(1);
   });
@@ -493,19 +517,24 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     await mount();
     await arrive();
 
-    expect((q(".slot__runact")[0] as HTMLButtonElement).disabled).toBe(true);
-    expect((q(".slot__runact")[1] as HTMLButtonElement).disabled).toBe(false);
+    const [action, task, stop] = await moves();
+    expect(action!.disabled).toBe(true);
+    expect(task!.disabled).toBe(true);
+    expect(stop!.disabled).toBe(false);
   });
 
-  // Asked from the project's header, the pane says the run is waiting to pause, and its own pause —
-  // at the end of the action under way — can still be pressed (`AMB-D-1009`).
+  // Asked to pause before its next task, the pane says the run is waiting to pause, and the pause at
+  // the end of the action under way can still be pressed (`AMB-D-1019`).
   it("says a run asked to pause before its next task is waiting to pause, and keeps its pause", async () => {
     hoisted.cards = [runCard({ pauseBeforeNextTask: true })];
     await mount();
     await arrive();
 
     expect(container.textContent).toContain(t("auto.run.pausing"));
-    expect((q(".slot__runact")[0] as HTMLButtonElement).disabled).toBe(false);
+    const [action, task] = await moves();
+    expect(action!.disabled).toBe(false);
+    expect(task!.disabled).toBe(true);
+    expect(task!.textContent).toBe(t("auto.run.pauseAfterTaskWaiting"));
   });
 
   it("picks a held run up again, or cancels it, from its pane", async () => {
@@ -514,18 +543,13 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     hoisted.cards = [runCard({ status: "paused" })];
     await mount();
     await arrive();
-    expect(q(".slot__runact").map((b) => b.getAttribute("aria-label"))).toEqual([t("auto.run.resume"), t("auto.run.cancel")]);
+    expect(mark()[0]?.querySelector('[data-icon="play"]')).not.toBeNull();
+    expect((await moves()).map((b) => b.textContent)).toEqual([t("auto.run.resume"), t("auto.run.cancel")]);
 
-    await act(async () => {
-      q(".slot__runact")[0]!.click();
-      await new Promise((r) => setTimeout(r, 0));
-    });
+    await pick((await moves())[0]!);
     expect(hoisted.resumed).toEqual([7]);
 
-    await act(async () => {
-      q(".slot__runact")[1]!.click();
-      await new Promise((r) => setTimeout(r, 0));
-    });
+    await pick((await moves())[1]!);
     expect(hoisted.canceled).toEqual([7]);
     expect(hoisted.stopped).toEqual([]);
   });
@@ -533,11 +557,11 @@ describe("what the row above a run's pane says, and what closing it does", () =>
   it("offers no moves on a run that is over, or not read yet", async () => {
     await mount();
     await arrive();
-    expect(q(".slot__runact")).toHaveLength(0);
+    expect(mark()).toHaveLength(0);
 
     hoisted.cards = [runCard({ status: "completed", exitName: "" })];
     await arrive();
-    expect(q(".slot__runact")).toHaveLength(0);
+    expect(mark()).toHaveLength(0);
   });
 
   it("cannot be taken away while its run is going", async () => {

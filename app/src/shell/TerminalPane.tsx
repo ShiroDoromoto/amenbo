@@ -17,7 +17,7 @@ import {
 } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row, Say } from "../talk/nameplate";
-import { acknowledgeRun, cancelRun, forceCancelRun, pauseRun, resumeRun } from "../core/automations";
+import { acknowledgeRun } from "../core/automations";
 import { FacetAvatar, facetActor } from "../components/atoms";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
@@ -36,6 +36,7 @@ import { hostOs } from "../core/platform";
 import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
+import { RunActs } from "./RunActs";
 import { BuiltinCard } from "./BuiltinCard";
 import { RunPicture } from "./RunPicture";
 import { RunOverCard, RunPausedCard } from "./RunBody";
@@ -1004,53 +1005,17 @@ export function TerminalPane({
           )}
           {runLive && run !== null && (
             <span className="slot__runacts">
-              {run.state?.status === "paused" ? (
-                <>
-                  <button
-                    type="button"
-                    className="slot__runact"
-                    disabled={pressing}
-                    title={t("auto.run.resume")}
-                    aria-label={t("auto.run.resume")}
-                    onClick={() => void press(() => resumeRun(run.run))}
-                  >
-                    <Icon name="play" />
-                  </button>
-                  <button
-                    type="button"
-                    className="slot__runact slot__runact--stop"
-                    disabled={pressing}
-                    title={t("auto.run.cancel")}
-                    aria-label={t("auto.run.cancel")}
-                    onClick={() => void press(() => cancelRun(run.run))}
-                  >
-                    <Icon name="close" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="slot__runact"
-                    disabled={pressing || run.state?.pauseRequested}
-                    title={t("auto.run.pause")}
-                    aria-label={t("auto.run.pause")}
-                    onClick={() => void press(() => pauseRun(run.run))}
-                  >
-                    <Icon name="pause" />
-                  </button>
-                  <button
-                    type="button"
-                    className="slot__runact slot__runact--stop"
-                    disabled={pressing}
-                    title={t("auto.run.forceCancel")}
-                    aria-label={t("auto.run.forceCancel")}
-                    onClick={() => void press(() => forceCancelRun(run.run))}
-                  >
-                    <Icon name="stop" />
-                  </button>
-                </>
-              )}
+              <RunActs
+                run={{
+                  run: run.run,
+                  status: run.state?.status ?? "running",
+                  pauseRequested: run.state?.pauseRequested ?? false,
+                  pauseBeforeNextTask: run.state?.pauseBeforeNextTask ?? false,
+                  pausableBeforeNextTask: run.state?.pausableBeforeNextTask ?? false,
+                }}
+                busy={pressing}
+                onPress={(move) => void press(move)}
+              />
             </span>
           )}
           {/* **Where a finished run is read from now** (`AMB-T-5539`), on the ledger. The run's moves

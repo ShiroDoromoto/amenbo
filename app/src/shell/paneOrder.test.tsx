@@ -247,7 +247,7 @@ describe("what a card says about its pane", () => {
     // A built-in opens no terminal, so its pane has no session — and is not over for that.
     const { layout } = stoodForRun(faceOf(1), 1, 13);
     const card = runFrameId(13);
-    const state = { status: "running" as const, word: "タスク待ち", pauseRequested: false, why: null, exit: null, errorExit: false, acknowledged: false };
+    const state = { status: "running" as const, word: "タスク待ち", pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, why: null, exit: null, errorExit: false, acknowledged: false };
     draw(layout, new Map(), new Map([
       reads(card, {
         name: "test",

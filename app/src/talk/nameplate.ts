@@ -157,6 +157,11 @@ export type RunState = {
   /** A pause has been asked for and the step under way has not finished yet — the run is still
    *  `running`, and a second press on pause would be asking for what is already coming. */
   readonly pauseRequested: boolean;
+  /** A pause has been asked for before the run takes its next task, and it has not taken it yet
+   *  (`AMB-D-1019`) — still `running`, as with {@link pauseRequested}. */
+  readonly pauseBeforeNextTask: boolean;
+  /** That pause can still be asked for: the run is running, asked for neither pause, and takes tasks. */
+  readonly pausableBeforeNextTask: boolean;
   /** Why it failed, in a short phrase — or null on anything but a failure, on one core gave no
    *  reason for, and on one said by its way out instead ({@link exit}). */
   readonly why: string | null;
@@ -299,7 +304,8 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     auto.hidden = runNo.hidden = plate.run === null;
     builtin.hidden = plate.run?.builtin !== true;
     const now = plate.run?.state ?? null;
-    state.hidden = now === null || (now.status === "running" && !now.pauseRequested && !now.waiting);
+    state.hidden = now === null
+      || (now.status === "running" && !now.pauseRequested && !now.pauseBeforeNextTask && !now.waiting);
     row.classList.toggle("plate--run", plate.run !== null);
     if (plate.run !== null) {
       // The run's number is the same in every language, and written the way a reader would type it

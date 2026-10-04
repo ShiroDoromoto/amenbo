@@ -56,6 +56,8 @@ steps_cli:
   - { type: action, domain: automation, op: cfg-set, with: { target: at_make, name: 起票したタスク, choice: "進行中にして、出口「起票して着手した」へ進む" } }
   - { type: action, domain: automation, op: cfg-set, with: { target: loose_fetch, name: 形式, choice: コマンド } }
   - { type: action, domain: automation, op: cfg-set, with: { target: loose_fetch, name: 見に行く先, text: "echo nothing to see" } }
+  # A run starts from the newest saved version, so it is saved first.
+  - { type: action, domain: automation, op: save, with: { target: auto } }
 
   - type: action
     domain: automation
@@ -71,12 +73,21 @@ steps_cli:
       target: run
       status: running
 
+  # The launch check is asked on the save, so the one that goes straight to an agent's step is not
+  # saved, and with no saved version it does not start either.
+  - type: action
+    domain: automation
+    op: save
+    with:
+      target: loose
+      refused: not_ready_automation
+
   - type: action
     domain: automation
     op: start
     with:
       target: loose
-      refused: not_ready_automation
+      refused: conflict
 
 steps_gui:
   - type: action

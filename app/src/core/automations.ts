@@ -299,6 +299,27 @@ export async function abandonAutomationAction(id: number): Promise<void> {
 }
 
 /**
+ * **Save the automation as its next version.** What the build screen writes goes to its draft, and
+ * this is what makes the draft the definition a launch stands on. Core refuses it with the reasons
+ * the detail lists (`saveBlocks`). It goes past `told`: it writes nothing a field holds, so the head
+ * reads it off the definition rather than off the write.
+ */
+export async function saveAutomation(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_save", { id });
+}
+
+/**
+ * **Throw away what is written on the automation since its newest saved version.** Every row goes back
+ * under the id it was saved with (`AMB-D-961`), and a placement only the draft held is gone. Core
+ * refuses it for an automation nobody has saved. There is no undo, so the screen asks first.
+ */
+export async function discardAutomation(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_discard", { id });
+}
+
+/**
  * Rename a library action, or rewrite what it is for. The name and the note are all that is the
  * action's own: the prompt and the flags belong to its steps (`editAutomationStep`), and who carries
  * each step out to where the action is placed (`chooseAutomationAgent`).

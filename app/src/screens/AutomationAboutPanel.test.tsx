@@ -40,6 +40,8 @@ const automation: AutomationDetailDto = {
   edges: [],
   wires: [],
   heldBy: [],
+  unsaved: false,
+  saveBlocks: [],
 };
 
 beforeEach(() => {

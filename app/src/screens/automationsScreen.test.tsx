@@ -32,6 +32,9 @@ const hoisted = vi.hoisted(() => ({
   launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
   stop: vi.fn(async (..._args: unknown[]) => true),
   cancel: vi.fn(async (..._args: unknown[]) => {}),
+  save: vi.fn(async (..._args: unknown[]) => {}),
+  discard: vi.fn(async (..._args: unknown[]) => {}),
+  confirm: vi.fn(async (..._args: unknown[]) => true),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -45,6 +48,8 @@ vi.mock("../core/automations", () => ({
   insertAutomationAction: () => Promise.resolve([]),
   ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
   launchAutomation: hoisted.launch,
+  saveAutomation: hoisted.save,
+  discardAutomation: hoisted.discard,
   // An agent's step as the entry: the dialog every start opens asks for a text and files.
   useLaunchAsks: () => ({ reads: "nothing", axes: [] }),
   NOTHING_HANDED: { files: [], title: "", notes: "", classification: [] },
@@ -72,6 +77,7 @@ vi.mock("../mock/adapter", () => ({
     ],
   },
 }));
+vi.mock("../core/dialog", () => ({ confirmDialog: hoisted.confirm }));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
 }));
@@ -122,6 +128,8 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     edges: [],
     wires: [],
     heldBy: [],
+    unsaved: false,
+    saveBlocks: [],
     ...over,
   };
 }
@@ -163,6 +171,10 @@ beforeEach(() => {
   hoisted.launch.mockClear();
   hoisted.launch.mockResolvedValue({ run: 1 });
   wentToRun.mockClear();
+  hoisted.save.mockClear();
+  hoisted.discard.mockClear();
+  hoisted.confirm.mockClear();
+  hoisted.confirm.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -681,6 +693,74 @@ describe("the start press on the build screen's head", () => {
     await open({ ready: true, blocks: [] });
     expect(button(t("auto.start")).disabled).toBe(false);
     expect(container.querySelector(".autolaunch")).toBeNull();
+  });
+});
+
+describe("saving on the build screen's head", () => {
+  async function open(over: Partial<AutomationDetailDto>, check: AutomationLaunchCheckDto = { ready: true, blocks: [] }) {
+    hoisted.automations = [card()];
+    hoisted.detail = detail(over);
+    hoisted.check = check;
+    await render();
+    await act(async () => { button("Morning round").click(); });
+  }
+  const head = () => container.querySelector(".actsaved")?.textContent;
+  const saved = { version: 3, savedAt: "2026-10-01T09:00:00Z" };
+  const noEntry: AutomationLaunchBlockDto = {
+    code: "not_ready_automation_no_entry",
+    message_en: "English for not_ready_automation_no_entry",
+    fields: {},
+  };
+
+  it("says nothing is saved yet, and offers no discard with no version to go back to", async () => {
+    await open({ unsaved: true });
+    expect(head()).toBe(t("auto.saved.never"));
+    expect(button(t("auto.saved.save")).disabled).toBe(false);
+    expect(button(t("auto.saved.discard")).disabled).toBe(true);
+  });
+
+  it("names the version saved last, with both presses shut while nothing is unsaved", async () => {
+    await open({ saved, unsaved: false });
+    expect(head()).toContain("3");
+    expect(head()).not.toBe(t("auto.saved.unsaved"));
+    expect(button(t("auto.saved.save")).disabled).toBe(true);
+    expect(button(t("auto.saved.discard")).disabled).toBe(true);
+  });
+
+  it("saves from its press", async () => {
+    await open({ saved, unsaved: true });
+    expect(head()).toBe(t("auto.saved.unsaved"));
+    await act(async () => { button(t("auto.saved.save")).click(); });
+    expect(hoisted.save).toHaveBeenCalledWith(7);
+  });
+
+  it("asks before discarding, and discards nothing when the answer is no", async () => {
+    await open({ saved, unsaved: true });
+    hoisted.confirm.mockResolvedValueOnce(false);
+    await act(async () => { button(t("auto.saved.discard")).click(); });
+    expect(hoisted.confirm).toHaveBeenCalledWith(tf("auto.saved.discardConfirm", { version: 3 }));
+    expect(hoisted.discard).not.toHaveBeenCalled();
+    await act(async () => { button(t("auto.saved.discard")).click(); });
+    expect(hoisted.discard).toHaveBeenCalledWith(7);
+  });
+
+  it("lists why it cannot be saved, shuts the press, and does not say a shared reason twice", async () => {
+    await open({ unsaved: true, saveBlocks: [noEntry] }, { ready: false, blocks: [noEntry] });
+    expect(container.querySelector(".autolaunch__head")?.textContent).toBe(t("auto.saved.blocked"));
+    expect(blocks()).toEqual([errSentence(noEntry)]);
+    expect(button(t("auto.saved.save")).disabled).toBe(true);
+  });
+
+  it("lists no reasons to save while nothing is unsaved", async () => {
+    await open({ saved, unsaved: false, saveBlocks: [noEntry] });
+    expect(container.querySelector(".autolaunch__head")).toBeNull();
+  });
+
+  it("puts a refused save where the reasons are", async () => {
+    hoisted.save.mockRejectedValueOnce(new Error("held"));
+    await open({ unsaved: true });
+    await act(async () => { button(t("auto.saved.save")).click(); });
+    expect(container.querySelector(".autolaunch__refused")?.textContent).toBe(errText(new Error("held")));
   });
 });
 

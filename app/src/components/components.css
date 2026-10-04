@@ -1931,10 +1931,10 @@ button.feed__target:hover { color: var(--c-accent); }
   border-block-end: var(--border-w) var(--border-style) var(--c-rule);
 }
 .actbuild__name { font-size: var(--fs-md); font-weight: var(--fw-bold); }
-/* A panel open beside the screen narrows the head, and the one over an automation carries a longer
-   back and a press more. Its presses keep their words on one line and their places, and what gives
-   way is what is read — the name, which the reader opened the screen by, and the line saying when it
-   was saved — each cut short rather than broken inside a press or pushing one out. */
+/* A panel open beside the screen narrows the head. Its presses keep their words on one line and their
+   places, and what gives way is what is read — the name, which the reader opened the screen by, and
+   the line saying when it was saved — each cut short rather than broken inside a press or pushing one
+   out. An automation's head goes further and sends its presses to a second line (below). */
 .actbuild__head > * { flex: none; white-space: nowrap; }
 .actbuild__head > .actbuild__name,
 .actbuild__head > .actsaved { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -2071,6 +2071,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .actsaved { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .actsaved + .actbuild__edit { margin-inline-start: 0; }
 .actsaved--failed { color: var(--c-stop); font-weight: var(--fw-bold); }
+/* An automation's head carries more presses than a panel beside it leaves room for. They stand
+   together at the far end and go down to a second line as one, so the name and the saved state
+   beside it stay whole on the first. */
+.actbuild__head--automation { flex-wrap: wrap; }
+.actbuild__head--automation > .actsaved { margin-inline-start: 0; }
+.actbuild__presses { display: flex; align-items: center; gap: var(--s-2); margin-inline-start: auto; }
 /* "Saved" beside the field a write came from, for two seconds. It stands over the page, not in the
    field's row, so its coming and going moves nothing. */
 .actsaved__mark {
@@ -2142,6 +2148,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autolaunch__go::after { content: " → " attr(data-see); color: var(--c-accent-text); }
 .autolaunch__go:hover, .autolaunch__go:focus-visible { text-decoration: underline; }
 .autolaunch__refused { font-size: var(--fs-md); color: var(--c-stop); }
+/* What the save's reasons are listed under, apart from the start's below them. */
+.autolaunch__head { font-size: var(--fs-md); font-weight: 700; color: var(--c-stop); }
 /* A test run stepped through in the build screen's panel (`../screens/AutomationTestPane`): where it
    stands, the step it stands on, and the prompt an agent would get, in a box of its own that scrolls. */
 .autotest { display: flex; flex-direction: column; gap: var(--s-2); }

@@ -493,7 +493,20 @@ entryPlacementId?: number, archived: boolean, placements: Array<AutomationPlacem
  * written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen
  * names these, each with the way to its pane. Empty while nothing is going.
  */
-heldBy: Array<AutomationRunCardDto>, };
+heldBy: Array<AutomationRunCardDto>, 
+/**
+ * The newest saved version. Absent for an automation nobody has saved.
+ */
+saved?: AutomationSavedDto, 
+/**
+ * Does what is written here hold anything the newest saved version does not?
+ */
+unsaved: boolean, 
+/**
+ * **Why a save would be refused** — the launch check asked the way the save asks it, without this
+ * machine's agents and models ([`amenbo_core::ops::automation::save`]). Empty when it would pass.
+ */
+saveBlocks: Array<AutomationLaunchBlockDto>, };
 
 /**
  * **What happens after a way out is taken.**
@@ -935,6 +948,11 @@ passed: Array<AutomationRunPassDto>,
  * Absent for a run that is not going.
  */
 at?: number, };
+
+/**
+ * **One saved version of an automation**: its number, and when it was saved.
+ */
+export type AutomationSavedDto = { version: number, savedAt: string, };
 
 /**
  * **One step inside an action**: the terminal it stands up, and what it declares inside the picture.

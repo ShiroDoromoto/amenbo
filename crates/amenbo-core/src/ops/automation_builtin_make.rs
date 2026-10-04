@@ -638,16 +638,15 @@ pub fn read_at_launch(builtin: Option<&str>, port: &str) -> bool {
 /// will be when the task is filed — so a launch that would only fall over at its first step is refused
 /// before a run is made — and written as [`CHOSEN`] reads it. `None` where nothing was handed.
 ///
-/// Asked of where it is placed as the entry (`entry`), since the axes offered and the axes fixed are
-/// answered there. The title is the caller's to ask for.
+/// Asked of the settings where it is placed as the entry (`settings`), since the axes offered and the
+/// axes fixed are answered there. The title is the caller's to ask for.
 pub(crate) fn handed_at_launch(
     conn: &rusqlite::Connection,
-    entry: &crate::model::AutomationPlacement,
+    settings: &[crate::model::AutomationCfg],
     project_id: i64,
     classification: &[(String, String)],
 ) -> Result<Option<String>> {
-    let settings = crate::ops::automation_run::settings_of(conn, entry)?;
-    let answer = |name: &str| answered(&settings, name);
+    let answer = |name: &str| answered(settings, name);
     let mut values = fixed(conn, project_id, answer(CLASSIFY)?.as_deref())?;
     let written = (!classification.is_empty()).then(|| {
         classification.iter().map(|(axis, value)| format!("{axis}={value}")).collect::<Vec<_>>().join("\n")
@@ -661,8 +660,8 @@ pub(crate) fn handed_at_launch(
     Ok(written)
 }
 
-/// **The lines of its settings that name what `project_id` does not have**, where it is placed
-/// (`placement`) — as (setting, line), in the order the settings are declared (`AMB-D-987`).
+/// **The lines of its settings that name what `project_id` does not have**, as they are answered where
+/// it is placed (`settings`) — as (setting, line), in the order the settings are declared (`AMB-D-987`).
 ///
 /// Asked by the launch check ([`crate::ops::automation_run::check`]) of the settings that name something by
 /// its number, its path or its name: a task to depend on, a decision to link, the folder, an axis and a
@@ -674,14 +673,13 @@ pub(crate) fn handed_at_launch(
 /// no `=` — is one of these too, since nothing can be found from it.
 pub(crate) fn unfound(
     conn: &rusqlite::Connection,
-    placement: &crate::model::AutomationPlacement,
+    settings: &[crate::model::AutomationCfg],
     project_id: i64,
 ) -> Result<Vec<(&'static str, String)>> {
-    let settings = crate::ops::automation_run::settings_of(conn, placement)?;
     let mut found = Vec::new();
     for setting in [DEPENDS_ON_TASKS, DECISIONS, FOLDER, CLASSIFY, AI_AXES] {
         // An answer that is not the JSON text it is kept as is the settings check's to refuse, not this one's.
-        let Ok(Some(written)) = answered(&settings, setting) else { continue };
+        let Ok(Some(written)) = answered(settings, setting) else { continue };
         let lines: Vec<&str> = match setting {
             FOLDER => vec![written.as_str()],
             _ => written.lines().map(str::trim).filter(|line| !line.is_empty()).collect(),
@@ -707,11 +705,10 @@ pub(crate) fn unfound(
 /// line naming what is not there at all is [`unfound`]'s.
 pub(crate) fn closed_values(
     conn: &rusqlite::Connection,
-    placement: &crate::model::AutomationPlacement,
+    settings: &[crate::model::AutomationCfg],
     project_id: i64,
 ) -> Result<Vec<String>> {
-    let settings = crate::ops::automation_run::settings_of(conn, placement)?;
-    let Ok(Some(written)) = answered(&settings, CLASSIFY) else { return Ok(Vec::new()) };
+    let Ok(Some(written)) = answered(settings, CLASSIFY) else { return Ok(Vec::new()) };
     let mut closed = Vec::new();
     for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
         let value_id = match fixed_one(conn, project_id, line) {
@@ -727,17 +724,16 @@ pub(crate) fn closed_values(
 }
 
 /// **How many folders `project_id` has linked, when [`FOLDER`] is left empty where it is placed
-/// (`placement`) and there are too many to fill it from** (`AMB-D-1012`, `AMB-D-987`). The built-in
+/// (`settings`) and there are too many to fill it from** (`AMB-D-1012`, `AMB-D-987`). The built-in
 /// files nothing then ([`folder_unwritten`]), so the launch check names it first. It is asked again when
 /// the built-in is carried out: a folder can be linked or unlinked in between.
 pub(crate) fn folder_unchosen(
     conn: &rusqlite::Connection,
-    placement: &crate::model::AutomationPlacement,
+    settings: &[crate::model::AutomationCfg],
     project_id: i64,
 ) -> Result<Option<usize>> {
-    let settings = crate::ops::automation_run::settings_of(conn, placement)?;
     // An answer that is not the JSON text it is kept as is the settings check's to refuse, not this one's.
-    if !matches!(answered(&settings, FOLDER), Ok(None)) {
+    if !matches!(answered(settings, FOLDER), Ok(None)) {
         return Ok(None);
     }
     let count = linked_folders(conn, project_id)?.len();
@@ -868,7 +864,7 @@ mod tests {
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
         check, launch_handing, launch_past_the_setting_checks as launch, nothing_asked, HandedAtLaunch,
-        Launcher, Unmet,
+        Launcher, ReadsFrom, Unmet,
     };
     use crate::ops::automation_step::Opened;
     use crate::lifecycle::name::{TASK_ASSIGNED, TASK_CREATED, TASK_DONE, TASK_STATUS_CHANGED};
@@ -1499,7 +1495,7 @@ mod tests {
             workspace_open: Some(true),
             by: Some(ActorKind::Human),
         };
-        launch_handing(tx, automation.id, &by, handed)
+        launch_handing(tx, automation.id, &by, handed, ReadsFrom::Saved)
     }
 
     fn titled(title: &str) -> HandedAtLaunch {
@@ -1575,7 +1571,7 @@ mod tests {
             let claude = ["claude".to_string()];
             let nobody =
                 Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: Some(true), by: None };
-            assert!(launch_handing(tx, automation.id, &nobody, &handed).is_err());
+            assert!(launch_handing(tx, automation.id, &nobody, &handed, ReadsFrom::Saved).is_err());
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
 
             let run = launch_with(tx, &automation, &handed).expect("launch");

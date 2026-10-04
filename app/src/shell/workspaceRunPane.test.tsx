@@ -446,6 +446,8 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     await arrive();
     const history = q(".slot__runlink")[0]!;
     expect(history.textContent).toBe(t("auto.run.seeHistory"));
+    // A narrow pane draws only its mark, so the word is kept where a pointer finds it.
+    expect(history.title).toBe(t("auto.run.seeHistory"));
     await act(async () => history.click());
     expect(went[2]).toEqual(["runs", 1, "history"]);
   });

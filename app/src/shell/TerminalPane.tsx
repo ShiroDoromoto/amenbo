@@ -1026,9 +1026,16 @@ export function TerminalPane({
             <button
               type="button"
               className="slot__runlink"
+              title={t(runsTab === "running" ? "auto.run.seeRunning" : "auto.run.seeHistory")}
               onClick={() => ledger.openRuns?.(project, runsTab)}
             >
-              {t(runsTab === "running" ? "auto.run.seeRunning" : "auto.run.seeHistory")}
+              {/* The word, and a mark that stands in for it where the pane is narrow: the word is
+                  wider than the moves it replaces, and a narrow pane gave up the whole of the
+                  run's name to it. */}
+              <Icon name="clock" />
+              <span className="slot__runlink-word">
+                {t(runsTab === "running" ? "auto.run.seeRunning" : "auto.run.seeHistory")}
+              </span>
             </button>
           )}
           {size !== undefined && onSize !== undefined && <PaneSize size={size} onSize={onSize} />}

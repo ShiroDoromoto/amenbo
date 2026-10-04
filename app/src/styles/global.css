@@ -570,6 +570,7 @@ input[type="color"] {
   color: var(--c-text-muted); font-size: var(--fs-xs); white-space: nowrap;
 }
 .slot__runlink:hover { color: var(--c-text); }
+.slot__runlink .icon { display: none; }
 
 /* **What a failed run is waiting for** (`../shell/TerminalPane`, `AMB-T-5529`), on a band between the
    header and the terminal, in the stop colour. One line where the pane is wide enough: why it
@@ -3034,6 +3035,10 @@ body.dragging-row { user-select: none; }
 .slot--run .slot__plate { display: contents; }
 .slot--run .slot__plate--behind { display: none; }
 .slot--run .plate { flex: 1 1 0; min-width: 0; }
+/* **The first line never draws over the controls**. The mark and the state chip do not
+   shrink, so a line given less room than the two of them ran on under the controls beside it — the
+   state written across "Terminal". Cut across only, so the mark's glow still shows above and below. */
+.slot--run .plate { overflow-x: clip; }
 .slot--run :is(.plate-step, .plate-run) { order: 1; flex: 0 0 100%; min-width: 0; }
 /* With the controls on the right even where the row has nothing to say. */
 .slot--run .slot__faces { margin-inline-start: auto; }
@@ -3150,6 +3155,16 @@ body.dragging-row { user-select: none; }
    narrow. */
 @container runbar (max-width: 28rem) {
   .plate__no, .plate-run__nth { display: none; }
+  /* **A run paused or over gives up its mark next**. Then the mark is still and says
+     only that the pane is a run's, which the frame and the wash say already — and "See the history",
+     wider than the moves it stands in for, left the line no room for the name and the state chip. A
+     run under way keeps it: its glow is what says the run is going. */
+  .plate__auto[data-run="still"] { display: none; }
+  /* And the way to the history is a mark (`.slot__runlink`), as the moves it stands in for are: as a
+     word it took the room the name and the state chip needed. It keeps the word as its title. */
+  .slot--run .slot__runlink { display: inline-flex; align-items: center; padding-inline: var(--s-1); }
+  .slot--run .slot__runlink .icon { display: block; }
+  .slot--run .slot__runlink-word { display: none; }
   /* The room around the controls goes too, to the name: at a third of the page the controls alone
      left it half a letter, and a name squeezed to nothing reads as no name at all. The controls
      themselves stay whole. */

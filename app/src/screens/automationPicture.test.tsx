@@ -565,6 +565,17 @@ describe("the picture of a run", () => {
     expect(container.querySelector(".autopic__legend")).toBeNull();
   });
 
+  it("dashes the box waiting for a task, and says it waits with a spinner in place of the word that it takes the task", async () => {
+    await render({ graph: two(), selectedBoxId: 1, trail: { boxes: new Set([1]), edges: new Set<number>(), at: 1, waiting: true } });
+    expect(nodes()[0]!.className).toContain("autopic__node--wait");
+    expect(nodes()[0]!.className).not.toContain("autopic__node--at");
+    expect(nodes()[1]!.className).not.toContain("autopic__node--wait");
+    const takes = [...container.querySelectorAll<HTMLElement>(".autopic__takes")];
+    expect(takes.map((one) => one.textContent)).toEqual([t("auto.run.body.taskWait")]);
+    expect(takes[0]!.querySelector(".autopic__spin")).not.toBeNull();
+    expect(takes[0]!.style.top).toBe(nodes()[0]!.style.top);
+  });
+
   it("lights the way from the leg of the way out the run left by into the box, where lines join on a lane (AMB-T-5824)", async () => {
     // Checking leaves by either of two ways out back into the work; the run went back by "b".
     const back = detail({

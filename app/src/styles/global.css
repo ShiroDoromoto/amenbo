@@ -927,13 +927,18 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
    stands where the terminal would and takes the same room, so the pane does not change size between a
    step and a built-in. It says where the built-in has got to by a mark in the middle — turning while
    Amenbo is at it or waiting, a tick once it is done — with what it waits for or the way out it left by
-   under it. */
+   under it. What it says can run taller than the pane — a wait lists one line per thing holding tasks
+   back — so the card scrolls rather than spilling out of the pane. It is centred by the margins of its
+   first and last child rather than by `justify-content`, which would push the top past where a scroll
+   can reach once the card is taller than the pane. */
 .slot__builtin {
-  flex: 1; min-height: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; min-height: 0; overflow: auto;
+  display: flex; flex-direction: column; align-items: center;
   gap: var(--s-3); padding: var(--s-4);
   text-align: center;
 }
+.slot__builtin > :first-child { margin-block-start: auto; }
+.slot__builtin > :last-child { margin-block-end: auto; }
 .slot__builtin-spin {
   width: 20px; height: 20px; border-radius: 50%;
   border: 2px solid var(--c-edge); border-top-color: var(--c-accent);

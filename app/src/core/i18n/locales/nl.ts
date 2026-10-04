@@ -1604,6 +1604,7 @@ export const nl: Translation = {
     pty_failed: "De terminal kon niet worden gestart: {reason}",
     pty_gone: "Die terminal is niet meer open.",
     pty_paste_failed: "De geplakte afbeelding kon niet worden opgeslagen: {reason}",
+    pty_read_only: "Er kan niets in deze terminal worden geschreven.",
     wake_unknown_agent: "Amenbo weet niet hoe {agent} gestart moet worden.",
     wake_no_folder: "Die map kon niet gelezen worden: {reason}",
     wake_no_config: "Amenbo kon zijn eigen bestanden niet vinden.",

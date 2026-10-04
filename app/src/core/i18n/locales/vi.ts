@@ -1605,6 +1605,7 @@ export const vi: Translation = {
     pty_failed: "Không thể khởi động terminal: {reason}",
     pty_gone: "Terminal đó không còn mở.",
     pty_paste_failed: "Không thể lưu hình ảnh đã dán: {reason}",
+    pty_read_only: "Không thể ghi gì vào terminal này.",
     wake_unknown_agent: "Amenbo không biết cách khởi chạy {agent}.",
     wake_no_folder: "Không đọc được thư mục đó: {reason}",
     wake_no_config: "Amenbo không tìm thấy tệp của chính nó.",

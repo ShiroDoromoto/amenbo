@@ -89,6 +89,17 @@ pub fn command(cwd: Option<PathBuf>, run: Option<&str>) -> CommandBuilder {
     cmd
 }
 
+/// Build the command a program is started with **without a shell in front of it**: `program` by its
+/// path, `args` each handed as one, with the environment a terminal owes the program inside it — a
+/// script step's (`crate::pty::open_script`). Nothing reads a profile, so the `PATH` it finds the
+/// program on is the one its caller sets.
+pub fn program(program: &str, args: &[String]) -> CommandBuilder {
+    let mut cmd = CommandBuilder::new(program);
+    cmd.args(args);
+    describe_terminal(&mut cmd);
+    cmd
+}
+
 /// One command line for a pane's shell: `program`, then `args` quoted the way the shell that reads
 /// them quotes.
 ///

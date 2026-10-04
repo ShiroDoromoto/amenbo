@@ -1604,6 +1604,7 @@ export const tr: Translation = {
     pty_failed: "Terminal başlatılamadı: {reason}",
     pty_gone: "O terminal artık açık değil.",
     pty_paste_failed: "Yapıştırılan görsel kaydedilemedi: {reason}",
+    pty_read_only: "Bu terminale hiçbir şey yazılamaz.",
     wake_unknown_agent: "Amenbo {agent} uygulamasını nasıl başlatacağını bilmiyor.",
     wake_no_folder: "O klasör okunamadı: {reason}",
     wake_no_config: "Amenbo kendi dosyalarını bulamadı.",

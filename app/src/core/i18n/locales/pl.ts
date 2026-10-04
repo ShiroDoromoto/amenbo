@@ -1630,6 +1630,7 @@ export const pl: Translation = {
     pty_failed: "Nie udało się uruchomić terminala: {reason}",
     pty_gone: "Ten terminal nie jest już otwarty.",
     pty_paste_failed: "Nie udało się zapisać wklejonego obrazu: {reason}",
+    pty_read_only: "W tym terminalu nie można niczego wpisać.",
     wake_unknown_agent: "Amenbo nie wie, jak uruchomić {agent}.",
     wake_no_folder: "Nie udało się odczytać tego folderu: {reason}",
     wake_no_config: "Amenbo nie znalazło własnych plików.",

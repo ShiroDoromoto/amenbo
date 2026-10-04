@@ -982,6 +982,12 @@ step?: AutomationStepRunDto,
  */
 builtin?: AutomationBuiltinRunDto, 
 /**
+ * **The terminal a script step's program runs on** (`AMB-D-1016`), which nobody writes into —
+ * for the pane to take up the way it takes up an agent's step. Absent for every other step, and
+ * for a script whose program could not be started.
+ */
+session?: string, 
+/**
  * The required inputs nothing filled, where the run was stopped. Empty otherwise.
  */
 missing: Array<string>, };

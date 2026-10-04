@@ -435,7 +435,17 @@ heldUntil?: string,
  * **The program a script step runs** (`AMB-D-1016`), by the full path its step was written
  * with. Absent on a built-in: a card that carries it is a script's, not one Amenbo carries out.
  */
-program?: string, };
+program?: string, 
+/**
+ * **The arguments the script is run with**, as its step was written with them. Absent on a
+ * built-in, beside `program`.
+ */
+args?: Array<string>, 
+/**
+ * **When the step was opened**, as an RFC3339 instant. Absent while it is about to be carried out
+ * and nothing is written for it yet.
+ */
+startedAt?: string, };
 
 /**
  * **One automation in the list** — what the "automations" tab draws a row from.
@@ -1036,7 +1046,11 @@ folder?: string,
 /**
  * Whether this step may stop and wait for a person (`automation_action_step.interactive`).
  */
-interactive: boolean, };
+interactive: boolean, 
+/**
+ * **When the step was opened**, as an RFC3339 instant (`automation_run_step.started_at`).
+ */
+startedAt?: string, };
 
 /**
  * **The program a script step starts**, by its full path, with the arguments handed to it as they

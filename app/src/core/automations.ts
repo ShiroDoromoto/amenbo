@@ -1232,14 +1232,14 @@ export async function pauseRun(run: number): Promise<void> {
 }
 
 /**
- * **Ask every run of a project to pause before it takes its next task** — pressed on the project's
- * header (`../shell/PauseAfterTask`, `AMB-D-1009`). A run that takes no task is not asked, and a run
- * waiting for one pauses on the spot (`amenbo_core::ops::automation_stop::pause_before_next_task`).
- * Not a `WriteAck` write, for `forceCancelRun`'s reason.
+ * **Ask a run to pause before it takes its next task** (`AMB-D-1019`). A run that takes no task is
+ * refused, and a run waiting for one pauses on the spot
+ * (`amenbo_core::ops::automation_stop::pause_run_before_next_task`). Not a `WriteAck` write, for
+ * `forceCancelRun`'s reason.
  */
-export async function pauseBeforeNextTask(project: number): Promise<void> {
+export async function pauseBeforeNextTask(run: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_pause_before_next_task", { projectId: project });
+  return invoke<void>("automation_pause_before_next_task", { runId: run });
 }
 
 /**

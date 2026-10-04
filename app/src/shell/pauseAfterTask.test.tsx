@@ -5,7 +5,8 @@
 // What these guard: **it asks only while there is a run to ask** — a run of this project, going,
 // asked for neither pause, that takes tasks — and says why on hover when there is not; **it is
 // `aria-disabled`, not `disabled`**, so the hover that says why still reaches it; and **a press asks
-// the project shown, with nothing in between**.
+// each run of the project shown that would be asked, one by one, with nothing in between** — and a
+// run refused does not keep the rest from being asked.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,16 +14,23 @@ import type { AutomationRunCardDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   runs: [] as AutomationRunCardDto[],
-  /** The projects a press asked, in order. */
+  /** The runs a press asked, in order. */
   asked: [] as number[],
+  /** The runs that refuse when asked. */
+  refusing: [] as number[],
+  notices: [] as string[],
 }));
 
 vi.mock("../core/automations", () => ({
   useLiveRuns: () => hoisted.runs,
-  pauseBeforeNextTask: (project: number) => {
-    hoisted.asked.push(project);
-    return Promise.resolve();
+  pauseBeforeNextTask: (run: number) => {
+    hoisted.asked.push(run);
+    return hoisted.refusing.includes(run) ? Promise.reject(new Error(`run ${run} ended`)) : Promise.resolve();
   },
+}));
+
+vi.mock("../core/notice", () => ({
+  pushNotice: (text: string) => hoisted.notices.push(text),
 }));
 
 import { t, tf } from "../core/i18n";
@@ -74,6 +82,8 @@ beforeEach(() => {
   root = createRoot(container);
   hoisted.runs = [];
   hoisted.asked = [];
+  hoisted.refusing = [];
+  hoisted.notices = [];
 });
 
 afterEach(() => {
@@ -82,8 +92,13 @@ afterEach(() => {
 });
 
 describe("the project's pause", () => {
-  it("asks the project shown when a run of it would be asked", async () => {
-    await render([run()]);
+  it("asks each run of the project shown that would be asked", async () => {
+    await render([
+      run({ run: 7 }),
+      run({ run: 8, project: 2 }),
+      run({ run: 9, pausableBeforeNextTask: false }),
+      run({ run: 10 }),
+    ]);
     expect(button().getAttribute("aria-disabled")).toBe("false");
     expect(button().disabled).toBe(false);
     expect(button().title).toBe(t("face.pauseAfterTask"));
@@ -91,7 +106,16 @@ describe("the project's pause", () => {
     expect(button().textContent).toBe("");
 
     await press();
-    expect(hoisted.asked).toEqual([1]);
+    expect(hoisted.asked).toEqual([7, 10]);
+  });
+
+  it("asks the rest when one run refuses, and says the refusal", async () => {
+    hoisted.refusing = [7];
+    await render([run({ run: 7 }), run({ run: 8 })]);
+
+    await press();
+    expect(hoisted.asked).toEqual([7, 8]);
+    expect(hoisted.notices).toHaveLength(1);
   });
 
   it("counts the runs still to pause once every one is asked, and asks nobody", async () => {

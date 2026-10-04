@@ -1883,13 +1883,13 @@ pub fn automation_run_pause(run_id: i64) -> Result<(), CmdError> {
     Ok(())
 }
 
-/// **Pause every run of a project before it takes its next task**
-/// ([`amenbo_core::ops::automation_stop::pause_before_next_task`], `AMB-D-1009`). Pressed on the
-/// project's header; not a `WriteAck` write, for the reason [`automation_run_pause`] is not.
+/// **Pause a run before it takes its next task**
+/// ([`amenbo_core::ops::automation_stop::pause_run_before_next_task`], `AMB-D-1019`). Not a
+/// `WriteAck` write, for the reason [`automation_run_pause`] is not.
 #[tauri::command]
-pub fn automation_pause_before_next_task(project_id: i64) -> Result<(), CmdError> {
+pub fn automation_pause_before_next_task(run_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
-    store.automation_pause_before_next_task(project_id)?;
+    store.automation_pause_run_before_next_task(run_id)?;
     crate::automation_watch::wake();
     Ok(())
 }

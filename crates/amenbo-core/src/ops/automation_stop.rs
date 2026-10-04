@@ -12,14 +12,14 @@
 //! [`crate::ops::automation_report::done`], which is the only place that knows a step has finished,
 //! and it takes hold only where the line out of that step leaves the action.
 //!
-//! **Pausing between tasks is the same request, one task wide** ([`pause_before_next_task`],
-//! `AMB-D-1009`). An action ends in the middle of a task where the task spans several, so a project's
-//! runs are asked instead to stop where they next come to the built-in that takes a task — before
+//! **Pausing between tasks is the same request, one task wide** ([`pause_run_before_next_task`],
+//! `AMB-D-1019`). An action ends in the middle of a task where the task spans several, so a run is
+//! asked instead to stop where it next comes to the built-in that takes a task — before
 //! taking one, so a run paused there holds none, and one picked up again goes on to take the next.
 //! What reads that flag is [`crate::ops::automation_step::open`], the one place that step is reached.
 //! A run already waiting there for a task to turn up is paused at once instead: it holds no task, so
-//! there is nothing to wait for. A run that takes no tasks is not asked: it has no task boundary to
-//! stop at, and runs on to its end.
+//! there is nothing to wait for. A run that takes no tasks cannot be asked: it has no task boundary
+//! to stop at, and runs on to its end.
 //!
 //! **Canceling is for a paused run** ([`cancel`], `AMB-D-1002`). Nothing is under way then, so it ends
 //! the run at once and cuts nothing off. A run still going is refused: pause it first, or force-cancel
@@ -92,7 +92,8 @@ impl Ending {
 /// What pressing pause did.
 #[derive(Clone, Debug)]
 pub enum Paused {
-    /// An action is under way. The run is still `running` and stops at the end of it.
+    /// The run is still `running`, asked, and stops where it was asked to: at the end of the action
+    /// under way, or before it takes its next task.
     Asked(AutomationRun),
     /// Nothing was under way, so it is `paused` already.
     Now(Ended),
@@ -379,13 +380,38 @@ pub fn pause(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
     }
 }
 
-/// **Ask every run of a project to pause before it takes its next task** (`AMB-D-1009`), and answer
-/// with the runs that were asked — the ones [`pauses_before_next_task`] counts. Pressed again with
-/// nothing left to ask, it asks nobody.
+/// **Ask a run to pause before it takes its next task** (`AMB-D-1019`). It finishes the task it is on
+/// and pauses where it next comes to the built-in that takes one, without taking it.
 ///
-/// A run waiting at the built-in that takes a task is paused here and then, and answered `paused`: it
-/// holds no task, and its next look would only pause it. Every other run answered is still `running`,
-/// asked. It is not taken back: a run asked keeps the request until it pauses or ends.
+/// A run waiting there for a task to turn up is paused at once ([`Paused::Now`]): it holds no task, and
+/// its next look would only pause it. A run already asked for either pause is answered as it stands,
+/// still asked: the request is not taken back, and one asked to pause at the end of its action stops
+/// sooner. A run that takes no tasks is refused, having no task boundary to stop at.
+pub fn pause_run_before_next_task(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
+    let before = live_run(tx, run_id)?;
+    match before.status {
+        AutomationRunStatus::Running => {
+            if !crate::ops::automation_run::current_defs(tx.conn(), run_id)?.iter().any(takes_a_task) {
+                return Err(Error::invalid(format!(
+                    "run '{run_id}' takes no tasks, so it has no next task to pause before"
+                )));
+            }
+            if before.pause_requested || before.pause_before_next_task {
+                return Ok(Paused::Asked(before));
+            }
+            ask_before_next_task(tx, before)
+        }
+        AutomationRunStatus::Paused => Ok(Paused::Now(Ended { run: before })),
+        other => Err(Error::invalid(format!(
+            "run '{run_id}' is {}, and only a run still going can be paused",
+            other.as_str()
+        ))),
+    }
+}
+
+/// **Ask every run of a project to pause before it takes its next task**, and answer with the runs
+/// that were asked — the ones [`pauses_before_next_task`] counts. Pressed again with nothing left to
+/// ask, it asks nobody. Each is asked as [`pause_run_before_next_task`] asks one.
 pub fn pause_before_next_task(tx: &WriteTx<'_>, project_id: i64) -> Result<Vec<AutomationRun>> {
     if read::project(tx.conn(), project_id)?.is_none() {
         return Err(not_found("project", project_id));
@@ -396,17 +422,25 @@ pub fn pause_before_next_task(tx: &WriteTx<'_>, project_id: i64) -> Result<Vec<A
         if before.project_id != project_id || !pauses_before_next_task(tx.conn(), &before)? {
             continue;
         }
-        if waits_to_take_a_task(tx.conn(), run_id)? {
-            asked.push(settle(tx, before, AutomationPauseKind::BeforeNextTask)?.run);
-            continue;
-        }
-        let mut after = before.clone();
-        after.pause_before_next_task = true;
-        after.updated_at = Timestamp::now();
-        crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
-        asked.push(after);
+        asked.push(match ask_before_next_task(tx, before)? {
+            Paused::Asked(run) => run,
+            Paused::Now(ended) => ended.run,
+        });
     }
     Ok(asked)
+}
+
+/// Ask a running run that takes tasks, not asked yet, to pause before its next task — or pause it now
+/// if it stands waiting for one.
+fn ask_before_next_task(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Paused> {
+    if waits_to_take_a_task(tx.conn(), before.id)? {
+        return Ok(Paused::Now(settle(tx, before, AutomationPauseKind::BeforeNextTask)?));
+    }
+    let mut after = before.clone();
+    after.pause_before_next_task = true;
+    after.updated_at = Timestamp::now();
+    crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
+    Ok(Paused::Asked(after))
 }
 
 /// Whether this run stands waiting at the built-in that takes a task, for one to turn up.
@@ -416,7 +450,7 @@ fn waits_to_take_a_task(conn: &Connection, run_id: i64) -> Result<bool> {
     Ok(takes_a_task(&def) && is_waiting(conn, run_id)?)
 }
 
-/// **Whether asking a run to pause before its next task would do anything** (`AMB-D-1009`): it is
+/// **Whether asking a run to pause before its next task would do anything** (`AMB-D-1019`): it is
 /// `running`, it is asked for neither pause yet, and it takes tasks.
 ///
 /// Whether it takes tasks is read from the steps it copied, the last time it copied them, not the

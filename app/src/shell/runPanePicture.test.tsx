@@ -28,14 +28,14 @@ vi.mock("../talk/terminal", async (actual) => ({
 // The row is a live thing of its own; what it draws is not what this is about.
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
-    opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {}, numbered: () => {},
+    opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {}, numbered: () => {}, timed: () => {},
     focused: () => {}, stop: () => {},
   }),
 }));
 
 /** A run that failed at its second step, as a pane come back with the app is handed it. */
 const FAILED: Say = {
-  automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false, interactive: false,
+  automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false, interactive: false, by: null, command: null, startedAt: null,
   action: null, task: null,
   state: { status: "failed", word: "Failed", pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, why: null, exit: null, errorExit: false, acknowledged: false },
 };

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { t, tf } from "../core/i18n";
-import { faceOf, mountNameplate, type Dot } from "./nameplate";
+import { clockOf, faceOf, mountNameplate, type Dot } from "./nameplate";
 
 /** The lamp in front of the name, at rest. These cases are about the name on the row; what the lamp
  *  does has its own (`./plateMoving.test`). */
@@ -83,6 +83,9 @@ describe("the row above a run's pane", () => {
     box: null,
     builtin: false,
     interactive: false,
+    by: null,
+    command: null,
+    startedAt: null,
     action: "下ごしらえ",
     task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 2 },
     state: null,
@@ -121,10 +124,12 @@ describe("the row above a run's pane", () => {
       .toEqual(["plate__dot", "plate__auto", "plate__name", "plate__no", "plate__state"]);
     expect((host.querySelector(".plate__dot") as HTMLElement).hidden).toBe(true);
     expect(row.classList.contains("plate--run")).toBe(true);
-    // The step's line: the step, and the chip after it, drawn on a built-in's step alone.
+    // The step's line: the step, the chip drawn on a built-in's step alone, who carries the step
+    // out, the command a script runs, and how long the step has run.
     const stepLine = host.querySelector(".plate-step") as HTMLElement;
     expect(stepLine.hidden).toBe(false);
-    expect([...stepLine.children].map((el) => el.classList[0])).toEqual(["plate__step", "plate__builtin"]);
+    expect([...stepLine.children].map((el) => el.classList[0]))
+      .toEqual(["plate__step", "plate__builtin", "plate__by", "plate__command", "plate__elapsed"]);
     expect(host.querySelector(".plate__no")?.textContent).toBe("#7");
     // Which step, with the action its spot stands on where that is not the step's own name
     // (`AMB-D-949`). The step's own name is the part drawn heavier.
@@ -140,6 +145,65 @@ describe("the row above a run's pane", () => {
     expect(host.querySelector(".plate-run__nth")?.textContent).toBe(tf("face.runTask", { n: 2 }));
     expect(host.querySelector(".plate-peek__task")?.textContent)
       .toBe("AMB-T-5252 ペインのヘッダを描く");
+  });
+
+  /// Who carries the step out is the run's own value for it (`AMB-D-858`): the agent and its model
+  /// as the run copied them, said the way the test pane says them.
+  it("says which agent carries the step out, with its model where it was given one", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, by: { kind: "agent", agent: "claude-code", model: "opus" } } });
+    const chip = host.querySelector<HTMLElement>(".plate__by")!;
+    expect(chip.hidden).toBe(false);
+    expect(chip.textContent).toBe("claude-code · opus");
+    expect(host.querySelector(".plate__command")?.textContent).toBe("");
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, by: { kind: "agent", agent: "codex-cli", model: null } } });
+    expect(chip.textContent).toBe("codex-cli");
+
+    // A built-in has a chip of its own, and says nothing here.
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, builtin: true } });
+    expect(chip.hidden).toBe(true);
+  });
+
+  /// A script's command is its program and its arguments as they were written (`AMB-D-1016`). The
+  /// row cuts it where the pane is narrow, and the panel says it whole.
+  it("says a script's whole command on the step's line and in the panel", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+    const command = "/usr/bin/python3 scripts/check.py --strict";
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, by: { kind: "script" }, command } });
+    expect(host.querySelector(".plate__by")?.textContent).toBe(t("auto.step.byScript"));
+    expect(host.querySelector(".plate__command")?.textContent).toBe(command);
+    expect(host.querySelector(".plate-peek__command")?.textContent).toBe(command);
+
+    // An agent's step has no command, and the panel says none.
+    draw({ name: "/work/a", dot: STILL, run: RUN });
+    expect(host.querySelector(".plate-peek__command")?.textContent).toBe("");
+  });
+
+  /// The time is counted from when the step was opened, up to the moment the row is drawn for.
+  it("says how long the step has run, and nothing before it is known when it started", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+    const at = Date.parse("2026-10-05T04:00:00Z");
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, startedAt: at }, now: at + 65_000 });
+    expect(host.querySelector(".plate__elapsed")?.textContent).toBe(tf("face.elapsed", { time: "1:05" }));
+
+    draw({ name: "/work/a", dot: STILL, run: RUN });
+    expect(host.querySelector(".plate__elapsed")?.textContent).toBe("");
+  });
+
+  it("writes a span of time the way a clock does", () => {
+    expect(clockOf(0)).toBe("0:00");
+    expect(clockOf(59_999)).toBe("0:59");
+    expect(clockOf(605_000)).toBe("10:05");
+    expect(clockOf(3_725_000)).toBe("1:02:05");
+    // A clock a little behind the host's never counts below nothing.
+    expect(clockOf(-2_000)).toBe("0:00");
   });
 
   /// The step is numbered as the picture numbers its box (`AMB-T-5538`) — and where that number is not

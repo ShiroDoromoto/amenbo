@@ -606,6 +606,7 @@ export const th: Translation = {
     "face.runStep": "ขั้นที่ {n}",
     "face.runNo": "การรัน {n}",
     "face.runTask": "งานที่ {n}",
+    "face.elapsed": "ผ่านไป {time}",
     "face.dropRunLive": "ลบไม่ได้จนกว่าการรันจะจบ",
     "face.runStoppedAt": "หยุดที่ {exit}",
     "quit.confirm": "ออกจาก Amenbo ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง บทสนทนาจะกลับมาในการเปิดครั้งถัดไป แต่สิ่งที่กำลังทำงานอยู่จะไม่กลับมา",

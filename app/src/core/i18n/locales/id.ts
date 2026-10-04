@@ -606,6 +606,7 @@ export const id: Translation = {
     "face.runStep": "Langkah {n}",
     "face.runNo": "Eksekusi {n}",
     "face.runTask": "Tugas {n}",
+    "face.elapsed": "Durasi {time}",
     "face.dropRunLive": "Tidak bisa dihapus sampai eksekusi selesai",
     "face.runStoppedAt": "Berhenti di {exit}",
     "quit.confirm": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, tetapi yang sedang berjalan di dalamnya tidak.",

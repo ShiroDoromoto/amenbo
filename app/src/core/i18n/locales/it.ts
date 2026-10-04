@@ -615,6 +615,7 @@ export const it: Translation = {
     "face.runStep": "Passo {n}",
     "face.runNo": "Esecuzione {n}",
     "face.runTask": "Attività {n}",
+    "face.elapsed": "Durata {time}",
     "face.dropRunLive": "Non si può rimuovere finché l'esecuzione non termina",
     "face.runStoppedAt": "Fermata a {exit}",
     "quit.confirm": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, ciò che stavano eseguendo no.",

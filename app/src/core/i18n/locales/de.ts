@@ -608,6 +608,7 @@ export const de: Translation = {
     "face.runStep": "Schritt {n}",
     "face.runNo": "Lauf {n}",
     "face.runTask": "Aufgabe {n}",
+    "face.elapsed": "Dauer {time}",
     "face.dropRunLive": "Kann erst entfernt werden, wenn der Lauf zu Ende ist",
     "face.runStoppedAt": "Angehalten bei {exit}",
     "quit.confirm": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, das, was in ihnen lief, nicht.",

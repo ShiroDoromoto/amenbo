@@ -619,6 +619,7 @@ export const ru: Translation = {
     "face.runStep": "Шаг {n}",
     "face.runNo": "Запуск {n}",
     "face.runTask": "Задача {n}",
+    "face.elapsed": "Прошло {time}",
     "face.dropRunLive": "Нельзя убрать, пока запуск не закончится",
     "face.runStoppedAt": "Остановлено на {exit}",
     "quit.confirm": "Завершить Amenbo? Все открытые терминалы завершатся. Разговоры вернутся при следующем запуске, а то, что в них выполнялось, — нет.",

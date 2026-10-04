@@ -604,6 +604,7 @@ export const hi: Translation = {
     "face.runStep": "चरण {n}",
     "face.runNo": "रन {n}",
     "face.runTask": "कार्य {n}",
+    "face.elapsed": "बीता समय {time}",
     "face.dropRunLive": "रन खत्म होने तक हटाया नहीं जा सकता",
     "face.runStoppedAt": "{exit} पर रुका",
     "quit.confirm": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे। बातचीत अगली बार वापस आ जाएगी, पर उनमें जो चल रहा था वह नहीं।",

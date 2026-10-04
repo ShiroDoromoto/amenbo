@@ -34,6 +34,10 @@ export type Plate = {
   /** The number of the box the step was opened from has been read off the picture, or has gone from
    *  it (`AMB-T-5538`). Nothing on an ordinary pane, for `took`'s reason. */
   numbered(box: number | null): void;
+  /** The step has been opened since the pane was: a built-in's card is written over rather than built
+   *  again, and says when it started only once it has (`../shell/BuiltinCard`). Nothing on an ordinary
+   *  pane, for `took`'s reason. */
+  timed(startedAt: number | null): void;
   /** Take the label away. */
   stop(): void;
   /**
@@ -58,11 +62,12 @@ export type Plate = {
  * laid the page out (`./moving`).
  *
  * `run` is where the run this pane is drawing has got to, and null on every ordinary pane
- * (`./nameplate`). **It is taken at mount, and only its task and its state change afterwards**: a
- * run's pane is built again at every step, the terminal in it being a new one each time
- * (`../shell/WorkspaceFace`), so the step and the run are said by that. The task and the
- * state are what move while a step stands — a step that takes its task opens with none and takes it
- * partway (`took`), and the run ends, or is paused, with its last step's pane still up (`stated`).
+ * (`./nameplate`). **It is taken at mount, and only its task, its state and when its step started
+ * change afterwards**: a run's pane is built again at every step, the terminal in it being a new one
+ * each time (`../shell/WorkspaceFace`), so the step and the run are said by that. The task, the state
+ * and the start are what move while a step stands — a step that takes its task opens with none and
+ * takes it partway (`took`), the run ends, or is paused, with its last step's pane still up
+ * (`stated`), and a built-in's card says when it started once it has (`timed`).
  */
 export function mountPlate(
   host: HTMLElement,
@@ -90,6 +95,11 @@ export function mountPlate(
   let lastOutput: number | null = null;
   let moving = false;
   let settling: ReturnType<typeof setTimeout> | undefined;
+  // The clock the step's time is drawn by (`./nameplate`): once a second while the run is under way.
+  // Once it has stopped, the time is held at the moment it was seen to — a pane outlives its step, and
+  // a time that went on counting would say the step was still running.
+  let ticking: ReturnType<typeof setInterval> | undefined;
+  let stoppedAt: number | null = null;
 
   /** Take in a chunk having crossed, and draw the change where there is one. */
   function tookOutput(): void {
@@ -127,7 +137,21 @@ export function mountPlate(
     // named by a person for what they do in it, and what is in it now is the run. A folder standing
     // in for a name would say less still.
     const name = run !== null && run.automation !== "" ? run.automation : frameLabel(names, frame, folder);
-    return { name, dot: { hue, face: faceOf(moving) }, run };
+    return stoppedAt === null
+      ? { name, dot: { hue, face: faceOf(moving) }, run }
+      : { name, dot: { hue, face: faceOf(moving) }, run, now: stoppedAt };
+  }
+
+  /** Start the step's clock or stop it, by where the run stands now. */
+  function clock(): void {
+    const over = run?.state != null && run.state.status !== "running";
+    if (over && stoppedAt === null) stoppedAt = Date.now();
+    const runs = live && run?.startedAt != null && stoppedAt === null;
+    if (runs && ticking === undefined) ticking = setInterval(redraw, 1000);
+    if (!runs && ticking !== undefined) {
+      clearInterval(ticking);
+      ticking = undefined;
+    }
   }
 
   function redraw(): void {
@@ -142,6 +166,7 @@ export function mountPlate(
     })
     .catch(() => {});
 
+  clock();
   redraw();
 
   return {
@@ -171,11 +196,18 @@ export function mountPlate(
     stated: (state) => {
       if (run === null) return;
       run = { ...run, state };
+      clock();
       redraw();
     },
     numbered: (box) => {
       if (run === null) return;
       run = { ...run, box };
+      redraw();
+    },
+    timed: (startedAt) => {
+      if (run === null) return;
+      run = { ...run, startedAt };
+      clock();
       redraw();
     },
     // A pane that has been taken down has no row to read: what it said was about a session that is
@@ -184,6 +216,7 @@ export function mountPlate(
     stop: () => {
       live = false;
       clearTimeout(settling);
+      clock();
       host.replaceChildren();
     },
   };

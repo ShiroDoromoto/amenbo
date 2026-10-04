@@ -127,6 +127,10 @@ export function runSayOf(run: AutomationRunCardDto | undefined): Say | null {
     builtin: run.builtin !== undefined,
     // A pane no step has arrived in has no step running to wait for a person.
     interactive: false,
+    // Nor anything carrying it out, or a time it has run: those are the step's, which has not arrived.
+    by: null,
+    command: null,
+    startedAt: null,
     action: run.actionName === undefined ? null : builtinWord(run.builtin, run.actionName),
     // A run waiting for the next task still carries the one it closed before (`../shell/WorkspaceFace`).
     task: run.waiting ? null : run.task ?? null,

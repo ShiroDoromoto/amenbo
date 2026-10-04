@@ -81,6 +81,8 @@ const action: AutomationActionDetailDto = {
   settings: [],
   heldBy: [],
   placedOn: [],
+  unsaved: false,
+  saveBlocks: [],
 };
 
 const onBack = vi.fn();

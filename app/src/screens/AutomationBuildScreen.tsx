@@ -310,7 +310,7 @@ export function AutomationBuildScreen({
   return (
     <>
     <div className="actbuild" {...saved.capture}>
-      <div className="actbuild__head actbuild__head--automation">
+      <div className="actbuild__head actbuild__head--wraps">
         <button type="button" className="btn" onClick={onBack}>
           <Icon name="chevronLeft" /> {t("auto.build.back")}
         </button>
@@ -338,7 +338,7 @@ export function AutomationBuildScreen({
           </button>
           <button
             type="button"
-            className={showing?.kind === "about" ? "btn btn--on actbuild__edit" : "btn actbuild__edit"}
+            className={showing?.kind === "about" ? "btn btn--on" : "btn"}
             aria-pressed={showing?.kind === "about"}
             // It opens and does not toggle: a second press while the panel stands is somebody meaning
             // to be there, and the panel's own × is the way out of it.

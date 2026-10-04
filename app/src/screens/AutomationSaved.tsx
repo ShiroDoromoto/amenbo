@@ -2,13 +2,12 @@
 // (`AMB-D-32`), so without this a reader cannot tell a field still being edited from one already
 // written. The automation's screen and the action's screen say it the same way, in two places:
 //
-// - **On the head, always.** A screen handed the definition's saved state (`SavedState`) says that:
-//   nothing saved yet, changes not saved, or the version saved last and when. The writes land in the
-//   draft, and the screen's own "Save" press is what makes it a version. A screen handed none says
-//   when the last write landed, as "Saved · <time>", and before the first write that editing saves on
-//   the spot. Either way a refused write turns it red with core's reason, until the next write lands.
-// - **Beside the field, for a moment.** A mark stands next to the field the write came from for two
-//   seconds, then goes — "Written" where the head says the saved state, "Saved" where it does not.
+// - **On the head, always.** It says the definition's saved state (`SavedState`): nothing saved yet,
+//   changes not saved, or the version saved last and when. The writes land in the draft, and the
+//   screen's own "Save" press is what makes it a version. A refused write turns it red with core's
+//   reason, until the next write lands.
+// - **Beside the field, for a moment.** "Written" stands next to the field the write came from for two
+//   seconds, then goes.
 //
 // **Which field a write came from is read off the event that made it.** Every write on a definition is
 // sent from a handler — a box losing the caret, a pulldown changed, a press — and core tells its start
@@ -22,10 +21,10 @@ import { createPortal } from "react-dom";
 import { onAutomationSave } from "../core/automationSave";
 import { dateLocale, errText, t, tf } from "../core/i18n";
 
-/** How long "Saved" stands beside a field. */
+/** How long "Written" stands beside a field. */
 export const MARK_MS = 2000;
 
-/** One "Saved" beside a field: where it stands, in the window's coordinates. */
+/** One "Written" beside a field: where it stands, in the window's coordinates. */
 type Mark = { key: number; left: number; top: number; inside: boolean };
 
 /** The handlers the screen's root takes, so each event notes the field it is on. */
@@ -37,16 +36,11 @@ type Capture = {
   onKeyDownCapture: (e: SyntheticEvent) => void;
 };
 
-/** "Saved" beside this field: to its right, or just inside its right edge where the window ends. */
+/** "Written" beside this field: to its right, or just inside its right edge where the window ends. */
 function markBeside(field: Element, key: number): Mark {
   const box = field.getBoundingClientRect();
   const inside = box.right + 80 > window.innerWidth;
   return { key, left: inside ? box.right - 6 : box.right + 6, top: box.top + box.height / 2, inside };
-}
-
-/** The time a write landed, as the head says it. */
-function clock(at: Date): string {
-  return at.toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 /** When a version was saved, as the head says it — it may be another day's. */
@@ -73,15 +67,13 @@ function stateLine(state: SavedState): string {
  * The head's line and the marks beside the fields, for one build screen. The screen spreads `capture`
  * on its root, draws `head` on its head and `marks` anywhere.
  *
- * `state` is the definition's saved state, `null` until it is read. A screen that passes nothing has
- * the head say when the last write landed instead.
+ * `state` is the definition's saved state, `null` until it is read.
  */
-export function useSaved(state?: SavedState | null): {
+export function useSaved(state: SavedState | null): {
   capture: Capture;
   head: ReactNode;
   marks: ReactNode;
 } {
-  const [at, setAt] = useState<Date | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [marks, setMarks] = useState<Mark[]>([]);
   // The field the event going on now is on, if any, and which field each write still out came from.
@@ -108,7 +100,6 @@ export function useSaved(state?: SavedState | null): {
         setFailed(errText(news.error));
         return;
       }
-      setAt(new Date());
       setFailed(null);
       // A field the write took away — a row deleted, a dialog closed — has nowhere to stand beside.
       if (field === undefined || !field.isConnected) return;
@@ -141,18 +132,13 @@ export function useSaved(state?: SavedState | null): {
     onKeyDownCapture: note,
   };
 
-  const stated = state !== undefined;
   const head = (
     <span className={failed === null ? "actsaved" : "actsaved actsaved--failed"} role="status">
       {failed !== null
-        ? tf(stated ? "auto.saved.writeFailed" : "auto.saved.failed", { reason: failed })
-        : stated
-          ? state === null
-            ? ""
-            : stateLine(state)
-          : at !== null
-            ? tf("auto.saved.at", { time: clock(at) })
-            : t("auto.saved.onTheSpot")}
+        ? tf("auto.saved.writeFailed", { reason: failed })
+        : state === null
+          ? ""
+          : stateLine(state)}
     </span>
   );
 
@@ -167,7 +153,7 @@ export function useSaved(state?: SavedState | null): {
               style={{ left: one.left, top: one.top }}
               aria-hidden="true"
             >
-              {t(stated ? "auto.saved.written" : "auto.saved.mark")}
+              {t("auto.saved.written")}
             </span>
           )),
           document.body,

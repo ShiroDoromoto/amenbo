@@ -470,6 +470,31 @@ pub fn automation_discard(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["automations"]))
 }
 
+/// **Save what is inside the action as its next version** ([`amenbo_core::ops::automation::action_save`]).
+/// Refused with the reasons the action build screen lists (`save_blocks`); not refused while a run of an
+/// automation placing it goes on (`AMB-D-1015`). The automations placing it read which version each
+/// stands on, so their list is told too.
+#[tauri::command]
+pub fn automation_action_save(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_save(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Throw away what is written inside the action since its newest version**
+/// ([`amenbo_core::ops::automation::action_discard`]). Every row goes back under the id it was saved
+/// with (`AMB-D-961`).
+#[tauri::command]
+pub fn automation_action_discard(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_discard(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
 /// **Give up an action made on the spot** (`AMB-D-1005`,
 /// [`amenbo_core::ops::automation::action_abandon`]): the action and the placement standing on it go
 /// in one act, and the lines into the placement go back to how they were before it was placed.
@@ -791,7 +816,10 @@ pub fn automation_action_detail(id: i64) -> Result<Option<AutomationActionDetail
             placed_on.push(AutomationPlacedOnDto { id: one.id, name: one.name, project: one.project_id });
         }
     }
-    Ok(Some(action_detail_dto(view, held_by, placed_on)))
+    // Asked the way the save asks it (`amenbo_core::ops::automation::action_save`): only what the action
+    // answers for on its own.
+    let save_blocks = automation_run::check_action(conn, id)?;
+    Ok(Some(action_detail_dto(view, held_by, placed_on, &save_blocks)))
 }
 
 /// **Take one action off a picture**, with the answers written on it and every line naming it. The
@@ -2615,6 +2643,7 @@ fn action_detail_dto(
     view: automation_view::ActionView,
     held_by: Vec<AutomationRunCardDto>,
     placed_on: Vec<AutomationPlacedOnDto>,
+    save_blocks: &[Unmet],
 ) -> AutomationActionDetailDto {
     let names = exit_names(view.steps.iter().flat_map(|s| s.exits.iter()).chain(view.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
@@ -2636,6 +2665,9 @@ fn action_detail_dto(
         settings: view.settings.into_iter().map(cfg_dto).collect(),
         held_by,
         placed_on,
+        saved: view.saved.map(saved_dto),
+        unsaved: view.unsaved,
+        save_blocks: save_blocks.iter().map(block_dto).collect(),
     }
 }
 

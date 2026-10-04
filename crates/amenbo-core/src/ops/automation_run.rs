@@ -1520,7 +1520,7 @@ fn launch_asking(
     let unmet: Vec<Unmet> =
         check(tx.conn(), automation_id, by.startable, by.models)?.into_iter().filter(|u| counts(u)).collect();
     if !unmet.is_empty() {
-        return Err(not_ready(&automation.name, &unmet));
+        return Err(not_ready("launch", &automation.name, &unmet));
     }
     // Only where somebody answered. A caller that cannot see the window says nothing rather than
     // `false`, and the run is made — a launch from a terminal is not a claim about what is on screen.
@@ -1613,7 +1613,7 @@ pub(crate) fn copy_down_again(
     }
     let unmet = check(tx.conn(), automation.id, startable, models)?;
     if !unmet.is_empty() {
-        return Err(not_ready(&automation.name, &unmet));
+        return Err(not_ready("launch", &automation.name, &unmet));
     }
     copy_down(tx, run.id, &automation, Timestamp::now())?;
     entry_def(tx.conn(), run.id)?.ok_or_else(|| {
@@ -1716,10 +1716,11 @@ pub fn launch_asks(conn: &Connection, automation_id: i64) -> Result<LaunchAsks> 
 /// Build the body of the `not_ready` refusal: one refusal over a list of reasons whose length is only
 /// known here. Each reason rides as a part rather than being folded into the sentence, because joining
 /// them is punctuation and punctuation belongs to the language doing the reading — the same shape a
-/// reservation's refusal takes ([`crate::ops::task`]).
-fn not_ready(name: &str, unmet: &[Unmet]) -> Error {
+/// reservation's refusal takes ([`crate::ops::task`]). `doing` is what was refused — a launch, or a save
+/// ([`crate::ops::automation::save`]), which asks the same check.
+pub(crate) fn not_ready(doing: &str, name: &str, unmet: &[Unmet]) -> Error {
     let sentence = format!(
-        "cannot launch '{name}': {}",
+        "cannot {doing} '{name}': {}",
         unmet.iter().map(Unmet::say).collect::<Vec<_>>().join("; ")
     );
     let msg = unmet.iter().fold(
@@ -3203,6 +3204,57 @@ mod tests {
             let named: Vec<(&str, &str)> = msg.parts()[1].fields().iter().collect();
             let id = placement.id.to_string();
             assert_eq!(named, vec![("placement", id.as_str()), ("step", "直す"), ("agent", "claude")]);
+        });
+    }
+
+    /// **A save asks the launch check**, and one that would not launch is refused with its reasons and
+    /// leaves no version behind.
+    #[test]
+    fn a_draft_that_would_not_launch_is_not_saved() {
+        with_tx(|tx| {
+            let (automation, action, _) = launchable(tx);
+            automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
+                .expect("exit");
+            let err = automation::save(tx, automation.id).expect_err("refused");
+            let Error::NotReady(msg) = err else { panic!("a save that cannot go ahead is not_ready") };
+            assert_eq!(msg.code(), Some(ErrorCode::NotReadyAutomation));
+            assert_eq!(
+                msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
+                vec![Some(ErrorCode::NotReadyAutomationOpenExit)],
+                "the agents this machine has are the launch's to ask, not the save's",
+            );
+            assert!(read::automation_version_ids(tx.conn(), automation.id).expect("read").is_empty());
+            assert!(automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
+        });
+    }
+
+    /// **What is written after a save is unsaved until the next one**, and a save with nothing written
+    /// since adds no version.
+    #[test]
+    fn a_save_takes_the_draft_and_what_is_written_after_it_waits_for_the_next() {
+        with_tx(|tx| {
+            let empty = mk_automation(tx, "まだ何も無い");
+            assert!(!automation::unsaved(tx.conn(), empty.id).expect("unsaved"), "nothing to save yet");
+
+            let (automation, _, placement) = launchable(tx);
+            assert!(automation::unsaved(tx.conn(), automation.id).expect("unsaved"), "never saved");
+            let first = automation::save(tx, automation.id).expect("save");
+            assert_eq!(first.version, 1);
+            assert!(!automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
+            let again = automation::save(tx, automation.id).expect("save with nothing written");
+            assert_eq!(again.id, first.id, "nothing written since, so no new version");
+
+            automation::update(tx, automation.id, Some("2件やりきる"), None, None).expect("rename");
+            assert!(
+                !automation::unsaved(tx.conn(), automation.id).expect("unsaved"),
+                "the name is not part of a version",
+            );
+            automation::placement_move(tx, placement.id, crate::ops::Position::Top).expect("move");
+            assert!(automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
+            launch(tx, automation.id, &here(&claude())).expect("launch");
+            let second = automation::save(tx, automation.id).expect("saved while a run goes on");
+            assert_eq!(second.version, 2);
+            assert!(!automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
         });
     }
 

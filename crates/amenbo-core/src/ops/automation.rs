@@ -38,6 +38,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use rusqlite::Connection;
+
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     AttachmentTarget, Automation, AutomationAction, AutomationActionVersion, AutomationCfg,
@@ -49,7 +51,7 @@ use crate::model::{
     DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, MAX_SCRIPT_TIMEOUT_MINUTES,
 };
-use crate::ops::{automation_builtin, emit_create, emit_update, place, Position};
+use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -1088,37 +1090,114 @@ fn not_an_entry(what: &str) -> Error {
     ))
 }
 
-/// **Save the automation's picture as its next version** — the placements with the version of its action
-/// each stands on, the answers written for their settings, the agents chosen for their steps, the edges
-/// and wires drawn on the automation, and the placement it opens first. The copy is never rewritten:
-/// writing on in the automation changes its tables and leaves this as it was.
+/// **Save the automation as its next version, once the launch check passes.** Every op that writes on
+/// the automation writes on its tables, and those are the draft; this is what makes the draft the
+/// definition a launch can stand on.
+///
+/// Refused as `not_ready` with the launch check's reasons ([`automation_run::check`]), asked without the
+/// agents and models this machine has: those belong to the machine the run is launched on, not to the
+/// definition. Not refused while a run of it goes on (`AMB-D-1015`), nor while it is archived — archiving
+/// keeps it out of the lists and says nothing about its picture.
+///
+/// A draft with nothing changed since the newest version saves nothing, and that version is what comes
+/// back.
+pub fn save(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion> {
+    let automation = live_automation(tx, automation_id)?;
+    let unmet = automation_run::check(tx.conn(), automation_id, None, automation_run::nothing_asked())?;
+    if !unmet.is_empty() {
+        return Err(automation_run::not_ready("save", &automation.name, &unmet));
+    }
+    if let Some(latest) = read::automation_version_latest(tx.conn(), automation_id)? {
+        if Picture::read(tx.conn(), &automation)?.is(&latest)? {
+            return Ok(latest);
+        }
+    }
+    version_add(tx, automation_id)
+}
+
+/// **Does the draft hold anything its newest saved version does not?** For an automation nobody has
+/// saved, anything on its picture at all is unsaved. Its name and notes are not part of a version, so
+/// writing them leaves this as it was.
+pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
+    let automation =
+        read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    let draft = Picture::read(conn, &automation)?;
+    match read::automation_version_latest(conn, automation_id)? {
+        Some(latest) => Ok(!draft.is(&latest)?),
+        None => Ok(draft.entry_placement_id.is_some() || !draft.placements.is_empty()),
+    }
+}
+
+/// **The automation's picture as its tables hold it** — the rows a version is saved from, with the
+/// version of its action each placement stands on, the answers written for their settings, the agents
+/// chosen for their steps, the edges and wires drawn on the automation, and the placement it opens first.
+struct Picture {
+    entry_placement_id: Option<i64>,
+    placements: Vec<AutomationPlacement>,
+    cfgs: Vec<AutomationCfg>,
+    placement_steps: Vec<AutomationPlacementStep>,
+    edges: Vec<AutomationEdge>,
+    wires: Vec<AutomationWire>,
+}
+
+impl Picture {
+    fn read(conn: &Connection, automation: &Automation) -> Result<Picture> {
+        let placements = read::automation_placements_of(conn, automation.id)?;
+        let mut cfgs = Vec::new();
+        let mut placement_steps = Vec::new();
+        for placement in &placements {
+            cfgs.extend(read::automation_cfgs_of(conn, AutomationCfgOwner::Placement, placement.id)?);
+            placement_steps.extend(read::automation_placement_steps_of(conn, placement.id)?);
+        }
+        Ok(Picture {
+            entry_placement_id: automation.entry_placement_id,
+            placements,
+            cfgs,
+            placement_steps,
+            edges: read::automation_edges_of(conn, AutomationPictureOwner::Automation, automation.id)?,
+            wires: read::automation_wires_of(conn, AutomationPictureOwner::Automation, automation.id)?,
+        })
+    }
+
+    /// Whether `saved` holds this picture, row for row. Every op that writes a row moves its
+    /// `updated_at`, so a row written since the save differs from its copy even where it was written back
+    /// to the same value.
+    fn is(&self, saved: &AutomationVersion) -> Result<bool> {
+        fn same<T: serde::Serialize>(rows: &[T], saved: &str) -> Result<bool> {
+            let saved: serde_json::Value = serde_json::from_str(saved).map_err(Error::from)?;
+            Ok(serde_json::to_value(rows).map_err(Error::from)? == saved)
+        }
+        Ok(self.entry_placement_id == saved.entry_placement_id
+            && same(&self.placements, &saved.placements)?
+            && same(&self.cfgs, &saved.cfgs)?
+            && same(&self.placement_steps, &saved.placement_steps)?
+            && same(&self.edges, &saved.edges)?
+            && same(&self.wires, &saved.wires)?)
+    }
+}
+
+/// **Write the automation's picture down as its next version** ([`Picture`]), without asking whether it
+/// launches — [`save`] is the op that asks. The copy is never rewritten: writing on in the automation
+/// changes its tables and leaves this as it was.
 ///
 /// Every row goes in as its own record under its own id, as [`action_version_add`]'s do (`AMB-D-961`).
 /// The number is one past the automation's newest, and 1 for its first.
 pub fn version_add(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion> {
     let automation = live_automation(tx, automation_id)?;
     let conn = tx.conn();
-    let placements = read::automation_placements_of(conn, automation_id)?;
-    let mut cfgs = Vec::new();
-    let mut placement_steps = Vec::new();
-    for placement in &placements {
-        cfgs.extend(read::automation_cfgs_of(conn, AutomationCfgOwner::Placement, placement.id)?);
-        placement_steps.extend(read::automation_placement_steps_of(conn, placement.id)?);
-    }
-    let edges = read::automation_edges_of(conn, AutomationPictureOwner::Automation, automation_id)?;
-    let wires = read::automation_wires_of(conn, AutomationPictureOwner::Automation, automation_id)?;
+    let picture = Picture::read(conn, &automation)?;
     let version = read::automation_version_latest(conn, automation_id)?.map_or(1, |v| v.version + 1);
     let now = Timestamp::now();
     let saved = AutomationVersion {
         id: read::next_id(conn, "automation_version")?,
         automation_id,
         version,
-        entry_placement_id: automation.entry_placement_id,
-        placements: serde_json::to_string(&placements).map_err(Error::from)?,
-        cfgs: serde_json::to_string(&cfgs).map_err(Error::from)?,
-        placement_steps: serde_json::to_string(&placement_steps).map_err(Error::from)?,
-        edges: serde_json::to_string(&edges).map_err(Error::from)?,
-        wires: serde_json::to_string(&wires).map_err(Error::from)?,
+        entry_placement_id: picture.entry_placement_id,
+        placements: serde_json::to_string(&picture.placements).map_err(Error::from)?,
+        cfgs: serde_json::to_string(&picture.cfgs).map_err(Error::from)?,
+        placement_steps: serde_json::to_string(&picture.placement_steps).map_err(Error::from)?,
+        edges: serde_json::to_string(&picture.edges).map_err(Error::from)?,
+        wires: serde_json::to_string(&picture.wires).map_err(Error::from)?,
         created_at: now,
         updated_at: now,
     };
@@ -2779,7 +2858,7 @@ pub fn lines_back(entry: Option<i64>, boxes: &[i64], edges: &[AutomationEdge]) -
 
 /// [`lines_back`] of the picture one box is drawn on, read off the store.
 pub(crate) fn lines_back_on(
-    conn: &rusqlite::Connection,
+    conn: &Connection,
     owner_kind: AutomationPictureOwner,
     owner_id: i64,
 ) -> Result<BTreeSet<i64>> {

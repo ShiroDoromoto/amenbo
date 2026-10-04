@@ -1622,6 +1622,7 @@ export const ptBR: Translation = {
     pty_failed: "Não foi possível iniciar o terminal: {reason}",
     pty_gone: "Esse terminal não está mais aberto.",
     pty_paste_failed: "Não foi possível salvar a imagem colada: {reason}",
+    pty_read_only: "Não é possível escrever nada neste terminal.",
     wake_unknown_agent: "O Amenbo não sabe como iniciar {agent}.",
     wake_no_folder: "Não foi possível ler essa pasta: {reason}",
     wake_no_config: "O Amenbo não encontrou os próprios arquivos.",

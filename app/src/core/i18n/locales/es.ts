@@ -1621,6 +1621,7 @@ export const es: Translation = {
     pty_failed: "No se pudo iniciar la terminal: {reason}",
     pty_gone: "Esa terminal ya no está abierta.",
     pty_paste_failed: "No se pudo guardar la imagen pegada: {reason}",
+    pty_read_only: "No se puede escribir nada en esta terminal.",
     wake_unknown_agent: "Amenbo no sabe cómo iniciar {agent}.",
     wake_no_folder: "No se pudo leer esa carpeta: {reason}",
     wake_no_config: "Amenbo no pudo encontrar sus propios archivos.",

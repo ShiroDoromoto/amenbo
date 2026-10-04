@@ -1881,6 +1881,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   pty_failed: "The terminal could not be started: {reason}",
   pty_gone: "That terminal is no longer open.",
   pty_paste_failed: "The pasted image could not be saved: {reason}",
+  pty_read_only: "Nothing can be written into this terminal.",
   wake_unknown_agent: "Amenbo does not know how to start {agent}.",
   wake_no_folder: "That folder could not be read: {reason}",
   wake_no_config: "Amenbo could not find its own files.",

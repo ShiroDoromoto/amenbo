@@ -1619,6 +1619,7 @@ export const ja: Translation = {
     pty_failed: "端末を起動できませんでした: {reason}",
     pty_gone: "この端末はもう開いていません。",
     pty_paste_failed: "貼り付けた画像を保存できませんでした: {reason}",
+    pty_read_only: "この端末には書き込めません。",
     wake_unknown_agent: "{agent} の起こし方を Amenbo は知りません。",
     wake_no_folder: "そのフォルダを読めませんでした: {reason}",
     wake_no_config: "Amenbo が自分のファイルを見つけられませんでした。",

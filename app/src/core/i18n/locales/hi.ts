@@ -1603,6 +1603,7 @@ export const hi: Translation = {
     pty_failed: "टर्मिनल शुरू नहीं किया जा सका: {reason}",
     pty_gone: "वह टर्मिनल अब खुला नहीं है।",
     pty_paste_failed: "चिपकाई गई छवि सहेजी नहीं जा सकी: {reason}",
+    pty_read_only: "इस टर्मिनल में कुछ भी नहीं लिखा जा सकता।",
     wake_unknown_agent: "Amenbo को नहीं पता कि {agent} को कैसे शुरू करें।",
     wake_no_folder: "वह फ़ोल्डर पढ़ा नहीं जा सका: {reason}",
     wake_no_config: "Amenbo को अपनी ही फ़ाइलें नहीं मिलीं।",

@@ -1600,6 +1600,7 @@ export const ko: Translation = {
     pty_failed: "터미널을 시작할 수 없습니다: {reason}",
     pty_gone: "해당 터미널은 더 이상 열려 있지 않습니다.",
     pty_paste_failed: "붙여넣은 이미지를 저장하지 못했습니다: {reason}",
+    pty_read_only: "이 터미널에는 아무것도 입력할 수 없습니다.",
     wake_unknown_agent: "Amenbo는 {agent}을(를) 실행하는 방법을 모릅니다.",
     wake_no_folder: "그 폴더를 읽을 수 없었습니다: {reason}",
     wake_no_config: "Amenbo가 자신의 파일을 찾지 못했습니다.",

@@ -1605,6 +1605,7 @@ export const zhHant: Translation = {
     pty_failed: "無法啟動終端機：{reason}",
     pty_gone: "該終端機已經關閉。",
     pty_paste_failed: "無法儲存貼上的圖片：{reason}",
+    pty_read_only: "無法向此終端機寫入任何內容。",
     wake_unknown_agent: "Amenbo 不知道如何啟動 {agent}。",
     wake_no_folder: "讀不到那個資料夾：{reason}",
     wake_no_config: "Amenbo 找不到自己的檔案。",

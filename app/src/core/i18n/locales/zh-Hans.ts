@@ -1605,6 +1605,7 @@ export const zhHans: Translation = {
     pty_failed: "无法启动终端：{reason}",
     pty_gone: "该终端已经关闭。",
     pty_paste_failed: "无法保存粘贴的图片：{reason}",
+    pty_read_only: "无法向此终端写入任何内容。",
     wake_unknown_agent: "Amenbo 不知道如何启动 {agent}。",
     wake_no_folder: "读不到那个文件夹：{reason}",
     wake_no_config: "Amenbo 找不到自己的文件。",

@@ -1604,6 +1604,7 @@ export const id: Translation = {
     pty_failed: "Terminal tidak dapat dijalankan: {reason}",
     pty_gone: "Terminal itu sudah tidak terbuka.",
     pty_paste_failed: "Gambar yang ditempel tidak dapat disimpan: {reason}",
+    pty_read_only: "Tidak ada yang bisa ditulis ke terminal ini.",
     wake_unknown_agent: "Amenbo tidak tahu cara menjalankan {agent}.",
     wake_no_folder: "Folder itu tidak bisa dibaca: {reason}",
     wake_no_config: "Amenbo tidak menemukan berkasnya sendiri.",

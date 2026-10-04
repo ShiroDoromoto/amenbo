@@ -1,6 +1,15 @@
 //! **Run a script step's program once** (`AMB-D-1016`) — hand it its inputs, let it run, and take back
 //! what it left, without deciding what any of it means.
 //!
+//! A run comes in three parts, so that whoever starts the program — [`run`] here with its output on pipes,
+//! or the app on a PTY — goes through the same folder, the same waiting and the same reading back:
+//!
+//! - [`prepare`] — writes the folder and answers [`Prepared`]: the program, its arguments, and the
+//!   variables to set on it and take off it. Nothing is started.
+//! - [`wait`] — waits for the started program, given its [`crate::sys::ProcessGroup`] and a way to ask
+//!   whether it has ended, and kills the group at its timeout or when its caller says it is to stop.
+//! - [`Prepared::finish`] — reads back what the program left and removes the folder.
+//!
 //! Each run gets a folder of its own under the OS's temporary folder:
 //!
 //! - `input.json` — `{"version":1,"ins":{…}}`, one entry per input, its path handed in `AMENBO_INPUT`;
@@ -14,18 +23,18 @@
 //! taken for a step it has no part in. On macOS it is handed the user's login-shell `PATH`
 //! ([`crate::sys::login_shell_path`]) when that can be read: a `.app` started from Finder carries only
 //! `/usr/bin:/bin:/usr/sbin:/sbin`, where neither `amenbo` nor a Homebrew tool is found, while an AI step's
-//! terminal finds both. It is started in a group of its own ([`crate::sys::ProcessGroup`]),
-//! and one still running at its timeout, or when its caller says it is to stop, is killed with every
-//! process it started.
+//! terminal finds both. It is started in a group of its own, and one still running at its timeout, or when
+//! its caller says it is to stop, is killed with every process it started.
 //!
 //! **Nothing is written to the store.** A program may run for hours ([`MAX_SCRIPT_TIMEOUT_MINUTES`]), so
 //! this runs outside any transaction, and what came back is [`Ran`] for the caller to check against the
 //! step's exits and ports and to record ([`crate::ops::automation_report::script_ran`]). Whatever
-//! happened, the folder is gone by the time it returns: the files a program left are read into [`Ran`]
-//! first.
+//! happened, the folder is gone once [`Prepared`] is: the files a program left are read by
+//! [`Prepared::finish`] first.
 //!
 //! [`MAX_SCRIPT_TIMEOUT_MINUTES`]: crate::model::MAX_SCRIPT_TIMEOUT_MINUTES
 
+use std::ffi::OsString;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{ExitStatus, Stdio};
@@ -34,6 +43,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crate::model::StepScript;
+use crate::sys::ProcessGroup;
 
 /// The variable the path to `input.json` is handed in.
 pub const INPUT_VAR: &str = "AMENBO_INPUT";
@@ -90,28 +100,94 @@ pub enum Ended {
     },
 }
 
-/// **Run `script` once**, handing it `given`, and stop it at its timeout or as soon as `stop` answers
-/// `true` — asked every [`STOP_EVERY`] while it runs.
+/// **Run `script` once** with its output on pipes, handing it `given`, and stop it at its timeout or as
+/// soon as `stop` answers `true` — asked every [`STOP_EVERY`] while it runs.
 pub fn run(script: &StepScript, given: &[(String, Given)], stop: impl FnMut() -> bool) -> Ran {
-    let minutes = u64::try_from(script.timeout_minutes).unwrap_or(0);
-    run_until(script, given, Duration::from_secs(minutes * 60), stop)
+    match prepare(script, given) {
+        Ok(prepared) => run_prepared(prepared, stop),
+        Err(why) => not_started(why),
+    }
 }
 
 /// How often a running program's caller is asked whether it is to stop.
 pub const STOP_EVERY: Duration = Duration::from_secs(1);
 
-fn run_until(script: &StepScript, given: &[(String, Given)], timeout: Duration, stop: impl FnMut() -> bool) -> Ran {
-    let dir = match folder() {
-        Ok(dir) => dir,
-        Err(e) => return not_started(e.to_string()),
-    };
-    let ran = run_in(&dir, script, given, timeout, stop);
-    let _ = std::fs::remove_dir_all(&dir);
-    ran
-}
-
 fn not_started(why: String) -> Ran {
     Ran { ended: Ended::NotStarted(why), stdout_tail: String::new(), stderr_tail: String::new() }
+}
+
+/// **A run's folder, written and waiting for its program** — and what the program is to be started
+/// with. The folder is removed when this is dropped.
+#[derive(Debug)]
+pub struct Prepared {
+    dir: PathBuf,
+    out: PathBuf,
+    output: PathBuf,
+    /// The program, started by this path as it is.
+    pub program: String,
+    /// Its arguments, each handed as one.
+    pub args: Vec<String>,
+    /// The variables to set on it.
+    pub env: Vec<(&'static str, OsString)>,
+    /// The variables to take off it.
+    pub env_remove: Vec<&'static str>,
+    /// How long it may run before it is killed.
+    pub timeout: Duration,
+}
+
+/// **Write the folder for one run of `script`**, handing it `given`, and answer what to start the program
+/// with — or why it cannot be, in the OS's words.
+pub fn prepare(script: &StepScript, given: &[(String, Given)]) -> Result<Prepared, String> {
+    let dir = folder().map_err(|e| e.to_string())?;
+    let minutes = u64::try_from(script.timeout_minutes).unwrap_or(0);
+    let mut prepared = Prepared {
+        out: dir.join("out"),
+        output: dir.join("out").join("output.json"),
+        dir,
+        program: script.program.clone(),
+        args: script.args.clone(),
+        env: Vec::new(),
+        env_remove: vec![crate::session::STEP_VAR],
+        timeout: Duration::from_secs(minutes * 60),
+    };
+    let input = write_input(&prepared.dir, given).map_err(|e| e.to_string())?;
+    std::fs::create_dir(&prepared.out).map_err(|e| e.to_string())?;
+    prepared.env.push((INPUT_VAR, input.into_os_string()));
+    prepared.env.push((OUTPUT_VAR, prepared.output.clone().into_os_string()));
+    if let Some(path) = crate::sys::login_shell_path() {
+        prepared.env.push((crate::env::PATH_VAR, path.to_os_string()));
+    }
+    Ok(prepared)
+}
+
+impl Prepared {
+    /// **Read back what the program left**, given how [`wait`] ended, and remove the folder.
+    pub fn finish(self, waited: Result<ExitStatus, Ended>) -> Ended {
+        match waited {
+            Err(cut) => cut,
+            Ok(status) if !status.success() => Ended::Failed(status),
+            Ok(_) => read_output(&self.out, &self.output),
+        }
+    }
+
+    /// The program as a [`std::process::Command`], its stdin closed and its stdout and stderr piped.
+    fn command(&self) -> std::process::Command {
+        let mut command = crate::sys::command(&self.program);
+        command.args(&self.args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        for var in &self.env_remove {
+            command.env_remove(var);
+        }
+        for (var, value) in &self.env {
+            command.env(var, value);
+        }
+        command
+    }
+}
+
+impl Drop for Prepared {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
 }
 
 /// A folder no other run has, under the OS's temporary folder.
@@ -124,75 +200,55 @@ fn folder() -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
-fn run_in(
-    dir: &Path,
-    script: &StepScript,
-    given: &[(String, Given)],
+/// **Wait for a started program** until `exited` answers its status, killing `group` once `timeout` has
+/// passed or as soon as `stop` answers `true` — asked every [`STOP_EVERY`]. A program that was killed is
+/// waited for until `exited` answers, and how it was cut short comes back in place of its status.
+pub fn wait(
+    group: &ProcessGroup,
     timeout: Duration,
+    mut exited: impl FnMut() -> std::io::Result<Option<ExitStatus>>,
     mut stop: impl FnMut() -> bool,
-) -> Ran {
-    let input = match write_input(dir, given) {
-        Ok(input) => input,
-        Err(e) => return not_started(e.to_string()),
+) -> Result<ExitStatus, Ended> {
+    let deadline = Instant::now() + timeout;
+    let mut asked = Instant::now();
+    let cut = loop {
+        match exited() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) if Instant::now() < deadline => {
+                if asked.elapsed() >= STOP_EVERY {
+                    asked = Instant::now();
+                    if stop() {
+                        break Ended::Stopped;
+                    }
+                } else {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+            }
+            _ => break Ended::TimedOut,
+        }
     };
-    let out = dir.join("out");
-    if let Err(e) = std::fs::create_dir(&out) {
-        return not_started(e.to_string());
+    group.kill();
+    while let Ok(None) = exited() {
+        std::thread::sleep(Duration::from_millis(20));
     }
-    let output = out.join("output.json");
-    let mut command = crate::sys::command(&script.program);
-    command
-        .args(&script.args)
-        .env_remove(crate::session::STEP_VAR)
-        .env(INPUT_VAR, &input)
-        .env(OUTPUT_VAR, &output)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(path) = crate::sys::login_shell_path() {
-        command.env(crate::env::PATH_VAR, path);
-    }
-    let (mut child, group) = match crate::sys::ProcessGroup::start(&mut command) {
+    Err(cut)
+}
+
+/// Start `prepared` with its output on pipes, wait for it, and read back what it left.
+fn run_prepared(prepared: Prepared, stop: impl FnMut() -> bool) -> Ran {
+    let (mut child, group) = match ProcessGroup::start(&mut prepared.command()) {
         Ok(started) => started,
         Err(e) => return not_started(e.to_string()),
     };
     let stdout = Tail::drain(child.stdout.take());
     let stderr = Tail::drain(child.stderr.take());
-    let deadline = Instant::now() + timeout;
-    let mut asked = Instant::now();
-    let status = loop {
-        let cut = match child.try_wait() {
-            Ok(Some(status)) => break Ok(status),
-            Ok(None) if Instant::now() < deadline => {
-                if asked.elapsed() >= STOP_EVERY {
-                    asked = Instant::now();
-                    if stop() {
-                        Ended::Stopped
-                    } else {
-                        continue;
-                    }
-                } else {
-                    std::thread::sleep(Duration::from_millis(20));
-                    continue;
-                }
-            }
-            _ => Ended::TimedOut,
-        };
-        group.kill();
-        let _ = child.kill();
-        let _ = child.wait();
-        break Err(cut);
-    };
+    let deadline = Instant::now() + prepared.timeout;
+    let waited = wait(&group, prepared.timeout, || child.try_wait(), stop);
     // A child the program left running may still hold its pipes open, so the readers are waited for
     // only until the deadline, and what they have read by then is what is kept. One that was stopped
     // went with its group, and its pipes closed with it.
     let (stdout_tail, stderr_tail) = (stdout.until(deadline), stderr.until(deadline));
-    let ended = match status {
-        Err(cut) => cut,
-        Ok(status) if !status.success() => Ended::Failed(status),
-        Ok(_) => read_output(&out, &output),
-    };
-    Ran { ended, stdout_tail, stderr_tail }
+    Ran { ended: prepared.finish(waited), stdout_tail, stderr_tail }
 }
 
 /// Write `input.json`, and each file input beside it, and answer the path to `input.json`.
@@ -363,6 +419,13 @@ mod tests {
             assert!(matches!(ran.ended, Ended::NotJson(_)), "{:?}", ran.ended);
         }
 
+        /// [`run`] with a timeout of `timeout` in place of the script's.
+        fn run_for(script: &StepScript, timeout: Duration, stop: impl FnMut() -> bool) -> Ran {
+            let mut prepared = prepare(script, &[]).expect("the folder is written");
+            prepared.timeout = timeout;
+            run_prepared(prepared, stop)
+        }
+
         /// A program that prints where its `input.json` is, starts a child that would outlive it, prints
         /// the child's pid, and waits.
         const WITH_A_CHILD: &str = "echo \"$AMENBO_INPUT\"; sleep 30 & echo $!; wait";
@@ -391,7 +454,7 @@ mod tests {
         #[test]
         fn a_program_still_running_at_its_timeout_is_killed_with_its_children_and_its_folder_removed() {
             let started = Instant::now();
-            let ran = run_until(&sh(WITH_A_CHILD), &[], Duration::from_millis(500), || false);
+            let ran = run_for(&sh(WITH_A_CHILD), Duration::from_millis(500), || false);
             assert!(matches!(ran.ended, Ended::TimedOut), "{:?}", ran.ended);
             assert!(started.elapsed() < Duration::from_secs(10));
             let (folder, child) = printed(&ran.stdout_tail);
@@ -402,7 +465,7 @@ mod tests {
         #[test]
         fn a_program_its_caller_stops_is_killed_with_its_children_and_its_folder_removed() {
             let started = Instant::now();
-            let ran = run_until(&sh(WITH_A_CHILD), &[], Duration::from_secs(60), || true);
+            let ran = run_for(&sh(WITH_A_CHILD), Duration::from_secs(60), || true);
             assert!(matches!(ran.ended, Ended::Stopped), "{:?}", ran.ended);
             assert!(started.elapsed() < Duration::from_secs(10));
             let (folder, child) = printed(&ran.stdout_tail);

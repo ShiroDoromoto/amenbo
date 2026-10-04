@@ -467,20 +467,28 @@ export function TerminalPane({
   };
   const clearing = useRef(clearBand);
   clearing.current = clearBand;
+  // Whether the terminal face is drawn — not while a built-in stands where it would.
+  const termShown = running && builtin === null;
 
   // The box opening, folding or growing moves the terminal's bottom, and so does the pane changing
-  // size; each is the terminal changing height, so watching it and the body is enough.
+  // size; each is the terminal changing height, so watching it and the body is enough. With no
+  // terminal there is nothing to follow through the picture, so the length measured for the last one
+  // is taken off and the picture is drawn whole (`.slot__body--bare`).
   useEffect(() => {
     if (!onPicture) return;
     const body = bodyRef.current;
     const face = paneRef.current;
-    if (body === null || face === null) return;
+    if (body === null) return;
+    if (face === null) {
+      body.style.removeProperty("--runpic-clear");
+      return;
+    }
     clearing.current();
     const watch = new ResizeObserver(() => clearing.current());
     watch.observe(body);
     watch.observe(face);
     return () => watch.disconnect();
-  }, [onPicture, running, live]);
+  }, [onPicture, termShown, live]);
 
   /** Send what has been written to the program in the pane, as the person's own line
    *  (`../talk/terminal`), and empty the box behind it. */
@@ -1180,8 +1188,11 @@ export function TerminalPane({
             away would be ending what draws it. The picture is drawn over it and is clear over the
             band, the box and the terminal's last eight rows (`clearBand`), and the face under it dims,
             so the terminal can be followed through the picture and keeps its size when the face is
-            turned (`../talk/terminal`). */}
-        <div ref={bodyRef} className={`slot__body${onPicture ? " slot__body--away" : ""}`}>
+            turned (`../talk/terminal`). With no terminal up, it is clear nowhere. */}
+        <div
+          ref={bodyRef}
+          className={`slot__body${onPicture ? " slot__body--away" : ""}${onPicture && !termShown ? " slot__body--bare" : ""}`}
+        >
         {run !== null && face === "picture" && <RunPicture run={run} />}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}

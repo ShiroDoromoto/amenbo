@@ -12,6 +12,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Say } from "../talk/nameplate";
+import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t } from "../core/i18n";
 
@@ -54,8 +55,8 @@ afterEach(() => {
   container.remove();
 });
 
-/** A pane, on a run or on none. */
-async function pane(run: Say | null): Promise<void> {
+/** A pane, on a run or on none — with a terminal put up where `autoStart`, or a built-in in its place. */
+async function pane(run: Say | null, { autoStart = false, builtin = null }: { autoStart?: boolean; builtin?: BuiltinRun | null } = {}): Promise<void> {
   await act(async () => {
     root.render(createElement(TerminalPane, {
       frame: run === null ? "1" : `run-${run.run}`,
@@ -63,9 +64,10 @@ async function pane(run: Say | null): Promise<void> {
       project: 1,
       names: new Map(),
       start: { cwd: "/work/here" },
-      autoStart: false,
+      autoStart,
       focused: true,
       run,
+      builtin,
       onOpened: () => {},
       onSaid: () => {},
       onPath: () => {},
@@ -84,7 +86,9 @@ async function pane(run: Say | null): Promise<void> {
 const faces = () => [...container.querySelectorAll<HTMLButtonElement>(".slot__face")];
 const pressed = () => faces().find((one) => one.getAttribute("aria-pressed") === "true")?.textContent;
 const picture = () => container.querySelector(".runpic");
-const away = () => container.querySelector(".slot__body")?.classList.contains("slot__body--away");
+const body = () => container.querySelector<HTMLElement>(".slot__body");
+const away = () => body()?.classList.contains("slot__body--away");
+const bare = () => body()?.classList.contains("slot__body--bare");
 
 describe("the face a run's pane is turned to", () => {
   it("opens on the picture, with the terminal face kept behind it", async () => {
@@ -164,5 +168,29 @@ describe("a step that may wait for a person", () => {
   it("does not turn a run that is not going", async () => {
     await pane({ ...ASKING, run: 24, state: { ...FAILED.state!, status: "paused", word: "Paused" } });
     expect(pressed()).toBe(t("auto.run.facePicture"));
+  });
+});
+
+/// The bottom of the picture is clear only over a terminal (`AMB-T-5832`).
+describe("the clear band at the bottom of the picture", () => {
+  const RUNNING: Say = { ...FAILED, run: 31, state: { ...FAILED.state!, status: "running", word: "Running" } };
+  const CUT: BuiltinRun = {
+    automation: 3, placement: 12, automationName: "Nightly", name: "worktree を切る", key: "worktree_cut",
+    finished: false, waiting: true,
+  };
+
+  it("is clear over a terminal", async () => {
+    await pane(RUNNING, { autoStart: true });
+    expect(picture()).not.toBeNull();
+    expect(bare()).toBe(false);
+  });
+
+  it("is not clear over a built-in, and drops the length measured for the terminal before it", async () => {
+    await pane(RUNNING, { autoStart: true });
+    body()!.style.setProperty("--runpic-clear", "240px");
+    await pane({ ...RUNNING, step: "worktree を切る", builtin: true }, { autoStart: true, builtin: CUT });
+    expect(picture()).not.toBeNull();
+    expect(bare(), "the picture over a built-in was left clear at its bottom").toBe(true);
+    expect(body()!.style.getPropertyValue("--runpic-clear"), "the last terminal's length was kept").toBe("");
   });
 });

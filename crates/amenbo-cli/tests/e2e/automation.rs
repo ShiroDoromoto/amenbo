@@ -677,6 +677,35 @@ fn a_definition_that_does_not_exist_is_said_to_be_missing() {
     }
 }
 
+/// **A show says which version was saved last and whether the draft holds more**, and each placement
+/// which version of its action it stands on beside the newest there is. One nobody has saved is shown
+/// as such, and `--saved` is refused for it rather than answered with the draft.
+#[test]
+fn a_show_names_the_versions_and_saved_is_refused_where_nothing_is_saved() {
+    let cli = Cli::new();
+    let (_, a, action, placement) = an_automation(&cli);
+
+    let (shown, _) = cli.run(&["automation", "show", &a]);
+    assert!(shown.contains("not saved yet · the draft has unsaved changes"), "{shown}");
+    assert!(shown.contains(&format!("placement {placement} — action {action} (one) no saved version")), "{shown}");
+    let json = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(json["showing"].as_str(), Some("draft"));
+    assert_eq!(json["unsaved"], serde_json::json!(true));
+    let entry = &json["placements"][0];
+    assert!(entry["version"].is_i64(), "a built-in stands on the version its record is: {entry}");
+    assert_eq!(entry["version"], entry["latest_version"], "{entry}");
+
+    let (inside, _) = cli.run(&["automation", "action-show", &action]);
+    assert!(inside.contains("not saved yet · the draft has unsaved changes"), "{inside}");
+    assert!(inside.contains(&format!("placed at: automation {a} no version")), "{inside}");
+
+    for args in [["automation", "show", a.as_str(), "--saved"], ["automation", "action-show", action.as_str(), "--saved"]] {
+        let (refused, code) = cli.run_err(&args);
+        assert_ne!(code, 0, "{refused}");
+        assert!(refused.contains("no saved version"), "{refused}");
+    }
+}
+
 // ───────────────────────────── running one ─────────────────────────────
 
 /// An automation that launches as it stands: the built-in that takes a task, with one there for it to

@@ -3,7 +3,8 @@
 // What a reader watching a run wants to know is where it is and where it has been, and a terminal's
 // output says neither. So the pane's body can be the automation's picture instead, drawn the way the
 // build screen draws it (`../screens/AutomationPicture`), with the lap the run is walking on the task
-// it is working lit, and the box under way blinking.
+// it is working lit, and the box under way blinking — or, while the run waits for a task it can take,
+// dashed with a spinner over it.
 //
 // **The trail is core's to read** (`amenbo_core::ops::automation_run::trail`): which spots it passed, by
 // which lines, and where it stands. It is read again whenever the run moves (`useRunTrail`), and a
@@ -61,7 +62,7 @@ function lapStart(passed: AutomationRunTrailDto["passed"]): number {
 
 export function RunPicture({ run }: { run: Say }) {
   const automation = useAutomation(run.automationId);
-  const trail = picTrail(useRunTrail(run.run));
+  const trail = { ...picTrail(useRunTrail(run.run)), waiting: run.state?.waiting === true };
   return (
     <div className="runpic">
       <AutomationPicture graph={automationGraph(automation)} selectedBoxId={trail.at} trail={trail} />

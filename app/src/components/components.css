@@ -2359,5 +2359,16 @@ button.feed__target:hover { color: var(--c-accent); }
 @media (prefers-reduced-motion: reduce) {
   .autopic__node--at { animation: none; box-shadow: 0 0 0 2px var(--c-accent); }
 }
+/* The box under way waiting for a task it can take: still, with a dashed border, and a spinner and the
+   words for the wait over it in place of the word that it takes the task. */
+.autopic__node--wait { border-color: var(--c-accent); border-style: dashed; }
+.autopic__takes--wait { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--c-accent-text); }
+.autopic__spin {
+  flex: none; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
+  border: 2px solid var(--c-edge); border-top-color: var(--c-accent);
+  animation: autopic-spin 1s linear infinite;
+}
+@keyframes autopic-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .autopic__spin { animation: none; } }
 /* One output a way out of the action hands on, and the step output that fills it. */
 .autostep__outline { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }

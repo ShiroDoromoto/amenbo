@@ -49,9 +49,10 @@
 //
 // **Drawn in a run's pane, it is the run's trail** (`AMB-T-5775`, `../shell/RunPicture`). The boxes and
 // lines the run passed on the lap it is walking are lit, the box under way blinks — or wears only its
-// border where the reader asked for less motion — and each box the run moves on to is picked and
-// brought to the middle. Nothing is put in there, so no `+` is drawn, and the legend is left to the
-// build screen: what a line means is read where the picture is made.
+// border where the reader asked for less motion. A box waiting for a task it can take does not blink:
+// its border is dashed, and a spinner and the words for the wait stand over it. Each box the run moves
+// on to is picked and brought to the middle. Nothing is put in there, so no `+` is drawn, and the
+// legend is left to the build screen: what a line means is read where the picture is made.
 import { useEffect, useId, useRef, useState } from "react";
 import { edgeWord, layOut, openWord, ACTION_BOUNDARY, ERROR_EXIT, TAKES_INSET, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
@@ -92,12 +93,14 @@ function inputsLine(mark: PicMark): string {
 
 /**
  * **What a run has walked on this picture** (`AMB-T-5775`): the boxes and the lines it passed on the lap
- * it is walking (`AMB-T-5825`), and the box under way.
+ * it is walking (`AMB-T-5825`), and the box under way — and whether that box is waiting for a task it
+ * can take rather than working.
  */
 export type PicTrail = {
   boxes: ReadonlySet<number>;
   edges: ReadonlySet<number>;
   at?: number;
+  waiting?: boolean;
 };
 
 /** Which arrowhead a line ends in — its colour, since a marker cannot take the line's own. */
@@ -254,6 +257,7 @@ export function AutomationPicture({
   // observer again from the start.
   const drawn = picture.nodes.some((node) => node.boxId === selectedBoxId);
   const centred = trail !== undefined;
+  const waitingAt = (boxId: number) => trail?.waiting === true && trail.at === boxId;
   useEffect(() => {
     const box = pickedRef.current;
     if (!drawn || box === null || typeof IntersectionObserver === "undefined") return;
@@ -448,16 +452,24 @@ export function AutomationPicture({
 
           {/* Over the top-right of a box that takes the next task, outside it: inside, the name and
               its second line have the width, and the top-left is where lines come in. It ends short of
-              the corner, where the line in from the right margin lands. */}
+              the corner, where the line in from the right margin lands. While the run waits there for
+              a task it can take, it says so instead, with a spinner. */}
           {picture.nodes
-            .filter((node) => node.takes === true)
+            .filter((node) => node.takes === true || waitingAt(node.boxId))
             .map((node) => (
               <span
                 key={`takes-${node.boxId}`}
-                className="autopic__takes"
+                className={waitingAt(node.boxId) ? "autopic__takes autopic__takes--wait" : "autopic__takes"}
                 style={{ left: `${node.x + node.w - TAKES_INSET}px`, top: `${node.y}px` }}
               >
-                {t("auto.step.takesTask")}
+                {waitingAt(node.boxId) ? (
+                  <>
+                    <span className="autopic__spin" aria-hidden="true" />
+                    {t("auto.run.body.taskWait")}
+                  </>
+                ) : (
+                  t("auto.step.takesTask")
+                )}
               </span>
             ))}
           {picture.nodes.map((node) => (
@@ -472,7 +484,7 @@ export function AutomationPicture({
                 node.draft === true ? "autopic__node--draft" : "",
                 node.boxId === selectedBoxId ? "autopic__node--on" : "",
                 trail?.boxes.has(node.boxId) === true ? "autopic__node--lit" : "",
-                trail?.at === node.boxId ? "autopic__node--at" : "",
+                trail?.at === node.boxId ? (trail.waiting === true ? "autopic__node--wait" : "autopic__node--at") : "",
               ]
                 .filter((one) => one !== "")
                 .join(" ")}

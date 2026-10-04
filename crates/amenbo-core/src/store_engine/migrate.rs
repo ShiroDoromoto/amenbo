@@ -1169,7 +1169,51 @@ pub const STEPS: &[Step] = &[
         // **What an earlier build already cleared stays NULL.** Nothing here says what it was.
         apply: Apply::Custom(keep_the_ids_a_run_was_copied_from),
     },
+    Step {
+        to: 92,
+        name: "add automation_action_version, the saved versions of an action a person wrote, and automation_placement.version, the one a placement stands on",
+        // An action a person wrote takes a version each time it is saved, and a placement points at one
+        // of them, as a built-in's placement already points at one of its versions (`AMB-D-1000`).
+        //
+        // **Seeded with nothing.** No build before this one saved a version, so the table starts empty
+        // and every placement already there stands on none.
+        apply: Apply::Custom(give_the_actions_versions),
+    },
 ];
+
+/// v92: `automation_action_version` and `automation_placement.version` — the saved versions of an action
+/// a person wrote, and which of them a placement stands on.
+///
+/// **The table is laid down here in frozen text** as well as by genesis, for the reason v53's are, and
+/// **the column is appended only where it is missing**, v68's guard and for v53's reason. The placements
+/// already there are left at NULL.
+fn give_the_actions_versions(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    tx.execute_batch(ACTION_VERSION_TABLE)?;
+    if !column_names(tx, "automation_placement")?.iter().any(|c| c == "version") {
+        tx.execute_batch("ALTER TABLE automation_placement ADD COLUMN version BIGINT;")?;
+    }
+    Ok(())
+}
+
+/// The table v92 lays down — frozen text, like every step's.
+const ACTION_VERSION_TABLE: &str = r"
+CREATE TABLE IF NOT EXISTS automation_action_version (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    action_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    version BIGINT NOT NULL DEFAULT 0,
+    entry_step_id BIGINT,
+    steps TEXT NOT NULL DEFAULT '',
+    exits TEXT NOT NULL DEFAULT '',
+    ports TEXT NOT NULL DEFAULT '',
+    cfgs TEXT NOT NULL DEFAULT '',
+    edges TEXT NOT NULL DEFAULT '',
+    wires TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (action_id, version)
+);
+";
 
 /// v91: `automation_run_def.placement_id`, `automation_run_def.step_id` and
 /// `automation_placement_step.step_id` lose their `REFERENCES` (`AMB-D-1015`).
@@ -9715,6 +9759,41 @@ mod tests {
         assert!(
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v92: every placement an upgrade brings in stands on no saved version, the table of versions
+    /// starts empty, and it takes one version per number per action.
+    #[test]
+    fn every_placement_already_there_stands_on_no_saved_version() {
+        let dir = scratch("action-versions");
+        let engine = store_at(&dir, 91);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, project_id, name) VALUES (1, 1, 'review');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (1, 1, 1);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let conn = engine.conn();
+        let version: Option<i64> =
+            conn.query_row("SELECT version FROM automation_placement WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, None);
+        let saved: i64 =
+            conn.query_row("SELECT COUNT(*) FROM automation_action_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(saved, 0, "no build before this one saved a version");
+        conn.execute("INSERT INTO automation_action_version (action_id, version) VALUES (1, 1)", []).unwrap();
+        conn.execute("UPDATE automation_placement SET version = 1 WHERE id = 1", []).unwrap();
+        assert!(
+            conn.execute("INSERT INTO automation_action_version (action_id, version) VALUES (1, 1)", []).is_err(),
+            "one action has one version under each number"
         );
         std::fs::remove_dir_all(&dir).ok();
     }

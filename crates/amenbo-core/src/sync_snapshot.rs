@@ -247,7 +247,7 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation_placement" => {
             "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)"
         }
-        "automation_action_step" => {
+        "automation_action_step" | "automation_action_version" => {
             "action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)"
         }
         // Who carries a step out is chosen where the action is placed, so it travels with the
@@ -1070,10 +1070,17 @@ mod tests {
             "UPDATE automation_action SET entry_step_id = ?2 WHERE id = ?1",
             rusqlite::params![action, step],
         );
+        put(
+            "INSERT INTO automation_action_version \
+                 (action_id, version, entry_step_id, steps, exits, ports, cfgs, edges, wires, \
+                  created_at, updated_at) \
+             VALUES (?1, 1, ?2, '[]', '[]', '[]', '[]', '[]', '[]', ?3, ?3)",
+            rusqlite::params![action, step, at],
+        );
         let placement = put(
             "INSERT INTO automation_placement \
-                 (automation_id, action_id, order_key, created_at, updated_at) \
-             VALUES (?1, ?2, 'a0', ?3, ?3)",
+                 (automation_id, action_id, version, order_key, created_at, updated_at) \
+             VALUES (?1, ?2, 1, 'a0', ?3, ?3)",
             rusqlite::params![automation, action, at],
         );
         put(

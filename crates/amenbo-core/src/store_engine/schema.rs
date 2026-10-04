@@ -1007,7 +1007,7 @@ datasets! {
 
     // ───────────────────────── automation: what is built ─────────────────────────
     //
-    // Ten tables for the definition and five for the run, and the line between them is that a run
+    // Eleven tables for the definition and five for the run, and the line between them is that a run
     // never reads a definition again once it has started: `automation_run_def` is the copy taken at
     // the moment of launch, so editing an automation cannot change what a run already under way is
     // doing. The definition half is built through `crate::ops::automation`, and the run is opened by
@@ -1091,6 +1091,11 @@ datasets! {
     automation_placement {
         automation_id: fk("automation", "RESTRICT"),
         action_id: fk("automation_action", "RESTRICT"),
+        // The saved version of the action this placement stands on (`automation_action_version.version`),
+        // or NULL. A built-in's is NULL, because its `action_id` already names one version
+        // (`AMB-D-1000`); so is one on an action nobody has saved yet. A placement keeps the version it
+        // was put down with until it is moved onto another.
+        version: col(INT_OPT),
         order_key: col(ORDER_KEY),
     }
 
@@ -1263,6 +1268,33 @@ datasets! {
         to_id: col(KEY_REF),
         to_port_id: col(KEY_REF),
     }
+
+    // **One saved version of an action a person wrote** — what was inside the action at the moment it
+    // was saved, copied whole and never rewritten. The tables above are the action as it is being
+    // written; this is what a placement stands on (`automation_placement.version`), so writing on in the
+    // action changes no automation until a placement is moved onto a newer version.
+    //
+    // `version` counts up from 1 within one action. A built-in has no rows here: its versions are
+    // actions of their own (`AMB-D-1000`).
+    //
+    // The six JSON columns hold the rows as they stood — the steps, the ways out of the action and of
+    // each step, the inputs and the outputs on those ways out, the action's settings, and the edges and
+    // wires drawn inside it — each the row's own record, under its own id. Ids are never reused
+    // (`AUTOINCREMENT`), so an edge or a wire in the copy keys its way out and its ports exactly as the
+    // row did (`AMB-D-961`), and a row deleted from the action afterwards still means the same thing
+    // here. `entry_step_id` is the step the copy opens first, a key into `steps` rather than a reference
+    // to a step that may since have gone.
+    automation_action_version {
+        action_id: fk("automation_action", "RESTRICT"),
+        version: col(COUNT),
+        entry_step_id: col(KEY_REF_OPT),
+        steps: col(REQ),
+        exits: col(REQ),
+        ports: col(REQ),
+        cfgs: col(REQ),
+        edges: col(REQ),
+        wires: col(REQ),
+    } => "UNIQUE (action_id, version)"
 
     // ───────────────────────── automation: what ran ─────────────────────────
 

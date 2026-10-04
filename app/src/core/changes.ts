@@ -98,6 +98,9 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // action's own row does — and a step, a way out, a port and a setting are all read through the
   // action a spot on some picture stands on (`AMB-D-949`).
   automation_action: ["automationActions"],
+  // A saved version of an action. Written in the same transaction as the save, whose own rows already
+  // move both surfaces, and no screen reads the copy yet — so it is folded to nothing.
+  automation_action_version: [],
   automation_placement: ["automationActions", "automations"],
   // Who carries a step out is read on the automation's definition alone; the library does not show it.
   automation_placement_step: ["automations"],

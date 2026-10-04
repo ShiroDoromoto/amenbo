@@ -20,8 +20,8 @@ use chrono::NaiveDate;
 use rusqlite::types::Value;
 
 use crate::model::{
-    ActorKind, Attachment, Automation, AutomationAction, AutomationCfg, AutomationEdge,
-    AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
+    ActorKind, Attachment, Automation, AutomationAction, AutomationActionVersion, AutomationCfg,
+    AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
     AutomationRun, AutomationRunDef,
     AutomationRunStep, AutomationRunTask, AutomationRunValue,
     AutomationStep,
@@ -565,6 +565,7 @@ pub fn automation_placement(p: &AutomationPlacement) -> Record {
             vec![
                 ("automation_id", kv(p.automation_id)),
                 ("action_id", kv(p.action_id)),
+                ("version", p.version.map(iv).unwrap_or(Value::Null)),
                 ("order_key", tv(&p.order_key)),
             ],
             &p.created_at,
@@ -745,6 +746,28 @@ pub fn automation_run(r: &AutomationRun) -> Record {
             ],
             &r.created_at,
             &r.updated_at,
+        ),
+    )
+}
+
+pub fn automation_action_version(v: &AutomationActionVersion) -> Record {
+    Record::new(
+        "automation_action_version",
+        v.id,
+        with_audit(
+            vec![
+                ("action_id", kv(v.action_id)),
+                ("version", iv(v.version)),
+                ("entry_step_id", kv_opt(&v.entry_step_id)),
+                ("steps", tv(&v.steps)),
+                ("exits", tv(&v.exits)),
+                ("ports", tv(&v.ports)),
+                ("cfgs", tv(&v.cfgs)),
+                ("edges", tv(&v.edges)),
+                ("wires", tv(&v.wires)),
+            ],
+            &v.created_at,
+            &v.updated_at,
         ),
     )
 }

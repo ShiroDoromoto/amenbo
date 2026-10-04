@@ -6869,19 +6869,27 @@ pub fn automation_edge_for_exit(
         .next())
 }
 
-/// The lines hanging on one way out — the edges that leave by it or return to it, and the wires that
-/// carry what it hands on. What goes when the way out does: a line keyed to a row that is gone decides
-/// nothing and carries nothing.
-pub fn automation_line_ids_on_exit(conn: &Connection, exit_id: i64) -> Result<(Vec<i64>, Vec<i64>)> {
+/// The lines of one picture hanging on one way out — the edges that leave by it or return to it, and
+/// the wires that carry what it hands on. What goes from that picture when the way out does: a line
+/// keyed to a row that is gone decides nothing and carries nothing.
+pub fn automation_line_ids_on_exit(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPictureOwner,
+    exit_id: i64,
+) -> Result<(Vec<i64>, Vec<i64>)> {
     const E: col::automation_edge::Cols = col::automation_edge::ALL;
     const W: col::automation_wire::Cols = col::automation_wire::ALL;
-    let mut edges = select_ids(conn, E.id, Some(&Pred::eq(E.exit_id, exit_id)))?;
-    for id in select_ids(conn, E.id, Some(&Pred::eq(E.exit_to_id, exit_id)))? {
-        if !edges.contains(&id) {
-            edges.push(id);
-        }
-    }
-    let wires = select_ids(conn, W.id, Some(&Pred::eq(W.from_exit_id, exit_id)))?;
+    let on = Pred::eq(E.owner_kind, owner_kind.as_str());
+    let edges = select_ids(
+        conn,
+        E.id,
+        Some(&on.and(Pred::eq(E.exit_id, exit_id).or(Pred::eq(E.exit_to_id, exit_id)))),
+    )?;
+    let wires = select_ids(
+        conn,
+        W.id,
+        Some(&Pred::eq(W.owner_kind, owner_kind.as_str()).and(Pred::eq(W.from_exit_id, exit_id))),
+    )?;
     Ok((edges, wires))
 }
 
@@ -7003,11 +7011,16 @@ pub fn automation_wires_to_port(
     automation_rows(conn, W.table, &pred, &[Sort::by(W.id)], super::hydrate::automation_wire_row)
 }
 
-/// Every wire keyed to one port at either end — what goes when the port does, since a wire from or
-/// into a port that is gone carries nothing.
-pub fn automation_wire_ids_naming_port(conn: &Connection, port_id: i64) -> Result<Vec<i64>> {
+/// Every wire of one picture keyed to one port at either end — what goes from that picture when the
+/// port does, since a wire from or into a port that is gone carries nothing.
+pub fn automation_wire_ids_naming_port(
+    conn: &Connection,
+    owner_kind: crate::model::AutomationPictureOwner,
+    port_id: i64,
+) -> Result<Vec<i64>> {
     const W: col::automation_wire::Cols = col::automation_wire::ALL;
-    let pred = Pred::eq(W.from_port_id, port_id).or(Pred::eq(W.to_port_id, port_id));
+    let pred = Pred::eq(W.owner_kind, owner_kind.as_str())
+        .and(Pred::eq(W.from_port_id, port_id).or(Pred::eq(W.to_port_id, port_id)));
     select_ids(conn, W.id, Some(&pred))
 }
 
@@ -7107,12 +7120,6 @@ pub fn automation_cfg_ids(
 pub fn automation_placement_step_ids(conn: &Connection, placement_id: i64) -> Result<Vec<i64>> {
     const C: col::automation_placement_step::Cols = col::automation_placement_step::ALL;
     select_ids(conn, C.id, Some(&Pred::eq(C.placement_id, placement_id)))
-}
-
-/// The choices naming one step, at every placement of its action — what goes when the step does.
-pub fn automation_placement_step_ids_naming_step(conn: &Connection, step_id: i64) -> Result<Vec<i64>> {
-    const C: col::automation_placement_step::Cols = col::automation_placement_step::ALL;
-    select_ids(conn, C.id, Some(&Pred::eq(C.step_id, step_id)))
 }
 
 /// The placements of one library action — what a delete of the action is refused by, since the

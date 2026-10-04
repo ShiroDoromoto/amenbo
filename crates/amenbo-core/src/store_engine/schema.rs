@@ -1140,9 +1140,12 @@ datasets! {
     // A row is written when somebody chooses, the way a placement's answer to a setting is: a step
     // with no row here has nobody chosen, and the launch check refuses a run that would open it.
     // `model` NULL leaves the agent's own default. One row per pair, which is the constraint.
+    //
+    // `step_id` has no `REFERENCES`: a placement points at a saved version of its action, which keeps
+    // the step's id (`AMB-D-961`), so the choice stays when the step is deleted from the action.
     automation_placement_step {
         placement_id: fk("automation_placement", "RESTRICT"),
-        step_id: fk("automation_action_step", "RESTRICT"),
+        step_id: col(KEY_REF),
         agent: col(REQ),
         model: col(OPT),
     } => "UNIQUE (placement_id, step_id)"

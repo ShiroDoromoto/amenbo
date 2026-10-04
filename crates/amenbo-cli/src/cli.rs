@@ -2082,8 +2082,8 @@ pub enum AutomationCmd {
         #[arg(long)]
         name: String,
     },
-    /// Delete a way out with the outputs declared on it and the edges and wires keyed to it — confirms
-    /// unless -y
+    /// Delete a way out with the outputs declared on it and the edges and wires inside its action keyed
+    /// to it — confirms unless -y. An automation's lines on it stay
     ExitRm {
         /// way out id
         id: i64,
@@ -2124,7 +2124,8 @@ pub enum AutomationCmd {
         #[arg(long)]
         required: Option<bool>,
     },
-    /// Delete a port — confirms unless -y. The wires that named it are left where they are, parted
+    /// Delete a port and the wires inside its action keyed to it — confirms unless -y. An automation's
+    /// wires on it stay
     PortRm {
         /// port id
         id: i64,

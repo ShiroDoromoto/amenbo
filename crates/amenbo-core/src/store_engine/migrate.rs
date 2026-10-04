@@ -1159,7 +1159,66 @@ pub const STEPS: &[Step] = &[
         // run leaves both at ''.
         apply: Apply::Custom(keep_the_tails_of_a_script),
     },
+    Step {
+        to: 91,
+        name: "free automation_placement_step.step_id from its foreign key, so a step deleted from an action leaves who was chosen for it",
+        // `AMB-D-1000`. A placement points at a saved version of its action, and that version keeps the
+        // step's id (`AMB-D-961`), so who a placement chose for a step still means something after the
+        // step is deleted from the action. The `RESTRICT` refused that delete while the choice stood.
+        //
+        // **Nothing is written to the rows.** Dropping a constraint cannot leave a row breaking it.
+        apply: Apply::Custom(free_the_choice_from_its_step),
+    },
 ];
+
+/// v91: `automation_placement_step.step_id` loses its `REFERENCES`, as `automation_edge.exit_id` has none
+/// (`AMB-D-961`).
+///
+/// **v52's procedure once more, copied rather than called** — the reasons [`admit_rejected_task_status`]
+/// gives at length. The declaration is rewritten in place, and the column list is held equal across it.
+fn free_the_choice_from_its_step(ctx: &Ctx<'_>) -> Result<()> {
+    /// The column as every store from v69 on declares it — frozen text, like every step's.
+    const KEYED: &str = "step_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action_step(id) \
+         ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,";
+    /// The same column with no key.
+    const FREE: &str = "step_id BIGINT NOT NULL DEFAULT 0,";
+
+    let tx = ctx.tx;
+    let declared: String = tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_placement_step'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains(FREE) {
+        return Ok(());
+    }
+    if !declared.contains(KEYED) {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation_placement_step",
+            expected: KEYED,
+        });
+    }
+    let freed = declared.replace(KEYED, FREE);
+
+    let before = column_names(tx, "automation_placement_step")?;
+    tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_placement_step'",
+        [&freed],
+    );
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the next statement sees
+    // the column with no key instead of the one this connection read at open.
+    tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    let after = column_names(tx, "automation_placement_step")?;
+    if before != after {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation_placement_step",
+            expected: KEYED,
+        });
+    }
+    Ok(())
+}
 
 /// v90: `stdout_tail` and `stderr_tail` on `automation_run_step` — the last of what a script step wrote
 /// to its standard output and its standard error (`AMB-D-1016`).
@@ -9626,6 +9685,37 @@ mod tests {
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v91: a choice an upgrade brings in stays when the step it names is deleted, and still reads back.
+    #[test]
+    fn a_choice_outlives_the_step_it_names() {
+        let dir = scratch("choice-outlives-step");
+        let engine = store_at(&dir, 90);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_action (id, name) VALUES (1, 'review');
+                 INSERT INTO automation_action_step (id, action_id, name, prompt) VALUES (1, 1, 'read', 'Read it.');
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (1, 1, 1);
+                 INSERT INTO automation_placement_step (id, placement_id, step_id, agent) VALUES (1, 1, 1, 'claude');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        engine.conn().execute("DELETE FROM automation_action_step WHERE id = 1", []).unwrap();
+        let chosen: (i64, String) = engine
+            .conn()
+            .query_row("SELECT step_id, agent FROM automation_placement_step WHERE id = 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(chosen, (1, "claude".to_string()));
         std::fs::remove_dir_all(&dir).ok();
     }
 

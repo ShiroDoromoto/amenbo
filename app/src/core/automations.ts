@@ -782,7 +782,10 @@ export async function editAutomationInput(
   });
 }
 
-/** **Take an input away.** The wires that fed it are left where they are, parted. */
+/**
+ * **Take an input away**, with the wires inside its action that fed it. An automation's wires into it
+ * stay: the version a placement points at still declares it.
+ */
 export async function removeAutomationInput(
   owner: Declarer,
   ownerId: number,

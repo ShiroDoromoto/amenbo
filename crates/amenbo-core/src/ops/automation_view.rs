@@ -3,8 +3,8 @@
 //!
 //! The ten definition tables are written by [`super::automation`]; nothing here writes. What this
 //! module does is the resolving: a placement reads its ways out, its inputs and its settings off the
-//! library action standing on it, a step reads its own, and a caller that had to know which of the two
-//! declared a name would be reading the storage rather than the picture.
+//! version of the library action it stands on, a step reads its own, and a caller that had to know which
+//! of the two declared a name would be reading the storage rather than the picture.
 //!
 //! **Two pictures, two details.** [`detail`] reads one automation — the placements on it and the lines
 //! between them — and [`action_detail`] reads one library action, which is a picture in its own right:
@@ -27,6 +27,7 @@ use crate::model::{
     AutomationPort,
     AutomationPortDirection, AutomationPortOwner, AutomationStep, AutomationWire,
 };
+use crate::ops::automation::ActionDef;
 use crate::store_engine::read;
 use crate::time::Timestamp;
 use crate::{Error, Result};
@@ -561,26 +562,24 @@ fn versions_of(
     Ok((placement.version, latest))
 }
 
-/// One placement, with the action standing on it read in: the ways out it can be left by, what it takes
-/// in, and what it is set to.
+/// One placement, with the action standing on it read in — as the version the placement stands on holds
+/// it ([`ActionDef::placed`]): the ways out it can be left by, what it takes in, what it is set to, and
+/// the steps inside it.
 fn placement_view(conn: &Connection, placement: AutomationPlacement) -> Result<PlacementView> {
     let action = read::automation_action(conn, placement.action_id)?;
-    let entry_step = match action.as_ref().and_then(|one| one.entry_step_id) {
-        Some(step_id) => read::automation_action_step(conn, step_id)?,
-        None => None,
-    };
-    let exits = exit_views(conn, AutomationOwner::Action, placement.action_id)?;
-    let inputs = ports_of(
-        conn,
-        AutomationPortOwner::Action,
-        placement.action_id,
-        AutomationPortDirection::In,
-    )?;
+    let def = ActionDef::placed(conn, &placement)?;
+    let entry_step = def.entry_step_id.and_then(|id| def.steps.iter().find(|s| s.id == id)).cloned();
+    let exits = def
+        .action_exits()
+        .into_iter()
+        .map(|exit| ExitView { outputs: def.outs_of(exit.id), exit })
+        .collect();
+    let inputs = def.action_inputs();
     // An action declares and the placement answers, and core is what puts the two rows back together —
     // the same pair the launch check reads, rather than a second reading of it.
-    let settings = super::automation_run::settings_of(conn, &placement)?;
+    let settings = super::automation_run::answered(conn, &placement, &def)?;
     let mut steps = Vec::new();
-    for step in read::automation_action_steps_of(conn, placement.action_id)? {
+    for step in def.steps {
         let chosen = read::automation_placement_step_for(conn, placement.id, step.id)?;
         steps.push(PlacementStepView { step, chosen });
     }
@@ -630,6 +629,42 @@ mod tests {
     use super::*;
     use crate::ops::automation::{action_add, add, NewAutomation};
     use crate::ops::test_support::{mk_project, with_tx};
+
+    /// **A placement is read as the version it stands on** — its steps, its ways out and what it takes
+    /// in — while the action itself is read as it is being written.
+    #[test]
+    fn a_placement_is_read_as_the_version_it_stands_on() {
+        use crate::model::AutomationPortKind;
+        use crate::ops::automation::{
+            action_from_prompt, action_version_add, exit_add, placement_add_by_hand, port_add, step_update,
+            NewStep,
+        };
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+            let action = action_from_prompt(tx, Some(project), NewStep::new("点検", "見る"), &[], &[]).unwrap();
+            action_version_add(tx, action.id).unwrap();
+            let placement = placement_add_by_hand(tx, automation.id, action.id).unwrap();
+            let step = action.entry_step_id.unwrap();
+            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None)
+                .unwrap();
+            exit_add(tx, AutomationOwner::Action, action.id, Some("直す")).unwrap();
+            let into = AutomationPortDirection::In;
+            port_add(tx, AutomationPortOwner::Action, action.id, into, "指摘", AutomationPortKind::Value, false)
+                .unwrap();
+
+            let view = detail(tx.conn(), automation.id).unwrap().unwrap();
+            let placed = view.placements.iter().find(|p| p.placement.id == placement.id).unwrap();
+            assert_eq!(placed.steps[0].step.prompt, "見る");
+            assert_eq!(placed.entry_step.as_ref().map(|s| s.prompt.as_str()), Some("見る"));
+            assert!(!placed.exits.iter().any(|x| x.exit.name == "直す"));
+            assert!(!placed.inputs.iter().any(|p| p.name == "指摘"));
+            let written = action_detail(tx.conn(), action.id).unwrap().unwrap();
+            assert_eq!(written.steps[0].step.prompt, "もう一度見る", "the action is read as it is written");
+            assert!(written.exits.iter().any(|x| x.exit.name == "直す"));
+        });
+    }
 
     /// **A show names the version saved last and whether the draft holds more**, and each placement the
     /// version it stands on beside the newest there is — a built-in's off its record and this build.

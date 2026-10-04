@@ -1565,7 +1565,11 @@ fn launch_asking(
 /// **The entry's copy is written first**, so a run's copies fall into one run of rows per time they
 /// were taken, each starting at its entry ([`current_defs`]). The rows of an earlier copy are kept:
 /// the executions opened from them still point at them.
+///
+/// Every row of one copy records the automation's newest saved version at that moment, or none where
+/// nobody has saved one.
 fn copy_down(tx: &WriteTx<'_>, run_id: i64, automation: &Automation, now: Timestamp) -> Result<()> {
+    let version = read::automation_version_latest(tx.conn(), automation.id)?.map(|v| v.version);
     let mut steps = Vec::new();
     for placement in read::automation_placements_of(tx.conn(), automation.id)? {
         let opens_first =
@@ -1577,7 +1581,7 @@ fn copy_down(tx: &WriteTx<'_>, run_id: i64, automation: &Automation, now: Timest
     }
     steps.sort_by_key(|(_, _, entry)| !entry);
     for (placement, step, entry) in steps {
-        if let Some(def) = snapshot(tx, run_id, &placement, &step, entry, now)? {
+        if let Some(def) = snapshot(tx, run_id, version, &placement, &step, entry, now)? {
             emit_create(tx, record::automation_run_def(&def))?;
         }
     }
@@ -1754,6 +1758,7 @@ fn not_ready(name: &str, unmet: &[Unmet]) -> Error {
 fn snapshot(
     tx: &WriteTx<'_>,
     run_id: i64,
+    automation_version: Option<i64>,
     placement: &AutomationPlacement,
     step: &AutomationStep,
     entry: bool,
@@ -1812,6 +1817,7 @@ fn snapshot(
         prompt: step.builtin.is_none().then(|| step.prompt.clone()),
         builtin: step.builtin.clone(),
         builtin_version,
+        automation_version,
         script: step.script.clone(),
         agent: chosen.agent,
         model: chosen.model,

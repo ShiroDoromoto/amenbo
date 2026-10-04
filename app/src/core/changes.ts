@@ -88,11 +88,14 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   binding_project_dir: ["projects"],
   hook_optout: ["projects"],
   harness_consent: ["projects"],
-  // The eleven tables an automation's definition is built in. Most of them are what the build screen
+  // The twelve tables an automation's definition is built in. Most of them are what the build screen
   // reads as one answer — the definition is fetched whole and its picture, its panel and its launch
   // check all walk it (`core/automations`) — so they share one scope. A run's own tables are the
   // exception below, naming the scopes the band and the "running" tab read.
   automation: ["automations"],
+  // A saved version of an automation. Written in the same transaction as the save, whose own rows
+  // already move the surface, and no screen reads the copy yet — so it is folded to nothing.
+  automation_version: [],
   // The library and the three layers' seams. The "actions" tab draws every action with how many
   // automations place it, so a placement being drawn or taken off moves that list as surely as the
   // action's own row does — and a step, a way out, a port and a setting are all read through the

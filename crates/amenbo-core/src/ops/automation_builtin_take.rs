@@ -716,6 +716,11 @@ mod tests {
                 None,
             )
             .expect("rewrite the work");
+            assert!(
+                launched_with.iter().all(|d| d.automation_version.is_none()),
+                "launched before anybody saved the automation"
+            );
+            automation::version_add(tx, automation.id).expect("save the automation");
 
             let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
             assert_eq!(resumed.run.status, AutomationRunStatus::Running);
@@ -727,6 +732,10 @@ mod tests {
             assert_eq!(waiting.id, resumed.next.id, "the new copy's entry, not the take it paused before");
             let kept = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             assert_eq!(kept.len(), launched_with.len() * 2, "the copy it launched with is kept");
+            assert!(
+                kept.iter().filter(|d| d.id > last_copied).all(|d| d.automation_version == Some(1)),
+                "the new copy records the version it was taken from"
+            );
             for step in read::automation_run_steps_of(tx.conn(), run.id).expect("steps") {
                 assert!(step.run_def_id <= last_copied, "what it opened before points at the old copy");
             }

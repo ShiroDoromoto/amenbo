@@ -45,7 +45,8 @@ use crate::model::{
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
-    AutomationWire, StepScript, ACTION_BOUNDARY, DEFAULT_MAX_TIMES, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
+    AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY, DEFAULT_MAX_TIMES,
+    DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, MAX_SCRIPT_TIMEOUT_MINUTES,
 };
 use crate::ops::{automation_builtin, emit_create, emit_update, place, Position};
@@ -1087,9 +1088,47 @@ fn not_an_entry(what: &str) -> Error {
     ))
 }
 
-/// Delete an automation and everything built onto it — wires, edges, and the placements with the
-/// answers written on them. The library actions those placements stood on are left where they are:
-/// the library outlives any one picture.
+/// **Save the automation's picture as its next version** — the placements with the version of its action
+/// each stands on, the answers written for their settings, the agents chosen for their steps, the edges
+/// and wires drawn on the automation, and the placement it opens first. The copy is never rewritten:
+/// writing on in the automation changes its tables and leaves this as it was.
+///
+/// Every row goes in as its own record under its own id, as [`action_version_add`]'s do (`AMB-D-961`).
+/// The number is one past the automation's newest, and 1 for its first.
+pub fn version_add(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion> {
+    let automation = live_automation(tx, automation_id)?;
+    let conn = tx.conn();
+    let placements = read::automation_placements_of(conn, automation_id)?;
+    let mut cfgs = Vec::new();
+    let mut placement_steps = Vec::new();
+    for placement in &placements {
+        cfgs.extend(read::automation_cfgs_of(conn, AutomationCfgOwner::Placement, placement.id)?);
+        placement_steps.extend(read::automation_placement_steps_of(conn, placement.id)?);
+    }
+    let edges = read::automation_edges_of(conn, AutomationPictureOwner::Automation, automation_id)?;
+    let wires = read::automation_wires_of(conn, AutomationPictureOwner::Automation, automation_id)?;
+    let version = read::automation_version_latest(conn, automation_id)?.map_or(1, |v| v.version + 1);
+    let now = Timestamp::now();
+    let saved = AutomationVersion {
+        id: read::next_id(conn, "automation_version")?,
+        automation_id,
+        version,
+        entry_placement_id: automation.entry_placement_id,
+        placements: serde_json::to_string(&placements).map_err(Error::from)?,
+        cfgs: serde_json::to_string(&cfgs).map_err(Error::from)?,
+        placement_steps: serde_json::to_string(&placement_steps).map_err(Error::from)?,
+        edges: serde_json::to_string(&edges).map_err(Error::from)?,
+        wires: serde_json::to_string(&wires).map_err(Error::from)?,
+        created_at: now,
+        updated_at: now,
+    };
+    emit_create(tx, record::automation_version(&saved))?;
+    Ok(saved)
+}
+
+/// Delete an automation and everything built onto it — wires, edges, the placements with the answers
+/// written on them, and the versions saved of it. The library actions those placements stood on are
+/// left where they are: the library outlives any one picture.
 ///
 /// **Refused while a run stands behind it**, naming how many (`invalid_automation_has_runs`). A run
 /// carries its own copy of the steps and would go on reading correctly, but it is filed under the
@@ -1121,6 +1160,9 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     }
     for placement in read::automation_placement_ids(tx.conn(), id)? {
         delete_placement_row(tx, placement)?;
+    }
+    for version in read::automation_version_ids(tx.conn(), id)? {
+        tx.delete_record("automation_version", version)?;
     }
     tx.delete_record("automation", id)?;
     Ok(())
@@ -5246,6 +5288,55 @@ mod tests {
             action_version_add(tx, action.id).expect("save");
             action_delete(tx, action.id).expect("delete");
             assert!(read::automation_action_version_ids(tx.conn(), action.id).expect("read").is_empty());
+        });
+    }
+
+    /// **A saved version is the automation's picture as it stood**, every row under its own id, and
+    /// placing on afterwards leaves it as it was.
+    #[test]
+    fn a_saved_version_keeps_the_automation_as_it_stood() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, here) = mk_placed(tx, &automation, "点検");
+            let step = only_step(tx, &action);
+            placement_step_set(tx, here.id, step.id, "claude", Some("opus")).expect("choose");
+
+            let first = version_add(tx, automation.id).expect("save");
+            assert_eq!(first.version, 1);
+            let placements: Vec<AutomationPlacement> = saved(&first.placements);
+            assert_eq!(placements.iter().map(|p| p.id).collect::<Vec<_>>(), vec![here.id]);
+            let chosen: Vec<AutomationPlacementStep> = saved(&first.placement_steps);
+            assert_eq!(
+                chosen.iter().map(|c| (c.step_id, c.agent.as_str())).collect::<Vec<_>>(),
+                vec![(step.id, "claude")]
+            );
+            let edges: Vec<AutomationEdge> = saved(&first.edges);
+            let live =
+                read::automation_edge_ids(tx.conn(), AutomationPictureOwner::Automation, automation.id)
+                    .expect("read");
+            assert_eq!(edges.len(), live.len());
+
+            let (_, there) = mk_placed(tx, &automation, "直す");
+            let second = version_add(tx, automation.id).expect("save again");
+            assert_eq!(second.version, 2);
+            assert_eq!(saved::<AutomationPlacement>(&second.placements).len(), 2);
+            assert!(saved::<AutomationPlacement>(&second.placements).iter().any(|p| p.id == there.id));
+
+            let latest = read::automation_version_latest(tx.conn(), automation.id).expect("read");
+            assert_eq!(latest.map(|v| v.version), Some(2));
+            assert_eq!(saved::<AutomationPlacement>(&first.placements).len(), 1, "the first stays as saved");
+        });
+    }
+
+    /// Deleting an automation takes the versions saved of it.
+    #[test]
+    fn the_versions_of_an_automation_go_with_it() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            mk_placed(tx, &automation, "点検");
+            version_add(tx, automation.id).expect("save");
+            delete(tx, automation.id).expect("delete");
+            assert!(read::automation_version_ids(tx.conn(), automation.id).expect("read").is_empty());
         });
     }
 

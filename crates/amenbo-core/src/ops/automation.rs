@@ -795,6 +795,47 @@ pub fn action_unsaved(conn: &Connection, action_id: i64) -> Result<bool> {
     }
 }
 
+/// **Throw away what is written inside the action since its newest version**, putting every row back as
+/// that version holds it, under the id it was saved with (`AMB-D-961`). What was added since goes, what
+/// was deleted since comes back, and what was rewritten is written back. Its name, notes and place in
+/// the library are not part of a version, so they stay as they are.
+///
+/// Not refused while a run of an automation placing it goes on (`AMB-D-1015`): the run reads its own
+/// copy. Refused for an action nobody has saved, since there is nothing to go back to, and for a
+/// built-in, as [`action_save`] is.
+///
+/// A draft with nothing changed since the newest version writes nothing. The version gone back to is
+/// what comes back.
+pub fn action_discard(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionVersion> {
+    let action = live_action(tx, action_id)?;
+    not_built_in(tx, Def::Action(action_id))?;
+    let Some(saved) = read::automation_action_version_latest(tx.conn(), action_id)? else {
+        return Err(Error::invalid(format!(
+            "action '{}' has never been saved, so there is no saved version to go back to",
+            action.name
+        )));
+    };
+    let draft = ActionPicture::read(tx.conn(), &action)?;
+    if draft.is(&saved)? {
+        return Ok(saved);
+    }
+    // `entry_step_id` is `RESTRICT`, which bites at the statement, so the entry is moved off a step that
+    // is about to go before the steps are put back.
+    if action.entry_step_id != saved.entry_step_id {
+        let mut after = action.clone();
+        after.entry_step_id = saved.entry_step_id;
+        after.updated_at = Timestamp::now();
+        emit_update(tx, record::automation_action(&action), record::automation_action(&after))?;
+    }
+    restore_rows(tx, &draft.wires, &saved.wires, record::automation_wire)?;
+    restore_rows(tx, &draft.edges, &saved.edges, record::automation_edge)?;
+    restore_rows(tx, &draft.ports, &saved.ports, record::automation_port)?;
+    restore_rows(tx, &draft.exits, &saved.exits, record::automation_exit)?;
+    restore_rows(tx, &draft.cfgs, &saved.cfgs, record::automation_cfg)?;
+    restore_rows(tx, &draft.steps, &saved.steps, record::automation_action_step)?;
+    Ok(saved)
+}
+
 /// **What is inside an action as its tables hold it** — the rows a version is saved from: the steps, the
 /// ways out of the action and of each step, the inputs and the outputs on those ways out, the settings
 /// the action declares, the edges and wires drawn inside it, and the step it opens first.
@@ -849,6 +890,36 @@ impl ActionPicture {
 fn same_rows<T: serde::Serialize>(rows: &[T], saved: &str) -> Result<bool> {
     let saved: serde_json::Value = serde_json::from_str(saved).map_err(Error::from)?;
     Ok(serde_json::to_value(rows).map_err(Error::from)? == saved)
+}
+
+/// Make one table's `rows` the rows a version saved as `saved`: a row the version does not hold is
+/// deleted, one it holds that is gone is written again under its own id, and one that differs is written
+/// back. Only the rows that differ are touched, so a row the version still holds keeps standing.
+fn restore_rows<T: serde::de::DeserializeOwned>(
+    tx: &WriteTx<'_>,
+    rows: &[T],
+    saved: &str,
+    to_record: fn(&T) -> record::Record,
+) -> Result<()> {
+    let saved: Vec<T> = serde_json::from_str(saved).map_err(Error::from)?;
+    let saved: BTreeMap<i64, record::Record> =
+        saved.iter().map(to_record).map(|row| (row.id, row)).collect();
+    let mut now = BTreeMap::new();
+    for row in rows {
+        let row = to_record(row);
+        if !saved.contains_key(&row.id) {
+            tx.delete_record(row.dataset, row.id)?;
+            continue;
+        }
+        now.insert(row.id, row);
+    }
+    for (id, row) in saved {
+        match now.remove(&id) {
+            Some(before) => emit_update(tx, before, row)?,
+            None => emit_create(tx, row)?,
+        }
+    }
+    Ok(())
 }
 
 /// **Write what is inside an action down as its next version** ([`ActionPicture`]), without asking
@@ -1206,6 +1277,50 @@ pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
         Some(latest) => Ok(!draft.is(&latest)?),
         None => Ok(draft.entry_placement_id.is_some() || !draft.placements.is_empty()),
     }
+}
+
+/// **Throw away what is written on the automation since its newest version**, putting every row back as
+/// that version holds it, under the id it was saved with (`AMB-D-961`), and the placement it opens first
+/// with them. Its name and notes are not part of a version, so they stay as they are.
+///
+/// Not refused while a run of it goes on (`AMB-D-1015`): the run reads its own copy. Refused for an
+/// automation nobody has saved, since there is nothing to go back to, and when a placement the version
+/// holds stood on an action deleted since — put back, it would stand on nothing.
+///
+/// A draft with nothing changed since the newest version writes nothing. The version gone back to is
+/// what comes back.
+pub fn discard(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion> {
+    let automation = live_automation(tx, automation_id)?;
+    let Some(saved) = read::automation_version_latest(tx.conn(), automation_id)? else {
+        return Err(Error::invalid(format!(
+            "automation '{}' has never been saved, so there is no saved version to go back to",
+            automation.name
+        )));
+    };
+    let draft = Picture::read(tx.conn(), &automation)?;
+    if draft.is(&saved)? {
+        return Ok(saved);
+    }
+    let placements: Vec<AutomationPlacement> = serde_json::from_str(&saved.placements).map_err(Error::from)?;
+    for placement in &placements {
+        if read::automation_action(tx.conn(), placement.action_id)?.is_none() {
+            return Err(Error::invalid(format!(
+                "placement '{}' was saved standing on action '{}', which has been deleted since — the \
+                 saved version cannot be gone back to",
+                placement.id, placement.action_id
+            )));
+        }
+    }
+    // `entry_placement_id` is `RESTRICT`, as an action's entry is, so the entry is moved first.
+    if automation.entry_placement_id != saved.entry_placement_id {
+        name_entry(tx, automation_id, saved.entry_placement_id)?;
+    }
+    restore_rows(tx, &draft.wires, &saved.wires, record::automation_wire)?;
+    restore_rows(tx, &draft.edges, &saved.edges, record::automation_edge)?;
+    restore_rows(tx, &draft.placement_steps, &saved.placement_steps, record::automation_placement_step)?;
+    restore_rows(tx, &draft.cfgs, &saved.cfgs, record::automation_cfg)?;
+    restore_rows(tx, &draft.placements, &saved.placements, record::automation_placement)?;
+    Ok(saved)
 }
 
 /// **The automation's picture as its tables hold it** — the rows a version is saved from, with the
@@ -5495,6 +5610,76 @@ mod tests {
             let second = action_save(tx, action.id).expect("save again");
             assert_eq!(second.version, 2);
             assert!(!action_unsaved(tx.conn(), action.id).expect("unsaved"));
+        });
+    }
+
+    /// **Discarding puts what is inside the action back as it was saved**, every row under its own id:
+    /// a step added since goes, one deleted since comes back, and one rewritten is written back.
+    #[test]
+    fn an_action_discard_goes_back_to_the_saved_version() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let action = action_from_prompt(tx, Some(project), NewStep::new("点検する", "見る"), &[], &[])
+                .expect("write the action");
+            let step = only_step(tx, &action);
+            assert!(action_discard(tx, action.id).is_err(), "nothing saved to go back to");
+            let first = action_save(tx, action.id).expect("save");
+            assert_eq!(action_discard(tx, action.id).expect("nothing to discard").id, first.id);
+
+            let prompt = Some("もう一度見る");
+            step_update(tx, step.id, None, prompt, None, None, None, None, None, None, None, None)
+                .expect("write on the step");
+            let added = step_add(tx, action.id, NewStep::new("直す", "直す")).expect("add a step");
+            action_update(tx, action.id, Some("見直す"), None).expect("rename");
+            assert!(action_unsaved(tx.conn(), action.id).expect("unsaved"));
+
+            let back = action_discard(tx, action.id).expect("discard");
+            assert_eq!(back.id, first.id);
+            assert!(!action_unsaved(tx.conn(), action.id).expect("unsaved"));
+            assert_eq!(live_step(tx, step.id).expect("read").prompt, "見る");
+            assert!(read::automation_action_step(tx.conn(), added.id).expect("read").is_none());
+            let kept = live_action(tx, action.id).expect("read");
+            assert_eq!(kept.name, "見直す", "the name is not part of a version");
+
+            step_delete(tx, step.id).expect("delete the step");
+            action_discard(tx, action.id).expect("discard");
+            assert!(!action_unsaved(tx.conn(), action.id).expect("unsaved"));
+            assert_eq!(live_action(tx, action.id).expect("read").entry_step_id, Some(step.id));
+            assert_eq!(live_step(tx, step.id).expect("read").id, step.id, "back under its own id");
+
+            let take = automation_builtin::action(tx, "take_task").expect("built-in");
+            assert!(matches!(action_discard(tx, take.id), Err(Error::Invalid(_))));
+        });
+    }
+
+    /// **Discarding puts the automation back as it was saved** — a placement added since goes, one
+    /// deleted since comes back under its own id, and so does the placement it opens first.
+    #[test]
+    fn an_automation_discard_goes_back_to_the_saved_version() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, here) = mk_placed(tx, &automation, "点検");
+            set_entry(tx, automation.id, Some(here.id)).expect("start there");
+            assert!(discard(tx, automation.id).is_err(), "nothing saved to go back to");
+            let first = version_add(tx, automation.id).expect("save");
+            assert_eq!(discard(tx, automation.id).expect("nothing to discard").id, first.id);
+
+            placement_delete(tx, here.id).expect("delete the placement");
+            let (_, there) = mk_placed(tx, &automation, "直す");
+            set_entry(tx, automation.id, Some(there.id)).expect("start at the new one");
+            assert!(unsaved(tx.conn(), automation.id).expect("unsaved"));
+
+            let back = discard(tx, automation.id).expect("discard");
+            assert_eq!(back.id, first.id);
+            assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"));
+            assert!(read::automation_placement(tx.conn(), there.id).expect("read").is_none());
+            assert_eq!(live_placement(tx, here.id).expect("read").action_id, action.id);
+            assert_eq!(live_automation(tx, automation.id).expect("read").entry_placement_id, Some(here.id));
+
+            placement_delete(tx, here.id).expect("delete the placement");
+            action_delete(tx, action.id).expect("delete the action placed nowhere now");
+            let refused = discard(tx, automation.id);
+            assert!(matches!(refused, Err(Error::Invalid(_))), "it would stand on nothing");
         });
     }
 

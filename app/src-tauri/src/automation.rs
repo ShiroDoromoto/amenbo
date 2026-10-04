@@ -2023,6 +2023,7 @@ fn open_one(
                     model: def.model.clone(),
                     folder,
                     interactive: def.interactive,
+                    started_at: ready.run_step.started_at.map(|at| at.to_rfc3339_z()),
                 }),
                 None,
                 Vec::new(),
@@ -2176,6 +2177,8 @@ fn builtin_about_to(
         exit_name: None,
         held_until: None,
         program: def.script.as_ref().map(|s| s.program.clone()),
+        args: def.script.as_ref().map(|s| s.args.clone()),
+        started_at: None,
     }))
 }
 
@@ -2222,6 +2225,8 @@ fn builtin_of_step(
         exit_name: left_by(&def, run_step.exit_id),
         held_until,
         program: def.script.as_ref().map(|s| s.program.clone()),
+        args: def.script.as_ref().map(|s| s.args.clone()),
+        started_at: run_step.started_at.map(|at| at.to_rfc3339_z()),
     }))
 }
 

@@ -1,16 +1,16 @@
 # Pausing one run waits for the action under way to end, and an action can be half of one task. The
-# other pause is asked of the whole project: each run that takes tasks goes on until it next comes to
-# the built-in that takes one, and pauses there with no task in hand. A run that takes no task has
-# nothing to be cut off in the middle of, so it is not asked and goes on to its end.
+# other pause stops a run at the seam between tasks: it goes on until it next comes to the built-in
+# that takes one, and pauses there with no task in hand. A run that takes no task has no such seam, so
+# asking it is refused and it goes on to its end.
 #
 # A run started at a terminal opens no step, so neither pause settles here: the run stays `running`
-# with the request on it. What the road reads is which runs were asked.
-id: ask-a-projects-runs-to-pause-before-their-next-task
-title: Asking a project to pause before the next task asks the runs that take tasks, and leaves the others running
+# with the request on it. What the road reads is which run carries it.
+id: ask-a-run-to-pause-before-its-next-task
+title: A run that takes tasks is asked to pause before its next task, and one that takes none is refused
 description: >
-  Start two runs in one project, one of an automation that takes tasks and one of an automation that
-  does not. Ask the project to pause before the next task. The run that takes tasks carries the
-  request and is still running; the other carries none.
+  Start two runs, one of an automation that takes tasks and one of an automation that does not. Ask
+  each to pause before its next task. The run that takes tasks carries the request and is still
+  running; asking the other is refused, and it carries none.
 given:
   # Two rather than one for `hold-a-run-and-let-it-go-again`'s reason: the premise cannot stand up a
   # row shorter than two.
@@ -64,6 +64,8 @@ steps_cli:
   - type: action
     domain: automation
     op: pause-before-next-task
+    with:
+      target: taking_run
 
   # Asked, and still running: the pause waits for the built-in that takes a task. It is not the
   # pause at the end of the action, which is a request of its own.
@@ -75,6 +77,13 @@ steps_cli:
       status: running
       pause_before_next_task: true
       pause_requested: false
+
+  - type: action
+    domain: automation
+    op: pause-before-next-task
+    with:
+      target: plain_run
+      refused: invalid_value
 
   - type: assert
     domain: automation

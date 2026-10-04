@@ -2366,20 +2366,16 @@ pub enum AutomationCmd {
         dim: Vec<String>,
     },
     /// Ask a run to pause. The action under way finishes first and the run pauses at the end of it,
-    /// keeping the task it is working. With `--before-next-task`, ask every run of a project instead to
-    /// pause when it next comes to take a task, before it takes one
+    /// keeping the task it is working. With `--before-next-task`, it pauses instead when it next comes to
+    /// take a task, before it takes one
     Pause {
-        /// run id — left out with `--before-next-task`
-        #[arg(required_unless_present = "before_next_task", conflicts_with = "before_next_task")]
-        run: Option<i64>,
-        /// ask every run of the project that takes tasks, is running and is not yet asked to pause, to
-        /// pause before it takes its next task; one waiting for a task pauses there and then. It cannot
-        /// be taken back
+        /// run id
+        run: i64,
+        /// pause before the run takes its next task rather than at the end of the action; one waiting
+        /// for a task pauses there and then. Refused for a run that takes no tasks. It cannot be taken
+        /// back
         #[arg(long)]
         before_next_task: bool,
-        /// project (name or ID; defaults to the bound project) — with `--before-next-task`
-        #[arg(long, requires = "before_next_task")]
-        project: Option<String>,
     },
     /// Pick a paused run up again. One paused at the end of an action goes on from the copy it
     /// launched with, from the way out the step before it left through; one paused with

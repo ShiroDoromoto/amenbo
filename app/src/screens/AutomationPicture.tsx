@@ -520,6 +520,14 @@ export function AutomationPicture({
                 )}
                 {node.empty === true && <span className="autopic__emptymark">{t("auto.pic.emptyMark")}</span>}
                 {node.draft === true && <span className="autopic__draftmark">{t("chip.draft")}</span>}
+                {node.behind !== undefined && (
+                  <span
+                    className="autopic__behindmark"
+                    title={tf("auto.pic.behind", { version: node.behind.version, latest: node.behind.latest })}
+                  >
+                    {tf("auto.pic.behindMark", { version: node.behind.version })}
+                  </span>
+                )}
                 {placedForYou?.has(node.boxId) === true && (
                   <span className="autopic__formark">{t("auto.pic.placedForYou")}</span>
                 )}

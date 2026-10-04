@@ -51,6 +51,7 @@ import {
   ENTRY_BUILTINS,
   removeAutomationPlacement,
   replaceAutomationEntry,
+  setAutomationPlacementVersion,
   setAutomationWire,
   useAutomationAction,
   useAutomationBuiltins,
@@ -62,7 +63,7 @@ import { builtinShown, builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { ExitMark, filterValueLabel, ReachChip, usedCount } from "./automationParts";
-import { automationGraph, ERROR_EXIT, fed, readAtLaunch } from "./automationLayout";
+import { automationGraph, behindOf, ERROR_EXIT, fed, readAtLaunch } from "./automationLayout";
 import { exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import { Sec } from "./automationDeclParts";
 import {
@@ -565,6 +566,13 @@ export function AutomationStepPanel({
   const isEntry = automation.entryPlacementId === placement.id;
   // The start comes off only as the last thing on the picture, which leaves it empty.
   const removable = !isEntry || automation.placements.length === 1;
+  // Amenbo never moves a spot onto a newer version of its action by itself (`AMB-D-1000`): the press is
+  // here, and lines and wires the newer version has no end for go with it, so it asks first.
+  const behind = behindOf(placement);
+  const moveToLatest = async (latest: number) => {
+    if (!(await confirmDialog(tf("auto.place.versionSetConfirm", { version: latest })))) return;
+    void run(setAutomationPlacementVersion(placement.id, latest));
+  };
 
   return (
     <div className="autostep">
@@ -584,6 +592,18 @@ export function AutomationStepPanel({
               <span>{usedCount(action.usedBy)}</span>
             </div>
           )}
+          {placement.version !== undefined && (
+            <div className="autoplace__meta">
+              <span>{tf("auto.place.version", { version: placement.version })}</span>
+              {placement.latestVersion !== undefined && (
+                <span>
+                  {placement.latestVersion === placement.version
+                    ? t("auto.place.versionLatest")
+                    : tf("auto.place.versionNewest", { version: placement.latestVersion })}
+                </span>
+              )}
+            </div>
+          )}
           {action !== null && action.steps.length === 0 && (
             <div className="autoplace__empty">{t("auto.place.empty")}</div>
           )}
@@ -595,6 +615,14 @@ export function AutomationStepPanel({
       </div>
 
       <div className="autostep__writes">
+        {behind !== undefined && (
+          <div className="autoplace__version">
+            <button type="button" className="btn" onClick={() => void moveToLatest(behind.latest)}>
+              {tf("auto.place.versionSet", { version: behind.latest })}
+            </button>
+          </div>
+        )}
+
         {isEntry && placement.builtin !== undefined && (
           <EntryRow automationId={automation.id} current={placement.builtin} run={run} />
         )}

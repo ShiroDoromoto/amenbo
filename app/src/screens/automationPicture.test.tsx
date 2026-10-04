@@ -367,6 +367,25 @@ describe("the picture of the steps", () => {
     expect(box("hollow").className).not.toContain("autopic__node--draft");
   });
 
+  /// A box standing on an older version than its action's newest says which, since Amenbo never moves
+  /// it by itself (`AMB-D-1000`) — never for a built-in, whose placement nobody moves.
+  it("marks the box standing on an older version, and not the newest or a built-in", async () => {
+    const one = detail({
+      placements: [
+        step({ id: 1, name: "old", version: 2, latestVersion: 3 }),
+        step({ id: 2, name: "new", version: 3, latestVersion: 3 }),
+        step({ id: 3, name: "take_task", builtin: "take_task", version: 1, latestVersion: 2 }),
+      ],
+    });
+    await render({ graph: one });
+    const box = (name: string) => nodes().find((node) => node.textContent?.includes(name))!;
+    const mark = box("old").querySelector(".autopic__behindmark")!;
+    expect(mark.textContent).toBe(tf("auto.pic.behindMark", { version: 2 }));
+    expect(mark.getAttribute("title")).toBe(tf("auto.pic.behind", { version: 2, latest: 3 }));
+    expect(box("new").querySelector(".autopic__behindmark")).toBeNull();
+    expect(nodes().filter((node) => node.querySelector(".autopic__behindmark") !== null)).toHaveLength(1);
+  });
+
   /// A box Amenbo put on for the reader says so, and what it is there for, so it is not taken for one
   /// the reader put there themselves (`AMB-T-5797`).
   it("marks a box put on for the reader, and says what it is there for", async () => {

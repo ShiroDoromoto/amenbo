@@ -1406,6 +1406,7 @@ button.feed__target:hover { color: var(--c-accent); }
    under way rather than missing something. */
 .autopic__node--draft { border-color: var(--c-accent); border-style: dashed; }
 .autopic__draftmark { flex: none; font-size: var(--fs-xs); color: var(--c-accent); }
+.autopic__behindmark { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autopic__formark { flex: none; font-size: var(--fs-xs); color: var(--c-accent-text); background: var(--c-accent-weak); border-radius: var(--r-sm); padding: 0 var(--s-1); }
 .autopic__node--on { background: var(--c-accent-faint); border-color: var(--c-accent); }
 /* Two lines: the number and the name, and under them where the action comes from — or what it is
@@ -2101,6 +2102,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoplace__actionname { font-size: var(--fs-md); font-weight: var(--fw-bold); overflow-wrap: anywhere; }
 .autoplace__empty { font-size: var(--fs-xs); color: var(--c-heed); font-weight: var(--fw-bold); }
 .autoplace__meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autoplace__version { display: flex; font-size: var(--fs-md); }
 .autoplace__open {
   flex: none; margin-inline-start: auto; padding: 0; border: 0; background: none; cursor: pointer;
   font: inherit; font-size: var(--fs-md); color: var(--c-accent-text); white-space: nowrap;

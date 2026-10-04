@@ -1,4 +1,4 @@
-//! Building an automation's definition — the nine tables of the definition side. Of the run side
+//! Building an automation's definition — the tables of the definition side. Of the run side
 //! there is one op here, [`run_delete`], and it is a sweep rather than a launch: the definition and what
 //! was launched from it go down together when the project does.
 //!
@@ -40,7 +40,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    AttachmentTarget, Automation, AutomationAction, AutomationCfg, AutomationCfgKind,
+    AttachmentTarget, Automation, AutomationAction, AutomationActionVersion, AutomationCfg,
+    AutomationCfgKind,
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
@@ -740,8 +741,57 @@ fn automations_placing_outside(
     Ok(named)
 }
 
+/// **Save what is inside an action as its next version** — the steps, the ways out of the action and of
+/// each step, the inputs and the outputs on those ways out, the settings the action declares, the edges
+/// and wires drawn inside it, and the step it opens first. The copy is never rewritten: writing on in the
+/// action changes its tables and leaves this as it was.
+///
+/// Every row goes in as its own record under its own id, so the lines in the copy key their ways out and
+/// ports exactly as the rows did (`AMB-D-961`). The number is one past the action's newest, and 1 for
+/// its first.
+///
+/// Refused for a built-in: its versions are actions of their own (`AMB-D-1000`).
+pub fn action_version_add(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionVersion> {
+    let action = live_action(tx, action_id)?;
+    not_built_in(tx, Def::Action(action_id))?;
+    let conn = tx.conn();
+    let (into, out_of) = (AutomationPortDirection::In, AutomationPortDirection::Out);
+    let steps = read::automation_action_steps_of(conn, action_id)?;
+    let mut exits = read::automation_exits_of(conn, AutomationOwner::Action, action_id)?;
+    let mut ports = read::automation_ports_of(conn, AutomationPortOwner::Action, action_id, into)?;
+    for step in &steps {
+        exits.extend(read::automation_exits_of(conn, AutomationOwner::Step, step.id)?);
+        ports.extend(read::automation_ports_of(conn, AutomationPortOwner::Step, step.id, into)?);
+    }
+    for exit in &exits {
+        ports.extend(read::automation_ports_of(conn, AutomationPortOwner::Exit, exit.id, out_of)?);
+    }
+    let cfgs = read::automation_cfgs_of(conn, AutomationCfgOwner::Action, action_id)?;
+    let edges = read::automation_edges_of(conn, AutomationPictureOwner::Action, action_id)?;
+    let wires = read::automation_wires_of(conn, AutomationPictureOwner::Action, action_id)?;
+    let version = read::automation_action_version_latest(conn, action_id)?.map_or(1, |v| v.version + 1);
+    let now = Timestamp::now();
+    let saved = AutomationActionVersion {
+        id: read::next_id(conn, "automation_action_version")?,
+        action_id,
+        version,
+        entry_step_id: action.entry_step_id,
+        steps: serde_json::to_string(&steps).map_err(Error::from)?,
+        exits: serde_json::to_string(&exits).map_err(Error::from)?,
+        ports: serde_json::to_string(&ports).map_err(Error::from)?,
+        cfgs: serde_json::to_string(&cfgs).map_err(Error::from)?,
+        edges: serde_json::to_string(&edges).map_err(Error::from)?,
+        wires: serde_json::to_string(&wires).map_err(Error::from)?,
+        created_at: now,
+        updated_at: now,
+    };
+    emit_create(tx, record::automation_action_version(&saved))?;
+    Ok(saved)
+}
+
 /// Delete a library action with everything inside it — the picture its steps are drawn into, the steps
-/// with their own declarations, and the ways out, ports and settings the action declared.
+/// with their own declarations, the ways out, ports and settings the action declared, and the versions
+/// saved of it.
 ///
 /// **Refused while it is placed**, naming how many placements: the placement would be left standing on
 /// nothing, and what should stand there instead is not this op's to guess.
@@ -775,6 +825,9 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     }
     delete_declarations(tx, AutomationOwner::Action, AutomationPortOwner::Action, id)?;
     delete_cfgs(tx, AutomationCfgOwner::Action, id)?;
+    for version in read::automation_action_version_ids(tx.conn(), id)? {
+        tx.delete_record("automation_action_version", version)?;
+    }
     tx.delete_record("automation_action", id)?;
     Ok(())
 }
@@ -1006,6 +1059,7 @@ pub fn entry_replace(tx: &WriteTx<'_>, automation_id: i64, key: &str) -> Result<
     }
     let mut after = before.clone();
     after.action_id = action.id;
+    after.version = None;
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation_placement(&before), record::automation_placement(&after))?;
     answer_as_entry(tx, &after, Some(key))?;
@@ -1172,15 +1226,20 @@ pub(crate) fn placement_add_by_hand(
 
 /// Write one placement row at the bottom of an automation's list — what [`placement_add`] does once it
 /// has asked what it asks.
+///
+/// It stands on the action's newest saved version, or on none where nobody has saved one — which is
+/// every built-in, whose `action_id` already names one version (`AMB-D-1000`).
 fn put_placement(tx: &WriteTx<'_>, automation: &Automation, action_id: i64) -> Result<AutomationPlacement> {
     let sibs = read::automation_placement_siblings(tx.conn(), automation.id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
+    let version = read::automation_action_version_latest(tx.conn(), action_id)?.map(|v| v.version);
     let now = Timestamp::now();
     let id = read::next_id(tx.conn(), "automation_placement")?;
     let placement = AutomationPlacement {
         id,
         automation_id: automation.id,
         action_id,
+        version,
         order_key,
         created_at: now,
         updated_at: now,
@@ -5027,6 +5086,122 @@ mod tests {
                 read::automation_action_step_ids(tx.conn(), action.id).expect("read").is_empty(),
                 "and so did the steps inside it",
             );
+        });
+    }
+
+    /// The rows one JSON field of a saved version holds.
+    fn saved<T: serde::de::DeserializeOwned>(json: &str) -> Vec<T> {
+        serde_json::from_str(json).expect("a saved version reads back")
+    }
+
+    /// **A saved version is the action as it stood**, every row under its own id, and writing on in the
+    /// action afterwards leaves it as it was.
+    #[test]
+    fn a_saved_version_keeps_the_action_as_it_stood() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let action = action_from_prompt(
+                tx,
+                Some(project),
+                NewStep::new("点検する", "見る"),
+                &["直すところがある".to_string()],
+                &[("差分".to_string(), AutomationPortKind::File, true)],
+            )
+            .expect("write the action");
+            let step = only_step(tx, &action);
+            let fix = exit_id(tx, AutomationOwner::Step, step.id, Some("直すところがある"));
+            let found = port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                fix,
+                AutomationPortDirection::Out,
+                "指摘",
+                AutomationPortKind::Value,
+                true,
+            )
+            .expect("declare an output");
+            cfg_add(tx, action.id, "リポジトリの場所", AutomationCfgKind::Folder, true, None)
+                .expect("declare a setting");
+
+            let first = action_version_add(tx, action.id).expect("save");
+            assert_eq!(first.version, 1);
+            assert_eq!(first.entry_step_id, Some(step.id));
+            let steps: Vec<AutomationStep> = saved(&first.steps);
+            assert_eq!(
+                steps.iter().map(|s| (s.id, s.prompt.as_str())).collect::<Vec<_>>(),
+                vec![(step.id, "見る")]
+            );
+            let mut exits: Vec<i64> = saved::<AutomationExit>(&first.exits).iter().map(|e| e.id).collect();
+            exits.sort_unstable();
+            let owners = [(AutomationOwner::Action, action.id), (AutomationOwner::Step, step.id)];
+            let mut live: Vec<i64> = owners
+                .into_iter()
+                .flat_map(|(owner, id)| read::automation_exit_ids(tx.conn(), owner, id).expect("read"))
+                .collect();
+            live.sort_unstable();
+            assert_eq!(exits, live, "the ways out of the action and of its step");
+            let ports: Vec<AutomationPort> = saved(&first.ports);
+            assert!(ports.iter().any(|p| p.id == found.id), "the output on the step's way out");
+            assert_eq!(
+                ports.iter().filter(|p| p.direction == AutomationPortDirection::In).count(),
+                2,
+                "the action's input and the step's"
+            );
+            let cfgs: Vec<AutomationCfg> = saved(&first.cfgs);
+            assert_eq!(cfgs.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["リポジトリの場所"]);
+            let edges: Vec<AutomationEdge> = saved(&first.edges);
+            let live_edges =
+                read::automation_edge_ids(tx.conn(), AutomationPictureOwner::Action, action.id).expect("read");
+            assert_eq!(edges.len(), live_edges.len());
+            let wires: Vec<AutomationWire> = saved(&first.wires);
+            assert_eq!(wires.len(), 1, "the input carried from the action into the step");
+
+            let prompt = Some("もう一度見る");
+            step_update(tx, step.id, None, prompt, None, None, None, None, None, None, None, None)
+                .expect("write on");
+            port_delete(tx, found.id).expect("take the output away");
+            let second = action_version_add(tx, action.id).expect("save again");
+            assert_eq!(second.version, 2);
+            assert_eq!(saved::<AutomationStep>(&second.steps)[0].prompt, "もう一度見る");
+            assert!(!saved::<AutomationPort>(&second.ports).iter().any(|p| p.id == found.id));
+
+            let latest = read::automation_action_version_latest(tx.conn(), action.id).expect("read");
+            assert_eq!(latest.map(|v| v.version), Some(2));
+            assert_eq!(saved::<AutomationStep>(&first.steps)[0].prompt, "見る", "the first stays as saved");
+        });
+    }
+
+    /// A placement stands on the newest version there is when it is put down, and keeps it after the
+    /// action is saved again; one put down before any save, and a built-in's, stand on none.
+    #[test]
+    fn a_placement_stands_on_the_newest_version_when_it_is_put_down() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let take = automation_builtin::action(tx, "take_task").expect("built-in");
+            let first = placement_add(tx, automation.id, take.id).expect("place the built-in");
+            assert_eq!(first.version, None, "a built-in's action is already one version");
+            let (action, unsaved) = mk_placed(tx, &automation, "点検");
+            assert_eq!(unsaved.version, None, "nobody has saved the action yet");
+            action_version_add(tx, action.id).expect("save");
+            let saved = placement_add(tx, automation.id, action.id).expect("place it again");
+            assert_eq!(saved.version, Some(1));
+            action_version_add(tx, action.id).expect("save again");
+            let kept = read::automation_placement(tx.conn(), saved.id).expect("read").expect("there");
+            assert_eq!(kept.version, Some(1), "a placement is not moved onto a newer version by itself");
+            assert!(action_version_add(tx, take.id).is_err(), "a built-in is not saved by hand");
+        });
+    }
+
+    /// Deleting an action takes the versions saved of it.
+    #[test]
+    fn the_versions_of_an_action_go_with_it() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let action = action_from_prompt(tx, Some(project), NewStep::new("点検する", "見る"), &[], &[])
+                .expect("write the action");
+            action_version_add(tx, action.id).expect("save");
+            action_delete(tx, action.id).expect("delete");
+            assert!(read::automation_action_version_ids(tx.conn(), action.id).expect("read").is_empty());
         });
     }
 

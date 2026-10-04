@@ -1740,6 +1740,11 @@ pub struct AutomationPlacement {
     pub id: i64,
     pub automation_id: i64,
     pub action_id: i64,
+    /// **The saved version of the action this placement stands on** ([`AutomationActionVersion::version`]),
+    /// or `None`. A built-in's is `None`, because its `action_id` already names one version
+    /// (`AMB-D-1000`); so is one on an action nobody has saved yet.
+    #[serde(default)]
+    pub version: Option<i64>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -1933,6 +1938,39 @@ pub struct AutomationWire {
     /// The port it lands on — an input of the box, or, into [`ACTION_BOUNDARY`], an output on the way
     /// out of the action the source returns to.
     pub to_port_id: i64,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **One saved version of an action a person wrote** — what was inside it at the moment it was saved,
+/// copied whole and never rewritten. A placement stands on one ([`AutomationPlacement::version`]), so
+/// writing on in the action changes no automation until a placement is moved onto a newer version.
+///
+/// The six JSON fields are the rows as they stood, each its own record under its own id: ids are never
+/// reused, so the edges and wires here key their ways out and ports exactly as the rows did
+/// (`AMB-D-961`), and a row deleted from the action afterwards still means the same thing here.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationActionVersion {
+    pub id: i64,
+    pub action_id: i64,
+    /// Counts up from 1 within one action.
+    pub version: i64,
+    /// The step the copy opens first, by its id in `steps`, or `None` where the action had none.
+    #[serde(default)]
+    pub entry_step_id: Option<i64>,
+    /// The steps — JSON, [`AutomationStep`]s.
+    pub steps: String,
+    /// The ways out of the action and of each step — JSON, [`AutomationExit`]s.
+    pub exits: String,
+    /// The inputs of the action and of each step, and the outputs on every one of those ways out —
+    /// JSON, [`AutomationPort`]s.
+    pub ports: String,
+    /// The settings the action declares — JSON, [`AutomationCfg`]s.
+    pub cfgs: String,
+    /// The edges drawn inside the action — JSON, [`AutomationEdge`]s.
+    pub edges: String,
+    /// The wires drawn inside the action — JSON, [`AutomationWire`]s.
+    pub wires: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

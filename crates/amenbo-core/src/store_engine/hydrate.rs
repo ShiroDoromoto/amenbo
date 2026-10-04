@@ -28,7 +28,8 @@ use super::sql::{Col, ColType, Int, NotNull, Nullability, Nullable, Read, Text};
 use super::Result;
 use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Automation, AutomationAction,
-    AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge, AutomationEnds,
+    AutomationActionVersion, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
+    AutomationEnds,
     AutomationExit, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
     AutomationPauseKind, AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind,
@@ -534,6 +535,7 @@ pub(super) fn automation_placement_row(r: &Row) -> rusqlite::Result<AutomationPl
         id: get(r, C.id)?,
         automation_id: get(r, C.automation_id)?,
         action_id: get(r, C.action_id)?,
+        version: get(r, C.version)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
@@ -683,6 +685,25 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         acknowledged_at: ts_opt(r, C.acknowledged_at)?,
         handed_task: get(r, C.handed_task)?,
         acknowledged_by_kind: enum_opt(r, C.acknowledged_by_kind, ActorKind::parse)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_action_version_row(r: &Row) -> rusqlite::Result<AutomationActionVersion> {
+    const C: col::automation_action_version::Cols = col::automation_action_version::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationActionVersion {
+        id: get(r, C.id)?,
+        action_id: get(r, C.action_id)?,
+        version: get(r, C.version)?,
+        entry_step_id: get(r, C.entry_step_id)?,
+        steps: get(r, C.steps)?,
+        exits: get(r, C.exits)?,
+        ports: get(r, C.ports)?,
+        cfgs: get(r, C.cfgs)?,
+        edges: get(r, C.edges)?,
+        wires: get(r, C.wires)?,
         created_at,
         updated_at,
     })

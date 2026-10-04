@@ -7017,6 +7017,30 @@ pub fn automation_action_step_ids(conn: &Connection, action_id: i64) -> Result<V
     select_ids(conn, S.id, Some(&Pred::eq(S.action_id, action_id)))
 }
 
+/// The newest saved version of one action, or `None` for an action nobody has saved — what a placement
+/// put down on it stands on.
+pub fn automation_action_version_latest(
+    conn: &Connection,
+    action_id: i64,
+) -> Result<Option<crate::model::AutomationActionVersion>> {
+    const V: col::automation_action_version::Cols = col::automation_action_version::ALL;
+    Ok(automation_rows(
+        conn,
+        V.table,
+        &Pred::eq(V.action_id, action_id),
+        &[Sort::by(V.version).desc()],
+        super::hydrate::automation_action_version_row,
+    )?
+    .into_iter()
+    .next())
+}
+
+/// The saved versions of one action — what goes when the action does.
+pub fn automation_action_version_ids(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
+    const V: col::automation_action_version::Cols = col::automation_action_version::ALL;
+    select_ids(conn, V.id, Some(&Pred::eq(V.action_id, action_id)))
+}
+
 /// The placements of one automation, oldest key first — the subtree a delete walks.
 pub fn automation_placement_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
     const P: col::automation_placement::Cols = col::automation_placement::ALL;

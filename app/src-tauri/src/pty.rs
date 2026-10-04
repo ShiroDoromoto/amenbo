@@ -341,13 +341,14 @@ const CURSOR_ANSWER: &[u8] = b"\x1b[1;1R";
 pub struct Terminals(Mutex<HashMap<String, Terminal>>);
 
 impl Terminals {
-    /// How many sessions are open right now.
+    /// How many sessions have a program running right now.
     ///
     /// Asked by the way out of the app (`crate::quit`), where the only thing worth knowing is
     /// whether there is anything to lose — a count is that, and it can be had without copying the
-    /// registry the way [`pty_sessions`] does.
+    /// registry the way [`pty_sessions`] does. A terminal kept after its program ended
+    /// ([`Terminal::ended`]) has nothing left to lose, so it is not counted.
     pub fn open(&self) -> usize {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner).len()
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).values().filter(|t| !t.ended()).count()
     }
 
     /// The way into this session's keystrokes, or `None` once the terminal is gone.
@@ -373,6 +374,49 @@ impl Terminals {
     /// a terminal that is gone, and for one whose thread has stopped writing.
     fn send(&self, session: &str, bytes: Vec<u8>) -> bool {
         self.keys(session).is_some_and(|keys| keys.send(bytes).is_ok())
+    }
+
+    /// **Note that this session's program has ended**, and answer whether it ended by itself.
+    ///
+    /// Whether the registry still held it says who ended it: [`pty_close`] and [`end_steps_of`] take
+    /// the entry out before they kill, so an entry still here is a program that ended on its own. One
+    /// nobody writes into stays, marked ended, for a pane to read what it wrote ([`Terminal::ended`]);
+    /// any other is taken out.
+    fn program_ended(&self, session: &str) -> bool {
+        let mut open = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        match open.get_mut(session) {
+            Some(terminal) if terminal.read_only => {
+                // The keystrokes thread ends as its sender is dropped, and lets go of the master
+                // with it; nothing is written into this terminal either way (`AMB-D-931`).
+                terminal.master = None;
+                terminal.keys = mpsc::channel().0;
+                true
+            }
+            Some(_) => {
+                open.remove(session);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Take the terminals of this run's steps out of the registry, and hand back the ones whose program
+    /// is still running for the caller to end ([`end_steps_of`]). One whose program has ended already
+    /// ([`Terminal::ended`]) is only taken out: this is what it was kept until.
+    fn take_steps_of(&self, run: i64) -> Vec<Terminal> {
+        let mut open = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let of_run: Vec<String> =
+            open.iter().filter(|(_, one)| one.run == Some(run)).map(|(id, _)| id.clone()).collect();
+        of_run.iter().filter_map(|id| open.remove(id)).filter(|one| !one.ended()).collect()
+    }
+
+    /// The runs with a step's program running, each once ([`runs_with_steps`]).
+    fn runs_running_steps(&self) -> Vec<i64> {
+        let open = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut runs: Vec<i64> = open.values().filter(|one| !one.ended()).filter_map(|one| one.run).collect();
+        runs.sort_unstable();
+        runs.dedup();
+        runs
     }
 }
 
@@ -768,8 +812,9 @@ pub struct Terminal {
     /// terminal started, and a pane that adopts this session has no other way to learn what is
     /// running in it ([`crate::dto::PtySessionDto`]).
     agent: Option<String>,
-    /// The master side, kept for one purpose: telling the terminal how large the pane is.
-    master: Box<dyn MasterPty + Send>,
+    /// The master side, kept for one purpose: telling the terminal how large the pane is. Let go of
+    /// once the program has ended ([`Terminal::ended`]), with the pty it holds.
+    master: Option<Box<dyn MasterPty + Send>>,
     /// The keystrokes side: what is sent here is written to the master, in order, by a thread that
     /// belongs to this session alone ([`write_keys`]). Writing to the master is what a key press is.
     keys: mpsc::Sender<Vec<u8>>,
@@ -794,6 +839,21 @@ pub struct Terminal {
     /// was handed everything it is given before it started, so nothing typed, pasted or handed over
     /// goes in (`AMB-D-931`).
     read_only: bool,
+}
+
+impl Terminal {
+    /// Whether its program has ended. Only a terminal nobody writes into is kept once it has: what it
+    /// wrote is the whole of what a reader has to go on when its step failed, so it stays for a pane to
+    /// take up ([`pty_attach`]) until the run's next step replaces it ([`end_steps_of`]), the pane is
+    /// closed ([`pty_close`]) or the app ends. Any other terminal leaves the registry as its program
+    /// ends.
+    ///
+    /// What is kept is the pane alone: the pty is let go of as the program ends
+    /// ([`Terminals::program_ended`]), so a terminal kept for every run whose last step was a script
+    /// does not hold a pty each.
+    fn ended(&self) -> bool {
+        self.master.is_none()
+    }
 }
 
 /// A session id: sixteen bytes of the operating system's randomness, in hex.
@@ -1544,7 +1604,7 @@ fn spawn(
         Terminal {
             folder,
             agent,
-            master: pair.master,
+            master: Some(pair.master),
             keys: write_keys(session.clone(), writer),
             killer,
             pane: Arc::clone(&pane),
@@ -1586,16 +1646,8 @@ fn spawn(
         // that stopped over a file Amenbo pointed somewhere else, whose own message then names a
         // home the reader will never see again (`crate::dto::PtyClosedDto`).
         let code = reap(&child).and_then(|it| i32::try_from(it.exit_code()).ok());
-        // Whether the registry still held it says who ended it: `pty_close`, like the panic above,
-        // takes the entry out before it kills, so an entry still here is a program that ended on its
-        // own.
-        let itself = app
-            .state::<Terminals>()
-            .0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(&id)
-            .is_some();
+        // The panic above takes the entry out the way `pty_close` does, so it reads as not by itself.
+        let itself = app.state::<Terminals>().program_ended(&id);
         let no_way_back = ended(&app, itself, broke);
         let ending = PtyClosedDto { session: id.clone(), code, no_way_back };
         let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, ending);
@@ -2029,7 +2081,8 @@ fn in_open_order(mut open: Vec<(String, PtySessionDto)>) -> Vec<PtySessionDto> {
     open.into_iter().map(|(_, one)| one).collect()
 }
 
-/// Draw an already-open terminal in the pane that is asking, and hand back what it has said lately.
+/// Draw an already-open terminal in the pane that is asking, and hand back what it has said lately —
+/// one whose program has ended as well, where it was kept for this ([`Terminal::ended`]).
 ///
 /// This is what a pane calls in place of [`pty_open`] when it is taking over a session that is
 /// already running: the same terminal shown in the other window after the user split the app in two
@@ -2056,7 +2109,8 @@ pub fn pty_attach(
     Ok(terminal.pane.adopt(window.label()))
 }
 
-/// Whether the terminal of this session is still running.
+/// Whether the terminal of this session is still in the registry: running, or ended and kept for its
+/// pane to take up ([`Terminal::ended`]).
 pub fn is_open(app: &tauri::AppHandle, session: &str) -> bool {
     app.state::<Terminals>().0.lock().unwrap_or_else(PoisonError::into_inner).contains_key(session)
 }
@@ -2072,32 +2126,25 @@ const STEP_SIZE: Size = (120, 32);
 /// (`crate::automation_watch`).
 ///
 /// It is taken out of the registry before it is killed, the way [`pty_close`] does, so its ending
-/// reads as one Amenbo made and not as the program stopping by itself.
+/// reads as one Amenbo made and not as the program stopping by itself. One whose program has ended
+/// already ([`Terminal::ended`]) is only taken out: this is what it was kept until.
 pub fn end_steps_of(app: &tauri::AppHandle, run: i64) {
-    let terminals = app.state::<Terminals>();
-    let before: Vec<Terminal> = {
-        let mut open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
-        let of_run: Vec<String> =
-            open.iter().filter(|(_, one)| one.run == Some(run)).map(|(id, _)| id.clone()).collect();
-        of_run.iter().filter_map(|id| open.remove(id)).collect()
-    };
-    for mut one in before {
+    for mut one in app.state::<Terminals>().take_steps_of(run) {
         if let Err(e) = one.killer.kill() {
             log::warn!("could not end the terminal of run {run}'s step before: {e}");
         }
     }
 }
 
-/// **The runs that have a step's terminal standing right now**, each once — what the watch compares
+/// **The runs that have a step's program running right now**, each once — what the watch compares
 /// with the runs still going, to end the terminals of the ones that are over
 /// (`crate::automation_watch`).
+///
+/// A terminal whose program has ended is left out ([`Terminal::ended`]). There is nothing in it to
+/// stop, and what it wrote is most worth reading exactly when its step failed the run — so the run
+/// being over does not take it away; the run's next step, if it has one, or its pane being closed does.
 pub fn runs_with_steps(app: &tauri::AppHandle) -> Vec<i64> {
-    let open = app.state::<Terminals>();
-    let open = open.0.lock().unwrap_or_else(PoisonError::into_inner);
-    let mut runs: Vec<i64> = open.values().filter_map(|one| one.run).collect();
-    runs.sort_unstable();
-    runs.dedup();
-    runs
+    app.state::<Terminals>().runs_running_steps()
 }
 
 /// **Start the terminal a step of a run is carried out in** — on the host, whether or not any pane is
@@ -2160,6 +2207,7 @@ pub fn open_step(
 ///
 /// **Its ending is the caller's to write down** (`crate::automation`), so nothing is said here when it
 /// ends by itself: `step_program_ended` is for an agent that never reported, and a script never does.
+/// Its terminal stays once it has ended, for the run's pane to read what it wrote ([`Terminal::ended`]).
 pub fn open_script(
     app: &tauri::AppHandle,
     run: i64,
@@ -2284,6 +2332,9 @@ fn exit_status(status: &portable_pty::ExitStatus) -> std::process::ExitStatus {
 /// the terminal is gone instead of trying to kill it twice. The drain ends on its own once the program
 /// does, and emits the close the pane listens for: what is on the screen stays as it is, which is what
 /// a terminal ends with.
+///
+/// A terminal kept after its program ended ([`Terminal::ended`]) is only dropped: there is nothing
+/// left to kill.
 #[tauri::command]
 pub fn pty_close(terminals: tauri::State<'_, Terminals>, session: String) -> Result<(), CmdError> {
     let mut terminal = terminals
@@ -2292,6 +2343,9 @@ pub fn pty_close(terminals: tauri::State<'_, Terminals>, session: String) -> Res
         .unwrap_or_else(PoisonError::into_inner)
         .remove(&session)
         .ok_or_else(|| gone(&session))?;
+    if terminal.ended() {
+        return Ok(());
+    }
     terminal.killer.kill().map_err(failed)
 }
 
@@ -2444,8 +2498,12 @@ pub fn pty_resize(
 ) -> Result<(), CmdError> {
     let open = terminals.0.lock().unwrap_or_else(PoisonError::into_inner);
     let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
-    terminal
-        .master
+    // A terminal whose program has ended has nothing to reflow, and a run opened for a size nothing
+    // will write at is a fold the next pane would be handed for nothing.
+    let Some(master) = &terminal.master else {
+        return Ok(());
+    };
+    master
         .resize(PtySize {
             rows,
             cols,
@@ -3112,6 +3170,105 @@ mod tests {
             out.contains("[a-session][a-pane]"),
             "the grandchild did not inherit the session name and the pane it is drawn in: {out:?}"
         );
+    }
+
+    /// A terminal put in `open` as [`spawn`] puts one, its program a shell that waits — what a test
+    /// of the registry stands on. The program is handed back for the test to end.
+    #[cfg(unix)]
+    fn standing(
+        open: &Terminals,
+        session: &str,
+        run: Option<i64>,
+        read_only: bool,
+    ) -> Box<dyn portable_pty::Child + Send + Sync> {
+        let pair = native_pty_system()
+            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .expect("open a pty");
+        let mut cmd = CommandBuilder::new("/bin/sh");
+        cmd.args(["-c", "sleep 30"]);
+        let child = pair.slave.spawn_command(cmd).expect("start the shell");
+        drop(pair.slave);
+        let writer = pair.master.take_writer().expect("write to the pty");
+        open.0.lock().unwrap().insert(
+            session.to_owned(),
+            Terminal {
+                folder: None,
+                agent: None,
+                master: Some(pair.master),
+                keys: write_keys(session.to_owned(), writer),
+                killer: child.clone_killer(),
+                pane: Arc::new(Pane::new(crate::windows::BOARD, OPENED_AT)),
+                started_at: String::new(),
+                run,
+                read_only,
+            },
+        );
+        child
+    }
+
+    /// End each program a test started, and wait for it.
+    #[cfg(unix)]
+    fn ending(children: Vec<Box<dyn portable_pty::Child + Send + Sync>>) {
+        for mut child in children {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
+    /// A script step's terminal stays once its program has ended, so a pane drawn after it can still
+    /// read what it wrote; the run's next step taking it away is what it is kept until.
+    #[cfg(unix)]
+    #[test]
+    fn a_terminal_nobody_writes_into_is_kept_until_the_next_step_takes_it_away() {
+        let open = Terminals::default();
+        let script = standing(&open, "script", Some(7), true);
+        assert_eq!(open.0.lock().unwrap()["script"].pane.keep(b"what failed"), crate::windows::BOARD);
+
+        assert!(open.program_ended("script"), "it ended by itself");
+        assert_eq!(open.open(), 0, "nothing is running, so there is nothing to lose on the way out");
+        assert!(open.runs_running_steps().is_empty(), "the run being over has nothing in it to stop");
+        assert!(matches!(open.writable("script"), Err(e) if e.code == "pty_read_only"));
+        let adopted = open.0.lock().unwrap()["script"].pane.adopt(crate::windows::TALK);
+        assert_eq!(run_bytes(&adopted.replay), b"what failed");
+
+        assert!(open.take_steps_of(7).is_empty(), "there is no program left to end");
+        assert!(open.0.lock().unwrap().is_empty(), "and the terminal is gone");
+        ending(vec![script]);
+    }
+
+    /// Any other terminal leaves the registry as its program ends, and one taken out before then
+    /// ended at somebody's hand rather than by itself.
+    #[cfg(unix)]
+    #[test]
+    fn a_terminal_a_person_writes_into_is_gone_once_its_program_ends() {
+        let open = Terminals::default();
+        let agent = standing(&open, "agent", Some(7), false);
+
+        assert!(open.program_ended("agent"), "it ended by itself");
+        assert!(open.0.lock().unwrap().is_empty());
+        assert!(!open.program_ended("agent"), "an entry already taken out was ended by somebody");
+        ending(vec![agent]);
+    }
+
+    /// The next step ends the program of a step still running, and takes the terminals of only the
+    /// run it belongs to.
+    #[cfg(unix)]
+    #[test]
+    fn the_next_step_ends_only_what_is_running_in_its_own_run() {
+        let open = Terminals::default();
+        let children = vec![
+            standing(&open, "ended", Some(7), true),
+            standing(&open, "running", Some(7), true),
+            standing(&open, "other run", Some(8), false),
+        ];
+        open.program_ended("ended");
+
+        assert_eq!(open.runs_running_steps(), [7, 8]);
+        let running = open.take_steps_of(7);
+        assert_eq!(running.len(), 1, "only the one still running is handed back to be ended");
+        let left: Vec<String> = open.0.lock().unwrap().keys().cloned().collect();
+        assert_eq!(left, ["other run"]);
+        ending(children);
     }
 
     /// The sweep takes what a dead run left and nothing else — both the directories a pane makes, and

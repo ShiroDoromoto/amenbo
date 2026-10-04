@@ -1789,6 +1789,20 @@ impl Store {
         })
     }
 
+    /// **Copy a run standing at its entry down afresh from a newer saved version**
+    /// ([`crate::ops::automation_run::take_up_newer`]). `startable` and `models` are a launch's, as
+    /// [`Self::automation_resume`]'s are. The reach is the run's.
+    pub fn automation_take_up_newer(
+        &mut self,
+        run_id: i64,
+        startable: Option<&[String]>,
+        models: &crate::ops::automation_run::ModelsHere,
+    ) -> Result<crate::ops::automation_run::TakenUp> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_run::take_up_newer(tx, run_id, startable, models)
+        })
+    }
+
     /// **Cancel a paused run** (one operation = one transaction, `AMB-D-1002`). A run still going is
     /// refused: it is paused first, or force-canceled through [`Self::automation_stop`]. The reach is
     /// the run's, as stopping it.

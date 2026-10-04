@@ -56,7 +56,8 @@ static NUDGE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 /// **Look now rather than at the end of the wait.** Called where this process is the one that moved a
 /// run — launching it, or opening a step of it — so what the run is waiting for next is picked up at
 /// once instead of up to `WHILE_IDLE` later. A run waiting for a task is looked at too, rather than
-/// at the end of its `WHILE_WAITING`.
+/// at the end of its `WHILE_WAITING` — which is also why saving an automation in the app calls it: a run
+/// waiting at its entry takes the new version up at once (`AMB-D-1015`).
 ///
 /// **A `start` typed in a terminal cannot reach here.** The CLI is another process, so a run launched
 /// there is found by the next look rather than announced — which is what `WHILE_IDLE` is sized for.
@@ -174,7 +175,18 @@ fn advance(
             amenbo_core::ops::automation_run::next_def(store.read_model().conn(), *run)?
         };
         match waiting {
+            // Before the entry is opened, what has been saved since the run's copy was taken is taken
+            // up (`AMB-D-1015`): a run that came back to its entry, or waits there for a task, starts
+            // from the newest saved definition. A run that failed its check has nothing left to open.
             Waiting::Step(def) => {
+                let def = match crate::automation::take_up_newer(app, *run, *def) {
+                    Ok(Some(def)) => def,
+                    Ok(None) => continue,
+                    Err(e) => {
+                        log::warn!("run {run} could not take up a newer saved version: {}", e.message_en);
+                        continue;
+                    }
+                };
                 match crate::automation::automation_step_open(app.clone(), *run, Some(def.id)) {
                     Ok(opened) if opened.builtin.as_ref().is_some_and(|b| b.waiting) => {
                         resting.insert(*run, Instant::now() + WHILE_WAITING);

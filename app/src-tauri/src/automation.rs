@@ -455,6 +455,9 @@ pub fn automation_save(id: i64) -> Result<WriteAck, CmdError> {
         store.automation_save(id)?;
         Ok(())
     })?;
+    // A run of it standing at its entry takes the new version up on the watch's next look, so that
+    // look is taken now (`AMB-D-1015`).
+    crate::automation_watch::wake();
     Ok(WriteAck::new(&["automations"]))
 }
 
@@ -2185,6 +2188,62 @@ fn standing_wait(app: &tauri::AppHandle, run_id: i64) -> Option<AutomationStepOp
     let standing = app.state::<StepsStanding>();
     let standing = standing.0.lock().expect("steps standing lock");
     standing.get(&run_id).filter(|one| one.builtin.as_ref().is_some_and(|b| b.waiting)).cloned()
+}
+
+/// **Take up what has been saved since a run's copy was taken, before its entry is opened**
+/// (`AMB-D-1015`, [`automation_run::take_up_newer`]) — and answer the step to open now, or `None`
+/// where the newer version did not pass and the run failed.
+///
+/// **Asked of the store before it is written to.** The watch asks this of every run standing before a
+/// step on every look, and nearly always nothing has been saved since: the entry and the versions are
+/// read first, and the write is opened only where there is something newer to take up.
+///
+/// **The card a waiting run stood on is the old entry's**, so it is dropped: opening the new entry
+/// tells its own card, rather than handing back the old one ([`open_one`]). A run that failed is told
+/// with nothing to stand on, which takes its pane down.
+pub(crate) fn take_up_newer(
+    app: &tauri::AppHandle,
+    run_id: i64,
+    def: amenbo_core::model::AutomationRunDef,
+) -> Result<Option<amenbo_core::model::AutomationRunDef>, CmdError> {
+    if !def.entry {
+        return Ok(Some(def));
+    }
+    let newer = {
+        let store = open_store_read()?;
+        let conn = store.read_model().conn();
+        let Some(run) = read::automation_run(conn, run_id)? else { return Ok(Some(def)) };
+        read::automation_version_latest(conn, run.automation_id)?
+            .is_some_and(|saved| !matches!(def.automation_version, Some(copied) if copied >= saved.version))
+    };
+    if !newer {
+        return Ok(Some(def));
+    }
+    let mut store = crate::commands::open_store()?;
+    let startable = amenbo_core::wake::startable_ids(&store.config);
+    let offered = crate::agent_models::offered_here();
+    let taken = store.automation_take_up_newer(run_id, startable.as_deref(), &offered)?;
+    match taken {
+        automation_run::TakenUp::Same => Ok(Some(def)),
+        automation_run::TakenUp::Copied(entry) => {
+            log::info!("run {run_id} took up the newer saved version of its automation");
+            let standing = app.state::<StepsStanding>();
+            standing.0.lock().expect("steps standing lock").remove(&run_id);
+            Ok(Some(*entry))
+        }
+        automation_run::TakenUp::Failed(run) => {
+            log::info!("run {run_id} failed the check of the newer saved version of its automation");
+            tell(app, AutomationStepOpenDto {
+                run: run_id,
+                project: run.project_id,
+                step: None,
+                builtin: None,
+                session: None,
+                missing: Vec::new(),
+            });
+            Ok(None)
+        }
+    }
 }
 
 /// **A built-in about to be carried out**, as its pane is told before Amenbo starts on it — and which

@@ -43,6 +43,8 @@ steps_cli:
   # Every task has to carry a value on it from here on.
   - { type: action, domain: dimension, op: required, with: { dimension: 職種, required: true } }
   - { type: action, domain: automation, op: cfg-set, with: { target: at_make, name: 起票したタスク, choice: "進行中にして、出口「起票して着手した」へ進む" } }
+  # A run starts from the newest saved version, so it is saved first.
+  - { type: action, domain: automation, op: save, with: { target: auto } }
 
   - type: action
     domain: repo

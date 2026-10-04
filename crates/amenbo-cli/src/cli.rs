@@ -2366,7 +2366,8 @@ pub enum AutomationCmd {
         id: i64,
     },
 
-    /// Start an automation: check it, copy what is placed on it into a run, and start it. The tasks a
+    /// Start an automation: check its newest saved version, copy it into a run, and start it — refused
+    /// for an automation never saved (`automation save`); what is written since is not used. The tasks a
     /// step works on and the folder it runs in are the automation's own answers, given while it was
     /// built. Only an entry of the make_task built-in reads what is handed over here: the `--title`,
     /// `--notes` and `--dim` of the task it files, and each `--file`, attached to that task.
@@ -2390,7 +2391,8 @@ pub enum AutomationCmd {
         dim: Vec<String>,
     },
 
-    /// Walk an automation from its entry to its end without running anything: the launch check, what
+    /// Walk an automation's draft, unsaved changes included, from its entry to its end without running
+    /// anything — saving is not needed, unlike `automation start`: the launch check, what
     /// each step is handed and the whole prompt each agent would be started on — with no agent started,
     /// no built-in carried out and nothing kept. Each step leaves by its first way out, and by the next
     /// one each time it is reached again; what it would have handed on is a placeholder. Takes what

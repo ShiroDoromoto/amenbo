@@ -4215,6 +4215,11 @@ const REGISTRY: &[OpSpec] = &[
     // and both are named.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "wire-add", required: &["from_port", "to_port"], refs: &["target", "to"], strings: &["exit", "from_port", "to_port"], binds: true },
     //
+    // Saving it as its next version (`automation save`), which is what a start reads: one never saved
+    // is refused at the start (`conflict`). The save asks the launch check, and is refused
+    // (`not_ready_automation`) while anything is unmet.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "save", required: &[], refs: &["target"], strings: &[], binds: false },
+    //
     // Running one. `start` binds the run every other verb here names.
     //
     // What a person hands the run as it starts: `text`, and `file`, a file the run

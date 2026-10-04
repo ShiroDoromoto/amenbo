@@ -1821,11 +1821,16 @@ pub enum AutomationCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// One automation in full: each placement with the ways out, inputs and settings it runs under,
-    /// what happens after each way out, what is handed along, and the documents it shares
+    /// One automation in full: the version saved last and whether the draft holds more, each placement
+    /// with the version of its action it stands on and the newest there is, the ways out, inputs and
+    /// settings it runs under, what happens after each way out, what is handed along, and the documents
+    /// it shares
     Show {
         /// automation id
         id: i64,
+        /// show the newest saved version — what a launch uses — instead of the draft
+        #[arg(long)]
+        saved: bool,
     },
     /// Change an automation's name, notes, or whether it is archived (only the given fields change)
     Update {
@@ -1923,10 +1928,14 @@ pub enum AutomationCmd {
         #[arg(long)]
         global: bool,
     },
-    /// One library action: the steps inside it, what it declares, and how many automations place it
+    /// One library action: the version saved last and whether the draft holds more, the steps inside
+    /// it, what it declares, and which automations place it at which version
     ActionShow {
         /// action id
         id: i64,
+        /// show the newest saved version — what a placement put down now stands on — instead of the draft
+        #[arg(long)]
+        saved: bool,
     },
     /// Amenbo's built-ins: steps it carries out itself, with what each does, the settings it reads, what
     /// it takes in and the ways out it leaves by. They are read, placed and put in, never edited

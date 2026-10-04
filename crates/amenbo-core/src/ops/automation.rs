@@ -9,8 +9,8 @@
 //! **Two pictures, drawn the same way.** An automation's boxes are placements and an action's are
 //! steps, but a line is a line either way: `automation_edge` and `automation_wire` carry which picture
 //! they are on, and the ops here take that pair rather than assuming one of them. What a box declares is
-//! read one hop off: a placement reads its action's ways out and inputs, a step reads its own
-//! ([`box_declarer`]).
+//! read one hop off: a placement reads its action's ways out and inputs, as the version it stands on
+//! holds them, and a step reads its own ([`box_declarer`]).
 //!
 //! **What an action declares is joined to what is inside it, never merely spelled the same.** Three
 //! lines cross that edge, and all three are the ordinary ones: an [`EdgeTarget::Exit`] edge says which
@@ -228,43 +228,58 @@ fn def_of_picture(owner_kind: AutomationPictureOwner, owner_id: i64) -> Def {
     }
 }
 
-/// **Where a box's declarations are read from.** A placement reads the action standing on it; a step
-/// reads itself. One answer, asked by everything that resolves a name on a box — an edge's way out, a
-/// wire's ends.
+/// **Where a box's declarations are read from.** A placement reads the action standing on it, as the
+/// version it stands on holds it ([`ActionDef::placed`]); a step reads itself. One answer, asked by
+/// everything that resolves a name on a box — an edge's way out, a wire's ends.
 ///
 /// It refuses a box that is not in the picture it was asked about, which is the check every edge and
 /// wire op would otherwise make twice.
-fn box_declarer(
-    tx: &WriteTx<'_>,
-    owner_kind: AutomationPictureOwner,
-    box_id: i64,
-) -> Result<(AutomationOwner, i64)> {
+fn box_declarer(tx: &WriteTx<'_>, owner_kind: AutomationPictureOwner, box_id: i64) -> Result<Declarer> {
     match owner_kind {
         AutomationPictureOwner::Automation => {
             let placement = live_placement(tx, box_id)?;
-            Ok((AutomationOwner::Action, placement.action_id))
+            Ok(Declarer::Placement(ActionDef::placed(tx.conn(), &placement)?))
         }
-        AutomationPictureOwner::Action => {
-            let step = live_step(tx, box_id)?;
-            Ok((AutomationOwner::Step, step.id))
-        }
+        AutomationPictureOwner::Action => Ok(Declarer::Step(live_step(tx, box_id)?.id)),
     }
 }
 
-/// The same pair as a port's owner, which admits a third kind this one does not.
-fn box_port_declarer(
-    tx: &WriteTx<'_>,
-    owner_kind: AutomationPictureOwner,
-    box_id: i64,
-) -> Result<(AutomationPortOwner, i64)> {
-    let (declarer, id) = box_declarer(tx, owner_kind, box_id)?;
-    Ok((
-        match declarer {
-            AutomationOwner::Action => AutomationPortOwner::Action,
-            AutomationOwner::Step => AutomationPortOwner::Step,
-        },
-        id,
-    ))
+/// What [`box_declarer`] answers: the action a placement stands on, or a step by its id.
+enum Declarer {
+    Placement(ActionDef),
+    Step(i64),
+}
+
+impl Declarer {
+    /// The box's way out under this name — `None` for [`DONE_EXIT`].
+    fn exit(&self, conn: &Connection, name: Option<&str>) -> Result<Option<AutomationExit>> {
+        match self {
+            Declarer::Placement(def) => Ok(def.exit_by_name(AutomationOwner::Action, def.action_id, name)),
+            Declarer::Step(id) => Ok(read::automation_exit_by_name(conn, AutomationOwner::Step, *id, name)?),
+        }
+    }
+
+    /// What one of the box's ways out hands on under this name.
+    fn out(&self, conn: &Connection, exit_id: i64, name: &str) -> Result<Option<AutomationPort>> {
+        let (owner, direction) = (AutomationPortOwner::Exit, AutomationPortDirection::Out);
+        match self {
+            Declarer::Placement(def) => Ok(def.port_by_name(owner, exit_id, direction, name)),
+            Declarer::Step(_) => Ok(read::automation_port_by_name(conn, owner, exit_id, direction, name)?),
+        }
+    }
+
+    /// What the box takes in under this name.
+    fn input(&self, conn: &Connection, name: &str) -> Result<Option<AutomationPort>> {
+        let into = AutomationPortDirection::In;
+        match self {
+            Declarer::Placement(def) => {
+                Ok(def.port_by_name(AutomationPortOwner::Action, def.action_id, into, name))
+            }
+            Declarer::Step(id) => {
+                Ok(read::automation_port_by_name(conn, AutomationPortOwner::Step, *id, into, name)?)
+            }
+        }
+    }
 }
 
 /// **Which picture a box is drawn on** — the automation a placement sits on, or the action a step is
@@ -776,7 +791,7 @@ pub fn action_save(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionV
         return Err(automation_run::not_ready("save", &action.name, &unmet));
     }
     if let Some(latest) = read::automation_action_version_latest(tx.conn(), action_id)? {
-        if ActionPicture::read(tx.conn(), &action)?.is(&latest)? {
+        if ActionDef::live(tx.conn(), action_id)?.is(&latest)? {
             return Ok(latest);
         }
     }
@@ -787,8 +802,8 @@ pub fn action_save(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionV
 /// nobody has saved, any step at all is unsaved. Its name, notes and place in the library are not part
 /// of a version, so writing them leaves this as it was.
 pub fn action_unsaved(conn: &Connection, action_id: i64) -> Result<bool> {
-    let action = read::automation_action(conn, action_id)?.ok_or_else(|| not_found("action", action_id))?;
-    let draft = ActionPicture::read(conn, &action)?;
+    read::automation_action(conn, action_id)?.ok_or_else(|| not_found("action", action_id))?;
+    let draft = ActionDef::live(conn, action_id)?;
     match read::automation_action_version_latest(conn, action_id)? {
         Some(latest) => Ok(!draft.is(&latest)?),
         None => Ok(!draft.steps.is_empty()),
@@ -815,7 +830,7 @@ pub fn action_discard(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActi
             action.name
         )));
     };
-    let draft = ActionPicture::read(tx.conn(), &action)?;
+    let draft = ActionDef::live(tx.conn(), action_id)?;
     if draft.is(&saved)? {
         return Ok(saved);
     }
@@ -836,25 +851,29 @@ pub fn action_discard(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActi
     Ok(saved)
 }
 
-/// **What is inside an action as its tables hold it** — the rows a version is saved from: the steps, the
-/// ways out of the action and of each step, the inputs and the outputs on those ways out, the settings
-/// the action declares, the edges and wires drawn inside it, and the step it opens first.
-struct ActionPicture {
-    entry_step_id: Option<i64>,
-    steps: Vec<AutomationStep>,
-    exits: Vec<AutomationExit>,
-    ports: Vec<AutomationPort>,
-    cfgs: Vec<AutomationCfg>,
-    edges: Vec<AutomationEdge>,
-    wires: Vec<AutomationWire>,
+/// **What is inside one action** — the steps, the ways out of the action and of each step, the inputs
+/// and the outputs on those ways out, the settings the action declares, the edges and wires drawn inside
+/// it, and the step it opens first. Read either off the action's rows as they stand now ([`Self::live`])
+/// or off one saved version of it, and asked the same way either way.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ActionDef {
+    pub action_id: i64,
+    pub entry_step_id: Option<i64>,
+    pub steps: Vec<AutomationStep>,
+    pub exits: Vec<AutomationExit>,
+    pub ports: Vec<AutomationPort>,
+    pub cfgs: Vec<AutomationCfg>,
+    pub edges: Vec<AutomationEdge>,
+    pub wires: Vec<AutomationWire>,
 }
 
-impl ActionPicture {
-    fn read(conn: &Connection, action: &AutomationAction) -> Result<ActionPicture> {
+impl ActionDef {
+    /// The action as its rows stand now. Each list is in display order.
+    pub fn live(conn: &Connection, action_id: i64) -> Result<Self> {
         let (into, out_of) = (AutomationPortDirection::In, AutomationPortDirection::Out);
-        let steps = read::automation_action_steps_of(conn, action.id)?;
-        let mut exits = read::automation_exits_of(conn, AutomationOwner::Action, action.id)?;
-        let mut ports = read::automation_ports_of(conn, AutomationPortOwner::Action, action.id, into)?;
+        let steps = read::automation_action_steps_of(conn, action_id)?;
+        let mut exits = read::automation_exits_of(conn, AutomationOwner::Action, action_id)?;
+        let mut ports = read::automation_ports_of(conn, AutomationPortOwner::Action, action_id, into)?;
         for step in &steps {
             exits.extend(read::automation_exits_of(conn, AutomationOwner::Step, step.id)?);
             ports.extend(read::automation_ports_of(conn, AutomationPortOwner::Step, step.id, into)?);
@@ -862,15 +881,109 @@ impl ActionPicture {
         for exit in &exits {
             ports.extend(read::automation_ports_of(conn, AutomationPortOwner::Exit, exit.id, out_of)?);
         }
-        Ok(ActionPicture {
-            entry_step_id: action.entry_step_id,
+        Ok(Self {
+            action_id,
+            entry_step_id: read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id),
             steps,
             exits,
             ports,
-            cfgs: read::automation_cfgs_of(conn, AutomationCfgOwner::Action, action.id)?,
-            edges: read::automation_edges_of(conn, AutomationPictureOwner::Action, action.id)?,
-            wires: read::automation_wires_of(conn, AutomationPictureOwner::Action, action.id)?,
+            cfgs: read::automation_cfgs_of(conn, AutomationCfgOwner::Action, action_id)?,
+            edges: read::automation_edges_of(conn, AutomationPictureOwner::Action, action_id)?,
+            wires: read::automation_wires_of(conn, AutomationPictureOwner::Action, action_id)?,
         })
+    }
+
+    /// **The action as one placement stands on it** — the saved version the placement points at, or the
+    /// rows as they stand where it points at none: a built-in, whose `action_id` already names one
+    /// version (`AMB-D-1000`), and an action nobody has saved yet.
+    pub fn placed(conn: &Connection, placement: &AutomationPlacement) -> Result<Self> {
+        let Some(version) = placement.version else {
+            return Self::live(conn, placement.action_id);
+        };
+        let saved = read::automation_action_version(conn, placement.action_id, version)?.ok_or_else(|| {
+            Error::not_found(format!("version {version} of action '{}' not found", placement.action_id))
+        })?;
+        Ok(Self {
+            action_id: saved.action_id,
+            entry_step_id: saved.entry_step_id,
+            steps: serde_json::from_str(&saved.steps)?,
+            exits: serde_json::from_str(&saved.exits)?,
+            ports: serde_json::from_str(&saved.ports)?,
+            cfgs: serde_json::from_str(&saved.cfgs)?,
+            edges: serde_json::from_str(&saved.edges)?,
+            wires: serde_json::from_str(&saved.wires)?,
+        })
+    }
+
+    /// The ways out one owner inside the action declares, in display order.
+    pub fn exits_of(&self, owner_kind: AutomationOwner, owner_id: i64) -> Vec<AutomationExit> {
+        self.exits.iter().filter(|x| x.owner_kind == owner_kind && x.owner_id == owner_id).cloned().collect()
+    }
+
+    /// The ways out of the action itself.
+    pub fn action_exits(&self) -> Vec<AutomationExit> {
+        self.exits_of(AutomationOwner::Action, self.action_id)
+    }
+
+    /// The way out under this id, where one owner inside the action declares it.
+    pub fn exit(&self, id: i64) -> Option<&AutomationExit> {
+        self.exits.iter().find(|x| x.id == id)
+    }
+
+    /// One owner's way out under this name — `None` for [`DONE_EXIT`].
+    pub fn exit_by_name(
+        &self,
+        owner_kind: AutomationOwner,
+        owner_id: i64,
+        name: Option<&str>,
+    ) -> Option<AutomationExit> {
+        let name = name.unwrap_or(DONE_EXIT);
+        self.exits_of(owner_kind, owner_id).into_iter().find(|x| x.name == name)
+    }
+
+    /// The ports one owner inside the action declares in one direction, in display order.
+    pub fn ports_of(
+        &self,
+        owner_kind: AutomationPortOwner,
+        owner_id: i64,
+        direction: AutomationPortDirection,
+    ) -> Vec<AutomationPort> {
+        self.ports
+            .iter()
+            .filter(|p| p.owner_kind == owner_kind && p.owner_id == owner_id && p.direction == direction)
+            .cloned()
+            .collect()
+    }
+
+    /// The inputs of the action itself.
+    pub fn action_inputs(&self) -> Vec<AutomationPort> {
+        self.ports_of(AutomationPortOwner::Action, self.action_id, AutomationPortDirection::In)
+    }
+
+    /// What one way out hands on.
+    pub fn outs_of(&self, exit_id: i64) -> Vec<AutomationPort> {
+        self.ports_of(AutomationPortOwner::Exit, exit_id, AutomationPortDirection::Out)
+    }
+
+    /// One owner's port of this name, facing this way.
+    pub fn port_by_name(
+        &self,
+        owner_kind: AutomationPortOwner,
+        owner_id: i64,
+        direction: AutomationPortDirection,
+        name: &str,
+    ) -> Option<AutomationPort> {
+        self.ports_of(owner_kind, owner_id, direction).into_iter().find(|p| p.name == name)
+    }
+
+    /// What is set to happen after one step leaves through one way out.
+    pub fn edge_for_exit(&self, from_id: i64, exit_id: i64) -> Option<&AutomationEdge> {
+        self.edges.iter().find(|e| e.from_id == from_id && e.exit_id == exit_id)
+    }
+
+    /// The edges leaving one step, in display order.
+    pub fn edges_from(&self, from_id: i64) -> impl Iterator<Item = &AutomationEdge> {
+        self.edges.iter().filter(move |e| e.from_id == from_id)
     }
 
     /// Whether `saved` holds what is inside the action, row for row — compared as [`Picture::is`]
@@ -883,6 +996,12 @@ impl ActionPicture {
             && same_rows(&self.cfgs, &saved.cfgs)?
             && same_rows(&self.edges, &saved.edges)?
             && same_rows(&self.wires, &saved.wires)?)
+    }
+
+    /// [`lines_back`] of the picture inside the action.
+    pub fn lines_back(&self) -> BTreeSet<i64> {
+        let boxes: Vec<i64> = self.steps.iter().map(|s| s.id).collect();
+        lines_back(self.entry_step_id, &boxes, &self.edges)
     }
 }
 
@@ -922,7 +1041,7 @@ fn restore_rows<T: serde::de::DeserializeOwned>(
     Ok(())
 }
 
-/// **Write what is inside an action down as its next version** ([`ActionPicture`]), without asking
+/// **Write what is inside an action down as its next version** ([`ActionDef`]), without asking
 /// whether it is ready — [`action_save`] is the op that asks. The copy is never rewritten: writing on in
 /// the action changes its tables and leaves this as it was.
 ///
@@ -932,23 +1051,23 @@ fn restore_rows<T: serde::de::DeserializeOwned>(
 ///
 /// Refused for a built-in: its versions are actions of their own (`AMB-D-1000`).
 pub fn action_version_add(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionVersion> {
-    let action = live_action(tx, action_id)?;
+    live_action(tx, action_id)?;
     not_built_in(tx, Def::Action(action_id))?;
     let conn = tx.conn();
-    let picture = ActionPicture::read(conn, &action)?;
+    let def = ActionDef::live(conn, action_id)?;
     let version = read::automation_action_version_latest(conn, action_id)?.map_or(1, |v| v.version + 1);
     let now = Timestamp::now();
     let saved = AutomationActionVersion {
         id: read::next_id(conn, "automation_action_version")?,
         action_id,
         version,
-        entry_step_id: picture.entry_step_id,
-        steps: serde_json::to_string(&picture.steps).map_err(Error::from)?,
-        exits: serde_json::to_string(&picture.exits).map_err(Error::from)?,
-        ports: serde_json::to_string(&picture.ports).map_err(Error::from)?,
-        cfgs: serde_json::to_string(&picture.cfgs).map_err(Error::from)?,
-        edges: serde_json::to_string(&picture.edges).map_err(Error::from)?,
-        wires: serde_json::to_string(&picture.wires).map_err(Error::from)?,
+        entry_step_id: def.entry_step_id,
+        steps: serde_json::to_string(&def.steps).map_err(Error::from)?,
+        exits: serde_json::to_string(&def.exits).map_err(Error::from)?,
+        ports: serde_json::to_string(&def.ports).map_err(Error::from)?,
+        cfgs: serde_json::to_string(&def.cfgs).map_err(Error::from)?,
+        edges: serde_json::to_string(&def.edges).map_err(Error::from)?,
+        wires: serde_json::to_string(&def.wires).map_err(Error::from)?,
         created_at: now,
         updated_at: now,
     };
@@ -2995,8 +3114,19 @@ fn box_exit(
     box_id: i64,
     exit_name: Option<&str>,
 ) -> Result<AutomationExit> {
-    let (declarer, declarer_id) = box_declarer(tx, owner_kind, box_id)?;
-    read::automation_exit_by_name(tx.conn(), declarer, declarer_id, exit_name)?.ok_or_else(|| {
+    let declarer = box_declarer(tx, owner_kind, box_id)?;
+    declared_exit(tx, &declarer, owner_kind, box_id, exit_name)
+}
+
+/// [`box_exit`], asked of a box's declarations already read.
+fn declared_exit(
+    tx: &WriteTx<'_>,
+    declarer: &Declarer,
+    owner_kind: AutomationPictureOwner,
+    box_id: i64,
+    exit_name: Option<&str>,
+) -> Result<AutomationExit> {
+    declarer.exit(tx.conn(), exit_name)?.ok_or_else(|| {
         let what = box_word(owner_kind);
         let n = exit_name.unwrap_or(DONE_EXIT);
         Error::not_found(format!("{what} '{box_id}' has no way out called '{n}'"))
@@ -3102,23 +3232,12 @@ pub fn lines_back(entry: Option<i64>, boxes: &[i64], edges: &[AutomationEdge]) -
     back
 }
 
-/// [`lines_back`] of the picture one box is drawn on, read off the store.
-pub(crate) fn lines_back_on(
-    conn: &Connection,
-    owner_kind: AutomationPictureOwner,
-    owner_id: i64,
-) -> Result<BTreeSet<i64>> {
-    let (entry, boxes) = match owner_kind {
-        AutomationPictureOwner::Automation => (
-            read::automation(conn, owner_id)?.and_then(|a| a.entry_placement_id),
-            read::automation_placements_of(conn, owner_id)?.iter().map(|p| p.id).collect::<Vec<_>>(),
-        ),
-        AutomationPictureOwner::Action => (
-            read::automation_action(conn, owner_id)?.and_then(|a| a.entry_step_id),
-            read::automation_action_steps_of(conn, owner_id)?.iter().map(|s| s.id).collect(),
-        ),
-    };
-    let edges = read::automation_edges_of(conn, owner_kind, owner_id)?;
+/// [`lines_back`] of one automation's picture, read off the store. An action's is asked of the version a
+/// placement stands on instead ([`ActionDef::lines_back`]).
+pub(crate) fn lines_back_on(conn: &Connection, automation_id: i64) -> Result<BTreeSet<i64>> {
+    let entry = read::automation(conn, automation_id)?.and_then(|a| a.entry_placement_id);
+    let boxes: Vec<i64> = read::automation_placements_of(conn, automation_id)?.iter().map(|p| p.id).collect();
+    let edges = read::automation_edges_of(conn, AutomationPictureOwner::Automation, automation_id)?;
     Ok(lines_back(entry, &boxes, &edges))
 }
 
@@ -3354,16 +3473,10 @@ pub fn draw_wire(
         )?
         .ok_or_else(|| Error::not_found(format!("this action takes in no '{from_port_name}'")))?
     } else {
-        let exit = box_exit(tx, owner_kind, from_id, from_exit_name)?;
+        let declarer = box_declarer(tx, owner_kind, from_id)?;
+        let exit = declared_exit(tx, &declarer, owner_kind, from_id, from_exit_name)?;
         from_exit_id = Some(exit.id);
-        read::automation_port_by_name(
-            tx.conn(),
-            AutomationPortOwner::Exit,
-            exit.id,
-            AutomationPortDirection::Out,
-            from_port_name,
-        )?
-        .ok_or_else(|| {
+        declarer.out(tx.conn(), exit.id, from_port_name)?.ok_or_else(|| {
             Error::not_found(format!(
                 "that way out of {} '{from_id}' hands on no '{from_port_name}'",
                 box_word(owner_kind)
@@ -3399,15 +3512,7 @@ pub fn draw_wire(
             ))
         })?
     } else {
-        let (to_owner, to_owner_id) = box_port_declarer(tx, owner_kind, to_id)?;
-        read::automation_port_by_name(
-            tx.conn(),
-            to_owner,
-            to_owner_id,
-            AutomationPortDirection::In,
-            to_port_name,
-        )?
-        .ok_or_else(|| {
+        box_declarer(tx, owner_kind, to_id)?.input(tx.conn(), to_port_name)?.ok_or_else(|| {
             Error::not_found(format!(
                 "{} '{to_id}' takes in no '{to_port_name}'",
                 box_word(owner_kind)
@@ -5896,6 +6001,42 @@ mod tests {
             let kept = read::automation_placement(tx.conn(), saved.id).expect("read").expect("there");
             assert_eq!(kept.version, Some(1), "a placement is not moved onto a newer version by itself");
             assert!(action_version_add(tx, take.id).is_err(), "a built-in is not saved by hand");
+        });
+    }
+
+    /// **A line on an automation names a placement's ways out and inputs as the version it stands on
+    /// declares them** — one written into the action since is not there to name.
+    #[test]
+    fn a_line_on_a_placement_names_what_its_version_declares() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let action =
+                action_from_prompt(tx, Some(automation.project_id), NewStep::new("点検", "見る"), &[], &[])
+                    .expect("write the action");
+            let (into, out_of, value) =
+                (AutomationPortDirection::In, AutomationPortDirection::Out, AutomationPortKind::Value);
+            let done = exit_id(tx, AutomationOwner::Action, action.id, None);
+            port_add(tx, AutomationPortOwner::Exit, done, out_of, "結果", value, false).expect("an output");
+            port_add(tx, AutomationPortOwner::Action, action.id, into, "前から", value, false).expect("an input");
+            action_version_add(tx, action.id).expect("save");
+            let first = placement_add_by_hand(tx, automation.id, action.id).expect("place it");
+            let second = placement_add_by_hand(tx, automation.id, action.id).expect("place it again");
+            assert_eq!((first.version, second.version), (Some(1), Some(1)));
+            exit_add(tx, AutomationOwner::Action, action.id, Some("直す")).expect("a way out written since");
+            port_add(tx, AutomationPortOwner::Action, action.id, into, "指摘", value, false)
+                .expect("an input written since");
+
+            let on = AutomationPictureOwner::Automation;
+            assert!(
+                edge_add(tx, on, first.id, Some("直す"), EdgeTarget::Go(second.id), None).is_err(),
+                "version 1 has no such way out",
+            );
+            edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), None).expect("version 1 has this one");
+            assert!(
+                wire_add(tx, on, first.id, None, "結果", second.id, "指摘").is_err(),
+                "version 1 takes in no such input",
+            );
+            wire_add(tx, on, first.id, None, "結果", second.id, "前から").expect("version 1 takes in this one");
         });
     }
 

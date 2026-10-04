@@ -30,7 +30,9 @@ use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewScr
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{HandedAtLaunch, HandedFile, Launcher};
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
-use amenbo_core::ops::automation_view::{ActionView, AutomationView, PlacementView, StepView};
+use amenbo_core::ops::automation_view::{
+    ActionView, AutomationView, PlacementView, SavedVersion, Showing, StepView,
+};
 use amenbo_core::time::Timestamp;
 use amenbo_core::Store;
 
@@ -268,8 +270,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
             }
         }
-        AutomationCmd::Show { id } => {
-            let view = store.automation_detail(id).map_err(CliError::from)?.ok_or_else(|| {
+        AutomationCmd::Show { id, saved } => {
+            let view = if saved { store.automation_saved_detail(id) } else { store.automation_detail(id) };
+            let view = view.map_err(CliError::from)?.ok_or_else(|| {
                 CliError::from(amenbo_core::Error::not_found(format!(
                     "automation '{id}' not found"
                 )))
@@ -409,8 +412,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
             }
         }
-        AutomationCmd::ActionShow { id } => {
-            let view = store.automation_action_detail(id).map_err(CliError::from)?.ok_or_else(|| {
+        AutomationCmd::ActionShow { id, saved } => {
+            let view = if saved {
+                store.automation_action_saved_detail(id)
+            } else {
+                store.automation_action_detail(id)
+            };
+            let view = view.map_err(CliError::from)?.ok_or_else(|| {
                 CliError::from(amenbo_core::Error::not_found(format!("action '{id}' not found")))
             })?;
             if flags.json {
@@ -1173,6 +1181,10 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
             view.placements.len()
         ),
     );
+    human(flags, saved_line(view.saved.as_ref(), view.unsaved));
+    if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
+        human(flags, line);
+    }
     write_body(flags, "notes", &a.notes);
     for placement in &view.placements {
         render_placement(flags, view, placement);
@@ -1186,7 +1198,12 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
     let boxes: Vec<i64> = view.placements.iter().map(|p| p.placement.id).collect();
     let back = lines_back(view.automation.entry_placement_id, &boxes, &view.edges);
     let named = match &placement.action {
-        Some(action) => format!("action {} ({})", action.id, action.name),
+        Some(action) => format!(
+            "action {} ({}) {}",
+            action.id,
+            action.name,
+            placed_version(placement.version, placement.latest_version)
+        ),
         None => "no action".to_string(),
     };
     human(flags, format!("\nplacement {} — {named}", row.id));
@@ -1283,6 +1300,31 @@ fn render_action(flags: &Flags, view: &ActionView) {
         flags,
         format!("{shelf}  {entry}  used by {} automation(s)", view.used_by),
     );
+    match &a.builtin {
+        Some(key) => {
+            let latest = amenbo_core::ops::automation_builtin::find(key).map(|b| b.version);
+            human(flags, format!("built-in {}", placed_version(a.builtin_version, latest)));
+        }
+        None => {
+            human(flags, saved_line(view.saved.as_ref(), view.unsaved));
+            if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
+                human(flags, line);
+            }
+        }
+    }
+    if !view.placed_at.is_empty() {
+        let mut places: Vec<String> = Vec::new();
+        for one in &view.placed_at {
+            let place = match one.version {
+                Some(version) => format!("automation {} version {version}", one.automation_id),
+                None => format!("automation {} no version", one.automation_id),
+            };
+            if !places.contains(&place) {
+                places.push(place);
+            }
+        }
+        human(flags, format!("placed at: {}", places.join(", ")));
+    }
     write_body(flags, "note", &a.note);
     for port in &view.inputs {
         human(flags, format!("takes  {}", one_port(port)));
@@ -1315,6 +1357,36 @@ fn render_action(flags: &Flags, view: &ActionView) {
     }
     for step in &view.steps {
         render_step(flags, view, step);
+    }
+}
+
+/// The version saved last, and whether the draft holds more.
+fn saved_line(saved: Option<&SavedVersion>, unsaved: bool) -> String {
+    let saved = match saved {
+        Some(one) => format!("version {} saved {}", one.version, one.saved_at.to_rfc3339_z()),
+        None => "not saved yet".to_string(),
+    };
+    let draft = if unsaved { "the draft has unsaved changes" } else { "no unsaved changes" };
+    format!("{saved} · {draft}")
+}
+
+/// Which of the two a show is reading, where there is a saved version to tell it from.
+fn showing_line(showing: Showing, saved: Option<&SavedVersion>) -> Option<String> {
+    let version = saved?.version;
+    Some(match showing {
+        Showing::Draft => format!("showing the draft; --saved shows version {version}"),
+        Showing::Saved => format!("showing version {version}; without --saved shows the draft"),
+    })
+}
+
+/// The version of its action a placement stands on, beside the newest there is.
+fn placed_version(version: Option<i64>, latest: Option<i64>) -> String {
+    match (version, latest) {
+        (Some(v), Some(l)) if v == l => format!("version {v} (latest)"),
+        (Some(v), Some(l)) => format!("version {v} (latest {l})"),
+        (Some(v), None) => format!("version {v}"),
+        (None, Some(l)) => format!("no version (latest {l})"),
+        (None, None) => "no saved version".to_string(),
     }
 }
 

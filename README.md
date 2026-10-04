@@ -410,8 +410,10 @@ amenbo automation place-version 33 2                   # move a placement onto a
 amenbo automation save 3                               # keep the automation as its next version, once the launch check passes (`discard 3` throws away what is written since)
 amenbo automation list                                 # what this project has, and how built each is
 amenbo automation show 3                               # one whole definition, every spot resolved
+amenbo automation show 3 --saved                       # ...as it was saved last, which is what a launch uses
 amenbo automation action-list                          # the library this project reaches
 amenbo automation action-show 7                        # one action, and the picture inside it
+amenbo automation action-show 7 --saved                # ...as it was saved last, which is what a placement put down now stands on
 amenbo automation test-run 3                           # walk it through first: every step and the prompt each agent would get, with nothing started and nothing kept
 amenbo automation start 3                              # away it goes (with the app up: it opens the steps, so with none running this is refused)
 amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand a make_task entry the task it files: title, notes, classification and attachments

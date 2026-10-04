@@ -227,7 +227,9 @@ fn advance(
 /// commands, over a task the run has handed back. A run ends by many roads, one of
 /// them a `step-done` typed in another process, and this look is the one place all of them pass.
 ///
-/// A paused run keeps its terminal: it is not over, and the step it paused after may be asked why.
+/// A paused run keeps its terminal: it is not over, and the step it paused after may be asked why. A
+/// script step's terminal whose program has ended is not one this looks at: there is nothing in it to
+/// stop, and it stays for its pane to read (`crate::pty::runs_with_steps`).
 /// The store is read only where a terminal stands for a run that is not running, which is none on
 /// most looks.
 fn end_what_is_over(app: &tauri::AppHandle, running: &[i64]) -> Result<(), crate::error::CmdError> {

@@ -2331,7 +2331,8 @@ button.feed__target:hover { color: var(--c-accent); }
    over the pane's band, the box when it is open and the terminal's last eight rows, and the 3rem above
    that fades into the picture, so the terminal under it can be followed while the picture is up
    (`.slot__body--away`). The pane measures that length (`--runpic-clear`, `../shell/TerminalPane`);
-   until it has, the clear band is 5rem. */
+   until it has, the clear band is 5rem. With no terminal under it — a built-in's step, or none up —
+   there is nothing to follow, and the picture is drawn whole (`.slot__body--bare`). */
 .runpic {
   position: absolute; inset: 0; z-index: 1;
   display: flex; container-type: size;
@@ -2341,6 +2342,7 @@ button.feed__target:hover { color: var(--c-accent); }
   -webkit-mask-image: var(--runpic-mask);
   mask-image: var(--runpic-mask);
 }
+.slot__body--bare > .runpic { -webkit-mask-image: none; mask-image: none; }
 .runpic .autopic {
   flex: 1; max-height: none;
   overflow: scroll;

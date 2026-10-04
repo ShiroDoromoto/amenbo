@@ -69,7 +69,9 @@
 //!
 //! `ON UPDATE CASCADE` is uniform and harmless (an `INTEGER` key does not change in place).
 //! `attachment.target_id` is polymorphic — no `REFERENCES` can branch on a sibling `target_type`
-//! column — so no constraint holds it and the delete ops sweep it by hand.
+//! column — so no constraint holds it and the delete ops sweep it by hand. Nor does one hold
+//! `automation_run_def.placement_id` and `step_id`, which keep naming what a run's copy was taken from
+//! after it is gone, or `automation_placement_step.step_id`, which deleting a step sweeps by hand.
 //!
 //! Enforcement is per-connection (`PRAGMA foreign_keys = ON`, set by `super::engine::init`) and
 //! per-table: `CREATE TABLE IF NOT EXISTS` leaves an existing table exactly as it was, so an existing
@@ -159,10 +161,12 @@ const COUNT: &str = "BIGINT NOT NULL DEFAULT 0";
 /// A polymorphic reference (`attachment.target_id`): a key like `fk!`'s, minus
 /// the `REFERENCES` — SQLite cannot branch a constraint on a sibling `target_type` column, so the ops
 /// sweep these rows by hand. An integer because every key is one; a TEXT affinity here would
-/// coerce the boundary's `i64` back into a decimal string on the way in.
+/// coerce the boundary's `i64` back into a decimal string on the way in. Also a key kept as a plain id
+/// on purpose — `automation_placement_step.step_id`, which deleting a step sweeps by hand.
 const KEY_REF: &str = "BIGINT NOT NULL DEFAULT 0";
 /// The nullable half of [`KEY_REF`]: a polymorphic reference that may be unset — `automation_edge.to_id`,
-/// where a line that closes or stops the picture goes nowhere.
+/// where a line that closes or stops the picture goes nowhere. Also `automation_run_def.placement_id`
+/// and `step_id`, which keep naming the placement and the step after either is gone.
 const KEY_REF_OPT: &str = "BIGINT";
 /// Fractional index: ordered by string comparison, never parsed as a number.
 const ORDER_KEY: &str = "TEXT NOT NULL DEFAULT ''";
@@ -1147,7 +1151,9 @@ datasets! {
     // `model` NULL leaves the agent's own default. One row per pair, which is the constraint.
     automation_placement_step {
         placement_id: fk("automation_placement", "RESTRICT"),
-        step_id: fk("automation_action_step", "RESTRICT"),
+        // A plain id, not a key: deleting a step sweeps its rows here by hand, and a run under way
+        // still matches its copies to the step by this id after the step is gone.
+        step_id: col(KEY_REF),
         agent: col(REQ),
         model: col(OPT),
     } => "UNIQUE (placement_id, step_id)"
@@ -1341,18 +1347,20 @@ datasets! {
     // the step's inputs, and the settings' answers. They are read back as a whole, never queried
     // into, which is what a snapshot is for.
     //
-    // `placement_id` and `step_id` are the two ways back to the live definition — which spot of the
-    // picture this copy was opened from, and which step of that spot's action it is a copy of. Both
-    // are `SET NULL`: a placement taken off, or a step deleted, while building must not take the
-    // record of a run that used it, nor be held undeletable by one.
+    // `placement_id` and `step_id` name which spot of the picture this copy was opened from, and which
+    // step of that spot's action it is a copy of. Both are plain ids with no constraint behind them:
+    // the definition can be rewritten while a run goes (`AMB-D-1015`), and a run under way matches a
+    // copy to the values its wires carry by these two ids — so a placement taken off, or a step
+    // deleted, must neither clear them nor be held undeletable by the run that used it. NULL only on a
+    // row an earlier build cleared before this held.
     //
     // `entry` marks the one copy the run starts at, and `exits` carries what follows each way out, both
     // resolved at launch: a run under way reads the picture from its copies alone and never from the
     // live definition (`AMB-D-961`).
     automation_run_def {
         run_id: fk("automation_run", "RESTRICT"),
-        placement_id: fk_opt("automation_placement", "SET NULL"),
-        step_id: fk_opt("automation_action_step", "SET NULL"),
+        placement_id: col(KEY_REF_OPT),
+        step_id: col(KEY_REF_OPT),
         name: col(REQ),
         prompt: col(OPT),
         // The built-in the step was, copied with it — what tells `automation_step::open` to carry it out

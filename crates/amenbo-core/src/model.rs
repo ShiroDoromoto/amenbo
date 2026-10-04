@@ -2177,11 +2177,12 @@ pub struct AutomationRun {
 pub struct AutomationRunDef {
     pub id: i64,
     pub run_id: i64,
-    /// Which spot of the picture this copy was opened from, or `None` where that placement has since
-    /// been taken off.
+    /// Which spot of the picture this copy was opened from. Kept after that placement is taken off;
+    /// `None` only where an earlier build cleared it.
     #[serde(default)]
     pub placement_id: Option<i64>,
-    /// The way back to the live definition, or `None` where that step has since been deleted.
+    /// Which step of the live definition this is a copy of. Kept after that step is deleted; `None`
+    /// only where an earlier build cleared it.
     #[serde(default)]
     pub step_id: Option<i64>,
     pub name: String,

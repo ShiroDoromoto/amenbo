@@ -256,6 +256,7 @@ CREATE TABLE IF NOT EXISTS automation_placement (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     action_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    version BIGINT,
     order_key TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
@@ -349,6 +350,21 @@ CREATE TABLE IF NOT EXISTS automation_wire (
     to_port_id BIGINT NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+CREATE TABLE IF NOT EXISTS automation_action_version (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    action_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    version BIGINT NOT NULL DEFAULT 0,
+    entry_step_id BIGINT,
+    steps TEXT NOT NULL DEFAULT '',
+    exits TEXT NOT NULL DEFAULT '',
+    ports TEXT NOT NULL DEFAULT '',
+    cfgs TEXT NOT NULL DEFAULT '',
+    edges TEXT NOT NULL DEFAULT '',
+    wires TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (action_id, version)
 );
 CREATE TABLE IF NOT EXISTS automation_run (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

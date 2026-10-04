@@ -58,7 +58,9 @@ use crate::time::Timestamp;
 /// where the gap is, or holding the action whose picture has it. A name alone cannot say which: the same
 /// action placed twice is two boxes with one name, and a screen that opens the box a reason is about has
 /// to know which of the two. So the same gap in an action placed twice is two reasons, one per placement.
-/// The two reasons about the automation as a whole ([`Unmet::NoSteps`], [`Unmet::NoEntry`]) name none.
+/// The two reasons about the automation as a whole ([`Unmet::NoSteps`], [`Unmet::NoEntry`]) name none,
+/// and nor do the ones the action's own check finds ([`check_action`]): it is asked with the action on
+/// no picture.
 ///
 /// **`builtin` is the key of the built-in a name came from** (`AMB-D-964`), and `to_builtin` the same
 /// for `to`. A built-in's step, ways out, inputs and settings are named in the store's Japanese, so a
@@ -73,8 +75,9 @@ pub enum Unmet {
     /// holds one of these, and replacing the entry gives it one.
     NoEntry,
     /// An action standing on the picture has no step to open — none written yet, or none named as its
-    /// entry. A run reaching that spot would have no terminal to put up.
-    ActionEmpty { action: String, placement: i64 },
+    /// entry. A run reaching that spot would have no terminal to put up. Asked of the action alone
+    /// ([`check_action`]), it names no placement.
+    ActionEmpty { action: String, placement: Option<i64> },
     /// An action standing on the picture that is still being written (`AMB-D-1005`) — made on the spot
     /// where it was placed, and neither finished nor given up. Its author has not said it is what they
     /// meant, so a run is not sent through it. Raised wherever it stands, reached from the entry or not:
@@ -103,11 +106,23 @@ pub enum Unmet {
     /// `inside` is the step inside the placed action whose way out it is, or `None` for the action's
     /// own way out on the automation's picture. The two read alike, and are mended in different places:
     /// the one inside only on the action's own picture.
-    OpenExit { step: String, exit: String, builtin: Option<String>, placement: i64, inside: Option<i64> },
+    OpenExit {
+        step: String,
+        exit: String,
+        builtin: Option<String>,
+        placement: Option<i64>,
+        inside: Option<i64>,
+    },
     /// A required input with nothing reaching it — no wire at all, or none whose far end is both
     /// declared and reachable from the entry before this placement is. `inside` as for
     /// [`Unmet::OpenExit`].
-    UnwiredInput { step: String, port: String, builtin: Option<String>, placement: i64, inside: Option<i64> },
+    UnwiredInput {
+        step: String,
+        port: String,
+        builtin: Option<String>,
+        placement: Option<i64>,
+        inside: Option<i64>,
+    },
     /// A required setting nobody answered while building.
     UnansweredCfg { step: String, cfg: String, builtin: Option<String>, placement: i64 },
     /// A setting answered with something its kind does not take — a task filter that is not its parts, a
@@ -188,8 +203,11 @@ impl Unmet {
                 "no placement is named as the entry — choose what a run starts at with `automation entry-replace`"
                     .to_string()
             }
-            Unmet::ActionEmpty { action, .. } => {
+            Unmet::ActionEmpty { action, placement: Some(_) } => {
                 format!("the action '{action}' placed on it has no step to start at")
+            }
+            Unmet::ActionEmpty { action, placement: None } => {
+                format!("the action '{action}' has no step to start at")
             }
             Unmet::ActionDraft { action, .. } => {
                 format!(
@@ -377,16 +395,17 @@ impl Unmet {
         }
     }
 
-    /// The placement this reason is about, or `None` for one about the automation as a whole.
+    /// The placement this reason is about, or `None` for one about the automation as a whole or found by
+    /// the action's own check.
     pub fn placement(&self) -> Option<i64> {
         match self {
             Unmet::NoSteps | Unmet::NoEntry => None,
             Unmet::ActionEmpty { placement, .. }
-            | Unmet::ActionDraft { placement, .. }
+            | Unmet::OpenExit { placement, .. }
+            | Unmet::UnwiredInput { placement, .. } => *placement,
+            Unmet::ActionDraft { placement, .. }
             | Unmet::EntryTakesNoTask { placement, .. }
             | Unmet::BackToEntry { placement, .. }
-            | Unmet::OpenExit { placement, .. }
-            | Unmet::UnwiredInput { placement, .. }
             | Unmet::UnansweredCfg { placement, .. }
             | Unmet::MisansweredCfg { placement, .. }
             | Unmet::CfgNotFound { placement, .. }
@@ -638,7 +657,7 @@ pub fn check(
                     step: name.clone(),
                     exit: exit.name.clone(),
                     builtin: builtin.clone(),
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: None,
                 });
             }
@@ -654,7 +673,7 @@ pub fn check(
                     step: name.clone(),
                     port: port.name,
                     builtin: builtin.clone(),
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: None,
                 });
             }
@@ -723,10 +742,11 @@ pub fn check(
             push_new(&mut unmet, hands_on_the_task(conn, placement, &name, &steps)?);
         }
         if steps.is_empty() {
-            unmet.push(Unmet::ActionEmpty { action: name.clone(), placement: placement.id });
+            unmet.push(Unmet::ActionEmpty { action: name.clone(), placement: Some(placement.id) });
             continue;
         }
-        push_new(&mut unmet, inside(conn, placement, &steps, entry_id, &live, &by_id)?);
+        let fed_here = |port| fed(conn, placement, port, entry_id, &live, &by_id);
+        push_new(&mut unmet, inside(conn, placement.action_id, Some(placement.id), &steps, fed_here)?);
         // A built-in names no agent and no model: Amenbo carries it out itself (`AMB-D-964`).
         for step in steps.iter().filter(|step| step.builtin.is_none()) {
             // Nor does a script: its program is what is started, so that is what is asked about.
@@ -767,6 +787,23 @@ pub fn check(
     }
     push_new(&mut unmet, leaves_task_open(conn, &live, &by_id)?);
     Ok(unmet)
+}
+
+/// **Is what is inside this action ready to be saved?** An empty answer is yes.
+///
+/// Only what the action answers for on its own is asked: that it has a step to open
+/// ([`Unmet::ActionEmpty`]), and of every step it could open, the two questions [`inside`] puts — a way
+/// out with nothing after it, and a required input nothing inside reaches. An input wired in from the
+/// action itself counts where the action declares it; whether something reaches that input is asked of
+/// each placement, at the automation's launch check. So is everything chosen or answered where the action
+/// is placed — the agents, the settings — and the lines out of the action.
+pub fn check_action(conn: &Connection, action_id: i64) -> Result<Vec<Unmet>> {
+    let action = read::automation_action(conn, action_id)?.ok_or_else(|| not_found("action", action_id))?;
+    let steps = steps_opened_by(conn, action_id)?;
+    if steps.is_empty() {
+        return Ok(vec![Unmet::ActionEmpty { action: action.name, placement: None }]);
+    }
+    inside(conn, action_id, None, &steps, |_| Ok(true))
 }
 
 /// **Why the program of a script step could not be started here**, or `None` when it could
@@ -965,19 +1002,21 @@ fn declared_exit(
 ///
 /// **A required input of a step is reached** by a wire inside the action from a step the run could
 /// open, whose way out hands on a port of that name, or by a wire from the action itself
-/// ([`ACTION_BOUNDARY`]) — which counts only where the action declares that input and something on the
-/// automation's picture reaches it on this placement ([`fed`]). It is the same walk a run makes when it
-/// hands a step its values ([`crate::ops::automation_step`]).
+/// ([`ACTION_BOUNDARY`]) — which counts only where the action declares that input and `fed` says
+/// something reaches it: on a placement, something on the automation's picture ([`fed`]); asked of the
+/// action alone ([`check_action`]), the declaration is all there is to ask. It is the same walk a run
+/// makes when it hands a step its values ([`crate::ops::automation_step`]).
+///
+/// `placement` is the one the reasons name, `None` when the action is asked on no picture.
 fn inside(
     conn: &Connection,
-    placement: &AutomationPlacement,
+    action_id: i64,
+    placement: Option<i64>,
     steps: &[AutomationStep],
-    entry_id: i64,
-    live: &BTreeSet<i64>,
-    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    mut fed: impl FnMut(i64) -> Result<bool>,
 ) -> Result<Vec<Unmet>> {
     let opened: BTreeSet<i64> = steps.iter().map(|s| s.id).collect();
-    let wires = read::automation_wires_of(conn, AutomationPictureOwner::Action, placement.action_id)?;
+    let wires = read::automation_wires_of(conn, AutomationPictureOwner::Action, action_id)?;
     let mut unmet = Vec::new();
     for step in steps {
         for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
@@ -992,7 +1031,7 @@ fn inside(
                     AutomationEnds::Done | AutomationEnds::Halt => true,
                     AutomationEnds::Go => edge.to_id.is_some_and(|to| opened.contains(&to)),
                     AutomationEnds::Exit => {
-                        declared_exit(conn, edge.exit_to_id, AutomationOwner::Action, placement.action_id)?
+                        declared_exit(conn, edge.exit_to_id, AutomationOwner::Action, action_id)?
                             .is_some()
                     }
                 },
@@ -1002,7 +1041,7 @@ fn inside(
                     step: step.name.clone(),
                     exit: exit.name.clone(),
                     builtin: step.builtin.clone(),
-                    placement: placement.id,
+                    placement,
                     inside: Some(step.id),
                 });
             }
@@ -1023,18 +1062,18 @@ fn inside(
                     let declared = read::automation_ports_of(
                         conn,
                         AutomationPortOwner::Action,
-                        placement.action_id,
+                        action_id,
                         AutomationPortDirection::In,
                     )?
                     .iter()
                     .any(|p| p.id == wire.from_port_id);
-                    declared && fed(conn, placement, wire.from_port_id, entry_id, live, by_id)?
+                    declared && fed(wire.from_port_id)?
                 } else if opened.contains(&wire.from_id) {
                     // Only a step a run opens before this one hands anything on to its first opening:
                     // its own way out, or that of a step only reached through it, leaves the input empty
                     // then (`AMB-T-5641`), as on the automation's picture (`fed`).
                     if before.is_none() {
-                        before = Some(steps_reached(conn, placement.action_id, steps, Some(step.id))?);
+                        before = Some(steps_reached(conn, action_id, steps, Some(step.id))?);
                     }
                     if !before.as_ref().is_some_and(|b| b.contains(&wire.from_id)) {
                         continue;
@@ -1058,7 +1097,7 @@ fn inside(
                     step: step.name.clone(),
                     port: port.name,
                     builtin: step.builtin.clone(),
-                    placement: placement.id,
+                    placement,
                     inside: Some(step.id),
                 });
             }
@@ -1717,7 +1756,9 @@ pub fn launch_asks(conn: &Connection, automation_id: i64) -> Result<LaunchAsks> 
 /// known here. Each reason rides as a part rather than being folded into the sentence, because joining
 /// them is punctuation and punctuation belongs to the language doing the reading — the same shape a
 /// reservation's refusal takes ([`crate::ops::task`]). `doing` is what was refused — a launch, or a save
-/// ([`crate::ops::automation::save`]), which asks the same check.
+/// ([`crate::ops::automation::save`]), which asks the same check. A save of an action
+/// ([`crate::ops::automation::action_save`]) is refused through here too, with the action's name and
+/// [`check_action`]'s reasons.
 pub(crate) fn not_ready(doing: &str, name: &str, unmet: &[Unmet]) -> Error {
     let sentence = format!(
         "cannot {doing} '{name}': {}",
@@ -2415,7 +2456,7 @@ mod tests {
             automation::action_set_entry(tx, action.id, None).expect("take the entry off");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
-                vec![Unmet::ActionEmpty { action: "直す".into(), placement: placement.id }],
+                vec![Unmet::ActionEmpty { action: "直す".into(), placement: Some(placement.id) }],
             );
         });
     }
@@ -2674,7 +2715,7 @@ mod tests {
                     step: "直す".into(),
                     exit: exit.name.clone(),
                     builtin: None,
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: None,
                 }],
                 "it saves while building, and is refused at launch",
@@ -2714,7 +2755,7 @@ mod tests {
                     step: "直す".into(),
                     port: "下書き".into(),
                     builtin: None,
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: None,
                 }],
             );
@@ -2767,7 +2808,7 @@ mod tests {
                     step: "直す".into(),
                     port: "下書き".into(),
                     builtin: None,
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: None,
                 }],
                 "the only wire into it comes back from its own way out",
@@ -2826,7 +2867,7 @@ mod tests {
                     step: "直す".into(),
                     port: "下書き".into(),
                     builtin: None,
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: None,
                 }],
                 "and the orphan's own ways out are not checked either — no run reaches them",
@@ -3736,7 +3777,7 @@ mod tests {
                     step: "見直す".into(),
                     exit: crate::model::DONE_EXIT.into(),
                     builtin: None,
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: Some(second.id),
                 }],
                 "the second step's done way out leads nowhere inside the action",
@@ -3785,7 +3826,7 @@ mod tests {
                     step: "見直す".into(),
                     exit: crate::model::DONE_EXIT.into(),
                     builtin: None,
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: Some(second.id),
                 }),
                 "the line returning to it went with it: {unmet:?}",
@@ -3816,7 +3857,7 @@ mod tests {
                     step: "見直す".into(),
                     port: "下書き".into(),
                     builtin: None,
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: Some(second.id),
                 }],
             );
@@ -3888,7 +3929,7 @@ mod tests {
                     step: "見直す".into(),
                     port: "下書き".into(),
                     builtin: None,
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: Some(second.id),
                 }],
                 "the only wire into it comes back from its own way out",
@@ -3920,7 +3961,7 @@ mod tests {
                     step: "直す".into(),
                     port: "下書き".into(),
                     builtin: None,
-                    placement: placement.id,
+                    placement: Some(placement.id),
                     inside: Some(step.id),
                 }],
                 "the wire from the action carries nothing while nothing reaches the action",
@@ -3953,7 +3994,7 @@ mod tests {
                 step: "見直す".into(),
                 exit: crate::model::DONE_EXIT.into(),
                 builtin: None,
-                placement: at,
+                placement: Some(at),
                 inside: Some(second.id),
             };
             assert!(unmet.contains(&about(first.id)), "{unmet:?}");

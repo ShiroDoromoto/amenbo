@@ -624,8 +624,6 @@ export const zhHant: Translation = {
     "face.pages": "頁",
     "face.page": "第 {n} 頁",
     "face.order": "把窗格移到另一頁",
-    "face.pauseAfterTask": "任務完成後暫停",
-    "face.pauseAfterTaskWaiting": "等待暫停（{n} 個）",
     "face.orderTitle": "逐頁檢視窗格",
     "face.orderApply": "使用此順序",
     "face.orderCancel": "取消",

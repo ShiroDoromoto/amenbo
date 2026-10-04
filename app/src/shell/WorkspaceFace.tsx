@@ -38,7 +38,6 @@ import { composeStartsOpen } from "../core/composeStartsOpen";
 import { isBlankSpaceClose } from "./outsideClose";
 import { useHandDrag } from "../files/handDrag";
 import { Icon } from "../components/Icon";
-import { PauseAfterTask } from "./PauseAfterTask";
 import { useBoundFolders } from "../core/boundFolders";
 import { chooseFolderFor, chooseWorkFolder, fetchBoundFolders } from "../core/mutations";
 import { dataAdapter } from "../mock/adapter";
@@ -1608,9 +1607,6 @@ export function WorkspaceFace({
           </nav>
         )}
         {note !== null && <span className="workspace__note">{note}</span>}
-        {/* The project's pause (`AMB-D-1009`), beside the far end rather than in it: it is about the
-            runs of the project shown, not the other side of the screen. */}
-        {layout.project !== null && <PauseAfterTask projectId={layout.project} />}
         {/* The way to the reading column, at the far end because it is about the other side of the
             screen. It opens the column and closes it again, and what comes up is the face the
             reader left up.

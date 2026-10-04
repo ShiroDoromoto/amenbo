@@ -625,8 +625,6 @@ export const nl: Translation = {
     "face.pages": "Pagina's",
     "face.page": "Pagina {n}",
     "face.order": "Een deelvenster naar een andere pagina verplaatsen",
-    "face.pauseAfterTask": "Pauzeren na de huidige taak",
-    "face.pauseAfterTaskWaiting": "Wacht op pauze ({n})",
     "face.orderTitle": "De deelvensters, pagina voor pagina",
     "face.orderApply": "Deze volgorde gebruiken",
     "face.orderCancel": "Annuleren",

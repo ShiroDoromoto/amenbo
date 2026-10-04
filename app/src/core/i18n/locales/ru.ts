@@ -640,8 +640,6 @@ export const ru: Translation = {
     "face.pages": "Страницы",
     "face.page": "Страница {n}",
     "face.order": "Переместить панель на другую страницу",
-    "face.pauseAfterTask": "Приостановить после текущей задачи",
-    "face.pauseAfterTaskWaiting": "Ждут паузы ({n})",
     "face.orderTitle": "Панели, страница за страницей",
     "face.orderApply": "Применить этот порядок",
     "face.orderCancel": "Отмена",

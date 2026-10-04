@@ -636,8 +636,6 @@ export const fr: Translation = {
     "face.pages": "Pages",
     "face.page": "Page {n}",
     "face.order": "Déplacer un volet vers une autre page",
-    "face.pauseAfterTask": "Mettre en pause après la tâche en cours",
-    "face.pauseAfterTaskWaiting": "En attente de pause ({n})",
     "face.orderTitle": "Les volets, page par page",
     "face.orderApply": "Utiliser cet ordre",
     "face.orderCancel": "Annuler",

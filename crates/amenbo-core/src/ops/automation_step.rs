@@ -603,8 +603,7 @@ fn new_execution(
         exit_id: None,
         report: String::new(),
         report_withheld: false,
-        stdout_tail: String::new(),
-        stderr_tail: String::new(),
+        output_tail: String::new(),
         status: AutomationRunStepStatus::Running,
         started_at: Some(now),
         ended_at: None,
@@ -1881,7 +1880,7 @@ mod tests {
 
     /// What a program came to, printing `out` and `err`.
     fn ran(ended: crate::ops::automation_script::Ended) -> crate::ops::automation_script::Ran {
-        crate::ops::automation_script::Ran { ended, stdout_tail: "out\n".into(), stderr_tail: "err\n".into() }
+        crate::ops::automation_script::Ran { ended, output_tail: "out\nerr\n".into() }
     }
 
     /// A program that ended with exit code 0 and wrote `output`.
@@ -1932,7 +1931,7 @@ mod tests {
             assert_eq!(ended.status, AutomationRunStepStatus::Done);
             assert_eq!(ended.exit_id, crate::ops::test_support::way_out(tx, ended.id, "red"));
             assert_eq!(ended.report, "3 failed");
-            assert_eq!((ended.stdout_tail.as_str(), ended.stderr_tail.as_str()), ("out\n", "err\n"));
+            assert_eq!(ended.output_tail, "out\nerr\n");
             let values = put_down(tx, &ended);
             assert_eq!(values.len(), 1, "an output the way out does not declare is not read");
             assert_eq!(values[0].0, "count");
@@ -2024,7 +2023,7 @@ mod tests {
                 let ended = read::automation_run_step(tx.conn(), opening.run_step.id).expect("read").expect("row");
                 assert_eq!(ended.exit_id, crate::ops::test_support::way_out(tx, ended.id, ERROR_EXIT), "{case}");
                 assert!(ended.report.contains(why), "{case}: {}", ended.report);
-                assert_eq!((ended.stdout_tail.as_str(), ended.stderr_tail.as_str()), ("out\n", "err\n"), "{case}");
+                assert_eq!(ended.output_tail, "out\nerr\n", "{case}");
                 assert!(put_down(tx, &ended).is_empty(), "{case}");
             });
         }

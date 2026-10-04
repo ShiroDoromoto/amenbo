@@ -2388,14 +2388,11 @@ pub struct AutomationRunStep {
     /// read it there (`AMB-D-963`). The report itself is still [`AutomationRunStep::report`].
     #[serde(default)]
     pub report_withheld: bool,
-    /// The last of what a script step wrote to its standard output, kept so a failed run can be read
-    /// (`AMB-D-1016`). Empty on every step that is not a script.
+    /// The last of what a script step wrote to its standard output and its standard error, in the order
+    /// it was written and without its escape sequences, kept so a failed run can be read (`AMB-D-1016`).
+    /// Empty on every step that is not a script.
     #[serde(default)]
-    pub stdout_tail: String,
-    /// The last of what a script step wrote to its standard error, kept as
-    /// [`AutomationRunStep::stdout_tail`] is.
-    #[serde(default)]
-    pub stderr_tail: String,
+    pub output_tail: String,
     pub status: AutomationRunStepStatus,
     #[serde(default)]
     pub started_at: Option<Timestamp>,

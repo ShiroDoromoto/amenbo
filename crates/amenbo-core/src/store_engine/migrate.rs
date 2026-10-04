@@ -1169,7 +1169,49 @@ pub const STEPS: &[Step] = &[
         // **What an earlier build already cleared stays NULL.** Nothing here says what it was.
         apply: Apply::Custom(keep_the_ids_a_run_was_copied_from),
     },
+    Step {
+        to: 92,
+        name: "put the tails of a script step's standard output and standard error into one column on automation_run_step",
+        // `AMB-D-1016`. A script step's program prints both down one pipe, in the order it wrote them,
+        // so its run keeps one tail of them.
+        //
+        // **Seeded: the two tails of each step already run, stdout's then stderr's.** The order they were
+        // written in was not kept, and nothing here says what it was.
+        apply: Apply::Custom(put_the_tails_of_a_script_together),
+    },
 ];
+
+/// v92: `stdout_tail` and `stderr_tail` on `automation_run_step` become `output_tail` (`AMB-D-1016`).
+///
+/// **Each step's two tails are joined, stdout's first**, a line break between them where stdout's did
+/// not end in one. The escape sequences an older build kept stay in.
+///
+/// **Appended only where it is missing, and the two dropped only where they are there**, v68's guard
+/// and v80's.
+fn put_the_tails_of_a_script_together(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let columns = column_names(tx, "automation_run_step")?;
+    let has = |column: &str| columns.iter().any(|c| c == column);
+    if !has("output_tail") {
+        tx.execute_batch("ALTER TABLE automation_run_step ADD COLUMN output_tail TEXT NOT NULL DEFAULT '';")?;
+    }
+    if has("stdout_tail") && has("stderr_tail") {
+        tx.execute_batch(
+            "UPDATE automation_run_step
+                SET output_tail = stdout_tail
+                    || CASE WHEN stdout_tail <> '' AND stderr_tail <> '' AND substr(stdout_tail, -1) <> char(10)
+                            THEN char(10) ELSE '' END
+                    || stderr_tail
+              WHERE stdout_tail <> '' OR stderr_tail <> '';",
+        )?;
+    }
+    for column in ["stdout_tail", "stderr_tail"] {
+        if has(column) {
+            tx.execute_batch(&format!("ALTER TABLE automation_run_step DROP COLUMN {column};"))?;
+        }
+    }
+    Ok(())
+}
 
 /// v91: `automation_run_def.placement_id`, `automation_run_def.step_id` and
 /// `automation_placement_step.step_id` lose their `REFERENCES` (`AMB-D-1015`).
@@ -9785,6 +9827,47 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v92: each step already run keeps both its tails in the one column, stdout's first, and a step with
+    /// none keeps none.
+    #[test]
+    fn the_two_tails_of_a_step_already_run_are_put_together() {
+        let dir = scratch("step-tails-together");
+        let engine = store_at(&dir, 91);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, name, agent) VALUES (1, 1, 'read', 'claude');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, seq, report, status, stdout_tail, stderr_tail)
+                 VALUES
+                     (1, 1, 1, 1, 'Read it.', 'done', '', ''),
+                     (2, 1, 1, 2, 'Ran it.', 'done', 'ok\n', 'no tests to run\n'),
+                     (3, 1, 1, 3, 'Ran it.', 'done', 'ok', 'failed'),
+                     (4, 1, 1, 4, 'Ran it.', 'done', '', 'failed\n');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let left: i64 = engine
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('automation_run_step')
+                  WHERE name IN ('stdout_tail', 'stderr_tail')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0, "the two columns are gone");
+        let mut stmt = engine.conn().prepare("SELECT output_tail FROM automation_run_step ORDER BY id").unwrap();
+        let tails: Vec<String> = stmt.query_map([], |r| r.get(0)).unwrap().map(|v| v.unwrap()).collect();
+        assert_eq!(tails, ["", "ok\nno tests to run\n", "ok\nfailed", "failed\n"]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v90: every step already run that an upgrade brings in has empty tails, and the two columns take
     /// a tail once one is written.
     #[test]
@@ -9803,9 +9886,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v90: v92 puts the two into one.
+        run(&engine, &dir, steps_through(90), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         let tails: (String, String) = engine
             .conn()
             .query_row(

@@ -2314,8 +2314,7 @@ fn run_script(app: &tauri::AppHandle, run_id: i64, script: &amenbo_core::ops::au
         Ok(given) => automation_script::run(&script.script, &given, || !still_running(run_step_id)),
         Err(e) => Ran {
             ended: Ended::NotStarted(format!("its inputs could not be read: {}", e.message_en)),
-            stdout_tail: String::new(),
-            stderr_tail: String::new(),
+            output_tail: String::new(),
         },
     };
     let told = crate::commands::open_store().and_then(|mut store| {

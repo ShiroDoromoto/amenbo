@@ -637,8 +637,6 @@ export const ptBR: Translation = {
     "face.pages": "Páginas",
     "face.page": "Página {n}",
     "face.order": "Mover um painel para outra página",
-    "face.pauseAfterTask": "Pausar ao terminar a tarefa",
-    "face.pauseAfterTaskWaiting": "Aguardando pausa ({n})",
     "face.orderTitle": "Os painéis, página a página",
     "face.orderApply": "Usar esta ordem",
     "face.orderCancel": "Cancelar",

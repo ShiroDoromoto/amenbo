@@ -636,8 +636,6 @@ export const it: Translation = {
     "face.pages": "Pagine",
     "face.page": "Pagina {n}",
     "face.order": "Sposta un riquadro su un'altra pagina",
-    "face.pauseAfterTask": "Metti in pausa a fine attività",
-    "face.pauseAfterTaskWaiting": "In attesa di pausa ({n})",
     "face.orderTitle": "I riquadri, pagina per pagina",
     "face.orderApply": "Usa questo ordine",
     "face.orderCancel": "Annulla",

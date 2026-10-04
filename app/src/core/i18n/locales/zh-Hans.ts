@@ -624,8 +624,6 @@ export const zhHans: Translation = {
     "face.pages": "页",
     "face.page": "第 {n} 页",
     "face.order": "把窗格移到另一页",
-    "face.pauseAfterTask": "任务完成后暂停",
-    "face.pauseAfterTaskWaiting": "等待暂停（{n} 个）",
     "face.orderTitle": "逐页查看窗格",
     "face.orderApply": "使用此顺序",
     "face.orderCancel": "取消",

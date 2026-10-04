@@ -781,6 +781,57 @@ fn pause_before_next_task_asks_the_run() {
     cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 }
 
+/// **A step does not pause or force-cancel its own run** (`AMB-D-1020`): typed in a step's terminal, both
+/// are refused, naming why and that a person can stop the run from its pane. Aimed at another run, they
+/// go through as they would outside a step.
+#[test]
+fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_launchable(&cli);
+    let own = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    let other = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    // No watch opens a step here, so the run's first one — the built-in that takes a task — is opened
+    // on the store, as the app's watch would.
+    let step = {
+        let run: i64 = own.parse().unwrap();
+        let paths = amenbo_core::config::Paths::at(cli.home.clone());
+        let mut store = amenbo_core::Store::open_at(paths).expect("the store");
+        let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| d.entry).expect("an entry");
+        match store.automation_step_open(run, entry.id, None).expect("open") {
+            amenbo_core::ops::automation_step::Opened::Carried { run_step_id, .. } => run_step_id.to_string(),
+            _ => panic!("the entry takes a task and is carried out"),
+        }
+    };
+    let inside = [("AMENBO_AUTOMATION_STEP", step.as_str())];
+
+    for args in [
+        vec!["automation", "pause", &own, "--json"],
+        vec!["automation", "pause", &own, "--before-next-task", "--json"],
+        vec!["automation", "cancel", &own, "--force", "--json"],
+    ] {
+        let (refused, code) = cli.run_env_err(&inside, &args);
+        assert_eq!(code, 2, "{args:?}: {refused}");
+        assert!(refused.contains("unable to finish its work"), "{args:?}: {refused}");
+        assert!(refused.contains("from its pane"), "{args:?}: {refused}");
+    }
+    let shown = cli.json(&["automation", "run-show", &own, "--json"]);
+    assert_eq!(shown["run"]["status"].as_str(), Some("running"), "{shown}");
+    assert_eq!(shown["run"]["pause_requested"].as_bool(), Some(false), "{shown}");
+    assert_eq!(shown["run"]["pause_before_next_task"].as_bool(), Some(false), "{shown}");
+
+    for args in [
+        vec!["automation", "pause", &other, "--json"],
+        vec!["automation", "pause", &other, "--before-next-task", "--json"],
+        vec!["automation", "cancel", &other, "--force", "--json"],
+    ] {
+        let (out, code) = cli.run_env(&inside, &args);
+        assert_eq!(code, 0, "{args:?}: {out}");
+    }
+
+    cli.json(&["automation", "cancel", &own, "--force", "--json"]);
+}
+
 /// **A run waiting for a task is paused by the time the asking returns** (`AMB-D-1019`) — with no
 /// watch looking on to open its step again.
 #[test]

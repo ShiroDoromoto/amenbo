@@ -51,12 +51,13 @@ pub fn path() -> Option<OsString> {
     var_os(PATH_VAR)
 }
 
-/// `SHELL` — the shell of whoever's session this process was started from. Amenbo reads it in two places.
+/// `SHELL` — the shell of whoever's session this process was started from. Amenbo reads it in three places.
 /// On macOS it asks that shell where git is when [`PATH`](path) cannot say ([`crate::sys::git`]): a `.app`
 /// launched from Finder carries only `/usr/bin:/bin:/usr/sbin:/sbin`, and the profile that puts a Homebrew
-/// git in front is the shell's to read, not ours to guess at. In the GUI it is the fallback when the account
-/// database cannot say what this user's login shell is, so a terminal opened in the window still starts the
-/// shell they actually use (`app/src-tauri/launch.rs`).
+/// git in front is the shell's to read, not ours to guess at. For the same reason, on macOS it asks that
+/// shell for its `PATH` to start a script step's program with ([`crate::sys::login_shell_path`]). In the
+/// GUI it is the fallback when the account database cannot say what this user's login shell is, so a
+/// terminal opened in the window still starts the shell they actually use (`app/src-tauri/launch.rs`).
 ///
 /// There it is a fallback and not the answer, because what it describes is the session rather than the user:
 /// a process several launches deep can be carrying one that was inherited from something else. Unset (a

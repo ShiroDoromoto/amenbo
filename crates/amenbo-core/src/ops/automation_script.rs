@@ -11,7 +11,10 @@
 //! The program is started by its path with its arguments as they are written — no shell is in between,
 //! so nothing in one is expanded or split. The two variables are set on that process alone, which its
 //! children inherit, and it is started without [`crate::session::STEP_VAR`] so an Amenbo it calls is not
-//! taken for a step it has no part in. It is started in a group of its own ([`crate::sys::ProcessGroup`]),
+//! taken for a step it has no part in. On macOS it is handed the user's login-shell `PATH`
+//! ([`crate::sys::login_shell_path`]) when that can be read: a `.app` started from Finder carries only
+//! `/usr/bin:/bin:/usr/sbin:/sbin`, where neither `amenbo` nor a Homebrew tool is found, while an AI step's
+//! terminal finds both. It is started in a group of its own ([`crate::sys::ProcessGroup`]),
 //! and one still running at its timeout, or when its caller says it is to stop, is killed with every
 //! process it started.
 //!
@@ -146,6 +149,9 @@ fn run_in(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if let Some(path) = crate::sys::login_shell_path() {
+        command.env(crate::env::PATH_VAR, path);
+    }
     let (mut child, group) = match crate::sys::ProcessGroup::start(&mut command) {
         Ok(started) => started,
         Err(e) => return not_started(e.to_string()),

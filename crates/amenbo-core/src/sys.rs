@@ -244,6 +244,28 @@ pub fn git() -> Option<Command> {
     Some(command("git"))
 }
 
+/// The `PATH` the user's login shell sets up, for a script step's program to be started with
+/// ([`crate::ops::automation_script`]), or `None` when the shell cannot say.
+///
+/// A `.app` launched from Finder carries only `/usr/bin:/bin:/usr/sbin:/sbin`, so a script calling
+/// `amenbo` from `~/.local/bin` or a Homebrew `gh` stops at "command not found" — while the same line in
+/// an AI step's terminal, which is a login shell, runs. Asking the shell the way [`git`] does closes that
+/// gap. Read once for the life of the process: it costs a shell startup, and a `PATH` changed mid-session
+/// reaches the next launch, as it would for a terminal already open.
+///
+/// Off macOS the process's own `PATH` is already the session's, so there is nothing to ask.
+#[cfg(target_os = "macos")]
+pub fn login_shell_path() -> Option<&'static OsStr> {
+    static PATH: std::sync::OnceLock<Option<std::ffi::OsString>> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| login_shell::path(&login_shell::shell())).as_deref()
+}
+
+/// Off macOS a process inherits the session's `PATH`: keep it.
+#[cfg(not(target_os = "macos"))]
+pub fn login_shell_path() -> Option<&'static OsStr> {
+    None
+}
+
 /// Run one git command in `dir` and hand back its trimmed stdout, or `None` when git has nothing to say —
 /// no runnable git on this machine, `dir` in no repository, or the call itself failing. Empty output reads
 /// as `None` too: every caller here asks git for a value, and no value is the same answer as no git.
@@ -277,6 +299,105 @@ pub fn git_tracks(dir: &std::path::Path, path: &std::path::Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Asking the user's login shell a question — what [`git`] and [`login_shell_path`] both need on a Mac,
+/// where a `.app`'s own environment is not the one the user set up.
+#[cfg(target_os = "macos")]
+mod login_shell {
+    use std::ffi::{OsStr, OsString};
+    use std::process::Stdio;
+
+    /// The fence that separates the login shell's own chatter from the answer we asked it for — see
+    /// [`ask`]. Any word does, so long as no profile would print it by itself.
+    const MARK: &str = "--amenbo--";
+
+    /// The user's shell, or `/bin/sh` when `SHELL` is unset — see [`crate::env::shell`].
+    pub fn shell() -> OsString {
+        crate::env::shell().unwrap_or_else(|| "/bin/sh".into())
+    }
+
+    /// Run `script` in `shell` as a login shell and hand back the first line it printed, trimmed, or
+    /// `None` when the shell could not be started, exited non-zero, or printed nothing after the fence.
+    ///
+    /// `-l -i` so the files that set `PATH` are actually read — `.zshrc` and `.bashrc` are where a Homebrew
+    /// `PATH` usually lives, and only an interactive shell reads them. stderr is discarded rather than
+    /// parsed (fish writes terminal warnings there on every non-tty start), and stdin is closed so an
+    /// interactive shell has nothing to wait for.
+    ///
+    /// The answer is fenced behind [`MARK`] because a login shell's stdout is not ours: a profile that
+    /// greets, or prints the day's message, writes there first, and the first line would be that. Echoing a
+    /// marker and reading the line after it is the one shape all four shells a Mac carries — sh, bash, zsh,
+    /// fish — run identically; fish has no `VAR=$(…)`, so the usual way of tagging the answer is out.
+    ///
+    /// There is no time limit on the shell: a profile that hangs hangs this. That is the user's own shell
+    /// hanging — their terminal does not open either.
+    pub fn ask(shell: &OsStr, script: &str) -> Option<String> {
+        let out = super::command(shell)
+            .args(["-l", "-i", "-c", &format!("echo {MARK}; {script}")])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let mut lines = stdout.lines().map(str::trim);
+        lines.find(|l| *l == MARK)?;
+        lines.next().filter(|l| !l.is_empty()).map(str::to_string)
+    }
+
+    /// The login shell's `PATH`. Quoted, because fish prints an unquoted `$PATH` with spaces between the
+    /// entries and a quoted one joined by `:`, as the other three shells always do.
+    pub fn path(shell: &OsStr) -> Option<OsString> {
+        ask(shell, r#"echo "$PATH""#).map(OsString::from)
+    }
+
+    #[cfg(test)]
+    pub mod tests {
+        use std::ffi::OsStr;
+        use std::path::PathBuf;
+
+        /// A stand-in for the user's shell. It ignores the flags and runs the script it was handed, the way
+        /// a real one would, after `prelude` — so a test decides what the script finds without depending on
+        /// the machine. It also greets on stdout and warns on stderr, which is what a real profile and a
+        /// real fish do, and neither may reach the answer.
+        pub fn shell_with(prelude: &str) -> PathBuf {
+            use std::os::unix::fs::PermissionsExt;
+            let shell = amenbo_scratch::scratch("sys-login-shell").join("shell");
+            let script = format!(
+                "#!/bin/sh\n\
+                 {prelude}\n\
+                 echo 'Welcome back!'\n\
+                 echo 'Could not set up terminal' >&2\n\
+                 shift 3\n\
+                 eval \"$1\"\n"
+            );
+            std::fs::write(&shell, script).unwrap();
+            std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o755)).unwrap();
+            shell
+        }
+
+        /// The `PATH` the profile set is what comes back — past the greeting it printed first.
+        #[test]
+        fn the_login_shell_path_is_read_past_whatever_the_profile_printed() {
+            let shell = shell_with("PATH=/opt/homebrew/bin:/usr/bin:/bin");
+            assert_eq!(super::path(shell.as_os_str()), Some("/opt/homebrew/bin:/usr/bin:/bin".into()));
+        }
+
+        /// A shell that cannot answer leaves the step with the `PATH` it already had.
+        #[test]
+        fn a_login_shell_that_cannot_answer_yields_no_path() {
+            let failing = shell_with("exit 1");
+            assert_eq!(super::path(failing.as_os_str()), None, "a non-zero exit is no answer");
+
+            let empty = shell_with("PATH=");
+            assert_eq!(super::path(empty.as_os_str()), None, "an empty PATH is no answer");
+
+            assert_eq!(super::path(OsStr::new("/nonexistent-shell")), None, "an unstartable shell is no answer");
+        }
+    }
+}
+
 /// Where git is on this Mac — see [`git`] for why this is a question at all.
 #[cfg(target_os = "macos")]
 mod git_path {
@@ -289,10 +410,6 @@ mod git_path {
     /// real git binary and needs no further questions.
     const STUB: &str = "/usr/bin/git";
 
-    /// The fence that separates the login shell's own chatter from the answer we asked it for — see
-    /// [`from_login_shell`]. Any word does, so long as no profile would print it by itself.
-    const MARK: &str = "--amenbo-git--";
-
     /// The resolved git, decided on the first call and kept for the life of the process. Held rather than
     /// re-derived because the login-shell fallback costs a shell startup, and because the answer is about
     /// the machine, which does not change under a running app. Install the tools mid-session and Amenbo
@@ -301,7 +418,7 @@ mod git_path {
         static GIT: OnceLock<Option<PathBuf>> = OnceLock::new();
         GIT.get_or_init(|| {
             let path = crate::env::path();
-            let shell = crate::env::shell().unwrap_or_else(|| "/bin/sh".into());
+            let shell = super::login_shell::shell();
             choose(on_path(path.as_deref()), developer_tools_present, || from_login_shell(&shell))
         })
         .as_deref()
@@ -362,39 +479,16 @@ mod git_path {
         })
     }
 
-    /// Ask the user's login shell where git is, for the case a thin `PATH` cannot answer: a `.app` started
-    /// from Finder sees only `/usr/bin:/bin:/usr/sbin:/sbin`, while the shell reads the profile that puts
-    /// `/opt/homebrew/bin` in front.
+    /// Ask the user's login shell where git is ([`super::login_shell::ask`]), for the case a thin `PATH`
+    /// cannot answer: a `.app` started from Finder sees only `/usr/bin:/bin:/usr/sbin:/sbin`, while the
+    /// shell reads the profile that puts `/opt/homebrew/bin` in front.
     ///
-    /// `-l -i` so the files that set `PATH` are actually read — `.zshrc` and `.bashrc` are where a Homebrew
-    /// `PATH` usually lives, and only an interactive shell reads them. `command -v` because it is a
-    /// builtin: it reports the name without exec'ing it, which is the only way to ask about the stub
-    /// without setting it off — `git --version` here would raise the dialog. stderr is discarded rather
-    /// than parsed (fish writes terminal warnings there on every non-tty start), and stdin is closed so an
-    /// interactive shell has nothing to wait for.
-    ///
-    /// The answer is fenced behind [`MARK`] because a login shell's stdout is not ours: a profile that
-    /// greets, or prints the day's message, writes there first, and the first line would be that. Echoing a
-    /// marker and reading the line after it is the one shape all four shells a Mac carries — sh, bash, zsh,
-    /// fish — run identically; fish has no `VAR=$(…)`, so the usual way of tagging the answer is out.
-    ///
-    /// There is no time limit on the shell: a profile that hangs hangs this. That is the user's own shell
-    /// hanging — their terminal does not open either — and it is reached only on a Mac whose `PATH` holds
-    /// no usable git, so the case where it costs anything is already the case where nothing works.
+    /// `command -v` because it is a builtin: it reports the name without exec'ing it, which is the only way
+    /// to ask about the stub without setting it off — `git --version` here would raise the dialog. The shell
+    /// is started only on a Mac whose `PATH` holds no usable git, so the case where a hanging profile costs
+    /// anything is already the case where nothing works.
     fn from_login_shell(shell: &OsStr) -> Option<PathBuf> {
-        let out = super::command(shell)
-            .args(["-l", "-i", "-c", &format!("echo {MARK}; command -v git")])
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-            .ok()?;
-        if !out.status.success() {
-            return None;
-        }
-        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
-        let mut lines = stdout.lines().map(str::trim);
-        lines.find(|l| *l == MARK)?;
-        let path = PathBuf::from(lines.next()?);
+        let path = PathBuf::from(super::login_shell::ask(shell, "command -v git")?);
         (path.is_absolute() && is_executable(&path)).then_some(path)
     }
 
@@ -493,24 +587,9 @@ mod git_path {
             assert_eq!(on_path(Some(OsStr::new(""))), None, "and on its own it answers nothing");
         }
 
-        /// A stand-in for the user's shell. It ignores the flags and runs the script it was handed, the way
-        /// a real one would, but with `command` replaced by `answer` — so a test says what `command -v git`
-        /// found without depending on the machine. It also greets on stdout and warns on stderr, which is
-        /// what a real profile and a real fish do, and neither may reach the answer.
+        /// A stand-in shell whose `command -v git` prints what `answer` does.
         fn shell_answering(answer: &str) -> PathBuf {
-            use std::os::unix::fs::PermissionsExt;
-            let shell = amenbo_scratch::scratch("sys-git-shell").join("shell");
-            let script = format!(
-                "#!/bin/sh\n\
-                 command() {{ {answer}; }}\n\
-                 echo 'Welcome back!'\n\
-                 echo 'Could not set up terminal' >&2\n\
-                 shift 3\n\
-                 eval \"$1\"\n"
-            );
-            std::fs::write(&shell, script).unwrap();
-            std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o755)).unwrap();
-            shell
+            crate::sys::login_shell::tests::shell_with(&format!("command() {{ {answer}; }}"))
         }
 
         /// The fallback takes the shell's answer when it names a git that is really there — this is the

@@ -1612,7 +1612,15 @@ impl Store {
     ) -> Result<crate::model::AutomationRun> {
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::launch_handing(tx, automation_id, by, handed),
+            |tx| {
+                crate::ops::automation_run::launch_handing(
+                    tx,
+                    automation_id,
+                    by,
+                    handed,
+                    crate::ops::automation_run::ReadsFrom::Saved,
+                )
+            },
         )
     }
 

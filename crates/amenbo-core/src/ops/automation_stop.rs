@@ -463,10 +463,11 @@ pub fn settle(tx: &WriteTx<'_>, before: AutomationRun, kind: AutomationPauseKind
 
 /// **Pick a paused run up again** — how depends on which pause it stopped at (`AMB-D-1015`).
 ///
-/// - **Paused before its next task**, it holds no task, so it is copied down afresh from the automation
-///   as it stands now and starts at the new copy's entry. The new copy is checked as a launch checks
-///   it, with `startable` and `models` as [`crate::ops::automation_run::Launcher`] takes them; one that
-///   does not pass is refused, and the run stays paused.
+/// - **Paused before its next task**, it holds no task, so it is copied down afresh from the automation's
+///   newest saved version, as a launch reads it, and starts at the new copy's entry. The new copy is
+///   checked as a launch checks it, with `startable` and `models` as
+///   [`crate::ops::automation_run::Launcher`] takes them; one that does not pass is refused, and the run
+///   stays paused.
 /// - **Paused at the end of an action**, it goes on from the copy it has, at the step the way out the
 ///   last step left through leads to — never from the automation as it stands now, since it may be in
 ///   the middle of a task and the step it stood at may be gone from it. A run whose copy leads nowhere

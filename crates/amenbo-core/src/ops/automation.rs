@@ -1442,12 +1442,14 @@ pub fn discard(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion
     Ok(saved)
 }
 
-/// **The automation's picture as its tables hold it** — the rows a version is saved from, with the
-/// version of its action each placement stands on, the answers written for their settings, the agents
-/// chosen for their steps, the edges and wires drawn on the automation, and the placement it opens first.
-struct Picture {
-    entry_placement_id: Option<i64>,
-    placements: Vec<AutomationPlacement>,
+/// **The automation's picture** — the rows a version is saved from, with the version of its action each
+/// placement stands on, the answers written for their settings, the agents chosen for their steps, the
+/// edges and wires drawn on the automation, and the placement it opens first. Read off its tables (the
+/// draft, [`Picture::read`]) or off a saved version ([`Picture::saved`]), and asked the same way either
+/// way, as [`ActionDef`] is.
+pub(crate) struct Picture {
+    pub(crate) entry_placement_id: Option<i64>,
+    pub(crate) placements: Vec<AutomationPlacement>,
     cfgs: Vec<AutomationCfg>,
     placement_steps: Vec<AutomationPlacementStep>,
     edges: Vec<AutomationEdge>,
@@ -1455,7 +1457,8 @@ struct Picture {
 }
 
 impl Picture {
-    fn read(conn: &Connection, automation: &Automation) -> Result<Picture> {
+    /// The draft: the picture as the automation's tables hold it now.
+    pub(crate) fn read(conn: &Connection, automation: &Automation) -> Result<Picture> {
         let placements = read::automation_placements_of(conn, automation.id)?;
         let mut cfgs = Vec::new();
         let mut placement_steps = Vec::new();
@@ -1471,6 +1474,53 @@ impl Picture {
             edges: read::automation_edges_of(conn, AutomationPictureOwner::Automation, automation.id)?,
             wires: read::automation_wires_of(conn, AutomationPictureOwner::Automation, automation.id)?,
         })
+    }
+
+    /// The picture as one saved version holds it, every row under the id it was saved with (`AMB-D-961`).
+    pub(crate) fn saved(version: &AutomationVersion) -> Result<Picture> {
+        Ok(Picture {
+            entry_placement_id: version.entry_placement_id,
+            placements: serde_json::from_str(&version.placements).map_err(Error::from)?,
+            cfgs: serde_json::from_str(&version.cfgs).map_err(Error::from)?,
+            placement_steps: serde_json::from_str(&version.placement_steps).map_err(Error::from)?,
+            edges: serde_json::from_str(&version.edges).map_err(Error::from)?,
+            wires: serde_json::from_str(&version.wires).map_err(Error::from)?,
+        })
+    }
+
+    /// One of its placements.
+    pub(crate) fn placement(&self, id: i64) -> Option<&AutomationPlacement> {
+        self.placements.iter().find(|p| p.id == id)
+    }
+
+    /// What is set to happen after one placement leaves through one way out.
+    pub(crate) fn edge_for_exit(&self, from_id: i64, exit_id: i64) -> Option<&AutomationEdge> {
+        self.edges.iter().find(|e| e.from_id == from_id && e.exit_id == exit_id)
+    }
+
+    /// Every wire feeding one placement's input.
+    pub(crate) fn wires_to_port(&self, to_id: i64, to_port_id: i64) -> impl Iterator<Item = &AutomationWire> {
+        self.wires.iter().filter(move |w| w.to_id == to_id && w.to_port_id == to_port_id)
+    }
+
+    /// The answer written for one setting of one placement, as the text it was answered with.
+    pub(crate) fn answer(&self, placement_id: i64, name: &str) -> Option<String> {
+        self.cfgs
+            .iter()
+            .find(|c| c.owner_id == placement_id && c.name == name)
+            .and_then(|c| c.value.clone())
+    }
+
+    /// Who carries one step out at one placement, or `None` where nobody has been chosen there.
+    pub(crate) fn chosen(&self, placement_id: i64, step_id: i64) -> Option<&AutomationPlacementStep> {
+        self.placement_steps.iter().find(|c| c.placement_id == placement_id && c.step_id == step_id)
+    }
+
+    /// [`lines_back`] of the picture. An action's is asked of the version a placement stands on instead
+    /// ([`ActionDef::lines_back`]).
+    pub(crate) fn lines_back(&self) -> BTreeSet<i64> {
+        let boxes: Vec<i64> = self.placements.iter().map(|p| p.id).collect();
+        lines_back(self.entry_placement_id, &boxes, &self.edges)
     }
 
     /// Whether `saved` holds this picture, row for row. Every op that writes a row moves its
@@ -3230,15 +3280,6 @@ pub fn lines_back(entry: Option<i64>, boxes: &[i64], edges: &[AutomationEdge]) -
         }
     }
     back
-}
-
-/// [`lines_back`] of one automation's picture, read off the store. An action's is asked of the version a
-/// placement stands on instead ([`ActionDef::lines_back`]).
-pub(crate) fn lines_back_on(conn: &Connection, automation_id: i64) -> Result<BTreeSet<i64>> {
-    let entry = read::automation(conn, automation_id)?.and_then(|a| a.entry_placement_id);
-    let boxes: Vec<i64> = read::automation_placements_of(conn, automation_id)?.iter().map(|p| p.id).collect();
-    let edges = read::automation_edges_of(conn, AutomationPictureOwner::Automation, automation_id)?;
-    Ok(lines_back(entry, &boxes, &edges))
 }
 
 /// A limit counts something that can be taken twice, and it counts at least once.

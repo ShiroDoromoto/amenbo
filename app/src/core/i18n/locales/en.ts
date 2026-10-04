@@ -1625,6 +1625,7 @@ const ui = {
   "auto.say.noInput": "An automation run failed: a step's required input had nothing to fill it.",
   "auto.say.noWayOn": "An automation run failed: nothing was left for it to open.",
   "auto.say.leftTaskOpen": "An automation run failed: it went on without closing the task it had taken.",
+  "auto.say.failedCheck": "An automation run failed: the automation's newer saved version did not pass the launch check.",
   "auto.say.halted": "An automation run stopped to call a person: a step left through a way out that asks for one.",
   "auto.say.canceled": "An automation run was canceled.",
   "auto.say.completed": "An automation run completed.",

@@ -1379,6 +1379,7 @@ export const vi: Translation = {
     "auto.say.noInput": "Một lần chạy tự động hoá đã thất bại: một đầu vào bắt buộc của bước bị trống.",
     "auto.say.noWayOn": "Một lần chạy tự động hoá đã thất bại: không còn bước nào để mở.",
     "auto.say.leftTaskOpen": "Một lần chạy tự động hoá đã thất bại: nó đi tiếp mà không đóng tác vụ đã nhận.",
+    "auto.say.failedCheck": "Một lần chạy tự động hoá đã thất bại: phiên bản đã lưu mới hơn của tự động hoá không qua được bước kiểm tra khi khởi chạy.",
     "auto.say.halted": "Một lần chạy tự động hoá đã dừng để gọi một người: một bước đã đi ra qua lối ra yêu cầu một người.",
     "auto.say.canceled": "Một lần chạy tự động hoá đã bị hủy.",
     "auto.say.completed": "Một lần chạy tự động hoá đã hoàn tất.",

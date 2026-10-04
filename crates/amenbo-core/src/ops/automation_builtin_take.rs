@@ -282,14 +282,14 @@ mod tests {
     use super::*;
     use crate::model::{
         ActorKind, Automation, AutomationPictureOwner, AutomationPlacement, AutomationPortKind,
-        AutomationRun, AutomationRunStatus, Priority, TaskStatus,
+        AutomationRun, AutomationRunStatus, AutomationStoppedReason, Priority, TaskStatus,
     };
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
         check, held_back as held_back_of, is_waiting, launch, launch_past_the_task_checks, next_def,
-        nothing_asked, Launcher, Unmet, Waiting,
+        nothing_asked, take_up_newer, Launcher, TakenUp, Unmet, Waiting,
     };
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
@@ -819,6 +819,120 @@ mod tests {
 
             let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
+        });
+    }
+
+    /// **A run waiting at its entry is copied down afresh once a newer version is saved** (`AMB-D-1015`),
+    /// and starts at the new copy's entry. The copy it launched with is kept, and with nothing newer
+    /// saved since, it is left as it is.
+    #[test]
+    fn a_run_waiting_at_its_entry_takes_up_the_version_saved_since() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+            let run = launched(tx, &automation);
+            assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
+            assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked()).expect("look"), TakenUp::Same));
+            let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            let last_copied = launched_with.last().expect("a copy").id;
+            assert!(launched_with.iter().all(|d| d.automation_version.is_none()), "taken from the draft");
+
+            automation::version_add(tx, automation.id).expect("save the automation");
+            let TakenUp::Copied(entry) = take_up_newer(tx, run.id, None, nothing_asked()).expect("look") else {
+                panic!("copied down afresh");
+            };
+            assert!(entry.id > last_copied, "on the new copy");
+            assert_eq!(entry.builtin.as_deref(), Some("take_task"));
+            assert_eq!(entry.automation_version, Some(1));
+            let Waiting::Step(waiting) = next_def(tx.conn(), run.id).expect("next") else {
+                panic!("the run stands before a step");
+            };
+            assert_eq!(waiting.id, entry.id, "the new copy's entry is what is opened next");
+            let kept = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            assert_eq!(kept.len(), launched_with.len() * 2, "the copy it launched with is kept");
+            assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked()).expect("look"), TakenUp::Same));
+            let still = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            assert_eq!(still.status, AutomationRunStatus::Running);
+        });
+    }
+
+    /// **A run partway through a task is left on the copy it has**, newer version or not: only a run
+    /// standing at its entry holds no task.
+    #[test]
+    fn a_run_partway_through_a_task_is_left_on_its_copy() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, _) = picture(tx, project);
+            for_ai(tx, "a", project, None);
+            let (run, _, next) = carried(tx, &automation);
+            assert!(matches!(next, Next::Step(_)), "on to the work");
+            automation::version_add(tx, automation.id).expect("save the automation");
+            let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
+
+            assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked()).expect("look"), TakenUp::Same));
+            assert_eq!(read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(), copies);
+        });
+    }
+
+    /// **A newer version that would not launch fails the run waiting at its entry**, with what it did
+    /// not pass kept on the run. Nothing is copied down, and there is no task to hand back.
+    #[test]
+    fn a_run_waiting_at_its_entry_fails_on_a_version_that_would_not_launch() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+            let run = launched(tx, &automation);
+            let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
+            automation::set_entry(tx, automation.id, None).expect("no entry");
+            automation::version_add(tx, automation.id).expect("save past the check");
+
+            let TakenUp::Failed(failed) = take_up_newer(tx, run.id, None, nothing_asked()).expect("look") else {
+                panic!("the run fails");
+            };
+            assert_eq!(failed.status, AutomationRunStatus::Failed);
+            assert_eq!(failed.stopped_reason, Some(AutomationStoppedReason::FailedCheck));
+            let kept = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            assert_eq!(kept.stopped_reason, Some(AutomationStoppedReason::FailedCheck));
+            let detail = kept.stopped_detail.expect("what it did not pass is kept");
+            assert!(detail.starts_with("cannot launch 'wait'"), "{detail}");
+            assert_eq!(read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(), copies);
+        });
+    }
+
+    /// **A newer version that starts by filing a task fails the run waiting at its entry**: only a
+    /// launch is handed what to file.
+    #[test]
+    fn a_run_waiting_at_its_entry_fails_on_a_version_that_starts_by_filing_a_task() {
+        use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, WHAT_THEN};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+            let run = launched(tx, &automation);
+            let written = action(tx, "make_task").expect("the built-in's action");
+            let make = automation::placement_add(tx, automation.id, written.id).expect("place it");
+            automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
+                .expect("take it");
+            let work = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| d.name == "work")
+                .and_then(|d| d.placement_id)
+                .expect("the work");
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(work), None)
+                .expect("onward");
+            automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
+            let claude = ["claude".to_string()];
+            let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked()).expect("check");
+            assert!(unmet.is_empty(), "it would launch: {unmet:?}");
+            automation::version_add(tx, automation.id).expect("save the automation");
+
+            let TakenUp::Failed(failed) = take_up_newer(tx, run.id, None, nothing_asked()).expect("look") else {
+                panic!("the run fails");
+            };
+            assert_eq!(failed.stopped_reason, Some(AutomationStoppedReason::FailedCheck));
+            let detail = failed.stopped_detail.expect("what it did not pass is kept");
+            assert!(detail.contains("files a task"), "{detail}");
         });
     }
 

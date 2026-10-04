@@ -26,9 +26,10 @@
 //! as the version the placement stands on holds it, is copied into `automation_run_def` at launch — one
 //! column of them, each saying which placement it was opened from, with the wires joined to each input
 //! resolved into it — so editing the automation afterwards cannot change what a run already under way is
-//! doing, and a run stays readable months later when the automation it came from has moved on. The one
-//! exception is a run paused before its next task: picking it up copies the automation down onto it
-//! again (`AMB-D-1015`, [`copy_down_again`]).
+//! doing, and a run stays readable months later when the automation it came from has moved on. The
+//! exceptions are a run with no task in hand: one paused before its next task, which picking up copies
+//! the automation down onto again ([`copy_down_again`]), and one standing at its entry, copied down again
+//! where a newer version has been saved ([`take_up_newer`]) (`AMB-D-1015`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -41,7 +42,7 @@ use crate::model::{
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
-    AutomationRunStepStatus, AutomationStep, AutomationEdge,
+    AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
 };
 use crate::ops::automation::{ActionDef, Picture};
@@ -1622,6 +1623,7 @@ fn launch_asking(
         acknowledged_at: None,
         handed_task,
         acknowledged_by_kind: None,
+        stopped_detail: None,
         created_at: now,
         updated_at: now,
     };
@@ -1664,7 +1666,7 @@ fn copy_down(tx: &WriteTx<'_>, run_id: i64, pic: &Picture, version: Option<i64>,
 /// answer the copy of its entry — where the run picks up.
 ///
 /// It reads the saved definition, as a launch does ([`ReadsFrom::Saved`]). The new copy is checked
-/// first, as a launch checks it ([`launch_asking`]): an archived automation, or one [`check`] finds
+/// first, as a launch checks it ([`checked_saved`]): an archived automation, or one [`check`] finds
 /// anything unmet in, is refused, and nothing is written.
 pub(crate) fn copy_down_again(
     tx: &WriteTx<'_>,
@@ -1672,8 +1674,24 @@ pub(crate) fn copy_down_again(
     startable: Option<&[String]>,
     models: &ModelsHere,
 ) -> Result<AutomationRunDef> {
-    let automation: Automation = read::automation(tx.conn(), run.automation_id)?
-        .ok_or_else(|| not_found("automation", run.automation_id))?;
+    let (pic, version) = checked_saved(tx.conn(), run, startable, models)?;
+    copy_down(tx, run.id, &pic, version, Timestamp::now())?;
+    entry_def(tx.conn(), run.id)?.ok_or_else(|| {
+        Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
+    })
+}
+
+/// **The automation's newest saved definition, checked as a launch checks it** ([`launch_asking`]) — for
+/// a run about to be copied down afresh. An archived automation, or one [`check`] finds anything unmet
+/// in, is refused.
+fn checked_saved(
+    conn: &Connection,
+    run: &AutomationRun,
+    startable: Option<&[String]>,
+    models: &ModelsHere,
+) -> Result<(Picture, Option<i64>)> {
+    let automation: Automation =
+        read::automation(conn, run.automation_id)?.ok_or_else(|| not_found("automation", run.automation_id))?;
     if automation.archived {
         return Err(Error::Invalid(
             Msg::new(format!(
@@ -1684,14 +1702,93 @@ pub(crate) fn copy_down_again(
             .with("automation", &automation.name),
         ));
     }
-    let (pic, version) = definition(tx.conn(), &automation, ReadsFrom::Saved)?;
-    let unmet = check_picture(tx.conn(), &automation, &pic, startable, models)?;
+    let (pic, version) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let unmet = check_picture(conn, &automation, &pic, startable, models)?;
     if !unmet.is_empty() {
         return Err(not_ready("launch", &automation.name, &unmet));
     }
-    copy_down(tx, run.id, &pic, version, Timestamp::now())?;
-    entry_def(tx.conn(), run.id)?.ok_or_else(|| {
-        Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
+    Ok((pic, version))
+}
+
+/// **What [`take_up_newer`] did to a run.**
+#[derive(Clone, Debug)]
+pub enum TakenUp {
+    /// Nothing: the run is not standing at its entry, or nothing newer than its copy has been saved.
+    Same,
+    /// The run was copied down afresh from the newer version, and starts at this, the new copy's entry.
+    /// What was waiting to open the old entry is stale.
+    Copied(Box<AutomationRunDef>),
+    /// The newer version did not pass, so the run failed with
+    /// [`AutomationStoppedReason::FailedCheck`]; this is the run as it ended.
+    Failed(AutomationRun),
+}
+
+/// **Copy a run standing at its entry down afresh, where the automation has been saved since its copy
+/// was taken** (`AMB-D-1015`) — asked before the entry is opened, so a run that comes back to its entry,
+/// or waits there for a task to turn up, starts from the newest saved definition.
+///
+/// - **Standing at its entry** is a `running` run with nothing under way whose next step is the copy of
+///   the entry ([`next_def`]). Anywhere else the run may be partway through a task, and is left alone.
+/// - **Newer** is a saved version later than the one its entry's copy was taken from. A copy taken from
+///   the draft (`None`) is older than any saved version.
+/// - **The newer version is checked as a launch checks it** ([`checked_saved`]), and it may not start
+///   by filing a task: only a launch is handed what to file ([`entry_reads`]). Either refusal fails the
+///   run, with what it did not pass kept on it ([`AutomationRun::stopped_detail`]), and nothing is
+///   copied. The run holds no task here, so there is nothing to hand back (`AMB-D-967`).
+///
+/// The rows of the old copy are kept ([`copy_down`]).
+pub fn take_up_newer(
+    tx: &WriteTx<'_>,
+    run_id: i64,
+    startable: Option<&[String]>,
+    models: &ModelsHere,
+) -> Result<TakenUp> {
+    let run = read::automation_run(tx.conn(), run_id)?.ok_or_else(|| not_found("run", run_id))?;
+    let Waiting::Step(standing) = next_def(tx.conn(), run_id)? else { return Ok(TakenUp::Same) };
+    if !standing.entry {
+        return Ok(TakenUp::Same);
+    }
+    let Some(saved) = read::automation_version_latest(tx.conn(), run.automation_id)? else {
+        return Ok(TakenUp::Same);
+    };
+    if standing.automation_version.is_some_and(|copied| copied >= saved.version) {
+        return Ok(TakenUp::Same);
+    }
+    let refused = match checked_saved(tx.conn(), &run, startable, models) {
+        Ok((pic, version)) => match files_a_task(tx.conn(), &pic)? {
+            Some(step) => format!(
+                "cannot pick up run '{}' at version {}: the entry '{step}' files a task, and only a launch \
+                 is handed what to file",
+                run.id, saved.version
+            ),
+            None => {
+                copy_down(tx, run.id, &pic, version, Timestamp::now())?;
+                let entry = entry_def(tx.conn(), run.id)?.ok_or_else(|| {
+                    Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
+                })?;
+                return Ok(TakenUp::Copied(Box::new(entry)));
+            }
+        },
+        Err(refusal @ (Error::Invalid(_) | Error::NotReady(_))) => refusal.to_string(),
+        Err(other) => return Err(other),
+    };
+    let mut detailed = run.clone();
+    detailed.stopped_detail = Some(refused);
+    crate::ops::emit_update(tx, record::automation_run(&run), record::automation_run(&detailed))?;
+    let ended = crate::ops::automation_stop::ended(
+        tx,
+        detailed,
+        crate::ops::automation_stop::Ending::Failed(AutomationStoppedReason::FailedCheck),
+    )?;
+    Ok(TakenUp::Failed(ended.run))
+}
+
+/// The name of the entry's action where it is the built-in that files a task, `None` where it is not.
+fn files_a_task(conn: &Connection, pic: &Picture) -> Result<Option<String>> {
+    let Some(entry) = pic.entry_placement_id.and_then(|id| pic.placement(id)) else { return Ok(None) };
+    Ok(match action_builtin(conn, entry.action_id)?.as_deref() {
+        Some(crate::ops::automation_builtin_make::KEY) => Some(action_name(conn, entry.action_id)?),
+        _ => None,
     })
 }
 

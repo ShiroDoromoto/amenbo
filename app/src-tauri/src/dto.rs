@@ -3814,7 +3814,7 @@ pub struct AutomationTestRunDto {
     /// a real run would have been stopped, `running` where the walk was cut short (`cut`).
     #[ts(type = "\"running\" | \"paused\" | \"completed\" | \"failed\" | \"canceled\"")]
     pub(crate) status: &'static str,
-    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | null")]
+    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | \"failed_check\" | null")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) stopped_reason: Option<&'static str>,
@@ -4295,7 +4295,7 @@ pub struct AutomationRunCardDto {
     /// **Whether it stands before a built-in that is waiting** for something to turn up — still
     /// `running`, with nothing under way (`AMB-D-969`).
     pub(crate) waiting: bool,
-    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | null")]
+    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | \"failed_check\" | null")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) stopped_reason: Option<&'static str>,

@@ -1380,6 +1380,7 @@ export const zhHant: Translation = {
     "auto.say.noInput": "自動化執行失敗：步驟的必填輸入是空的。",
     "auto.say.noWayOn": "自動化執行失敗：沒有可以開啟的下一個步驟。",
     "auto.say.leftTaskOpen": "自動化執行失敗：它沒有關閉已領取的任務就繼續前進了。",
+    "auto.say.failedCheck": "自動化執行失敗：自動化新儲存的版本未通過啟動檢查。",
     "auto.say.halted": "自動化執行已停下來呼叫人：某個步驟從呼叫人的出口離開了。",
     "auto.say.canceled": "自動化執行已取消。",
     "auto.say.completed": "自動化執行已完成。",

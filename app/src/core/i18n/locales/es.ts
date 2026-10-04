@@ -1390,6 +1390,7 @@ export const es: Translation = {
     "auto.say.noInput": "Una ejecución de automatización falló: una entrada obligatoria de un paso estaba vacía.",
     "auto.say.noWayOn": "Una ejecución de automatización falló: no quedaba ningún paso que abrir.",
     "auto.say.leftTaskOpen": "Una ejecución de automatización falló: siguió adelante sin cerrar la tarea que había tomado.",
+    "auto.say.failedCheck": "Una ejecución de automatización falló: la versión guardada más reciente de la automatización no pasó la comprobación de inicio.",
     "auto.say.halted": "Una ejecución de automatización se detuvo para llamar a una persona: un paso salió por una salida que pide a una persona.",
     "auto.say.canceled": "Una ejecución de automatización se canceló.",
     "auto.say.completed": "Una ejecución de automatización se completó.",

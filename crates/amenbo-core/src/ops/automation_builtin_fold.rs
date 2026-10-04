@@ -11,16 +11,21 @@
 //!
 //! **Unmerged is a way out, not a failure.** The fold refuses while the branch carries changes the trunk
 //! does not have, and whether that means "wait", "go back and merge" or "call a person" is the picture's
-//! to say: it leaves by [`UNMERGED`], and whoever built it draws where that goes. There is no setting
-//! that forces the fold — discarding work is a person's decision, made at a terminal. Anything else that
+//! to say: it leaves by [`UNMERGED`], and whoever built it draws where that goes. Anything else that
 //! stops it, uncommitted changes included, leaves by the error way out.
+//!
+//! **Or it discards them**, where [`WHEN_UNMERGED`] is answered [`DISCARD`]: the work committed on the
+//! branch and the changes left uncommitted go with the checkout, and it leaves by the way out it takes
+//! when there was nothing to keep. Whether a branch reached the trunk and whether it may be folded are
+//! two questions — a task that only looks into something leaves nothing for the trunk to take. Left
+//! unanswered it discards nothing, so only a picture whose builder chose to throws work away.
 //!
 //! **Done before the step's transaction** ([`Work::Outside`]), as the cut is: the fetch waits on the
 //! remote.
 
 use crate::error::{Error, Result};
-use crate::model::DONE_EXIT;
-use crate::ops::automation_builtin::{Builtin, BuiltinExit, Outside, Work, Worked};
+use crate::model::{AutomationCfgKind, DONE_EXIT};
+use crate::ops::automation_builtin::{answer, Builtin, BuiltinExit, BuiltinSetting, Outside, Work, Worked};
 use crate::ops::automation_builtin_cut::{refused, repository};
 use crate::run_wording::builtin as say;
 use crate::store_engine::read;
@@ -28,16 +33,22 @@ use crate::worktree_cut::{self, Refusal};
 
 /// The way out it leaves by when the branch carries changes the trunk does not have.
 pub const UNMERGED: &str = "未マージ";
+/// The setting that says what it does with changes the trunk does not have.
+pub const WHEN_UNMERGED: &str = "既定ブランチに無い変更があるとき";
+/// The choice on [`WHEN_UNMERGED`] that keeps them — also what it does left unanswered.
+pub const KEEP: &str = "捨てずに残す";
+/// The choice on [`WHEN_UNMERGED`] that discards them, committed or not, and folds.
+pub const DISCARD: &str = "コミットしていない変更も含めて捨てて畳む";
 
 pub(super) const FOLD_WORKTREE: Builtin = Builtin {
     key: "fold_worktree",
-    version: 1,
+    version: 2,
     name: "worktree を畳む",
-    does: "いま扱っているタスクの worktree とブランチを片付ける。リモートの既定ブランチにまだ入っていない変更があれば、畳まずに「未マージ」から出る",
+    does: "いま扱っているタスクの worktree とブランチを片付ける。リモートの既定ブランチにまだ入っていない変更があれば、畳まずに「未マージ」から出る。設定で捨てると決めてあれば、その変更も捨てて畳む",
     steps: &[
         "いま扱っているタスクのリポジトリを、「worktree を切る」と同じ決め方で決める",
         "リモートを fetch し、ブランチ task/<タスクの番号> をリモートの既定ブランチの最新と比べる",
-        "既定ブランチに無い変更があれば、畳まずに「未マージ」から出る。無ければ、worktree とブランチを消して「完了」から出る",
+        "既定ブランチに無い変更があれば、畳まずに「未マージ」から出る。無ければ、worktree とブランチを消して「完了」から出る。設定で捨てると決めてあれば、コミット済みの変更もコミットしていない変更も捨てて、「完了」から出る",
     ],
     halts: &[
         "この実行がまだタスクを扱っていない",
@@ -45,11 +56,16 @@ pub(super) const FOLD_WORKTREE: Builtin = Builtin {
         "このプロジェクトに紐付けたフォルダが、どれも git リポジトリに入っていない",
         "タスクの作業フォルダが、git リポジトリに入っていない",
         "このタスクの worktree が無い",
-        "worktree にコミットしていない変更がある",
+        "worktree にコミットしていない変更があり、設定で捨てると決めていない",
         "このマシンに git が無い",
         "git が失敗した（リモートを fetch できないときなど）",
     ],
-    settings: &[],
+    settings: &[BuiltinSetting {
+        name: WHEN_UNMERGED,
+        kind: AutomationCfgKind::Choice,
+        required: false,
+        options: Some(r#"["捨てずに残す","コミットしていない変更も含めて捨てて畳む"]"#),
+    }],
     ins: &[],
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }, BuiltinExit { name: UNMERGED, outs: &[] }],
     waits: None,
@@ -65,7 +81,10 @@ fn fold(outside: &Outside<'_>) -> Result<Worked> {
     let root = repository(outside.conn, lang, outside.run.project_id, task.at_binding_id)?;
     let cut = worktree_cut::layout(&root, &task_id.to_string());
     let base = worktree_cut::origin_default(&root).map_err(|r| refused(lang, r))?;
-    match worktree_cut::finish(&cut, Some(&base), false) {
+    let discard = answer(outside.cfg, WHEN_UNMERGED)
+        .and_then(|value| serde_json::from_str::<String>(value).ok())
+        .is_some_and(|value| value == DISCARD);
+    match worktree_cut::finish(&cut, Some(&base), discard) {
         Ok(_) => Ok(Worked {
             exit: DONE_EXIT,
             report: say(lang, "folded", &[("path", &cut.worktree.display().to_string()), ("branch", &cut.branch)]),
@@ -96,9 +115,9 @@ mod tests {
     use crate::store_engine::WriteTx;
     use std::path::{Path, PathBuf};
 
-    /// Take a task and fold its worktree. Either way out ends the run: what follows is not what is
-    /// being tested.
-    fn picture(tx: &WriteTx<'_>, project: i64) -> Automation {
+    /// Take a task and fold its worktree, with [`WHEN_UNMERGED`] answered as `when_unmerged` says.
+    /// Either way out ends the run: what follows is not what is being tested.
+    fn picture(tx: &WriteTx<'_>, project: i64, when_unmerged: Option<&str>) -> Automation {
         let automation =
             automation::add(tx, project, NewAutomation { name: "fold".into(), ..Default::default() })
                 .expect("automation");
@@ -107,6 +126,10 @@ mod tests {
             .expect("place take");
         let fold = automation::placement_add(tx, automation.id, action(tx, "fold_worktree").expect("fold").id)
             .expect("place fold");
+        if let Some(choice) = when_unmerged {
+            let value = serde_json::to_string(choice).expect("a JSON string");
+            automation::cfg_set(tx, fold.id, WHEN_UNMERGED, Some(&value)).expect("answer the setting");
+        }
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(fold.id), None).expect("take → fold");
         automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, fold.id, None, EdgeTarget::Done, None).expect("folded");
@@ -116,11 +139,11 @@ mod tests {
 
     /// A project bound to a fresh clone, a task for the AI in it, and that task's worktree cut with one
     /// commit of its own on the branch. Answers the clone, the task and the worktree.
-    fn a_task_with_work(tx: &WriteTx<'_>, tag: &str) -> (Automation, PathBuf, i64, PathBuf) {
+    fn a_task_with_work(tx: &WriteTx<'_>, tag: &str, when_unmerged: Option<&str>) -> (Automation, PathBuf, i64, PathBuf) {
         let (app, _) = repositories(tag);
         let project = mk_project(tx, "amenbo");
         bind(tx, project, &[&app]);
-        let automation = picture(tx, project);
+        let automation = picture(tx, project, when_unmerged);
         let task = mk_task_in(tx, "直すもの", Some(project));
         crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
         let root = worktree_cut::git_root(&app).expect("root");
@@ -164,7 +187,7 @@ mod tests {
     #[test]
     fn work_merged_on_the_remote_is_folded_away() {
         with_tx(|tx| {
-            let (automation, app, task, worktree) = a_task_with_work(tx, "builtin-fold-merged");
+            let (automation, app, task, worktree) = a_task_with_work(tx, "builtin-fold-merged", None);
             // Merged the way a pull request lands it: on the remote, and nowhere else.
             git(&worktree, &["push", "--quiet", "origin", &format!("task/{task}:main")]);
 
@@ -181,7 +204,7 @@ mod tests {
     #[test]
     fn work_not_merged_leaves_by_the_way_out_that_says_so() {
         with_tx(|tx| {
-            let (automation, app, task, worktree) = a_task_with_work(tx, "builtin-fold-unmerged");
+            let (automation, app, task, worktree) = a_task_with_work(tx, "builtin-fold-unmerged", None);
 
             let (run_step_id, _) = walk(tx, &automation);
             let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
@@ -189,5 +212,47 @@ mod tests {
             assert!(worktree.exists(), "the checkout is left standing");
             assert!(branch_there(&app, task), "and so is its branch");
         });
+    }
+
+    /// **Answered [`DISCARD`], work the trunk does not have is discarded and folded** — the commit on
+    /// the branch and a change never committed alike — and it leaves by the way out it takes when
+    /// there was nothing to keep.
+    #[test]
+    fn work_not_merged_is_discarded_where_the_setting_says_so() {
+        with_tx(|tx| {
+            let (automation, app, task, worktree) =
+                a_task_with_work(tx, "builtin-fold-discard", Some(DISCARD));
+            std::fs::write(worktree.join("uncommitted.txt"), "never committed").expect("an uncommitted change");
+
+            let (run_step_id, _) = walk(tx, &automation);
+            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+            assert_eq!(ran.exit_id, way_out(tx, run_step_id, DONE_EXIT), "{}", ran.report);
+            assert!(!worktree.exists(), "the checkout is gone");
+            assert!(!branch_there(&app, task), "and so is its branch");
+        });
+    }
+
+    /// **Answered [`KEEP`], it is folded as if left unanswered**: the work stays, and it leaves by
+    /// [`UNMERGED`].
+    #[test]
+    fn work_not_merged_is_kept_where_the_setting_says_so() {
+        with_tx(|tx| {
+            let (automation, app, task, worktree) = a_task_with_work(tx, "builtin-fold-keep", Some(KEEP));
+
+            let (run_step_id, _) = walk(tx, &automation);
+            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+            assert_eq!(ran.exit_id, way_out(tx, run_step_id, UNMERGED), "{}", ran.report);
+            assert!(worktree.exists(), "the checkout is left standing");
+            assert!(branch_there(&app, task), "and so is its branch");
+        });
+    }
+
+    /// The choices written out on the setting are the two the code reads, the one it does unanswered
+    /// first.
+    #[test]
+    fn the_choices_offered_are_the_ones_it_reads() {
+        let options = FOLD_WORKTREE.settings.iter().find(|s| s.name == WHEN_UNMERGED).and_then(|s| s.options);
+        let offered: Vec<String> = serde_json::from_str(options.expect("a choice list")).expect("JSON");
+        assert_eq!(offered, vec![KEEP, DISCARD]);
     }
 }

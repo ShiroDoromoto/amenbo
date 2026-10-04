@@ -563,7 +563,7 @@ pub fn cancel(tx: &WriteTx<'_>, run_id: i64) -> Result<Ended> {
 ///
 /// A script step's program is not reached from here, which only writes: the app that started it sees
 /// its step is no longer running and stops it with every process it started
-/// ([`crate::ops::automation_script::run`]).
+/// ([`crate::ops::automation_script::wait`]).
 pub fn stop(tx: &WriteTx<'_>, run_id: i64, ending: Ending) -> Result<Ended> {
     if ending == Ending::Completed {
         return Err(Error::invalid(format!(

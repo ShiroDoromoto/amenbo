@@ -3171,8 +3171,8 @@ mod tests {
             let exits: Vec<RunDefExit> = serde_json::from_str(&copy.exits).expect("exits");
             assert_eq!(exits.len(), 2, "the done way out and the error one");
 
-            // The definition is held while the run is going (`AMB-D-961`), so it is ended first — the copy
-            // is what the run's record reads from then on, whatever the definition becomes.
+            // Once the run is ended, the copy is what its record reads from (`AMB-D-961`), whatever the
+            // definition becomes.
             crate::ops::automation_stop::stop(tx, run.id, crate::ops::automation_stop::Ending::Canceled)
                 .expect("stop");
             automation::action_update(tx, action.id, Some("取り直す"), None)

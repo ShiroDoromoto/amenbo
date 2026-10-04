@@ -628,6 +628,15 @@ export async function answerAutomationCfg(
 }
 
 /**
+ * **Move a placement onto another saved version of its action** (`AMB-D-1000`) — Amenbo never moves
+ * it by itself. A built-in's placement is refused.
+ */
+export async function setAutomationPlacementVersion(placementId: number, version: number): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_placement_version_set", { placementId, version });
+}
+
+/**
  * **Choose who carries one step out at one placement** — the agent, and the model where one is
  * named (`null` is the agent's own default) — or, with `agent` `null`, leave nobody chosen
  * (`AMB-D-960`). The same action placed on two pictures is chosen for apart, step by step.

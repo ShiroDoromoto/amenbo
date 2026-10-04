@@ -1537,6 +1537,18 @@ impl Store {
         })
     }
 
+    /// Move a placement onto another saved version of its action (`AMB-D-1000`; one operation = one
+    /// transaction) — [`crate::ops::automation::placement_version_set`].
+    pub fn automation_placement_version_set(
+        &mut self,
+        id: i64,
+        version: i64,
+    ) -> Result<crate::model::AutomationPlacement> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, id)], |tx| {
+            crate::ops::automation::placement_version_set(tx, id, version)
+        })
+    }
+
     /// Take a placement off its automation with the answers and lines hanging on it (one operation =
     /// one transaction).
     pub fn automation_placement_delete(&mut self, id: i64) -> Result<()> {

@@ -1121,6 +1121,18 @@ pub fn automation_placement_step_set(
     Ok(WriteAck::new(&["automations"]))
 }
 
+/// **Move a placement onto another saved version of its action** (`AMB-D-1000`) — Amenbo never moves
+/// it by itself. A built-in's placement is refused
+/// ([`amenbo_core::ops::automation::placement_version_set`]).
+#[tauri::command]
+pub fn automation_placement_version_set(placement_id: i64, version: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_placement_version_set(placement_id, version)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
 /// **Put a library action in on a line** — the one road by which an action already on the shelf joins
 /// a picture already drawn. The way out that was pressed comes to point at the new placement, and the
 /// new placement goes on to where that way out used to reach.
@@ -2683,6 +2695,8 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         global: action.as_ref().is_some_and(|one| one.project_id.is_none()),
         builtin: action.as_ref().and_then(|one| one.builtin.clone()),
         draft: action.as_ref().is_some_and(|one| one.draft),
+        version: view.version,
+        latest_version: view.latest_version,
         never_leaves_by: never_leaves_by.map(str::to_string),
         step_id: opens.as_ref().map(|s| s.id),
         prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),

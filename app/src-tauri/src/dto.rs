@@ -3484,6 +3484,17 @@ pub struct AutomationPlacementDto {
     /// with. Absent on every other spot.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) draft: bool,
+    /// **The version of the action this spot stands on** (`AMB-D-1000`) — a built-in's off its record.
+    /// Absent where it stands on none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) version: Option<i64>,
+    /// The newest version of that action there is — for a built-in, the one this build defines; for
+    /// another, its newest saved. Where it is above `version`, the spot stands on an older one, and
+    /// moving it is a person's or an AI's to do. Absent where there is none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) latest_version: Option<i64>,
     /// **The way out this spot never leaves by**, as its settings stand — a built-in that leaves by one
     /// of two ways out as a setting chooses, or that waits instead of leaving by one
     /// ([`amenbo_core::ops::automation_builtin::never_leaves_by`]). What it would hand on through that way

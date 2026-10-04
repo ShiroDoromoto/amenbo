@@ -1671,6 +1671,7 @@ export const ptBR: Translation = {
     not_ready_automation_action_draft: "a ação “{action}” posicionada ainda está em criação",
     not_ready_automation_action_empty: "a ação “{action}” posicionada não tem etapa de início",
     not_ready_automation_entry_takes_no_task: "{step}: a etapa de início não pega nenhuma tarefa, então cada etapa seguinte não trataria de nada",
+    not_ready_automation_back_to_entry: "{step}: depois de “{exit}” volta para a etapa de início “{to}”, que só recebe o que criar quando a execução começa",
     not_ready_automation_open_exit: "{step}: nada está previsto depois de “{exit}”",
     not_ready_automation_unwired_input: "{step}: nada chega à entrada obrigatória “{port}”",
     not_ready_automation_unanswered_cfg: "{step}: a configuração obrigatória “{cfg}” está sem resposta",

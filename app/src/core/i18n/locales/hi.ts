@@ -1653,6 +1653,7 @@ export const hi: Translation = {
     not_ready_automation_action_draft: "रखी गई क्रिया “{action}” अभी बन रही है।",
     not_ready_automation_action_empty: "रखी गई क्रिया “{action}” में शुरुआत का कोई चरण नहीं है।",
     not_ready_automation_entry_takes_no_task: "{step}: शुरुआत का चरण कोई कार्य नहीं लेता, इसलिए उसके बाद के चरण किसी चीज़ पर नहीं होंगे।",
+    not_ready_automation_back_to_entry: "{step}: “{exit}” के बाद यह शुरुआत के चरण “{to}” पर लौटता है, जिसे क्या दर्ज करना है यह सिर्फ़ रन शुरू होने पर मिलता है",
     not_ready_automation_open_exit: "{step}: “{exit}” के बाद क्या होगा, तय नहीं है।",
     not_ready_automation_unwired_input: "{step}: ज़रूरी इनपुट “{port}” तक कुछ भी नहीं पहुँचता।",
     not_ready_automation_unanswered_cfg: "{step}: ज़रूरी सेटिंग “{cfg}” का जवाब नहीं दिया गया है।",

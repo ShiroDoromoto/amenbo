@@ -1653,6 +1653,7 @@ export const tr: Translation = {
     not_ready_automation_action_draft: "yerleştirilen “{action}” eylemi hâlâ oluşturuluyor",
     not_ready_automation_action_empty: "yerleştirilen “{action}” eyleminin başlangıç adımı yok",
     not_ready_automation_entry_takes_no_task: "{step}: başlangıç adımı hiçbir görev almıyor, bu yüzden sonraki her adım hiçbir şey hakkında olmaz",
+    not_ready_automation_back_to_entry: "{step}: “{exit}” sonrasında başlangıç adımı “{to}” adımına dönülüyor; o, neyi oluşturacağını yalnızca çalıştırma başlarken alır",
     not_ready_automation_open_exit: "{step}: “{exit}” sonrasında ne olacağı belli değil",
     not_ready_automation_unwired_input: "{step}: zorunlu girdi “{port}” öğesine hiçbir şey ulaşmıyor",
     not_ready_automation_unanswered_cfg: "{step}: zorunlu ayar “{cfg}” yanıtsız",

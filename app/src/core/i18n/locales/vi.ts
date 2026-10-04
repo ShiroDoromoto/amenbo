@@ -1653,6 +1653,7 @@ export const vi: Translation = {
     not_ready_automation_action_draft: "hành động “{action}” đã đặt vẫn đang được tạo",
     not_ready_automation_action_empty: "hành động “{action}” đã đặt không có bước bắt đầu",
     not_ready_automation_entry_takes_no_task: "{step}: bước bắt đầu không nhận nhiệm vụ nào, nên mọi bước sau nó sẽ không nói về điều gì",
+    not_ready_automation_back_to_entry: "{step}: sau “{exit}” quay lại bước bắt đầu “{to}”, bước này chỉ nhận nội dung cần tạo khi lượt chạy bắt đầu",
     not_ready_automation_open_exit: "{step}: chưa đặt việc gì sau “{exit}”",
     not_ready_automation_unwired_input: "{step}: không có gì đến được đầu vào bắt buộc “{port}”",
     not_ready_automation_unanswered_cfg: "{step}: thiết lập bắt buộc “{cfg}” chưa có câu trả lời",

@@ -1654,6 +1654,7 @@ export const zhHant: Translation = {
     not_ready_automation_action_draft: "所放置的動作「{action}」仍在建立中",
     not_ready_automation_action_empty: "所放置的動作「{action}」沒有起點步驟",
     not_ready_automation_entry_takes_no_task: "{step}：起點步驟不領取任務，因此其後的步驟不知道要處理什麼",
+    not_ready_automation_back_to_entry: "{step}：從「{exit}」出發回到起點步驟「{to}」，它只在執行開始時收到要建立的內容",
     not_ready_automation_open_exit: "{step}：「{exit}」之後要做什麼還沒定",
     not_ready_automation_unwired_input: "{step}：沒有東西到達必填輸入「{port}」",
     not_ready_automation_unanswered_cfg: "{step}：必填設定「{cfg}」還沒有填",

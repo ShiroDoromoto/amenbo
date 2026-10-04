@@ -1654,6 +1654,7 @@ export const id: Translation = {
     not_ready_automation_action_draft: "aksi “{action}” yang ditempatkan masih sedang dibuat",
     not_ready_automation_action_empty: "aksi “{action}” yang ditempatkan tidak punya langkah awal",
     not_ready_automation_entry_takes_no_task: "{step}: langkah awal tidak mengambil tugas, jadi setiap langkah sesudahnya tidak tentang apa pun",
+    not_ready_automation_back_to_entry: "{step}: setelah “{exit}” kembali ke langkah awal “{to}”, yang hanya menerima apa yang harus dibuat saat run dimulai",
     not_ready_automation_open_exit: "{step}: tidak ada yang ditetapkan setelah “{exit}”",
     not_ready_automation_unwired_input: "{step}: tidak ada yang sampai ke masukan wajib “{port}”",
     not_ready_automation_unanswered_cfg: "{step}: setelan wajib “{cfg}” belum dijawab",

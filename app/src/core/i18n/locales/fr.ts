@@ -1671,6 +1671,7 @@ export const fr: Translation = {
     not_ready_automation_action_draft: "l'action « {action} » placée est encore en cours de création",
     not_ready_automation_action_empty: "l'action « {action} » placée n'a pas d'étape de départ",
     not_ready_automation_entry_takes_no_task: "{step} : l'étape de départ ne prend aucune tâche, donc chaque étape suivante ne porterait sur rien",
+    not_ready_automation_back_to_entry: "{step} : après « {exit} », on revient à l’étape de départ « {to} », qui ne reçoit ce qu’elle doit créer qu’au lancement de l’exécution",
     not_ready_automation_open_exit: "{step} : rien n’est prévu après « {exit} »",
     not_ready_automation_unwired_input: "{step} : rien n’atteint l’entrée obligatoire « {port} »",
     not_ready_automation_unanswered_cfg: "{step} : le réglage obligatoire « {cfg} » est sans réponse",

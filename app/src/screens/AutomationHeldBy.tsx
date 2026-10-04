@@ -6,13 +6,12 @@
 // done (`./AutomationBuildScreen`, `./AutomationActionBuildScreen`).
 //
 // Each run is one band: which run — of which automation, over an action — and on which step, the way
-// to the pane it is drawn in, and the two moves its state has (`AMB-D-1002`) — a run going is paused
-// or force-cancelled, a paused one picked up again or cancelled.
+// to the pane it is drawn in, and the moves its state has behind one mark (`../shell/RunActs`).
 import { useState } from "react";
-import { cancelRun, forceCancelRun, pauseRun, resumeRun } from "../core/automations";
 import { builtinWord } from "../core/builtinWords";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
+import { RunActs } from "../shell/RunActs";
 import type { AutomationRunCardDto } from "../bindings/bindings";
 
 export function AutomationHeldBy({
@@ -63,40 +62,7 @@ export function AutomationHeldBy({
                 {t("auto.held.openPane")}
               </button>
             )}
-            {run.status === "paused" ? (
-              <>
-                <button type="button" className="btn" disabled={pressing} onClick={() => void press(() => resumeRun(run.run))}>
-                  {t("auto.run.resume")}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--danger"
-                  disabled={pressing}
-                  onClick={() => void press(() => cancelRun(run.run))}
-                >
-                  {t("auto.run.cancel")}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={pressing || run.pauseRequested}
-                  onClick={() => void press(() => pauseRun(run.run))}
-                >
-                  {t("auto.run.pause")}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--danger"
-                  disabled={pressing}
-                  onClick={() => void press(() => forceCancelRun(run.run))}
-                >
-                  {t("auto.run.forceCancel")}
-                </button>
-              </>
-            )}
+            <RunActs run={run} busy={pressing} onPress={(move) => void press(move)} />
           </li>
         ))}
       </ul>

@@ -73,6 +73,7 @@ export type IconName =
   | "robot"
   | "dot"
   | "pause"
+  | "pauseTask"
   | "play"
   | "stop"
   | "newWindow"
@@ -405,6 +406,9 @@ const ART: Record<IconName, ReactNode> = {
   // (`components.css`) turns the convention round for it.
   dot: <circle cx="12" cy="12" r="5.4" />,
   pause: drawn("pause"),
+  // The pause drawn to the left of a small box — the run held once the task it is on is over
+  // (`../shell/RunActs`), not at the end of the action under way.
+  pauseTask: <path d="M7.4 5.6v12.8M12.6 5.6v12.8M16.5 8.5h3.5v7h-3.5z" />,
   play: drawn("play"),
   stop: drawn("stop"),
   // Two panes, one lifted off the other — the terminal put into a window of its own. It is drawn as

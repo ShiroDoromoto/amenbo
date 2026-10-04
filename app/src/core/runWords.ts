@@ -15,7 +15,7 @@ const ERROR_EXIT = "*";
 
 /**
  * **Whether a pause has been asked for and not settled** — at the end of the action under way
- * (`AMB-D-1002`), or before the run takes its next task (`AMB-D-1009`). The run is still `running`.
+ * (`AMB-D-1002`), or before the run takes its next task (`AMB-D-1019`). The run is still `running`.
  */
 export function isPausing(
   run: Pick<AutomationRunCardDto, "status" | "pauseRequested" | "pauseBeforeNextTask">,
@@ -29,7 +29,7 @@ export function isPausing(
  * A pause that has been asked for and not settled is its own line rather than either of the two it
  * sits between: the run is still `running` and a reader told only that would press pause again, and
  * told "paused" would believe the action under way — or, asked before its next task, the task — had
- * already ended (`AMB-D-1002`, `AMB-D-1009`, `amenbo_core::ops::automation_stop`).
+ * already ended (`AMB-D-1002`, `AMB-D-1019`, `amenbo_core::ops::automation_stop`).
  */
 export function runStatusWord(
   run: Pick<AutomationRunCardDto, "status" | "pauseRequested" | "pauseBeforeNextTask">,
@@ -83,6 +83,8 @@ export function runStateOf(run: AutomationRunCardDto | undefined): RunState | nu
     status: run.status,
     word: runStatusWord(run),
     pauseRequested: run.pauseRequested,
+    pauseBeforeNextTask: run.pauseBeforeNextTask,
+    pausableBeforeNextTask: run.pausableBeforeNextTask,
     why: failed && !byExit ? runReasonWord(run) : null,
     exit: byExit ? runExitWord(run.builtin, run.exitName!) : null,
     errorExit: byExit && run.exitName === ERROR_EXIT,

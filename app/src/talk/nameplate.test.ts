@@ -87,7 +87,7 @@ describe("the row above a run's pane", () => {
     task: { ref: "AMB-T-5252", title: "ペインのヘッダを描く", seq: 2 },
     state: null,
   };
-  const STATE = { why: null, exit: null, errorExit: false, acknowledged: false, pauseRequested: false };
+  const STATE = { why: null, exit: null, errorExit: false, acknowledged: false, pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false };
 
   it("marks a built-in's step with the chip every screen marks one with, and no other step", () => {
     const host = document.createElement("div");
@@ -240,6 +240,10 @@ describe("the row above a run's pane", () => {
     expect(state().hidden).toBe(false);
     expect(state().textContent).toBe("一時停止待ち");
     expect(auto().dataset.run).toBe("on");
+
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status: "running", word: "一時停止待ち", pauseBeforeNextTask: true } } });
+    expect(state().hidden).toBe(false);
+    expect(state().textContent).toBe("一時停止待ち");
 
     draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status: "running", word: "タスク待ち", waiting: true } } });
     expect(state().hidden).toBe(false);

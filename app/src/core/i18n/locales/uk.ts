@@ -1679,6 +1679,7 @@ export const uk: Translation = {
     not_ready_automation_action_draft: "розміщена дія «{action}» ще створюється",
     not_ready_automation_action_empty: "розміщена дія «{action}» не має стартового кроку",
     not_ready_automation_entry_takes_no_task: "{step}: стартовий крок не бере завдання, тож усі кроки після нього були б ні про що",
+    not_ready_automation_back_to_entry: "{step}: після «{exit}» повертається до стартового кроку «{to}», який отримує, що створити, лише під час запуску",
     not_ready_automation_open_exit: "{step}: після «{exit}» нічого не задано",
     not_ready_automation_unwired_input: "{step}: до обов’язкового входу «{port}» нічого не доходить",
     not_ready_automation_unanswered_cfg: "{step}: обов’язкове налаштування «{cfg}» лишилося без відповіді",

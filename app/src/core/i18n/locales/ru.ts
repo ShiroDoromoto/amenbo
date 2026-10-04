@@ -1679,6 +1679,7 @@ export const ru: Translation = {
     not_ready_automation_action_draft: "размещённое действие «{action}» ещё создаётся",
     not_ready_automation_action_empty: "у размещённого действия «{action}» нет стартового шага",
     not_ready_automation_entry_takes_no_task: "{step}: стартовый шаг не берёт задачу, поэтому все шаги после него были бы ни о чём",
+    not_ready_automation_back_to_entry: "{step}: после «{exit}» возвращается к стартовому шагу «{to}», который получает, что создать, только при запуске",
     not_ready_automation_open_exit: "{step}: после «{exit}» ничего не задано",
     not_ready_automation_unwired_input: "{step}: до обязательного входа «{port}» ничего не доходит",
     not_ready_automation_unanswered_cfg: "{step}: обязательная настройка «{cfg}» осталась без ответа",

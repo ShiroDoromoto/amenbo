@@ -153,6 +153,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_action_empty",
   "not_ready_automation_action_draft",
   "not_ready_automation_entry_takes_no_task",
+  "not_ready_automation_back_to_entry",
   "not_ready_automation_open_exit",
   "not_ready_automation_unwired_input",
   "not_ready_automation_unanswered_cfg",

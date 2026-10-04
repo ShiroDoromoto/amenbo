@@ -1653,6 +1653,7 @@ export const nl: Translation = {
     not_ready_automation_action_draft: "de geplaatste actie ‘{action}’ wordt nog aangemaakt",
     not_ready_automation_action_empty: "de geplaatste actie ‘{action}’ heeft geen startstap",
     not_ready_automation_entry_takes_no_task: "{step}: de startstap pakt geen taak op, dus elke stap erna zou nergens over gaan",
+    not_ready_automation_back_to_entry: "{step}: na ‘{exit}’ gaat het terug naar de startstap ‘{to}’, die alleen bij de start van de run krijgt wat hij moet aanmaken",
     not_ready_automation_open_exit: "{step}: na ‘{exit}’ staat niets vast",
     not_ready_automation_unwired_input: "{step}: niets bereikt de verplichte invoer ‘{port}’",
     not_ready_automation_unanswered_cfg: "{step}: de verplichte instelling ‘{cfg}’ is onbeantwoord",

@@ -621,10 +621,17 @@ fn chosen(
     Ok(values)
 }
 
+/// **Whether it reads what was handed over at launch**, placed as the entry — `builtin` being the key
+/// of the built-in placed there, if one is. It is handed it only the first time a run opens it, so the
+/// launch check refuses a line back to it ([`crate::ops::automation_run::Unmet::BackToEntry`]).
+pub fn reads_at_launch(builtin: Option<&str>) -> bool {
+    builtin == Some(KEY)
+}
+
 /// **The inputs it reads from what was handed over at launch**, placed as the entry — `builtin` being
 /// the key of the built-in placed there, if one is.
 pub fn read_at_launch(builtin: Option<&str>, port: &str) -> bool {
-    builtin == Some(KEY) && [TITLE, NOTES, CHOSEN].contains(&port)
+    reads_at_launch(builtin) && [TITLE, NOTES, CHOSEN].contains(&port)
 }
 
 /// **The classification a person handed over to launch a run whose entry this is**, checked the way it

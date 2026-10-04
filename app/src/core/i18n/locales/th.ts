@@ -1653,6 +1653,7 @@ export const th: Translation = {
     not_ready_automation_action_draft: "แอ็กชัน “{action}” ที่วางไว้ยังกำลังสร้างอยู่",
     not_ready_automation_action_empty: "แอ็กชัน “{action}” ที่วางไว้ไม่มีขั้นตอนที่เป็นจุดเริ่ม",
     not_ready_automation_entry_takes_no_task: "{step}: ขั้นตอนที่เป็นจุดเริ่มไม่ได้รับงาน ขั้นตอนถัดไปจึงไม่มีเรื่องที่จะทำ",
+    not_ready_automation_back_to_entry: "{step}: หลัง “{exit}” จะย้อนกลับไปที่ขั้นตอนจุดเริ่ม “{to}” ซึ่งได้รับสิ่งที่ต้องสร้างเฉพาะตอนเริ่มรันเท่านั้น",
     not_ready_automation_open_exit: "{step}: ยังไม่ได้กำหนดว่าหลัง “{exit}” จะทำอะไร",
     not_ready_automation_unwired_input: "{step}: ไม่มีอะไรไปถึงอินพุตที่จำเป็น “{port}”",
     not_ready_automation_unanswered_cfg: "{step}: การตั้งค่าที่จำเป็น “{cfg}” ยังไม่มีคำตอบ",

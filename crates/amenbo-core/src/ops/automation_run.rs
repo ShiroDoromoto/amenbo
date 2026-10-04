@@ -83,6 +83,20 @@ pub enum Unmet {
     /// The entry declares no `task_take` output, so no step of the run would ever come to hold a task
     /// and every step after it would be about nothing.
     EntryTakesNoTask { step: String, builtin: Option<String>, placement: i64 },
+    /// A line a run could walk back to an entry that reads what was handed over at launch — the
+    /// built-in that files a task ([`crate::ops::automation_builtin_make::reads_at_launch`]). It is
+    /// handed the title only the first time a run opens it, so coming back to it the run would fail
+    /// there on no input.
+    ///
+    /// `step` and `exit` name the way out the line leaves by, and `to` the entry it goes back to.
+    BackToEntry {
+        step: String,
+        exit: String,
+        to: String,
+        builtin: Option<String>,
+        to_builtin: Option<String>,
+        placement: i64,
+    },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
     ///
@@ -189,6 +203,13 @@ impl Unmet {
                      or change what a run starts at with `automation entry-replace`"
                 )
             }
+            Unmet::BackToEntry { step, exit, to, .. } => {
+                format!(
+                    "{} of '{step}' goes back to the entry '{to}', which is handed what to file only when a \
+                     run starts — end the run there, or go on to a step that takes the next task",
+                    named(exit)
+                )
+            }
             Unmet::OpenExit { step, exit, .. } => {
                 format!("nothing is set to happen after {} of '{step}'", named(exit))
             }
@@ -272,6 +293,7 @@ impl Unmet {
             Unmet::ActionEmpty { .. } => ErrorCode::NotReadyAutomationActionEmpty,
             Unmet::ActionDraft { .. } => ErrorCode::NotReadyAutomationActionDraft,
             Unmet::EntryTakesNoTask { .. } => ErrorCode::NotReadyAutomationEntryTakesNoTask,
+            Unmet::BackToEntry { .. } => ErrorCode::NotReadyAutomationBackToEntry,
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
@@ -315,6 +337,13 @@ impl Unmet {
             Unmet::NoSteps | Unmet::NoEntry => msg,
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
             Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
+            Unmet::BackToEntry { step, exit, to, to_builtin, .. } => {
+                let msg = msg.with("step", step).with("exit", exit).with("to", to);
+                match to_builtin {
+                    Some(key) => msg.with("to_builtin", key),
+                    None => msg,
+                }
+            }
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
             Unmet::UnansweredCfg { step, cfg, .. } | Unmet::MisansweredCfg { step, cfg, .. } => {
@@ -355,6 +384,7 @@ impl Unmet {
             Unmet::ActionEmpty { placement, .. }
             | Unmet::ActionDraft { placement, .. }
             | Unmet::EntryTakesNoTask { placement, .. }
+            | Unmet::BackToEntry { placement, .. }
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. }
             | Unmet::UnansweredCfg { placement, .. }
@@ -388,6 +418,7 @@ impl Unmet {
     fn builtin(&self) -> Option<&str> {
         match self {
             Unmet::EntryTakesNoTask { builtin, .. }
+            | Unmet::BackToEntry { builtin, .. }
             | Unmet::OpenExit { builtin, .. }
             | Unmet::UnwiredInput { builtin, .. }
             | Unmet::UnansweredCfg { builtin, .. }
@@ -581,6 +612,7 @@ pub fn check(
                 placement: entry.id,
             });
         }
+        unmet.extend(back_to_entry(conn, entry, &placements, &live)?);
     }
     for placement in placements.iter().filter(|p| live.contains(&p.id)) {
         let name = action_name(conn, placement.action_id)?;
@@ -1141,6 +1173,44 @@ fn reachable_without(
     Ok(seen)
 }
 
+/// **The lines a run could walk back to an entry that reads what was handed over at launch**
+/// ([`Unmet::BackToEntry`]) — one for each way out of a placement in `live` that goes to `entry`, the
+/// entry's own included. A way out its setting says it never leaves by is not asked about.
+fn back_to_entry(
+    conn: &Connection,
+    entry: &AutomationPlacement,
+    placements: &[AutomationPlacement],
+    live: &BTreeSet<i64>,
+) -> Result<Vec<Unmet>> {
+    let to_builtin = action_builtin(conn, entry.action_id)?;
+    if !crate::ops::automation_builtin_make::reads_at_launch(to_builtin.as_deref()) {
+        return Ok(Vec::new());
+    }
+    let to = action_name(conn, entry.action_id)?;
+    let mut found = Vec::new();
+    for placement in placements.iter().filter(|p| live.contains(&p.id)) {
+        let never = never_taken(conn, placement)?;
+        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+            if Some(exit.name.as_str()) == never {
+                continue;
+            }
+            let edge =
+                read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, placement.id, exit.id)?;
+            if edge.and_then(|e| e.to_id) == Some(entry.id) {
+                found.push(Unmet::BackToEntry {
+                    step: action_name(conn, placement.action_id)?,
+                    exit: exit.name,
+                    to: to.clone(),
+                    builtin: action_builtin(conn, placement.action_id)?,
+                    to_builtin: to_builtin.clone(),
+                    placement: placement.id,
+                });
+            }
+        }
+    }
+    Ok(found)
+}
+
 /// Whether a way out has something set to happen after it. An edge that goes on to a placement of some
 /// other automation — or to none — decides nothing, so it counts as undecided rather than as an edge.
 fn decided(
@@ -1244,7 +1314,8 @@ fn outs_of(conn: &Connection, exit: &AutomationExit) -> Result<Vec<crate::model:
 /// **An input the entry reads at launch is fed there** (`entry_id`): the built-in that files a task,
 /// placed as the entry, is handed its title, notes and classification by the person launching the run
 /// ([`crate::ops::automation_builtin_make::read_at_launch`]), and the launch refuses one that hands no
-/// title.
+/// title. That holds only the first time a run opens it, and a line back to it is refused on its own
+/// ([`Unmet::BackToEntry`]).
 fn fed(
     conn: &Connection,
     placement: &AutomationPlacement,
@@ -2457,6 +2528,50 @@ mod tests {
             automation::edge_delete(tx, closed.id).expect("unhook the end");
             automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(taking.id), None).expect("close → take");
             assert_eq!(checked(tx, &automation), vec![]);
+        });
+    }
+
+    /// **A line back to the entry that files a task is refused**, even closed on the way: it is handed
+    /// its title only when a run starts, so coming back to it the run would fail there on no input.
+    #[test]
+    fn a_line_back_to_the_entry_that_files_a_task_is_refused() {
+        with_tx(|tx| {
+            use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, WHAT_THEN};
+            let automation = mk_automation(tx, "起票してやりきる");
+            let make = crate::ops::automation_builtin::action(tx, "make_task").expect("the built-in's action");
+            let making = automation::placement_add(tx, automation.id, make.id).expect("place it");
+            automation::cfg_set(tx, making.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
+                .expect("take it");
+            let (_, working) = mk_placed(tx, &automation, "直す", "fix it", "claude");
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, making.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(working.id), None)
+                .expect("file → work");
+            let close = crate::ops::test_support::mk_closed_after(tx, &automation, working.id, None);
+            let automation = automation::set_entry(tx, automation.id, Some(making.id)).expect("entry");
+            assert_eq!(checked(tx, &automation), vec![]);
+
+            let closed = read::automation_edge_for_exit(
+                tx.conn(),
+                on,
+                close.id,
+                exit_id(tx, AutomationOwner::Action, close.action_id, None),
+            )
+            .expect("read")
+            .expect("the close's line");
+            automation::edge_delete(tx, closed.id).expect("unhook the end");
+            automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(making.id), None).expect("close → file");
+            let closing = read::automation_action(tx.conn(), close.action_id).expect("read").expect("the close");
+            assert_eq!(
+                checked(tx, &automation),
+                vec![Unmet::BackToEntry {
+                    step: closing.name,
+                    exit: crate::model::DONE_EXIT.into(),
+                    to: make.name,
+                    builtin: Some("close_task".into()),
+                    to_builtin: Some("make_task".into()),
+                    placement: close.id,
+                }],
+            );
         });
     }
 

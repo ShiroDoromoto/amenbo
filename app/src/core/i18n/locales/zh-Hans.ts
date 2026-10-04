@@ -1654,6 +1654,7 @@ export const zhHans: Translation = {
     not_ready_automation_action_draft: "所放置的动作“{action}”仍在创建中",
     not_ready_automation_action_empty: "所放置的动作“{action}”没有起点步骤",
     not_ready_automation_entry_takes_no_task: "{step}：起点步骤不领取任务，因此其后的步骤不知道要处理什么",
+    not_ready_automation_back_to_entry: "{step}：从“{exit}”出发回到起点步骤“{to}”，它只在运行开始时收到要创建的内容",
     not_ready_automation_open_exit: "{step}：“{exit}”之后要做什么还没定",
     not_ready_automation_unwired_input: "{step}：没有东西到达必填输入“{port}”",
     not_ready_automation_unanswered_cfg: "{step}：必填设置“{cfg}”还没有填",

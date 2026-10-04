@@ -1482,8 +1482,8 @@ mod tests {
     }
 
     /// **A value travels along the wires the run launched with** (`AMB-D-961`). The copy holds them, so a
-    /// picture that has since lost its wire — written straight to the table here, since a definition a
-    /// run is using refuses the edit — still hands the note on.
+    /// picture that has since lost its wire — written straight to the table here — still hands the note
+    /// on.
     #[test]
     fn a_value_travels_along_the_wire_the_run_launched_with_after_the_picture_loses_it() {
         with_tx(|tx| {
@@ -1493,6 +1493,52 @@ mod tests {
 
             let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let handed =
+                read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
+            assert_eq!(handed.len(), 1);
+            assert_eq!(handed[0].value.as_deref(), Some("the note"));
+        });
+    }
+
+    /// **A value travels after the step that produced it is deleted** (`AMB-D-1015`). The definition can
+    /// be rewritten while a run goes, and the copy still names the step it was copied from, which is
+    /// what the wire it launched with is matched by.
+    #[test]
+    fn a_value_travels_along_the_wire_after_the_producing_step_is_deleted() {
+        with_tx(|tx| {
+            let p = picture(tx, true, true);
+            let run = a_run(tx, &p.automation);
+            let def = def_of(tx, &run, &p.first);
+            let first = ready(open(tx, run.id, def.id, None).expect("open"));
+            reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+            let step = def.step_id.expect("the copy names its step");
+            automation::step_delete(tx, step).expect("the definition moves on");
+
+            assert_eq!(def_of(tx, &run, &p.first).step_id, Some(step), "the copy keeps the id");
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let handed =
+                read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
+            assert_eq!(handed.len(), 1);
+            assert_eq!(handed[0].value.as_deref(), Some("the note"));
+        });
+    }
+
+    /// **A value travels after the placement that produced it is taken off** (`AMB-D-1015`), for the
+    /// reason the step's deletion above gives.
+    #[test]
+    fn a_value_travels_along_the_wire_after_the_producing_placement_is_taken_off() {
+        with_tx(|tx| {
+            let p = picture(tx, true, true);
+            let run = a_run(tx, &p.automation);
+            let def = def_of(tx, &run, &p.first);
+            let first = ready(open(tx, run.id, def.id, None).expect("open"));
+            reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+            automation::set_entry(tx, p.automation.id, Some(p.second.id)).expect("start elsewhere");
+            automation::placement_delete(tx, p.first.id).expect("the definition moves on");
+
+            let copy = read::automation_run_def(tx.conn(), def.id).expect("read").expect("the copy");
+            assert_eq!(copy.placement_id, Some(p.first.id), "the copy keeps the id");
             let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
             let handed =
                 read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");

@@ -1159,7 +1159,97 @@ pub const STEPS: &[Step] = &[
         // run leaves both at ''.
         apply: Apply::Custom(keep_the_tails_of_a_script),
     },
+    Step {
+        to: 91,
+        name: "keep automation_run_def.placement_id, automation_run_def.step_id and automation_placement_step.step_id as plain ids",
+        // `AMB-D-1015`. The definition can be rewritten while a run goes, and a run under way matches
+        // its copies to the values its wires carry by these ids — so taking off a placement, or deleting
+        // a step, must not clear them.
+        //
+        // **What an earlier build already cleared stays NULL.** Nothing here says what it was.
+        apply: Apply::Custom(keep_the_ids_a_run_was_copied_from),
+    },
 ];
+
+/// v91: `automation_run_def.placement_id`, `automation_run_def.step_id` and
+/// `automation_placement_step.step_id` lose their `REFERENCES` (`AMB-D-1015`).
+///
+/// **v9's procedure, copied rather than called.** `automation_run_step.run_def_id` references
+/// `automation_run_def`, so the table cannot be rebuilt; only its declaration is rewritten, and the
+/// column list is read back before and after.
+///
+/// **A column with no foreign key is left as it is** — a store born from a registry that already
+/// declares it plain. The clause is matched in either spelling a store can carry: as written, and with
+/// the parent quoted, which is how v54's `RENAME TO` wrote `automation_step` back as
+/// `"automation_action_step"`. Anything else is refused rather than guessed at.
+fn keep_the_ids_a_run_was_copied_from(ctx: &Ctx<'_>) -> Result<()> {
+    /// Each column as the stores that reach this step declare it, and as it is declared from here on —
+    /// frozen text, like every step's.
+    const COLUMNS: [(&str, &str, &str, &str); 3] = [
+        (
+            "automation_placement_step",
+            "step_id",
+            "step_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_action_step(id) ON DELETE RESTRICT \
+             ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED",
+            "step_id BIGINT NOT NULL DEFAULT 0",
+        ),
+        (
+            "automation_run_def",
+            "placement_id",
+            "placement_id BIGINT REFERENCES automation_placement(id) ON DELETE SET NULL \
+             ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED",
+            "placement_id BIGINT",
+        ),
+        (
+            "automation_run_def",
+            "step_id",
+            "step_id BIGINT REFERENCES automation_action_step(id) ON DELETE SET NULL \
+             ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED",
+            "step_id BIGINT",
+        ),
+    ];
+
+    for (table, column, bound, plain) in COLUMNS {
+        let keyed: i64 = ctx.tx.query_row(
+            "SELECT COUNT(*) FROM pragma_foreign_key_list(?1) WHERE \"from\" = ?2",
+            [table, column],
+            |r| r.get(0),
+        )?;
+        if keyed == 0 {
+            continue;
+        }
+        let declared: String = ctx.tx.query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |r| r.get(0),
+        )?;
+        let quoted = bound.replacen("REFERENCES automation_action_step(", "REFERENCES \"automation_action_step\"(", 1);
+        let starts_a_column = |at: usize| declared[..at].ends_with(|c: char| c.is_whitespace() || c == ',');
+        let Some((at, len)) = [bound, quoted.as_str()]
+            .into_iter()
+            .find_map(|spelt| declared.find(spelt).filter(|&at| starts_a_column(at)).map(|at| (at, spelt.len())))
+        else {
+            return Err(super::StoreEngineError::UnrecognisedDdl { table, expected: bound });
+        };
+        let loosened = format!("{}{plain}{}", &declared[..at], &declared[at + len..]);
+
+        let before = column_names(ctx.tx, table)?;
+        ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+        let wrote = ctx.tx.execute(
+            "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = ?2",
+            [loosened.as_str(), table],
+        );
+        // `RESET` both shuts the door and drops the connection's parsed schema, so the next column
+        // reads the declaration this one left.
+        ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+        wrote?;
+        let after = column_names(ctx.tx, table)?;
+        if before != after {
+            return Err(super::StoreEngineError::UnrecognisedDdl { table, expected: bound });
+        }
+    }
+    Ok(())
+}
 
 /// v90: `stdout_tail` and `stderr_tail` on `automation_run_step` — the last of what a script step wrote
 /// to its standard output and its standard error (`AMB-D-1016`).
@@ -9626,6 +9716,72 @@ mod tests {
             engine.conn().execute("UPDATE dimension SET sequential = 2 WHERE id = 1", []).is_err(),
             "only the two booleans go in"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The columns of `table` that carry a `REFERENCES`, by name.
+    fn keyed_columns(engine: &StoreEngine, table: &str) -> Vec<String> {
+        let conn = engine.conn();
+        let mut stmt = conn.prepare("SELECT \"from\" FROM pragma_foreign_key_list(?1) ORDER BY \"from\"").unwrap();
+        stmt.query_map([table], |r| r.get(0)).unwrap().collect::<rusqlite::Result<_>>().unwrap()
+    }
+
+    /// v91: the three columns lose their keys, and a run's copy keeps the placement and the step it was
+    /// copied from after both are gone.
+    #[test]
+    fn a_run_s_copy_keeps_the_ids_it_was_copied_from() {
+        let dir = scratch("run-def-plain-ids");
+        let engine = store_at(&dir, 90);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_action (id, name) VALUES (1, 'review');
+                 INSERT INTO automation_action_step (id, action_id, name, prompt) VALUES (1, 1, 'read', 'Read it.');
+                 INSERT INTO automation_placement (id, automation_id, action_id) VALUES (1, 1, 1);
+                 INSERT INTO automation_placement_step (id, placement_id, step_id, agent) VALUES (1, 1, 1, 'claude');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, placement_id, step_id, name, agent) VALUES
+                     (1, 1, 1, 1, 'read', 'claude');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(keyed_columns(&engine, "automation_run_def"), ["run_id"]);
+        assert_eq!(keyed_columns(&engine, "automation_placement_step"), ["placement_id"]);
+        engine
+            .conn()
+            .execute_batch(
+                "DELETE FROM automation_action_step WHERE id = 1;
+                 DELETE FROM automation_placement_step WHERE id = 1;
+                 DELETE FROM automation_placement WHERE id = 1;",
+            )
+            .unwrap();
+        let ids: (Option<i64>, Option<i64>) = engine
+            .conn()
+            .query_row("SELECT placement_id, step_id FROM automation_run_def WHERE id = 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(ids, (Some(1), Some(1)));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v91 on a store from before v53 and v54: `placement_id` was appended by v53's `ALTER TABLE` and
+    /// `step_id` names its parent as v54's `RENAME TO` wrote it back, quoted. Both are still found.
+    #[test]
+    fn a_run_s_copy_from_before_the_step_was_renamed_loses_its_keys_too() {
+        let dir = scratch("run-def-plain-ids-renamed");
+        let engine = store_at(&dir, 52);
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(keyed_columns(&engine, "automation_run_def"), ["run_id"]);
+        assert_eq!(keyed_columns(&engine, "automation_placement_step"), ["placement_id"]);
         std::fs::remove_dir_all(&dir).ok();
     }
 

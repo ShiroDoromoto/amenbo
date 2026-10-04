@@ -52,10 +52,12 @@ pub fn command(program: impl AsRef<OsStr>) -> Command {
 ///
 /// - **macOS and Linux** — a process group. [`Self::start`] puts the program at the head of a new one,
 ///   which its children join unless they leave it on purpose, and [`Self::kill`] sends `SIGKILL` to the
-///   group.
-/// - **Windows** — a Job Object. The program is assigned to a job of its own as soon as it is started,
-///   its children are put in the same job by the OS, and [`Self::kill`] terminates the job. A child the
-///   program starts in the moment between its start and that assignment is not in the job.
+///   group. A program started elsewhere at the head of its own group — as a PTY starts one, in a session
+///   of its own — is taken by its pid with [`Self::adopt`], its pid being the group's id.
+/// - **Windows** — a Job Object. The program is assigned to a job of its own as soon as it is started
+///   (or, with [`Self::adopt`], as soon as it is handed over by its pid), its children are put in the same
+///   job by the OS, and [`Self::kill`] terminates the job. A child the program starts in the moment
+///   between its start and that assignment is not in the job.
 ///
 /// Nothing here stops the group by itself: a program that ends on its own leaves anything it started
 /// running, as it would anywhere else.
@@ -112,6 +114,50 @@ impl ProcessGroup {
         }
     }
 
+    /// Take the program already running as `pid` as a group, for a program started elsewhere that only
+    /// its pid is known of — one started on a PTY.
+    ///
+    /// On macOS and Linux the program must already be at the head of a process group of its own; the
+    /// group is not created here, its pid is taken as the group's id. On Windows it is assigned to a new
+    /// job, and whatever it started before that is not in the job.
+    pub fn adopt(pid: u32) -> std::io::Result<ProcessGroup> {
+        #[cfg(unix)]
+        {
+            let pgid = libc::pid_t::try_from(pid).map_err(std::io::Error::other)?;
+            Ok(ProcessGroup { pgid })
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::Foundation::CloseHandle;
+            use windows_sys::Win32::System::JobObjects::{AssignProcessToJobObject, CreateJobObjectW};
+            use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE};
+            // SAFETY: an unnamed job with default security; a null answer is a failure, read from the OS.
+            let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+            if job.is_null() {
+                return Err(std::io::Error::last_os_error());
+            }
+            // SAFETY: the rights `AssignProcessToJobObject` needs, not inherited; a null answer is a failure.
+            let process = unsafe { OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, 0, pid) };
+            if process.is_null() {
+                let e = std::io::Error::last_os_error();
+                // SAFETY: `job` was opened above and is closed once.
+                unsafe { CloseHandle(job) };
+                return Err(e);
+            }
+            // SAFETY: both handles were opened above and are live.
+            let assigned = unsafe { AssignProcessToJobObject(job, process) } != 0;
+            let e = std::io::Error::last_os_error();
+            // SAFETY: `process` was opened above and is closed once; the job keeps the process in it.
+            unsafe { CloseHandle(process) };
+            if !assigned {
+                // SAFETY: `job` was opened above and is closed once.
+                unsafe { CloseHandle(job) };
+                return Err(e);
+            }
+            Ok(ProcessGroup { job })
+        }
+    }
+
     /// Stop every process in the group at once.
     pub fn kill(&self) {
         #[cfg(unix)]
@@ -130,11 +176,53 @@ impl ProcessGroup {
 #[cfg(windows)]
 impl Drop for ProcessGroup {
     fn drop(&mut self) {
-        // SAFETY: `job` was opened by `start` and is closed only here. Without `KILL_ON_JOB_CLOSE`,
+        // SAFETY: `job` was opened by `start` or `adopt` and is closed only here. Without `KILL_ON_JOB_CLOSE`,
         // closing it leaves the processes in it as they are.
         unsafe {
             windows_sys::Win32::Foundation::CloseHandle(self.job);
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod process_group_tests {
+    use super::ProcessGroup;
+    use std::io::{BufRead, BufReader};
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    /// Is the process `pid` gone — given a few seconds, since a killed orphan is collected by the OS.
+    fn gone(pid: libc::pid_t) -> bool {
+        let until = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < until {
+            // SAFETY: signal 0 only asks whether the process is there.
+            if unsafe { libc::kill(pid, 0) } != 0 {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        false
+    }
+
+    /// A program started elsewhere at the head of its own group, taken by its pid, is stopped with the
+    /// child it started.
+    #[test]
+    fn a_program_taken_by_its_pid_is_killed_with_its_children() {
+        let mut program = Command::new("sh")
+            .args(["-c", "sleep 30 & echo $!; wait"])
+            .stdout(Stdio::piped())
+            .process_group(0)
+            .spawn()
+            .expect("sh starts");
+        let mut line = String::new();
+        BufReader::new(program.stdout.take().expect("stdout")).read_line(&mut line).expect("the child's pid");
+        let child: libc::pid_t = line.trim().parse().expect("a pid");
+
+        let group = ProcessGroup::adopt(program.id()).expect("the group is taken");
+        group.kill();
+        let _ = program.wait();
+        assert!(gone(child), "the child went with the program");
     }
 }
 

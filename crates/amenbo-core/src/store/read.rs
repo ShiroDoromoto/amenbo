@@ -846,6 +846,13 @@ impl Store {
         crate::ops::automation_view::detail(self.engine.conn(), id)
     }
 
+    /// **Does the automation's draft hold anything its newest saved version does not?** —
+    /// [`crate::ops::automation::unsaved`].
+    pub fn automation_unsaved(&self, id: i64) -> Result<bool> {
+        self.reachable(&format!("automation #{id}"), |c| super::owner::automation(c, id))?;
+        crate::ops::automation::unsaved(self.engine.conn(), id)
+    }
+
     /// **The library one project reaches** — the device's shelf, then that project's own.
     ///
     /// `project_id` `None` is the device's shelf alone, and it is within reach from anywhere: an
@@ -875,6 +882,16 @@ impl Store {
             self.reachable_project(project_id)?;
         }
         crate::ops::automation_view::action_detail(conn, id)
+    }
+
+    /// **Does what is inside the action hold anything its newest saved version does not?** —
+    /// [`crate::ops::automation::action_unsaved`]. Reached the way [`Self::automation_action_detail`] is.
+    pub fn automation_action_unsaved(&self, id: i64) -> Result<bool> {
+        let conn = self.engine.conn();
+        if let Some(project_id) = super::owner::automation_action(conn, id)?.project() {
+            self.reachable_project(project_id)?;
+        }
+        crate::ops::automation::action_unsaved(conn, id)
     }
 
     // ───────────────────────── automation: what ran ─────────────────────────

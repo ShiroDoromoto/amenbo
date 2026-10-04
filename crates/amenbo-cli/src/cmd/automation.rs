@@ -824,6 +824,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
         }
         AutomationCmd::Pause { run, before_next_task } => {
+            let verb = if before_next_task { "pause --before-next-task" } else { "pause" };
+            not_from_its_own_step(store, run, verb)?;
             // `--before-next-task` stops at the next take_task rather than the end of the action
             // (`AMB-D-1019`); a run waiting there for a task comes back already paused.
             let paused = match before_next_task {
@@ -858,6 +860,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         }
         AutomationCmd::Cancel { run, force } => {
             // Only a paused run is canceled; `--force` ends one still going where it stands (`AMB-D-1002`).
+            if force {
+                not_from_its_own_step(store, run, "cancel --force")?;
+            }
             let ended = match force {
                 true => store.automation_stop(run, Ending::Canceled),
                 false => store.automation_cancel(run),
@@ -928,6 +933,29 @@ fn speaking_for() -> Result<i64, CliError> {
         code: "invalid_value",
         message: "this is not a step of a run — `step-out` and `step-done` are typed by the agent a step opened, in the terminal the run opened for it.".to_string(),
         hint: Some("start a run with `automation start <id>`, and the step's own terminal carries what these commands need".to_string()),
+        exit: 2,
+    })
+}
+
+/// **A step does not stop the run it belongs to** (`AMB-D-1020`). Pausing it stops the step that asked,
+/// and a forced cancel closes that step's terminal with it, so either way the step cannot finish its
+/// work. Outside a step, or aimed at another run, the command goes through.
+fn not_from_its_own_step(store: &Store, run: i64, verb: &str) -> Result<(), CliError> {
+    let Some(step) = amenbo_core::env::automation_step() else {
+        return Ok(());
+    };
+    let own = store.automation_run_steps(run).map_err(CliError::from)?.iter().any(|s| s.id == step);
+    if !own {
+        return Ok(());
+    }
+    Err(CliError {
+        code: "invalid_value",
+        message: format!(
+            "`automation {verb}` on run {run} is refused inside a step of run {run} — stopping its own run would leave this step unable to finish its work."
+        ),
+        hint: Some(format!(
+            "finish the step with `automation step-done`; a person can pause or cancel run {run} from its pane"
+        )),
         exit: 2,
     })
 }

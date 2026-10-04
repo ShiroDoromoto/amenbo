@@ -846,6 +846,13 @@ impl Store {
         crate::ops::automation_view::detail(self.engine.conn(), id)
     }
 
+    /// **Does the automation's draft hold anything its newest saved version does not?** —
+    /// [`crate::ops::automation::unsaved`].
+    pub fn automation_unsaved(&self, id: i64) -> Result<bool> {
+        self.reachable(&format!("automation #{id}"), |c| super::owner::automation(c, id))?;
+        crate::ops::automation::unsaved(self.engine.conn(), id)
+    }
+
     /// **One automation as its newest saved version holds it** — what a launch uses. `None` where that
     /// id names none; refused where nobody has saved it.
     pub fn automation_saved_detail(
@@ -885,6 +892,16 @@ impl Store {
             self.reachable_project(project_id)?;
         }
         crate::ops::automation_view::action_detail(conn, id)
+    }
+
+    /// **Does what is inside the action hold anything its newest saved version does not?** —
+    /// [`crate::ops::automation::action_unsaved`]. Reached the way [`Self::automation_action_detail`] is.
+    pub fn automation_action_unsaved(&self, id: i64) -> Result<bool> {
+        let conn = self.engine.conn();
+        if let Some(project_id) = super::owner::automation_action(conn, id)?.project() {
+            self.reachable_project(project_id)?;
+        }
+        crate::ops::automation::action_unsaved(conn, id)
     }
 
     /// **One library action as its newest saved version holds it.** `None` where that id names none;

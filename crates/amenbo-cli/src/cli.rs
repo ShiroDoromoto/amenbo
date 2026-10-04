@@ -1861,6 +1861,18 @@ pub enum AutomationCmd {
         #[arg(long, value_name = "KEY")]
         builtin: String,
     },
+    /// Save the automation as its next version — what a run is launched from. Refused until the launch
+    /// check passes; with nothing written since the newest version, nothing is saved
+    Save {
+        /// automation id
+        id: i64,
+    },
+    /// Throw away what is written on the automation since its newest version, putting it back as that
+    /// version holds it — refused for one never saved; confirms unless -y
+    Discard {
+        /// automation id
+        id: i64,
+    },
     /// Put a library action on an automation. What stands on a picture is a placement of an action,
     /// never a prompt of its own
     PlaceAdd {
@@ -1883,6 +1895,14 @@ pub enum AutomationCmd {
     PlaceRm {
         /// placement id
         id: i64,
+    },
+    /// Move a placement onto another saved version of its action. What the version does not declare —
+    /// lines on its ways out and ports, the agents chosen for its steps — goes. Refused for a built-in
+    PlaceVersion {
+        /// placement id
+        placement: i64,
+        /// the saved version of the action to stand on
+        version: i64,
     },
     /// Add an action to the library. It is born empty — `step add` writes what it holds
     ActionAdd {
@@ -1966,6 +1986,19 @@ pub enum AutomationCmd {
     /// Give up an action made on the spot: it goes with every placement standing on it, and the lines
     /// into them go back to where they went before — refused for one not being created; confirms unless -y
     ActionAbandon {
+        /// action id
+        id: i64,
+    },
+    /// Save what is inside a library action — its steps, ways out, inputs, outputs, settings and lines —
+    /// as its next version. A placement keeps its version until `place-version` moves it; refused until
+    /// the action's own check passes
+    ActionSave {
+        /// action id
+        id: i64,
+    },
+    /// Throw away what is written inside a library action since its newest version, putting it back as
+    /// that version holds it — refused for one never saved; confirms unless -y
+    ActionDiscard {
         /// action id
         id: i64,
     },

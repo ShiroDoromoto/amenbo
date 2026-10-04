@@ -302,6 +302,32 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let line = format!("✓ Automation {id} starts at the built-in '{builtin}' (placement {})", p.id);
             write_envelope(flags, "automation.entry-replace", "automation_placement", serde_json::to_value(&p).unwrap(), Some(vec!["action_id".to_string()]), false, line);
         }
+        AutomationCmd::Save { id } => {
+            // Core hands the newest version straight back when nothing was written since it, so whether
+            // this call saved anything is asked before it.
+            let unsaved = store.automation_unsaved(id).map_err(CliError::from)?;
+            let v = store.automation_save(id).map_err(CliError::from)?;
+            let line = match unsaved {
+                true => format!("✓ Saved automation {id} as version {}", v.version),
+                false => format!("✓ Automation {id} has nothing unsaved — version {} stands", v.version),
+            };
+            let resource = json!({ "id": v.id, "automation_id": v.automation_id, "version": v.version });
+            write_envelope(flags, "automation.save", "automation_version", resource, None, !unsaved, line);
+        }
+        AutomationCmd::Discard { id } => {
+            if !confirm(flags, "throw away what is unsaved on automation")? {
+                return Ok(0);
+            }
+            // Asked before, for the reason `save` asks it.
+            let unsaved = store.automation_unsaved(id).map_err(CliError::from)?;
+            let v = store.automation_discard(id).map_err(CliError::from)?;
+            let line = match unsaved {
+                true => format!("✓ Put automation {id} back to version {}", v.version),
+                false => format!("✓ Automation {id} has nothing unsaved — version {} stands", v.version),
+            };
+            let resource = json!({ "id": v.id, "automation_id": v.automation_id, "version": v.version });
+            write_envelope(flags, "automation.discard", "automation_version", resource, None, !unsaved, line);
+        }
         AutomationCmd::PlaceAdd { automation, action, builtin, axis } => {
             // clap holds exactly one of the two: `--action` is required unless `--builtin` is given.
             let (p, what) = match (action, builtin) {
@@ -333,6 +359,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             store.automation_placement_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.place-rm", "automation_placement", json!({ "id": id, "deleted": true }), None, false, format!("✓ Took placement off: {id}"));
+        }
+        AutomationCmd::PlaceVersion { placement, version } => {
+            let p = store.automation_placement_version_set(placement, version).map_err(CliError::from)?;
+            let line = format!("✓ Placement {} stands on version {version} of action {}", p.id, p.action_id);
+            write_envelope(flags, "automation.place-version", "automation_placement", serde_json::to_value(&p).unwrap(), Some(vec!["version".to_string()]), false, line);
         }
 
         AutomationCmd::ActionAdd { project, global, name, note } => {
@@ -474,6 +505,31 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             store.automation_action_abandon(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-abandon", "automation_action", json!({ "id": id, "abandoned": true }), None, false, format!("✓ Gave up action: {id}"));
+        }
+        AutomationCmd::ActionSave { id } => {
+            // Asked before, for the reason `save` asks it.
+            let unsaved = store.automation_action_unsaved(id).map_err(CliError::from)?;
+            let v = store.automation_action_save(id).map_err(CliError::from)?;
+            let line = match unsaved {
+                true => format!("✓ Saved action {id} as version {}", v.version),
+                false => format!("✓ Action {id} has nothing unsaved — version {} stands", v.version),
+            };
+            let resource = json!({ "id": v.id, "action_id": v.action_id, "version": v.version });
+            write_envelope(flags, "automation.action-save", "automation_action_version", resource, None, !unsaved, line);
+        }
+        AutomationCmd::ActionDiscard { id } => {
+            if !confirm(flags, "throw away what is unsaved in action")? {
+                return Ok(0);
+            }
+            // Asked before, for the reason `save` asks it.
+            let unsaved = store.automation_action_unsaved(id).map_err(CliError::from)?;
+            let v = store.automation_action_discard(id).map_err(CliError::from)?;
+            let line = match unsaved {
+                true => format!("✓ Put action {id} back to version {}", v.version),
+                false => format!("✓ Action {id} has nothing unsaved — version {} stands", v.version),
+            };
+            let resource = json!({ "id": v.id, "action_id": v.action_id, "version": v.version });
+            write_envelope(flags, "automation.action-discard", "automation_action_version", resource, None, !unsaved, line);
         }
         AutomationCmd::StepAdd { action, name, prompt, program, args, timeout_minutes, interactive, work_dir, report_to_task, no_history, no_task_notes, no_task_decisions, no_task_comments } => {
             // A script step runs its program, not a prompt, so it may be written without one.

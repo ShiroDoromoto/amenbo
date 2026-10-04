@@ -431,6 +431,9 @@ commands! {
     AutomationEntryReplace => "automation entry-replace",
     AutomationPlaceAdd => "automation place-add",
     AutomationPlaceRm => "automation place-rm",
+    AutomationPlaceVersion => "automation place-version",
+    AutomationSave => "automation save",
+    AutomationDiscard => "automation discard",
     AutomationStart => "automation start",
     AutomationTestRun => "automation test-run",
     AutomationPause => "automation pause",
@@ -449,6 +452,8 @@ commands! {
     AutomationActionRm => "automation action-rm",
     AutomationActionFinishCreating => "automation action-finish-creating",
     AutomationActionAbandon => "automation action-abandon",
+    AutomationActionSave => "automation action-save",
+    AutomationActionDiscard => "automation action-discard",
     AutomationStepAdd => "automation step-add",
     AutomationStepUpdate => "automation step-update",
     AutomationStepRm => "automation step-rm",
@@ -1267,10 +1272,12 @@ fn capabilities() -> Value {
             "Build an automation — the library of actions, the steps in them, the placements on a picture, and the settings each answers",
             &[
                 "automation add", "automation update", "automation rm",
-                "automation place-add", "automation place-rm",
+                "automation place-add", "automation place-rm", "automation place-version",
+                "automation save", "automation discard",
                 "automation action-add", "automation action-update", "automation action-entry-set",
                 "automation action-scope-set", "automation action-rm",
                 "automation action-finish-creating", "automation action-abandon",
+                "automation action-save", "automation action-discard",
                 "automation step-add", "automation step-update", "automation step-rm",
                 "automation cfg-add", "automation cfg-update", "automation cfg-set", "automation cfg-rm",
                 "automation agent-set",
@@ -2006,6 +2013,17 @@ fn all_commands() -> Value {
             json!([{ "name": "<id>", "help": "placement id", "required": true },
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation place-rm 11 --yes"])),
+        cmd("automation place-version", "Moves a placement onto another saved version of its action — a newer one, or back to an older one. Amenbo never moves it by itself. What the version does not declare goes from the picture: an edge on a way out it lacks, a wire from an output or into an input it lacks, and the agent chosen for a step it lacks. Ways out and ports are matched by id, so one renamed between the versions keeps its lines. Refused for a built-in and for a version the action does not have.",
+            json!([{ "name": "<placement>", "help": "placement id", "required": true },
+                   { "name": "<version>", "help": "the saved version of the action to stand on", "required": true }]),
+            json!(["amenbo automation place-version 11 2"])),
+        cmd("automation save", "Saves the automation as its next version. Refused as not_ready_automation with the launch check's reasons until it passes. With nothing written since the newest version, nothing is saved and that version is printed.",
+            json!([{ "name": "<id>", "help": "automation id", "required": true }]),
+            json!(["amenbo automation save 3"])),
+        cmd("automation discard", "Throws away what is written on the automation since its newest version, putting each row back as that version holds it, under the id it was saved with. Its name and notes stay. Refused for an automation never saved. Confirms unless --yes.",
+            json!([{ "name": "<id>", "help": "automation id", "required": true },
+                   { "name": "--yes/-y", "help": "skip the confirmation" }]),
+            json!(["amenbo automation discard 3 --yes"])),
 
         cmd("automation start", "Starts an automation: checks it, copies what is placed on it into the run, and starts it. It is typed while the app is up on this store — a run's steps are opened by the app, so with no app running nothing is started and it is refused as app_not_running; start the app and type it again. The run goes on the copy it took here: the automation and every action placed on it may still be edited, deleted, archived or moved to another scope while it is running or paused, and that run does not see it. The new definition is used by the next start, and by `resume` of a run paused with `pause --before-next-task`. Nothing caps how many runs may be going at once, so a start never waits. A run comes in by one of three entrances, and each ends up working a task: a take_task built-in takes one its filter finds; what a person hands over here is read by a make_task entry alone, which files a task from `--title` (required), `--notes` and each `--dim <axis>=<value>` (the axes it offers the step before it, plus every axis the project requires that its placement leaves open, which then need a value — all but the time axis, which the period containing today fills, as task add fills it) and attaches each `--file` to it; take_task and fetch read nothing, and handing an entry what it does not read is refused as invalid; a fetch built-in goes to the URL, file path or command it was set with and hands on what was there. What is handed over or fetched becomes a task through the make_task built-in before the run goes on. Which tasks a step works on and which folder it runs in stay the automation's own answers, given while it was built. An unfinished one is refused as not_ready_automation (a code of its own, apart from a reservation's not_ready), naming every reason: a way out with nothing after it, a required input nothing reaches before the run first comes to it (a wire back from its own way out, or from a box only reached after it, does not count) — both asked of the automation's picture and of the picture inside every action placed on it — a required setting nobody answered, an agent this machine cannot start, nothing placed on it, no entry, an entry that takes no task, an action placed on it with no step to open, a split_by_dim whose axis has been deleted since it was placed (named by its placement). A model the agent does not have here is NOT among them from a terminal: knowing costs a login shell and that provider starting up, and the answers the app keeps are in the app's own process — so the GUI's build screen names it and a step started from here meets it in the pane instead. An archived one is refused as invalid_automation_archived — bring it back with `automation update <id> --archived false`. Prints the run id that pause / resume / cancel take.",
             json!([{ "name": "<id>", "help": "automation id", "required": true },
@@ -2099,6 +2117,13 @@ fn all_commands() -> Value {
             json!([{ "name": "<id>", "help": "action id", "required": true },
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation action-abandon 7 --yes"])),
+        cmd("automation action-save", "Saves what is inside a library action — its steps, ways out, inputs, outputs, settings and lines — as its next version. A placement keeps the version it stands on until `automation place-version` moves it. Refused until the action's own check passes, and for a built-in. With nothing written since the newest version, nothing is saved and that version is printed.",
+            json!([{ "name": "<id>", "help": "action id", "required": true }]),
+            json!(["amenbo automation action-save 7"])),
+        cmd("automation action-discard", "Throws away what is written inside a library action since its newest version, putting each row back as that version holds it, under the id it was saved with. Its name, note and library stay. Refused for an action never saved and for a built-in. Confirms unless --yes.",
+            json!([{ "name": "<id>", "help": "action id", "required": true },
+                   { "name": "--yes/-y", "help": "skip the confirmation" }]),
+            json!(["amenbo automation action-discard 7 --yes"])),
 
         cmd("automation step-add", "Adds a step to a library action — one step is one terminal, and it carries its own prompt. Who carries it out is not the step's: it is chosen where the action is placed (`automation agent-set`), so the same action can be run by different agents on two automations. It is born with the done way out and the error one (`*`), and the first step of an action is the one the action opens first. --work-dir names the setting or the input the working folder is taken from: a name, not a path, and the name is one the action declares. A built-in is not put in here: it stands on a picture only as Amenbo's own action (`automation place-add --builtin`). Prints the id the action's own edge and wire commands take. **A script step** (--program) runs a program instead of a prompt: the program by its full path, wherever it is, each --arg handed to it as it is with no shell in between, stopped with every process it started after --timeout-minutes (30 unless given, at most 360) or when its run is force-cancelled. Its ways out and ports are declared with `automation exit-add` and `automation port-add`, as any step's. Amenbo writes the step's inputs to `input.json` in a folder of the run's own and puts that file's path in `AMENBO_INPUT` (a file input is written out, and its path is what `input.json` holds). The program writes `{\"version\":1,\"exit\":\"<way out>\",\"outs\":{…},\"report\":\"…\"}` to the path in `AMENBO_OUTPUT` and exits 0: one way out per run, with every output declared on it in `outs`, and a file output placed in the same folder as that file, which Amenbo attaches and hands on. The exit code says only that the program ran to the end — the way out is the JSON's. It leaves through the error way out when the program does not start, runs past its timeout, exits non-zero, leaves no output or one that is not JSON, names a way out not declared, or leaves out a required output. The two variables reach only that program and what it starts, and the folder goes when the step ends.",
             json!([{ "name": "<action>", "help": "action id", "required": true },
@@ -2528,7 +2553,7 @@ mod tests {
 
     /// The most the whole entry point may weigh. Every AI session reads it before it does anything,
     /// so this is the standing cost of the tool having a face at all.
-    const MOST_THE_ENTRY_SAYS: usize = 48_000;
+    const MOST_THE_ENTRY_SAYS: usize = 50_000;
 
     /// The most the entry inside a step may weigh. It is read once for every step of every run, so it
     /// carries what a step needs and nothing else ([`build_step`]).

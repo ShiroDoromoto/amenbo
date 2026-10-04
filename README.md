@@ -405,6 +405,9 @@ amenbo automation edge-add --from 35: --to 31          # and on to the next task
 amenbo automation place-add 3 --builtin wait           # 36: waits for as long as its <hours>, <minutes> and <seconds> add up to, then goes on by done
 amenbo automation cfg-set 36 --name "<minutes>" --number 30 # (unanswered ones count as none) — put it between two spots to space them apart
 amenbo automation entry-replace 3 --builtin make_task  # later: start at another of the three; the lines out of 31 go, the placements after it stay
+amenbo automation action-save 7                        # keep what is inside the action as its next version, once its own check passes (`action-discard 7` throws away what is written since)
+amenbo automation place-version 33 2                   # move a placement onto another saved version of its action — Amenbo never moves it by itself
+amenbo automation save 3                               # keep the automation as its next version, once the launch check passes (`discard 3` throws away what is written since)
 amenbo automation list                                 # what this project has, and how built each is
 amenbo automation show 3                               # one whole definition, every spot resolved
 amenbo automation show 3 --saved                       # ...as it was saved last, which is what a launch uses

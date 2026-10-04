@@ -1,13 +1,14 @@
-// **What the build screens say about saving** (`AMB-D-1005`). Nothing there has a Save press — every
-// field writes on the spot (`AMB-D-32`) — so without this a reader cannot tell a field still being
-// edited from one already written. The automation's screen and the action's screen say it the same
-// way, in two places:
+// **What the build screens say about saving** (`AMB-D-1005`). Every field writes on the spot
+// (`AMB-D-32`), so without this a reader cannot tell a field still being edited from one already
+// written. The automation's screen and the action's screen say it the same way, in two places:
 //
-// - **On the head, always.** When the last write landed, as "Saved · <time>". Before the first write
-//   it says that editing saves on the spot, which is what a reader looking for a Save press needs to
-//   know. A refused write turns it red with core's reason, until the next write lands.
-// - **Beside the field, for a moment.** "Saved" stands next to the field the write came from for two
-//   seconds, then goes.
+// - **On the head, always.** A screen handed the definition's saved state (`SavedState`) says that:
+//   nothing saved yet, changes not saved, or the version saved last and when. The writes land in the
+//   draft, and the screen's own "Save" press is what makes it a version. A screen handed none says
+//   when the last write landed, as "Saved · <time>", and before the first write that editing saves on
+//   the spot. Either way a refused write turns it red with core's reason, until the next write lands.
+// - **Beside the field, for a moment.** A mark stands next to the field the write came from for two
+//   seconds, then goes — "Written" where the head says the saved state, "Saved" where it does not.
 //
 // **Which field a write came from is read off the event that made it.** Every write on a definition is
 // sent from a handler — a box losing the caret, a pulldown changed, a press — and core tells its start
@@ -48,11 +49,38 @@ function clock(at: Date): string {
   return at.toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
 }
 
+/** When a version was saved, as the head says it — it may be another day's. */
+function savedWhen(at: string): string {
+  return new Date(at).toLocaleString(dateLocale(), {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** **A definition's saved state**: the version saved last, if any, and whether the draft holds more. */
+export type SavedState = { saved?: { version: number; savedAt: string }; unsaved: boolean };
+
+/** The head's line for a definition's saved state. */
+function stateLine(state: SavedState): string {
+  if (state.saved === undefined) return t("auto.saved.never");
+  if (state.unsaved) return t("auto.saved.unsaved");
+  return tf("auto.saved.version", { version: state.saved.version, time: savedWhen(state.saved.savedAt) });
+}
+
 /**
  * The head's line and the marks beside the fields, for one build screen. The screen spreads `capture`
  * on its root, draws `head` on its head and `marks` anywhere.
+ *
+ * `state` is the definition's saved state, `null` until it is read. A screen that passes nothing has
+ * the head say when the last write landed instead.
  */
-export function useSaved(): { capture: Capture; head: ReactNode; marks: ReactNode } {
+export function useSaved(state?: SavedState | null): {
+  capture: Capture;
+  head: ReactNode;
+  marks: ReactNode;
+} {
   const [at, setAt] = useState<Date | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [marks, setMarks] = useState<Mark[]>([]);
@@ -113,13 +141,18 @@ export function useSaved(): { capture: Capture; head: ReactNode; marks: ReactNod
     onKeyDownCapture: note,
   };
 
+  const stated = state !== undefined;
   const head = (
     <span className={failed === null ? "actsaved" : "actsaved actsaved--failed"} role="status">
       {failed !== null
-        ? tf("auto.saved.failed", { reason: failed })
-        : at !== null
-          ? tf("auto.saved.at", { time: clock(at) })
-          : t("auto.saved.onTheSpot")}
+        ? tf(stated ? "auto.saved.writeFailed" : "auto.saved.failed", { reason: failed })
+        : stated
+          ? state === null
+            ? ""
+            : stateLine(state)
+          : at !== null
+            ? tf("auto.saved.at", { time: clock(at) })
+            : t("auto.saved.onTheSpot")}
     </span>
   );
 
@@ -134,7 +167,7 @@ export function useSaved(): { capture: Capture; head: ReactNode; marks: ReactNod
               style={{ left: one.left, top: one.top }}
               aria-hidden="true"
             >
-              {t("auto.saved.mark")}
+              {t(stated ? "auto.saved.written" : "auto.saved.mark")}
             </span>
           )),
           document.body,

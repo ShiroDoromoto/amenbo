@@ -68,7 +68,7 @@ use crate::dto::{
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunStartedDto, AutomationRunTaskDto,
-    AutomationRunTrailDto, AutomationStepDto, AutomationStepScriptDto,
+    AutomationRunTrailDto, AutomationSavedDto, AutomationStepDto, AutomationStepScriptDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
@@ -444,6 +444,30 @@ pub fn automation_action_finish_creating(id: i64) -> Result<WriteAck, CmdError> 
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Save the automation as its next version** ([`amenbo_core::ops::automation::save`]). Refused with
+/// the reasons the build screen lists (`save_blocks`); not refused while a run of it goes on
+/// (`AMB-D-1015`).
+#[tauri::command]
+pub fn automation_save(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_save(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Throw away what is written on the automation since its newest version**
+/// ([`amenbo_core::ops::automation::discard`]). Every row goes back under the id it was saved with
+/// (`AMB-D-961`); a placement only the draft held is gone.
+#[tauri::command]
+pub fn automation_discard(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_discard(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
 }
 
 /// **Give up an action made on the spot** (`AMB-D-1005`,
@@ -1349,7 +1373,11 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
     let Some(view) = automation_view::detail(store.read_model().conn(), id)? else { return Ok(None) };
     let held_by =
         run_cards(&store, automation_view::run_ids_holding_automation(store.read_model().conn(), id)?)?;
-    Ok(Some(detail_dto(view, held_by)))
+    // Asked the way the save asks it (`amenbo_core::ops::automation::save`): without the agents and
+    // models of this machine, which are the launch's to judge and not the definition's.
+    let save_blocks =
+        automation_run::check(store.read_model().conn(), id, None, automation_run::nothing_asked())?;
+    Ok(Some(detail_dto(view, held_by, &save_blocks)))
 }
 
 /// Whether this automation could be started, and what is in the way — core's launch check, named for
@@ -2541,6 +2569,7 @@ fn stop_if_going(
 fn detail_dto(
     view: automation_view::AutomationView,
     held_by: Vec<AutomationRunCardDto>,
+    save_blocks: &[Unmet],
 ) -> AutomationDetailDto {
     let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
@@ -2556,7 +2585,15 @@ fn detail_dto(
         wires,
         placements: view.placements.into_iter().map(placement_dto).collect(),
         held_by,
+        saved: view.saved.map(saved_dto),
+        unsaved: view.unsaved,
+        save_blocks: save_blocks.iter().map(block_dto).collect(),
     }
+}
+
+/// The newest saved version, as the build screen's head names it.
+fn saved_dto(saved: automation_view::SavedVersion) -> AutomationSavedDto {
+    AutomationSavedDto { version: saved.version, saved_at: saved.saved_at.to_rfc3339_z() }
 }
 
 /// One library action's whole definition, under the names the action build screen draws it by.

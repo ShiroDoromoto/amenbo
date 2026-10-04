@@ -61,6 +61,7 @@ pub const ON_WORKER: &[&str] = &[
     "automation_cfg_remove", "automation_input_declare", "automation_input_edit",
     "automation_input_remove", "automation_wire_set", "automation_wire_clear", "automation_detail",
     "automation_launch_check", "automation_launch", "automation_launch_asks", "automation_test_run",
+    "automation_save", "automation_discard",
     "automation_step_open",
     "automation_running_page", "automation_run_cards", "automation_run_held_back", "automation_run_trail",
     "automation_history_page", "automation_run_acknowledge", "automation_run_pause", "automation_run_resume",

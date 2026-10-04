@@ -1339,6 +1339,22 @@ impl Store {
         })
     }
 
+    /// Save an automation as its next version, once the launch check passes (one operation = one
+    /// transaction) — [`crate::ops::automation::save`].
+    pub fn automation_save(&mut self, id: i64) -> Result<crate::model::AutomationVersion> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
+            crate::ops::automation::save(tx, id)
+        })
+    }
+
+    /// Throw away what is written on an automation since its newest version (one operation = one
+    /// transaction) — [`crate::ops::automation::discard`].
+    pub fn automation_discard(&mut self, id: i64) -> Result<crate::model::AutomationVersion> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
+            crate::ops::automation::discard(tx, id)
+        })
+    }
+
     /// Change what a run starts at, to another of the built-ins it can start at (one operation = one
     /// transaction) — [`crate::ops::automation::entry_replace`].
     pub fn automation_entry_replace(

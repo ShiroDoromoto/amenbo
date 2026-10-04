@@ -3454,6 +3454,25 @@ pub struct AutomationDetailDto {
     /// written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen
     /// names these, each with the way to its pane. Empty while nothing is going.
     pub(crate) held_by: Vec<AutomationRunCardDto>,
+    /// The newest saved version. Absent for an automation nobody has saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved: Option<AutomationSavedDto>,
+    /// Does what is written here hold anything the newest saved version does not?
+    pub(crate) unsaved: bool,
+    /// **Why a save would be refused** — the launch check asked the way the save asks it, without this
+    /// machine's agents and models ([`amenbo_core::ops::automation::save`]). Empty when it would pass.
+    pub(crate) save_blocks: Vec<AutomationLaunchBlockDto>,
+}
+
+/// **One saved version of an automation**: its number, and when it was saved.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationSavedDto {
+    #[ts(type = "number")]
+    pub(crate) version: i64,
+    pub(crate) saved_at: String,
 }
 
 /// **One spot on the picture**: the library action standing there, with everything it is read under

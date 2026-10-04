@@ -120,6 +120,8 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     edges: [],
     wires: [],
     heldBy: [],
+    unsaved: false,
+    saveBlocks: [],
     ...over,
   };
 }

@@ -8,7 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { told } from "../core/automationSave";
 import { t } from "../core/i18n";
-import { MARK_MS, useSaved } from "./AutomationSaved";
+import { MARK_MS, useSaved, type SavedState } from "./AutomationSaved";
 
 /** A write the test settles by hand. */
 function pending() {
@@ -18,9 +18,11 @@ function pending() {
 }
 
 let write = pending();
+// The saved state the screen hands the hook — `undefined` for a screen that hands none.
+let state: SavedState | null | undefined;
 
 function Screen() {
-  const saved = useSaved();
+  const saved = useSaved(state);
   return createElement(
     "div",
     { ...saved.capture },
@@ -39,6 +41,7 @@ let host: HTMLDivElement;
 beforeEach(() => {
   vi.useFakeTimers();
   write = pending();
+  state = undefined;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -102,5 +105,49 @@ describe("what a build screen says about saving (AMB-D-1005)", () => {
     });
     expect(head()?.textContent).not.toBe(t("auto.saved.onTheSpot"));
     expect(marks()).toHaveLength(0);
+  });
+});
+
+describe("a head handed the definition's saved state", () => {
+  function draw(next: SavedState | null) {
+    state = next;
+    act(() => root.render(createElement(Screen)));
+  }
+
+  it("says nothing is saved yet, then that changes are unsaved, then the version saved last", () => {
+    draw({ unsaved: true });
+    expect(head()?.textContent).toBe(t("auto.saved.never"));
+    draw({ saved: { version: 2, savedAt: "2026-10-01T09:00:00Z" }, unsaved: true });
+    expect(head()?.textContent).toBe(t("auto.saved.unsaved"));
+    draw({ saved: { version: 2, savedAt: "2026-10-01T09:00:00Z" }, unsaved: false });
+    expect(head()?.textContent).toContain("2");
+    expect(head()?.textContent).not.toBe(t("auto.saved.unsaved"));
+  });
+
+  it("says nothing until the state is read", () => {
+    draw(null);
+    expect(head()?.textContent).toBe("");
+  });
+
+  it("marks the field a write came from as written, not saved", async () => {
+    draw({ unsaved: false });
+    leave();
+    await act(async () => {
+      write.settle().ok();
+      await write.promise;
+    });
+    expect(head()?.textContent).toBe(t("auto.saved.never"));
+    expect(marks()[0].textContent).toBe(t("auto.saved.written"));
+  });
+
+  it("turns the head red when a write is refused", async () => {
+    draw({ unsaved: false });
+    leave();
+    await act(async () => {
+      write.settle().no(new Error("held by a run"));
+      await write.promise.catch(() => undefined);
+    });
+    expect(head()?.classList.contains("actsaved--failed")).toBe(true);
+    expect(head()?.textContent).toContain("held by a run");
   });
 });

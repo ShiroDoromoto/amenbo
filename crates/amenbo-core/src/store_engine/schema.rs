@@ -1151,8 +1151,9 @@ datasets! {
     // `model` NULL leaves the agent's own default. One row per pair, which is the constraint.
     automation_placement_step {
         placement_id: fk("automation_placement", "RESTRICT"),
-        // A plain id, not a key: deleting a step sweeps its rows here by hand, and a run under way
-        // still matches its copies to the step by this id after the step is gone.
+        // A plain id, not a key: a placement points at a saved version of its action, which keeps the
+        // step's id (`AMB-D-961`), so the choice stays when the step is deleted from the action; and a
+        // run under way still matches its copies to the step by this id after the step is gone.
         step_id: col(KEY_REF),
         agent: col(REQ),
         model: col(OPT),

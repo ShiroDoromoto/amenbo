@@ -312,19 +312,26 @@ fn add_exit_row(
     Ok(exit)
 }
 
-/// Delete one way out, the outputs declared on it, and the lines keyed to it — an edge that leaves by
-/// it or returns to it, and a wire that carries what it hands on. A line keyed to a row that is gone
-/// decides nothing and carries nothing, which is why it goes with the row (`AMB-D-961`).
-fn delete_exit_row(tx: &WriteTx<'_>, exit_id: i64) -> Result<()> {
-    let (edges, wires) = read::automation_line_ids_on_exit(tx.conn(), exit_id)?;
-    for wire in wires {
-        tx.delete_record("automation_wire", wire)?;
-    }
-    for edge in edges {
-        tx.delete_record("automation_edge", edge)?;
+/// The pictures a delete in the library takes lines from: the action's own. A placement points at a
+/// saved version of the action (`AMB-D-1000`), and that version keeps the row's id (`AMB-D-961`), so
+/// an automation's lines keyed to a way out or a port deleted here still mean what they meant.
+const INSIDE: &[AutomationPictureOwner] = &[AutomationPictureOwner::Action];
+
+/// Delete one way out, the outputs declared on it, and the lines of `pictures` keyed to it — an edge
+/// that leaves by it or returns to it, and a wire that carries what it hands on. A line keyed to a row
+/// that is gone decides nothing and carries nothing, which is why it goes with the row (`AMB-D-961`).
+fn delete_exit_row(tx: &WriteTx<'_>, pictures: &[AutomationPictureOwner], exit_id: i64) -> Result<()> {
+    for &on in pictures {
+        let (edges, wires) = read::automation_line_ids_on_exit(tx.conn(), on, exit_id)?;
+        for wire in wires {
+            tx.delete_record("automation_wire", wire)?;
+        }
+        for edge in edges {
+            tx.delete_record("automation_edge", edge)?;
+        }
     }
     for port in read::automation_port_ids(tx.conn(), AutomationPortOwner::Exit, exit_id)? {
-        delete_port_row(tx, port)?;
+        delete_port_row(tx, pictures, port)?;
     }
     tx.delete_record("automation_exit", exit_id)?;
     Ok(())
@@ -336,7 +343,9 @@ fn delete_exit_row(tx: &WriteTx<'_>, exit_id: i64) -> Result<()> {
 /// each from the step to the action. The error way out is left where it is.
 ///
 /// `renamed` is a value renamed in the same stroke. Its way out is renamed rather than deleted and
-/// written again, so the lines an automation hangs on it stay (`AMB-D-961`).
+/// written again, so the lines an automation hangs on it stay (`AMB-D-961`). A value gone takes the
+/// automations' lines on its way out too: the built-in is rewritten where it stands rather than saved
+/// as a new version, so no placement still reads the way out.
 ///
 /// **Written past the guard.** What it writes is Amenbo's own, from the axis, so the guard that refuses
 /// a person's edit to a built-in is not for it.
@@ -363,7 +372,11 @@ pub(crate) fn builtin_exits_follow(
     for (kind, id) in owners {
         for exit in read::automation_exits_of(tx.conn(), kind, id)? {
             if exit.name != ERROR_EXIT && !wanted.contains(&exit.name) {
-                delete_exit_row(tx, exit.id)?;
+                delete_exit_row(
+                    tx,
+                    &[AutomationPictureOwner::Action, AutomationPictureOwner::Automation],
+                    exit.id,
+                )?;
             }
         }
     }
@@ -431,10 +444,10 @@ fn delete_declarations(
     owner_id: i64,
 ) -> Result<()> {
     for exit in read::automation_exit_ids(tx.conn(), owner, owner_id)? {
-        delete_exit_row(tx, exit)?;
+        delete_exit_row(tx, INSIDE, exit)?;
     }
     for port in read::automation_port_ids(tx.conn(), port_owner, owner_id)? {
-        delete_port_row(tx, port)?;
+        delete_port_row(tx, INSIDE, port)?;
     }
     Ok(())
 }
@@ -1978,10 +1991,7 @@ pub fn step_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 fn delete_step_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     delete_lines_naming_box(tx, AutomationPictureOwner::Action, id)?;
     delete_declarations(tx, AutomationOwner::Step, AutomationPortOwner::Step, id)?;
-    // Every placement of the action chose someone for it, and none of those choices names anything now.
-    for chosen in read::automation_placement_step_ids_naming_step(tx.conn(), id)? {
-        tx.delete_record("automation_placement_step", chosen)?;
-    }
+    // Who each placement chose for it stays: the version a placement points at keeps the step's id.
     tx.delete_record("automation_action_step", id)?;
     Ok(())
 }
@@ -2088,7 +2098,7 @@ pub fn exit_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
             "the error way out cannot be deleted — every step and every action carries one",
         ));
     }
-    delete_exit_row(tx, id)
+    delete_exit_row(tx, INSIDE, id)
 }
 
 /// Declare a port: what a step or an action takes in (`In`, on that step or action) or what a way out
@@ -2247,19 +2257,21 @@ pub fn port_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationP
     Ok(after)
 }
 
-/// Delete a port, and every wire keyed to it at either end — a wire from or into a port that is gone
-/// carries nothing.
+/// Delete a port, and every wire inside the action keyed to it at either end — a wire from or into a
+/// port that is gone carries nothing ([`INSIDE`]).
 pub fn port_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let port = live_port(tx, id)?;
     not_built_in(tx, def_of_port_owner(tx, port.owner_kind, port.owner_id)?)?;
-    delete_port_row(tx, id)
+    delete_port_row(tx, INSIDE, id)
 }
 
-/// One port and the wires keyed to it — what [`port_delete`] does, and what every sweep that takes a
-/// port with its owner does.
-fn delete_port_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
-    for wire in read::automation_wire_ids_naming_port(tx.conn(), id)? {
-        tx.delete_record("automation_wire", wire)?;
+/// One port and the wires of `pictures` keyed to it — what [`port_delete`] does, and what every sweep
+/// that takes a port with its owner does.
+fn delete_port_row(tx: &WriteTx<'_>, pictures: &[AutomationPictureOwner], id: i64) -> Result<()> {
+    for &on in pictures {
+        for wire in read::automation_wire_ids_naming_port(tx.conn(), on, id)? {
+            tx.delete_record("automation_wire", wire)?;
+        }
     }
     tx.delete_record("automation_port", id)?;
     Ok(())
@@ -4165,9 +4177,10 @@ mod tests {
     }
 
     /// **A wire keys the ports at its two ends** (`AMB-D-961`): renaming either port leaves the wire on
-    /// it, and deleting one takes the wire with it — a wire into a port that is gone carries nothing.
+    /// it, and so does deleting one from the action — the version a placement points at still declares
+    /// it (`AMB-D-1000`).
     #[test]
-    fn a_wire_stays_on_a_renamed_port_and_goes_with_a_deleted_one() {
+    fn an_automations_wire_stays_on_a_renamed_port_and_on_a_deleted_one() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let (from_action, from) = mk_placed(tx, &automation, "実装する");
@@ -4208,7 +4221,38 @@ mod tests {
             );
 
             port_delete(tx, into.id).expect("delete the input");
-            assert!(read::automation_wire(tx.conn(), wire.id).expect("read").is_none(), "and the wire goes with it");
+            assert_eq!(
+                read::automation_wire(tx.conn(), wire.id).expect("read").map(|w| (w.from_port_id, w.to_port_id)),
+                Some((out.id, into.id)),
+                "and so does the delete",
+            );
+        });
+    }
+
+    /// **Deleting a way out from an action leaves an automation's line on it** (`AMB-D-1000`): the
+    /// version a placement points at still declares it, under the same id (`AMB-D-961`).
+    #[test]
+    fn an_automations_edge_stays_on_a_way_out_deleted_from_the_action() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, placed) = mk_placed(tx, &automation, "点検する");
+            let exit =
+                exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある")).expect("add exit");
+            let edge = edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                placed.id,
+                Some("直すところがある"),
+                EdgeTarget::Done,
+                None,
+            )
+            .expect("add edge");
+
+            exit_delete(tx, exit.id).expect("delete the way out");
+            assert_eq!(
+                read::automation_edge(tx.conn(), edge.id).expect("read").map(|e| e.exit_id),
+                Some(exit.id),
+            );
         });
     }
 
@@ -5372,9 +5416,10 @@ mod tests {
         });
     }
 
-    /// The choices go with whatever they name: the placement taken off, or the step deleted.
+    /// A choice goes with the placement taken off, and stays when the step is deleted from the action —
+    /// the version a placement points at still holds the step (`AMB-D-1000`).
     #[test]
-    fn a_choice_goes_with_its_placement_and_with_its_step() {
+    fn a_choice_goes_with_its_placement_and_stays_when_its_step_goes() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let (action, here) = mk_placed(tx, &automation, "調べる");
@@ -5388,7 +5433,7 @@ mod tests {
             assert_eq!(read::automation_placement_step_ids(tx.conn(), here.id).unwrap().len(), 1);
 
             step_delete(tx, step.id).expect("delete the step");
-            assert!(read::automation_placement_step_ids(tx.conn(), here.id).unwrap().is_empty());
+            assert_eq!(read::automation_placement_step_ids(tx.conn(), here.id).unwrap().len(), 1);
         });
     }
 }

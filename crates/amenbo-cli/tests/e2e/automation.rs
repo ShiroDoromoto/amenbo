@@ -754,33 +754,34 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_cancel_name() {
     assert!(canceled["automation_run"]["stopped_reason"].is_null(), "a cancel carries no reason");
 }
 
-/// **A project's runs are asked to pause before their next task** (`AMB-D-1009`): no run id, the
-/// project's runs that take tasks. A run already asked is not asked again, and none to ask is no error.
+/// **A run is asked to pause before its next task** (`AMB-D-1019`), by its id. Asked again, it is
+/// answered as it stands, still asked, and a whole project is no longer something to ask.
 #[test]
-fn pause_before_next_task_asks_the_projects_runs() {
+fn pause_before_next_task_asks_the_run() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _) = a_launchable(&cli);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     let project = cli.json(&["automation", "run-show", &run, "--json"])["run"]["project_id"].to_string();
 
-    let asked = cli.json(&["automation", "pause", "--before-next-task", "--project", &project, "--json"]);
-    assert_eq!(asked["count"].as_u64(), Some(1), "{asked}");
-    assert_eq!(asked["noop"].as_bool(), Some(false), "{asked}");
-    assert_eq!(asked["automation_runs"][0]["run"].to_string(), run, "{asked}");
+    let asked = cli.json(&["automation", "pause", &run, "--before-next-task", "--json"]);
+    assert_eq!(asked["automation_run"]["run"].to_string(), run, "{asked}");
+    assert_eq!(asked["automation_run"]["state"].as_str(), Some("asked"), "{asked}");
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    assert_eq!(shown["run"]["status"].as_str(), Some("running"), "{shown}");
+    assert_eq!(shown["run"]["pause_before_next_task"].as_bool(), Some(true), "{shown}");
+    assert_eq!(shown["run"]["pause_requested"].as_bool(), Some(false), "{shown}");
 
-    let again = cli.json(&["automation", "pause", "--before-next-task", "--project", &project, "--json"]);
-    assert_eq!(again["count"].as_u64(), Some(0), "{again}");
-    assert_eq!(again["noop"].as_bool(), Some(true), "{again}");
+    let again = cli.json(&["automation", "pause", &run, "--before-next-task", "--json"]);
+    assert_eq!(again["automation_run"]["state"].as_str(), Some("asked"), "{again}");
 
-    // A run id and the whole project are two different askings.
-    let (refused, code) = cli.run_err(&["automation", "pause", &run, "--before-next-task", "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "pause", "--before-next-task", "--project", &project, "--json"]);
     assert_ne!(code, 0, "{refused}");
 
     cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 }
 
-/// **A run waiting for a task is paused by the time the asking returns** (`AMB-D-1009`) — with no
+/// **A run waiting for a task is paused by the time the asking returns** (`AMB-D-1019`) — with no
 /// watch looking on to open its step again.
 #[test]
 fn pause_before_next_task_pauses_a_run_waiting_for_a_task_at_once() {
@@ -792,12 +793,10 @@ fn pause_before_next_task_pauses_a_run_waiting_for_a_task_at_once() {
         "--choice", "着手できるタスクが出るまで待つ", "--json",
     ]);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
-    let project = cli.json(&["automation", "run-show", &run, "--json"])["run"]["project_id"].to_string();
     assert_eq!(cli.json(&["automation", "run-show", &run, "--json"])["waiting"].as_bool(), Some(true));
 
-    let asked = cli.json(&["automation", "pause", "--before-next-task", "--project", &project, "--json"]);
-    assert_eq!(asked["count"].as_u64(), Some(1), "{asked}");
-    assert_eq!(asked["automation_runs"][0]["state"].as_str(), Some("paused"), "{asked}");
+    let asked = cli.json(&["automation", "pause", &run, "--before-next-task", "--json"]);
+    assert_eq!(asked["automation_run"]["state"].as_str(), Some("paused"), "{asked}");
 
     let shown = cli.json(&["automation", "run-show", &run, "--json"]);
     assert_eq!(shown["run"]["status"].as_str(), Some("paused"), "{shown}");

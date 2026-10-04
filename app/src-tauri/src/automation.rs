@@ -2359,8 +2359,10 @@ fn start_script(
 /// stopped with every process it started ([`still_running`]), core refuses the write, and only the log
 /// says so.
 ///
-/// Its terminal is ended by the next step, as an agent's is, and not here: it ending by itself is not a
-/// crash, since what it came to is written down here (`crate::pty::open_script`).
+/// Its terminal is left to the next step, as an agent's is, and not ended here: it ending by itself is
+/// not a crash, since what it came to is written down here (`crate::pty::open_script`). Once the program
+/// has ended the terminal stays for the run's pane to read what it wrote, until the next step takes it
+/// away (`crate::pty::end_steps_of`) — the run being over does not (`crate::pty::runs_with_steps`).
 ///
 /// Nothing here outlives the app: a step whose program was running when it went down is failed as a
 /// crash on the way back up (`crate::automation_watch`).

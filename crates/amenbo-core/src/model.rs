@@ -1975,6 +1975,35 @@ pub struct AutomationActionVersion {
     pub updated_at: Timestamp,
 }
 
+/// **One saved version of an automation** — its picture at the moment it was saved, copied whole and
+/// never rewritten. A run records which one it was copied from ([`AutomationRunDef::automation_version`]).
+///
+/// The five JSON fields are the rows as they stood, each its own record under its own id, for the reason
+/// [`AutomationActionVersion`]'s are (`AMB-D-961`).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationVersion {
+    pub id: i64,
+    pub automation_id: i64,
+    /// Counts up from 1 within one automation.
+    pub version: i64,
+    /// The placement the copy opens first, by its id in `placements`, or `None` where the automation had
+    /// none.
+    #[serde(default)]
+    pub entry_placement_id: Option<i64>,
+    /// The placements, each with the version of its action it stood on — JSON, [`AutomationPlacement`]s.
+    pub placements: String,
+    /// The answers written for each placement's settings — JSON, [`AutomationCfg`]s.
+    pub cfgs: String,
+    /// The agents and models chosen for each placement's steps — JSON, [`AutomationPlacementStep`]s.
+    pub placement_steps: String,
+    /// The edges drawn on the automation — JSON, [`AutomationEdge`]s.
+    pub edges: String,
+    /// The wires drawn on the automation — JSON, [`AutomationWire`]s.
+    pub wires: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 // ───────────────────────── automation: what ran ─────────────────────────
 
 /// Where one launch of one automation stands (`AMB-D-955`).
@@ -2197,6 +2226,10 @@ pub struct AutomationRunDef {
     /// behave as the definition this copy's ways out were written from.
     #[serde(default)]
     pub builtin_version: Option<i64>,
+    /// The saved version of the automation this copy was taken from ([`AutomationVersion::version`]), or
+    /// `None` where the automation had none saved then. Every copy taken at one time carries the same one.
+    #[serde(default)]
+    pub automation_version: Option<i64>,
     /// The script the step was, or `None` for one that was not ([`StepScript`]).
     #[serde(default)]
     pub script: Option<StepScript>,

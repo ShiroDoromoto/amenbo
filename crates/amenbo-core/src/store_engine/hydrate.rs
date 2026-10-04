@@ -35,7 +35,7 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationStoppedReason, AutomationWire, Database,
+    AutomationStep, AutomationStoppedReason, AutomationVersion, AutomationWire, Database,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
@@ -709,6 +709,24 @@ pub(super) fn automation_action_version_row(r: &Row) -> rusqlite::Result<Automat
     })
 }
 
+pub(super) fn automation_version_row(r: &Row) -> rusqlite::Result<AutomationVersion> {
+    const C: col::automation_version::Cols = col::automation_version::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationVersion {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        version: get(r, C.version)?,
+        entry_placement_id: get(r, C.entry_placement_id)?,
+        placements: get(r, C.placements)?,
+        cfgs: get(r, C.cfgs)?,
+        placement_steps: get(r, C.placement_steps)?,
+        edges: get(r, C.edges)?,
+        wires: get(r, C.wires)?,
+        created_at,
+        updated_at,
+    })
+}
+
 pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunDef> {
     const C: col::automation_run_def::Cols = col::automation_run_def::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -721,6 +739,7 @@ pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunD
         prompt: get(r, C.prompt)?,
         builtin: get(r, C.builtin)?,
         builtin_version: get(r, C.builtin_version)?,
+        automation_version: get(r, C.automation_version)?,
         script: script(r, C.script_program, C.script_args, C.script_timeout_minutes)?,
         agent: get(r, C.agent)?,
         model: get(r, C.model)?,

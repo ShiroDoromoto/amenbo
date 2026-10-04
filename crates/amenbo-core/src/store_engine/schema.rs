@@ -1007,7 +1007,7 @@ datasets! {
 
     // ───────────────────────── automation: what is built ─────────────────────────
     //
-    // Eleven tables for the definition and five for the run, and the line between them is that a run
+    // Twelve tables for the definition and five for the run, and the line between them is that a run
     // never reads a definition again once it has started: `automation_run_def` is the copy taken at
     // the moment of launch, so editing an automation cannot change what a run already under way is
     // doing. The definition half is built through `crate::ops::automation`, and the run is opened by
@@ -1297,6 +1297,29 @@ datasets! {
         wires: col(REQ),
     } => "UNIQUE (action_id, version)"
 
+    // **One saved version of an automation** — its picture at the moment it was saved, copied whole and
+    // never rewritten. The tables above are the automation as it is being written; a run is copied
+    // down from it and records which version it was (`automation_run_def.automation_version`).
+    //
+    // `version` counts up from 1 within one automation.
+    //
+    // The five JSON columns hold the rows as they stood — the placements, the answers written for each
+    // placement's settings, the agents chosen for each placement's steps, and the edges and wires drawn
+    // on the automation — each the row's own record, under its own id, for the reason
+    // `automation_action_version`'s are (`AMB-D-961`). A placement in the copy keeps the version of its
+    // action it stood on. `entry_placement_id` is the placement the copy opens first, a key into
+    // `placements` rather than a reference to a placement that may since have been taken off.
+    automation_version {
+        automation_id: fk("automation", "RESTRICT"),
+        version: col(COUNT),
+        entry_placement_id: col(KEY_REF_OPT),
+        placements: col(REQ),
+        cfgs: col(REQ),
+        placement_steps: col(REQ),
+        edges: col(REQ),
+        wires: col(REQ),
+    } => "UNIQUE (automation_id, version)"
+
     // ───────────────────────── automation: what ran ─────────────────────────
 
     // **One launch of one automation.**
@@ -1370,6 +1393,9 @@ datasets! {
         // That built-in's version, copied with it (`AMB-D-1000`) — what its code reads to behave as the
         // definition the copy's ways out were written from.
         builtin_version: col(INT_OPT),
+        // The saved version of the automation the copy was taken from (`automation_version.version`), or
+        // NULL where the automation had none saved then. Every row of one copy carries the same one.
+        automation_version: col(INT_OPT),
         // The script the step was, copied with it: its program, its arguments and its timeout.
         script_program: col(OPT),
         script_args: col(REQ),

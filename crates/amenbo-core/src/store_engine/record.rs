@@ -24,7 +24,7 @@ use crate::model::{
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
     AutomationRun, AutomationRunDef,
     AutomationRunStep, AutomationRunTask, AutomationRunValue,
-    AutomationStep,
+    AutomationStep, AutomationVersion,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
@@ -772,6 +772,27 @@ pub fn automation_action_version(v: &AutomationActionVersion) -> Record {
     )
 }
 
+pub fn automation_version(v: &AutomationVersion) -> Record {
+    Record::new(
+        "automation_version",
+        v.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(v.automation_id)),
+                ("version", iv(v.version)),
+                ("entry_placement_id", kv_opt(&v.entry_placement_id)),
+                ("placements", tv(&v.placements)),
+                ("cfgs", tv(&v.cfgs)),
+                ("placement_steps", tv(&v.placement_steps)),
+                ("edges", tv(&v.edges)),
+                ("wires", tv(&v.wires)),
+            ],
+            &v.created_at,
+            &v.updated_at,
+        ),
+    )
+}
+
 pub fn automation_run_def(d: &AutomationRunDef) -> Record {
     let [script_program, script_args, script_timeout_minutes] = script_values(&d.script);
     Record::new(
@@ -786,6 +807,7 @@ pub fn automation_run_def(d: &AutomationRunDef) -> Record {
                 ("prompt", ov(&d.prompt)),
                 ("builtin", ov(&d.builtin)),
                 ("builtin_version", d.builtin_version.map(iv).unwrap_or(Value::Null)),
+                ("automation_version", d.automation_version.map(iv).unwrap_or(Value::Null)),
                 ("script_program", script_program),
                 ("script_args", script_args),
                 ("script_timeout_minutes", script_timeout_minutes),

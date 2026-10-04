@@ -244,7 +244,7 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation" => "project_id = ?1",
         "automation_run" => "project_id = ?1",
 
-        "automation_placement" => {
+        "automation_placement" | "automation_version" => {
             "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)"
         }
         "automation_action_step" | "automation_action_version" => {
@@ -1088,6 +1088,13 @@ mod tests {
             rusqlite::params![automation, placement],
         );
         put(
+            "INSERT INTO automation_version \
+                 (automation_id, version, entry_placement_id, placements, cfgs, placement_steps, edges, \
+                  wires, created_at, updated_at) \
+             VALUES (?1, 1, ?2, '[]', '[]', '[]', '[]', '[]', ?3, ?3)",
+            rusqlite::params![automation, placement, at],
+        );
+        put(
             "INSERT INTO automation_placement_step \
                  (placement_id, step_id, agent, model, created_at, updated_at) \
              VALUES (?1, ?2, 'claude-code', 'opus', ?3, ?3)",
@@ -1153,9 +1160,10 @@ mod tests {
         );
         let run_def = put(
             "INSERT INTO automation_run_def \
-                 (run_id, placement_id, step_id, name, prompt, agent, model, interactive, \
-                  work_dir_ref, report_to_task, show_history, exits, ins, cfg, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, 'worktree を切る', 'あなたは…', 'claude-code', 'opus', 0, \
+                 (run_id, placement_id, step_id, name, prompt, automation_version, agent, model, \
+                  interactive, work_dir_ref, report_to_task, show_history, exits, ins, cfg, created_at, \
+                  updated_at) \
+             VALUES (?1, ?2, ?3, 'worktree を切る', 'あなたは…', 1, 'claude-code', 'opus', 0, \
                      'リポジトリの場所', 0, 1, '[]', '[]', '{}', ?4, ?4)",
             rusqlite::params![run, placement, step, at],
         );

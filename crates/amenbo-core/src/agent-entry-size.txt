@@ -12,10 +12,10 @@ filterGrammar    5472
 inspect          150
 mode             10
 notes            645
-operating        2683
+operating        2554
 principles       350
 schemaVersion    3
 updateAvailable  5
 version          7
-TOTAL            47971
-TOTAL_IN_A_PANE  48486
+TOTAL            47842
+TOTAL_IN_A_PANE  48357

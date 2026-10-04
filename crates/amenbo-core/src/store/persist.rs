@@ -1712,8 +1712,19 @@ impl Store {
         })
     }
 
-    /// **Ask every run of a project to pause before it takes its next task** (`AMB-D-1009`), and answer
-    /// with the runs that were asked.
+    /// **Ask a run to pause before it takes its next task**
+    /// ([`crate::ops::automation_stop::pause_run_before_next_task`]). A run waiting for a task pauses now.
+    pub fn automation_pause_run_before_next_task(
+        &mut self,
+        run_id: i64,
+    ) -> Result<crate::ops::automation_stop::Paused> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_stop::pause_run_before_next_task(tx, run_id)
+        })
+    }
+
+    /// **Ask every run of a project to pause before it takes its next task**, and answer with the runs
+    /// that were asked.
     pub fn automation_pause_before_next_task(
         &mut self,
         project_id: i64,

@@ -857,6 +857,91 @@ mod tests {
         });
     }
 
+    /// **Asked on its own, a run working a task is asked and the others are not** (`AMB-D-1019`): it
+    /// stays `running` with the request on it, and asking again answers it as it stands. A run of the
+    /// same project waiting for a task is left running.
+    #[test]
+    fn asked_on_its_own_a_run_is_asked_and_no_other() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            for_ai(tx, "a", project, Some(Priority::High));
+            let run = launched(tx, &round_picture(tx, project));
+            assert!(matches!(open_entry(tx, &run), Opened::Carried { next: Next::Step(_), .. }));
+            let other = launched(tx, &waiting_picture(tx, project));
+            assert!(matches!(open_entry(tx, &other), Opened::Waiting { .. }));
+
+            let automation_stop::Paused::Asked(asked) =
+                automation_stop::pause_run_before_next_task(tx, run.id).expect("ask")
+            else {
+                panic!("the task under way is not cut off");
+            };
+            assert_eq!(asked.status, AutomationRunStatus::Running);
+            assert!(asked.pause_before_next_task);
+            let automation_stop::Paused::Asked(again) =
+                automation_stop::pause_run_before_next_task(tx, run.id).expect("ask again")
+            else {
+                panic!("still asked");
+            };
+            assert!(again.pause_before_next_task);
+            assert_eq!(again.updated_at, asked.updated_at, "nothing is written twice");
+
+            let other = read::automation_run(tx.conn(), other.id).expect("read").expect("run");
+            assert_eq!(other.status, AutomationRunStatus::Running, "the other run goes on");
+            assert!(!other.pause_before_next_task, "and is not asked");
+        });
+    }
+
+    /// **Asked on its own while waiting for a task, a run pauses there and then** (`AMB-D-1019`).
+    #[test]
+    fn asked_on_its_own_a_run_waiting_for_a_task_pauses_now() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let run = launched(tx, &waiting_picture(tx, project));
+            assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
+
+            let automation_stop::Paused::Now(ended) =
+                automation_stop::pause_run_before_next_task(tx, run.id).expect("ask")
+            else {
+                panic!("paused there and then");
+            };
+            assert_eq!(ended.run.status, AutomationRunStatus::Paused);
+            assert!(!ended.run.pause_before_next_task, "nothing is left asked");
+            assert_eq!(ended.run.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
+            assert!(read::automation_run_steps_of(tx.conn(), run.id).expect("steps").is_empty(), "nothing taken");
+        });
+    }
+
+    /// **A run that takes no tasks cannot be asked on its own** (`AMB-D-1019`): it is refused and left
+    /// as it was.
+    #[test]
+    fn a_run_that_takes_no_tasks_cannot_be_asked_on_its_own() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let taskless =
+                automation::add(tx, project, NewAutomation { name: "no tasks".into(), ..Default::default() })
+                    .expect("automation");
+            let (work_action, work) = mk_placed(tx, &taskless, "work", "work on it", "claude");
+            mk_out(tx, &work_action, None, "task", AutomationPortKind::TaskTake, false);
+            automation::edge_add(tx, AutomationPictureOwner::Automation, work.id, None, EdgeTarget::Done, None)
+                .expect("done");
+            let taskless = automation::set_entry(tx, taskless.id, Some(work.id)).expect("entry");
+            let claude = ["claude".to_string()];
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                workspace_open: Some(true),
+                by: Some(ActorKind::Ai),
+            };
+            let plain = launch_past_the_task_checks(tx, taskless.id, &by).expect("launch");
+
+            let refused = automation_stop::pause_run_before_next_task(tx, plain.id).expect_err("refused");
+            assert!(matches!(refused, crate::error::Error::Invalid(_)), "{refused:?}");
+            let plain = read::automation_run(tx.conn(), plain.id).expect("read").expect("run");
+            assert_eq!(plain.status, AutomationRunStatus::Running);
+            assert!(!plain.pause_before_next_task);
+        });
+    }
+
     /// **Left unanswered, or answered not to wait, it does not** — and then the way out that says
     /// there was nothing to take is one the launch check asks a line of. The reason carries the
     /// built-in's key, so a screen can write its words in its own language.

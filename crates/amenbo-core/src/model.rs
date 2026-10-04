@@ -2089,7 +2089,8 @@ pub struct AutomationRun {
     pub project_id: i64,
     pub status: AutomationRunStatus,
     pub pause_requested: bool,
-    /// Asked to pause before it takes its next task ([`crate::ops::automation_stop::pause_before_next_task`]).
+    /// Asked to pause before it takes its next task
+    /// ([`crate::ops::automation_stop::pause_run_before_next_task`]).
     #[serde(default)]
     pub pause_before_next_task: bool,
     /// Which pause it stopped at. Set only while `status` is `Paused`.

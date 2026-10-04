@@ -772,6 +772,44 @@ fn automations_placing_outside(
     Ok(named)
 }
 
+/// **Save what is inside an action as its next version, once the action's own check passes.** Every op
+/// that writes inside the action — its steps, the ways out, inputs and outputs, the settings it declares,
+/// the edges and wires drawn inside it, the step it opens first — writes on its tables, and those are the
+/// draft. A change to a step is saved here too: a step has no version of its own.
+///
+/// Refused as `not_ready` with [`automation_run::check_action`]'s reasons: only what the action answers
+/// for on its own, since what is answered where it is placed belongs to each automation placing it.
+/// Refused for a built-in, as [`action_version_add`] is.
+///
+/// A draft with nothing changed since the newest version saves nothing, and that version is what comes
+/// back.
+pub fn action_save(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionVersion> {
+    let action = live_action(tx, action_id)?;
+    not_built_in(tx, Def::Action(action_id))?;
+    let unmet = automation_run::check_action(tx.conn(), action_id)?;
+    if !unmet.is_empty() {
+        return Err(automation_run::not_ready("save", &action.name, &unmet));
+    }
+    if let Some(latest) = read::automation_action_version_latest(tx.conn(), action_id)? {
+        if ActionDef::live(tx.conn(), action_id)?.is(&latest)? {
+            return Ok(latest);
+        }
+    }
+    action_version_add(tx, action_id)
+}
+
+/// **Does what is inside the action hold anything its newest saved version does not?** For an action
+/// nobody has saved, any step at all is unsaved. Its name, notes and place in the library are not part
+/// of a version, so writing them leaves this as it was.
+pub fn action_unsaved(conn: &Connection, action_id: i64) -> Result<bool> {
+    read::automation_action(conn, action_id)?.ok_or_else(|| not_found("action", action_id))?;
+    let draft = ActionDef::live(conn, action_id)?;
+    match read::automation_action_version_latest(conn, action_id)? {
+        Some(latest) => Ok(!draft.is(&latest)?),
+        None => Ok(!draft.steps.is_empty()),
+    }
+}
+
 /// **What is inside one action** — the steps, the ways out of the action and of each step, the inputs
 /// and the outputs on those ways out, the settings the action declares, the edges and wires drawn inside
 /// it, and the step it opens first. Read either off the action's rows as they stand now ([`Self::live`])
@@ -907,6 +945,18 @@ impl ActionDef {
         self.edges.iter().filter(move |e| e.from_id == from_id)
     }
 
+    /// Whether `saved` holds what is inside the action, row for row — compared as [`Picture::is`]
+    /// compares an automation's.
+    fn is(&self, saved: &AutomationActionVersion) -> Result<bool> {
+        Ok(self.entry_step_id == saved.entry_step_id
+            && same_rows(&self.steps, &saved.steps)?
+            && same_rows(&self.exits, &saved.exits)?
+            && same_rows(&self.ports, &saved.ports)?
+            && same_rows(&self.cfgs, &saved.cfgs)?
+            && same_rows(&self.edges, &saved.edges)?
+            && same_rows(&self.wires, &saved.wires)?)
+    }
+
     /// [`lines_back`] of the picture inside the action.
     pub fn lines_back(&self) -> BTreeSet<i64> {
         let boxes: Vec<i64> = self.steps.iter().map(|s| s.id).collect();
@@ -914,8 +964,15 @@ impl ActionDef {
     }
 }
 
-/// **Save what is inside an action as its next version** ([`ActionDef`]). The copy is never rewritten:
-/// writing on in the action changes its tables and leaves this as it was.
+/// Whether `rows` are the rows a version saved as `saved`.
+fn same_rows<T: serde::Serialize>(rows: &[T], saved: &str) -> Result<bool> {
+    let saved: serde_json::Value = serde_json::from_str(saved).map_err(Error::from)?;
+    Ok(serde_json::to_value(rows).map_err(Error::from)? == saved)
+}
+
+/// **Write what is inside an action down as its next version** ([`ActionDef`]), without asking
+/// whether it is ready — [`action_save`] is the op that asks. The copy is never rewritten: writing on in
+/// the action changes its tables and leaves this as it was.
 ///
 /// Every row goes in as its own record under its own id, so the lines in the copy key their ways out and
 /// ports exactly as the rows did (`AMB-D-961`). The number is one past the action's newest, and 1 for
@@ -1305,16 +1362,12 @@ impl Picture {
     /// `updated_at`, so a row written since the save differs from its copy even where it was written back
     /// to the same value.
     fn is(&self, saved: &AutomationVersion) -> Result<bool> {
-        fn same<T: serde::Serialize>(rows: &[T], saved: &str) -> Result<bool> {
-            let saved: serde_json::Value = serde_json::from_str(saved).map_err(Error::from)?;
-            Ok(serde_json::to_value(rows).map_err(Error::from)? == saved)
-        }
         Ok(self.entry_placement_id == saved.entry_placement_id
-            && same(&self.placements, &saved.placements)?
-            && same(&self.cfgs, &saved.cfgs)?
-            && same(&self.placement_steps, &saved.placement_steps)?
-            && same(&self.edges, &saved.edges)?
-            && same(&self.wires, &saved.wires)?)
+            && same_rows(&self.placements, &saved.placements)?
+            && same_rows(&self.cfgs, &saved.cfgs)?
+            && same_rows(&self.placement_steps, &saved.placement_steps)?
+            && same_rows(&self.edges, &saved.edges)?
+            && same_rows(&self.wires, &saved.wires)?)
     }
 }
 
@@ -1749,6 +1802,61 @@ pub fn placement_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automa
     let mut after = before.clone();
     after.order_key = place(&sibs, &pos)?;
     after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation_placement(&before), record::automation_placement(&after))?;
+    Ok(after)
+}
+
+/// **Move a placement onto another saved version of its action** (`AMB-D-1000`) — a newer one, or back
+/// to an older one. Amenbo never does this by itself; a person or an AI does it here, on the draft, and
+/// it reaches a run once the automation is saved.
+///
+/// **What the new version does not declare goes from the draft with it**: an edge on a way out it has
+/// no longer, a wire from an output or into an input it has no longer, and the choice of who carries out
+/// a step it holds no longer. Ways out and ports are matched by id, never by name (`AMB-D-961`), so one
+/// renamed between the two versions keeps its lines. The answers to its settings stay, matched by name
+/// as ever: one the new version does not declare is read by nothing, and moving back to the old version
+/// wants it again.
+///
+/// Moving onto the version it already stands on writes nothing. Refused for a built-in, whose
+/// `action_id` already names one version, and for a version the action does not have. Not refused while
+/// a run of the automation goes on (`AMB-D-1015`).
+pub fn placement_version_set(tx: &WriteTx<'_>, id: i64, version: i64) -> Result<AutomationPlacement> {
+    let before = live_placement(tx, id)?;
+    not_built_in(tx, Def::Action(before.action_id))?;
+    let saved = read::automation_action_version(tx.conn(), before.action_id, version)?.ok_or_else(|| {
+        Error::not_found(format!("version {version} of action '{}' not found", before.action_id))
+    })?;
+    if before.version == Some(version) {
+        return Ok(before);
+    }
+    fn ids<T: serde::de::DeserializeOwned>(json: &str, id: fn(&T) -> i64) -> Result<BTreeSet<i64>> {
+        let rows: Vec<T> = serde_json::from_str(json).map_err(Error::from)?;
+        Ok(rows.iter().map(id).collect())
+    }
+    let steps = ids(&saved.steps, |s: &AutomationStep| s.id)?;
+    let exits = ids(&saved.exits, |e: &AutomationExit| e.id)?;
+    let ports = ids(&saved.ports, |p: &AutomationPort| p.id)?;
+    let on = AutomationPictureOwner::Automation;
+    for edge in read::automation_edges_of(tx.conn(), on, before.automation_id)? {
+        if edge.from_id == id && !exits.contains(&edge.exit_id) {
+            tx.delete_record("automation_edge", edge.id)?;
+        }
+    }
+    for wire in read::automation_wires_of(tx.conn(), on, before.automation_id)? {
+        let from_gone = wire.from_id == id
+            && (wire.from_exit_id.is_some_and(|exit| !exits.contains(&exit))
+                || !ports.contains(&wire.from_port_id));
+        let to_gone = wire.to_id == id && !ports.contains(&wire.to_port_id);
+        if from_gone || to_gone {
+            tx.delete_record("automation_wire", wire.id)?;
+        }
+    }
+    for chosen in read::automation_placement_steps_of(tx.conn(), id)? {
+        if !steps.contains(&chosen.step_id) {
+            tx.delete_record("automation_placement_step", chosen.id)?;
+        }
+    }
+    let after = AutomationPlacement { version: Some(version), updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::automation_placement(&before), record::automation_placement(&after))?;
     Ok(after)
 }
@@ -4505,6 +4613,146 @@ mod tests {
         });
     }
 
+    /// **Moving a placement onto a new version takes off what that version no longer declares**
+    /// (`AMB-D-1000`): the edge on a way out it dropped, the wire from an output it dropped, and the
+    /// choice for a step it dropped. What it still declares keeps its lines, renamed or not.
+    #[test]
+    fn moving_a_placement_onto_a_version_drops_the_lines_to_what_it_no_longer_declares() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, placed) = mk_placed(tx, &automation, "実装する");
+            let (to_action, to) = mk_placed(tx, &automation, "点検する");
+            let kept_step = only_step(tx, &action);
+            let gone_step = step_add(tx, action.id, NewStep::new("書き直す", "do it")).expect("add step");
+            let gone_exit =
+                exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある")).expect("add exit");
+            let done = read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, action.id, None)
+                .expect("read")
+                .expect("the done way out");
+            let mut outs = Vec::new();
+            for name in ["差分", "ログ"] {
+                outs.push(
+                    port_add(
+                        tx,
+                        AutomationPortOwner::Exit,
+                        done.id,
+                        AutomationPortDirection::Out,
+                        name,
+                        AutomationPortKind::File,
+                        true,
+                    )
+                    .expect("declare the output"),
+                );
+                port_add(
+                    tx,
+                    AutomationPortOwner::Action,
+                    to_action.id,
+                    AutomationPortDirection::In,
+                    name,
+                    AutomationPortKind::File,
+                    true,
+                )
+                .expect("declare the input");
+            }
+            let on = AutomationPictureOwner::Automation;
+            let kept_wire = wire_add(tx, on, placed.id, None, "差分", to.id, "差分").expect("wire");
+            let gone_wire = wire_add(tx, on, placed.id, None, "ログ", to.id, "ログ").expect("wire");
+            let kept_edge = edge_add(tx, on, placed.id, None, EdgeTarget::Go(to.id), None).expect("add edge");
+            let gone_edge = edge_add(tx, on, placed.id, Some("直すところがある"), EdgeTarget::Done, None)
+                .expect("add edge");
+            for step in [kept_step.id, gone_step.id] {
+                placement_step_set(tx, placed.id, step, "claude", None).expect("choose");
+            }
+            action_version_add(tx, action.id).expect("save version 1");
+            let placed = placement_version_set(tx, placed.id, 1).expect("onto version 1");
+
+            exit_delete(tx, gone_exit.id).expect("delete the way out");
+            port_delete(tx, outs[1].id).expect("delete the output");
+            port_update(tx, outs[0].id, Some("変更点"), None, None).expect("rename the output");
+            step_delete(tx, gone_step.id).expect("delete the step");
+            action_version_add(tx, action.id).expect("save version 2");
+            let moved = placement_version_set(tx, placed.id, 2).expect("onto version 2");
+
+            assert_eq!(moved.version, Some(2));
+            assert_eq!(
+                read::automation_placement(tx.conn(), placed.id).expect("read").and_then(|p| p.version),
+                Some(2),
+            );
+            let edges: Vec<i64> =
+                read::automation_edges_of(tx.conn(), on, automation.id).expect("read").iter().map(|e| e.id).collect();
+            assert!(edges.contains(&kept_edge.id) && !edges.contains(&gone_edge.id), "{edges:?}");
+            let wires: Vec<i64> =
+                read::automation_wires_of(tx.conn(), on, automation.id).expect("read").iter().map(|w| w.id).collect();
+            assert_eq!(wires, vec![kept_wire.id], "the renamed output keeps its wire; {} goes", gone_wire.id);
+            let chosen: Vec<i64> = read::automation_placement_steps_of(tx.conn(), placed.id)
+                .expect("read")
+                .iter()
+                .map(|c| c.step_id)
+                .collect();
+            assert_eq!(chosen, vec![kept_step.id]);
+        });
+    }
+
+    /// A wire into an input the new version dropped goes with it, as one out of an output does.
+    #[test]
+    fn moving_a_placement_onto_a_version_drops_the_wire_into_an_input_it_no_longer_declares() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (from_action, from) = mk_placed(tx, &automation, "実装する");
+            let (to_action, to) = mk_placed(tx, &automation, "点検する");
+            let done = read::automation_exit_by_name(tx.conn(), AutomationOwner::Action, from_action.id, None)
+                .expect("read")
+                .expect("the done way out");
+            port_add(
+                tx,
+                AutomationPortOwner::Exit,
+                done.id,
+                AutomationPortDirection::Out,
+                "差分",
+                AutomationPortKind::File,
+                true,
+            )
+            .expect("declare the output");
+            let into = port_add(
+                tx,
+                AutomationPortOwner::Action,
+                to_action.id,
+                AutomationPortDirection::In,
+                "差分",
+                AutomationPortKind::File,
+                true,
+            )
+            .expect("declare the input");
+            let on = AutomationPictureOwner::Automation;
+            wire_add(tx, on, from.id, None, "差分", to.id, "差分").expect("wire");
+            action_version_add(tx, to_action.id).expect("save version 1");
+            port_delete(tx, into.id).expect("delete the input");
+            action_version_add(tx, to_action.id).expect("save version 2");
+
+            placement_version_set(tx, to.id, 1).expect("onto version 1");
+            assert_eq!(read::automation_wires_of(tx.conn(), on, automation.id).expect("read").len(), 1);
+            placement_version_set(tx, to.id, 2).expect("onto version 2");
+            assert!(read::automation_wires_of(tx.conn(), on, automation.id).expect("read").is_empty());
+        });
+    }
+
+    /// The version it stands on writes nothing; a version the action does not have, and a built-in,
+    /// are refused.
+    #[test]
+    fn a_placement_moves_only_onto_a_version_its_action_has() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let entry = entry_placed(tx, &automation, automation_builtin::entries()[0]);
+            placement_version_set(tx, entry.id, 1).expect_err("a built-in has no versions to move onto");
+            let (action, placed) = mk_placed(tx, &automation, "実装する");
+            placement_version_set(tx, placed.id, 1).expect_err("nobody has saved version 1");
+            action_version_add(tx, action.id).expect("save version 1");
+            let moved = placement_version_set(tx, placed.id, 1).expect("onto version 1");
+            let again = placement_version_set(tx, placed.id, 1).expect("onto it again");
+            assert_eq!(again.updated_at, moved.updated_at, "nothing is written");
+        });
+    }
+
     #[test]
     fn a_wire_joins_two_ports_of_one_kind() {
         with_tx(|tx| {
@@ -5461,6 +5709,92 @@ mod tests {
             let latest = read::automation_action_version_latest(tx.conn(), action.id).expect("read");
             assert_eq!(latest.map(|v| v.version), Some(2));
             assert_eq!(saved::<AutomationStep>(&first.steps)[0].prompt, "見る", "the first stays as saved");
+        });
+    }
+
+    /// **An action saves once what is inside it is ready**, asked with the action on no picture: an input
+    /// wired in from the action itself counts where the action declares it, and nobody has to be chosen
+    /// for its step. One that is not ready is refused with its reasons and leaves no version behind.
+    #[test]
+    fn an_action_saves_once_what_is_inside_it_is_ready() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let action = action_from_prompt(
+                tx,
+                Some(project),
+                NewStep::new("点検する", "見る"),
+                &[],
+                &[("差分".to_string(), AutomationPortKind::File, true)],
+            )
+            .expect("write the action");
+            let step = only_step(tx, &action);
+            let again = exit_add(tx, AutomationOwner::Step, step.id, Some("やり直す")).expect("exit");
+
+            let err = action_save(tx, action.id).expect_err("refused");
+            let Error::NotReady(msg) = err else { panic!("a save that cannot go ahead is not_ready") };
+            assert_eq!(
+                msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
+                vec![Some(ErrorCode::NotReadyAutomationOpenExit)],
+            );
+            let fields: Vec<(&str, &str)> = msg.parts()[0].fields().iter().collect();
+            let inside = step.id.to_string();
+            assert!(fields.contains(&("inside_step", inside.as_str())), "{fields:?}");
+            assert!(!fields.iter().any(|(k, _)| *k == "placement"), "the action is asked on no picture");
+            assert!(read::automation_action_version_ids(tx.conn(), action.id).expect("read").is_empty());
+
+            exit_delete(tx, again.id).expect("take the way out off");
+            let first = action_save(tx, action.id).expect("save");
+            assert_eq!(first.version, 1);
+        });
+    }
+
+    /// An action with no step to open is not saved, and a built-in is not saved by hand.
+    #[test]
+    fn an_empty_action_and_a_built_in_are_not_saved() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let empty = action_add(tx, Some(project), "空", "").expect("add");
+            let Error::NotReady(msg) = action_save(tx, empty.id).expect_err("refused") else {
+                panic!("an empty action is not_ready")
+            };
+            assert_eq!(
+                msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
+                vec![Some(ErrorCode::NotReadyAutomationActionEmpty)],
+            );
+            assert!(msg.parts()[0].en().contains("'空' has no step to start at"), "{}", msg.parts()[0].en());
+
+            let take = automation_builtin::action(tx, "take_task").expect("built-in");
+            assert!(matches!(action_save(tx, take.id), Err(Error::Invalid(_))));
+        });
+    }
+
+    /// **What is written inside the action after a save is unsaved until the next one**, and a save with
+    /// nothing written since adds no version.
+    #[test]
+    fn an_action_save_takes_the_draft_and_what_is_written_after_it_waits_for_the_next() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let empty = action_add(tx, Some(project), "空", "").expect("add");
+            assert!(!action_unsaved(tx.conn(), empty.id).expect("unsaved"), "nothing to save yet");
+
+            let action = action_from_prompt(tx, Some(project), NewStep::new("点検する", "見る"), &[], &[])
+                .expect("write the action");
+            let step = only_step(tx, &action);
+            assert!(action_unsaved(tx.conn(), action.id).expect("unsaved"), "never saved");
+            let first = action_save(tx, action.id).expect("save");
+            assert!(!action_unsaved(tx.conn(), action.id).expect("unsaved"));
+            let again = action_save(tx, action.id).expect("save with nothing written");
+            assert_eq!(again.id, first.id, "nothing written since, so no new version");
+
+            action_update(tx, action.id, Some("見直す"), None).expect("rename");
+            assert!(!action_unsaved(tx.conn(), action.id).expect("unsaved"), "the name is not part of a version");
+            let prompt = Some("もう一度見る");
+            step_update(tx, step.id, None, prompt, None, None, None, None, None, None, None, None)
+                .expect("write on the step");
+            assert!(action_unsaved(tx.conn(), action.id).expect("unsaved"), "a step is saved with its action");
+            let second = action_save(tx, action.id).expect("save again");
+            assert_eq!(second.version, 2);
+            assert!(!action_unsaved(tx.conn(), action.id).expect("unsaved"));
         });
     }
 

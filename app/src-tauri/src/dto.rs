@@ -3888,6 +3888,12 @@ pub struct AutomationStepOpenDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) builtin: Option<AutomationBuiltinRunDto>,
+    /// **The terminal a script step's program runs on** (`AMB-D-1016`), which nobody writes into —
+    /// for the pane to take up the way it takes up an agent's step. Absent for every other step, and
+    /// for a script whose program could not be started.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) session: Option<String>,
     /// The required inputs nothing filled, where the run was stopped. Empty otherwise.
     pub(crate) missing: Vec<String>,
 }

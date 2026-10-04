@@ -493,7 +493,7 @@ mod tests {
             dimension::value_add(tx, p.role, "企画", None).expect("add");
             let unmet = check(tx.conn(), p.automation.id, None, nothing_asked()).expect("check");
             assert!(
-                unmet.iter().any(|u| matches!(u, Unmet::OpenExit { exit, placement, .. } if exit == "企画" && *placement == p.split.id)),
+                unmet.iter().any(|u| matches!(u, Unmet::OpenExit { exit, placement, .. } if exit == "企画" && *placement == Some(p.split.id))),
                 "the new way out has nowhere to go: {unmet:?}",
             );
         });

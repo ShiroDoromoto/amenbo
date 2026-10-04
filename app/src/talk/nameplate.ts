@@ -16,7 +16,8 @@
 // the run was launched from rather than with the place's name (`./plate`), and the header is the
 // run's, in the run's colour (`AMB-T-5428`). It is three lines, each about one thing (`AMB-T-5529`,
 // `AMB-T-5739`): the first says which run — a mark saying nobody is typing in this one, the
-// automation, which run it is, and where it stands — the second which step, and the third which task,
+// automation, which run it is, and where it stands — the second which step, who carries it out, the
+// command a script runs and how long the step has run (`AMB-D-1016`), and the third which task,
 // by reference and by title, with how many tasks into the run it is. **The three are there whether or
 // not each has anything to say**, so a run that takes a task or gives one up does not move the
 // terminal under them. Every one of those is a value
@@ -56,7 +57,7 @@
 // events, so what is under it goes on being a terminal. It is dropped by a pointer resting on the row
 // and by the keyboard reaching the controls beside it — the row itself is no tab stop. A run's task
 // is given back there too: the title on the row is the first thing given up as a pane narrows, and
-// the panel says it whole.
+// the panel says it whole. So is a script's command, which is the first thing the step's line gives up.
 
 import { t, tf } from "../core/i18n";
 
@@ -127,6 +128,18 @@ export type Say = {
    *  run's pane turns to its terminal while one is running, so the question it asks is in front of the
    *  reader (`AMB-T-5776`). False for a built-in, and for a pane no step has arrived in. */
   readonly interactive: boolean;
+  /** **Who carries the step out** (`AMB-D-1016`): a script, or an agent with the model it was given —
+   *  the run's own values for the step, never what the agent says of itself (`AMB-D-858`). Null on a
+   *  built-in, which its own chip says, and on a pane no step has arrived in. */
+  readonly by: By | null;
+  /** **The whole command a script step runs**: its program and its arguments, joined by spaces as
+   *  they were written, with no shell quoting added — they are handed to the program as they are, not
+   *  through a shell (`AMB-D-1016`). The row cuts it where the pane is too narrow, and the panel says
+   *  it whole. Null on anything but a script. */
+  readonly command: string | null;
+  /** When the step was opened, in milliseconds since the epoch — what the time it has run is counted
+   *  from. Null where nothing is written for it yet, and on a pane no step has arrived in. */
+  readonly startedAt: number | null;
   /** The action the spot this step was opened from stands on, or null where that spot has been taken
    *  off the picture since — and then the row says the step alone, as it does where the action is
    *  named after the step. */
@@ -138,6 +151,11 @@ export type Say = {
    *  nothing about the state rather than guessing it from the step. */
   readonly state: RunState | null;
 };
+
+/** Who carries a step out, as the step's line says it. */
+export type By =
+  | { readonly kind: "script" }
+  | { readonly kind: "agent"; readonly agent: string; readonly model: string | null };
 
 /**
  * **Where a run stands**, in the words the row says it with (`../core/runWords`).
@@ -182,6 +200,9 @@ export type Plate = {
   readonly dot: Dot;
   /** The run this pane is drawing, or null for an ordinary pane. */
   readonly run: Say | null;
+  /** The moment the step's time is counted up to, in milliseconds since the epoch: the clock where
+   *  absent, and the moment the run was seen to stop once it has (`./plate`). */
+  readonly now?: number;
 };
 
 /**
@@ -237,7 +258,18 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   const builtinDot = document.createElement("em");
   builtinDot.setAttribute("aria-hidden", "true");
   builtin.append(builtinDot, t("auto.actions.reachBuiltin"));
-  stepRow.append(step, builtin);
+  // Who carries the step out, on a chip after the step: a script, or the agent and its model.
+  const by = document.createElement("span");
+  by.className = "plate__by actscope";
+  // The whole command a script runs. It is the longest thing on the line and the one a reader can
+  // least guess the end of, so it is the part cut first; the panel has it whole.
+  const command = document.createElement("code");
+  command.className = "plate__command";
+  // How long the step has run, last on the line. It is a number and nothing more: the mark in front
+  // of the name is what says the run is under way (`AMB-D-1010`).
+  const elapsed = document.createElement("span");
+  elapsed.className = "plate__elapsed";
+  stepRow.append(step, builtin, by, command, elapsed);
   host.append(stepRow);
 
   // The task the run is working, on a line of its own under the step. It is a row of its own and not
@@ -269,6 +301,10 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   const peekName = document.createElement("b");
   peekName.className = "plate-peek__name";
   peek.append(peekName);
+  // A script's command, in full: the row cuts it as the pane narrows.
+  const peekCommand = document.createElement("code");
+  peekCommand.className = "plate-peek__command";
+  peek.append(peekCommand);
   // The run's task, in full. The row has room for the reference and the panel has room for the title,
   // which is what says which task it is without going to look it up.
   const peekTask = document.createElement("span");
@@ -303,6 +339,19 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     // the mark is away, the run's lines are down, and the panel says only the name.
     auto.hidden = runNo.hidden = plate.run === null;
     builtin.hidden = plate.run?.builtin !== true;
+    const who = plate.run?.by ?? null;
+    by.hidden = who === null;
+    by.textContent = who === null
+      ? ""
+      : who.kind === "script"
+        ? t("auto.step.byScript")
+        // As the test pane says who carries a step out (`../screens/AutomationTestPane`).
+        : [who.agent, who.model].filter((one) => one !== null).join(" · ");
+    command.textContent = plate.run?.command ?? "";
+    const since = plate.run?.startedAt ?? null;
+    elapsed.textContent = since === null
+      ? ""
+      : tf("face.elapsed", { time: clockOf((plate.now ?? Date.now()) - since) });
     const now = plate.run?.state ?? null;
     state.hidden = now === null
       || (now.status === "running" && !now.pauseRequested && !now.pauseBeforeNextTask && !now.waiting);
@@ -327,8 +376,21 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     peekTask.textContent = plate.run?.task
       ? `${plate.run.task.ref} ${plate.run.task.title}`
       : "";
-    peek.hidden = !plate.name && !peekTask.textContent;
+    peekCommand.textContent = plate.run?.command ?? "";
+    peek.hidden = !plate.name && !peekTask.textContent && !peekCommand.textContent;
   };
+}
+
+/**
+ * A span of time the way a clock writes it: `4:05`, and `1:04:05` from an hour on. The digits are the
+ * same in every language the row is drawn in, so only the word around them is the locale's.
+ */
+export function clockOf(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = String(seconds % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
 }
 
 /**

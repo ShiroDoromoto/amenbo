@@ -89,9 +89,9 @@ pub enum Opened {
     /// ([`super::automation_builtin::time_up`]).
     Holding { run_step_id: i64 },
     /// **The step is a script** (`AMB-D-1016`): its execution is written down and its inputs are
-    /// gathered, and no terminal is opened. Its program is run on this outside any transaction
-    /// ([`super::automation_script::run`]), and what came of it is written down by
-    /// [`super::automation_report::script_ran`].
+    /// gathered, and no agent is started. Its program is started on this outside any transaction —
+    /// by the app on a terminal nobody writes into, through [`super::automation_script::prepare`] —
+    /// and what came of it is written down by [`super::automation_report::script_ran`].
     Script(Box<ScriptOpening>),
 }
 

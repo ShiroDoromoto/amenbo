@@ -7048,18 +7048,22 @@ pub fn automation_action_version_latest(
     .next())
 }
 
-/// One saved version of one action, by its number, or `None` where that action has no such version — what
-/// a placement standing on it reads.
+/// One saved version of one action by its number, or `None` where the action has no such version.
 pub fn automation_action_version(
     conn: &Connection,
     action_id: i64,
     version: i64,
 ) -> Result<Option<crate::model::AutomationActionVersion>> {
     const V: col::automation_action_version::Cols = col::automation_action_version::ALL;
-    let pred = Pred::eq(V.action_id, action_id).and(Pred::eq(V.version, version));
-    Ok(automation_rows(conn, V.table, &pred, &[Sort::by(V.id)], super::hydrate::automation_action_version_row)?
-        .into_iter()
-        .next())
+    Ok(automation_rows(
+        conn,
+        V.table,
+        &Pred::eq(V.action_id, action_id).and(Pred::eq(V.version, version)),
+        &[Sort::by(V.id)],
+        super::hydrate::automation_action_version_row,
+    )?
+    .into_iter()
+    .next())
 }
 
 /// The saved versions of one action — what goes when the action does.

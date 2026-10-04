@@ -359,6 +359,16 @@ impl Terminals {
         self.0.lock().unwrap_or_else(PoisonError::into_inner).get(session).map(|t| t.keys.clone())
     }
 
+    /// Whether a person may write into this session: refused for one that is gone, and for one nobody
+    /// writes into ([`Terminal::read_only`]).
+    fn writable(&self, session: &str) -> Result<(), CmdError> {
+        match self.0.lock().unwrap_or_else(PoisonError::into_inner).get(session) {
+            None => Err(gone(session)),
+            Some(terminal) if terminal.read_only => Err(read_only(session)),
+            Some(_) => Ok(()),
+        }
+    }
+
     /// Hand these bytes to the session's writing thread, and answer whether it took them: `false` for
     /// a terminal that is gone, and for one whose thread has stopped writing.
     fn send(&self, session: &str, bytes: Vec<u8>) -> bool {
@@ -780,6 +790,10 @@ pub struct Terminal {
     /// The automation run this terminal carries a step of, or `None` for every other terminal. It is
     /// what the next step of the same run ends it by ([`open_step`]).
     run: Option<i64>,
+    /// Whether nobody may write into it — a script step's terminal ([`open_script`]). Its program
+    /// was handed everything it is given before it started, so nothing typed, pasted or handed over
+    /// goes in (`AMB-D-931`).
+    read_only: bool,
 }
 
 /// A session id: sixteen bytes of the operating system's randomness, in hex.
@@ -1230,7 +1244,6 @@ fn model_to_open_on<'a>(placed: Option<&'a str>, was_on: Option<&'a str>) -> Opt
 fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySessionDto, CmdError> {
     let Opening { frame, cwd, agent, model, at: (cols, rows), say, fresh, step } = opening;
     let run_step = step.map(|(_, run_step)| run_step);
-    let terminals = app.state::<Terminals>();
     // A session of its own, every time, with nothing of it written on the frame — what an
     // automation's step is opened on (`AMB-T-5251`). One step is one session: the frame is reused so
     // the run keeps one place on the page, and reusing the place must not mean reusing the
@@ -1401,35 +1414,45 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
         Err(e) => log::warn!("no drop box for session {session}: {e}"),
     }
 
-    let mut child = pair.slave.spawn_command(cmd).map_err(failed)?;
-    let killer = child.clone_killer();
-    // Let go of the slave now the child holds its own. While this process keeps it open the master
-    // never reaches end-of-file, so the drain below would sit there for good after the program
-    // exited and the pane would never be told it had closed.
-    drop(pair.slave);
-
-    let reader = pair.master.try_clone_reader().map_err(failed)?;
-    let writer = pair.master.take_writer().map_err(failed)?;
-    // The chunks go to whichever window asked for the terminal. Nothing here decides which that is:
-    // the pane that called is the pane that draws, and if the user later moves it to the other
-    // window, `pty_attach` moves this along with it.
-    let pane = Arc::new(Pane::new(target, (cols, rows)));
-
     let opened_in = folder.as_ref().map(|f| f.to_string_lossy().into_owned());
-
-    terminals.0.lock().unwrap_or_else(PoisonError::into_inner).insert(
-        session.clone(),
-        Terminal {
+    let pane = spawn(
+        app,
+        target,
+        pair,
+        cmd,
+        Spawn {
+            session: session.clone(),
+            at: (cols, rows),
             folder,
             agent: agent_id.clone(),
-            master: pair.master,
-            keys: write_keys(session.clone(), writer),
-            killer,
-            pane: Arc::clone(&pane),
             started_at,
             run: step.map(|(run, _)| run),
+            read_only: false,
         },
-    );
+        move |app, itself, broke| {
+            // A program that ended by itself within moments of starting never got as far as a
+            // session, so the handle written down for it is taken back before it can refuse the next
+            // run too (`crate::frames::TalkFace::gave_up`).
+            let gave_up = on_the_line.filter(|_| itself && opened.elapsed() < BELIEVED_AFTER);
+            // And where the handle it gave up was the one a record held, the pane says so rather than
+            // ending in silence: the person pressed to go back into that conversation, and what they
+            // are owed is that it is no longer there (`AMB-D-897`, `crate::dto::PtyClosedDto`).
+            let no_way_back = opened_again && gave_up.is_some();
+            if let Some(frame) = gave_up {
+                app.state::<crate::frames::TalkFace>().gave_up(&frame);
+            }
+            // A step's program that ended by itself, where the step has not reported, fails its run
+            // now rather than leaving it at "running" until the next startup (`AMB-D-961`). One
+            // Amenbo ended — the next step taking the place, or a person force-cancelling the run —
+            // is not this. One ended over a panicking drain is: nobody chose to end it, and it will
+            // not report now.
+            if let Some(run_step) = run_step.filter(|_| itself || broke) {
+                crate::automation::step_program_ended(run_step);
+            }
+            no_way_back
+        },
+    )?
+    .pane;
 
     // The one provider that names its own handle: the pane is started, and which session it took is
     // read back out of the provider's own list once it has one (`crate::agent_sessions`).
@@ -1446,13 +1469,100 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
 
     listen(app.clone(), session.clone(), Arc::clone(&pane), drop_box);
     // Once the terminal is in the registry, which is where the hand-over reaches for the keys. It
-    // may well start before the drain thread below has put anything in the tail it reads; a pane
-    // holding nothing is one it waits on rather than writes into (see the handover module).
+    // may well start before the drain thread has put anything in the tail it reads; a pane holding
+    // nothing is one it waits on rather than writes into (see the handover module).
     if let Some(instruction) = started.and_then(|s| s.hand_over) {
         hand_over(app.clone(), session.clone(), Arc::clone(&pane), instruction);
     }
 
-    let id = session.clone();
+    Ok(PtySessionDto {
+        session,
+        folder: opened_in,
+        agent: agent_id,
+        run: step.map(|(run, _)| run),
+    })
+}
+
+/// What [`spawn`] puts in the registry beside the program it starts.
+struct Spawn {
+    session: String,
+    at: Size,
+    folder: Option<PathBuf>,
+    agent: Option<String>,
+    started_at: String,
+    run: Option<i64>,
+    read_only: bool,
+}
+
+/// A terminal's program, shared between the thread draining the terminal and whoever else waits on it
+/// ([`ScriptTerminal`]). Each asks with `try_wait` and lets go between asks ([`reap`]), so neither is
+/// held behind the other's wait.
+type SharedChild = Arc<Mutex<Box<dyn portable_pty::Child + Send + Sync>>>;
+
+/// A program [`spawn`] started, as its caller is left holding it.
+struct Spawned {
+    pane: Arc<Pane>,
+    pid: Option<u32>,
+    child: SharedChild,
+    /// Whether the terminal has been read to its end, so everything it wrote is in the pane's tail.
+    drained: Arc<AtomicBool>,
+}
+
+/// **Start `cmd` on `pair` and put the terminal in the registry**, its output going to the window
+/// labelled `target` until a pane takes it up ([`pty_attach`]) — the half of starting a terminal that
+/// is the same whatever is started in it.
+///
+/// A thread drains it to its end and then waits for the program. Once it has ended, `ended` is asked
+/// what the pane is owed — handed whether the program ended by itself and whether the drain broke —
+/// and the pane is told the terminal closed.
+fn spawn(
+    app: &tauri::AppHandle,
+    target: &str,
+    pair: portable_pty::PtyPair,
+    cmd: portable_pty::CommandBuilder,
+    parts: Spawn,
+    ended: impl FnOnce(&tauri::AppHandle, bool, bool) -> bool + Send + 'static,
+) -> Result<Spawned, CmdError> {
+    let Spawn { session, at, folder, agent, started_at, run, read_only } = parts;
+    let child = pair.slave.spawn_command(cmd).map_err(failed)?;
+    let killer = child.clone_killer();
+    let pid = child.process_id();
+    // Let go of the slave now the child holds its own. While this process keeps it open the master
+    // never reaches end-of-file, so the drain below would sit there for good after the program
+    // exited and the pane would never be told it had closed.
+    drop(pair.slave);
+
+    let reader = pair.master.try_clone_reader().map_err(failed)?;
+    let writer = pair.master.take_writer().map_err(failed)?;
+    // The chunks go to whichever window asked for the terminal. Nothing here decides which that is:
+    // the pane that called is the pane that draws, and if the user later moves it to the other
+    // window, `pty_attach` moves this along with it.
+    let pane = Arc::new(Pane::new(target, at));
+
+    app.state::<Terminals>().0.lock().unwrap_or_else(PoisonError::into_inner).insert(
+        session.clone(),
+        Terminal {
+            folder,
+            agent,
+            master: pair.master,
+            keys: write_keys(session.clone(), writer),
+            killer,
+            pane: Arc::clone(&pane),
+            started_at,
+            run,
+            read_only,
+        },
+    );
+
+    let child: SharedChild = Arc::new(Mutex::new(child));
+    let drained = Arc::new(AtomicBool::new(false));
+    let spawned = Spawned {
+        pane: Arc::clone(&pane),
+        pid,
+        child: Arc::clone(&child),
+        drained: Arc::clone(&drained),
+    };
+    let id = session;
     let app = app.clone();
     std::thread::spawn(move || {
         // A drain that panics has left the program running and the pane open, so it is caught here
@@ -1469,12 +1579,13 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
                 broke = true;
             }
         }
+        drained.store(true, Ordering::Release);
         // Reap the program before the pane is told, so nothing is left behind for the length of a
         // round trip to the webview. What it ended with goes on with the ending: for nearly every
         // program the screen is the whole of why it stopped, and the one exception is a provider
         // that stopped over a file Amenbo pointed somewhere else, whose own message then names a
         // home the reader will never see again (`crate::dto::PtyClosedDto`).
-        let code = child.wait().ok().and_then(|it| i32::try_from(it.exit_code()).ok());
+        let code = reap(&child).and_then(|it| i32::try_from(it.exit_code()).ok());
         // Whether the registry still held it says who ended it: `pty_close`, like the panic above,
         // takes the entry out before it kills, so an entry still here is a program that ended on its
         // own.
@@ -1485,34 +1596,27 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&id)
             .is_some();
-        // A program that ended by itself within moments of starting never got as far as a session,
-        // so the handle written down for it is taken back before it can refuse the next run too
-        // (`crate::frames::TalkFace::gave_up`).
-        let gave_up = on_the_line.filter(|_| itself && opened.elapsed() < BELIEVED_AFTER);
-        // And where the handle it gave up was the one a record held, the pane says so rather than
-        // ending in silence: the person pressed to go back into that conversation, and what they are
-        // owed is that it is no longer there (`AMB-D-897`, `crate::dto::PtyClosedDto`).
-        let no_way_back = opened_again && gave_up.is_some();
-        if let Some(frame) = gave_up {
-            app.state::<crate::frames::TalkFace>().gave_up(&frame);
-        }
-        // A step's program that ended by itself, where the step has not reported, fails its run now
-        // rather than leaving it at "running" until the next startup (`AMB-D-961`). One Amenbo ended
-        // — the next step taking the place, or a person force-cancelling the run — is not this. One
-        // ended over a panicking drain is: nobody chose to end it, and it will not report now.
-        if let Some(run_step) = run_step.filter(|_| itself || broke) {
-            crate::automation::step_program_ended(run_step);
-        }
+        let no_way_back = ended(&app, itself, broke);
         let ending = PtyClosedDto { session: id.clone(), code, no_way_back };
         let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, ending);
     });
+    Ok(spawned)
+}
 
-    Ok(PtySessionDto {
-        session,
-        folder: opened_in,
-        agent: agent_id,
-        run: step.map(|(run, _)| run),
-    })
+/// How long [`reap`] waits between asks.
+const REAP_EVERY: std::time::Duration = std::time::Duration::from_millis(20);
+
+/// Wait for a terminal's program to end and answer what it ended with, or `None` where it cannot be
+/// asked. It asks with `try_wait` and lets go of the program between asks, so a caller waiting on the
+/// same program ([`ScriptTerminal::exited`]) is never held behind a wait that does not return.
+fn reap(child: &Mutex<Box<dyn portable_pty::Child + Send + Sync>>) -> Option<portable_pty::ExitStatus> {
+    loop {
+        match child.lock().unwrap_or_else(PoisonError::into_inner).try_wait() {
+            Ok(Some(status)) => return Some(status),
+            Ok(None) => std::thread::sleep(REAP_EVERY),
+            Err(_) => return None,
+        }
+    }
 }
 
 /// Read one terminal to its end, sending each chunk on to the pane drawing it.
@@ -1648,7 +1752,8 @@ fn page_box() -> &'static std::path::Path {
 ///
 /// **A pane names its session and everywhere else names none.** With a session, the image goes to
 /// that pane's box and a session naming no open terminal is refused rather than written for — one
-/// made for a pane that is gone is one nothing will ever take away. Without, it goes to the run's
+/// made for a pane that is gone is one nothing will ever take away — and so is one naming a terminal
+/// nobody writes into, whose path could not be pasted anywhere. Without, it goes to the run's
 /// own box ([`page_box`]), which is what the draft page and the panel's editor paste into
 /// (`AMB-T-4446`).
 #[tauri::command]
@@ -1660,9 +1765,7 @@ pub fn pty_paste_image(
 ) -> Result<String, CmdError> {
     let dir = match &session {
         Some(session) => {
-            if !terminals.0.lock().unwrap_or_else(PoisonError::into_inner).contains_key(session) {
-                return Err(gone(session));
-            }
+            terminals.writable(session)?;
             paste_box(session)
         }
         None => page_box().to_path_buf(),
@@ -1964,7 +2067,7 @@ pub fn is_open(app: &tauri::AppHandle, session: &str) -> bool {
 const STEP_SIZE: Size = (120, 32);
 
 /// **End the terminal of a run's step before**, where one is still standing — as a step's terminal is
-/// started ([`open_step`]), as a built-in is carried out or a script is run in its place
+/// started ([`open_step`], [`open_script`]), as a built-in is carried out in its place
 /// (`crate::automation`), which takes the run's pane over from it just the same, and once the run is over
 /// (`crate::automation_watch`).
 ///
@@ -2045,6 +2148,132 @@ pub fn open_step(
     Ok(opened.session)
 }
 
+/// **Start a script step's program on a terminal nobody writes into** (`AMB-D-1016`) — on the host, as
+/// [`open_step`] starts an agent's. The terminal of the run's step before is the caller's to end first
+/// ([`end_steps_of`]), since it is ended whether or not the program can be started.
+///
+/// **No shell is put in front of it.** The program is started by its path and handed its arguments each
+/// as one, with the variables `prepared` names and none of a pane's own: it is no agent, so it has no
+/// session to speak through, no pane to name and no step of its own to report (`STEP_ENV`). Its output
+/// takes the road an agent's does — the run's frame, the same size, the same window — and stdout and
+/// stderr arrive on it as one stream, in the order they were written.
+///
+/// **Its ending is the caller's to write down** (`crate::automation`), so nothing is said here when it
+/// ends by itself: `step_program_ended` is for an agent that never reported, and a script never does.
+pub fn open_script(
+    app: &tauri::AppHandle,
+    run: i64,
+    prepared: &amenbo_core::ops::automation_script::Prepared,
+) -> Result<ScriptTerminal, CmdError> {
+    let target = if app.get_webview_window(crate::windows::TALK).is_some() {
+        crate::windows::TALK
+    } else {
+        crate::windows::BOARD
+    };
+    let (cols, rows) = STEP_SIZE;
+    let pair = native_pty_system()
+        .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+        .map_err(failed)?;
+    let mut cmd = launch::program(&prepared.program, &prepared.args);
+    for var in &prepared.env_remove {
+        cmd.env_remove(var);
+    }
+    for (var, value) in &prepared.env {
+        cmd.env(var, value);
+    }
+    let session = new_session();
+    let spawned = spawn(
+        app,
+        target,
+        pair,
+        cmd,
+        Spawn {
+            session: session.clone(),
+            at: STEP_SIZE,
+            folder: None,
+            agent: None,
+            started_at: amenbo_core::time::Timestamp::now().to_rfc3339_z(),
+            run: Some(run),
+            read_only: true,
+        },
+        |_, _, _| false,
+    )?;
+    Ok(ScriptTerminal {
+        session,
+        pid: spawned.pid,
+        child: spawned.child,
+        pane: spawned.pane,
+        drained: spawned.drained,
+    })
+}
+
+/// A script step's program, started on its terminal by [`open_script`] — what its caller waits on.
+pub struct ScriptTerminal {
+    /// The session its terminal is, for the run's pane to take up.
+    pub session: String,
+    /// The program's process id, which its group is taken by
+    /// ([`amenbo_core::sys::ProcessGroup::adopt`]). `None` where the OS did not say.
+    pub pid: Option<u32>,
+    child: SharedChild,
+    pane: Arc<Pane>,
+    drained: Arc<AtomicBool>,
+}
+
+impl ScriptTerminal {
+    /// What the program ended with, or `None` while it runs.
+    pub fn exited(&self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        let status = self.child.lock().unwrap_or_else(PoisonError::into_inner).try_wait()?;
+        Ok(status.as_ref().map(exit_status))
+    }
+
+    /// **The end of what it wrote**, at most `max` bytes of it, once its terminal has been read to its
+    /// end. A child the program left running may still hold the terminal open, so the terminal is
+    /// waited for only until `deadline`, and what has been read by then is what is answered.
+    pub fn output_until(&self, deadline: std::time::Instant, max: usize) -> String {
+        while !self.drained.load(Ordering::Acquire) && std::time::Instant::now() < deadline {
+            std::thread::sleep(REAP_EVERY);
+        }
+        tail_of(&self.pane.recent.lock().unwrap_or_else(PoisonError::into_inner).bytes(), max)
+    }
+}
+
+/// The last `max` bytes of `bytes` at most, cut on a character so the text does not begin with half
+/// of one.
+fn tail_of(bytes: &[u8], max: usize) -> String {
+    let mut from = bytes.len().saturating_sub(max);
+    while bytes.get(from).is_some_and(|b| b & 0xc0 == 0x80) {
+        from += 1;
+    }
+    String::from_utf8_lossy(&bytes[from..]).into_owned()
+}
+
+/// A terminal's program's ending, in the shape the rest of the process reads one in.
+///
+/// A program a signal ended is said by the signal's name, and is read back to its number by asking the
+/// OS for each number's name in turn. One whose name the OS does not give back is read as exit code 1,
+/// which is the code the terminal said beside the name.
+#[cfg(unix)]
+fn exit_status(status: &portable_pty::ExitStatus) -> std::process::ExitStatus {
+    use std::os::unix::process::ExitStatusExt as _;
+    let Some(name) = status.signal() else {
+        return std::process::ExitStatus::from_raw(i32::try_from(status.exit_code() & 0xff).unwrap_or(1) << 8);
+    };
+    let numbered = (1..64).find(|&signal| {
+        // SAFETY: `strsignal` answers a string it owns, or null; it is read before the next call.
+        let named = unsafe { libc::strsignal(signal) };
+        // SAFETY: a non-null answer from `strsignal` is a NUL-terminated string.
+        !named.is_null() && unsafe { std::ffi::CStr::from_ptr(named) }.to_string_lossy() == name
+    });
+    std::process::ExitStatus::from_raw(numbered.unwrap_or(1 << 8))
+}
+
+/// The Windows form of [`exit_status`]: the code is the whole of an ending there.
+#[cfg(windows)]
+fn exit_status(status: &portable_pty::ExitStatus) -> std::process::ExitStatus {
+    use std::os::windows::process::ExitStatusExt as _;
+    std::process::ExitStatus::from_raw(status.exit_code())
+}
+
 /// End the program in a terminal, and forget the session.
 ///
 /// **It is the only way out.** A pane going away leaves the terminal running — that is a pane moving
@@ -2067,15 +2296,26 @@ pub fn pty_close(terminals: tauri::State<'_, Terminals>, session: String) -> Res
 }
 
 /// Send what was typed into the pane to the terminal. `data` is the text the emulator produced for
-/// the key press, escape sequences and all, and its bytes go through untouched.
+/// the key press, escape sequences and all, and its bytes go through untouched. A terminal nobody
+/// writes into ([`Terminal::read_only`]) refuses it.
 #[tauri::command]
 pub fn pty_write(
     terminals: tauri::State<'_, Terminals>,
     session: String,
     data: String,
 ) -> Result<(), CmdError> {
+    terminals.writable(&session)?;
     let keys = terminals.keys(&session).ok_or_else(|| gone(&session))?;
     keys.send(data.into_bytes()).map_err(|_| stopped())
+}
+
+/// The refusal for writing into a terminal nobody writes into — a script step's ([`open_script`]).
+fn read_only(session: &str) -> CmdError {
+    CmdError::coded(
+        "pty_read_only",
+        "Nothing can be written into this terminal.",
+        serde_json::json!({ "session": session }),
+    )
 }
 
 /// The refusal for a terminal that is still open but no longer takes keystrokes — its writing thread
@@ -2228,6 +2468,38 @@ mod tests {
 
     /// The size a pane opens a terminal at, for a test that is not about the size.
     const OPENED_AT: Size = (80, 24);
+
+    #[test]
+    fn a_script_s_output_is_cut_to_its_end_on_a_character() {
+        let written = "abあい".as_bytes();
+        assert_eq!(tail_of(written, 100), "abあい");
+        // Four bytes from the end is the last byte of the first kana and all of the second: the half
+        // is left out.
+        assert_eq!(tail_of(written, 4), "い");
+        assert_eq!(tail_of(written, 6), "あい");
+        assert_eq!(tail_of(written, 0), "");
+    }
+
+    #[test]
+    fn a_script_s_ending_reads_as_the_code_it_exited_with() {
+        assert_eq!(exit_status(&portable_pty::ExitStatus::with_exit_code(0)).code(), Some(0));
+        assert_eq!(exit_status(&portable_pty::ExitStatus::with_exit_code(3)).code(), Some(3));
+        assert!(!exit_status(&portable_pty::ExitStatus::with_exit_code(3)).success());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_script_a_signal_ended_reads_as_that_signal() {
+        use std::os::unix::process::ExitStatusExt as _;
+        // The name the terminal says it by is the OS's own, as `strsignal` gives it.
+        // SAFETY: `strsignal` answers a NUL-terminated string it owns, read before the next call.
+        let name = unsafe { std::ffi::CStr::from_ptr(libc::strsignal(libc::SIGKILL)) }
+            .to_string_lossy()
+            .into_owned();
+        let status = exit_status(&portable_pty::ExitStatus::with_signal(&name));
+        assert_eq!(status.signal(), Some(libc::SIGKILL));
+        assert_eq!(status.code(), None);
+    }
 
     /// A step placed on a model starts its agent with that model named on the line, over the model the
     /// agent was last chosen for (`AMB-T-5763`).

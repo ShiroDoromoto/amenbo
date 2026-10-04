@@ -603,6 +603,7 @@ export const zhHant: Translation = {
     "face.runStep": "第 {n} 步",
     "face.runNo": "執行 {n}",
     "face.runTask": "第 {n} 個任務",
+    "face.elapsed": "已用 {time}",
     "face.dropRunLive": "執行結束前無法移除",
     "face.runStoppedAt": "停在 {exit}",
     "quit.confirm": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，正在跑的東西不會。",

@@ -452,6 +452,9 @@ input[type="color"] {
    line would push the name's panel taller for a pane that has no run. */
 .plate-peek__task { display: block; }
 .plate-peek__task:empty { display: none; }
+/* A script's command, in full: the step's line cuts it as the pane narrows (`.plate__command`). */
+.plate-peek__command { display: block; font-family: var(--font-mono); }
+.plate-peek__command:empty { display: none; }
 /* The line while a name is being typed in its place. Out of sight and still on the page: what
    draws the row is mounted once and keeps drawing into this box, so taking it away would be taking
    the label down to type a name (`../talk/plate`). */
@@ -2981,8 +2984,9 @@ body.dragging-row { user-select: none; }
 /* Spelled out for the reason `.plate[hidden]` is: the run's parts are drawn on the same row as an
    ordinary pane's name, and are away there — and the lamp is away on a run's pane (`../talk/nameplate`).
    The built-in's chip is one of them twice over: it wears `.actscope`'s `display`, and without this it
-   was drawn on every step of a run (`AMB-T-5589`). */
-.plate__dot[hidden], .plate__auto[hidden], .plate__no[hidden], .plate__builtin[hidden] { display: none; }
+   was drawn on every step of a run (`AMB-T-5589`). The chip saying who carries a step out wears it too. */
+.plate__dot[hidden], .plate__auto[hidden], .plate__no[hidden], .plate__builtin[hidden],
+.plate__by[hidden] { display: none; }
 /* **The mark glows while the run is under way** (`AMB-D-1010`), in place of a chip saying running: its
    edge brightens and dims at the pace the state chip's dot used to pulse at, so the page keeps one
    rhythm. It is a glow and not a light going round the edge, because four panes side by side would
@@ -3091,6 +3095,21 @@ body.dragging-row { user-select: none; }
 }
 .plate__step b { font-weight: 700; }
 .plate-step .plate__builtin { flex: 0 0 auto; }
+/* Who carries the step out, the command a script runs and how long the step has run, after the step
+   (`../talk/nameplate`). The command takes only the width the rest of the line leaves, so it is cut
+   down to nothing before the step's name loses a letter, and the panel has it whole
+   (`.plate-peek__command`). The time stands at the end of the line, so it does not move as the
+   command is cut. */
+.plate-step .plate__by { flex: 0 0 auto; }
+.plate__command {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+.plate__elapsed { flex: 0 0 auto; margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+.plate__command:empty, .plate__elapsed:empty { display: none; }
 .plate__step .plate__into { margin-inline: var(--s-1); }
 /* The number of the box the step was opened from, drawn as the picture draws it (`AMB-T-5538`). */
 .plate__step .plate__box { margin-inline-end: var(--s-1); vertical-align: 1px; }

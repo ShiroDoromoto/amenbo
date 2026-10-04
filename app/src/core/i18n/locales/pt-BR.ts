@@ -616,6 +616,7 @@ export const ptBR: Translation = {
     "face.runStep": "Passo {n}",
     "face.runNo": "Execução {n}",
     "face.runTask": "Tarefa {n}",
+    "face.elapsed": "Duração {time}",
     "face.dropRunLive": "Não dá para remover até a execução terminar",
     "face.runStoppedAt": "Parou em {exit}",
     "quit.confirm": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução; o que estava rodando nelas, não.",

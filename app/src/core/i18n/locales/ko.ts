@@ -602,6 +602,7 @@ export const ko: Translation = {
     "face.runStep": "{n}번째 단계",
     "face.runNo": "실행 {n}",
     "face.runTask": "{n}번째 작업",
+    "face.elapsed": "경과 {time}",
     "face.dropRunLive": "실행이 끝날 때까지 지울 수 없습니다",
     "face.runStoppedAt": "{exit}에서 멈춤",
     "quit.confirm": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, 그 안에서 돌던 것은 돌아오지 않습니다.",

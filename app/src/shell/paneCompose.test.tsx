@@ -63,7 +63,7 @@ vi.mock("../core/ipc", () => ({
 // The label above the pane is a live thing of its own; what it draws is not what this is about.
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
-    opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {}, numbered: () => {},
+    opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {}, numbered: () => {}, timed: () => {},
     focused: () => {}, stop: () => {},
   }),
 }));
@@ -673,7 +673,7 @@ describe("a press that moves the pane being worked in", () => {
 describe("a run's pane turned to its picture", () => {
   const RUNNING: Say = {
     automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false,
-    interactive: false, action: null, task: null,
+    interactive: false, by: null, command: null, startedAt: null, action: null, task: null,
     state: { status: "running", word: "Running", pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, why: null, exit: null, errorExit: false, acknowledged: false },
   };
 

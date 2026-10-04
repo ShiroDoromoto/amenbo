@@ -610,6 +610,7 @@ export const ja: Translation = {
     "face.runStep": "ステップ {n}",
     "face.runNo": "実行 {n}",
     "face.runTask": "{n}件目",
+    "face.elapsed": "経過 {time}",
     "face.dropRunLive": "実行が終わるまで消せません",
     "face.runStoppedAt": "{exit}で止まった",
     "quit.confirm": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、走っていたものは戻りません。",

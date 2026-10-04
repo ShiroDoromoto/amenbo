@@ -604,6 +604,7 @@ export const tr: Translation = {
     "face.runStep": "{n}. adım",
     "face.runNo": "Çalıştırma {n}",
     "face.runTask": "{n}. görev",
+    "face.elapsed": "Süre {time}",
     "face.dropRunLive": "Çalıştırma bitene kadar kaldırılamaz",
     "face.runStoppedAt": "{exit} çıkışında durdu",
     "quit.confirm": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, içlerinde çalışanlar gelmez.",

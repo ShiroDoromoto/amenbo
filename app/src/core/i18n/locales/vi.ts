@@ -606,6 +606,7 @@ export const vi: Translation = {
     "face.runStep": "Bước {n}",
     "face.runNo": "Lần chạy {n}",
     "face.runTask": "Nhiệm vụ {n}",
+    "face.elapsed": "Đã chạy {time}",
     "face.dropRunLive": "Không thể xóa cho đến khi lần chạy kết thúc",
     "face.runStoppedAt": "Dừng ở {exit}",
     "quit.confirm": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, còn những gì đang chạy trong đó thì không.",

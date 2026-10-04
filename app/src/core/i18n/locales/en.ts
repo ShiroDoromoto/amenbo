@@ -677,6 +677,7 @@ const ui = {
   "face.runStep": "Step {n}",
   "face.runNo": "Run {n}",
   "face.runTask": "Task {n}",
+  "face.elapsed": "Elapsed {time}",
   "face.dropRunLive": "Can't be removed while the run is going",
   "face.runStoppedAt": "Stopped at {exit}",
   // The way out of the whole app, which ends every terminal at once and is asked about for the same

@@ -604,6 +604,7 @@ export const nl: Translation = {
     "face.runStep": "Stap {n}",
     "face.runNo": "Uitvoering {n}",
     "face.runTask": "Taak {n}",
+    "face.elapsed": "Duur {time}",
     "face.dropRunLive": "Kan pas worden verwijderd als de uitvoering klaar is",
     "face.runStoppedAt": "Gestopt bij {exit}",
     "quit.confirm": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, wat erin liep niet.",

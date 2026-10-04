@@ -619,6 +619,7 @@ export const uk: Translation = {
     "face.runStep": "Крок {n}",
     "face.runNo": "Запуск {n}",
     "face.runTask": "Завдання {n}",
+    "face.elapsed": "Минуло {time}",
     "face.dropRunLive": "Не можна прибрати, доки запуск не завершиться",
     "face.runStoppedAt": "Зупинено на {exit}",
     "quit.confirm": "Завершити Amenbo? Усі відкриті термінали завершаться. Розмови повернуться під час наступного запуску, а те, що в них виконувалося, — ні.",

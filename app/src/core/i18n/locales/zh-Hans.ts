@@ -603,6 +603,7 @@ export const zhHans: Translation = {
     "face.runStep": "第 {n} 步",
     "face.runNo": "运行 {n}",
     "face.runTask": "第 {n} 个任务",
+    "face.elapsed": "已用 {time}",
     "face.dropRunLive": "运行结束前无法移除",
     "face.runStoppedAt": "停在 {exit}",
     "quit.confirm": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，正在跑的东西不会。",

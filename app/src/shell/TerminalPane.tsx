@@ -804,6 +804,13 @@ export function TerminalPane({
     plateRef.current?.numbered(box);
   }, [box]);
 
+  // **When the step started**, which a built-in's card says only once it has: the card is written
+  // over between its start and its end rather than built again (`./WorkspaceFace`).
+  const startedAt = run?.startedAt ?? null;
+  useEffect(() => {
+    plateRef.current?.timed(startedAt);
+  }, [startedAt]);
+
   // The name as it stands, ready to be typed over. A box opened on a pane already called something is
   // opened to change that name, and a reader who has to clear it first is being asked to type the old
   // one back in whenever they only meant to add a word.

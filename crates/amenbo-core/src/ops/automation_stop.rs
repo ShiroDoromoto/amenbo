@@ -399,7 +399,14 @@ pub fn pause_run_before_next_task(tx: &WriteTx<'_>, run_id: i64) -> Result<Pause
             if before.pause_requested || before.pause_before_next_task {
                 return Ok(Paused::Asked(before));
             }
-            ask_before_next_task(tx, before)
+            if waits_to_take_a_task(tx.conn(), run_id)? {
+                return Ok(Paused::Now(settle(tx, before, AutomationPauseKind::BeforeNextTask)?));
+            }
+            let mut after = before.clone();
+            after.pause_before_next_task = true;
+            after.updated_at = Timestamp::now();
+            crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
+            Ok(Paused::Asked(after))
         }
         AutomationRunStatus::Paused => Ok(Paused::Now(Ended { run: before })),
         other => Err(Error::invalid(format!(
@@ -407,40 +414,6 @@ pub fn pause_run_before_next_task(tx: &WriteTx<'_>, run_id: i64) -> Result<Pause
             other.as_str()
         ))),
     }
-}
-
-/// **Ask every run of a project to pause before it takes its next task**, and answer with the runs
-/// that were asked — the ones [`pauses_before_next_task`] counts. Pressed again with nothing left to
-/// ask, it asks nobody. Each is asked as [`pause_run_before_next_task`] asks one.
-pub fn pause_before_next_task(tx: &WriteTx<'_>, project_id: i64) -> Result<Vec<AutomationRun>> {
-    if read::project(tx.conn(), project_id)?.is_none() {
-        return Err(not_found("project", project_id));
-    }
-    let mut asked = Vec::new();
-    for run_id in read::automation_run_ids_running(tx.conn())? {
-        let before = live_run(tx, run_id)?;
-        if before.project_id != project_id || !pauses_before_next_task(tx.conn(), &before)? {
-            continue;
-        }
-        asked.push(match ask_before_next_task(tx, before)? {
-            Paused::Asked(run) => run,
-            Paused::Now(ended) => ended.run,
-        });
-    }
-    Ok(asked)
-}
-
-/// Ask a running run that takes tasks, not asked yet, to pause before its next task — or pause it now
-/// if it stands waiting for one.
-fn ask_before_next_task(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Paused> {
-    if waits_to_take_a_task(tx.conn(), before.id)? {
-        return Ok(Paused::Now(settle(tx, before, AutomationPauseKind::BeforeNextTask)?));
-    }
-    let mut after = before.clone();
-    after.pause_before_next_task = true;
-    after.updated_at = Timestamp::now();
-    crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
-    Ok(Paused::Asked(after))
 }
 
 /// Whether this run stands waiting at the built-in that takes a task, for one to turn up.

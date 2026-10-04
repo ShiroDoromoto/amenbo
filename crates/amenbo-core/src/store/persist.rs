@@ -1723,17 +1723,6 @@ impl Store {
         })
     }
 
-    /// **Ask every run of a project to pause before it takes its next task**, and answer with the runs
-    /// that were asked.
-    pub fn automation_pause_before_next_task(
-        &mut self,
-        project_id: i64,
-    ) -> Result<Vec<crate::model::AutomationRun>> {
-        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
-            crate::ops::automation_stop::pause_before_next_task(tx, project_id)
-        })
-    }
-
     /// **Pick a paused run up again** ([`crate::ops::automation_stop::resume`]). `startable` and
     /// `models` are a launch's ([`crate::ops::automation_run::Launcher`]): a run paused before its next
     /// task is copied down afresh and checked as a launch is.

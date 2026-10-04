@@ -790,6 +790,41 @@ fn an_action_is_saved_and_a_placement_is_moved_onto_its_version() {
     assert_eq!(after["noop"], serde_json::json!(true), "the draft is version 2 again: {after}");
 }
 
+/// **A rewrite says whose draft it went into and the command that saves it**, the automation's for
+/// what is drawn on it and the action's for what is inside one — a port on a step's way out included.
+/// A rewrite a version does not hold, such as a name, says nothing of a draft.
+#[test]
+fn a_rewrite_names_the_draft_it_went_into_and_how_to_save_it() {
+    let cli = Cli::new();
+    let (_, a, action, placement) = an_automation(&cli);
+
+    let placed = cli.json(&["automation", "place-add", &a, "--builtin", "close_task", "--json"]);
+    assert_eq!(placed["draft"]["kind"].as_str(), Some("automation"), "{placed}");
+    assert_eq!(placed["draft"]["id"].as_i64().map(|i| i.to_string()), Some(a.clone()), "{placed}");
+    assert_eq!(placed["draft"]["save"].as_str(), Some(format!("amenbo automation save {a}").as_str()));
+    let (told, _) = cli.run(&["automation", "edge-add", "--from", &format!("{placement}:"), "--halt"]);
+    assert!(told.contains(&format!("in the unsaved draft of automation {a}")), "{told}");
+    assert!(told.contains(&format!("`amenbo automation save {a}`")), "{told}");
+
+    let (told, _) = cli.run(&["automation", "step-add", &action, "--name", "two", "--prompt", "then this"]);
+    assert!(told.contains(&format!("`amenbo automation action-save {action}`")), "{told}");
+    let step = id_of(
+        &cli.json(&["automation", "step-add", &action, "--name", "three", "--prompt", "last", "--json"]),
+        "automation_step",
+    );
+    let exit = id_of(&cli.json(&["automation", "exit-add", "--step", &step, "--name", "found", "--json"]), "automation_exit");
+    let port = cli.json(&["automation", "port-add", "--exit", &exit, "--name", "report", "--kind", "file", "--json"]);
+    assert_eq!(port["draft"]["kind"].as_str(), Some("action"), "{port}");
+    assert_eq!(port["draft"]["save"].as_str(), Some(format!("amenbo automation action-save {action}").as_str()));
+    let gone = cli.json(&["automation", "step-rm", &step, "--yes", "--json"]);
+    assert_eq!(gone["draft"]["kind"].as_str(), Some("action"), "a deleted row still names its draft: {gone}");
+
+    let renamed = cli.json(&["automation", "update", &a, "--name", "B", "--json"]);
+    assert!(renamed.get("draft").is_none(), "a name is not part of a version: {renamed}");
+    let shelved = cli.json(&["automation", "action-update", &action, "--name", "uno", "--json"]);
+    assert!(shelved.get("draft").is_none(), "{shelved}");
+}
+
 /// A built-in's action is Amenbo's, one version already, so its placement is not moved and the
 /// action is neither saved nor thrown back by hand.
 #[test]

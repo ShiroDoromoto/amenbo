@@ -1694,6 +1694,8 @@ export const tr: Translation = {
     invalid_automation_cfg_not_a_count: "“{cfg}” ayarı sıfır veya daha büyük bir tam sayı alır ve {value} öyle değil.",
     invalid_automation_limit_below_one: "“En çok” 1 veya daha fazladır ve {value} daha az. Sınır olmasın diye boş bırak.",
     not_ready_automation_split_axis_gone: "{step} (yerleşim {placement}): bölmek için kullandığı eksen silinmiş — bu yerleşimi kaldırın ve var olan bir eksene yeniden yerleştirin",
+    not_ready_action_save: "“{action}” kaydedilemez: {reasons}",
+    not_ready_action_save_empty: "başlangıç adımı yok",
     store_busy: "Depo şu anda kullanılıyor. Birazdan yeniden deneyin.",
     storage_error: "Depo okunamadı ya da yazılamadı ve hiçbir şey değişmedi. Amenbo'yu yeniden başlatıp tekrar deneyin — olmaya devam ederse Ayarlar > Günlükler içindekileri gönderin.",
     not_found_task: "{ref} işi bulunamadı.",

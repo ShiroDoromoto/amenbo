@@ -877,6 +877,17 @@ impl Store {
         crate::ops::automation_view::action_detail(conn, id)
     }
 
+    /// **Whether what is inside a library action holds anything its newest saved version does not**
+    /// ([`crate::ops::automation::action_unsaved`]), behind the guard [`Self::automation_action_detail`]
+    /// keeps.
+    pub fn automation_action_unsaved(&self, id: i64) -> Result<bool> {
+        let conn = self.engine.conn();
+        if let Some(project_id) = super::owner::automation_action(conn, id)?.project() {
+            self.reachable_project(project_id)?;
+        }
+        crate::ops::automation::action_unsaved(conn, id)
+    }
+
     // ───────────────────────── automation: what ran ─────────────────────────
     //
     // A run is **reached, never searched for**: from the task it worked, or from the automation it came

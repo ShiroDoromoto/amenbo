@@ -1694,6 +1694,8 @@ export const vi: Translation = {
     invalid_automation_cfg_not_a_count: "Thiết lập “{cfg}” nhận số nguyên từ 0 trở lên, và {value} không phải số như vậy.",
     invalid_automation_limit_below_one: "“Nhiều nhất” là 1 trở lên, và {value} nhỏ hơn. Để trống nếu không muốn giới hạn.",
     not_ready_automation_split_axis_gone: "{step} (vị trí đặt {placement}): trục dùng để chia đã bị xóa — hãy gỡ vị trí đặt này và đặt lại trên một trục đang có",
+    not_ready_action_save: "Không thể lưu “{action}”: {reasons}",
+    not_ready_action_save_empty: "không có bước bắt đầu",
     store_busy: "Kho dữ liệu đang được sử dụng. Hãy thử lại sau giây lát.",
     storage_error: "Không đọc hoặc ghi được kho dữ liệu, và không có gì bị thay đổi. Hãy khởi động lại Amenbo rồi thử lại — nếu vẫn xảy ra, hãy gửi những gì có trong Cài đặt > Nhật ký.",
     not_found_task: "Không tìm thấy việc {ref}.",

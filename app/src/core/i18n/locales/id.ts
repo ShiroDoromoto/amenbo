@@ -1695,6 +1695,8 @@ export const id: Translation = {
     invalid_automation_cfg_not_a_count: "Setelan “{cfg}” menerima bilangan bulat nol atau lebih, dan {value} bukan bilangan itu.",
     invalid_automation_limit_below_one: "“Paling banyak” bernilai 1 atau lebih, dan {value} kurang dari itu. Kosongkan untuk tanpa batas.",
     not_ready_automation_split_axis_gone: "{step} (penempatan {placement}): sumbu yang dipakai untuk membagi sudah dihapus — lepas penempatan ini dan tempatkan lagi pada sumbu yang ada",
+    not_ready_action_save: "“{action}” tidak bisa disimpan: {reasons}",
+    not_ready_action_save_empty: "tidak punya langkah awal",
     store_busy: "Penyimpanan sedang digunakan. Coba lagi sebentar lagi.",
     storage_error: "Penyimpanan tidak dapat dibaca atau ditulis, dan tidak ada yang berubah. Mulai ulang Amenbo lalu coba lagi — kalau terus terjadi, kirimkan isi Pengaturan > Log.",
     not_found_task: "Tugas {ref} tidak ditemukan.",

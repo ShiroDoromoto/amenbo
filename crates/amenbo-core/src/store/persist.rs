@@ -1285,11 +1285,16 @@ impl Store {
         })
     }
 
-    /// Say an action made on the spot is written (`AMB-D-1005`; one operation = one transaction).
-    pub fn automation_action_finish_creating(&mut self, id: i64) -> Result<crate::model::AutomationAction> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, id)], |tx| {
-            crate::ops::automation::action_finish_creating(tx, id)
-        })
+    /// Save what is inside an action as its next version once its own check passes; the first save of
+    /// one still being created finishes its creation (`AMB-D-1005`; one operation = one transaction).
+    /// Each placement is declared as well as the action: that first save points the placements standing
+    /// on it at version 1, and a device's action can stand on another project's automation.
+    pub fn automation_action_save(&mut self, id: i64) -> Result<crate::model::AutomationActionVersion> {
+        let mut targets = vec![WriteTarget::AutomationPart(AutomationPart::Action, id)];
+        for placement in crate::store_engine::read::automation_placement_ids_using_action(self.engine.conn(), id)? {
+            targets.push(WriteTarget::AutomationPart(AutomationPart::Placement, placement));
+        }
+        self.write_one(&targets, |tx| crate::ops::automation::action_save(tx, id))
     }
 
     /// Give up an action made on the spot, with every placement standing on it, the lines into them put

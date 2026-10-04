@@ -1701,6 +1701,8 @@ export const de: Translation = {
     invalid_automation_cfg_not_a_count: "Die Einstellung „{cfg}“ nimmt eine ganze Zahl von null oder mehr, und {value} ist keine.",
     invalid_automation_limit_below_one: "„Höchstens so oft“ ist 1 oder mehr, und {value} ist weniger. Lass das Feld leer für kein Limit.",
     not_ready_automation_split_axis_gone: "{step} (Platzierung {placement}): Die Achse, nach der aufgeteilt wird, wurde gelöscht – entferne diese Platzierung und platziere den Schritt erneut auf einer vorhandenen Achse",
+    not_ready_action_save: "„{action}“ kann nicht gespeichert werden: {reasons}",
+    not_ready_action_save_empty: "Es gibt keinen Startschritt",
     store_busy: "Der Speicher wird gerade verwendet. Versuche es gleich noch einmal.",
     storage_error: "Der Speicher konnte nicht gelesen oder geschrieben werden, und es wurde nichts geändert. Starte Amenbo neu und versuche es noch einmal — wenn es weiter passiert, schick, was unter Einstellungen > Protokolle liegt.",
     not_found_task: "Aufgabe {ref} wurde nicht gefunden.",

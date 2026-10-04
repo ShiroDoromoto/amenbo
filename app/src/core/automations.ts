@@ -280,12 +280,12 @@ export async function removeAutomationAction(id: number): Promise<void> {
 }
 
 /**
- * **Say an action made on the spot is written** (`AMB-D-1005`) — one of the two ways out of being
- * still written, taken with nothing inside the action too.
+ * **Save what is inside an action as its next version**; the first save of an action made on the spot
+ * finishes its creation (`AMB-D-1005`). An empty one is refused, so it stays being created.
  */
 export async function finishCreatingAutomationAction(id: number): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("automation_action_finish_creating", { id });
+  return invokeAck("automation_action_save", { id });
 }
 
 /**

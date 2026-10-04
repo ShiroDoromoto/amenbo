@@ -308,7 +308,8 @@ impl Unmet {
         match self {
             Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
             Unmet::NoEntry => ErrorCode::NotReadyAutomationNoEntry,
-            Unmet::ActionEmpty { .. } => ErrorCode::NotReadyAutomationActionEmpty,
+            Unmet::ActionEmpty { placement: Some(_), .. } => ErrorCode::NotReadyAutomationActionEmpty,
+            Unmet::ActionEmpty { placement: None, .. } => ErrorCode::NotReadyActionSaveEmpty,
             Unmet::ActionDraft { .. } => ErrorCode::NotReadyAutomationActionDraft,
             Unmet::EntryTakesNoTask { .. } => ErrorCode::NotReadyAutomationEntryTakesNoTask,
             Unmet::BackToEntry { .. } => ErrorCode::NotReadyAutomationBackToEntry,
@@ -1756,18 +1757,23 @@ pub fn launch_asks(conn: &Connection, automation_id: i64) -> Result<LaunchAsks> 
 /// known here. Each reason rides as a part rather than being folded into the sentence, because joining
 /// them is punctuation and punctuation belongs to the language doing the reading — the same shape a
 /// reservation's refusal takes ([`crate::ops::task`]). `doing` is what was refused — a launch, or a save
-/// ([`crate::ops::automation::save`]), which asks the same check. A save of an action
-/// ([`crate::ops::automation::action_save`]) is refused through here too, with the action's name and
-/// [`check_action`]'s reasons.
+/// ([`crate::ops::automation::save`]), which asks the same check.
 pub(crate) fn not_ready(doing: &str, name: &str, unmet: &[Unmet]) -> Error {
-    let sentence = format!(
-        "cannot {doing} '{name}': {}",
-        unmet.iter().map(Unmet::say).collect::<Vec<_>>().join("; ")
-    );
-    let msg = unmet.iter().fold(
-        Msg::new(sentence).coded(ErrorCode::NotReadyAutomation).with("automation", name),
-        |msg, one| msg.part(one.msg()),
-    );
+    refused_over(format!("cannot {doing} '{name}'"), ErrorCode::NotReadyAutomation, "automation", name, unmet)
+}
+
+/// The `not_ready` refusal of a save of an action ([`crate::ops::automation::action_save`]), over
+/// [`check_action`]'s reasons. It names its own code: what was pressed is a save, not a launch.
+pub(crate) fn not_ready_to_save_action(name: &str, unmet: &[Unmet]) -> Error {
+    refused_over(format!("cannot save '{name}'"), ErrorCode::NotReadyActionSave, "action", name, unmet)
+}
+
+/// One `not_ready` refusal headed by `head`, named by `code` with `name` under `field`, over `unmet`.
+fn refused_over(head: String, code: ErrorCode, field: &'static str, name: &str, unmet: &[Unmet]) -> Error {
+    let sentence = format!("{head}: {}", unmet.iter().map(Unmet::say).collect::<Vec<_>>().join("; "));
+    let msg = unmet
+        .iter()
+        .fold(Msg::new(sentence).coded(code).with(field, name), |msg, one| msg.part(one.msg()));
     Error::NotReady(msg)
 }
 
@@ -2420,13 +2426,15 @@ mod tests {
         });
     }
 
-    /// **An action still being written is refused** (`AMB-D-1005`), and finishing it is what lets the
-    /// automation go.
+    /// **An action still being written is refused** (`AMB-D-1005`), and saving it, which finishes it, is
+    /// what lets the automation go.
     #[test]
     fn a_placement_standing_on_an_action_still_being_written_is_refused_until_it_is_finished() {
         with_tx(|tx| {
             let (automation, action, placement) = launchable(tx);
-            let before = automation::action_finish_creating(tx, action.id).expect("read it");
+            let before = crate::store_engine::read::automation_action(tx.conn(), action.id)
+                .expect("read it")
+                .expect("there");
             let draft = crate::model::AutomationAction { draft: true, ..before.clone() };
             crate::ops::emit_update(
                 tx,
@@ -2439,7 +2447,7 @@ mod tests {
                 vec![Unmet::ActionDraft { action: "直す".into(), placement: placement.id }],
             );
 
-            automation::action_finish_creating(tx, action.id).expect("finish it");
+            automation::action_save(tx, action.id).expect("save it");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
                 vec![],

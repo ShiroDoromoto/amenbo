@@ -548,6 +548,11 @@ impl From<amenbo_core::Error> for CliError {
             E::NotReady(m) if m.code() == Some(ErrorCode::NotReadyAutomation) => Some(format!(
                 "Every reason is named above, and each is answered by writing on the automation: `{cmd} automation step-add`, `automation entry-replace`, `automation edge-add`, `automation wire-add`, `automation cfg-set`, `automation agent-set`."
             )),
+            // Saving an action its own check turns away: the reasons are inside the action, so that is
+            // where they are fixed.
+            E::NotReady(m) if m.code() == Some(ErrorCode::NotReadyActionSave) => Some(format!(
+                "Every reason is named above, and each is answered by writing inside the action — `{cmd} automation action-show <id>` shows what it holds."
+            )),
             // An automation kept out of the way, which archiving is for — so the way out is to bring it
             // back rather than to launch past it.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidAutomationArchived) => Some(format!(

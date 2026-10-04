@@ -768,19 +768,47 @@ fn automations_placing_outside(
 ///
 /// A draft with nothing changed since the newest version saves nothing, and that version is what comes
 /// back.
+///
+/// **An action still being created finishes its creation here** (`AMB-D-1005`): its first save makes
+/// version 1, and the placements standing on it with no version are pointed at that version. One that
+/// already holds a version with nothing new since — a store upgraded to v94 saved every written action —
+/// finishes on that version. An empty one is refused by the check like any other, so it stays being
+/// created.
 pub fn action_save(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionVersion> {
     let action = live_action(tx, action_id)?;
     not_built_in(tx, Def::Action(action_id))?;
     let unmet = automation_run::check_action(tx.conn(), action_id)?;
     if !unmet.is_empty() {
-        return Err(automation_run::not_ready("save", &action.name, &unmet));
+        return Err(automation_run::not_ready_to_save_action(&action.name, &unmet));
     }
-    if let Some(latest) = read::automation_action_version_latest(tx.conn(), action_id)? {
-        if ActionPicture::read(tx.conn(), &action)?.is(&latest)? {
-            return Ok(latest);
+    let unchanged = match read::automation_action_version_latest(tx.conn(), action_id)? {
+        Some(latest) if ActionPicture::read(tx.conn(), &action)?.is(&latest)? => Some(latest),
+        _ => None,
+    };
+    let saved = match unchanged {
+        Some(latest) => latest,
+        None => action_version_add(tx, action_id)?,
+    };
+    if action.draft {
+        finish_creating(tx, &action, saved.version)?;
+    }
+    Ok(saved)
+}
+
+/// Lower an action's `draft` and point every placement standing on it with no version at `version` —
+/// what the first save of an action still being created does on top of saving it.
+fn finish_creating(tx: &WriteTx<'_>, before: &AutomationAction, version: i64) -> Result<()> {
+    let after = AutomationAction { draft: false, updated_at: Timestamp::now(), ..before.clone() };
+    emit_update(tx, record::automation_action(before), record::automation_action(&after))?;
+    for id in read::automation_placement_ids_using_action(tx.conn(), before.id)? {
+        let placed = live_placement(tx, id)?;
+        if placed.version.is_some() {
+            continue;
         }
+        let pointed = AutomationPlacement { version: Some(version), updated_at: Timestamp::now(), ..placed.clone() };
+        emit_update(tx, record::automation_placement(&placed), record::automation_placement(&pointed))?;
     }
-    action_version_add(tx, action_id)
+    Ok(())
 }
 
 /// **Does what is inside the action hold anything its newest saved version does not?** For an action
@@ -926,22 +954,6 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     }
     tx.delete_record("automation_action", id)?;
     Ok(())
-}
-
-/// **Say an action made on the spot is written** (`AMB-D-1005`) — one of the two ways out of being
-/// still written, and the one that keeps it. It is taken with nothing inside the action, too: an action
-/// with no step is the launch check's to refuse (`ActionEmpty`), not this op's.
-///
-/// Finishing an action that is already finished hands it straight back and writes nothing, the way
-/// [`crate::ops::task::finish_creating`] does and for its reason.
-pub fn action_finish_creating(tx: &WriteTx<'_>, id: i64) -> Result<AutomationAction> {
-    let before = live_action(tx, id)?;
-    if !before.draft {
-        return Ok(before);
-    }
-    let after = AutomationAction { draft: false, updated_at: Timestamp::now(), ..before.clone() };
-    emit_update(tx, record::automation_action(&before), record::automation_action(&after))?;
-    Ok(after)
 }
 
 /// **Give up an action made on the spot** (`AMB-D-1005`) — the other way out of being still written.
@@ -1511,7 +1523,7 @@ impl ActionShelf {
 /// nothing stands on, or a line running past a spot that was meant to be on it.
 ///
 /// **The action is born still being written** (`AMB-D-1005`), and the reader leaves it one of two ways:
-/// [`action_finish_creating`] keeps it, and [`action_abandon`] takes it and its placement away again.
+/// its first [`action_save`] keeps it, and [`action_abandon`] takes it and its placement away again.
 ///
 /// Which library it lands in is the dialog's answer ([`ActionShelf`]), not this op's: an action
 /// made here is an ordinary action, and where an ordinary action is kept is a choice its author
@@ -3973,21 +3985,74 @@ mod tests {
         });
     }
 
-    /// **Finishing takes an empty action too, and finishing twice writes nothing** (`AMB-D-1005`).
+    /// Write one step into `action` with both of its ways out led out of the action, so the action's
+    /// own check has nothing to refuse.
+    fn fill(tx: &WriteTx<'_>, action_id: i64) {
+        let step = step_add(tx, action_id, NewStep::new("書く", "do it")).expect("write a step");
+        for name in [DONE_EXIT, ERROR_EXIT] {
+            edge_add(tx, AutomationPictureOwner::Action, step.id, Some(name), EdgeTarget::Exit(Some(name.into())), None)
+                .expect("lead the way out out of the action");
+        }
+    }
+
+    /// **The first save of an action still being created makes version 1 and finishes its creation**
+    /// (`AMB-D-1005`): the placement standing on it is pointed at that version, and saving again with
+    /// nothing written adds nothing.
     #[test]
-    fn finishing_an_action_keeps_it_even_when_it_is_empty() {
+    fn the_first_save_of_an_action_being_created_finishes_it() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            let made = placement_insert_new_at_exit(tx, first.id, None, ActionShelf::Project, "書く")
+                .expect("make one");
+            fill(tx, made.action_id);
+
+            let saved = action_save(tx, made.action_id).expect("save it");
+            assert_eq!(saved.version, 1);
+            let action = read::automation_action(tx.conn(), made.action_id).unwrap().unwrap();
+            assert!(!action.draft, "its creation is finished");
+            assert_eq!(live_placement(tx, made.id).unwrap().version, Some(1), "the placement stands on it");
+            let again = action_save(tx, made.action_id).expect("save again");
+            assert_eq!(again.id, saved.id, "nothing written since, so no new version");
+            let kept = read::automation_action(tx.conn(), made.action_id).unwrap().unwrap();
+            assert_eq!(kept.updated_at, action.updated_at, "nothing is written the second time");
+        });
+    }
+
+    /// **An action still being created that already holds a version finishes on it** (`AMB-D-1005`): a
+    /// store upgraded to v94 saved every written action, those still being created too, and saving one
+    /// with nothing new since adds no version but still finishes it.
+    #[test]
+    fn an_action_being_created_with_nothing_new_since_its_version_finishes_on_it() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, first) = mk_placed(tx, &automation, "取る");
+            let made = placement_insert_new_at_exit(tx, first.id, None, ActionShelf::Project, "書く")
+                .expect("make one");
+            fill(tx, made.action_id);
+            let saved = action_save(tx, made.action_id).expect("save it");
+            let before = read::automation_action(tx.conn(), made.action_id).unwrap().unwrap();
+            let draft = AutomationAction { draft: true, ..before.clone() };
+            emit_update(tx, record::automation_action(&before), record::automation_action(&draft)).unwrap();
+
+            let again = action_save(tx, made.action_id).expect("save it again");
+            assert_eq!(again.id, saved.id, "nothing new, so no new version");
+            assert!(!read::automation_action(tx.conn(), made.action_id).unwrap().unwrap().draft);
+        });
+    }
+
+    /// **An empty action still being created is not saved, so it stays being created** (`AMB-D-1005`).
+    #[test]
+    fn an_empty_action_being_created_is_not_saved_and_stays_being_created() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let (_, first) = mk_placed(tx, &automation, "取る");
             let made = placement_insert_new_at_exit(tx, first.id, None, ActionShelf::Project, "書く")
                 .expect("make one");
 
-            let finished = action_finish_creating(tx, made.action_id).expect("finish it, empty as it is");
-            assert!(!finished.draft);
-            assert_eq!(finished.entry_step_id, None);
-            let again = action_finish_creating(tx, made.action_id).expect("finish it again");
-            assert_eq!(again.updated_at, finished.updated_at, "nothing is written the second time");
-            assert_eq!(live_placement(tx, made.id).unwrap().action_id, made.action_id, "it stays placed");
+            assert!(matches!(action_save(tx, made.action_id), Err(Error::NotReady(_))));
+            assert!(read::automation_action(tx.conn(), made.action_id).unwrap().unwrap().draft);
+            assert_eq!(live_placement(tx, made.id).unwrap().version, None);
         });
     }
 
@@ -4046,7 +4111,8 @@ mod tests {
             let (_, first) = mk_placed(tx, &automation, "取る");
             let made = placement_insert_new_at_exit(tx, first.id, None, ActionShelf::Project, "書く")
                 .expect("make one");
-            action_finish_creating(tx, made.action_id).expect("finish it");
+            fill(tx, made.action_id);
+            action_save(tx, made.action_id).expect("save it");
 
             let refused = action_abandon(tx, made.action_id).expect_err("it is kept");
             assert!(format!("{refused}").contains("is not being written"), "{refused}");
@@ -5457,9 +5523,10 @@ mod tests {
             let Error::NotReady(msg) = action_save(tx, empty.id).expect_err("refused") else {
                 panic!("an empty action is not_ready")
             };
+            assert_eq!(msg.code(), Some(ErrorCode::NotReadyActionSave), "a save is refused as a save");
             assert_eq!(
                 msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
-                vec![Some(ErrorCode::NotReadyAutomationActionEmpty)],
+                vec![Some(ErrorCode::NotReadyActionSaveEmpty)],
             );
             assert!(msg.parts()[0].en().contains("'空' has no step to start at"), "{}", msg.parts()[0].en());
 

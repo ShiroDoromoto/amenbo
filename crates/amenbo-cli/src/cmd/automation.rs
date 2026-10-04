@@ -445,20 +445,22 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_action_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-rm", "automation_action", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted action: {id}"));
         }
-        AutomationCmd::ActionFinishCreating { id } => {
-            // Core hands an action that is already written straight back without writing it, so
-            // whether this call moved anything is asked before it.
+        AutomationCmd::ActionSave { id } => {
+            // Core hands the newest version back without writing when nothing changed since it, and
+            // still finishes an action being created on it, so both are asked before the call.
+            let saved = store.automation_action_unsaved(id).map_err(CliError::from)?;
             let was_draft = store
                 .automation_action_detail(id)
                 .map_err(CliError::from)?
                 .is_some_and(|view| view.action.draft);
-            let a = store.automation_action_finish_creating(id).map_err(CliError::from)?;
-            let line = match was_draft {
-                true => format!("✓ Finished creating action: {} ({})", a.name, a.id),
-                false => format!("✓ Action {} ({}) is not being created — nothing to finish", a.name, a.id),
+            let v = store.automation_action_save(id).map_err(CliError::from)?;
+            let line = match (saved, was_draft) {
+                (true, true) => format!("✓ Saved action {id} as version {} and finished creating it", v.version),
+                (true, false) => format!("✓ Saved action {id} as version {}", v.version),
+                (false, true) => format!("✓ Finished creating action {id} on version {}", v.version),
+                (false, false) => format!("✓ Action {id} has nothing new since version {} — nothing to save", v.version),
             };
-            let changed = was_draft.then(|| vec!["draft".to_string()]);
-            write_envelope(flags, "automation.action-finish-creating", "automation_action", serde_json::to_value(&a).unwrap(), changed, !was_draft, line);
+            write_envelope(flags, "automation.action-save", "automation_action_version", serde_json::to_value(&v).unwrap(), None, !saved && !was_draft, line);
         }
         AutomationCmd::ActionAbandon { id } => {
             if !confirm(flags, "give up this action and the placements standing on it")? {
@@ -1213,7 +1215,7 @@ fn render_action(flags: &Flags, view: &ActionView) {
         human(
             flags,
             format!(
-                "still being created — keep it with `automation action-finish-creating {}`, or give it up \
+                "still being created — keep it with `automation action-save {}`, or give it up \
                  with `automation action-abandon {}`",
                 a.id, a.id
             ),

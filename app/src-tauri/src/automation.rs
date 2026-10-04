@@ -434,13 +434,14 @@ pub fn automation_action_remove(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["automationActions"]))
 }
 
-/// **Say an action made on the spot is written** (`AMB-D-1005`,
-/// [`amenbo_core::ops::automation::action_finish_creating`]). It is taken with nothing inside the
-/// action too. The pictures standing on it draw its mark, so the ack moves the automations as well.
+/// **Save what is inside an action as its next version**
+/// ([`amenbo_core::ops::automation::action_save`]); the first save of an action made on the spot
+/// finishes its creation (`AMB-D-1005`). The pictures standing on it draw its mark and point at the
+/// version, so the ack moves the automations as well.
 #[tauri::command]
-pub fn automation_action_finish_creating(id: i64) -> Result<WriteAck, CmdError> {
+pub fn automation_action_save(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_action_finish_creating(id)?;
+        store.automation_action_save(id)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))

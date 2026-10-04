@@ -1949,8 +1949,10 @@ pub enum AutomationCmd {
         /// action id
         id: i64,
     },
-    /// Say an action made on the spot is written, and keep it — even with nothing inside it
-    ActionFinishCreating {
+    /// Save what is inside a library action as its next version, once the action's own check passes.
+    /// The first save of an action still being created makes version 1 and finishes its creation;
+    /// with nothing changed since the newest version, nothing is saved
+    ActionSave {
         /// action id
         id: i64,
     },

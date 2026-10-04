@@ -1712,6 +1712,8 @@ export const ptBR: Translation = {
     invalid_automation_cfg_not_a_count: "A configuração “{cfg}” aceita um número inteiro maior ou igual a zero, e {value} não é.",
     invalid_automation_limit_below_one: "“No máximo” é 1 ou mais, e {value} é menos. Deixe vazio para não ter limite.",
     not_ready_automation_split_axis_gone: "{step} (posicionamento {placement}): o eixo usado para dividir foi excluído; tire este posicionamento e coloque de novo em um eixo que exista",
+    not_ready_action_save: "“{action}” não pode ser salva: {reasons}",
+    not_ready_action_save_empty: "não tem etapa de início",
     store_busy: "O armazenamento está em uso agora. Tente de novo em instantes.",
     storage_error: "Não foi possível ler nem gravar no armazenamento, e nada foi alterado. Reinicie o Amenbo e tente de novo; se continuar acontecendo, envie o que está em Configurações > Logs.",
     not_found_task: "Tarefa {ref} não encontrada.",

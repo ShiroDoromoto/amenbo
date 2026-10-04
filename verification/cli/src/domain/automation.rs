@@ -476,6 +476,11 @@ impl Driver<'_> {
                 self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 Ok(Outcome::action(format!("setting `{name}` on placement {placement} {said}")))
             }
+            "save" => {
+                let automation = self.resolve(with)?;
+                self.run_json(&["automation", "save", &automation.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("saved automation {automation}")))
+            }
             "start" => {
                 let automation = self.resolve(with)?;
                 let mut args = vec!["automation".into(), "start".into(), automation.to_string()];

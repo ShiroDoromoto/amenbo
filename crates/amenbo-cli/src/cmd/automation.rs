@@ -831,6 +831,22 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             if !amenbo_core::app_running::is_running(&paths).map_err(CliError::from)? {
                 return Err(CliError::app_not_running());
             }
+            // A launch reads the newest saved version, and core falls back to the draft for an
+            // automation never saved. That fallback is refused here, before any file is ingested.
+            let saved = store
+                .automation_detail(id)
+                .map_err(CliError::from)?
+                .ok_or_else(|| CliError::from(amenbo_core::Error::not_found(format!("automation '{id}' not found"))))?
+                .saved
+                .ok_or_else(|| CliError {
+                    code: "conflict",
+                    message: format!("automation '{id}' has never been saved, and a run starts from its newest saved version. No run was started."),
+                    hint: Some(format!(
+                        "Save it first with `{cmd} automation save {id}`, or try the draft without starting anything with `{cmd} automation test-run {id}`.",
+                        cmd = amenbo_core::config::Paths::command_name()
+                    )),
+                    exit: 1,
+                })?;
             let notes = crate::cmd::arg::body_arg_opt(notes)?;
             let classification = classification_of(&dim)?;
             // Every file is read and held to its limit before any is ingested, so a refusal of the last
@@ -865,7 +881,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 by: Some(flags.facet()?),
             };
             let r = store.automation_launch(id, &by, &handed).map_err(CliError::from)?;
-            let line = format!("✓ Run {} started", r.id);
+            let line = format!("✓ Run {} started from version {}", r.id, saved.version);
             write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
         }
         AutomationCmd::TestRun { id, title, notes, dim } => {
@@ -882,7 +898,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             };
             let walked = store.automation_rehearse(id, &by, &handed).map_err(CliError::from)?;
             if flags.json {
-                print_json(&json!({ "test_run": serde_json::to_value(&walked).unwrap() }));
+                // A launch reads the newest saved version; a test run reads the draft, and says so.
+                print_json(&json!({ "test_run": serde_json::to_value(&walked).unwrap(), "reads": "draft" }));
             } else {
                 render_rehearsal(flags, &walked);
             }
@@ -1043,11 +1060,12 @@ fn classification_of(dim: &[String]) -> Result<Vec<(String, String)>, CliError> 
         .collect()
 }
 
-/// **A test run, as a terminal reads it**: each step it opened, the way out it was taken to leave by,
-/// and — for an agent's step — the whole prompt, indented under it. The last line says how it ended.
+/// **A test run, as a terminal reads it**: the first line says it tried the draft, then each step it
+/// opened, the way out it was taken to leave by, and — for an agent's step — the whole prompt, indented
+/// under it. The last line says how it ended.
 fn render_rehearsal(flags: &Flags, walked: &amenbo_core::ops::automation_rehearse::Rehearsal) {
     use amenbo_core::ops::automation_rehearse::Cut;
-    human(flags, "Test run — no agent was started, and nothing was kept");
+    human(flags, "Test run of the draft, unsaved changes included — no agent was started, and nothing was kept");
     for (n, step) in walked.steps.iter().enumerate() {
         let who = match (&step.builtin, &step.agent) {
             (Some(key), _) => format!("built-in {key}"),

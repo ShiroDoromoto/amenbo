@@ -1189,7 +1189,224 @@ pub const STEPS: &[Step] = &[
         // and every copy already there was taken from none.
         apply: Apply::Custom(give_the_automations_versions),
     },
+    Step {
+        to: 94,
+        name: "save what every automation, and every action a person wrote, already holds as its version 1, and point each placement on such an action at it",
+        // An action a person wrote and an automation are started from a saved version, so what a store
+        // already holds is saved once, and what is left unsaved is nothing. A built-in's placement stays
+        // at NULL: its `action_id` already names one version (`AMB-D-1000`).
+        apply: Apply::Custom(save_what_is_there_as_version_one),
+    },
 ];
+
+/// v94: what every automation, and every action a person wrote, already holds is saved as its version 1,
+/// and every placement on such an action is pointed at it — so a store that arrives here has nothing
+/// left unsaved.
+///
+/// **Each copy is built the way [`crate::ops::automation::action_version_add`] and
+/// [`crate::ops::automation::version_add`] build theirs** — the same rows in the same order, each its own
+/// record under its own id (`AMB-D-961`) — but read from the columns as they stand at v93, in frozen
+/// text, rather than through the model. A built-in gets no version (`AMB-D-1000`).
+///
+/// **The placements are pointed before the automations are copied**, so each automation's copy carries
+/// version 1 on them. An action or an automation that already has a version 1 is left as it is.
+fn save_what_is_there_as_version_one(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let now = crate::time::Timestamp::now().to_rfc3339_z();
+
+    let actions = ids_and_entries(
+        tx,
+        "SELECT id, entry_step_id FROM automation_action a \
+         WHERE builtin IS NULL \
+           AND NOT EXISTS (SELECT 1 FROM automation_action_version v WHERE v.action_id = a.id AND v.version = 1) \
+         ORDER BY id",
+    )?;
+    for (action, entry_step) in actions {
+        let steps =
+            json_rows(tx, STEPS_OF, [action])?.into_iter().map(fold_script).collect::<Result<Vec<_>>>()?;
+        let mut exits = json_rows(tx, EXITS_OF, rusqlite::params!["action", action])?;
+        let mut ports = json_rows(tx, PORTS_OF, rusqlite::params!["action", action, "in"])?;
+        for step in &steps {
+            let step = row_id(step);
+            exits.extend(json_rows(tx, EXITS_OF, rusqlite::params!["step", step])?);
+            ports.extend(json_rows(tx, PORTS_OF, rusqlite::params!["step", step, "in"])?);
+        }
+        for exit in &exits {
+            ports.extend(json_rows(tx, PORTS_OF, rusqlite::params!["exit", row_id(exit), "out"])?);
+        }
+        let cfgs = json_rows(tx, CFGS_OF, rusqlite::params!["action", action])?;
+        let edges = json_rows(tx, EDGES_OF, rusqlite::params!["action", action])?;
+        let wires = json_rows(tx, WIRES_OF, rusqlite::params!["action", action])?;
+        tx.execute(
+            "INSERT INTO automation_action_version (action_id, version, entry_step_id, steps, exits, ports, \
+                 cfgs, edges, wires, created_at, updated_at) \
+             VALUES (?1, 1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)",
+            rusqlite::params![
+                action,
+                entry_step,
+                json_text(steps),
+                json_text(exits),
+                json_text(ports),
+                json_text(cfgs),
+                json_text(edges),
+                json_text(wires),
+                now,
+            ],
+        )?;
+    }
+
+    tx.execute_batch(
+        "UPDATE automation_placement SET version = 1 \
+         WHERE version IS NULL \
+           AND action_id IN (SELECT id FROM automation_action WHERE builtin IS NULL);",
+    )?;
+
+    let automations = ids_and_entries(
+        tx,
+        "SELECT id, entry_placement_id FROM automation a \
+         WHERE NOT EXISTS (SELECT 1 FROM automation_version v WHERE v.automation_id = a.id AND v.version = 1) \
+         ORDER BY id",
+    )?;
+    for (automation, entry_placement) in automations {
+        let placements = json_rows(tx, PLACEMENTS_OF, [automation])?;
+        let mut cfgs = Vec::new();
+        let mut placement_steps = Vec::new();
+        for placement in &placements {
+            let placement = row_id(placement);
+            cfgs.extend(json_rows(tx, CFGS_OF, rusqlite::params!["placement", placement])?);
+            placement_steps.extend(json_rows(tx, PLACEMENT_STEPS_OF, [placement])?);
+        }
+        let edges = json_rows(tx, EDGES_OF, rusqlite::params!["automation", automation])?;
+        let wires = json_rows(tx, WIRES_OF, rusqlite::params!["automation", automation])?;
+        tx.execute(
+            "INSERT INTO automation_version (automation_id, version, entry_placement_id, placements, cfgs, \
+                 placement_steps, edges, wires, created_at, updated_at) \
+             VALUES (?1, 1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+            rusqlite::params![
+                automation,
+                entry_placement,
+                json_text(placements),
+                json_text(cfgs),
+                json_text(placement_steps),
+                json_text(edges),
+                json_text(wires),
+                now,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+/// What v94 reads each kind of row with — the columns as they stand at v93, in the order the read side
+/// lists them. Frozen text, like every step's. A setting's kind is the one value whose stored word is
+/// not the model's (`taskfilter` against `task_filter`), so it is renamed on the way out.
+const STEPS_OF: &str = "SELECT id, action_id, name, prompt, builtin, script_program, script_args, \
+     script_timeout_minutes, interactive, work_dir_ref, report_to_task, show_history, show_notes, \
+     show_decisions, show_comments, order_key, created_at, updated_at \
+     FROM automation_action_step WHERE action_id = ?1 ORDER BY order_key, id";
+const EXITS_OF: &str = "SELECT id, owner_kind, owner_id, name, order_key, created_at, updated_at \
+     FROM automation_exit WHERE owner_kind = ?1 AND owner_id = ?2 ORDER BY order_key, id";
+const PORTS_OF: &str = "SELECT id, owner_kind, owner_id, direction, name, kind, required, order_key, \
+     created_at, updated_at \
+     FROM automation_port WHERE owner_kind = ?1 AND owner_id = ?2 AND direction = ?3 ORDER BY order_key, id";
+const CFGS_OF: &str = "SELECT id, owner_kind, owner_id, name, \
+     CASE kind WHEN 'taskfilter' THEN 'task_filter' ELSE kind END AS kind, required, options, value, \
+     order_key, created_at, updated_at \
+     FROM automation_cfg WHERE owner_kind = ?1 AND owner_id = ?2 ORDER BY order_key, id";
+const EDGES_OF: &str = "SELECT id, owner_kind, owner_id, from_id, exit_id, to_id, ends, exit_to_id, \
+     max_times, order_key, created_at, updated_at \
+     FROM automation_edge WHERE owner_kind = ?1 AND owner_id = ?2 ORDER BY order_key, id";
+const WIRES_OF: &str = "SELECT id, owner_kind, owner_id, from_id, from_exit_id, from_port_id, to_id, \
+     to_port_id, created_at, updated_at \
+     FROM automation_wire WHERE owner_kind = ?1 AND owner_id = ?2 ORDER BY id";
+const PLACEMENTS_OF: &str = "SELECT id, automation_id, action_id, version, order_key, created_at, updated_at \
+     FROM automation_placement WHERE automation_id = ?1 ORDER BY order_key, id";
+const PLACEMENT_STEPS_OF: &str = "SELECT id, placement_id, step_id, agent, model, created_at, updated_at \
+     FROM automation_placement_step WHERE placement_id = ?1 ORDER BY id";
+
+/// The columns among those that hold a boolean, which the copy writes as `true` or `false` as the model
+/// does, not as the 0 or 1 the store keeps.
+const BOOLEAN_COLUMNS: [&str; 7] = [
+    "interactive",
+    "report_to_task",
+    "show_history",
+    "show_notes",
+    "show_decisions",
+    "show_comments",
+    "required",
+];
+
+/// Each row `sql` answers, as a JSON object keyed by its column names.
+fn json_rows(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: impl rusqlite::Params,
+) -> Result<Vec<serde_json::Map<String, serde_json::Value>>> {
+    use rusqlite::types::ValueRef;
+    let mut stmt = tx.prepare(sql)?;
+    let names: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
+    let rows = stmt
+        .query_map(params, |r| {
+            let mut row = serde_json::Map::new();
+            for (i, name) in names.iter().enumerate() {
+                let value = match r.get_ref(i)? {
+                    ValueRef::Null => serde_json::Value::Null,
+                    ValueRef::Integer(n) if BOOLEAN_COLUMNS.contains(&name.as_str()) => {
+                        serde_json::Value::Bool(n != 0)
+                    }
+                    ValueRef::Integer(n) => serde_json::Value::from(n),
+                    ValueRef::Real(f) => serde_json::Value::from(f),
+                    ValueRef::Text(_) | ValueRef::Blob(_) => serde_json::Value::String(r.get(i)?),
+                };
+                row.insert(name.clone(), value);
+            }
+            Ok(row)
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// A step's three script columns folded into the one `script` field the model writes — `null` where the
+/// step names no program. Arguments that are not a JSON list are refused rather than guessed at.
+fn fold_script(
+    mut step: serde_json::Map<String, serde_json::Value>,
+) -> Result<serde_json::Map<String, serde_json::Value>> {
+    let program = step.remove("script_program").unwrap_or_default();
+    let args = step.remove("script_args").unwrap_or_default();
+    let timeout_minutes = step.remove("script_timeout_minutes").unwrap_or_default();
+    let script = if program.is_null() {
+        serde_json::Value::Null
+    } else {
+        let args = match args.as_str().unwrap_or_default() {
+            "" => serde_json::Value::Array(Vec::new()),
+            json => serde_json::from_str::<Vec<String>>(json)
+                .map(serde_json::Value::from)
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(6, rusqlite::types::Type::Text, Box::new(e))
+                })?,
+        };
+        serde_json::json!({ "program": program, "args": args, "timeout_minutes": timeout_minutes })
+    };
+    step.insert("script".to_string(), script);
+    Ok(step)
+}
+
+/// The `id` of a row [`json_rows`] read.
+fn row_id(row: &serde_json::Map<String, serde_json::Value>) -> i64 {
+    row.get("id").and_then(serde_json::Value::as_i64).unwrap_or_default()
+}
+
+/// Rows as the JSON text a version keeps them in.
+fn json_text(rows: Vec<serde_json::Map<String, serde_json::Value>>) -> String {
+    serde_json::Value::Array(rows.into_iter().map(serde_json::Value::Object).collect()).to_string()
+}
+
+/// `(id, entry)` for each row `sql` answers.
+fn ids_and_entries(tx: &Transaction<'_>, sql: &str) -> Result<Vec<(i64, Option<i64>)>> {
+    let mut stmt = tx.prepare(sql)?;
+    let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
 
 /// v93: `automation_version` and `automation_run_def.automation_version` — the saved versions of an
 /// automation, and which of them a run's copy was taken from.
@@ -9806,6 +10023,138 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v94: an action a person wrote and every automation are saved as version 1, in the shape the model
+    /// reads back and in the order the read side lists the rows; each placement on such an action stands
+    /// on it, and a built-in gets no version and its placement stays on none.
+    #[test]
+    fn what_is_already_there_is_saved_as_version_one() {
+        use crate::model::{
+            AutomationCfg, AutomationCfgKind, AutomationEdge, AutomationExit, AutomationPlacement,
+            AutomationPlacementStep, AutomationPort, AutomationStep, AutomationWire, StepScript,
+        };
+        let dir = scratch("version-one");
+        let engine = store_at(&dir, 93);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, project_id, name, created_at, updated_at) VALUES
+                     (1, 1, 'review', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation_action (id, name, builtin, created_at, updated_at) VALUES
+                     (2, 'take', 'take', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation_action_step (id, action_id, name, prompt, script_program, script_args,
+                         script_timeout_minutes, interactive, order_key, created_at, updated_at) VALUES
+                     (1, 1, 'run', '', '/bin/echo', '[\"hi\"]', 5, 1, 'a1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+                     (2, 1, 'read', 'Read it.', NULL, '', NULL, 0, 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 UPDATE automation_action SET entry_step_id = 2 WHERE id = 1;
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, updated_at) VALUES
+                     (1, 'action', 1, 'done', 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+                     (2, 'step', 1, 'done', 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind, required, order_key,
+                         created_at, updated_at) VALUES
+                     (1, 'action', 1, 'in', 'task', 'value', 1, 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+                     (2, 'step', 2, 'in', 'task', 'value', 0, 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+                     (3, 'exit', 2, 'out', 'memo', 'file', 0, 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, required, order_key, created_at,
+                         updated_at) VALUES
+                     (1, 'action', 1, 'tasks', 'taskfilter', 1, 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, order_key,
+                         created_at, updated_at) VALUES
+                     (1, 'action', 1, 2, 2, 1, 'go', 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_id, from_port_id, to_id,
+                         to_port_id, created_at, updated_at) VALUES
+                     (1, 'action', 1, 1, 2, 3, 2, 2, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation (id, project_id, name, created_at, updated_at) VALUES
+                     (1, 1, 'work', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, updated_at) VALUES
+                     (1, 1, 2, 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+                     (2, 1, 1, 'a1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 UPDATE automation SET entry_placement_id = 1 WHERE id = 1;
+                 INSERT INTO automation_placement_step (id, placement_id, step_id, agent, created_at, updated_at) VALUES
+                     (1, 2, 2, 'claude', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, required, value, order_key,
+                         created_at, updated_at) VALUES
+                     (2, 'placement', 2, 'folder', 'text', 1, '\"docs\"', 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, order_key,
+                         created_at, updated_at) VALUES
+                     (2, 'automation', 1, 2, 1, NULL, 'done', 'a0', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let conn = engine.conn();
+        let saved: i64 =
+            conn.query_row("SELECT COUNT(*) FROM automation_action_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(saved, 1, "the built-in gets no version");
+        let action: (i64, Option<i64>, String, String, String, String, String, String) = conn
+            .query_row(
+                "SELECT version, entry_step_id, steps, exits, ports, cfgs, edges, wires \
+                 FROM automation_action_version WHERE action_id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?)),
+            )
+            .unwrap();
+        assert_eq!((action.0, action.1), (1, Some(2)));
+        let steps: Vec<AutomationStep> = serde_json::from_str(&action.2).unwrap();
+        assert_eq!(steps.iter().map(|s| s.id).collect::<Vec<_>>(), [2, 1], "in display order");
+        assert_eq!(steps[0].script, None);
+        assert_eq!(
+            steps[1].script,
+            Some(StepScript { program: "/bin/echo".into(), args: vec!["hi".into()], timeout_minutes: 5 })
+        );
+        assert!(steps[1].interactive && !steps[0].interactive);
+        let exits: Vec<AutomationExit> = serde_json::from_str(&action.3).unwrap();
+        assert_eq!(exits.iter().map(|x| x.id).collect::<Vec<_>>(), [1, 2]);
+        let ports: Vec<AutomationPort> = serde_json::from_str(&action.4).unwrap();
+        assert_eq!(ports.iter().map(|p| p.id).collect::<Vec<_>>(), [1, 2, 3]);
+        assert!(ports[0].required);
+        let cfgs: Vec<AutomationCfg> = serde_json::from_str(&action.5).unwrap();
+        assert_eq!(
+            cfgs.iter().map(|c| (c.id, c.kind)).collect::<Vec<_>>(),
+            [(1, AutomationCfgKind::TaskFilter)]
+        );
+        let edges: Vec<AutomationEdge> = serde_json::from_str(&action.6).unwrap();
+        assert_eq!(edges.iter().map(|e| e.id).collect::<Vec<_>>(), [1]);
+        let wires: Vec<AutomationWire> = serde_json::from_str(&action.7).unwrap();
+        assert_eq!(wires.iter().map(|w| (w.id, w.from_exit_id)).collect::<Vec<_>>(), [(1, Some(2))]);
+
+        let stands_on = |id: i64| -> Option<i64> {
+            conn.query_row("SELECT version FROM automation_placement WHERE id = ?1", [id], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(stands_on(1), None, "a built-in's placement stands on no saved version");
+        assert_eq!(stands_on(2), Some(1));
+
+        let automation: (i64, Option<i64>, String, String, String, String, String) = conn
+            .query_row(
+                "SELECT version, entry_placement_id, placements, cfgs, placement_steps, edges, wires \
+                 FROM automation_version WHERE automation_id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
+            )
+            .unwrap();
+        assert_eq!((automation.0, automation.1), (1, Some(1)));
+        let placements: Vec<AutomationPlacement> = serde_json::from_str(&automation.2).unwrap();
+        assert_eq!(
+            placements.iter().map(|p| (p.id, p.version)).collect::<Vec<_>>(),
+            [(1, None), (2, Some(1))],
+            "the copy carries the version each placement was pointed at"
+        );
+        let cfgs: Vec<AutomationCfg> = serde_json::from_str(&automation.3).unwrap();
+        assert_eq!(
+            cfgs.iter().map(|c| (c.id, c.value.clone())).collect::<Vec<_>>(),
+            [(2, Some("\"docs\"".to_string()))]
+        );
+        let chosen: Vec<AutomationPlacementStep> = serde_json::from_str(&automation.4).unwrap();
+        assert_eq!(chosen.iter().map(|c| c.id).collect::<Vec<_>>(), [1]);
+        let edges: Vec<AutomationEdge> = serde_json::from_str(&automation.5).unwrap();
+        assert_eq!(edges.iter().map(|e| e.id).collect::<Vec<_>>(), [2]);
+        let wires: Vec<AutomationWire> = serde_json::from_str(&automation.6).unwrap();
+        assert!(wires.is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v93: every copy an upgrade brings in was taken from no saved version, the table of versions
     /// starts empty, and it takes one version per number per automation.
     #[test]
@@ -9822,9 +10171,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(93), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 93, "the chain stopped where this test looks");
         let conn = engine.conn();
         let version: Option<i64> = conn
             .query_row("SELECT automation_version FROM automation_run_def WHERE id = 1", [], |r| r.get(0))
@@ -9857,9 +10206,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(92), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 92, "the chain stopped where this test looks");
         let conn = engine.conn();
         let version: Option<i64> =
             conn.query_row("SELECT version FROM automation_placement WHERE id = 1", [], |r| r.get(0)).unwrap();

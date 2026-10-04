@@ -1021,6 +1021,31 @@ fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
     assert_eq!(code, 2, "an agent or --clear has to be said: {err}");
 }
 
+/// A script step runs its own program (`AMB-D-1016`), so `show` names the program and its arguments
+/// where an agent's step names the agent — never the agent chosen by default where it was placed.
+#[test]
+fn a_script_step_is_shown_carried_out_by_its_program() {
+    let cli = Cli::new();
+    let (p, a, _, _) = an_automation(&cli);
+    let action = id_of(
+        &cli.json(&["automation", "action-add", "--project", &p, "--name", "run it", "--json"]),
+        "automation_action",
+    );
+    let step = id_of(
+        &cli.json(&[
+            "automation", "step-add", &action, "--name", "run it", "--program", "/bin/echo", "--arg",
+            "--verbose", "--arg", "hello", "--json",
+        ]),
+        "automation_step",
+    );
+    cli.json(&["automation", "action-entry-set", &action, "--step", &step, "--json"]);
+    cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]);
+
+    let (shown, _) = cli.run(&["automation", "show", &a]);
+    assert!(shown.contains("run it  carried out by a script: /bin/echo --verbose hello"), "{shown}");
+    assert!(!shown.contains("run it  carried out by claude"), "{shown}");
+}
+
 /// The two verbs a step's own agent types refuse outside a step, and say why.
 ///
 /// **There is no "the current step" to fall back on.** Several runs go at once, so a command that

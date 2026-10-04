@@ -7047,7 +7047,18 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
     BuiltinWords {
         key: "fold_worktree",
         called: "the built-in that folds the task's worktree away",
-        words: &[("未マージ", "the way out for a branch not yet merged")],
+        words: &[
+            (
+                "既定ブランチに無い変更があるとき",
+                "the setting saying what it does with changes the default branch does not have",
+            ),
+            ("捨てずに残す", "the choice that keeps them, and leaves by the way out for a branch not yet merged"),
+            (
+                "コミットしていない変更も含めて捨てて畳む",
+                "the choice that discards them, uncommitted changes included, and folds the worktree away",
+            ),
+            ("未マージ", "the way out for a branch not yet merged"),
+        ],
     },
     BuiltinWords {
         key: "close_task",

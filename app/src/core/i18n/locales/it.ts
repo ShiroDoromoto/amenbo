@@ -1374,6 +1374,7 @@ export const it: Translation = {
     "auto.say.noInput": "Un'esecuzione di automazione non è riuscita: un input obbligatorio di un passo era vuoto.",
     "auto.say.noWayOn": "Un'esecuzione di automazione non è riuscita: non restava nessun passo da aprire.",
     "auto.say.leftTaskOpen": "Un'esecuzione di automazione non è riuscita: è andata avanti senza chiudere l'attività che aveva preso.",
+    "auto.say.failedCheck": "Un'esecuzione di automazione non è riuscita: la versione salvata più recente dell'automazione non ha superato il controllo di avvio.",
     "auto.say.halted": "Un'esecuzione di automazione si è fermata per chiamare una persona: un passo è uscito da un'uscita che ne chiede una.",
     "auto.say.canceled": "Un'esecuzione di automazione è stata annullata.",
     "auto.say.completed": "Un'esecuzione di automazione è stata completata.",

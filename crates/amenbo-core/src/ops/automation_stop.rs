@@ -344,6 +344,7 @@ fn why(ending: Ending) -> &'static str {
         Ending::Failed(AutomationStoppedReason::NoInput) => "noInput",
         Ending::Failed(AutomationStoppedReason::NoWayOn) => "noWayOn",
         Ending::Failed(AutomationStoppedReason::LeftTaskOpen) => "leftTaskOpen",
+        Ending::Failed(AutomationStoppedReason::FailedCheck) => "failedCheck",
         Ending::Failed(AutomationStoppedReason::Halted) => "halted",
         Ending::Canceled => "canceled",
         Ending::Completed => "completed",

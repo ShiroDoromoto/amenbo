@@ -1363,6 +1363,7 @@ export const id: Translation = {
     "auto.say.noInput": "Sebuah eksekusi otomasi gagal: input wajib sebuah langkah kosong.",
     "auto.say.noWayOn": "Sebuah eksekusi otomasi gagal: tidak ada langkah lagi yang bisa dibuka.",
     "auto.say.leftTaskOpen": "Sebuah eksekusi otomasi gagal: eksekusi itu lanjut tanpa menutup tugas yang diambilnya.",
+    "auto.say.failedCheck": "Sebuah eksekusi otomasi gagal: versi tersimpan yang lebih baru dari otomasi tidak lolos pemeriksaan peluncuran.",
     "auto.say.halted": "Sebuah eksekusi otomasi berhenti untuk memanggil seseorang: sebuah langkah keluar lewat jalan keluar yang meminta seseorang.",
     "auto.say.canceled": "Sebuah eksekusi otomasi dibatalkan.",
     "auto.say.completed": "Sebuah eksekusi otomasi selesai.",

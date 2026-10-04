@@ -1366,6 +1366,7 @@ export const de: Translation = {
     "auto.say.noInput": "Ein Automationslauf ist fehlgeschlagen: Eine Pflichteingabe eines Schritts war leer.",
     "auto.say.noWayOn": "Ein Automationslauf ist fehlgeschlagen: Es gab keinen Schritt mehr, der geöffnet werden konnte.",
     "auto.say.leftTaskOpen": "Ein Automationslauf ist fehlgeschlagen: Er ging weiter, ohne die übernommene Aufgabe abzuschließen.",
+    "auto.say.failedCheck": "Ein Automationslauf ist fehlgeschlagen: Die neuer gespeicherte Version der Automation hat die Startprüfung nicht bestanden.",
     "auto.say.halted": "Ein Automationslauf hat angehalten, um einen Menschen zu rufen: Ein Schritt nahm einen Ausgang, der nach einem Menschen ruft.",
     "auto.say.canceled": "Ein Automationslauf wurde abgebrochen.",
     "auto.say.completed": "Ein Automationslauf wurde abgeschlossen.",

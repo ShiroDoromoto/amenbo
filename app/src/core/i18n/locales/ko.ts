@@ -1359,6 +1359,7 @@ export const ko: Translation = {
     "auto.say.noInput": "오토메이션 실행이 실패했습니다. 단계의 필수 입력이 비어 있었습니다.",
     "auto.say.noWayOn": "오토메이션 실행이 실패했습니다. 다음에 열 단계가 없었습니다.",
     "auto.say.leftTaskOpen": "오토메이션 실행이 실패했습니다. 가져온 작업을 닫지 않고 다음으로 가려고 했습니다.",
+    "auto.say.failedCheck": "오토메이션 실행이 실패했습니다. 새로 저장된 오토메이션 버전이 실행 전 검사를 통과하지 못했습니다.",
     "auto.say.halted": "오토메이션 실행이 멈추고 사람을 부르고 있습니다. 단계가 사람을 부르는 출구로 나갔습니다.",
     "auto.say.canceled": "오토메이션 실행이 취소되었습니다.",
     "auto.say.completed": "오토메이션 실행이 완료되었습니다.",

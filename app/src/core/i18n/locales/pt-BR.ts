@@ -1375,6 +1375,7 @@ export const ptBR: Translation = {
     "auto.say.noInput": "Uma execução de automação falhou: uma entrada obrigatória de um passo estava vazia.",
     "auto.say.noWayOn": "Uma execução de automação falhou: não restava nenhum passo para abrir.",
     "auto.say.leftTaskOpen": "Uma execução de automação falhou: ela seguiu sem fechar a tarefa que tinha pegado.",
+    "auto.say.failedCheck": "Uma execução de automação falhou: a versão salva mais recente da automação não passou na verificação de início.",
     "auto.say.halted": "Uma execução de automação parou para chamar uma pessoa: um passo saiu por uma saída que pede uma pessoa.",
     "auto.say.canceled": "Uma execução de automação foi cancelada.",
     "auto.say.completed": "Uma execução de automação foi concluída.",

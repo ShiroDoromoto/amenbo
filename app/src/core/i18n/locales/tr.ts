@@ -1362,6 +1362,7 @@ export const tr: Translation = {
     "auto.say.noInput": "Bir otomasyon çalıştırması başarısız oldu: bir adımın zorunlu girdisi boştu.",
     "auto.say.noWayOn": "Bir otomasyon çalıştırması başarısız oldu: açılacak adım kalmadı.",
     "auto.say.leftTaskOpen": "Bir otomasyon çalıştırması başarısız oldu: aldığı görevi kapatmadan devam etti.",
+    "auto.say.failedCheck": "Bir otomasyon çalıştırması başarısız oldu: otomasyonun daha yeni kaydedilmiş sürümü başlatma denetiminden geçmedi.",
     "auto.say.halted": "Bir otomasyon çalıştırması bir insanı çağırmak için durdu: bir adım, insan isteyen bir çıkıştan çıktı.",
     "auto.say.canceled": "Bir otomasyon çalıştırması iptal edildi.",
     "auto.say.completed": "Bir otomasyon çalıştırması tamamlandı.",

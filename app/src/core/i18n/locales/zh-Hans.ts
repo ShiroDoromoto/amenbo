@@ -1364,6 +1364,7 @@ export const zhHans: Translation = {
     "auto.say.noInput": "自动化执行失败：步骤的必填输入为空。",
     "auto.say.noWayOn": "自动化执行失败：没有可以打开的下一个步骤。",
     "auto.say.leftTaskOpen": "自动化执行失败：它没有关闭已领取的任务就继续前进了。",
+    "auto.say.failedCheck": "自动化执行失败：自动化新保存的版本未通过启动检查。",
     "auto.say.halted": "自动化执行已停下来呼叫人：某个步骤从呼叫人的出口离开了。",
     "auto.say.canceled": "自动化执行已取消。",
     "auto.say.completed": "自动化执行已完成。",

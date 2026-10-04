@@ -1379,6 +1379,7 @@ export const pl: Translation = {
     "auto.say.noInput": "Uruchomienie automatyzacji nie powiodło się: wymagane wejście kroku było puste.",
     "auto.say.noWayOn": "Uruchomienie automatyzacji nie powiodło się: nie został żaden krok do otwarcia.",
     "auto.say.leftTaskOpen": "Uruchomienie automatyzacji nie powiodło się: poszło dalej, nie zamykając pobranego zadania.",
+    "auto.say.failedCheck": "Uruchomienie automatyzacji nie powiodło się: nowsza zapisana wersja automatyzacji nie przeszła kontroli przed uruchomieniem.",
     "auto.say.halted": "Uruchomienie automatyzacji zatrzymało się, aby wezwać człowieka: krok wyszedł wyjściem, które wzywa człowieka.",
     "auto.say.canceled": "Uruchomienie automatyzacji zostało anulowane.",
     "auto.say.completed": "Uruchomienie automatyzacji zostało zakończone.",

@@ -787,7 +787,7 @@ pausableBeforeNextTask: boolean,
  * **Whether it stands before a built-in that is waiting** for something to turn up — still
  * `running`, with nothing under way (`AMB-D-969`).
  */
-waiting: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | null, 
+waiting: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | "failed_check" | null, 
 /**
  * The step it is on, or the last one it ran. Absent before the first step has opened.
  */
@@ -1074,7 +1074,7 @@ export type AutomationTestRunDto = { steps: Array<AutomationTestStepDto>,
  * Where the run stood when the walk ended: `completed` where the picture ran out, `failed` where
  * a real run would have been stopped, `running` where the walk was cut short (`cut`).
  */
-status: "running" | "paused" | "completed" | "failed" | "canceled", stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | null, 
+status: "running" | "paused" | "completed" | "failed" | "canceled", stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | "failed_check" | null, 
 /**
  * The required inputs the last step found nothing wired into. Empty otherwise.
  */

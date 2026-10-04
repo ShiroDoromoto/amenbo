@@ -1362,6 +1362,7 @@ export const nl: Translation = {
     "auto.say.noInput": "Een automatiseringsrun is mislukt: een verplichte invoer van een stap was leeg.",
     "auto.say.noWayOn": "Een automatiseringsrun is mislukt: er was geen stap meer om te openen.",
     "auto.say.leftTaskOpen": "Een automatiseringsrun is mislukt: de run ging verder zonder de taak te sluiten die hij had opgepakt.",
+    "auto.say.failedCheck": "Een automatiseringsrun is mislukt: de nieuwere opgeslagen versie van de automatisering kwam niet door de startcontrole.",
     "auto.say.halted": "Een automatiseringsrun is gestopt om een mens te roepen: een stap ging door een uitgang die om een mens vraagt.",
     "auto.say.canceled": "Een automatiseringsrun is geannuleerd.",
     "auto.say.completed": "Een automatiseringsrun is voltooid.",

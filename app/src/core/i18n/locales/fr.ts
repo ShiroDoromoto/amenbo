@@ -1374,6 +1374,7 @@ export const fr: Translation = {
     "auto.say.noInput": "Une exécution d'automatisation a échoué : une entrée obligatoire d'une étape était vide.",
     "auto.say.noWayOn": "Une exécution d'automatisation a échoué : il ne restait aucune étape à ouvrir.",
     "auto.say.leftTaskOpen": "Une exécution d'automatisation a échoué : elle a continué sans fermer la tâche qu'elle avait prise.",
+    "auto.say.failedCheck": "Une exécution d'automatisation a échoué : la version enregistrée plus récente de l'automatisation n'a pas passé la vérification de lancement.",
     "auto.say.halted": "Une exécution d'automatisation s'est arrêtée pour appeler une personne : une étape est sortie par une sortie qui en demande une.",
     "auto.say.canceled": "Une exécution d'automatisation a été annulée.",
     "auto.say.completed": "Une exécution d'automatisation s'est terminée.",

@@ -16,7 +16,7 @@ import type { AutomationActionDetailDto } from "../bindings/bindings";
 const hoisted = vi.hoisted(() => ({
   action: null as AutomationActionDetailDto | null,
   editAction: vi.fn(),
-  finish: vi.fn(),
+  save: vi.fn(),
   abandon: vi.fn(),
   confirm: vi.fn(),
   editStep: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock("../core/automations", () => ({
   useAutomationAction: () => hoisted.action,
   useAutomationActions: () => [],
   editAutomationAction: hoisted.editAction,
-  saveAutomationAction: hoisted.finish,
+  saveAutomationAction: hoisted.save,
   abandonAutomationAction: hoisted.abandon,
   editAutomationStep: hoisted.editStep,
   setAutomationWire: vi.fn(),
@@ -105,7 +105,7 @@ beforeEach(() => {
   onBack.mockReset();
   onFull.mockReset();
   onAbandoned.mockReset();
-  hoisted.finish.mockReset().mockResolvedValue(undefined);
+  hoisted.save.mockReset().mockResolvedValue(undefined);
   hoisted.abandon.mockReset().mockResolvedValue(undefined);
   hoisted.confirm.mockReset();
   container = document.createElement("div");
@@ -176,10 +176,10 @@ describe("an action still being made, opened over its automation", () => {
     expect(buttons().some((one) => one.textContent?.includes(t("auto.over.full")))).toBe(false);
   });
 
-  it("finishes creating and then goes back", async () => {
+  it("saves and then goes back", async () => {
     await render();
-    await act(async () => press(t("auto.over.finish")).click());
-    expect(hoisted.finish).toHaveBeenCalledWith(4);
+    await act(async () => press(t("auto.over.save")).click());
+    expect(hoisted.save).toHaveBeenCalledWith(4);
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 

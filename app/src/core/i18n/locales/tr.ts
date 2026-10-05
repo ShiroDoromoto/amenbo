@@ -1303,7 +1303,7 @@ export const tr: Translation = {
     "auto.over.abandon": "Oluşturmayı bırak",
     "auto.over.abandonNote": "Bırakınca bu eylem ve yerleşimi silinir, şemaya dönülür",
     "auto.over.abandonConfirm": "“{name}” oluşturmayı bırakmak mı? Eylem ve yerleşimi silinir. Geri alınamaz.",
-    "auto.over.finish": "Oluşturmayı bitir ve dön",
+    "auto.over.save": "Kaydet ve dön",
     "auto.saved.never": "Henüz kaydedilmedi",
     "auto.saved.version": "Sürüm {version} kaydedildi · {time}",
     "auto.saved.unsaved": "Kaydedilmemiş değişiklikler var",

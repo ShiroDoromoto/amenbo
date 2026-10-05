@@ -1307,7 +1307,7 @@ export const de: Translation = {
     "auto.over.abandon": "Nicht mehr anlegen",
     "auto.over.abandonNote": "Dabei werden diese Aktion und ihre Platzierung entfernt, zurück zum Bild",
     "auto.over.abandonConfirm": "„{name}“ nicht mehr anlegen? Die Aktion und ihre Platzierung werden entfernt. Das lässt sich nicht rückgängig machen.",
-    "auto.over.finish": "Fertig anlegen und zurück",
+    "auto.over.save": "Speichern und zurück",
     "auto.saved.never": "Noch nicht gespeichert",
     "auto.saved.version": "Version {version} gespeichert · {time}",
     "auto.saved.unsaved": "Ungespeicherte Änderungen",

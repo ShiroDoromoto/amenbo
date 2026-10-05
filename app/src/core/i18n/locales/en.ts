@@ -1550,7 +1550,7 @@ const ui = {
   "auto.over.abandon": "Stop making it",
   "auto.over.abandonNote": "Stopping removes this action and the placement it stands on, and goes back to the picture",
   "auto.over.abandonConfirm": "Stop making “{name}”? The action and the placement it stands on are removed. This cannot be undone.",
-  "auto.over.finish": "Finish creating and go back",
+  "auto.over.save": "Save and go back",
   "auto.saved.never": "Not saved yet",
   "auto.saved.version": "Version {version} saved · {time}",
   "auto.saved.unsaved": "Unsaved changes",

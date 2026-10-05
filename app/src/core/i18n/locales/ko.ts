@@ -1300,7 +1300,7 @@ export const ko: Translation = {
     "auto.over.abandon": "만들기 그만두기",
     "auto.over.abandonNote": "그만두면 이 액션과 배치를 지우고 그림으로 돌아갑니다",
     "auto.over.abandonConfirm": "“{name}” 만들기를 그만둘까요? 액션과 배치를 지웁니다. 되돌릴 수 없습니다.",
-    "auto.over.finish": "작성을 마치고 돌아가기",
+    "auto.over.save": "저장하고 돌아가기",
     "auto.saved.never": "아직 저장하지 않았습니다",
     "auto.saved.version": "버전 {version} 저장됨 · {time}",
     "auto.saved.unsaved": "저장하지 않은 변경 사항이 있습니다",

@@ -1315,7 +1315,7 @@ export const it: Translation = {
     "auto.over.abandon": "Smetti di crearla",
     "auto.over.abandonNote": "Smettendo si rimuovono questa azione e il suo posizionamento, e si torna allo schema",
     "auto.over.abandonConfirm": "Smettere di creare «{name}»? L’azione e il suo posizionamento vengono rimossi. Non si può annullare.",
-    "auto.over.finish": "Termina la creazione e torna",
+    "auto.over.save": "Salva e torna",
     "auto.saved.never": "Non ancora salvato",
     "auto.saved.version": "Versione {version} salvata · {time}",
     "auto.saved.unsaved": "Modifiche non salvate",

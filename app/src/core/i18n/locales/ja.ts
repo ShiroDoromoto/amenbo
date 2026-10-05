@@ -1309,7 +1309,7 @@ export const ja: Translation = {
     "auto.over.abandon": "作るのをやめる",
     "auto.over.abandonNote": "やめると、このアクションと、それを置いた配置を消して、図面に戻ります",
     "auto.over.abandonConfirm": "「{name}」を作るのをやめますか？ このアクションと、それを置いた配置を消します。元に戻せません。",
-    "auto.over.finish": "作成を終えて戻る",
+    "auto.over.save": "保存して戻る",
     "auto.saved.never": "まだ保存していません",
     "auto.saved.version": "バージョン {version} を保存済み・{time}",
     "auto.saved.unsaved": "保存していない変更があります",

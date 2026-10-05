@@ -1320,7 +1320,7 @@ export const uk: Translation = {
     "auto.over.abandon": "Не створювати",
     "auto.over.abandonNote": "Дію та її розміщення буде видалено, і ви повернетеся до схеми",
     "auto.over.abandonConfirm": "Не створювати «{name}»? Дію та її розміщення буде видалено. Це не можна скасувати.",
-    "auto.over.finish": "Завершити створення й повернутися",
+    "auto.over.save": "Зберегти й повернутися",
     "auto.saved.never": "Ще не збережено",
     "auto.saved.version": "Версію {version} збережено · {time}",
     "auto.saved.unsaved": "Є незбережені зміни",

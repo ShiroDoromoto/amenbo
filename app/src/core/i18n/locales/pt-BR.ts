@@ -1316,7 +1316,7 @@ export const ptBR: Translation = {
     "auto.over.abandon": "Parar de criar",
     "auto.over.abandonNote": "Parar remove esta ação e a colocação dela, e volta ao diagrama",
     "auto.over.abandonConfirm": "Parar de criar “{name}”? A ação e a colocação dela serão removidas. Não é possível desfazer.",
-    "auto.over.finish": "Terminar de criar e voltar",
+    "auto.over.save": "Salvar e voltar",
     "auto.saved.never": "Ainda não salvo",
     "auto.saved.version": "Versão {version} salva · {time}",
     "auto.saved.unsaved": "Alterações não salvas",

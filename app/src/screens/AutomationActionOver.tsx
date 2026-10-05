@@ -15,7 +15,7 @@
 // shown only while a panel claims it, the way the shell's is.
 //
 // **An action made on the spot is still being made** (`AMB-D-1005`), and then the two ways out are
-// the pair at its foot: "finish creating and go back", and "stop making it", which asks once and then
+// the pair at its foot: "save and go back", and "stop making it", which asks once and then
 // takes the action and the placement it stands on away. The back and "open full screen" are not
 // offered while it is: either would leave it half made without the reader having said which it is.
 //
@@ -62,7 +62,7 @@ export function AutomationActionOver({
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
 
-  const finish = async () => {
+  const save = async () => {
     setBusy(true);
     setRefused(null);
     try {
@@ -130,8 +130,8 @@ export function AutomationActionOver({
                 </button>
                 <span className="actover__footnote">{t("auto.over.abandonNote")}</span>
                 {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
-                <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void finish()}>
-                  {t("auto.over.finish")}
+                <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void save()}>
+                  {t("auto.over.save")}
                 </button>
               </div>
             )}

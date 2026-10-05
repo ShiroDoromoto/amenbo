@@ -38,9 +38,9 @@
 // button does: there is no definition left for this screen to be drawn from.
 //
 // **An automation a run is going on is written all the same** (`AMB-D-1015`). The run goes on from
-// the snapshot it took at its start, and the definition written here is what the next start takes, or
-// a resume from a pause at a task's end. The runs going on it are named over the picture with the way
-// to each one's pane and the presses that pause or end it (`./AutomationHeldBy`).
+// the copy it took, and what is saved here is what it reads afresh when it comes back to its entry.
+// The runs going on it are named over the picture with the version each is on, the one it switches
+// to, the way to each one's pane and the presses that pause or end it (`./AutomationHeldBy`).
 //
 // **What the panel shows is the screen's, not the picture's.** The picture marks the pressed box and
 // the panel draws it, so it is held where both can see it, and the panel hands it back when the spot
@@ -399,7 +399,13 @@ export function AutomationBuildScreen({
         </div>
       )}
 
-      {automation !== null && <AutomationHeldBy runs={automation.heldBy} onGoToRun={onGoToRun} />}
+      {automation !== null && (
+        <AutomationHeldBy
+          runs={automation.heldBy}
+          savedVersion={automation.saved?.version}
+          onGoToRun={onGoToRun}
+        />
+      )}
 
       <div className="actbuild__canvashead">
         <span className="actbuild__sec">{t("auto.build.picture")}</span>

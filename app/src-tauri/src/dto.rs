@@ -4308,6 +4308,13 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) stopped_reason: Option<&'static str>,
+    /// **The saved version of the automation its copy was taken from** (`AMB-D-1015`) — the newest
+    /// copy, which is what it goes on from and what it last took up at its entry. Absent where that
+    /// copy was taken from unsaved changes — a run every saved version is newer than — and on a run
+    /// that carries no copy of its entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) version: Option<i64>,
     /// The step it is on, or the last one it ran. Absent before the first step has opened.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

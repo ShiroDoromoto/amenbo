@@ -2124,6 +2124,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoheld__step { margin-inline-start: var(--s-2); color: var(--c-text-muted); }
 .autoheld__step::before { content: "("; }
 .autoheld__step::after { content: ")"; }
+.autoheld__version { margin-inline-start: var(--s-2); color: var(--c-text-muted); }
+.autoheld__next { margin-inline-start: var(--s-2); font-weight: var(--fw-bold); }
 /* The placement panel's writes, under the card that goes to the action. */
 .autostep__writes { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
 .autolaunch {

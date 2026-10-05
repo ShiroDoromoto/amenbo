@@ -264,7 +264,15 @@ note: string,
 /**
  * How many steps it holds. One is the shape every action folded out of a v52 step has.
  */
-steps: number, global: boolean, usedBy: number, };
+steps: number, global: boolean, usedBy: number, 
+/**
+ * The newest saved version. Absent for an action nobody has saved.
+ */
+saved?: AutomationSavedDto, 
+/**
+ * Does what is inside the action hold anything the newest saved version does not?
+ */
+unsaved: boolean, };
 
 /**
  * **One library action's whole definition** — the steps inside it, the lines drawn between them, and
@@ -473,7 +481,16 @@ notes: string,
  * How many actions are placed on it. The row says it because "what is this" and "is it built
  * yet" are the two things a list is read for.
  */
-placements: number, archived: boolean, };
+placements: number, archived: boolean, 
+/**
+ * The newest saved version. Absent for an automation nobody has saved.
+ */
+saved?: AutomationSavedDto, 
+/**
+ * Does the draft hold anything the newest saved version does not? The row marks it, so a draft
+ * left unsaved is noticed from the list.
+ */
+unsaved: boolean, };
 
 /**
  * **A setting, and the answer written for it while building.** An action declares and the placement

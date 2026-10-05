@@ -1309,6 +1309,8 @@ export const zhHans: Translation = {
     "auto.saved.never": "尚未保存",
     "auto.saved.version": "已保存版本 {version} · {time}",
     "auto.saved.unsaved": "有未保存的更改",
+    "auto.saved.listVersion": "版本 {version}",
+    "auto.saved.listUnsaved": "未保存",
     "auto.saved.written": "已写入",
     "auto.saved.writeFailed": "未能写入：{reason}",
     "auto.saved.save": "保存",

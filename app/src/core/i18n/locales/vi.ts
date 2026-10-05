@@ -1308,6 +1308,8 @@ export const vi: Translation = {
     "auto.saved.never": "Chưa lưu",
     "auto.saved.version": "Đã lưu phiên bản {version} · {time}",
     "auto.saved.unsaved": "Có thay đổi chưa lưu",
+    "auto.saved.listVersion": "Phiên bản {version}",
+    "auto.saved.listUnsaved": "Chưa lưu",
     "auto.saved.written": "Đã ghi",
     "auto.saved.writeFailed": "Không ghi được: {reason}",
     "auto.saved.save": "Lưu",

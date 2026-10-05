@@ -1324,6 +1324,8 @@ export const uk: Translation = {
     "auto.saved.never": "Ще не збережено",
     "auto.saved.version": "Версію {version} збережено · {time}",
     "auto.saved.unsaved": "Є незбережені зміни",
+    "auto.saved.listVersion": "Версія {version}",
+    "auto.saved.listUnsaved": "Не збережено",
     "auto.saved.written": "Записано",
     "auto.saved.writeFailed": "Не записано: {reason}",
     "auto.saved.save": "Зберегти",

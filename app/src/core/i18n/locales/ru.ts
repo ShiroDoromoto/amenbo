@@ -1324,6 +1324,8 @@ export const ru: Translation = {
     "auto.saved.never": "Ещё не сохранено",
     "auto.saved.version": "Версия {version} сохранена · {time}",
     "auto.saved.unsaved": "Есть несохранённые изменения",
+    "auto.saved.listVersion": "Версия {version}",
+    "auto.saved.listUnsaved": "Не сохранено",
     "auto.saved.written": "Записано",
     "auto.saved.writeFailed": "Не записано: {reason}",
     "auto.saved.save": "Сохранить",

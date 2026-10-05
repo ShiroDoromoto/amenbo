@@ -1319,6 +1319,8 @@ export const es: Translation = {
     "auto.saved.never": "Aún sin guardar",
     "auto.saved.version": "Versión {version} guardada · {time}",
     "auto.saved.unsaved": "Cambios sin guardar",
+    "auto.saved.listVersion": "Versión {version}",
+    "auto.saved.listUnsaved": "Sin guardar",
     "auto.saved.written": "Escrito",
     "auto.saved.writeFailed": "No se escribió: {reason}",
     "auto.saved.save": "Guardar",

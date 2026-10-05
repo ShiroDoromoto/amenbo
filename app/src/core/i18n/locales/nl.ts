@@ -1307,6 +1307,8 @@ export const nl: Translation = {
     "auto.saved.never": "Nog niet opgeslagen",
     "auto.saved.version": "Versie {version} opgeslagen · {time}",
     "auto.saved.unsaved": "Niet-opgeslagen wijzigingen",
+    "auto.saved.listVersion": "Versie {version}",
+    "auto.saved.listUnsaved": "Niet opgeslagen",
     "auto.saved.written": "Geschreven",
     "auto.saved.writeFailed": "Niet geschreven: {reason}",
     "auto.saved.save": "Opslaan",

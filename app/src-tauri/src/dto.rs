@@ -3320,6 +3320,13 @@ pub struct AutomationCardDto {
     #[ts(type = "number")]
     pub(crate) placements: usize,
     pub(crate) archived: bool,
+    /// The newest saved version. Absent for an automation nobody has saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved: Option<AutomationSavedDto>,
+    /// Does the draft hold anything the newest saved version does not? The row marks it, so a draft
+    /// left unsaved is noticed from the list.
+    pub(crate) unsaved: bool,
 }
 
 /// **One automation in the list that spans every project** — the row the sidebar's "automations"
@@ -3367,6 +3374,12 @@ pub struct AutomationActionCardDto {
     pub(crate) global: bool,
     #[ts(type = "number")]
     pub(crate) used_by: usize,
+    /// The newest saved version. Absent for an action nobody has saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved: Option<AutomationSavedDto>,
+    /// Does what is inside the action hold anything the newest saved version does not?
+    pub(crate) unsaved: bool,
 }
 
 /// **One library action in the list that spans every project** — the row the sidebar's "actions" tab

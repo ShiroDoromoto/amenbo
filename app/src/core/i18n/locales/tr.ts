@@ -1307,6 +1307,8 @@ export const tr: Translation = {
     "auto.saved.never": "Henüz kaydedilmedi",
     "auto.saved.version": "Sürüm {version} kaydedildi · {time}",
     "auto.saved.unsaved": "Kaydedilmemiş değişiklikler var",
+    "auto.saved.listVersion": "Sürüm {version}",
+    "auto.saved.listUnsaved": "Kaydedilmedi",
     "auto.saved.written": "Yazıldı",
     "auto.saved.writeFailed": "Yazılamadı: {reason}",
     "auto.saved.save": "Kaydet",

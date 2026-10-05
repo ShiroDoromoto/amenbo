@@ -95,6 +95,8 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
             notes: card.automation.notes,
             placements: card.placements,
             archived: card.automation.archived,
+            saved: card.saved.map(saved_dto),
+            unsaved: card.unsaved,
         })
         .collect())
 }
@@ -120,6 +122,8 @@ pub fn automation_page_everywhere() -> Result<Vec<EveryAutomationCardDto>, CmdEr
                 notes: one.card.automation.notes,
                 placements: one.card.placements,
                 archived: one.card.automation.archived,
+                saved: one.card.saved.map(saved_dto),
+                unsaved: one.card.unsaved,
             },
         })
         .collect())
@@ -229,6 +233,8 @@ pub fn automation_action_page(
             // inside one project would only ever read an id back as "mine" or "the device's".
             global: card.action.project_id.is_none(),
             used_by: card.used_by,
+            saved: card.saved.map(saved_dto),
+            unsaved: card.unsaved,
         });
     }
     Ok(out)
@@ -258,6 +264,8 @@ pub fn automation_action_page_everywhere() -> Result<Vec<EveryAutomationActionCa
                 steps: one.card.steps,
                 global: one.card.action.project_id.is_none(),
                 used_by: one.card.used_by,
+                saved: one.card.saved.map(saved_dto),
+                unsaved: one.card.unsaved,
             },
         })
         .collect())

@@ -1307,6 +1307,8 @@ export const hi: Translation = {
     "auto.saved.never": "अभी तक सहेजा नहीं गया",
     "auto.saved.version": "संस्करण {version} सहेजा गया · {time}",
     "auto.saved.unsaved": "बिना सहेजे बदलाव",
+    "auto.saved.listVersion": "संस्करण {version}",
+    "auto.saved.listUnsaved": "बिना सहेजा",
     "auto.saved.written": "लिखा गया",
     "auto.saved.writeFailed": "नहीं लिखा गया: {reason}",
     "auto.saved.save": "सहेजें",

@@ -1308,6 +1308,8 @@ export const th: Translation = {
     "auto.saved.never": "ยังไม่ได้บันทึก",
     "auto.saved.version": "บันทึกเวอร์ชัน {version} แล้ว · {time}",
     "auto.saved.unsaved": "มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก",
+    "auto.saved.listVersion": "เวอร์ชัน {version}",
+    "auto.saved.listUnsaved": "ยังไม่ได้บันทึก",
     "auto.saved.written": "เขียนแล้ว",
     "auto.saved.writeFailed": "เขียนไม่สำเร็จ: {reason}",
     "auto.saved.save": "บันทึก",

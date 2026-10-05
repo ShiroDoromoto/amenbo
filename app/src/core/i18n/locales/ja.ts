@@ -1313,6 +1313,8 @@ export const ja: Translation = {
     "auto.saved.never": "まだ保存していません",
     "auto.saved.version": "バージョン {version} を保存済み・{time}",
     "auto.saved.unsaved": "保存していない変更があります",
+    "auto.saved.listVersion": "バージョン {version}",
+    "auto.saved.listUnsaved": "未保存",
     "auto.saved.written": "書き込み済み",
     "auto.saved.writeFailed": "書き込めませんでした：{reason}",
     "auto.saved.save": "保存する",

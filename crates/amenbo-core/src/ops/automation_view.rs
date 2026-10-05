@@ -32,14 +32,19 @@ use crate::store_engine::read;
 use crate::time::Timestamp;
 use crate::{Error, Result};
 
-/// **One automation in a list**: the row itself, and how many actions are placed on it.
+/// **One automation in a list**: the row itself, how many actions are placed on it, and its saved
+/// state.
 ///
 /// The count comes with the row because "what is this" and "is it built yet" are the two things a
-/// list is read for.
+/// list is read for. The saved state comes too, so a draft left unsaved shows in the list.
 #[derive(Clone, Debug, Serialize)]
 pub struct AutomationCard {
     pub automation: Automation,
     pub placements: usize,
+    /// The newest saved version, or `None` for an automation nobody has saved.
+    pub saved: Option<SavedVersion>,
+    /// Does the draft hold anything the newest saved version does not?
+    pub unsaved: bool,
 }
 
 /// **One automation in the list that spans every project**: its card, and the name of the project it
@@ -63,6 +68,11 @@ pub struct ActionCard {
     pub action: AutomationAction,
     pub steps: usize,
     pub used_by: usize,
+    /// The newest saved version — `None` for a built-in, which has none (`AMB-D-1000`), and for an
+    /// action nobody has saved.
+    pub saved: Option<SavedVersion>,
+    /// Does the draft hold anything the newest saved version does not? Never, for a built-in.
+    pub unsaved: bool,
 }
 
 /// **One library action in the list that spans every project**: its card, and the name of the project
@@ -228,6 +238,8 @@ pub fn cards(conn: &Connection, project_id: i64) -> Result<Vec<AutomationCard>> 
         out.push(AutomationCard {
             automation,
             placements: read::automation_placement_ids(conn, id)?.len(),
+            saved: saved_version(conn, id)?,
+            unsaved: super::automation::unsaved(conn, id)?,
         });
     }
     Ok(out)
@@ -292,10 +304,13 @@ fn shelf_cards(conn: &Connection, reach: Option<i64>) -> Result<Vec<ActionCard>>
     let mut out = Vec::new();
     for (id, _) in read::automation_action_siblings(conn, reach, None)? {
         let Some(action) = read::automation_action(conn, id)? else { continue };
+        let (saved, unsaved) = action_saved_state(conn, &action)?;
         out.push(ActionCard {
             action,
             steps: read::automation_action_step_ids(conn, id)?.len(),
             used_by: used_by(conn, id)?,
+            saved,
+            unsaved,
         });
     }
     Ok(out)
@@ -356,8 +371,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
     }
     let edges = read::automation_edges_of(conn, AutomationPictureOwner::Automation, id)?;
     let wires = read::automation_wires_of(conn, AutomationPictureOwner::Automation, id)?;
-    let saved = read::automation_version_latest(conn, id)?
-        .map(|v| SavedVersion { version: v.version, saved_at: v.created_at });
+    let saved = saved_version(conn, id)?;
     let unsaved = super::automation::unsaved(conn, id)?;
     Ok(Some(AutomationView {
         automation,
@@ -416,6 +430,26 @@ pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>
     }))
 }
 
+/// The newest saved version of one automation, or `None` where nobody has saved it.
+fn saved_version(conn: &Connection, id: i64) -> Result<Option<SavedVersion>> {
+    Ok(read::automation_version_latest(conn, id)?
+        .map(|v| SavedVersion { version: v.version, saved_at: v.created_at }))
+}
+
+/// One action's newest saved version and whether its draft holds more. A built-in has neither
+/// (`AMB-D-1000`).
+fn action_saved_state(
+    conn: &Connection,
+    action: &AutomationAction,
+) -> Result<(Option<SavedVersion>, bool)> {
+    if action.builtin.is_some() {
+        return Ok((None, false));
+    }
+    let saved = read::automation_action_version_latest(conn, action.id)?
+        .map(|v| SavedVersion { version: v.version, saved_at: v.created_at });
+    Ok((saved, super::automation::action_unsaved(conn, action.id)?))
+}
+
 /// One library action in full, or `None` where that id names none.
 pub fn action_detail(conn: &Connection, id: i64) -> Result<Option<ActionView>> {
     let Some(action) = read::automation_action(conn, id)? else { return Ok(None) };
@@ -428,14 +462,7 @@ pub fn action_detail(conn: &Connection, id: i64) -> Result<Option<ActionView>> {
     let exits = exit_views(conn, AutomationOwner::Action, id)?;
     let inputs = ports_of(conn, AutomationPortOwner::Action, id, AutomationPortDirection::In)?;
     let settings = read::automation_cfgs_of(conn, AutomationCfgOwner::Action, id)?;
-    let (saved, unsaved) = match action.builtin {
-        Some(_) => (None, false),
-        None => (
-            read::automation_action_version_latest(conn, id)?
-                .map(|v| SavedVersion { version: v.version, saved_at: v.created_at }),
-            super::automation::action_unsaved(conn, id)?,
-        ),
-    };
+    let (saved, unsaved) = action_saved_state(conn, &action)?;
     Ok(Some(ActionView {
         placed_at: placed_at(conn, &action)?,
         action,
@@ -769,6 +796,46 @@ mod tests {
             assert!(built_in.saved.is_none() && !built_in.unsaved);
             let built_in = action_saved_detail(tx.conn(), take.id).unwrap().unwrap();
             assert_eq!(built_in.showing, Showing::Saved);
+        });
+    }
+
+    /// **A card says the version saved last and whether the draft holds more**, the way a show does —
+    /// and a built-in's says neither.
+    #[test]
+    fn a_card_names_the_saved_version_and_whether_the_draft_holds_more() {
+        use crate::ops::automation::{action_version_add, step_update, version_add};
+        use crate::ops::test_support::mk_placed;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+            let (action, _) = mk_placed(tx, &automation, "点検", "見る", "claude");
+            let take = crate::ops::automation_builtin::action(tx, "take_task").unwrap();
+
+            let card = |conn: &Connection| cards(conn, project).unwrap().remove(0);
+            let action_card = |conn: &Connection, id: i64| {
+                let all = action_cards(conn, Some(project)).unwrap();
+                all.into_iter().find(|c| c.action.id == id).unwrap()
+            };
+            let one = card(tx.conn());
+            assert!(one.saved.is_none() && one.unsaved, "never saved");
+            let one = action_card(tx.conn(), action.id);
+            assert!(one.saved.is_none() && one.unsaved, "never saved");
+
+            version_add(tx, automation.id).unwrap();
+            action_version_add(tx, action.id).unwrap();
+            let one = card(tx.conn());
+            assert_eq!(one.saved.map(|v| v.version), Some(1));
+            assert!(!one.unsaved);
+            let step = action.entry_step_id.unwrap();
+            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None)
+                .unwrap();
+            let one = action_card(tx.conn(), action.id);
+            assert_eq!(one.saved.map(|v| v.version), Some(1));
+            assert!(one.unsaved);
+
+            let built_in = action_card(tx.conn(), take.id);
+            assert!(built_in.saved.is_none() && !built_in.unsaved);
         });
     }
 

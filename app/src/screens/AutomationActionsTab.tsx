@@ -57,6 +57,7 @@ import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { Menu, MenuItem } from "../components/Menu";
 import { LockMark, ReachChip, usedCount } from "./automationParts";
+import { SavedMark } from "./AutomationSaved";
 import type { AutomationActionCardDto } from "../bindings/bindings";
 
 /**
@@ -393,6 +394,7 @@ function ActionRow({
           <span className="auto__name">
             <span className="autoid">{tf("auto.id", { id: action.id })}</span>
             {action.name}
+            <SavedMark saved={action.saved} unsaved={action.unsaved} />
             {firstLine(action.note) !== "" && (
               <span className="auto__note">{firstLine(action.note)}</span>
             )}

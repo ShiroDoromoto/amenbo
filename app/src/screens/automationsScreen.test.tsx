@@ -114,7 +114,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 function card(over: Partial<AutomationCardDto> = {}): AutomationCardDto {
-  return { id: 7, name: "Morning round", notes: "", placements: 3, archived: false, ...over };
+  return { id: 7, name: "Morning round", notes: "", placements: 3, archived: false, unsaved: false, ...over };
 }
 
 function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
@@ -228,6 +228,23 @@ describe("the automations screen", () => {
     await act(async () => { button(t("auto.start")).click(); });
     await handOver();
     expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true, { files: [], title: "", notes: "", classification: [] });
+  });
+
+  it("marks a row whose draft holds changes not saved, beside the version saved last", async () => {
+    hoisted.automations = [
+      card({ id: 1, name: "Saved", saved: { version: 2, savedAt: "2026-10-01T00:00:00Z" } }),
+      card({ id: 2, name: "Edited", saved: { version: 3, savedAt: "2026-10-01T00:00:00Z" }, unsaved: true }),
+      card({ id: 3, name: "Empty" }),
+    ];
+    await render();
+    const marks = [...container.querySelectorAll(".autolist__row")].map(
+      (one) => one.querySelector(".savedmark")?.textContent ?? null,
+    );
+    expect(marks).toEqual([
+      tf("auto.saved.listVersion", { version: 2 }),
+      tf("auto.saved.listVersion", { version: 3 }) + t("auto.saved.listUnsaved"),
+      null,
+    ]);
   });
 
   // Whether it could start is the press's state, and why not is read off it (`AMB-T-5523`).

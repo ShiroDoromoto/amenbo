@@ -110,7 +110,7 @@ steps_cli:
   - type: assert
     domain: automation
     op: placement-read
-    with: { target: auto, name: work, saved: true, version: 2, latest: 2, steps: [check, fix] }
+    with: { target: auto, name: work, saved: true, version: 2, latest: 2, steps: [fix, check] }
   - { type: action, domain: automation, op: start, with: { target: auto }, as: run_on_2 }
   - { type: assert, domain: automation, op: run, with: { target: run_on_2, status: running } }
   - { type: action, domain: automation, op: stop, with: { target: run_on_2 } }

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // The line the "Edit" panel hands over to the terminal is one a reader can type as it stands: the CLI
 // this build installs, and the facet the CLI refuses to go without. The seam to core (the CLI's name)
-// and the writes are stubbed, so what runs for real is the line the panel draws and copies.
+// and the writes are stubbed, so what runs for real is the line the panel draws and copies — and the
+// patch the most-runs-at-once switch and its number hand to the write.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const hoisted = vi.hoisted(() => ({
   /** The CLI this build installs; null where it installs none a reader can run. */
   cli: "amenbo" as string | null,
+  /** Each patch the panel wrote, in order. */
+  edits: [] as unknown[],
 }));
 
 vi.mock("../core/mutations", () => ({
@@ -16,7 +19,10 @@ vi.mock("../core/mutations", () => ({
 }));
 
 vi.mock("../core/automations", () => ({
-  editAutomation: () => Promise.resolve(),
+  editAutomation: (_id: number, patch: unknown) => {
+    hoisted.edits.push(patch);
+    return Promise.resolve();
+  },
   deleteAutomation: () => Promise.resolve(),
 }));
 
@@ -46,6 +52,7 @@ const automation: AutomationDetailDto = {
 
 beforeEach(() => {
   hoisted.cli = "amenbo";
+  hoisted.edits = [];
   clipboard = [];
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -62,8 +69,8 @@ afterEach(() => {
 });
 
 // Awaited, so the build's CLI name — asked for at mount — has landed before anything is read.
-const render = () =>
-  act(async () => { root.render(createElement(AutomationAboutPanel, { automation, onDeleted: () => {} })); });
+const render = (shown: AutomationDetailDto = automation) =>
+  act(async () => { root.render(createElement(AutomationAboutPanel, { automation: shown, onDeleted: () => {} })); });
 
 const line = () => container.querySelector(".autoabout__command")?.textContent ?? null;
 
@@ -87,5 +94,52 @@ describe("the line the panel hands to the terminal", () => {
     hoisted.cli = null;
     await render();
     expect(line()).toBeNull();
+  });
+});
+
+describe("the most runs at once", () => {
+  const row = () =>
+    Array.from(container.querySelectorAll(".switchrow")).find(
+      (r) => (r.textContent ?? "") === t("auto.about.limitRuns"),
+    )!;
+  const toggle = () => row().querySelector<HTMLInputElement>('input[role="switch"]')!;
+  const field = () => container.querySelector<HTMLInputElement>('input[type="number"]');
+
+  const type = (input: HTMLInputElement, value: string) => {
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    set.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const leave = (input: HTMLInputElement) => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+
+  it("draws no number while nothing limits them, and turning it on writes 1", async () => {
+    await render();
+    expect(toggle().checked).toBe(false);
+    expect(field()).toBeNull();
+    await act(async () => { toggle().click(); });
+    expect(hoisted.edits).toEqual([{ maxConcurrentRuns: 1 }]);
+  });
+
+  it("turning it off lifts the limit", async () => {
+    await render({ ...automation, maxConcurrentRuns: 2 });
+    expect(toggle().checked).toBe(true);
+    expect(field()!.value).toBe("2");
+    await act(async () => { toggle().click(); });
+    expect(hoisted.edits).toEqual([{ maxConcurrentRuns: null }]);
+  });
+
+  it("writes the number when the caret leaves it", async () => {
+    await render({ ...automation, maxConcurrentRuns: 2 });
+    await act(async () => { type(field()!, "3"); });
+    await act(async () => { leave(field()!); });
+    expect(hoisted.edits).toEqual([{ maxConcurrentRuns: 3 }]);
+  });
+
+  it("does not write a number under 1, and puts the stored one back", async () => {
+    await render({ ...automation, maxConcurrentRuns: 2 });
+    await act(async () => { type(field()!, "0"); });
+    await act(async () => { leave(field()!); });
+    expect(hoisted.edits).toEqual([]);
+    expect(field()!.value).toBe("2");
   });
 });

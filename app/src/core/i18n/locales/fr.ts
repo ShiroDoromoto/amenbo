@@ -1345,6 +1345,8 @@ export const fr: Translation = {
     "auto.about.copy": "Copier",
     "auto.about.copied": "Copié",
     "auto.about.notesHint": "Une ligne affichée dans la liste",
+    "auto.about.limitRuns": "Limiter les exécutions simultanées",
+    "auto.about.mostRuns": "Au plus à la fois",
     "auto.about.archive": "Archivée",
     "auto.about.remove": "Supprimer cette automatisation",
     "auto.about.removeConfirm": "Supprimer cette automatisation ? Ses placements, ce qui suit chacun et les transmissions entre eux disparaissent avec elle. Les actions placées restent dans la bibliothèque. C'est irréversible.",

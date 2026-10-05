@@ -1335,6 +1335,8 @@ export const zhHant: Translation = {
     "auto.about.copy": "複製",
     "auto.about.copied": "已複製",
     "auto.about.notesHint": "顯示在清單中的一句話",
+    "auto.about.limitRuns": "限制同時執行的數量",
+    "auto.about.mostRuns": "同時執行上限",
     "auto.about.archive": "已封存",
     "auto.about.remove": "刪除此自動化",
     "auto.about.removeConfirm": "要刪除此自動化嗎？其中的放置、每個放置之後要做的事，以及它們之間的傳遞都會一併消失。放置過的動作仍留在庫中。此操作無法復原。",

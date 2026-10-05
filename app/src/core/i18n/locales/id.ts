@@ -1334,6 +1334,8 @@ export const id: Translation = {
     "auto.about.copy": "Salin",
     "auto.about.copied": "Disalin",
     "auto.about.notesHint": "Satu baris yang tampil di daftar",
+    "auto.about.limitRuns": "Batasi run bersamaan",
+    "auto.about.mostRuns": "Paling banyak sekaligus",
     "auto.about.archive": "Diarsipkan",
     "auto.about.remove": "Hapus otomasi ini",
     "auto.about.removeConfirm": "Hapus otomasi ini? Penempatannya, apa yang terjadi setelah masing-masing, dan serah terima di antaranya ikut terhapus. Aksi yang ditempatkan tetap ada di pustaka. Ini tidak bisa dibatalkan.",

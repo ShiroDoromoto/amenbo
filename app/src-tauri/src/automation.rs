@@ -148,8 +148,13 @@ pub fn automation_add(project_id: i64, name: String) -> Result<WriteAck, CmdErro
     Ok(WriteAck::new(&["automations"]).automation(made.id))
 }
 
-/// **Rename an automation, rewrite its notes, or put it out of the way.** Only what is `Some` is
-/// written.
+/// **Rename an automation, rewrite its notes, put it out of the way, or set how many of its runs may
+/// be going at once.** Only what is `Some` is written.
+///
+/// The most runs at once comes as two arguments, the way the CLI takes it: `max_concurrent_runs` sets
+/// it at that number, at least 1, and `no_max_concurrent_runs` lifts it. One `Option<Option<u32>>`
+/// would need an absent argument and a `null` to mean different things, which a call from the screen
+/// does not keep apart.
 ///
 /// Archiving takes nothing away, and like every rewrite it goes through while a run of the automation
 /// is going — the run keeps the copy it started with ([`amenbo_core::ops::automation::update`]). It
@@ -165,9 +170,13 @@ pub fn automation_edit(
     name: Option<String>,
     notes: Option<String>,
     archived: Option<bool>,
+    max_concurrent_runs: Option<u32>,
+    no_max_concurrent_runs: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
+    let max_concurrent_runs =
+        if no_max_concurrent_runs == Some(true) { Some(None) } else { max_concurrent_runs.map(Some) };
     with_store_mut(|store| {
-        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, None)?;
+        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
@@ -2762,6 +2771,7 @@ fn detail_dto(
         notes: a.notes,
         entry_placement_id: a.entry_placement_id,
         archived: a.archived,
+        max_concurrent_runs: a.max_concurrent_runs,
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires,
         placements: view.placements.into_iter().map(placement_dto).collect(),

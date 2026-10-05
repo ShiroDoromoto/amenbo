@@ -3353,7 +3353,7 @@ mod tests {
             let startable = claude();
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             assert!(launch(tx, automation.id, &closed).is_err());
-            automation::update(tx, automation.id, None, None, Some(true)).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
             assert!(launch(tx, automation.id, &here(&claude())).is_err());
         });
     }
@@ -3423,7 +3423,7 @@ mod tests {
             let again = automation::save(tx, automation.id).expect("save with nothing written");
             assert_eq!(again.id, first.id, "nothing written since, so no new version");
 
-            automation::update(tx, automation.id, Some("2件やりきる"), None, None).expect("rename");
+            automation::update(tx, automation.id, Some("2件やりきる"), None, None, None).expect("rename");
             assert!(
                 !automation::unsaved(tx.conn(), automation.id).expect("unsaved"),
                 "the name is not part of a version",
@@ -3442,7 +3442,7 @@ mod tests {
         with_tx(|tx| {
             let startable = claude();
             let (automation, _, _) = launchable(tx);
-            automation::update(tx, automation.id, None, None, Some(true)).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
             let err = launch(tx, automation.id, &here(&startable)).expect_err("archived");
             let Error::Invalid(msg) = err else { panic!("an archived automation is invalid") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationArchived));
@@ -3451,7 +3451,7 @@ mod tests {
                 vec!["automation"],
             );
 
-            automation::update(tx, automation.id, None, None, Some(false)).expect("bring back");
+            automation::update(tx, automation.id, None, None, Some(false), None).expect("bring back");
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             let err = launch(tx, automation.id, &closed).expect_err("closed");
             let Error::Invalid(msg) = err else { panic!("a closed workspace is invalid") };
@@ -3627,7 +3627,7 @@ mod tests {
             let Error::Invalid(msg) = err else { panic!("an automation with runs is invalid to delete") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationHasRuns));
             assert_eq!(msg.fields().iter().collect::<Vec<_>>(), vec![("count", "1")]);
-            automation::update(tx, automation.id, None, None, Some(true)).expect("archiving is the way instead");
+            automation::update(tx, automation.id, None, None, Some(true), None).expect("archiving is the way instead");
         });
     }
 

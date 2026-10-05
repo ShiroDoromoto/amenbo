@@ -1245,15 +1245,18 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
     Ok(automation)
 }
 
-/// Change an automation's name, notes, or whether it is archived. Only the `Some` fields are
-/// written. Archiving takes nothing away: it is what keeps an automation nobody launches any more out
-/// of the lists. A run of the automation going on does not stop it.
+/// Change an automation's name, notes, whether it is archived, or how many of its runs may be going
+/// at once. Only the `Some` fields are written. Archiving takes nothing away: it is what keeps an
+/// automation nobody launches any more out of the lists. A run of the automation going on does not
+/// stop it. `max_concurrent_runs` is `Some(Some(n))` to set the most at `n`, at least 1, and
+/// `Some(None)` to take the limit away.
 pub fn update(
     tx: &WriteTx<'_>,
     id: i64,
     name: Option<&str>,
     notes: Option<&str>,
     archived: Option<bool>,
+    max_concurrent_runs: Option<Option<u32>>,
 ) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     let mut after = before.clone();
@@ -1265,6 +1268,14 @@ pub fn update(
     }
     if let Some(archived) = archived {
         after.archived = archived;
+    }
+    if let Some(max) = max_concurrent_runs {
+        if max == Some(0) {
+            return Err(Error::invalid(
+                "the most runs of an automation going at once is at least 1; take the limit away for none",
+            ));
+        }
+        after.max_concurrent_runs = max;
     }
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation(&before), record::automation(&after))?;
@@ -3740,6 +3751,31 @@ mod tests {
             .into_iter()
             .map(|e| e.name)
             .collect()
+    }
+
+    /// **The most runs going at once is set, kept, taken away and never 0.** An automation is born
+    /// with no limit; leaving the field out keeps what is there.
+    #[test]
+    fn the_most_runs_going_at_once_is_set_and_taken_away_and_never_zero() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            assert_eq!(automation.max_concurrent_runs, None, "born with no limit");
+
+            let set = update(tx, automation.id, None, None, None, Some(Some(2))).expect("set the most");
+            assert_eq!(set.max_concurrent_runs, Some(2));
+            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, Some(2));
+
+            let renamed = update(tx, automation.id, Some("別名"), None, None, None).expect("rename");
+            assert_eq!(renamed.max_concurrent_runs, Some(2), "left out, it is kept");
+
+            let refused = update(tx, automation.id, None, None, None, Some(Some(0)));
+            assert!(matches!(refused, Err(Error::Invalid(_))), "0 runs at once is refused");
+            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, Some(2));
+
+            let cleared = update(tx, automation.id, None, None, None, Some(None)).expect("take it away");
+            assert_eq!(cleared.max_concurrent_runs, None);
+            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, None);
+        });
     }
 
     #[test]
@@ -6558,8 +6594,8 @@ mod rewritten_under_a_run {
                 .expect("the answer");
 
         // The automation's picture.
-        not_held("rename", update(tx, p.automation.id, Some("別名"), None, None));
-        not_held("archive", update(tx, p.automation.id, None, None, Some(true)));
+        not_held("rename", update(tx, p.automation.id, Some("別名"), None, None, None));
+        not_held("archive", update(tx, p.automation.id, None, None, Some(true), None));
         not_held("entry", entry_replace(tx, p.automation.id, "fetch"));
         not_held("delete", delete(tx, p.automation.id));
         not_held("place", placement_add(tx, p.automation.id, p.second_action.id));
@@ -6685,9 +6721,9 @@ mod rewritten_under_a_run {
                 let run = if pause { paused(tx, &run) } else { run };
                 let before = copied(tx, &run);
 
-                let renamed = update(tx, p.automation.id, Some("別名"), None, None).expect("rename");
+                let renamed = update(tx, p.automation.id, Some("別名"), None, None, None).expect("rename");
                 assert_eq!(renamed.name, "別名");
-                let archived = update(tx, p.automation.id, None, None, Some(true)).expect("archive");
+                let archived = update(tx, p.automation.id, None, None, Some(true), None).expect("archive");
                 assert!(archived.archived);
                 let moved = action_set_scope(tx, p.first_action.id, None).expect("to the device");
                 assert_eq!(moved.project_id, None);

@@ -1328,16 +1328,18 @@ impl Store {
         })
     }
 
-    /// Change an automation's name, notes or archived flag (one operation = one transaction).
+    /// Change an automation's name, notes, archived flag or most runs going at once (one operation =
+    /// one transaction) — [`crate::ops::automation::update`].
     pub fn automation_update(
         &mut self,
         id: i64,
         name: Option<&str>,
         notes: Option<&str>,
         archived: Option<bool>,
+        max_concurrent_runs: Option<Option<u32>>,
     ) -> Result<crate::model::Automation> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
-            crate::ops::automation::update(tx, id, name, notes, archived)
+            crate::ops::automation::update(tx, id, name, notes, archived, max_concurrent_runs)
         })
     }
 

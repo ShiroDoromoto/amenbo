@@ -1685,6 +1685,8 @@ export const ptBR: Translation = {
     invalid_automation_archived: "“{automation}” está arquivada. Recupere-a antes de iniciá-la.",
     invalid_automation_workspace_closed:
       "O espaço de trabalho está fechado, e uma execução desenha seus passos nos painéis dele. Abra-o e inicie de novo.",
+    invalid_automation_run_limit:
+      "“{automation}” já tem {max} execuções em andamento ou pausadas, o máximo permitido ao mesmo tempo ({runs}). Espere uma terminar antes de iniciá-la de novo.",
     not_ready_automation: "“{automation}” ainda não pode ser iniciada: {reasons}",
     not_ready_automation_no_steps: "Não tem nenhuma ação colocada",
     not_ready_automation_no_entry: "nenhum posicionamento é o início",

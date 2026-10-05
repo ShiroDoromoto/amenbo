@@ -1668,6 +1668,8 @@ export const zhHans: Translation = {
     invalid_automation_archived: "“{automation}”已归档。先取回再启动。",
     invalid_automation_workspace_closed:
       "工作区是关着的，而一次运行要把步骤画在它的窗格里。打开后再启动。",
+    invalid_automation_run_limit:
+      "“{automation}”已有 {max} 次执行正在运行或已暂停，达到同时运行的上限（{runs}）。请等其中一次结束后再启动。",
     not_ready_automation: "“{automation}”还不能启动：{reasons}",
     not_ready_automation_no_steps: "上面没有放置任何动作",
     not_ready_automation_no_entry: "尚未确定起点的放置",

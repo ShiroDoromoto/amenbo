@@ -1667,6 +1667,8 @@ export const tr: Translation = {
     invalid_automation_archived: "“{automation}” arşivlenmiş. Başlatmadan önce geri getir.",
     invalid_automation_workspace_closed:
       "Çalışma alanı kapalı ve bir koşu adımlarını oradaki bölmelere çizer. Aç ve yeniden başlat.",
+    invalid_automation_run_limit:
+      "“{automation}” zaten aynı anda izin verilen en fazla sayıda, {max} çalışan ya da duraklatılmış çalıştırmaya sahip ({runs}). Yeniden başlatmadan önce birinin bitmesini bekle.",
     not_ready_automation: "“{automation}” henüz başlatılamaz: {reasons}",
     not_ready_automation_no_steps: "Üzerine hiçbir eylem yerleştirilmemiş",
     not_ready_automation_no_entry: "hiçbir yerleşim başlangıç değil",

@@ -1663,6 +1663,8 @@ export const ko: Translation = {
     invalid_automation_archived: "“{automation}”은(는) 보관됨입니다. 되돌린 뒤에 시작하세요.",
     invalid_automation_workspace_closed:
       "워크스페이스가 닫혀 있고, 실행은 그 창에 단계를 그립니다. 열고 다시 시작하세요.",
+    invalid_automation_run_limit:
+      "“{automation}”은(는) 동시에 둘 수 있는 최대치인 {max}개의 실행이 이미 진행 중이거나 일시 정지 중입니다({runs}). 하나가 끝난 뒤에 다시 시작하세요.",
     not_ready_automation: "“{automation}”은(는) 아직 시작할 수 없습니다: {reasons}",
     not_ready_automation_no_steps: "액션이 하나도 놓여 있지 않습니다",
     not_ready_automation_no_entry: "시작점인 배치가 정해지지 않았다",

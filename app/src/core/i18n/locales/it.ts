@@ -1685,6 +1685,8 @@ export const it: Translation = {
     invalid_automation_archived: "«{automation}» è archiviata. Riportala indietro prima di avviarla.",
     invalid_automation_workspace_closed:
       "L’area di lavoro è chiusa, e un’esecuzione disegna i suoi passi nei suoi riquadri. Aprila e avvia di nuovo.",
+    invalid_automation_run_limit:
+      "«{automation}» ha già {max} esecuzioni in corso o in pausa, il massimo consentito contemporaneamente ({runs}). Attendi che una termini prima di avviarla di nuovo.",
     not_ready_automation: "«{automation}» non si può ancora avviare: {reasons}",
     not_ready_automation_no_steps: "Non ha nessuna azione collocata",
     not_ready_automation_no_entry: "nessun posizionamento è l'inizio",

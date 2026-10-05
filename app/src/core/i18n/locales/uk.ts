@@ -1693,6 +1693,8 @@ export const uk: Translation = {
     invalid_automation_archived: "«{automation}» в архіві. Поверніть її, перш ніж запускати.",
     invalid_automation_workspace_closed:
       "Робочий простір закрито, а запуск малює свої кроки в його панелях. Відкрийте його й запустіть знову.",
+    invalid_automation_run_limit:
+      "«{automation}» вже має {max} запусків, що виконуються або призупинені, — це межа одночасних ({runs}). Дочекайтеся, поки один завершиться, перш ніж запускати знову.",
     not_ready_automation: "«{automation}» поки запустити не можна: {reasons}",
     not_ready_automation_no_steps: "На ній не розміщено жодної дії",
     not_ready_automation_no_entry: "жодне розміщення не призначено стартом",

@@ -1685,6 +1685,8 @@ export const es: Translation = {
     invalid_automation_archived: "«{automation}» está archivada. Recupérala antes de iniciarla.",
     invalid_automation_workspace_closed:
       "El espacio de trabajo está cerrado y una ejecución dibuja sus pasos en sus paneles. Ábrelo y vuelve a iniciar.",
+    invalid_automation_run_limit:
+      "«{automation}» ya tiene {max} ejecuciones en curso o en pausa, el máximo permitido a la vez ({runs}). Espera a que termine una antes de volver a iniciarla.",
     not_ready_automation: "«{automation}» todavía no se puede iniciar: {reasons}",
     not_ready_automation_no_steps: "No tiene ninguna acción colocada",
     not_ready_automation_no_entry: "ninguna ubicación es el inicio",

@@ -1668,6 +1668,8 @@ export const zhHant: Translation = {
     invalid_automation_archived: "「{automation}」已封存。先取回再啟動。",
     invalid_automation_workspace_closed:
       "工作區是關著的，而一次執行要把步驟畫在它的窗格裡。打開後再啟動。",
+    invalid_automation_run_limit:
+      "「{automation}」已有 {max} 次執行正在進行或已暫停，達到同時執行的上限（{runs}）。請等其中一次結束後再啟動。",
     not_ready_automation: "「{automation}」還不能啟動：{reasons}",
     not_ready_automation_no_steps: "上面沒有放置任何動作",
     not_ready_automation_no_entry: "尚未決定起點的放置",

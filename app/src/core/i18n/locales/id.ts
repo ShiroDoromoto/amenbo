@@ -1668,6 +1668,8 @@ export const id: Translation = {
     invalid_automation_archived: "“{automation}” sudah diarsipkan. Kembalikan dulu sebelum menjalankannya.",
     invalid_automation_workspace_closed:
       "Ruang kerja tertutup, dan sebuah jalannya menggambar langkahnya di panel ruang itu. Buka lalu jalankan lagi.",
+    invalid_automation_run_limit:
+      "“{automation}” sudah punya {max} eksekusi yang berjalan atau dijeda, batas maksimum sekaligus ({runs}). Tunggu salah satunya selesai sebelum menjalankannya lagi.",
     not_ready_automation: "“{automation}” belum siap dijalankan: {reasons}",
     not_ready_automation_no_steps: "Belum ada aksi yang ditempatkan",
     not_ready_automation_no_entry: "tidak ada penempatan yang menjadi awal",

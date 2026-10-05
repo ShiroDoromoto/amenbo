@@ -1667,6 +1667,8 @@ export const hi: Translation = {
     invalid_automation_archived: "“{automation}” संग्रहित है। शुरू करने से पहले उसे वापस लाएँ।",
     invalid_automation_workspace_closed:
       "कार्यक्षेत्र बंद है, और एक रन अपने चरण उसी के पैनल में दिखाता है। उसे खोलकर फिर शुरू करें।",
+    invalid_automation_run_limit:
+      "“{automation}” के पहले से {max} रन चल रहे हैं या रुके हुए हैं, जो एक साथ की अधिकतम सीमा है ({runs})। फिर से शुरू करने से पहले किसी एक के ख़त्म होने तक रुकें।",
     not_ready_automation: "“{automation}” अभी शुरू नहीं किया जा सकता: {reasons}",
     not_ready_automation_no_steps: "इस पर कोई क्रिया नहीं रखी गई है।",
     not_ready_automation_no_entry: "कोई प्लेसमेंट शुरुआत नहीं है।",

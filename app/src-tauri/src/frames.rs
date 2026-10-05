@@ -19,7 +19,7 @@
 //! (`AMB-D-753`, `AMB-T-3664`). A window reload lands in the same place — what is here is this
 //! process's, and it goes when the process does.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
 
@@ -57,6 +57,16 @@ pub struct TalkFace {
     /// would be one a window could write. What is in here now is what came back from the store,
     /// beside whatever this run has since put on a pane.
     models: Mutex<BTreeMap<String, String>>,
+    /// The frames the store gave back with a way in that this run has not opened yet — the panes the
+    /// window wakes without being pressed (`AMB-D-869`, `AMB-T-4641`).
+    ///
+    /// **It is held here rather than read off the arrangement** because the window never writes it:
+    /// what it sends back carries no `resumes` (`app/src/talk/layout.ts`), and the arrangement it
+    /// sends is what [`talk_layout`] answers with from then on. A switch to the other face before a
+    /// pane was drawn would otherwise take the wake off every pane that came back (`AMB-D-753`).
+    /// Filled once with the panes ([`seed`]), and a frame leaves it as a pane is opened in it
+    /// ([`opened_on`](Self::opened_on)).
+    waking: Mutex<BTreeSet<String>>,
     /// The arrangement as the window drawing the face last had it, or nothing before either window
     /// has laid one out in this run.
     layout: Mutex<Option<TalkLayoutDto>>,
@@ -124,6 +134,7 @@ impl TalkFace {
     /// `None` is a pane put back on the provider's own default, which is an answer like any other:
     /// the row is cleared rather than left naming a model the pane is no longer on.
     pub fn opened_on(&self, frame: &str, model: Option<String>) {
+        self.waking.lock().unwrap_or_else(PoisonError::into_inner).remove(frame);
         {
             let mut models = self.models.lock().unwrap_or_else(PoisonError::into_inner);
             match model {
@@ -137,6 +148,20 @@ impl TalkFace {
         if let Err(e) = keep(self, &layout) {
             log::warn!("could not write down the model frame {frame} is on: {e:?}");
         }
+    }
+
+    /// The arrangement the window last sent, with the panes still to be woken marked as such
+    /// ([`waking`](Self::waking)).
+    ///
+    /// A frame is marked only while it still holds a way in: one taken back because what was started
+    /// in it never came up ([`gave_up`](Self::gave_up)) is a place to start afresh, not one to wake.
+    fn with_the_ones_to_wake(&self, mut live: TalkLayoutDto) -> TalkLayoutDto {
+        let waking = self.waking.lock().unwrap_or_else(PoisonError::into_inner);
+        let hints = self.hints.lock().unwrap_or_else(PoisonError::into_inner);
+        for frame in &mut live.frames {
+            frame.resumes = waking.contains(&frame.id) && hints.contains_key(&frame.id);
+        }
+        live
     }
 
     /// Every handle written down in this run — what a pane reading one back out of a provider's own
@@ -348,7 +373,7 @@ pub fn frame_model(face: tauri::State<'_, TalkFace>, frame: String) -> Option<St
 #[tauri::command]
 pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayoutDto>, CmdError> {
     if let Some(live) = face.layout.lock().unwrap_or_else(PoisonError::into_inner).clone() {
-        return Ok(Some(live));
+        return Ok(Some(face.with_the_ones_to_wake(live)));
     }
     Ok(open_store_read()?.saved_layout()?.map(|kept| {
         seed(&face, &kept);
@@ -416,12 +441,14 @@ fn seed(face: &TalkFace, kept: &SavedLayout) {
     let mut names = face.names.lock().unwrap_or_else(PoisonError::into_inner);
     let mut hints = face.hints.lock().unwrap_or_else(PoisonError::into_inner);
     let mut models = face.models.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut waking = face.waking.lock().unwrap_or_else(PoisonError::into_inner);
     for pane in &kept.panes {
         if let Some(name) = &pane.name {
             names.name(&pane.id, &name.name, name.by);
         }
         if let Some(resume) = &pane.resume {
             hints.insert(pane.id.clone(), resume.clone());
+            waking.insert(pane.id.clone());
         }
         if let Some(model) = &pane.model {
             models.insert(pane.id.clone(), model.clone());
@@ -470,8 +497,7 @@ fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
 /// to weigh what the homes have come to. Reading the device is left to the caller: this is reached
 /// on every keystroke under a pane, and the tests ask it directly.
 fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) -> bool {
-    let here: std::collections::BTreeSet<&str> =
-        layout.frames.iter().map(|frame| frame.id.as_str()).collect();
+    let here: BTreeSet<&str> = layout.frames.iter().map(|frame| frame.id.as_str()).collect();
     let mut a_home_went = false;
     face.hints.lock().unwrap_or_else(PoisonError::into_inner).retain(|frame, handle| {
         if here.contains(frame.as_str()) {
@@ -482,6 +508,7 @@ fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) -> bool {
     });
     face.models.lock().unwrap_or_else(PoisonError::into_inner).retain(|frame, _| here.contains(frame.as_str()));
     face.names.lock().unwrap_or_else(PoisonError::into_inner).retain(|frame| here.contains(frame));
+    face.waking.lock().unwrap_or_else(PoisonError::into_inner).retain(|frame| here.contains(frame.as_str()));
     a_home_went
 }
 
@@ -819,5 +846,47 @@ mod tests {
         face.names.lock().unwrap().name("1", "reading the store", NamedBy::Person);
         seed(&face, &kept);
         assert_eq!(face.names.lock().unwrap().all()["1"].name, "reading the store");
+    }
+
+    /// A pane that came back is still woken after the window has sent its own arrangement — which
+    /// carries no `resumes` — and is not woken again once a pane has been opened in it (`AMB-D-869`,
+    /// `AMB-D-753`).
+    #[test]
+    fn a_pane_not_yet_opened_is_still_woken_after_the_window_lays_the_face_out() {
+        let face = TalkFace::default();
+        let pane = |id: &str, resume: Option<&str>| SavedPane {
+            id: id.to_string(),
+            project: 1,
+            size: amenbo_core::frames::PaneSize::Quarter,
+            folder: Some("/work/repo".to_string()),
+            agent: Some("claude-code".to_string()),
+            name: None,
+            resume: resume.map(str::to_string),
+            model: None,
+            compose_open: None,
+        };
+        seed(&face, &SavedLayout {
+            project: Some(1),
+            panes: vec![pane("1", Some("0f9c")), pane("2", Some("7b2e")), pane("3", None)],
+        });
+
+        // What the window sends back, as `save_talk_layout` holds it: no frame in it says it resumes.
+        let sent = layout(vec![
+            frame("1", Some("claude-code")),
+            frame("2", Some("claude-code")),
+            frame("3", Some("claude-code")),
+        ]);
+        let resumes = |face: &TalkFace| -> Vec<bool> {
+            face.with_the_ones_to_wake(sent.clone()).frames.iter().map(|f| f.resumes).collect()
+        };
+        assert_eq!(resumes(&face), vec![true, true, false]);
+
+        // A pane opened in one is not woken a second time.
+        face.opened_on("1", None);
+        assert_eq!(resumes(&face), vec![false, true, false]);
+
+        // Nor is one whose way in was taken back.
+        face.gave_up("2");
+        assert_eq!(resumes(&face), vec![false, false, false]);
     }
 }

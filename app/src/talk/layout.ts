@@ -985,9 +985,10 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
       session: null,
       folder: frame.folder ?? null,
       agent: frame.agent ?? null,
-      // Only the host can answer this, and only for an arrangement that came out of the store: what
-      // it stands for is a handle no window holds (`crate::frames`). The arrangement the other
-      // window sends carries none, and a place in it is one this run has already opened.
+      // Only the host can answer this: what it stands for is a handle no window holds
+      // (`crate::frames`). No window writes it back (`laidOut`), so the host puts it on again for a
+      // place the store gave back that this run has not opened yet — the arrangement a window sent
+      // as well as the one read out of the store.
       resumes: frame.resumes === true && frame.folder !== undefined && frame.agent !== undefined,
       written: frame.written ?? "",
       // Kept only where the body it was put into came too: an empty box holds nothing, so a path

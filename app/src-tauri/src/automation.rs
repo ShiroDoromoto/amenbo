@@ -816,7 +816,22 @@ pub fn automation_action_detail(id: i64) -> Result<Option<AutomationActionDetail
     let mut placed_on = Vec::new();
     for automation_id in automation_view::automations_placing(conn, id)? {
         if let Some(one) = read::automation(conn, automation_id)? {
-            placed_on.push(AutomationPlacedOnDto { id: one.id, name: one.name, project: one.project_id });
+            // Each version once, oldest first: an automation may place the action more than once, each
+            // placement on a version of its own, and one that stands on none adds nothing.
+            let mut versions: Vec<i64> = view
+                .placed_at
+                .iter()
+                .filter(|p| p.automation_id == automation_id)
+                .filter_map(|p| p.version)
+                .collect();
+            versions.sort_unstable();
+            versions.dedup();
+            placed_on.push(AutomationPlacedOnDto {
+                id: one.id,
+                name: one.name,
+                project: one.project_id,
+                versions,
+            });
         }
     }
     // Asked the way the save asks it (`amenbo_core::ops::automation::action_save`): only what the action

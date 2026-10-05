@@ -679,7 +679,12 @@ export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<Automatio
  * **One automation an action is placed on**, with the project it is in — a global action stands on
  * automations in more than one, and going to one is going to its project.
  */
-export type AutomationPlacedOnDto = { id: number, name: string, project: number, };
+export type AutomationPlacedOnDto = { id: number, name: string, project: number, 
+/**
+ * **The versions of the action its placements stand on**, each once, oldest first — more than
+ * one where it places the action more than once. Empty where none stands on a version.
+ */
+versions: number[], };
 
 /**
  * **One spot on the picture**: the library action standing there, with everything it is read under

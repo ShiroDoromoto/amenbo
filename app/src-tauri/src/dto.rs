@@ -3640,6 +3640,10 @@ pub struct AutomationPlacedOnDto {
     pub(crate) name: String,
     #[ts(type = "number")]
     pub(crate) project: i64,
+    /// **The versions of the action its placements stand on**, each once, oldest first — more than
+    /// one where it places the action more than once. Empty where none stands on a version.
+    #[ts(type = "number[]")]
+    pub(crate) versions: Vec<i64>,
 }
 
 /// **One step inside an action**: the terminal it stands up, and what it declares inside the picture.

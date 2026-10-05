@@ -1672,6 +1672,59 @@ fn a_step_added_after_placing_is_given_the_default_agent_at_every_placement() {
     fs::remove_dir_all(&dir).ok();
 }
 
+/// **A built-in put in on a line that has more than one way out besides the error one** is pointed at by
+/// the line, and its own ways out are all left saying nothing (`AMB-D-1003`) — none of them is called
+/// [`crate::model::DONE_EXIT`], and which one goes on is not for the insert to guess. Both kinds of line
+/// a built-in is put in on are tried: one that goes on to another placement, and one that ends the run.
+#[test]
+fn a_builtin_put_in_on_a_line_leaves_its_own_ways_out_saying_nothing() {
+    use crate::model::{AutomationEnds, AutomationOwner, AutomationPictureOwner, ERROR_EXIT};
+    use crate::ops::automation::{EdgeTarget, NewAutomation, NewStep};
+    use crate::ops::automation_builtin_take::TAKEN;
+    use crate::store_engine::read;
+
+    let (mut s, dir) = fresh_store("builtin-insert");
+    let p = s.project_add(project("PJ")).unwrap();
+    let axis = s
+        .dimension_add(p.id, crate::ops::dimension::NewDimension { name: "作業種別".into(), ..Default::default() })
+        .unwrap();
+    s.dimension_value_add(axis.id, "実装", None, None).unwrap();
+    let action = s.automation_action_from_prompt(Some(p.id), NewStep::new("実装する", "do it"), &[], &[]).unwrap();
+
+    for (key, on) in [("take_task", None), ("make_task", None), ("fetch", None), ("split_by_dim", Some(axis.id))] {
+        let automation =
+            s.automation_add(p.id, NewAutomation { name: format!("回す {key}"), ..Default::default() }).unwrap();
+        let first = s.automation_builtin_place(automation.id, "take_task", None).unwrap();
+        let next = s.automation_placement_add(automation.id, action.id).unwrap();
+        let go = s
+            .automation_edge_add(AutomationPictureOwner::Automation, first.id, Some(TAKEN), EdgeTarget::Go(next.id), None)
+            .unwrap();
+        let done =
+            s.automation_edge_add(AutomationPictureOwner::Automation, next.id, None, EdgeTarget::Done, None).unwrap();
+
+        for edge in [go, done] {
+            let put = s
+                .automation_builtin_insert(edge.id, key, on)
+                .unwrap_or_else(|e| panic!("{key} put in on a {:?} line: {e}", edge.ends));
+            let conn = s.engine.conn();
+            let pressed = read::automation_edge(conn, edge.id).unwrap().unwrap();
+            assert_eq!((pressed.ends, pressed.to_id), (AutomationEnds::Go, Some(put.id)), "{key}");
+            let exits = read::automation_exits_of(conn, AutomationOwner::Action, put.action_id).unwrap();
+            assert!(exits.iter().filter(|x| x.name != ERROR_EXIT).count() > 1, "{key}");
+            for exit in exits {
+                assert!(
+                    read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, put.id, exit.id)
+                        .unwrap()
+                        .is_none(),
+                    "{key}'s way out '{}' is left to decide",
+                    exit.name,
+                );
+            }
+        }
+    }
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// **A built-in put on after a way out that says nothing yet** is pointed at by that way out, and its
 /// own ways out are left saying nothing (`AMB-D-1003`).
 #[test]

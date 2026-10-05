@@ -1523,9 +1523,9 @@ impl Store {
 
     /// **Put a built-in in on a line** (one operation = one transaction) —
     /// [`Self::automation_builtin_place`] for a picture already drawn: the way out that was pressed
-    /// comes to point at the new placement, and the new placement goes on to where that way out used
-    /// to ([`crate::ops::automation::placement_insert`]). The device's shelf is left undeclared for the
-    /// same reason as there.
+    /// comes to point at the new placement, which goes on to where that way out used to when it has one
+    /// way out besides the error one ([`crate::ops::automation::placement_insert`]). The device's shelf
+    /// is left undeclared for the same reason as there.
     pub fn automation_builtin_insert(
         &mut self,
         edge_id: i64,

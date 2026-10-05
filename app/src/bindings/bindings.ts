@@ -323,7 +323,20 @@ heldBy: Array<AutomationRunCardDto>,
  * **The automations that place it**, each once, in id order — the ones `used_by` counts. Named
  * rather than counted, so the panel shows where a rewrite here lands and goes to each of them.
  */
-placedOn: Array<AutomationPlacedOnDto>, };
+placedOn: Array<AutomationPlacedOnDto>, 
+/**
+ * The newest saved version. Absent for an action nobody has saved, and for a built-in.
+ */
+saved?: AutomationSavedDto, 
+/**
+ * Does what is inside the action hold anything the newest saved version does not?
+ */
+unsaved: boolean, 
+/**
+ * **Why a save would be refused** — the action's own check, as the save asks it
+ * ([`amenbo_core::ops::automation::action_save`]). Empty when it would pass.
+ */
+saveBlocks: Array<AutomationLaunchBlockDto>, };
 
 /**
  * **One built-in, as Amenbo defines it** (`AMB-D-964`) — what the library draws under its own head,

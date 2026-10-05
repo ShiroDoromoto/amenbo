@@ -3618,6 +3618,15 @@ pub struct AutomationActionDetailDto {
     /// **The automations that place it**, each once, in id order — the ones `used_by` counts. Named
     /// rather than counted, so the panel shows where a rewrite here lands and goes to each of them.
     pub(crate) placed_on: Vec<AutomationPlacedOnDto>,
+    /// The newest saved version. Absent for an action nobody has saved, and for a built-in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved: Option<AutomationSavedDto>,
+    /// Does what is inside the action hold anything the newest saved version does not?
+    pub(crate) unsaved: bool,
+    /// **Why a save would be refused** — the action's own check, as the save asks it
+    /// ([`amenbo_core::ops::automation::action_save`]). Empty when it would pass.
+    pub(crate) save_blocks: Vec<AutomationLaunchBlockDto>,
 }
 
 /// **One automation an action is placed on**, with the project it is in — a global action stands on

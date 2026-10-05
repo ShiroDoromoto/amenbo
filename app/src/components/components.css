@@ -1935,7 +1935,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* A panel open beside the screen narrows the head. Its presses keep their words on one line and their
    places, and what gives way is what is read — the name, which the reader opened the screen by, and
    the line saying when it was saved — each cut short rather than broken inside a press or pushing one
-   out. An automation's head goes further and sends its presses to a second line (below). */
+   out. A head with more presses goes further and sends them to a second line (below). */
 .actbuild__head > * { flex: none; white-space: nowrap; }
 .actbuild__head > .actbuild__name,
 .actbuild__head > .actsaved { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -2066,19 +2066,16 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ── One automation, opened (`../screens/AutomationBuildScreen`) ──
    The action build screen's frame (`.actbuild`). "Edit" and the start press stand at the far end of
    the head, and what keeps the press from being pressed is listed under the head. */
-.actbuild__edit { margin-inline-start: auto; }
-/* Whether the last write was saved, at the far end of a build screen's head, before "Edit"
-   (`../screens/AutomationSaved`). It takes the far end's space, so "Edit" stands right after it. */
+/* What is saved, on a build screen's head (`../screens/AutomationSaved`). */
 .actsaved { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--c-text-muted); }
-.actsaved + .actbuild__edit { margin-inline-start: 0; }
 .actsaved--failed { color: var(--c-stop); font-weight: var(--fw-bold); }
-/* An automation's head carries more presses than a panel beside it leaves room for. They stand
-   together at the far end and go down to a second line as one, so the name and the saved state
-   beside it stay whole on the first. */
-.actbuild__head--automation { flex-wrap: wrap; }
-.actbuild__head--automation > .actsaved { margin-inline-start: 0; }
+/* An automation's head, and an action's, carry more presses than a panel beside them leaves room for.
+   They stand together at the far end and go down to a second line as one, so the name and the saved
+   state beside it stay whole on the first. */
+.actbuild__head--wraps { flex-wrap: wrap; }
+.actbuild__head--wraps > .actsaved { margin-inline-start: 0; }
 .actbuild__presses { display: flex; align-items: center; gap: var(--s-2); margin-inline-start: auto; }
-/* "Saved" beside the field a write came from, for two seconds. It stands over the page, not in the
+/* "Written" beside the field a write came from, for two seconds. It stands over the page, not in the
    field's row, so its coming and going moves nothing. */
 .actsaved__mark {
   position: fixed; z-index: 50; transform: translateY(-50%); pointer-events: none; white-space: nowrap;

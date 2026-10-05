@@ -74,7 +74,7 @@ use crate::dto::{
     WriteAck,
 };
 use crate::error::CmdError;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
@@ -2030,20 +2030,70 @@ pub struct StepsStanding(Mutex<HashMap<i64, AutomationStepOpenDto>>);
 /// the runs' panes on. A step whose terminal has ended is left out: there is nothing for a pane to
 /// take up, and the run's next step, if it has one, arrives by the event like any other. A built-in
 /// Amenbo is still carrying out is kept, for the card its pane stands on ([`tell`]).
+///
+/// **Only for a run that is running or paused** ([`runs_still_standing`]): a run stopped — from its
+/// pane or from the command line — is not told again, so the pane closed on it stays closed.
 #[tauri::command]
-pub fn automation_steps_standing(app: tauri::AppHandle) -> Vec<AutomationStepOpenDto> {
+pub fn automation_steps_standing(
+    app: tauri::AppHandle,
+) -> Result<Vec<AutomationStepOpenDto>, CmdError> {
+    let kept: Vec<AutomationStepOpenDto> = {
+        let standing = app.state::<StepsStanding>();
+        let standing = standing.0.lock().expect("steps standing lock");
+        standing
+            .values()
+            .filter(|one| {
+                one.builtin.is_some()
+                    || one
+                        .step
+                        .as_ref()
+                        .is_some_and(|step| crate::pty::is_open(&app, &step.session))
+            })
+            .cloned()
+            .collect()
+    };
+    if kept.is_empty() {
+        return Ok(kept);
+    }
+    let store = open_store_read()?;
+    let conn = store.read_model().conn();
+    let live = runs_still_standing(kept.iter().map(|one| one.run), |run| {
+        Ok(read::automation_run(conn, run)?.map(|it| it.status))
+    })?;
+    let mut open: Vec<AutomationStepOpenDto> =
+        kept.into_iter().filter(|one| live.contains(&one.run)).collect();
+    open.sort_by_key(|one| one.run);
+    Ok(open)
+}
+
+/// **The runs whose pane still has something to stand on** — those running or paused. A paused run
+/// may be taken up again (`AMB-D-1015`), and a run gone from the store, or over, has nothing left.
+pub(crate) fn runs_still_standing(
+    runs: impl IntoIterator<Item = i64>,
+    mut status_of: impl FnMut(i64) -> Result<Option<AutomationRunStatus>, CmdError>,
+) -> Result<HashSet<i64>, CmdError> {
+    let mut live = HashSet::new();
+    for run in runs {
+        let status = status_of(run)?;
+        if matches!(status, Some(AutomationRunStatus::Running | AutomationRunStatus::Paused)) {
+            live.insert(run);
+        }
+    }
+    Ok(live)
+}
+
+/// The runs that have something kept for a face coming up ([`StepsStanding`]).
+pub(crate) fn runs_standing(app: &tauri::AppHandle) -> Vec<i64> {
     let standing = app.state::<StepsStanding>();
     let standing = standing.0.lock().expect("steps standing lock");
-    let mut open: Vec<AutomationStepOpenDto> = standing
-        .values()
-        .filter(|one| {
-            one.builtin.is_some()
-                || one.step.as_ref().is_some_and(|step| crate::pty::is_open(&app, &step.session))
-        })
-        .cloned()
-        .collect();
-    open.sort_by_key(|one| one.run);
-    open
+    standing.keys().copied().collect()
+}
+
+/// **Forget what was kept for a run that is over**, so a face coming up later does not stand its pane
+/// again ([`StepsStanding`]).
+pub(crate) fn forget_standing(app: &tauri::AppHandle, run: i64) {
+    let standing = app.state::<StepsStanding>();
+    standing.0.lock().expect("steps standing lock").remove(&run);
 }
 
 /// One step opened and told to the window.
@@ -2927,5 +2977,22 @@ mod tests {
         assert!(stop_if_going(&mut store, 404)
             .expect("a run nobody can find is not an error")
             .is_none());
+    }
+
+    /// **A run stopped has nothing for a face coming up to stand on**, however it was stopped; a
+    /// paused one does, since it may be taken up again. A run the store no longer has is left out
+    /// with the ones that are over.
+    #[test]
+    fn only_runs_running_or_paused_still_stand() {
+        let statuses: HashMap<i64, AutomationRunStatus> = HashMap::from([
+            (1, AutomationRunStatus::Running),
+            (2, AutomationRunStatus::Paused),
+            (3, AutomationRunStatus::Completed),
+            (4, AutomationRunStatus::Failed),
+            (5, AutomationRunStatus::Canceled),
+        ]);
+        let live = runs_still_standing(1..=6, |run| Ok(statuses.get(&run).copied()))
+            .expect("nothing to fail");
+        assert_eq!(live, HashSet::from([1, 2]));
     }
 }

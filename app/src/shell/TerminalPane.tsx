@@ -6,6 +6,7 @@ import {
   endTerminal,
   focusTerminal,
   leavesForTerminal,
+  mountTail,
   passedOn,
   pasteIntoTerminal,
   pressIntoTerminal,
@@ -126,7 +127,8 @@ const CLEAR_ROWS = 8;
  */
 export function TerminalPane({
   frame, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
-  inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, onGrab, onStretch, size, onSize,
+  inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, tail = null, onGrab, onStretch,
+  size, onSize,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
@@ -156,8 +158,18 @@ export function TerminalPane({
   /**
    * The built-in Amenbo is carrying out on this run's pane, or null (`./BuiltinCard`). While there is
    * one, it stands where the terminal would, and nothing is started here.
+   *
+   * **A script step comes this way too, and is drawn as a terminal** (`AMB-D-1016`): its program runs
+   * on one, which the pane takes up the way it takes up an agent's step's (`PaneStart.readOnly`). Nobody
+   * writes into it, so the box, the band under it and the ways to hand it a path are not drawn.
    */
   builtin?: BuiltinRun | null;
+  /**
+   * **What the run's last step wrote, where it was a script** (`AMB-D-1016`) — kept on the run, and
+   * drawn where its terminal would be on a pane come back with the app: that terminal went down with
+   * it. Null everywhere else.
+   */
+  tail?: string | null;
   /** True for the slot that puts a terminal up without being asked — the one the face comes up with,
    *  and the one a person has just pressed the way in on. */
   autoStart: boolean;
@@ -467,8 +479,10 @@ export function TerminalPane({
   };
   const clearing = useRef(clearBand);
   clearing.current = clearBand;
+  // Whether this pane draws a script step's terminal, which nobody writes into (`builtin`).
+  const script = builtin?.program !== undefined;
   // Whether the terminal face is drawn — not while a built-in stands where it would.
-  const termShown = running && builtin === null;
+  const termShown = running && (builtin === null || script);
 
   // The box opening, folding or growing moves the terminal's bottom, and so does the pane changing
   // size; each is the terminal changing height, so watching it and the body is enough. With no
@@ -729,7 +743,7 @@ export function TerminalPane({
   // with the app for a run held or failed. What its terminal printed died with the process, and the
   // row is still what says which run this is and where it stopped. No terminal is opened here by
   // hand; the run's next step, where it is picked up again, is what brings one.
-  const onBuiltin = builtin !== null;
+  const onBuiltin = builtin !== null && !script;
   const rowWithout = onBuiltin || (run !== null && !running);
   useEffect(() => {
     const label = labelRef.current;
@@ -838,8 +852,10 @@ export function TerminalPane({
   // an outside drag never presses the page, and the focus is the browser's, which the same gesture
   // never reaches either. Without them the path is pasted into this pane and the reader's next
   // keystroke goes to the pane they were in before (`AMB-T-4182`).
+  //
+  // **Nor on a script's terminal** (`builtin`): nothing there reads what would be pasted.
   useEffect(() => {
-    if (live === null) return;
+    if (live === null || script) return;
     let alive = true;
     let stop: (() => void) | null = null;
     void watchHostDrop({
@@ -858,7 +874,7 @@ export function TerminalPane({
       alive = false;
       stop?.();
     };
-  }, [frame, live]);
+  }, [frame, live, script]);
 
   // Files and pictures pasted into the box, which reach it by two doors and go in as one thing.
   //
@@ -1054,7 +1070,7 @@ export function TerminalPane({
             </button>
           )}
           {size !== undefined && onSize !== undefined && <PaneSize size={size} onSize={onSize} />}
-          {live !== null && (
+          {live !== null && !script && (
             <button
               className="slot__more"
               title={t("face.more")}
@@ -1203,13 +1219,17 @@ export function TerminalPane({
         {run !== null && face === "picture" && <RunPicture run={run} />}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}
-        {run !== null && over && !running ? (
+        {/* **A script's tail, kept on the run** (`tail`), in place of either card below: it is what the
+            step wrote, and the row and the band already say how the run stands. */}
+        {run !== null && !running && tail !== null ? (
+          <SavedTail tail={tail} />
+        ) : run !== null && over && !running ? (
           <RunOverCard
             run={run}
             see={t(runsTab === "running" ? "auto.run.seeRunning" : "auto.run.seeHistory")}
             onSee={ledger.openRuns === undefined ? undefined : () => ledger.openRuns?.(project, runsTab)}
           />
-        ) : builtin !== null ? <BuiltinCard builtin={builtin} run={run?.run ?? null} /> : running
+        ) : builtin !== null && !script ? <BuiltinCard builtin={builtin} run={run?.run ?? null} /> : running
           ? (
             <>
               {/* Not on a run's pane: a step's program ending is the run moving on, and the row
@@ -1251,7 +1271,7 @@ export function TerminalPane({
             What is written in it survives the fold — it belongs to the window rather than to this
             box (`../talk/layout`) — so a sentence left half-written comes back when it is opened
             again, and the press that folds it says so meanwhile. */}
-        {live !== null && !folded && (
+        {live !== null && !folded && !script && (
           <div className="compose">
             <textarea
               ref={boxRef}
@@ -1283,7 +1303,7 @@ export function TerminalPane({
             that folds the box is here, and a band that shrank when there was no model to name beside
             it would move that press from pane to pane (`AMB-D-889`). The model is the other thing on
             it and is drawn only where the host has a road (`./PaneModel`, `AMB-D-865`). */}
-        {live !== null && (
+        {live !== null && !script && (
           <div className="panerow">
             {/* Open or shut, and nothing else (`AMB-D-889`). Which of the two it is, is said by
                 `aria-expanded` and by the box standing there or not — so the mark is the same
@@ -1321,6 +1341,21 @@ export function TerminalPane({
         )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** A script step's tail, drawn read-only on a terminal of its own that runs nothing (`../talk/terminal`). */
+function SavedTail({ tail }: { tail: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = ref.current;
+    if (host === null) return;
+    return mountTail(host, tail);
+  }, [tail]);
+  return (
+    <div className="workspace__face">
+      <div className="workspace__pane" ref={ref} />
     </div>
   );
 }

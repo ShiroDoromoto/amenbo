@@ -662,20 +662,27 @@ export function WorkspaceFace({
    * not a new arrival: the ring goes up once, as the card first takes the place. The host has already
    * ended the terminal of the step before (`crate::pty::end_steps_of`); what comes off here is the
    * frame's hold on it.
+   *
+   * **A script step comes with the terminal its program runs on** (`AMB-D-1016`), and that goes on the
+   * frame the way an agent's step's does, for the pane to take up read-only (`./TerminalPane`). It is
+   * told again with the same terminal once the program has ended, which is already on the frame.
    */
   const builtinArrived = useCallback((
     run: number,
     project: number,
     builtin: BuiltinRun,
     before: string | null,
+    session: string | null,
   ) => {
     const id = runFrameId(run);
     const fresh = !builtinsNow.current.has(id);
     setSteps((had) => droppedFrom(had, id));
     setBuiltins((had) => new Map(had).set(id, builtin));
     setLayout((was) => {
+      if (session !== null && before === session) return was;
       const cleared = before === null ? was : closedIn(was, before);
-      return stoodForRun(cleared, project, run).layout;
+      const stood = stoodForRun(cleared, project, run).layout;
+      return session === null ? stood : openedIn(stood, id, session, null, null);
     });
     if (fresh) landOn(id);
   }, [landOn]);
@@ -704,7 +711,7 @@ export function WorkspaceFace({
     const id = runFrameId(one.run);
     const before = standing.current.frames.find((frame) => frame.id === id)?.session ?? null;
     if (one.builtin !== undefined) {
-      builtinArrived(one.run, one.project, one.builtin, before);
+      builtinArrived(one.run, one.project, one.builtin, before, one.session ?? null);
       return;
     }
     if (one.step === undefined) return;
@@ -1735,6 +1742,8 @@ export function WorkspaceFace({
                       // (`../talk/layout`). It is the row's own agent and not a fresh choice: the
                       // reader answered this a run ago.
                       resume: frame.resumes ? frame.agent : null,
+                      // A script step's terminal is taken up and never written into (`AMB-D-1016`).
+                      readOnly: builtin?.program !== undefined,
                     }}
                     // What the row says under the name, on a run's pane (`../talk/nameplate`). It is
                     // the run the place is standing for and the step it is on — both Amenbo's own
@@ -1754,8 +1763,8 @@ export function WorkspaceFace({
                       automationId: on.automation,
                       placement: on.placement ?? null,
                       box: null,
-                      // A script step stands on a card too, but it runs the project's own program and
-                      // is not one Amenbo carries out, so the row does not call it a built-in.
+                      // A script step comes by the built-ins' road, but it runs the project's own
+                      // program and is not one Amenbo carries out, so the row does not call it a built-in.
                       builtin: builtin !== undefined && builtin.program === undefined,
                       interactive: step?.interactive ?? false,
                       // Who carries the step out, and with what: the step's agent and model as the run
@@ -1781,11 +1790,15 @@ export function WorkspaceFace({
                         : runStateOf(runCardOf.get(frame.run)),
                     }}
                     builtin={builtin ?? null}
+                    // What a script step wrote, kept on the run, for a pane come back with the app
+                    // with no step arrived and its terminal gone (`AMB-D-1016`).
+                    tail={frame.run !== null && on === undefined ? runCardOf.get(frame.run)?.outputTail ?? null : null}
                     // A place that came back holding a way into what was running in it is opened
                     // without being pressed — that press is what `AMB-D-869` is about.
                     // A run's pane is never pressed to open: the step arrived by itself, and a way
                     // in drawn on it would be a button nobody is there to press.
-                    autoStart={frame.session !== null || startNow.current.has(frame.id) || frame.resumes || step !== undefined}
+                    autoStart={frame.session !== null || startNow.current.has(frame.id) || frame.resumes || step !== undefined ||
+                      builtin?.program !== undefined}
                     focused={layout.focus === frame.id}
                     landed={landed === frame.id}
                     offered={overFrame === frame.id}
@@ -1811,7 +1824,11 @@ export function WorkspaceFace({
                         setLayout((was) => movedTo(was, statement.session, statement.cwd!));
                       }
                     }}
-                    onClosed={(session) => setLayout((was) => closedIn(was, session))}
+                    // A script's terminal stays on the frame once its program has ended: the host keeps
+                    // it for the pane to read until the next step takes it away (`crate::pty`).
+                    onClosed={(session) => {
+                      if (builtin?.program === undefined) setLayout((was) => closedIn(was, session));
+                    }}
                     onDrop={(id) => {
                       setLayout((was) => closedFrame(was, id));
                       startNow.current.delete(id);

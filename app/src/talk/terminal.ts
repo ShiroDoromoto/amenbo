@@ -196,6 +196,12 @@ export type PaneStart = {
    * the step was carried out once, whether or not anybody was watching.
    */
   runStep?: number | null;
+  /**
+   * **Whether this is a script step's terminal, which nobody writes into** (`AMB-D-1016`,
+   * `crate::pty::open_script`). The pane takes it up and never starts one in its place, and nothing
+   * typed, pasted or dropped on it is sent: the program reads no keyboard.
+   */
+  readOnly?: boolean;
 };
 
 /**
@@ -476,6 +482,12 @@ export function isPagePaste(e: KeyboardEvent, os: HostOs = hostOs()): boolean {
     && !e.metaKey;
 }
 
+/** The face the pane's characters are drawn in: the app's own monospace. */
+function paneFont(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() ||
+    "ui-monospace, monospace";
+}
+
 // The colours a pane is drawn in — **the one part of the interface the theme does not reach**. They
 // are tokens like everything else (`styles/tokens.css`), and the tokens they read are the ones no
 // theme overrides, so light and dark give the same three values.
@@ -641,6 +653,9 @@ async function draw(
       // It ended between the two calls. Opening one is what the pane was there to do anyway.
     }
   }
+  // A script's terminal that is gone is not stood in for: a terminal opened here would be a shell under
+  // a row naming the script.
+  if (start.readOnly) throw new Error("pty_read_only");
   const opened = await invoke<PtySessionDto>("pty_open", {
     frame: start.frame ?? null,
     cwd: start.cwd ?? null,
@@ -1053,10 +1068,11 @@ export async function mountTerminal(
   start: PaneStart = {},
 ): Promise<() => void> {
   const term = new Terminal({
-    fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() ||
-      "ui-monospace, monospace",
+    fontFamily: paneFont(),
     fontSize: 13,
-    cursorBlink: true,
+    cursorBlink: !start.readOnly,
+    // A script's program reads no keyboard, so the emulator makes nothing of a press.
+    disableStdin: start.readOnly ?? false,
     theme: paneColors(),
     // **Option is the meta key here, which is not what macOS does with it by default.** Left alone,
     // this emulator treats Option as the third-level shift the operating system makes it: `Alt+B` is
@@ -1267,7 +1283,8 @@ export async function mountTerminal(
     if (its === null) return [];
     return await writesPastedImage(bytes, mime, its);
   };
-  const stopPaste = takesPastedFiles(
+  // A script's terminal takes nothing pasted: there is nothing reading it (`PaneStart.readOnly`).
+  const stopPaste = start.readOnly ? () => {} : takesPastedFiles(
     host,
     (paths, words) => {
       const its = session;
@@ -1281,7 +1298,7 @@ export async function mountTerminal(
   // **On Linux the same image arrives by a different door** — `Ctrl+Shift+V` rather than the paste,
   // which carries nothing there (`../core/clipFiles`). What comes back is written and pasted the
   // same way; only the reading differs.
-  const stopImagePress = takesPastedImages(
+  const stopImagePress = start.readOnly ? () => {} : takesPastedImages(
     host,
     writeImage,
     (paths) => {
@@ -1318,7 +1335,7 @@ export async function mountTerminal(
   const os = hostOs();
   term.attachCustomKeyEventHandler((e) => {
     if (isPagePaste(e, os)) return false;
-    if (!isNewline(e)) return true;
+    if (!isNewline(e) || start.readOnly) return true;
     e.preventDefault();
     send(NEWLINE);
     return false;
@@ -1365,6 +1382,34 @@ export async function mountTerminal(
     void unlistenClosed();
     void unlistenSaid();
     void unlistenUnsent();
+    term.dispose();
+  };
+}
+
+/**
+ * **What a script step wrote, drawn from what was kept of it** (`AMB-D-1016`) — for a run's pane come
+ * back with the app, whose terminal went down with it. The tail is text, its escape sequences taken
+ * out when it was kept (`amenbo_core::ops::automation_script::tail_of`), so each line is put on a row
+ * of its own; nothing reads a keyboard here and no cursor is drawn.
+ *
+ * What comes back takes it away again.
+ */
+export function mountTail(host: HTMLElement, tail: string): () => void {
+  const term = new Terminal({
+    fontFamily: paneFont(),
+    fontSize: 13,
+    disableStdin: true,
+    theme: paneColors(),
+  });
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  term.open(host);
+  refit(fit, host);
+  term.write(`\x1b[?25l${tail.replace(/\r?\n/g, "\r\n")}`);
+  const resize = new ResizeObserver(() => refit(fit, host));
+  resize.observe(host);
+  return () => {
+    resize.disconnect();
     term.dispose();
   };
 }

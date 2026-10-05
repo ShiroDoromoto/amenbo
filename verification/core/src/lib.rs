@@ -4219,6 +4219,13 @@ const REGISTRY: &[OpSpec] = &[
     // is refused at the start (`conflict`). The save asks the launch check, and is refused
     // (`not_ready_automation`) while anything is unmet.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "save", required: &[], refs: &["target"], strings: &[], binds: false },
+    // The same for a library action (`automation action-save`): what is inside it saved as its next
+    // version. A placement stands on the version that was newest when it was put down, and stays on it
+    // through every later save of the action until `place-version` moves it (`target`, the placement,
+    // onto `version`, a number the action has saved) — a move written on the automation's draft, which
+    // a start reads only once the automation is saved again.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-save", required: &[], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-version", required: &["target", "version"], refs: &["target"], strings: &[], binds: false },
     //
     // Running one. `start` binds the run every other verb here names.
     //
@@ -4327,6 +4334,10 @@ const REGISTRY: &[OpSpec] = &[
     // under**, not a sample of it: the first two in the order the action declares them, the third as
     // a name → answer mapping, where a road writes `~` for one this placement has not answered. A way
     // out is named the way `edge-add` names one — `""` is the done one, `*` the error one.
+    // `version` is the saved version of the action it stands on, `latest` the newest the action has,
+    // and `steps` the names of every step of the version it stands on, in display order. With `saved`
+    // it is read off the automation's newest saved version (`automation show --saved`) — the definition
+    // a start copies down — rather than off the draft.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "placement-read", required: &["name"], refs: &["target"], strings: &["name"], binds: false },
     // One step inside an action (`target`), named the way the action names it: the prompt it runs on,
     // and the ways out and the inputs it declares, read whole for the reason a placement's are.
@@ -4938,6 +4949,9 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // needs standing before the run starts.
     (Domain::Automation, "step-update"),
     (Domain::Automation, "action-entry"),
+    // An action saved before it is placed, so the placement stands on that version rather than on
+    // rows anyone can still write — a world a road about moving placements between versions starts in.
+    (Domain::Automation, "action-save"),
     (Domain::Automation, "place-add"),
     (Domain::Automation, "agent-set"),
     (Domain::Automation, "exit-add"),
@@ -5231,8 +5245,9 @@ impl Scenario {
             // something to ask before it can go out, `in_action` whether a way out, an edge or a
             // wire is drawn inside an action rather than on an automation, and `task_notes`,
             // `task_decisions`, `task_comments` and `history` whether a step is handed each part of the
-            // task the run is on and the run's story so far, and `executable` whether a fixture's copy
-            // may be run as a program.
+            // task the run is on and the run's story so far, `executable` whether a fixture's copy
+            // may be run as a program, and `saved` whether a definition is read off its newest saved
+            // version rather than off the draft.
             // The query, in whichever of its two spellings — one of them, never both and never
             // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
             // step naming a shape for one is a step that means a number and left the record out.
@@ -5347,6 +5362,7 @@ impl Scenario {
                 "interactive",
                 "pressable",
                 "executable",
+                "saved",
             ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {

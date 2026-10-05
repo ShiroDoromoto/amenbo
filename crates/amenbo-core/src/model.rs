@@ -1713,7 +1713,7 @@ pub struct AutomationAction {
 /// `entry_placement_id` is where a run starts; from it the edges are walked, and the place a
 /// placement sits in the picture and the number it is drawn with both fall out of that walk rather
 /// than out of `order_key`, which records only the order things were added in.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Automation {
     pub id: i64,
     pub project_id: i64,
@@ -1725,35 +1725,13 @@ pub struct Automation {
     pub entry_placement_id: Option<i64>,
     #[serde(default)]
     pub archived: bool,
-    /// Whether a run may start while another run of this automation is still going. On unless a
-    /// person turns it off. Like `archived`, it is the automation's, not part of a saved version.
-    #[serde(default = "allow_concurrent_runs_default")]
-    pub allow_concurrent_runs: bool,
+    /// How many runs of this automation may be going at once, at least 1; `None` for no limit. Like
+    /// `archived`, it is the automation's, not part of a saved version.
+    #[serde(default)]
+    pub max_concurrent_runs: Option<u32>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
-}
-
-/// For `serde(default)`: an automation written before the flag existed allows concurrent runs.
-fn allow_concurrent_runs_default() -> bool {
-    true
-}
-
-impl Default for Automation {
-    fn default() -> Self {
-        Automation {
-            id: 0,
-            project_id: 0,
-            name: String::new(),
-            notes: String::new(),
-            entry_placement_id: None,
-            archived: false,
-            allow_concurrent_runs: allow_concurrent_runs_default(),
-            order_key: String::new(),
-            created_at: Timestamp::default(),
-            updated_at: Timestamp::default(),
-        }
-    }
 }
 
 /// **One action, placed on one automation.** It carries no prompt and no way out of its own — those

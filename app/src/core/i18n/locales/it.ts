@@ -1730,6 +1730,8 @@ export const it: Translation = {
     invalid_automation_cfg_not_a_count: "L’impostazione «{cfg}» accetta un numero intero maggiore o uguale a zero, e {value} non lo è.",
     invalid_automation_limit_below_one: "«Al massimo» vale 1 o più, e {value} è meno. Lascia il campo vuoto per non avere limiti.",
     not_ready_automation_split_axis_gone: "{step} (posizionamento {placement}): l’asse con cui divide è stato eliminato; togli questo posizionamento e rimettilo su un asse esistente",
+    not_ready_action_save: "«{action}» non si può salvare: {reasons}",
+    not_ready_action_save_empty: "non ha un passo d'inizio",
     store_busy: "L'archivio è in uso in questo momento. Riprova tra un momento.",
     storage_error: "Non è stato possibile leggere o scrivere l'archivio, e non è stato cambiato nulla. Riavvia Amenbo e riprova; se continua a succedere, invia quello che si trova in Impostazioni > Registri.",
     not_found_task: "Attività {ref} non trovata.",

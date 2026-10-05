@@ -442,18 +442,6 @@ pub fn automation_action_remove(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["automationActions"]))
 }
 
-/// **Say an action made on the spot is written** (`AMB-D-1005`,
-/// [`amenbo_core::ops::automation::action_finish_creating`]). It is taken with nothing inside the
-/// action too. The pictures standing on it draw its mark, so the ack moves the automations as well.
-#[tauri::command]
-pub fn automation_action_finish_creating(id: i64) -> Result<WriteAck, CmdError> {
-    with_store_mut(|store| {
-        store.automation_action_finish_creating(id)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["automations", "automationActions"]))
-}
-
 /// **Save the automation as its next version** ([`amenbo_core::ops::automation::save`]). Refused with
 /// the reasons the build screen lists (`save_blocks`); not refused while a run of it goes on
 /// (`AMB-D-1015`).
@@ -483,8 +471,9 @@ pub fn automation_discard(id: i64) -> Result<WriteAck, CmdError> {
 
 /// **Save what is inside the action as its next version** ([`amenbo_core::ops::automation::action_save`]).
 /// Refused with the reasons the action build screen lists (`save_blocks`); not refused while a run of an
-/// automation placing it goes on (`AMB-D-1015`). The automations placing it read which version each
-/// stands on, so their list is told too.
+/// automation placing it goes on (`AMB-D-1015`). The first save of an action made on the spot finishes
+/// its creation and points the placements standing on it at version 1 (`AMB-D-1005`). The automations
+/// placing it read which version each stands on, so their list is told too.
 #[tauri::command]
 pub fn automation_action_save(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {

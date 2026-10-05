@@ -426,6 +426,10 @@ pub enum ErrorCode {
     NotReadyAutomationHandsOnTaskTaken,
     // The built-in that splits by an axis, placed on an axis deleted since (`AMB-D-987`).
     NotReadyAutomationSplitAxisGone,
+    // A save of an action refused by the action's own check — a save, not a launch, and with no
+    // placement to name when it has no step to start at.
+    NotReadyActionSave,
+    NotReadyActionSaveEmpty,
     // What the built-ins that file a task and that wait are turned away by, said on the task a run
     // stops on in the reader's language (`AMB-D-976`).
     InvalidMakeTaskNoRunsTask,
@@ -559,6 +563,8 @@ impl ErrorCode {
             ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd => "not_ready_automation_task_left_open_at_end",
             ErrorCode::NotReadyAutomationHandsOnTaskTaken => "not_ready_automation_hands_on_task_taken",
             ErrorCode::NotReadyAutomationSplitAxisGone => "not_ready_automation_split_axis_gone",
+            ErrorCode::NotReadyActionSave => "not_ready_action_save",
+            ErrorCode::NotReadyActionSaveEmpty => "not_ready_action_save_empty",
             ErrorCode::InvalidMakeTaskNoRunsTask => "invalid_make_task_no_runs_task",
             ErrorCode::InvalidMakeTaskBlockerOpen => "invalid_make_task_blocker_open",
             ErrorCode::InvalidMakeTaskValueClosed => "invalid_make_task_value_closed",
@@ -682,6 +688,8 @@ impl ErrorCode {
         ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
         ErrorCode::NotReadyAutomationHandsOnTaskTaken,
         ErrorCode::NotReadyAutomationSplitAxisGone,
+        ErrorCode::NotReadyActionSave,
+        ErrorCode::NotReadyActionSaveEmpty,
         ErrorCode::InvalidMakeTaskNoRunsTask,
         ErrorCode::InvalidMakeTaskBlockerOpen,
         ErrorCode::InvalidMakeTaskValueClosed,
@@ -936,6 +944,8 @@ mod tests {
             "not_ready_automation_task_left_open_at_end",
             "not_ready_automation_hands_on_task_taken",
             "not_ready_automation_split_axis_gone",
+            "not_ready_action_save",
+            "not_ready_action_save_empty",
             "invalid_make_task_no_runs_task",
             "invalid_make_task_blocker_open",
             "invalid_make_task_value_closed",

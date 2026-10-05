@@ -500,7 +500,6 @@ pub fn run() {
       automation::automation_action_edit,
       automation::automation_action_set_scope,
       automation::automation_action_remove,
-      automation::automation_action_finish_creating,
       automation::automation_action_save,
       automation::automation_action_discard,
       automation::automation_action_abandon,

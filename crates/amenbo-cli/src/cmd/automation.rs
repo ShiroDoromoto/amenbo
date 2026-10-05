@@ -604,20 +604,23 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_action_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-rm", "automation_action", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted action: {id}"));
         }
-        AutomationCmd::ActionFinishCreating { id } => {
-            // Core hands an action that is already written straight back without writing it, so
-            // whether this call moved anything is asked before it.
+        AutomationCmd::ActionSave { id } => {
+            // Asked before, for the reason `save` asks it — and whether it is still being created, since
+            // core finishes that on the newest version even with nothing to save.
+            let saved = store.automation_action_unsaved(id).map_err(CliError::from)?;
             let was_draft = store
                 .automation_action_detail(id)
                 .map_err(CliError::from)?
                 .is_some_and(|view| view.action.draft);
-            let a = store.automation_action_finish_creating(id).map_err(CliError::from)?;
-            let line = match was_draft {
-                true => format!("✓ Finished creating action: {} ({})", a.name, a.id),
-                false => format!("✓ Action {} ({}) is not being created — nothing to finish", a.name, a.id),
+            let v = store.automation_action_save(id).map_err(CliError::from)?;
+            let line = match (saved, was_draft) {
+                (true, true) => format!("✓ Saved action {id} as version {} and finished creating it", v.version),
+                (true, false) => format!("✓ Saved action {id} as version {}", v.version),
+                (false, true) => format!("✓ Finished creating action {id} on version {}", v.version),
+                (false, false) => format!("✓ Action {id} has nothing unsaved — version {} stands", v.version),
             };
-            let changed = was_draft.then(|| vec!["draft".to_string()]);
-            write_envelope(flags, "automation.action-finish-creating", "automation_action", serde_json::to_value(&a).unwrap(), changed, !was_draft, line);
+            let resource = json!({ "id": v.id, "action_id": v.action_id, "version": v.version });
+            write_envelope(flags, "automation.action-save", "automation_action_version", resource, None, !saved && !was_draft, line);
         }
         AutomationCmd::ActionAbandon { id } => {
             if !confirm(flags, "give up this action and the placements standing on it")? {
@@ -625,17 +628,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             store.automation_action_abandon(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-abandon", "automation_action", json!({ "id": id, "abandoned": true }), None, false, format!("✓ Gave up action: {id}"));
-        }
-        AutomationCmd::ActionSave { id } => {
-            // Asked before, for the reason `save` asks it.
-            let unsaved = store.automation_action_unsaved(id).map_err(CliError::from)?;
-            let v = store.automation_action_save(id).map_err(CliError::from)?;
-            let line = match unsaved {
-                true => format!("✓ Saved action {id} as version {}", v.version),
-                false => format!("✓ Action {id} has nothing unsaved — version {} stands", v.version),
-            };
-            let resource = json!({ "id": v.id, "action_id": v.action_id, "version": v.version });
-            write_envelope(flags, "automation.action-save", "automation_action_version", resource, None, !unsaved, line);
         }
         AutomationCmd::ActionDiscard { id } => {
             if !confirm(flags, "throw away what is unsaved in action")? {
@@ -1435,7 +1427,7 @@ fn render_action(flags: &Flags, view: &ActionView) {
         human(
             flags,
             format!(
-                "still being created — keep it with `automation action-finish-creating {}`, or give it up \
+                "still being created — keep it with `automation action-save {}`, or give it up \
                  with `automation action-abandon {}`",
                 a.id, a.id
             ),

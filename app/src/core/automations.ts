@@ -280,15 +280,6 @@ export async function removeAutomationAction(id: number): Promise<void> {
 }
 
 /**
- * **Say an action made on the spot is written** (`AMB-D-1005`) — one of the two ways out of being
- * still written, taken with nothing inside the action too.
- */
-export async function finishCreatingAutomationAction(id: number): Promise<void> {
-  if (!inTauri()) return;
-  return invokeAck("automation_action_finish_creating", { id });
-}
-
-/**
  * **Give up an action made on the spot** (`AMB-D-1005`): the action and the placement standing on it
  * go in one act, and the lines into the placement go back to how they were before it was placed.
  * There is no undo, so the screen asks first.
@@ -322,7 +313,9 @@ export async function discardAutomation(id: number): Promise<void> {
 /**
  * **Save what is inside the action as its next version.** What the action build screen writes goes to
  * its draft, and this is what makes it the version an automation placing it can move to. Core refuses
- * it with the reasons the detail lists (`saveBlocks`). It goes past `told`, as `saveAutomation` does.
+ * it with the reasons the detail lists (`saveBlocks`). The first save of an action made on the spot
+ * finishes its creation (`AMB-D-1005`); an empty one is refused, so it stays being created. It goes past
+ * `told`, as `saveAutomation` does.
  */
 export async function saveAutomationAction(id: number): Promise<void> {
   if (!inTauri()) return;

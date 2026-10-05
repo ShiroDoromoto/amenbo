@@ -1978,11 +1978,6 @@ pub enum AutomationCmd {
         /// action id
         id: i64,
     },
-    /// Say an action made on the spot is written, and keep it — even with nothing inside it
-    ActionFinishCreating {
-        /// action id
-        id: i64,
-    },
     /// Give up an action made on the spot: it goes with every placement standing on it, and the lines
     /// into them go back to where they went before — refused for one not being created; confirms unless -y
     ActionAbandon {
@@ -1991,7 +1986,8 @@ pub enum AutomationCmd {
     },
     /// Save what is inside a library action — its steps, ways out, inputs, outputs, settings and lines —
     /// as its next version. A placement keeps its version until `place-version` moves it; refused until
-    /// the action's own check passes
+    /// the action's own check passes. The first save of an action still being created makes version 1
+    /// and finishes its creation
     ActionSave {
         /// action id
         id: i64,

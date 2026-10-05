@@ -28,7 +28,7 @@ vi.mock("../core/automations", () => ({
   useAutomationAction: () => hoisted.action,
   useAutomationActions: () => [],
   editAutomationAction: hoisted.editAction,
-  finishCreatingAutomationAction: hoisted.finish,
+  saveAutomationAction: hoisted.finish,
   abandonAutomationAction: hoisted.abandon,
   editAutomationStep: hoisted.editStep,
   setAutomationWire: vi.fn(),

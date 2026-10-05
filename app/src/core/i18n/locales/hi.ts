@@ -1712,6 +1712,8 @@ export const hi: Translation = {
     invalid_automation_cfg_not_a_count: "सेटिंग “{cfg}” शून्य या उससे बड़ी पूर्ण संख्या लेती है, और {value} ऐसी संख्या नहीं है।",
     invalid_automation_limit_below_one: "“ज़्यादा से ज़्यादा” 1 या उससे ज़्यादा होता है, और {value} उससे कम है। कोई सीमा न रखनी हो तो इसे खाली छोड़ दें।",
     not_ready_automation_split_axis_gone: "{step} (प्लेसमेंट {placement}): जिस अक्ष से यह बाँटता है, वह मिटा दिया गया है — यह प्लेसमेंट हटाएँ और किसी मौजूद अक्ष पर फिर से रखें",
+    not_ready_action_save: "“{action}” सहेजी नहीं जा सकती: {reasons}",
+    not_ready_action_save_empty: "इसमें शुरुआत का कोई चरण नहीं है।",
     store_busy: "स्टोर इस समय उपयोग में है। थोड़ी देर बाद फिर कोशिश करें।",
     storage_error: "स्टोर को पढ़ा या लिखा नहीं जा सका, और कुछ भी नहीं बदला गया। Amenbo को फिर से चालू करके दोबारा कोशिश करें — अगर यह होता रहे, तो सेटिंग > लॉग में जो है वह भेजें।",
     not_found_task: "काम {ref} नहीं मिला।",

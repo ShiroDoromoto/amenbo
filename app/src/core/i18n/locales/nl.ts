@@ -1712,6 +1712,8 @@ export const nl: Translation = {
     invalid_automation_cfg_not_a_count: "De instelling ‘{cfg}’ neemt een geheel getal van nul of meer, en {value} is dat niet.",
     invalid_automation_limit_below_one: "‘Hoogstens’ is 1 of meer, en {value} is minder. Laat het leeg voor geen limiet.",
     not_ready_automation_split_axis_gone: "{step} (plaatsing {placement}): de as waarop wordt opgesplitst is verwijderd — haal deze plaatsing weg en plaats de stap opnieuw op een bestaande as",
+    not_ready_action_save: "‘{action}’ kan niet worden opgeslagen: {reasons}",
+    not_ready_action_save_empty: "heeft geen startstap",
     store_busy: "De opslag is momenteel in gebruik. Probeer het zo meteen opnieuw.",
     storage_error: "De opslag kon niet worden gelezen of geschreven, en er is niets gewijzigd. Start Amenbo opnieuw en probeer het nog eens — als het blijft gebeuren, stuur dan wat er onder Instellingen > Logboeken staat.",
     not_found_task: "Taak {ref} is niet gevonden.",

@@ -1730,6 +1730,8 @@ export const es: Translation = {
     invalid_automation_cfg_not_a_count: "El ajuste «{cfg}» admite un número entero de cero o más, y {value} no lo es.",
     invalid_automation_limit_below_one: "«Como máximo» es 1 o más, y {value} es menos. Déjalo vacío para no poner límite.",
     not_ready_automation_split_axis_gone: "{step} (colocación {placement}): el eje por el que divide se ha eliminado; quita esta colocación y vuelve a colocarlo en un eje que exista",
+    not_ready_action_save: "«{action}» no se puede guardar: {reasons}",
+    not_ready_action_save_empty: "no tiene paso de inicio",
     store_busy: "El almacén está en uso ahora mismo. Inténtalo de nuevo en un momento.",
     storage_error: "No se pudo leer ni escribir el almacén, y no se cambió nada. Reinicia Amenbo e inténtalo de nuevo; si sigue ocurriendo, envía lo que haya en Ajustes > Registros.",
     not_found_task: "No se encontró la tarea {ref}.",

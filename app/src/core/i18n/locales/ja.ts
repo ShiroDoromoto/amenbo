@@ -1727,6 +1727,8 @@ export const ja: Translation = {
     invalid_automation_cfg_not_a_count: "設定「{cfg}」に入れられるのは0以上の整数です。{value} は入れられません。",
     invalid_automation_limit_below_one: "繰り返しの上限は1以上です。{value} は入れられません。上限を外すなら空にしてください。",
     not_ready_automation_split_axis_gone: "{step}（配置 {placement}）：分ける軸が消えている。この配置を外し、今ある軸で置き直す",
+    not_ready_action_save: "「{action}」は保存できません: {reasons}",
+    not_ready_action_save_empty: "起点のステップが無い",
     store_busy: "ストアが使用中です。少し待ってからやり直してください。",
     storage_error: "ストアの読み書きに失敗しました。変更は保存されていません。Amenbo を再起動してやり直してください。それでも起きるときは、設定 > ログ の中身を送ってください。",
     not_found_task: "タスク {ref} が見つかりません。",

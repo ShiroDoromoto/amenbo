@@ -1738,6 +1738,8 @@ export const pl: Translation = {
     invalid_automation_cfg_not_a_count: "Ustawienie „{cfg}” przyjmuje liczbę całkowitą równą zero lub większą, a {value} nią nie jest.",
     invalid_automation_limit_below_one: "„Najwyżej” to 1 lub więcej, a {value} to mniej. Zostaw puste, żeby nie było limitu.",
     not_ready_automation_split_axis_gone: "{step} (umieszczenie {placement}): oś, według której dzieli, została usunięta — zdejmij to umieszczenie i umieść krok ponownie na istniejącej osi",
+    not_ready_action_save: "„{action}” nie można zapisać: {reasons}",
+    not_ready_action_save_empty: "nie ma kroku startowego",
     store_busy: "Magazyn jest właśnie używany. Spróbuj ponownie za chwilę.",
     storage_error: "Nie udało się odczytać ani zapisać magazynu i nic nie zostało zmienione. Uruchom Amenbo ponownie i spróbuj jeszcze raz — jeśli będzie się powtarzać, wyślij to, co jest w Ustawienia > Dzienniki.",
     not_found_task: "Nie znaleziono zadania {ref}.",

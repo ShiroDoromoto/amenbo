@@ -28,7 +28,7 @@ import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
 import { PaneSlotProvider } from "../shell/paneSlot";
 import {
   abandonAutomationAction,
-  finishCreatingAutomationAction,
+  saveAutomationAction,
   useAutomationAction,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
@@ -66,7 +66,7 @@ export function AutomationActionOver({
     setBusy(true);
     setRefused(null);
     try {
-      await finishCreatingAutomationAction(actionId);
+      await saveAutomationAction(actionId);
       onBack();
     } catch (e) {
       setRefused(errText(e));

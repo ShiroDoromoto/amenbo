@@ -1730,6 +1730,8 @@ export const fr: Translation = {
     invalid_automation_cfg_not_a_count: "Le réglage « {cfg} » prend un nombre entier positif ou nul, et {value} n’en est pas un.",
     invalid_automation_limit_below_one: "« Au plus » vaut 1 ou plus, et {value} est inférieur. Laisse le champ vide pour ne pas mettre de limite.",
     not_ready_automation_split_axis_gone: "{step} (placement {placement}) : l’axe selon lequel il répartit a été supprimé ; retirez ce placement et replacez-le sur un axe existant",
+    not_ready_action_save: "« {action} » ne peut pas être enregistrée : {reasons}",
+    not_ready_action_save_empty: "elle n'a pas d'étape de départ",
     store_busy: "Le magasin est en cours d'utilisation. Réessayez dans un instant.",
     storage_error: "Le magasin n'a pas pu être lu ni écrit, et rien n'a été modifié. Redémarrez Amenbo et réessayez ; si cela se reproduit, envoyez ce que contient Réglages > Journaux.",
     not_found_task: "Tâche {ref} introuvable.",

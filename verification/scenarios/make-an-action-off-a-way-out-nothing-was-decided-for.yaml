@@ -5,18 +5,20 @@
 #
 # What that makes stands over the automation rather than in its place, and it is still being made.
 # The automation under it cannot be left by a tab, the sidebar or "＜" "＞" while it is, and it closes
-# by one of two presses and nothing else: finishing keeps the action where it was placed, and giving it
-# up takes the action and its placement away and leaves the picture as it was. A build that lost the
-# first would leave the new box with nowhere to go on to; one that lost the second would leave a
-# half-made action in the library, and a start whose way out points at nothing.
+# by one of two presses and nothing else: finishing, which saves what is inside it as its first version,
+# keeps the action where it was placed, and giving it up takes the action and its placement away and
+# leaves the picture as it was. An empty action is not saved, so a step goes in before the finish. A
+# build that lost the first would leave the new box with nowhere to go on to; one that lost the second
+# would leave a half-made action in the library, and a start whose way out points at nothing.
 id: make-an-action-off-a-way-out-nothing-was-decided-for
 title: An action made off a way out nothing was decided for is finished or given up over its automation
 description: >
   Open an automation with nothing on it but the built-in that takes a task, and read its way out for
   having taken one drawn dashed. Press the button at its end, search the library for a name it does
   not hold, and make it there. Read the action's screen standing over the automation, still being
-  made, with nothing behind it that can be pressed. Finish creating it, and read the new box on the
-  picture — the start's way out now going on to it, and its own way out drawn dashed. Then make another
+  made, with nothing behind it that can be pressed. Write a step inside it that ends the action, finish
+  creating it, and read the new box on the picture — the start's way out now going on to it, and its
+  own way out drawn dashed. Then make another
   off the start's other way out, give it up, and read it gone from the picture and the library, and
   that way out dashed again.
 given:
@@ -64,6 +66,27 @@ steps_gui:
     with:
       name: work
       draft: true
+
+  # An empty action is refused at the finish, which is its first save: a step that ends the action
+  # goes in first.
+  - type: action
+    domain: automation
+    op: add-step
+    with:
+      name: write
+      prompt: write the draft
+
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: write
+
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      ends: exit
 
   - type: action
     domain: automation

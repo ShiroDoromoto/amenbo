@@ -1708,6 +1708,8 @@ export const ko: Translation = {
     invalid_automation_cfg_not_a_count: "설정 “{cfg}”에는 0 이상의 정수를 넣습니다. {value}은(는) 넣을 수 없습니다.",
     invalid_automation_limit_below_one: "최대 횟수는 1 이상입니다. {value}은(는) 넣을 수 없습니다. 제한을 없애려면 비워 두세요.",
     not_ready_automation_split_axis_gone: "{step} (배치 {placement}): 나누는 기준인 축이 삭제되었습니다. 이 배치를 빼고, 지금 있는 축으로 다시 두세요",
+    not_ready_action_save: "“{action}”은(는) 저장할 수 없습니다: {reasons}",
+    not_ready_action_save_empty: "시작점인 스텝이 없다",
     store_busy: "저장소를 사용하는 중입니다. 잠시 후 다시 시도하세요.",
     storage_error: "저장소를 읽거나 쓰지 못했고, 바뀐 것은 없습니다. Amenbo를 다시 시작한 뒤 다시 시도하세요. 계속 일어나면 설정 > 로그에 있는 것을 보내 주세요.",
     not_found_task: "작업 {ref}을(를) 찾을 수 없습니다.",

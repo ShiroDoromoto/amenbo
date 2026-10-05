@@ -1713,6 +1713,8 @@ export const zhHant: Translation = {
     invalid_automation_cfg_not_a_count: "設定「{cfg}」只接受 0 以上的整數，{value} 不是。",
     invalid_automation_limit_below_one: "最多次數至少為 1，{value} 比它小。不想限制的話請留空。",
     not_ready_automation_split_axis_gone: "{step}（配置 {placement}）：用來分流的軸已被刪除，請移除此配置，並在現有的軸上重新放置",
+    not_ready_action_save: "「{action}」無法儲存：{reasons}",
+    not_ready_action_save_empty: "沒有起點步驟",
     store_busy: "儲存正在使用中，請稍後再試。",
     storage_error: "無法讀取或寫入儲存，沒有任何變更。請重新啟動 Amenbo 後再試一次；如果仍然發生，請把 設定 > 記錄檔 裡的內容寄來。",
     not_found_task: "找不到任務 {ref}。",

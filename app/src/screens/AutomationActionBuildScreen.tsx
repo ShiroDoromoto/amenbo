@@ -99,24 +99,47 @@ function whereTo(action: AutomationActionDetailDto | null, target: AddTarget): W
 }
 
 /**
- * **The automations this action is placed on, by name** — each one where a rewrite here lands, and
- * each a press that goes to its build screen. The names say what "used by two" would leave the reader
- * to go and find.
+ * **What one automation stands on**: the versions its placements use, and, where any is older than
+ * the newest saved one, which that is — so after a save the reader sees which automations still run
+ * the old one. Nothing where none of its placements stands on a version.
+ */
+function placedVersions(one: AutomationPlacedOnDto, latest: number | undefined): string | null {
+  if (one.versions.length === 0) return null;
+  const used = one.versions.map((version) => tf("auto.place.version", { version })).join(", ");
+  if (latest === undefined) return used;
+  const behind = one.versions.some((version) => version < latest);
+  return `${used} · ${behind ? tf("auto.place.versionNewest", { version: latest }) : t("auto.place.versionLatest")}`;
+}
+
+/**
+ * **The automations this action is placed on, by name**, each with the versions it uses — each one
+ * where a rewrite here lands once it is saved and its placement moved on, and each a press that goes to
+ * its build screen. The names say what "used by two" would leave the reader to go and find.
  */
 function PlacedOn({
   placedOn,
+  latest,
   onGoTo,
 }: {
   placedOn: AutomationPlacedOnDto[];
+  /** The newest saved version, which each automation's versions are told against. */
+  latest: number | undefined;
   onGoTo?: (project: number, automation: number) => void;
 }) {
   if (placedOn.length === 0) return <span className="autostep__label">{t("auto.actions.unused")}</span>;
   return (
     <div className="actplaced">
-      {placedOn.map((one) =>
-        onGoTo === undefined ? (
-          <span key={one.id} className="actplaced__one">
+      {placedOn.map((one) => {
+        const versions = placedVersions(one, latest);
+        const label = (
+          <>
             {one.name}
+            {versions !== null && <span className="actplaced__ver"> {versions}</span>}
+          </>
+        );
+        return onGoTo === undefined ? (
+          <span key={one.id} className="actplaced__one">
+            {label}
           </span>
         ) : (
           <button
@@ -125,11 +148,11 @@ function PlacedOn({
             className="actplaced__one actplaced__one--go"
             onClick={() => onGoTo(one.project, one.id)}
           >
-            {one.name}
+            {label}
             <span aria-hidden="true"> ↗</span>
           </button>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -477,7 +500,7 @@ export function AutomationActionBuildScreen({
                 </span>
               </div>
               <Sec title={t("auto.act.placedOn")}>
-                <PlacedOn placedOn={action.placedOn} onGoTo={onGoToAutomation} />
+                <PlacedOn placedOn={action.placedOn} latest={action.saved?.version} onGoTo={onGoToAutomation} />
               </Sec>
             </>
           ) : (

@@ -1815,6 +1815,7 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .actplaced__one--go { cursor: pointer; }
 .actplaced__one--go:hover { border-color: var(--c-accent); }
+.actplaced__ver { color: var(--c-text-faint); }
 
 /* ── The library of actions (`../screens/AutomationActionsTab`) ── */
 /* A place is named by a small caps word over it, the way the build screen names its three. */

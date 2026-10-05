@@ -235,8 +235,8 @@ describe("the action build screen", () => {
     const goTo = vi.fn();
     hoisted.action = action({
       placedOn: [
-        { id: 7, name: "Dev loop", project: 1 },
-        { id: 8, name: "Elsewhere", project: 2 },
+        { id: 7, name: "Dev loop", project: 1, versions: [] },
+        { id: 8, name: "Elsewhere", project: 2, versions: [] },
       ],
     });
     await act(async () => {
@@ -256,6 +256,25 @@ describe("the action build screen", () => {
     expect(goTo).toHaveBeenCalledWith(1, 7);
     await act(async () => (names[1] as HTMLButtonElement).click());
     expect(goTo).toHaveBeenCalledWith(2, 8);
+  });
+
+  it("names the versions each automation uses, and which are behind the newest saved one", async () => {
+    hoisted.action = action({
+      saved: { version: 3, savedAt: "2026-10-01T00:00:00Z" },
+      placedOn: [
+        { id: 7, name: "Dev loop", project: 1, versions: [3] },
+        { id: 8, name: "Elsewhere", project: 2, versions: [1, 3] },
+        { id: 9, name: "Unversioned", project: 1, versions: [] },
+      ],
+    });
+    await render();
+    await openDeclaration();
+    const names = [...container.querySelectorAll(".actplaced__one")].map((one) => one.textContent);
+    expect(names).toEqual([
+      `Dev loop ${tf("auto.place.version", { version: 3 })} · ${t("auto.place.versionLatest")}`,
+      `Elsewhere ${tf("auto.place.version", { version: 1 })}, ${tf("auto.place.version", { version: 3 })} · ${tf("auto.place.versionNewest", { version: 3 })}`,
+      "Unversioned",
+    ]);
   });
 
   it("closes the panel from its own close button", async () => {

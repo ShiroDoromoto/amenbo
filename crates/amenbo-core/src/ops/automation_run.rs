@@ -1444,7 +1444,7 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 
 /// **Launch an automation**: check it, copy what is placed on it into a run, and start it.
 ///
-/// Three things refuse, in this order.
+/// Four things refuse, in this order.
 ///
 /// - **Archived.** Archiving is what keeps an automation nobody launches any more out of the lists, and
 ///   launching one straight past that would make the word mean nothing.
@@ -1452,6 +1452,10 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 /// - **The workspace being closed**, last on purpose. What the check found is wrong with the automation
 ///   and stays wrong after a window is opened, so saying "open a window" first would send somebody to do
 ///   that and then tell them the automation was never going to run.
+/// - **Its most runs under way.** Where the automation sets `max_concurrent_runs`, a launch is refused
+///   once that many of its runs are `running` or `paused` — a paused one can be picked up again, so it
+///   holds a place as much as a running one. It is counted in the same transaction the run is written in.
+///   Last, since it is the only one that goes away by waiting.
 ///
 /// The run is born `running`: nothing caps how many may be under way at once, so a launch never waits
 /// (`AMB-D-947`). `started_at` is the moment of the launch itself.
@@ -1498,6 +1502,30 @@ pub fn launch_handing(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
 ) -> Result<AutomationRun> {
+    hand(tx, automation_id, by, handed, reads, true)
+}
+
+/// [`launch_handing`], not refused over the automation's most runs under way. For a test run, whose run
+/// is thrown away with its transaction and so never stands beside the others.
+pub fn launch_handing_past_the_limit(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+    handed: &HandedAtLaunch,
+    reads: ReadsFrom,
+) -> Result<AutomationRun> {
+    hand(tx, automation_id, by, handed, reads, false)
+}
+
+/// [`launch_handing`], counting the runs under way only where `limited`.
+fn hand(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+    handed: &HandedAtLaunch,
+    reads: ReadsFrom,
+    limited: bool,
+) -> Result<AutomationRun> {
     let who = match (handed.files.is_empty(), by.by) {
         (true, _) => None,
         (false, Some(who)) => Some(who),
@@ -1507,7 +1535,7 @@ pub fn launch_handing(
             ))
         }
     };
-    let run = launch_asking(tx, automation_id, by, handed, reads, |_| true)?;
+    let run = launch_asking(tx, automation_id, by, handed, reads, limited, |_| true)?;
     if let Some(who) = who {
         for file in &handed.files {
             crate::ops::attachment::add_blob(
@@ -1538,7 +1566,7 @@ pub(crate) fn launch_past_the_task_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, |unmet| {
         !matches!(unmet, Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. })
     })
 }
@@ -1553,7 +1581,7 @@ pub(crate) fn launch_past_the_setting_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, |unmet| {
         !matches!(
             unmet,
             Unmet::LeavesTaskOpen { .. }
@@ -1565,14 +1593,16 @@ pub(crate) fn launch_past_the_setting_checks(
     })
 }
 
-/// [`launch`] of the definition `reads` names, refusing only over what `counts` says counts, and keeping
-/// what was `handed` on the run. The files are the caller's to attach once the run exists.
+/// [`launch`] of the definition `reads` names, refusing only over what `counts` says counts — and over
+/// the runs under way only where `limited` — and keeping what was `handed` on the run. The files are the
+/// caller's to attach once the run exists.
 fn launch_asking(
     tx: &WriteTx<'_>,
     automation_id: i64,
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
+    limited: bool,
     counts: impl Fn(&Unmet) -> bool,
 ) -> Result<AutomationRun> {
     let automation: Automation = read::automation(tx.conn(), automation_id)?
@@ -1604,6 +1634,24 @@ fn launch_asking(
             )
             .coded(ErrorCode::InvalidAutomationWorkspaceClosed),
         ));
+    }
+    if let (true, Some(max)) = (limited, automation.max_concurrent_runs) {
+        let mut runs = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
+        if runs.len() >= max as usize {
+            runs.sort_unstable();
+            let runs = runs.iter().map(i64::to_string).collect::<Vec<_>>().join(", ");
+            return Err(Error::Invalid(
+                Msg::new(format!(
+                    "automation '{}' already has {max} run(s) under way, the most it may have at once \
+                     ({runs}) — wait for one to end before launching it again",
+                    automation.name
+                ))
+                .coded(ErrorCode::InvalidAutomationRunLimit)
+                .with("automation", &automation.name)
+                .with("max", max)
+                .with("runs", runs),
+            ));
+        }
     }
     let handed_task = entry_reads(tx.conn(), &automation, &pic, handed)?
         .map(|task| serde_json::to_string(&task).map_err(Error::from))

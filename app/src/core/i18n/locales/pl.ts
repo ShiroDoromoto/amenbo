@@ -1693,6 +1693,8 @@ export const pl: Translation = {
     invalid_automation_archived: "„{automation}” jest zarchiwizowana. Przywróć ją, zanim uruchomisz.",
     invalid_automation_workspace_closed:
       "Obszar roboczy jest zamknięty, a przebieg rysuje swoje kroki w jego panelach. Otwórz go i uruchom ponownie.",
+    invalid_automation_run_limit:
+      "„{automation}” ma już {max} przebiegów w toku lub wstrzymanych, czyli najwięcej naraz ({runs}). Poczekaj, aż jeden się skończy, zanim uruchomisz ją ponownie.",
     not_ready_automation: "„{automation}” jeszcze nie można uruchomić: {reasons}",
     not_ready_automation_no_steps: "Nie ma na niej żadnej akcji",
     not_ready_automation_no_entry: "żadne umieszczenie nie jest startem",

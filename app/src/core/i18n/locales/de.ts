@@ -1674,6 +1674,8 @@ export const de: Translation = {
     invalid_automation_archived: "„{automation}“ ist archiviert. Hole sie zurück, bevor du sie startest.",
     invalid_automation_workspace_closed:
       "Der Arbeitsbereich ist geschlossen, und ein Lauf zeichnet seine Schritte in dessen Feldern. Öffne ihn und starte erneut.",
+    invalid_automation_run_limit:
+      "„{automation}“ hat schon {max} laufende oder pausierte Läufe – mehr sind gleichzeitig nicht erlaubt ({runs}). Warte, bis einer endet, bevor du sie erneut startest.",
     not_ready_automation: "„{automation}“ kann noch nicht gestartet werden: {reasons}",
     not_ready_automation_no_steps: "Es ist keine Aktion darauf platziert",
     not_ready_automation_no_entry: "Keine Platzierung ist der Start",

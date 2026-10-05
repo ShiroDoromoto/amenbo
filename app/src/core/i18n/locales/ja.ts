@@ -1682,6 +1682,8 @@ export const ja: Translation = {
     invalid_automation_archived: "「{automation}」はアーカイブ済みです。戻してから起動してください。",
     invalid_automation_workspace_closed:
       "ワークスペースが閉じています。実行はステップをそのペインに描くので、開いてから起動してください。",
+    invalid_automation_run_limit:
+      "「{automation}」は、すでに {max} 件の実行が動いているか一時停止中で、同時に動かせる上限に達しています（{runs}）。どれかが終わってから起動してください。",
     not_ready_automation: "「{automation}」は起動できません: {reasons}",
     not_ready_automation_no_steps: "アクションが1つも置かれていない",
     not_ready_automation_no_entry: "起点の配置が決まっていない",

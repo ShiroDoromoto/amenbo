@@ -1667,6 +1667,8 @@ export const th: Translation = {
     invalid_automation_archived: "“{automation}” ถูกเก็บเข้าคลังแล้ว นำกลับมาก่อนจึงจะเริ่มได้",
     invalid_automation_workspace_closed:
       "พื้นที่ทำงานปิดอยู่ และการรันจะวาดขั้นตอนไว้ในช่องของพื้นที่นั้น เปิดแล้วเริ่มใหม่",
+    invalid_automation_run_limit:
+      "“{automation}” มีการรันที่กำลังทำงานหรือหยุดชั่วคราวอยู่แล้ว {max} รายการ ซึ่งเป็นจำนวนสูงสุดที่ทำพร้อมกันได้ ({runs}) รอให้รายการหนึ่งจบก่อนจึงเริ่มอีกครั้ง",
     not_ready_automation: "“{automation}” ยังเริ่มไม่ได้: {reasons}",
     not_ready_automation_no_steps: "ยังไม่ได้วางแอ็กชันใดเลย",
     not_ready_automation_no_entry: "ยังไม่มีการวางที่เป็นจุดเริ่ม",

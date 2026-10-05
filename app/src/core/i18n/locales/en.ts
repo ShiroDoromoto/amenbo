@@ -1956,6 +1956,8 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_automation_archived: "“{automation}” is archived. Bring it back before starting it.",
   invalid_automation_workspace_closed:
     "The workspace is closed, and a run draws its steps in its panes. Open it and start again.",
+  invalid_automation_run_limit:
+    "“{automation}” already has {max} run(s) under way, the most it may have at once ({runs}). Wait for one to end before starting it again.",
   not_ready_automation: "“{automation}” is not ready to start: {reasons}",
   not_ready_automation_no_steps: "no action is placed on it",
   not_ready_automation_no_entry: "no placement is the start",

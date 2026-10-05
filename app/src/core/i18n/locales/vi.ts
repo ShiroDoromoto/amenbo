@@ -1667,6 +1667,8 @@ export const vi: Translation = {
     invalid_automation_archived: "“{automation}” đã lưu trữ. Đưa nó trở lại trước khi chạy.",
     invalid_automation_workspace_closed:
       "Không gian làm việc đang đóng, và một lượt chạy vẽ các bước của nó trong các khung ở đó. Mở ra rồi chạy lại.",
+    invalid_automation_run_limit:
+      "“{automation}” đã có {max} lượt chạy đang chạy hoặc tạm dừng, mức tối đa cùng lúc ({runs}). Hãy chờ một lượt kết thúc rồi mới chạy lại.",
     not_ready_automation: "“{automation}” chưa thể chạy: {reasons}",
     not_ready_automation_no_steps: "Chưa đặt hành động nào lên nó",
     not_ready_automation_no_entry: "chưa có vị trí đặt nào là điểm bắt đầu",

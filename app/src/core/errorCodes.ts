@@ -133,8 +133,8 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_migration_no_space",
   "invalid_migration_rolled_back",
   "invalid_migration_rollback_failed",
-  // Pressing launch on an automation. The two that refuse alone name the automation; the third is one
-  // refusal over the launch check's list, and the reasons under it arrive as its `parts` the way a
+  // Pressing launch on an automation. Those that refuse alone name the automation; `not_ready_automation`
+  // is one refusal over the launch check's list, and the reasons under it arrive as its `parts` the way a
   // reservation's do — how many there are is known only at the moment of refusing.
   //
   // The build screen draws the same list before anybody presses, and writes it from these very codes:
@@ -142,6 +142,9 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // refusal are one set of sentences rather than two to keep in step.
   "invalid_automation_archived",
   "invalid_automation_workspace_closed",
+  // Too many runs of it already under way. The build screen's list does not draw this one — it is about
+  // the runs, not the definition — and it names the most it may have (`max`) and those runs (`runs`).
+  "invalid_automation_run_limit",
   "invalid_action_still_placed",
   // Deleting an automation runs were launched from — refused for the runs filed under it, with how many.
   // Archiving is the way it goes out of sight instead, and the CLI's hint names it.

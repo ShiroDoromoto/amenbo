@@ -1667,6 +1667,8 @@ export const nl: Translation = {
     invalid_automation_archived: "“{automation}” is gearchiveerd. Haal het terug voordat je het start.",
     invalid_automation_workspace_closed:
       "De werkruimte is gesloten, en een run tekent zijn stappen in de vakken daarvan. Open hem en start opnieuw.",
+    invalid_automation_run_limit:
+      "“{automation}” heeft al {max} runs die lopen of gepauzeerd zijn, het maximum tegelijk ({runs}). Wacht tot er een klaar is voordat je het opnieuw start.",
     not_ready_automation: "“{automation}” kan nog niet gestart worden: {reasons}",
     not_ready_automation_no_steps: "Er is geen actie op geplaatst",
     not_ready_automation_no_entry: "geen plaatsing is de start",

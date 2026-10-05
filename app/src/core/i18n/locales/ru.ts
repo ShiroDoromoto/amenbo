@@ -1693,6 +1693,8 @@ export const ru: Translation = {
     invalid_automation_archived: "«{automation}» в архиве. Верните её, прежде чем запускать.",
     invalid_automation_workspace_closed:
       "Рабочее пространство закрыто, а запуск рисует свои шаги в его панелях. Откройте его и запустите снова.",
+    invalid_automation_run_limit:
+      "У «{automation}» уже {max} запусков идут или стоят на паузе — это предел одновременных ({runs}). Дождитесь, пока один закончится, прежде чем запускать снова.",
     not_ready_automation: "«{automation}» пока запустить нельзя: {reasons}",
     not_ready_automation_no_steps: "На ней не размещено ни одного действия",
     not_ready_automation_no_entry: "ни одно размещение не назначено стартом",

@@ -380,8 +380,8 @@ pub enum ErrorCode {
     InvalidMigrationRolledBack,
     InvalidMigrationRollbackFailed,
 
-    // Launching an automation. The two that refuse alone carry the automation's name; the third is one
-    // refusal over a list, and the reasons under it are the launch check's
+    // Launching an automation. Those that refuse alone carry the automation's name; `NotReadyAutomation`
+    // is one refusal over a list, and the reasons under it are the launch check's
     // (`ops::automation_run::Unmet`) — a list whose length is only known at the moment of refusing, so
     // each names itself and rides as a part (`Msg::part`), the way a reservation's reasons do.
     //
@@ -391,6 +391,11 @@ pub enum ErrorCode {
     // succeeded, this one is raised by a write that did not.
     InvalidAutomationArchived,
     InvalidAutomationWorkspaceClosed,
+    // An automation that already has as many runs under way (running or paused) as it may have at once.
+    // Unlike the two above, the build screen's list does not say it: it is about the runs, not the
+    // definition. It carries the automation's name, that most (`max`) and the runs under way (`runs`),
+    // so the reader can see which to wait for.
+    InvalidAutomationRunLimit,
     // A library action that cannot be deleted or moved for the placements standing on it. The screen
     // shows the refusal under the action's row, so it names itself and carries what it counts and names.
     InvalidActionStillPlaced,
@@ -537,6 +542,7 @@ impl ErrorCode {
             ErrorCode::InvalidMigrationRollbackFailed => "invalid_migration_rollback_failed",
             ErrorCode::InvalidAutomationArchived => "invalid_automation_archived",
             ErrorCode::InvalidAutomationWorkspaceClosed => "invalid_automation_workspace_closed",
+            ErrorCode::InvalidAutomationRunLimit => "invalid_automation_run_limit",
             ErrorCode::InvalidActionStillPlaced => "invalid_action_still_placed",
             ErrorCode::InvalidAutomationHasRuns => "invalid_automation_has_runs",
             ErrorCode::InvalidActionPlacedElsewhere => "invalid_action_placed_elsewhere",
@@ -662,6 +668,7 @@ impl ErrorCode {
         ErrorCode::InvalidMigrationRollbackFailed,
         ErrorCode::InvalidAutomationArchived,
         ErrorCode::InvalidAutomationWorkspaceClosed,
+        ErrorCode::InvalidAutomationRunLimit,
         ErrorCode::InvalidActionStillPlaced,
         ErrorCode::InvalidAutomationHasRuns,
         ErrorCode::InvalidActionPlacedElsewhere,
@@ -918,6 +925,7 @@ mod tests {
             "invalid_migration_rollback_failed",
             "invalid_automation_archived",
             "invalid_automation_workspace_closed",
+            "invalid_automation_run_limit",
             "invalid_action_still_placed",
             "invalid_automation_has_runs",
             "invalid_action_placed_elsewhere",

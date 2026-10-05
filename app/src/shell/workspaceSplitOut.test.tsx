@@ -23,9 +23,10 @@ const hoisted = vi.hoisted(() => ({
   saved: null as unknown,
   /** The terminals the host says are running, as it answers: oldest first
    *  (`crate::pty::pty_sessions`). */
-  running: [] as { session: string; folder: string | null }[],
-  /** Which session each pane was put up to draw, in the order the panes were built. */
-  drawn: [] as (string | null | undefined)[],
+  running: [] as { session: string; folder: string | null; frame?: string }[],
+  /** Which session each pane was put up to draw, beside the pane, in the order the panes were
+   *  built. */
+  drawn: [] as [string | null | undefined, string | null | undefined][],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -35,7 +36,7 @@ vi.mock("../talk/agent", () => ({
     on: { opened: (s: string) => void },
     start: PaneStart = {},
   ) => {
-    hoisted.drawn.push(start.session);
+    hoisted.drawn.push([start.frame, start.session]);
     on.opened(start.session ?? "s1");
     return Promise.resolve(() => {});
   },
@@ -170,10 +171,9 @@ describe("the window the terminal is split out into", () => {
 });
 
 describe("the terminals that were running in the face it left", () => {
-  it("puts each back in the place it was opened in, where two panes share a folder", async () => {
-    // The folder is all there is to tell two places apart, so what pairs them is the order: the
-    // oldest terminal in the oldest place. Paired any other way the two panes trade contents, and
-    // each is drawn under the other's name — a name belongs to the place (`../talk/frames`).
+  it("puts each back in the pane it was opened in, by that pane's id", async () => {
+    // Two panes share a folder, and the host answers the newer session first: the pane's id is what
+    // pairs them, so neither the folder nor the order can trade their contents.
     hoisted.saved = {
       nextId: 3,
       project: 1,
@@ -184,11 +184,45 @@ describe("the terminals that were running in the face it left", () => {
       splitOut: "1",
     };
     hoisted.running = [
-      { session: "older", folder: "/work/a" },
-      { session: "newer", folder: "/work/a" },
+      { session: "second", folder: "/work/a", frame: "2" },
+      { session: "first", folder: "/work/a", frame: "1" },
     ];
     await mount(true);
-    expect(hoisted.drawn).toEqual(["older", "newer"]);
+    expect(hoisted.drawn).toEqual([["1", "first"], ["2", "second"]]);
+  });
+
+  it("passes over a pane in the same folder whose program has ended", async () => {
+    // The first pane's program has ended, so it is free and in the same folder. Put there, the
+    // session would leave its own pane offering to open, and that press would resume the same
+    // conversation twice.
+    hoisted.saved = {
+      nextId: 3,
+      project: 1,
+      frames: [
+        { id: "1", project: 1, size: "half", folder: "/work/a" },
+        { id: "2", project: 1, size: "half", folder: "/work/a" },
+      ],
+      splitOut: "1",
+    };
+    hoisted.running = [{ session: "live", folder: "/work/a", frame: "2" }];
+    await mount(true);
+    expect(hoisted.drawn).toEqual([["2", "live"]]);
+  });
+
+  it("opens a session whose pane is gone from the arrangement in a new pane", async () => {
+    // The arrangement was opened again, and the pane the session was opened in is not in it. The
+    // pane left in the same folder is somebody else's place.
+    hoisted.saved = {
+      nextId: 2,
+      project: 1,
+      frames: [{ id: "1", project: 1, size: "half", folder: "/work/a" }],
+      splitOut: "1",
+    };
+    hoisted.running = [{ session: "live", folder: "/work/a", frame: "gone" }];
+    await mount(true);
+    expect(drawnPanes()).toHaveLength(2);
+    expect(hoisted.drawn.map(([, session]) => session)).toEqual(["live"]);
+    expect(hoisted.drawn[0]![0]).not.toBe("1");
   });
 });
 

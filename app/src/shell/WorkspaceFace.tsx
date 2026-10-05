@@ -476,15 +476,14 @@ export function WorkspaceFace({
   //
   // **What is running is a different question, and it is answered here.** A session with no pane
   // drawing it is one the other window was drawing a moment ago — the face moving between the two
-  // windows is what leaves them loose (`AMB-D-753`). It is put in the pane whose folder it is running
-  // in where there is one, and in a new pane on the project being shown where there is not: a
-  // terminal nobody can see is a terminal nobody can end.
+  // windows is what leaves them loose (`AMB-D-753`). It is put back in the pane it was opened in, by
+  // that pane's id (`AMB-D-897`), and in a new pane on the project being shown where the arrangement
+  // no longer has that pane: a terminal nobody can see is a terminal nobody can end.
   //
-  // The folder is all there is to go on, and two panes may share one — so the sessions are taken in
-  // the order they were started and the places in the order they were opened, which pairs them the
-  // way they were paired. The host answers oldest-first for exactly this (`crate::pty::pty_sessions`);
-  // paired any other way the two panes trade contents, and each is then drawn under the other's
-  // name, because a name belongs to the place rather than to what is running in it (`../talk/frames`).
+  // The folder is not what pairs them. Two panes may share one, and a pane whose program has ended
+  // shares it too — a session put there would leave its own pane offering to open, and pressing it
+  // would resume the same conversation twice. Only a session opened without a pane is put in a free
+  // one by folder, oldest first, the order the host answers in (`crate::pty::pty_sessions`).
   const restoring = useRef(false);
   // Whether the face has come down. It is the only thing that stops the restore, and it is kept
   // apart from the effect's own cleanup because the two are not the same event: the cleanup also
@@ -537,10 +536,10 @@ export function WorkspaceFace({
           // project the face is on, running a step nobody could tell was one.
           for (const session of running) {
             if (session.run != null) continue;
-            const free = next.frames.find(
-              (frame) => frame.session === null && frame.folder === session.folder,
-            );
-            const frame = free ?? (next.project === null
+            const place = session.frame == null
+              ? next.frames.find((frame) => frame.session === null && frame.folder === session.folder)
+              : next.frames.find((frame) => frame.id === session.frame);
+            const frame = place ?? (next.project === null
               ? null
               : (() => {
                 const made = openedFrame(next, next.project, session.folder, composeStartsOpen());

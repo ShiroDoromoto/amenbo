@@ -292,6 +292,12 @@ export function AppShell() {
   // asking: the face is a component, so what it is handed is where to work rather than a call to make
   // (`./WorkspaceFace`).
   const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; run?: number; nth: number } | null>(null);
+  // An asking is for the face that is up when it is made. Once the face comes down it has been
+  // answered, and a face stood again on folding back would answer it a second time — standing the
+  // pane that was closed since, or starting a terminal in the folder again.
+  useEffect(() => {
+    if (!hostsWorkspace) setOpenIn(null);
+  }, [hostsWorkspace]);
   /**
    * "Start in the workspace" — the one move the first loop offers (`../components/FirstLoop`).
    *

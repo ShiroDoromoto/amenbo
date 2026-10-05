@@ -1088,6 +1088,43 @@ fn run_show_says_when_a_run_is_waiting_for_a_task() {
     assert!(!text.contains("waiting:"), "{text}");
 }
 
+/// **A run picked up after a pause before its next task goes on from the newest saved version**
+/// (`AMB-D-1015`), and `run-show` says which versions it was copied from, in turn. A run waiting at its
+/// entry has run no step yet, so which version each step ran on is not held here.
+#[test]
+fn run_show_names_the_versions_a_run_was_copied_from() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _, take) = a_picture(&cli, false);
+    cli.json(&[
+        "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
+        "--choice", "着手できるタスクが出るまで待つ", "--json",
+    ]);
+    saved(&cli, &a);
+    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    let versions: Vec<Option<i64>> =
+        shown["versions"].as_array().unwrap().iter().map(|v| v["version"].as_i64()).collect();
+    assert_eq!(versions, vec![Some(1)], "{shown}");
+    let (text, _) = cli.run(&["automation", "run-show", &run]);
+    assert!(text.contains("copied from: version 1"), "{text}");
+    assert!(!text.contains("taken up at"), "{text}");
+
+    cli.json(&["automation", "pause", &run, "--before-next-task", "--json"]);
+    cli.json(&["automation", "cfg-set", &take, "--name", "絞り込み", "--status", "in_progress", "--json"]);
+    saved(&cli, &a);
+    cli.json(&["automation", "resume", &run, "--json"]);
+
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    let versions: Vec<Option<i64>> =
+        shown["versions"].as_array().unwrap().iter().map(|v| v["version"].as_i64()).collect();
+    assert_eq!(versions, vec![Some(1), Some(2)], "{shown}");
+    let (text, _) = cli.run(&["automation", "run-show", &run]);
+    assert!(text.contains("copied from: version 1 → version 2 (taken up at "), "{text}");
+
+    cli.json(&["automation", "cancel", &run, "--force", "--json"]);
+}
+
 /// **What a person hands over comes in on the launch itself** (`AMB-D-981`): for a run that starts by
 /// filing a task, its title, its notes and the files to attach to it. A file that cannot be read is
 /// refused before anything is started, so no run is left holding half of what it was handed, and a

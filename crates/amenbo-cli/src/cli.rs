@@ -2360,7 +2360,9 @@ pub enum AutomationCmd {
         limit: Option<usize>,
     },
     /// One run in full: every step it ran, the way out each took, how long it stood, what it handed on,
-    /// the whole of what it reported, and the end of what a script step printed
+    /// the whole of what it reported, and the end of what a script step printed — with the saved version
+    /// it was copied from, where a run picked up a newer one as it went on, and what a run that failed a
+    /// check did not pass
     RunShow {
         /// run id
         id: i64,

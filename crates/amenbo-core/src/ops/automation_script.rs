@@ -32,6 +32,9 @@
 //! happened, the folder is gone once [`Prepared`] is: the files a program left are read by
 //! [`Prepared::finish`] first.
 //!
+//! What it prints to stdout and to stderr goes down one pipe, in the order it was written, and the end of
+//! it is kept with its escape sequences taken out ([`TAIL_BYTES`]).
+//!
 //! [`MAX_SCRIPT_TIMEOUT_MINUTES`]: crate::model::MAX_SCRIPT_TIMEOUT_MINUTES
 
 use std::ffi::OsString;
@@ -51,8 +54,8 @@ pub const INPUT_VAR: &str = "AMENBO_INPUT";
 /// The variable the path to `output.json` is handed in.
 pub const OUTPUT_VAR: &str = "AMENBO_OUTPUT";
 
-/// How much of the end of what a program printed is kept, per stream, in bytes.
-pub const TAIL_BYTES: usize = 4096;
+/// How much of the end of what a program printed is kept, in bytes, once its escape sequences are out.
+pub const TAIL_BYTES: usize = 64 * 1024;
 
 /// The version of `input.json` written here.
 const INPUT_VERSION: u64 = 1;
@@ -70,10 +73,9 @@ pub enum Given {
 #[derive(Debug)]
 pub struct Ran {
     pub ended: Ended,
-    /// The end of what it printed to stdout, at most [`TAIL_BYTES`] of it.
-    pub stdout_tail: String,
-    /// The end of what it printed to stderr, at most [`TAIL_BYTES`] of it.
-    pub stderr_tail: String,
+    /// The end of what it printed to stdout and stderr, in the order it was written, without its escape
+    /// sequences — at most [`TAIL_BYTES`] of it.
+    pub output_tail: String,
 }
 
 /// How a run ended.
@@ -113,7 +115,7 @@ pub fn run(script: &StepScript, given: &[(String, Given)], stop: impl FnMut() ->
 pub const STOP_EVERY: Duration = Duration::from_secs(1);
 
 fn not_started(why: String) -> Ran {
-    Ran { ended: Ended::NotStarted(why), stdout_tail: String::new(), stderr_tail: String::new() }
+    Ran { ended: Ended::NotStarted(why), output_tail: String::new() }
 }
 
 /// **A run's folder, written and waiting for its program** — and what the program is to be started
@@ -170,10 +172,10 @@ impl Prepared {
         }
     }
 
-    /// The program as a [`std::process::Command`], its stdin closed and its stdout and stderr piped.
+    /// The program as a [`std::process::Command`], its stdin closed.
     fn command(&self) -> std::process::Command {
         let mut command = crate::sys::command(&self.program);
-        command.args(&self.args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        command.args(&self.args).stdin(Stdio::null());
         for var in &self.env_remove {
             command.env_remove(var);
         }
@@ -234,21 +236,34 @@ pub fn wait(
     Err(cut)
 }
 
-/// Start `prepared` with its output on pipes, wait for it, and read back what it left.
+/// Start `prepared` with its stdout and stderr down one pipe, wait for it, and read back what it left.
 fn run_prepared(prepared: Prepared, stop: impl FnMut() -> bool) -> Ran {
-    let (mut child, group) = match ProcessGroup::start(&mut prepared.command()) {
+    let (printed, into) = match std::io::pipe() {
+        Ok(pipe) => pipe,
+        Err(e) => return not_started(e.to_string()),
+    };
+    let into_err = match into.try_clone() {
+        Ok(into_err) => into_err,
+        Err(e) => return not_started(e.to_string()),
+    };
+    let mut command = prepared.command();
+    command.stdout(into).stderr(into_err);
+    let started = ProcessGroup::start(&mut command);
+    // The command holds this side's copies of the pipe's write end; were they kept, the pipe would
+    // never end.
+    drop(command);
+    let (mut child, group) = match started {
         Ok(started) => started,
         Err(e) => return not_started(e.to_string()),
     };
-    let stdout = Tail::drain(child.stdout.take());
-    let stderr = Tail::drain(child.stderr.take());
+    let tail = Tail::drain(printed);
     let deadline = Instant::now() + prepared.timeout;
     let waited = wait(&group, prepared.timeout, || child.try_wait(), stop);
-    // A child the program left running may still hold its pipes open, so the readers are waited for
-    // only until the deadline, and what they have read by then is what is kept. One that was stopped
-    // went with its group, and its pipes closed with it.
-    let (stdout_tail, stderr_tail) = (stdout.until(deadline), stderr.until(deadline));
-    Ran { ended: prepared.finish(waited), stdout_tail, stderr_tail }
+    // A child the program left running may still hold the pipe open, so the reader is waited for only
+    // until the deadline, and what it has read by then is what is kept. One that was stopped went with
+    // its group, and the pipe closed with it.
+    let output_tail = tail.until(deadline);
+    Ran { ended: prepared.finish(waited), output_tail }
 }
 
 /// Write `input.json`, and each file input beside it, and answer the path to `input.json`.
@@ -298,23 +313,24 @@ fn read_output(out: &Path, output: &Path) -> Ended {
     Ended::Wrote { output, files }
 }
 
-/// The end of one stream a program prints to, read on a thread of its own so a program that prints
-/// more than a pipe holds is not stuck waiting for a reader.
+/// The end of what a program prints, read on a thread of its own so a program that prints more than a
+/// pipe holds is not stuck waiting for a reader. Its escape sequences are taken out as it is read, so
+/// what is kept is [`TAIL_BYTES`] of text.
 struct Tail {
     kept: Arc<Mutex<Vec<u8>>>,
     reader: JoinHandle<()>,
 }
 
 impl Tail {
-    fn drain(pipe: Option<impl Read + Send + 'static>) -> Tail {
+    fn drain(mut pipe: impl Read + Send + 'static) -> Tail {
         let kept = Arc::new(Mutex::new(Vec::new()));
         let into = Arc::clone(&kept);
         let reader = std::thread::spawn(move || {
-            let Some(mut pipe) = pipe else { return };
             let mut chunk = [0u8; 8192];
+            let mut escape = Escape::None;
             while let Ok(n @ 1..) = pipe.read(&mut chunk) {
                 let mut kept = into.lock().unwrap_or_else(|e| e.into_inner());
-                kept.extend_from_slice(&chunk[..n]);
+                kept.extend(chunk[..n].iter().copied().filter(|b| escape.text(*b)));
                 let over = kept.len().saturating_sub(TAIL_BYTES);
                 kept.drain(..over);
             }
@@ -328,9 +344,63 @@ impl Tail {
         while !self.reader.is_finished() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(20));
         }
-        let kept = self.kept.lock().unwrap_or_else(|e| e.into_inner());
-        let start = kept.iter().position(|b| (*b as i8) >= -0x40).unwrap_or(kept.len());
-        String::from_utf8_lossy(&kept[start..]).into_owned()
+        whole_from_the_front(&self.kept.lock().unwrap_or_else(|e| e.into_inner()))
+    }
+}
+
+/// **The end of what a program printed, as it is kept** — `printed` with its escape sequences taken out,
+/// its last [`TAIL_BYTES`] at most, and a character cut in two at the front dropped.
+pub fn tail_of(printed: &[u8]) -> String {
+    let mut escape = Escape::None;
+    let text: Vec<u8> = printed.iter().copied().filter(|b| escape.text(*b)).collect();
+    whole_from_the_front(&text[text.len().saturating_sub(TAIL_BYTES)..])
+}
+
+/// `kept` as text, a character cut in two at its front dropped.
+fn whole_from_the_front(kept: &[u8]) -> String {
+    let start = kept.iter().position(|b| (*b as i8) >= -0x40).unwrap_or(kept.len());
+    String::from_utf8_lossy(&kept[start..]).into_owned()
+}
+
+/// Where the bytes read so far stand in an escape sequence — kept from one read to the next, since a
+/// sequence may be cut across two.
+#[derive(Clone, Copy)]
+enum Escape {
+    /// In text.
+    None,
+    /// Just after `ESC`.
+    Esc,
+    /// After `ESC` and an intermediate byte, as in `ESC ( B`, until the final byte.
+    Intermediate,
+    /// In a control sequence, `ESC [`, until its final byte.
+    Csi,
+    /// In a string — `ESC ]`, `ESC P`, `ESC X`, `ESC ^` or `ESC _` — until `BEL` or `ESC \`.
+    String,
+    /// Just after an `ESC` in a string.
+    StringEsc,
+}
+
+impl Escape {
+    /// Take in `b`, and answer whether it is text to keep.
+    fn text(&mut self, b: u8) -> bool {
+        const ESC: u8 = 0x1b;
+        let (next, keep) = match (*self, b) {
+            (Escape::None, ESC) => (Escape::Esc, false),
+            (Escape::None, _) => (Escape::None, true),
+            (Escape::Esc, b'[') => (Escape::Csi, false),
+            (Escape::Esc, b']' | b'P' | b'X' | b'^' | b'_') => (Escape::String, false),
+            (Escape::Esc | Escape::Intermediate, 0x20..=0x2f) => (Escape::Intermediate, false),
+            (Escape::Esc | Escape::Intermediate, _) => (Escape::None, false),
+            (Escape::Csi, 0x40..=0x7e) => (Escape::None, false),
+            (Escape::Csi, _) => (Escape::Csi, false),
+            (Escape::String, 0x07) => (Escape::None, false),
+            (Escape::String, ESC) => (Escape::StringEsc, false),
+            (Escape::String, _) => (Escape::String, false),
+            (Escape::StringEsc, b'\\') => (Escape::None, false),
+            (Escape::StringEsc, _) => (Escape::String, false),
+        };
+        *self = next;
+        keep
     }
 }
 
@@ -357,10 +427,39 @@ mod tests {
     #[test]
     fn the_end_of_a_stream_is_kept_whole_characters_only() {
         let text = "あ".repeat(TAIL_BYTES);
-        let tail = Tail::drain(Some(std::io::Cursor::new(text.into_bytes())));
+        let tail = Tail::drain(std::io::Cursor::new(text.into_bytes()));
         let kept = tail.until(Instant::now() + Duration::from_secs(5));
         assert!(kept.len() <= TAIL_BYTES);
         assert!(kept.chars().all(|c| c == 'あ'), "{kept}");
+    }
+
+    fn kept(printed: &str) -> String {
+        Tail::drain(std::io::Cursor::new(printed.as_bytes().to_vec())).until(Instant::now() + Duration::from_secs(5))
+    }
+
+    #[test]
+    fn escape_sequences_are_taken_out() {
+        let printed = "\x1b[1;31mred\x1b[0m \x1b]0;title\x07a\x1b]8;;https://example.com\x1b\\b\x1b(B c\x1b=\n";
+        assert_eq!(kept(printed), "red ab c\n");
+    }
+
+    #[test]
+    fn a_sequence_cut_across_two_reads_is_taken_out() {
+        let printed = format!("{}\x1b[31mb", "a".repeat(8190));
+        assert_eq!(kept(&printed), format!("{}b", "a".repeat(8190)));
+    }
+
+    #[test]
+    fn what_is_kept_is_counted_once_the_sequences_are_out() {
+        let printed = "\x1b[1mx\x1b[0m".repeat(TAIL_BYTES / 2);
+        assert_eq!(kept(&printed), "x".repeat(TAIL_BYTES / 2));
+    }
+
+    #[test]
+    fn what_a_terminal_printed_is_kept_the_same_way() {
+        let printed = format!("{}\x1b[1;31mあ\x1b[0m", "x".repeat(TAIL_BYTES));
+        let kept = tail_of(printed.as_bytes());
+        assert_eq!(kept, format!("{}あ", "x".repeat(TAIL_BYTES - "あ".len())));
     }
 
     #[cfg(unix)]
@@ -378,7 +477,7 @@ mod tests {
 
         #[test]
         fn the_program_reads_its_inputs_and_what_it_wrote_comes_back() {
-            let body = r#"echo "$AMENBO_INPUT" >&2
+            let body = r#"echo "$AMENBO_INPUT"
                 cat "$AMENBO_INPUT"
                 f=$(sed 's/.*"report":"\([^"]*\)".*/\1/' "$AMENBO_INPUT")
                 cp "$f" "$(dirname "$AMENBO_OUTPUT")/copy.txt"
@@ -388,20 +487,21 @@ mod tests {
                 ("report".to_string(), Given::File { name: "a.txt".to_string(), bytes: b"read me".to_vec() }),
             ];
             let ran = run(&sh(body), &given, || false);
-            let Ended::Wrote { output, files } = &ran.ended else { panic!("{:?} / {}", ran.ended, ran.stderr_tail) };
+            let Ended::Wrote { output, files } = &ran.ended else { panic!("{:?} / {}", ran.ended, ran.output_tail) };
             assert_eq!(output["exit"], "done");
-            let input: serde_json::Value = serde_json::from_str(&ran.stdout_tail).expect("input.json is JSON");
+            let (path, input) = ran.output_tail.split_once('\n').expect("the path, then input.json");
+            let input: serde_json::Value = serde_json::from_str(input).expect("input.json is JSON");
             assert_eq!(input["version"], 1);
             assert_eq!(input["ins"]["title"], "hello");
             assert!(input["ins"]["report"].as_str().is_some_and(|path| path.ends_with("a.txt")), "{input}");
             assert_eq!(files, &[("copy.txt".to_string(), b"read me".to_vec())]);
-            assert!(!folder_of(&ran.stderr_tail).exists(), "the folder is removed");
+            assert!(!folder_of(path).exists(), "the folder is removed");
         }
 
         #[test]
         fn arguments_reach_the_program_without_a_shell() {
             let ran = run(&script("/bin/echo", &["$HOME", "a b"]), &[], || false);
-            assert_eq!(ran.stdout_tail, "$HOME a b\n");
+            assert_eq!(ran.output_tail, "$HOME a b\n");
             assert!(matches!(ran.ended, Ended::NoOutput), "{:?}", ran.ended);
         }
 
@@ -410,7 +510,19 @@ mod tests {
             let ran = run(&sh("echo said >&2; echo '{}' > \"$AMENBO_OUTPUT\"; exit 4"), &[], || false);
             let Ended::Failed(status) = ran.ended else { panic!("{:?}", ran.ended) };
             assert_eq!(status.code(), Some(4));
-            assert_eq!(ran.stderr_tail, "said\n");
+            assert_eq!(ran.output_tail, "said\n");
+        }
+
+        #[test]
+        fn stdout_and_stderr_are_kept_in_the_order_they_were_written() {
+            let ran = run(&sh("echo one; echo two >&2; echo three; echo four >&2"), &[], || false);
+            assert_eq!(ran.output_tail, "one\ntwo\nthree\nfour\n");
+        }
+
+        #[test]
+        fn what_a_program_colors_is_kept_as_text() {
+            let ran = run(&sh(r"printf '\033[32mok\033[0m\n'; printf '\033[31mfailed\033[0m\n' >&2"), &[], || false);
+            assert_eq!(ran.output_tail, "ok\nfailed\n");
         }
 
         #[test]
@@ -457,7 +569,7 @@ mod tests {
             let ran = run_for(&sh(WITH_A_CHILD), Duration::from_millis(500), || false);
             assert!(matches!(ran.ended, Ended::TimedOut), "{:?}", ran.ended);
             assert!(started.elapsed() < Duration::from_secs(10));
-            let (folder, child) = printed(&ran.stdout_tail);
+            let (folder, child) = printed(&ran.output_tail);
             assert!(gone(child), "the child went with the program");
             assert!(!folder.exists(), "the folder is removed");
         }
@@ -468,16 +580,17 @@ mod tests {
             let ran = run_for(&sh(WITH_A_CHILD), Duration::from_secs(60), || true);
             assert!(matches!(ran.ended, Ended::Stopped), "{:?}", ran.ended);
             assert!(started.elapsed() < Duration::from_secs(10));
-            let (folder, child) = printed(&ran.stdout_tail);
+            let (folder, child) = printed(&ran.output_tail);
             assert!(gone(child), "the child went with the program");
             assert!(!folder.exists(), "the folder is removed");
         }
 
         #[test]
         fn only_the_end_of_what_it_printed_is_kept() {
-            let ran = run(&sh("i=0; while [ $i -lt 2000 ]; do echo line $i; i=$((i+1)); done"), &[], || false);
-            assert!(ran.stdout_tail.len() <= TAIL_BYTES);
-            assert!(ran.stdout_tail.ends_with("line 1999\n"), "{}", ran.stdout_tail);
+            let ran = run(&sh("i=0; while [ $i -lt 10000 ]; do echo line $i; i=$((i+1)); done"), &[], || false);
+            assert!(ran.output_tail.len() <= TAIL_BYTES);
+            assert!(!ran.output_tail.contains("line 0\n"), "the front was cut");
+            assert!(ran.output_tail.ends_with("line 9999\n"), "{}", ran.output_tail);
         }
     }
 }

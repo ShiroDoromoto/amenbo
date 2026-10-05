@@ -1449,9 +1449,9 @@ datasets! {
     // `report_withheld` is set where the step was built to carry its report onto the task and the
     // task was closed by then, so the report stayed here alone (`AMB-D-963`).
     //
-    // `stdout_tail` and `stderr_tail` are the last of what a script step wrote to its standard output
-    // and its standard error, kept so a failed run can be read (`AMB-D-1016`). Only a script step
-    // writes them; every other step leaves both at ''.
+    // `output_tail` is the last of what a script step wrote to its standard output and its standard
+    // error, in the order it was written and without its escape sequences, kept so a failed run can be
+    // read (`AMB-D-1016`). Only a script step writes it; every other step leaves it at ''.
     automation_run_step {
         run_id: fk("automation_run", "RESTRICT"),
         run_def_id: fk("automation_run_def", "RESTRICT"),
@@ -1460,8 +1460,7 @@ datasets! {
         exit_id: col(KEY_REF_OPT),
         report: col(REQ),
         report_withheld: bool_col,
-        stdout_tail: col(REQ),
-        stderr_tail: col(REQ),
+        output_tail: col(REQ),
         status: enum_col("running", "done", "failed", "stopped"),
         started_at: ts_opt,
         ended_at: ts_opt,

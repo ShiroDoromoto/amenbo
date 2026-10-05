@@ -2496,12 +2496,12 @@ fn start_script(
 /// **Wait for a script step's program and write down what it came to** (`AMB-D-1016`), on the thread
 /// [`open_one`] started for it.
 ///
-/// What it printed is read off its terminal, where stdout and stderr were one stream, so the whole of
-/// it is kept as stdout. The card is told again, ended, with the way out it left by, and the watch is
-/// woken to open the next step — the road [`time_up`] takes. Where the step stops being under way
-/// while the program runs — the run was force-cancelled, or ended some other way — the program is
-/// stopped with every process it started ([`still_running`]), core refuses the write, and only the log
-/// says so.
+/// What it printed is read off its terminal, where stdout and stderr were one stream, and its end is
+/// kept with the escape sequences taken out ([`amenbo_core::ops::automation_script::tail_of`]). The
+/// card is told again, ended, with the way out it left by, and the watch is woken to open the next
+/// step — the road [`time_up`] takes. Where the step stops being under way while the program runs —
+/// the run was force-cancelled, or ended some other way — the program is stopped with every process
+/// it started ([`still_running`]), core refuses the write, and only the log says so.
 ///
 /// Its terminal is left to the next step, as an agent's is, and not ended here: it ending by itself is
 /// not a crash, since what it came to is written down here (`crate::pty::open_script`). Once the program
@@ -2519,7 +2519,7 @@ fn run_script(
     use amenbo_core::ops::automation_script::{self, Ended, Ran};
     let (ran, session) = match started {
         Err(why) => {
-            let ran = Ran { ended: Ended::NotStarted(why), stdout_tail: String::new(), stderr_tail: String::new() };
+            let ran = Ran { ended: Ended::NotStarted(why), output_tail: String::new() };
             (ran, None)
         }
         Ok(StartedScript { prepared, terminal, group }) => {
@@ -2530,8 +2530,8 @@ fn run_script(
                 || terminal.exited(),
                 || !still_running(run_step_id),
             );
-            let stdout_tail = terminal.output_until(deadline, automation_script::TAIL_BYTES);
-            let ran = Ran { ended: prepared.finish(waited), stdout_tail, stderr_tail: String::new() };
+            let output_tail = automation_script::tail_of(&terminal.output_until(deadline));
+            let ran = Ran { ended: prepared.finish(waited), output_tail };
             (ran, Some(terminal.session))
         }
     };

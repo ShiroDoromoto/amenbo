@@ -2274,25 +2274,15 @@ impl ScriptTerminal {
         Ok(status.as_ref().map(exit_status))
     }
 
-    /// **The end of what it wrote**, at most `max` bytes of it, once its terminal has been read to its
+    /// **The end of what it wrote**, escape sequences and all, once its terminal has been read to its
     /// end. A child the program left running may still hold the terminal open, so the terminal is
     /// waited for only until `deadline`, and what has been read by then is what is answered.
-    pub fn output_until(&self, deadline: std::time::Instant, max: usize) -> String {
+    pub fn output_until(&self, deadline: std::time::Instant) -> Vec<u8> {
         while !self.drained.load(Ordering::Acquire) && std::time::Instant::now() < deadline {
             std::thread::sleep(REAP_EVERY);
         }
-        tail_of(&self.pane.recent.lock().unwrap_or_else(PoisonError::into_inner).bytes(), max)
+        self.pane.recent.lock().unwrap_or_else(PoisonError::into_inner).bytes()
     }
-}
-
-/// The last `max` bytes of `bytes` at most, cut on a character so the text does not begin with half
-/// of one.
-fn tail_of(bytes: &[u8], max: usize) -> String {
-    let mut from = bytes.len().saturating_sub(max);
-    while bytes.get(from).is_some_and(|b| b & 0xc0 == 0x80) {
-        from += 1;
-    }
-    String::from_utf8_lossy(&bytes[from..]).into_owned()
 }
 
 /// A terminal's program's ending, in the shape the rest of the process reads one in.
@@ -2526,17 +2516,6 @@ mod tests {
 
     /// The size a pane opens a terminal at, for a test that is not about the size.
     const OPENED_AT: Size = (80, 24);
-
-    #[test]
-    fn a_script_s_output_is_cut_to_its_end_on_a_character() {
-        let written = "abあい".as_bytes();
-        assert_eq!(tail_of(written, 100), "abあい");
-        // Four bytes from the end is the last byte of the first kana and all of the second: the half
-        // is left out.
-        assert_eq!(tail_of(written, 4), "い");
-        assert_eq!(tail_of(written, 6), "あい");
-        assert_eq!(tail_of(written, 0), "");
-    }
 
     #[test]
     fn a_script_s_ending_reads_as_the_code_it_exited_with() {

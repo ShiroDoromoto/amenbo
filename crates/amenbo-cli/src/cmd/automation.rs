@@ -1805,20 +1805,20 @@ fn render_move(
     if m.report_withheld {
         human(flags, "      (not left on the task: it was closed)");
     }
-    for line in tail_lines("stdout", &m.stdout_tail).into_iter().chain(tail_lines("stderr", &m.stderr_tail)) {
+    for line in tail_lines(&m.output_tail) {
         human(flags, line);
     }
     Ok(())
 }
 
-/// The end of what a script step printed to one stream, under the stream's name, so a failed run can be
+/// The end of what a script step printed to stdout and stderr, under a heading, so a failed run can be
 /// read from the terminal (`AMB-D-1016`). Nothing where it printed nothing, which is every step that is
 /// not a script.
-fn tail_lines(stream: &str, tail: &str) -> Vec<String> {
+fn tail_lines(tail: &str) -> Vec<String> {
     if tail.trim().is_empty() {
         return Vec::new();
     }
-    std::iter::once(format!("      {stream} (the end of it):"))
+    std::iter::once("      output (the end of it):".to_string())
         .chain(tail.lines().map(|line| format!("      > {line}")))
         .collect()
 }
@@ -1928,12 +1928,12 @@ mod tests {
     use super::tail_lines;
 
     #[test]
-    fn a_tail_is_written_under_its_stream_and_nothing_is_written_for_none() {
+    fn a_tail_is_written_under_a_heading_and_nothing_is_written_for_none() {
         assert_eq!(
-            tail_lines("stderr", "error: no tests to run\nexit 4\n"),
-            ["      stderr (the end of it):", "      > error: no tests to run", "      > exit 4"],
+            tail_lines("error: no tests to run\nexit 4\n"),
+            ["      output (the end of it):", "      > error: no tests to run", "      > exit 4"],
         );
-        assert!(tail_lines("stdout", "").is_empty());
-        assert!(tail_lines("stdout", "\n  \n").is_empty());
+        assert!(tail_lines("").is_empty());
+        assert!(tail_lines("\n  \n").is_empty());
     }
 }

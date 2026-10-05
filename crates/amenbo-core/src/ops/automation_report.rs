@@ -614,8 +614,7 @@ pub fn script_ran(
     let def = def_of(tx, &run_step)?;
     let exits = exits_of(&def)?;
     let mut tailed = run_step.clone();
-    tailed.stdout_tail = ran.stdout_tail.clone();
-    tailed.stderr_tail = ran.stderr_tail.clone();
+    tailed.output_tail = ran.output_tail.clone();
     tailed.updated_at = Timestamp::now();
     crate::ops::emit_update(tx, record::automation_run_step(&run_step), record::automation_run_step(&tailed))?;
 

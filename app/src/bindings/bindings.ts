@@ -826,6 +826,13 @@ pausableBeforeNextTask: boolean,
  */
 waiting: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | "failed_check" | null, 
 /**
+ * **The saved version of the automation its copy was taken from** (`AMB-D-1015`) — the newest
+ * copy, which is what it goes on from and what it last took up at its entry. Absent where that
+ * copy was taken from unsaved changes — a run every saved version is newer than — and on a run
+ * that carries no copy of its entry.
+ */
+version?: number, 
+/**
  * The step it is on, or the last one it ran. Absent before the first step has opened.
  */
 stepName?: string, 

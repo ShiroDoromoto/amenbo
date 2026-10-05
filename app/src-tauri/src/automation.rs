@@ -1765,6 +1765,10 @@ fn run_card(
     let builtin = last_def.as_ref().and_then(|def| def.builtin.clone());
     let placement = last_def.as_ref().and_then(|def| def.placement_id);
     let step_name = last_def.map(|def| def.name);
+    // The version it goes on from: the newest copy of its entry, which a run back at its entry has
+    // taken afresh before its first step is opened (`take_up_newer`).
+    let version = amenbo_core::ops::automation_run::entry_def(conn, run.id)?
+        .and_then(|def| def.automation_version);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
     let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
     // The steps that owed the task their report and could not leave it, the task being closed.
@@ -1793,6 +1797,7 @@ fn run_card(
         waiting: run.status == amenbo_core::model::AutomationRunStatus::Running
             && amenbo_core::ops::automation_run::is_waiting(conn, run.id)?,
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
+        version,
         step_name,
         builtin,
         action_name,

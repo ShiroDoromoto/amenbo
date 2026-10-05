@@ -33,9 +33,10 @@
 // screen's it was reached from.
 //
 // **An action a run is going on is written all the same** (`AMB-D-1015`). A run of an automation
-// placing it goes on from the snapshot it took at its start, and what is written here is what the
-// next start takes. Those runs are named over the picture with the way to each one's pane
-// (`./AutomationHeldBy`).
+// placing it goes on from the copy it took, and what is saved here reaches it only once its placement
+// is moved to the new version and the automation saved: the run reads that saved automation afresh
+// when it comes back to its entry. Those runs are named over the picture with the version of their
+// automation each is on and the way to each one's pane (`./AutomationHeldBy`).
 //
 // **A built-in's action is read as its definition** (`./AutomationBuiltinScreen`). Its rows are Amenbo's
 // own and core refuses every edit of them (`AMB-D-964`), so a box on a picture opening one lands on the

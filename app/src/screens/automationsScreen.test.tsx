@@ -885,9 +885,9 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     reportWithheld: [],
     acknowledged: false,
   };
-  async function openHeld(heldBy: AutomationRunCardDto[] = [run]) {
+  async function openHeld(heldBy: AutomationRunCardDto[] = [run], over: Partial<AutomationDetailDto> = {}) {
     hoisted.automations = [card()];
-    hoisted.detail = detail({ heldBy });
+    hoisted.detail = detail({ heldBy, ...over });
     hoisted.check = { ready: true, blocks: [] };
     goToRun.mockClear();
     await act(async () => {
@@ -900,6 +900,30 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     expect(container.querySelector(".autoheld")?.textContent).toContain(tf("auto.held.by", { run: 31 }));
     await act(async () => { button(t("auto.held.openPane")).click(); });
     expect(goToRun).toHaveBeenCalledWith(1, 31);
+  });
+
+  it("names the version the run is on, and the one it switches to back at the start", async () => {
+    await openHeld([{ ...run, version: 2 }], { saved: { version: 3, savedAt: "2026-10-05T00:00:00Z" } });
+    expect(container.querySelector(".autoheld__version")?.textContent).toBe(tf("auto.held.version", { version: 2 }));
+    expect(container.querySelector(".autoheld__next")?.textContent).toBe(tf("auto.held.next", { version: 3 }));
+  });
+
+  it("names no switch for a run on the newest saved version", async () => {
+    await openHeld([{ ...run, version: 3 }], { saved: { version: 3, savedAt: "2026-10-05T00:00:00Z" } });
+    expect(container.querySelector(".autoheld__version")?.textContent).toBe(tf("auto.held.version", { version: 3 }));
+    expect(container.querySelector(".autoheld__next")).toBeNull();
+  });
+
+  it("switches a run on unsaved changes to any saved version", async () => {
+    // A copy taken from unsaved changes is older than every saved version, as the run itself counts it.
+    await openHeld([run], { saved: { version: 1, savedAt: "2026-10-05T00:00:00Z" } });
+    expect(container.querySelector(".autoheld__version")?.textContent).toBe(t("auto.held.unsaved"));
+    expect(container.querySelector(".autoheld__next")?.textContent).toBe(tf("auto.held.next", { version: 1 }));
+  });
+
+  it("names no switch while nothing is saved", async () => {
+    await openHeld();
+    expect(container.querySelector(".autoheld__next")).toBeNull();
   });
 
   /** The moves behind the band's run mark (`../shell/RunActs`), drawn on the page's body once it is opened. */

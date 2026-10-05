@@ -522,6 +522,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         notes: get(r, C.notes)?,
         entry_placement_id: get(r, C.entry_placement_id)?,
         archived: get(r, C.archived)?,
+        allow_concurrent_runs: get(r, C.allow_concurrent_runs)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

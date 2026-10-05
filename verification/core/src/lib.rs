@@ -4217,7 +4217,9 @@ const REGISTRY: &[OpSpec] = &[
     //
     // Saving it as its next version (`automation save`), which is what a start reads: one never saved
     // is refused at the start (`conflict`). The save asks the launch check, and is refused
-    // (`not_ready_automation`) while anything is unmet.
+    // (`not_ready_automation`) while anything is unmet — bar the agents and models this machine has,
+    // which only a start and a run picking up the newer version ask. On screen it is the build
+    // screen's Save.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "save", required: &[], refs: &["target"], strings: &[], binds: false },
     // The same for a library action (`automation action-save`): what is inside it saved as its next
     // version. A placement stands on the version that was newest when it was put down, and stays on it

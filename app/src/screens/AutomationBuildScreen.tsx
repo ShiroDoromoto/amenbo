@@ -38,20 +38,29 @@
 // button does: there is no definition left for this screen to be drawn from.
 //
 // **An automation a run is going on is written all the same** (`AMB-D-1015`). The run goes on from
-// the snapshot it took at its start, and the definition written here is what the next start takes, or
-// a resume from a pause at a task's end. The runs going on it are named over the picture with the way
-// to each one's pane and the presses that pause or end it (`./AutomationHeldBy`).
+// the copy it took, and what is saved here is what it reads afresh when it comes back to its entry.
+// The runs going on it are named over the picture with the version each is on, the one it switches
+// to, the way to each one's pane and the presses that pause or end it (`./AutomationHeldBy`).
 //
 // **What the panel shows is the screen's, not the picture's.** The picture marks the pressed box and
 // the panel draws it, so it is held where both can see it, and the panel hands it back when the spot
 // it was drawn from is taken off.
 //
 // **The start press refuses, the build place never does.** Building is always half-finished — a step
-// with no way onward, an input nobody has wired — and every one of those saves
+// with no way onward, an input nobody has wired — and every one of those is written to the draft
 // (`amenbo_core::ops::automation`). What is unfinished only matters at the moment somebody is about
 // to be let down by it, which is at the press: it cannot be pressed while there is a reason, and the
 // reasons are listed under the head only then. Whether it can be started is said once, by the button,
 // rather than again by a badge and a heading beside it.
+//
+// **Saving is the other press that refuses** (`amenbo_core::ops::automation::save`). What the screen
+// writes goes to the draft, and "Save" makes it the automation's next version; "Discard changes" puts
+// the draft back as the newest version holds it. Save asks the launch check without this machine's
+// agents and models, so its reasons are the detail's own (`saveBlocks`) rather than the start press's.
+// They are listed under the head while there is something unsaved, each line opening what it is
+// about the way the start's do, and a reason the start's list shares is not said twice. Neither press
+// is held down by a run going on it (`AMB-D-1015`). A box only the draft held is gone after a discard,
+// and its panel with it: the panel is drawn from the box it was pressed on.
 //
 // **The press can still be refused, and its refusal is drawn where the reasons are.** Two things move
 // between the screen being drawn and the button being pressed — the machine, and whether the
@@ -75,8 +84,8 @@
 // would refuse a launch. While it is open the panel is the test's and the picture marks the box of the
 // step it stands on; pressing a box leaves it for that box's panel, as any other panel is left.
 //
-// **The head says whether the last write was saved** (`./AutomationSaved`, `AMB-D-1005`). Nothing
-// here has a Save press, so the head says when a write landed and "Saved" stands beside its field.
+// **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
+// saved, or the version saved last and when. A write still marks the field it came from.
 import { useMemo, useState } from "react";
 import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPanel";
 import { Panel } from "./AutomationActionBuildScreen";
@@ -91,9 +100,10 @@ import { AutomationStepPanel } from "./AutomationStepPanel";
 import { AutomationTestPane, useAutomationTestRun } from "./AutomationTestPane";
 import type { WhereTo } from "./automationParts";
 import { useAutomationStart } from "../components/StartAutomation";
-import { useAutomation, useLaunchCheck } from "../core/automations";
+import { discardAutomation, saveAutomation, useAutomation, useLaunchCheck } from "../core/automations";
+import { confirmDialog } from "../core/dialog";
 import { useBoundFolders } from "../core/boundFolders";
-import { errSentence, t, tf } from "../core/i18n";
+import { errSentence, errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { Icon } from "../components/Icon";
 import type { AutomationDetailDto, AutomationLaunchBlockDto } from "../bindings/bindings";
@@ -206,7 +216,38 @@ export function AutomationBuildScreen({
       ? automation?.placements.find((one) => one.id === showing.id) ?? null
       : null;
   const close = () => setShowing(null);
-  const saved = useSaved();
+  const saved = useSaved(
+    automation === null ? null : { saved: automation.saved, unsaved: automation.unsaved },
+  );
+  const [keeping, setKeeping] = useState(false);
+  const [keepRefused, setKeepRefused] = useState<string | null>(null);
+  const keep = async (write: () => Promise<void>) => {
+    setKeeping(true);
+    setKeepRefused(null);
+    try {
+      await write();
+    } catch (e) {
+      setKeepRefused(errText(e));
+    } finally {
+      setKeeping(false);
+    }
+  };
+  const save = () => void keep(() => saveAutomation(id));
+  const discard = async () => {
+    const version = automation?.saved?.version;
+    if (version === undefined) return;
+    if (!(await confirmDialog(tf("auto.saved.discardConfirm", { version })))) return;
+    await keep(() => discardAutomation(id));
+  };
+  // Listed only while there is something to save: a definition with nothing unsaved has nothing the
+  // reasons would hold back.
+  const saveBlocks = automation?.unsaved === true ? automation.saveBlocks : [];
+  const launchBlocks =
+    check === null || check.ready
+      ? []
+      : check.blocks.filter(
+          (block) => !saveBlocks.some((one) => one.code === block.code && one.message_en === block.message_en),
+        );
 
   // The box holding the action over the picture: the one pressed to open it, or the one just made to
   // hold it, which nobody has pressed yet. Back lands on it pressed, and the head over the action
@@ -226,10 +267,50 @@ export function AutomationBuildScreen({
     setOver(null);
   };
 
+  // One reason the automation cannot be saved or started.
+  const reasonLine = (block: AutomationLaunchBlockDto, nth: number) => {
+    // A reason about one box opens that box, the way pressing it on the picture does. The two about
+    // the automation as a whole name no box, and stay a line to read.
+    const box = automation?.placements.find((one) => String(one.id) === block.fields.placement);
+    // One whose gap is inside the action opens that action over the picture instead, on the step it
+    // names — the box's panel would only send the reader on again.
+    const mend = box === undefined ? null : mendedIn(block, box);
+    return (
+      <li key={`${block.code}-${nth}`}>
+        {box === undefined ? (
+          errSentence(block)
+        ) : mend !== null ? (
+          <button
+            type="button"
+            className="autolaunch__go"
+            data-see={t("auto.launch.fix")}
+            title={t("auto.launch.fix")}
+            onClick={() => {
+              setShowing({ kind: "box", id: box.id });
+              openOver(mend.action, mend.step);
+            }}
+          >
+            {errSentence(block)}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="autolaunch__go"
+            data-see={t("auto.launch.see")}
+            title={t("auto.launch.see")}
+            onClick={() => setShowing({ kind: "box", id: box.id })}
+          >
+            {errSentence(block)}
+          </button>
+        )}
+      </li>
+    );
+  };
+
   return (
     <>
     <div className="actbuild" {...saved.capture}>
-      <div className="actbuild__head">
+      <div className="actbuild__head actbuild__head--wraps">
         <button type="button" className="btn" onClick={onBack}>
           <Icon name="chevronLeft" /> {t("auto.build.back")}
         </button>
@@ -238,89 +319,79 @@ export function AutomationBuildScreen({
         )}
         <span className="actbuild__name">{automation?.name ?? ""}</span>
         {saved.head}
-        <button
-          type="button"
-          className={showing?.kind === "about" ? "btn btn--on actbuild__edit" : "btn actbuild__edit"}
-          aria-pressed={showing?.kind === "about"}
-          // It opens and does not toggle: a second press while the panel stands is somebody meaning
-          // to be there, and the panel's own × is the way out of it.
-          onClick={() => setShowing({ kind: "about" })}
-        >
-          {t("auto.build.edit")}
-        </button>
-        <button
-          type="button"
-          className={testing !== null ? "btn btn--on" : "btn"}
-          aria-pressed={testing !== null}
-          disabled={check?.ready !== true || test.walking || projectId === null}
-          onClick={() => {
-            setShowing(null);
-            test.test(id, automation?.name ?? "", folders.live.map((one) => one.path));
-          }}
-        >
-          {t("auto.test.run")}
-        </button>
-        {/* Held down until the check answers: a press offered before it would be a guess the list
-            under it may then contradict. */}
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={check?.ready !== true || starting || projectId === null}
-          onClick={() => start(id, automation?.name ?? "", folders.live.map((one) => one.path))}
-        >
-          {t("auto.start")}
-        </button>
+        <span className="actbuild__presses">
+          <button
+            type="button"
+            className="btn"
+            disabled={automation?.unsaved !== true || saveBlocks.length > 0 || keeping}
+            onClick={save}
+          >
+            {t("auto.saved.save")}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={automation?.saved === undefined || !automation.unsaved || keeping}
+            onClick={() => void discard()}
+          >
+            {t("auto.saved.discard")}
+          </button>
+          <button
+            type="button"
+            className={showing?.kind === "about" ? "btn btn--on" : "btn"}
+            aria-pressed={showing?.kind === "about"}
+            // It opens and does not toggle: a second press while the panel stands is somebody meaning
+            // to be there, and the panel's own × is the way out of it.
+            onClick={() => setShowing({ kind: "about" })}
+          >
+            {t("auto.build.edit")}
+          </button>
+          <button
+            type="button"
+            className={testing !== null ? "btn btn--on" : "btn"}
+            aria-pressed={testing !== null}
+            disabled={check?.ready !== true || test.walking || projectId === null}
+            onClick={() => {
+              setShowing(null);
+              test.test(id, automation?.name ?? "", folders.live.map((one) => one.path));
+            }}
+          >
+            {t("auto.test.run")}
+          </button>
+          {/* Held down until the check answers: a press offered before it would be a guess the list
+              under it may then contradict. */}
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={check?.ready !== true || starting || projectId === null}
+            onClick={() => start(id, automation?.name ?? "", folders.live.map((one) => one.path))}
+          >
+            {t("auto.start")}
+          </button>
+        </span>
       </div>
       {handing}
       {test.handing}
 
-      {((check !== null && !check.ready) || refused !== null || test.refused !== null) && (
+      {(saveBlocks.length > 0 ||
+        keepRefused !== null ||
+        launchBlocks.length > 0 ||
+        refused !== null ||
+        test.refused !== null) && (
         <div className="autolaunch">
-          {check !== null && !check.ready && (
+          {saveBlocks.length > 0 && (
+            <>
+              <div className="autolaunch__head">{t("auto.saved.blocked")}</div>
+              <ul className="autolaunch__blocks">{saveBlocks.map(reasonLine)}</ul>
+            </>
+          )}
+          {keepRefused !== null && <div className="autolaunch__refused">{keepRefused}</div>}
+          {launchBlocks.length > 0 && (
             <ul className="autolaunch__blocks">
               {/* Each reason names itself, so the sentence comes from the same place the press's
                   refusal writes its own from (`core/i18n`'s `errSentence`) — this list and that one
                   are the same words, and holding them apart is what let them drift. */}
-              {check.blocks.map((block, nth) => {
-                // A reason about one box opens that box, the way pressing it on the picture does. The
-                // two about the automation as a whole name no box, and stay a line to read.
-                const box = automation?.placements.find(
-                  (one) => String(one.id) === block.fields.placement,
-                );
-                // One whose gap is inside the action opens that action over the picture instead, on
-                // the step it names — the box's panel would only send the reader on again.
-                const mend = box === undefined ? null : mendedIn(block, box);
-                return (
-                  <li key={`${block.code}-${nth}`}>
-                    {box === undefined ? (
-                      errSentence(block)
-                    ) : mend !== null ? (
-                      <button
-                        type="button"
-                        className="autolaunch__go"
-                        data-see={t("auto.launch.fix")}
-                        title={t("auto.launch.fix")}
-                        onClick={() => {
-                          setShowing({ kind: "box", id: box.id });
-                          openOver(mend.action, mend.step);
-                        }}
-                      >
-                        {errSentence(block)}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="autolaunch__go"
-                        data-see={t("auto.launch.see")}
-                        title={t("auto.launch.see")}
-                        onClick={() => setShowing({ kind: "box", id: box.id })}
-                      >
-                        {errSentence(block)}
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
+              {launchBlocks.map(reasonLine)}
             </ul>
           )}
           {refused !== null && <div className="autolaunch__refused">{refused}</div>}
@@ -328,7 +399,13 @@ export function AutomationBuildScreen({
         </div>
       )}
 
-      {automation !== null && <AutomationHeldBy runs={automation.heldBy} onGoToRun={onGoToRun} />}
+      {automation !== null && (
+        <AutomationHeldBy
+          runs={automation.heldBy}
+          savedVersion={automation.saved?.version}
+          onGoToRun={onGoToRun}
+        />
+      )}
 
       <div className="actbuild__canvashead">
         <span className="actbuild__sec">{t("auto.build.picture")}</span>

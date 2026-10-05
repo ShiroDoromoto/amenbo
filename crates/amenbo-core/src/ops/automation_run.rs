@@ -22,12 +22,14 @@
 //! their screen. Read here, they would be read from whatever process happened to be running — which is
 //! the reason [`crate::ops::MadeIn`] is handed in too.
 //!
-//! **A run stops reading the definition the moment it starts.** Every step inside every placed action
-//! is copied into `automation_run_def` at launch — one column of them, each saying which placement it
-//! was opened from, with the wires joined to each input resolved into it — so editing the automation
-//! afterwards cannot change what a run already under way is doing, and a run stays readable months
-//! later when the automation it came from has moved on. The one exception is a run paused before its
-//! next task: picking it up copies the automation down onto it again (`AMB-D-1015`, [`copy_down_again`]).
+//! **A run stops reading the definition the moment it starts.** Every step inside every placed action,
+//! as the version the placement stands on holds it, is copied into `automation_run_def` at launch — one
+//! column of them, each saying which placement it was opened from, with the wires joined to each input
+//! resolved into it — so editing the automation afterwards cannot change what a run already under way is
+//! doing, and a run stays readable months later when the automation it came from has moved on. The
+//! exceptions are a run with no task in hand: one paused before its next task, which picking up copies
+//! the automation down onto again ([`copy_down_again`]), and one standing at its entry, copied down again
+//! where a newer version has been saved ([`take_up_newer`]) (`AMB-D-1015`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -40,11 +42,12 @@ use crate::model::{
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
-    AutomationRunStepStatus, AutomationStep, AutomationEdge,
+    AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
 };
+use crate::ops::automation::{ActionDef, Picture};
 use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
-use crate::ops::{automation, emit_create};
+use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -600,6 +603,9 @@ fn not_found(what: &str, id: i64) -> Error {
 ///
 /// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade. `models` is
 /// [`Launcher::models`], and an agent it says nothing about leaves that step's model check unmade.
+///
+/// Asked of the draft — the automation's picture as it is written now. A launch asks it of the
+/// picture it is about to copy down ([`check_picture`]).
 pub fn check(
     conn: &Connection,
     automation_id: i64,
@@ -608,40 +614,53 @@ pub fn check(
 ) -> Result<Vec<Unmet>> {
     let automation = read::automation(conn, automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
-    let placements = read::automation_placements_of(conn, automation_id)?;
+    check_picture(conn, &automation, &Picture::read(conn, &automation)?, startable, models)
+}
+
+/// [`check`], asked of `pic` — the draft or a saved version of `automation` ([`ReadsFrom`]).
+fn check_picture(
+    conn: &Connection,
+    automation: &Automation,
+    pic: &Picture,
+    startable: Option<&[String]>,
+    models: &ModelsHere,
+) -> Result<Vec<Unmet>> {
+    let placements = &pic.placements;
     if placements.is_empty() {
         return Ok(vec![Unmet::NoSteps]);
     }
-    let Some(entry_id) = automation.entry_placement_id else {
+    let Some(entry_id) = pic.entry_placement_id else {
         return Ok(vec![Unmet::NoEntry]);
     };
     let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
-    let live = reachable(conn, entry_id, &by_id)?;
+    let defs = defs_of(conn, placements)?;
+    let live = reachable(entry_id, pic, &by_id, &defs);
 
     let mut unmet = Vec::new();
-    for placement in &placements {
+    for placement in placements {
         if let Some(action) = read::automation_action(conn, placement.action_id)?.filter(|a| a.draft) {
             unmet.push(Unmet::ActionDraft { action: action.name, placement: placement.id });
         }
     }
     if let Some(entry) = by_id.get(&entry_id) {
-        if !takes_a_task(conn, entry)? && !takes_one_first(conn, entry, &by_id)? {
+        if !takes_a_task(conn, pic, entry, &defs[&entry.id])? && !takes_one_first(conn, pic, entry, &by_id, &defs)? {
             unmet.push(Unmet::EntryTakesNoTask {
                 step: action_name(conn, entry.action_id)?,
                 builtin: action_builtin(conn, entry.action_id)?,
                 placement: entry.id,
             });
         }
-        unmet.extend(back_to_entry(conn, entry, &placements, &live)?);
+        unmet.extend(back_to_entry(conn, pic, entry, &live, &defs)?);
     }
     for placement in placements.iter().filter(|p| live.contains(&p.id)) {
+        let def = &defs[&placement.id];
         let name = action_name(conn, placement.action_id)?;
         let builtin = action_builtin(conn, placement.action_id)?;
         // A built-in set to wait never leaves by the way out it waits instead of (`AMB-D-969`), and one
         // whose setting chooses its way out never by the other, so nothing has to follow it.
-        let never_taken = never_taken(conn, placement)?;
-        let settings = settings_of(conn, placement)?;
-        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+        let never_taken = never_taken(conn, pic, placement, def)?;
+        let settings = answers(pic, placement, def);
+        for exit in def.action_exits() {
             if never_taken.is_some() && Some(exit.name.as_str()) == never_taken {
                 continue;
             }
@@ -653,7 +672,7 @@ pub fn check(
             if exit.name == ERROR_EXIT {
                 continue;
             }
-            if !decided(conn, placement.id, exit.id, &by_id)? {
+            if !decided(pic, placement.id, exit.id, &by_id) {
                 unmet.push(Unmet::OpenExit {
                     step: name.clone(),
                     exit: exit.name.clone(),
@@ -663,13 +682,8 @@ pub fn check(
                 });
             }
         }
-        for port in read::automation_ports_of(
-            conn,
-            AutomationPortOwner::Action,
-            placement.action_id,
-            AutomationPortDirection::In,
-        )? {
-            if port.required && !fed(conn, placement, port.id, entry_id, &live, &by_id)? {
+        for port in def.action_inputs() {
+            if port.required && !fed(conn, pic, placement, port.id, entry_id, &live, &by_id, &defs)? {
                 unmet.push(Unmet::UnwiredInput {
                     step: name.clone(),
                     port: port.name,
@@ -679,11 +693,11 @@ pub fn check(
                 });
             }
         }
-        for cfg in settings {
+        for cfg in &settings {
             match cfg.value.as_deref() {
                 None if cfg.required => unmet.push(Unmet::UnansweredCfg {
                     step: name.clone(),
-                    cfg: cfg.name,
+                    cfg: cfg.name.clone(),
                     builtin: builtin.clone(),
                     placement: placement.id,
                 }),
@@ -693,7 +707,7 @@ pub fn check(
                     if let Some(why) = why {
                         unmet.push(Unmet::MisansweredCfg {
                             step: name.clone(),
-                            cfg: cfg.name,
+                            cfg: cfg.name.clone(),
                             why,
                             builtin: builtin.clone(),
                             placement: placement.id,
@@ -703,7 +717,7 @@ pub fn check(
             }
         }
         if builtin.as_deref() == Some(crate::ops::automation_builtin_make::KEY) {
-            for (cfg, line) in crate::ops::automation_builtin_make::unfound(conn, placement, automation.project_id)? {
+            for (cfg, line) in crate::ops::automation_builtin_make::unfound(conn, &settings, automation.project_id)? {
                 unmet.push(Unmet::CfgNotFound {
                     step: name.clone(),
                     cfg: cfg.to_string(),
@@ -713,7 +727,7 @@ pub fn check(
                 });
             }
             let classify = crate::ops::automation_builtin_make::CLASSIFY;
-            for line in crate::ops::automation_builtin_make::closed_values(conn, placement, automation.project_id)? {
+            for line in crate::ops::automation_builtin_make::closed_values(conn, &settings, automation.project_id)? {
                 unmet.push(Unmet::CfgValueClosed {
                     step: name.clone(),
                     cfg: classify.to_string(),
@@ -724,7 +738,7 @@ pub fn check(
             }
             let folder = crate::ops::automation_builtin_make::FOLDER;
             if let Some(count) =
-                crate::ops::automation_builtin_make::folder_unchosen(conn, placement, automation.project_id)?
+                crate::ops::automation_builtin_make::folder_unchosen(conn, &settings, automation.project_id)?
             {
                 unmet.push(Unmet::FolderUnchosen {
                     step: name.clone(),
@@ -738,16 +752,16 @@ pub fn check(
         if crate::ops::automation_builtin_split::lost_its_axis(conn, placement.action_id)? {
             unmet.push(Unmet::SplitAxisGone { step: name.clone(), placement: placement.id });
         }
-        let steps = steps_opened_by(conn, placement.action_id)?;
+        let steps = steps_opened_by(def);
         if builtin.is_none() {
-            push_new(&mut unmet, hands_on_the_task(conn, placement, &name, &steps)?);
+            push_new(&mut unmet, hands_on_the_task(placement, def, &name, &steps));
         }
         if steps.is_empty() {
             unmet.push(Unmet::ActionEmpty { action: name.clone(), placement: Some(placement.id) });
             continue;
         }
-        let fed_here = |port| fed(conn, placement, port, entry_id, &live, &by_id);
-        push_new(&mut unmet, inside(conn, placement.action_id, Some(placement.id), &steps, fed_here)?);
+        let fed_here = |port| fed(conn, pic, placement, port, entry_id, &live, &by_id, &defs);
+        push_new(&mut unmet, inside(def, Some(placement.id), &steps, fed_here)?);
         // A built-in names no agent and no model: Amenbo carries it out itself (`AMB-D-964`).
         for step in steps.iter().filter(|step| step.builtin.is_none()) {
             // Nor does a script: its program is what is started, so that is what is asked about.
@@ -756,7 +770,7 @@ pub fn check(
                 continue;
             }
             let mut found = Vec::new();
-            let Some(chosen) = read::automation_placement_step_for(conn, placement.id, step.id)? else {
+            let Some(chosen) = pic.chosen(placement.id, step.id) else {
                 found.push(Unmet::AgentUnchosen { step: step.name.clone(), placement: placement.id });
                 push_new(&mut unmet, found);
                 continue;
@@ -786,8 +800,17 @@ pub fn check(
             push_new(&mut unmet, found);
         }
     }
-    push_new(&mut unmet, leaves_task_open(conn, &live, &by_id)?);
+    push_new(&mut unmet, leaves_task_open(conn, pic, &live, &by_id, &defs)?);
     Ok(unmet)
+}
+
+/// **The action each placement of one automation stands on**, by placement id — read once, as the
+/// version the placement points at holds it ([`ActionDef::placed`]), and asked by every check and copy
+/// below rather than the action's rows as they stand now.
+type Defs = BTreeMap<i64, ActionDef>;
+
+fn defs_of(conn: &Connection, placements: &[AutomationPlacement]) -> Result<Defs> {
+    placements.iter().map(|p| Ok((p.id, ActionDef::placed(conn, p)?))).collect()
 }
 
 /// **Is what is inside this action ready to be saved?** An empty answer is yes.
@@ -800,11 +823,12 @@ pub fn check(
 /// is placed — the agents, the settings — and the lines out of the action.
 pub fn check_action(conn: &Connection, action_id: i64) -> Result<Vec<Unmet>> {
     let action = read::automation_action(conn, action_id)?.ok_or_else(|| not_found("action", action_id))?;
-    let steps = steps_opened_by(conn, action_id)?;
+    let def = ActionDef::live(conn, action_id)?;
+    let steps = steps_opened_by(&def);
     if steps.is_empty() {
         return Ok(vec![Unmet::ActionEmpty { action: action.name, placement: None }]);
     }
-    inside(conn, action_id, None, &steps, |_| Ok(true))
+    inside(&def, None, &steps, |_| Ok(true))
 }
 
 /// **Why the program of a script step could not be started here**, or `None` when it could
@@ -845,26 +869,27 @@ fn unrunnable(program: &str, step: &str, placement: i64) -> Option<Unmet> {
 /// placement of its own (`AMB-D-969`).
 fn leaves_task_open(
     conn: &Connection,
+    pic: &Picture,
     live: &BTreeSet<i64>,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
 ) -> Result<Vec<Unmet>> {
     let mut unmet = Vec::new();
     for &start in live {
         let Some(placement) = by_id.get(&start) else { continue };
+        let def = &defs[&placement.id];
         let mut lines = Vec::new();
-        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
-            if Some(exit.name.as_str()) == never_taken(conn, placement)? {
+        for exit in def.action_exits() {
+            if Some(exit.name.as_str()) == never_taken(conn, pic, placement, def)? {
                 continue;
             }
-            if outs_of(conn, &exit)?.iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+            if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
                 lines.push((*placement, exit));
             }
         }
         let mut walked = BTreeSet::new();
         while let Some((from, exit)) = lines.pop() {
-            let Some(edge) =
-                read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, from.id, exit.id)?
-            else {
+            let Some(edge) = pic.edge_for_exit(from.id, exit.id) else {
                 // Nothing drawn: the error way out halts, and any other is refused as an open way out.
                 continue;
             };
@@ -893,7 +918,7 @@ fn leaves_task_open(
             if lets_go_of_the_task(conn, to.action_id)? {
                 continue;
             }
-            if takes_a_task(conn, to)? {
+            if takes_a_task(conn, pic, to, &defs[&to.id])? {
                 push_new(
                     &mut unmet,
                     vec![Unmet::LeavesTaskOpen {
@@ -911,8 +936,8 @@ fn leaves_task_open(
             if !walked.insert(to.id) {
                 continue;
             }
-            push_new(&mut unmet, ends_inside(conn, to)?);
-            for exit in read::automation_exits_of(conn, AutomationOwner::Action, to.action_id)? {
+            push_new(&mut unmet, ends_inside(to, &defs[&to.id]));
+            for exit in defs[&to.id].action_exits() {
                 lines.push((to, exit));
             }
         }
@@ -924,17 +949,17 @@ fn leaves_task_open(
 /// asked of the action's own ways out and of every step inside it the action could open. A step's way
 /// out mirrored on the action's under the same name is said once.
 fn hands_on_the_task(
-    conn: &Connection,
     placement: &AutomationPlacement,
+    def: &ActionDef,
     action: &str,
     steps: &[AutomationStep],
-) -> Result<Vec<Unmet>> {
-    let mut owners = vec![(AutomationOwner::Action, placement.action_id, action.to_string())];
+) -> Vec<Unmet> {
+    let mut owners = vec![(AutomationOwner::Action, def.action_id, action.to_string())];
     owners.extend(steps.iter().map(|step| (AutomationOwner::Step, step.id, step.name.clone())));
     let mut found = Vec::new();
     for (owner, owner_id, name) in owners {
-        for exit in read::automation_exits_of(conn, owner, owner_id)? {
-            if outs_of(conn, &exit)?.iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+        for exit in def.exits_of(owner, owner_id) {
+            if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
                 push_new(
                     &mut found,
                     vec![Unmet::HandsOnTaskTaken { step: name.clone(), exit: exit.name, placement: placement.id }],
@@ -942,7 +967,7 @@ fn hands_on_the_task(
             }
         }
     }
-    Ok(found)
+    found
 }
 
 /// Whether a placement of this action lets go of the task the run holds — the built-in that closes it
@@ -957,13 +982,11 @@ fn lets_go_of_the_task(conn: &Connection, action_id: i64) -> Result<bool> {
 
 /// The lines inside the action standing on one placement that end the run, each named by the step and
 /// the way out it leaves by.
-fn ends_inside(conn: &Connection, placement: &AutomationPlacement) -> Result<Vec<Unmet>> {
+fn ends_inside(placement: &AutomationPlacement, def: &ActionDef) -> Vec<Unmet> {
     let mut found = Vec::new();
-    for step in steps_opened_by(conn, placement.action_id)? {
-        for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
-            let edge =
-                read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step.id, exit.id)?;
-            if edge.is_some_and(|e| e.ends == AutomationEnds::Done) {
+    for step in steps_opened_by(def) {
+        for exit in def.exits_of(AutomationOwner::Step, step.id) {
+            if def.edge_for_exit(step.id, exit.id).is_some_and(|e| e.ends == AutomationEnds::Done) {
                 found.push(Unmet::LeavesTaskOpen {
                     step: step.name.clone(),
                     exit: exit.name,
@@ -976,20 +999,18 @@ fn ends_inside(conn: &Connection, placement: &AutomationPlacement) -> Result<Vec
             }
         }
     }
-    Ok(found)
+    found
 }
 
-/// **The way out a line is keyed to**, where that row is still one the given owner declares — `None`
-/// for a line keyed to nothing, or to a row that is gone or belongs elsewhere.
+/// **The way out a line is keyed to**, where that row is one the given owner declares in `def` — `None`
+/// for a line keyed to nothing, or to a row that is not there or belongs elsewhere.
 fn declared_exit(
-    conn: &Connection,
+    def: &ActionDef,
     exit_id: Option<i64>,
     owner_kind: AutomationOwner,
     owner_id: i64,
-) -> Result<Option<AutomationExit>> {
-    let Some(id) = exit_id else { return Ok(None) };
-    Ok(read::automation_exit(conn, id)?
-        .filter(|exit| exit.owner_kind == owner_kind && exit.owner_id == owner_id))
+) -> Option<&AutomationExit> {
+    def.exit(exit_id?).filter(|exit| exit.owner_kind == owner_kind && exit.owner_id == owner_id)
 }
 
 /// **What is missing inside the action standing on one placement** — the same two questions the
@@ -1010,30 +1031,25 @@ fn declared_exit(
 ///
 /// `placement` is the one the reasons name, `None` when the action is asked on no picture.
 fn inside(
-    conn: &Connection,
-    action_id: i64,
+    def: &ActionDef,
     placement: Option<i64>,
     steps: &[AutomationStep],
     mut fed: impl FnMut(i64) -> Result<bool>,
 ) -> Result<Vec<Unmet>> {
     let opened: BTreeSet<i64> = steps.iter().map(|s| s.id).collect();
-    let wires = read::automation_wires_of(conn, AutomationPictureOwner::Action, action_id)?;
     let mut unmet = Vec::new();
     for step in steps {
-        for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
+        for exit in def.exits_of(AutomationOwner::Step, step.id) {
             if exit.name == ERROR_EXIT {
                 continue;
             }
-            let edge =
-                read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step.id, exit.id)?;
-            let decided = match edge {
+            let decided = match def.edge_for_exit(step.id, exit.id) {
                 None => false,
                 Some(edge) => match edge.ends {
                     AutomationEnds::Done | AutomationEnds::Halt => true,
                     AutomationEnds::Go => edge.to_id.is_some_and(|to| opened.contains(&to)),
                     AutomationEnds::Exit => {
-                        declared_exit(conn, edge.exit_to_id, AutomationOwner::Action, action_id)?
-                            .is_some()
+                        declared_exit(def, edge.exit_to_id, AutomationOwner::Action, def.action_id).is_some()
                     }
                 },
             };
@@ -1047,43 +1063,28 @@ fn inside(
                 });
             }
         }
-        for port in read::automation_ports_of(
-            conn,
-            AutomationPortOwner::Step,
-            step.id,
-            AutomationPortDirection::In,
-        )? {
+        for port in def.ports_of(AutomationPortOwner::Step, step.id, AutomationPortDirection::In) {
             if !port.required {
                 continue;
             }
             let mut reached = false;
             let mut before = None;
-            for wire in wires.iter().filter(|w| w.to_id == step.id && w.to_port_id == port.id) {
+            for wire in def.wires.iter().filter(|w| w.to_id == step.id && w.to_port_id == port.id) {
                 reached = if wire.from_id == ACTION_BOUNDARY {
-                    let declared = read::automation_ports_of(
-                        conn,
-                        AutomationPortOwner::Action,
-                        action_id,
-                        AutomationPortDirection::In,
-                    )?
-                    .iter()
-                    .any(|p| p.id == wire.from_port_id);
+                    let declared = def.action_inputs().iter().any(|p| p.id == wire.from_port_id);
                     declared && fed(wire.from_port_id)?
                 } else if opened.contains(&wire.from_id) {
                     // Only a step a run opens before this one hands anything on to its first opening:
                     // its own way out, or that of a step only reached through it, leaves the input empty
                     // then (`AMB-T-5641`), as on the automation's picture (`fed`).
                     if before.is_none() {
-                        before = Some(steps_reached(conn, action_id, steps, Some(step.id))?);
+                        before = Some(steps_reached(def, steps, Some(step.id)));
                     }
                     if !before.as_ref().is_some_and(|b| b.contains(&wire.from_id)) {
                         continue;
                     }
-                    let exit = declared_exit(conn, wire.from_exit_id, AutomationOwner::Step, wire.from_id)?;
-                    match exit {
-                        Some(exit) => {
-                            outs_of(conn, &exit)?.iter().any(|p| p.id == wire.from_port_id)
-                        }
+                    match declared_exit(def, wire.from_exit_id, AutomationOwner::Step, wire.from_id) {
+                        Some(exit) => def.outs_of(exit.id).iter().any(|p| p.id == wire.from_port_id),
                         None => false,
                     }
                 } else {
@@ -1141,23 +1142,17 @@ fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
 /// A step nothing inside leads to is left out for the reason [`reachable`] leaves a placement out: no
 /// pane ever comes up on it, so refusing the launch over the agent it names would hold a run back for
 /// a box still being drawn.
-fn steps_opened_by(conn: &Connection, action_id: i64) -> Result<Vec<crate::model::AutomationStep>> {
-    let steps = read::automation_action_steps_of(conn, action_id)?;
-    let seen = steps_reached(conn, action_id, &steps, None)?;
-    Ok(steps.into_iter().filter(|step| seen.contains(&step.id)).collect())
+fn steps_opened_by(def: &ActionDef) -> Vec<AutomationStep> {
+    let seen = steps_reached(def, &def.steps, None);
+    def.steps.iter().filter(|step| seen.contains(&step.id)).cloned().collect()
 }
 
 /// **The steps of one action walked from its entry**, without passing through `avoiding` — with it,
 /// what a run can open before it first comes to that step, the step itself not among them. The walk
 /// [`reachable_without`] takes over the placements, taken over the picture inside.
-fn steps_reached(
-    conn: &Connection,
-    action_id: i64,
-    steps: &[crate::model::AutomationStep],
-    avoiding: Option<i64>,
-) -> Result<BTreeSet<i64>> {
-    let Some(entry) = read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id) else {
-        return Ok(BTreeSet::new());
+fn steps_reached(def: &ActionDef, steps: &[AutomationStep], avoiding: Option<i64>) -> BTreeSet<i64> {
+    let Some(entry) = def.entry_step_id else {
+        return BTreeSet::new();
     };
     let ids: BTreeSet<i64> = steps.iter().map(|s| s.id).collect();
     let mut seen = BTreeSet::new();
@@ -1166,13 +1161,13 @@ fn steps_reached(
         if Some(id) == avoiding || !ids.contains(&id) || !seen.insert(id) {
             continue;
         }
-        for edge in read::automation_edges_from(conn, AutomationPictureOwner::Action, id)? {
+        for edge in def.edges_from(id) {
             if let Some(next) = edge.to_id {
                 todo.push(next);
             }
         }
     }
-    Ok(seen)
+    seen
 }
 
 /// The placements a run could actually reach, walked from the entry along the edges that go on to
@@ -1180,37 +1175,36 @@ fn steps_reached(
 /// launch over one would make an automation undeletable-in-practice while its author was still drawing
 /// it.
 fn reachable(
-    conn: &Connection,
     entry_id: i64,
+    pic: &Picture,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
-) -> Result<BTreeSet<i64>> {
-    reachable_without(conn, entry_id, by_id, None)
+    defs: &Defs,
+) -> BTreeSet<i64> {
+    reachable_without(entry_id, pic, by_id, defs, None)
 }
 
 /// [`reachable`], walked without passing through `avoiding` — **what a run can reach before it first
 /// comes to that placement**. The placement itself is not among them.
 fn reachable_without(
-    conn: &Connection,
     entry_id: i64,
+    pic: &Picture,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
     avoiding: Option<i64>,
-) -> Result<BTreeSet<i64>> {
+) -> BTreeSet<i64> {
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry_id];
     while let Some(id) = todo.pop() {
         if Some(id) == avoiding || !by_id.contains_key(&id) || !seen.insert(id) {
             continue;
         }
-        let placement = by_id[&id];
-        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
-            let edge =
-                read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, id, exit.id)?;
-            if let Some(next) = edge.and_then(|e| e.to_id) {
+        for exit in defs[&id].action_exits() {
+            if let Some(next) = pic.edge_for_exit(id, exit.id).and_then(|e| e.to_id) {
                 todo.push(next);
             }
         }
     }
-    Ok(seen)
+    seen
 }
 
 /// **The lines a run could walk back to an entry that reads what was handed over at launch**
@@ -1218,9 +1212,10 @@ fn reachable_without(
 /// entry's own included. A way out its setting says it never leaves by is not asked about.
 fn back_to_entry(
     conn: &Connection,
+    pic: &Picture,
     entry: &AutomationPlacement,
-    placements: &[AutomationPlacement],
     live: &BTreeSet<i64>,
+    defs: &Defs,
 ) -> Result<Vec<Unmet>> {
     let to_builtin = action_builtin(conn, entry.action_id)?;
     if !crate::ops::automation_builtin_make::reads_at_launch(to_builtin.as_deref()) {
@@ -1228,15 +1223,14 @@ fn back_to_entry(
     }
     let to = action_name(conn, entry.action_id)?;
     let mut found = Vec::new();
-    for placement in placements.iter().filter(|p| live.contains(&p.id)) {
-        let never = never_taken(conn, placement)?;
-        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+    for placement in pic.placements.iter().filter(|p| live.contains(&p.id)) {
+        let def = &defs[&placement.id];
+        let never = never_taken(conn, pic, placement, def)?;
+        for exit in def.action_exits() {
             if Some(exit.name.as_str()) == never {
                 continue;
             }
-            let edge =
-                read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, placement.id, exit.id)?;
-            if edge.and_then(|e| e.to_id) == Some(entry.id) {
+            if pic.edge_for_exit(placement.id, exit.id).and_then(|e| e.to_id) == Some(entry.id) {
                 found.push(Unmet::BackToEntry {
                     step: action_name(conn, placement.action_id)?,
                     exit: exit.name,
@@ -1253,33 +1247,31 @@ fn back_to_entry(
 
 /// Whether a way out has something set to happen after it. An edge that goes on to a placement of some
 /// other automation — or to none — decides nothing, so it counts as undecided rather than as an edge.
-fn decided(
-    conn: &Connection,
-    placement_id: i64,
-    exit_id: i64,
-    by_id: &BTreeMap<i64, &AutomationPlacement>,
-) -> Result<bool> {
-    let Some(edge) =
-        read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, placement_id, exit_id)?
-    else {
-        return Ok(false);
+fn decided(pic: &Picture, placement_id: i64, exit_id: i64, by_id: &BTreeMap<i64, &AutomationPlacement>) -> bool {
+    let Some(edge) = pic.edge_for_exit(placement_id, exit_id) else {
+        return false;
     };
-    Ok(match edge.to_id {
+    match edge.to_id {
         Some(to) => by_id.contains_key(&to),
         None => true,
-    })
+    }
 }
 
 /// Whether the action on a placement declares a `task_take` output on any of the ways out it can leave by
 /// there — the thing that makes the placement usable as an entry, since the task it comes out holding is
 /// what the run is about from there on.
-fn takes_a_task(conn: &Connection, placement: &AutomationPlacement) -> Result<bool> {
-    let never = never_taken(conn, placement)?;
-    for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+fn takes_a_task(
+    conn: &Connection,
+    pic: &Picture,
+    placement: &AutomationPlacement,
+    def: &ActionDef,
+) -> Result<bool> {
+    let never = never_taken(conn, pic, placement, def)?;
+    for exit in def.action_exits() {
         if Some(exit.name.as_str()) == never {
             continue;
         }
-        if outs_of(conn, &exit)?.iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+        if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
             return Ok(true);
         }
     }
@@ -1293,8 +1285,10 @@ fn takes_a_task(conn: &Connection, placement: &AutomationPlacement) -> Result<bo
 /// A line nothing is drawn after is not asked here: that is [`Unmet::OpenExit`], said on its own.
 fn takes_one_first(
     conn: &Connection,
+    pic: &Picture,
     entry: &AutomationPlacement,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
 ) -> Result<bool> {
     let before_a_task = |placement: &AutomationPlacement| -> Result<bool> {
         Ok(action_builtin(conn, placement.action_id)?
@@ -1310,18 +1304,17 @@ fn takes_one_first(
             continue;
         }
         let Some(placement) = by_id.get(&id) else { continue };
-        let never = never_taken(conn, placement)?;
-        for exit in read::automation_exits_of(conn, AutomationOwner::Action, placement.action_id)? {
+        let def = &defs[&placement.id];
+        let never = never_taken(conn, pic, placement, def)?;
+        for exit in def.action_exits() {
             if Some(exit.name.as_str()) == never {
                 continue;
             }
-            let Some(edge) =
-                read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, id, exit.id)?
-            else {
+            let Some(edge) = pic.edge_for_exit(id, exit.id) else {
                 continue;
             };
             let Some(to) = edge.to_id.and_then(|to| by_id.get(&to)) else { continue };
-            if takes_a_task(conn, to)? {
+            if takes_a_task(conn, pic, to, &defs[&to.id])? {
                 continue;
             }
             if !before_a_task(to)? {
@@ -1331,17 +1324,6 @@ fn takes_one_first(
         }
     }
     Ok(true)
-}
-
-/// What one way out hands on. An output belongs to the way out that produced it, so this is the only
-/// owner it is ever asked of.
-fn outs_of(conn: &Connection, exit: &AutomationExit) -> Result<Vec<crate::model::AutomationPort>> {
-    Ok(read::automation_ports_of(
-        conn,
-        AutomationPortOwner::Exit,
-        exit.id,
-        AutomationPortDirection::Out,
-    )?)
 }
 
 /// Whether anything actually reaches one input — the action's input port `port_id`, on this placement.
@@ -1356,24 +1338,20 @@ fn outs_of(conn: &Connection, exit: &AutomationExit) -> Result<Vec<crate::model:
 /// ([`crate::ops::automation_builtin_make::read_at_launch`]), and the launch refuses one that hands no
 /// title. That holds only the first time a run opens it, and a line back to it is refused on its own
 /// ([`Unmet::BackToEntry`]).
+#[allow(clippy::too_many_arguments)]
 fn fed(
     conn: &Connection,
+    pic: &Picture,
     placement: &AutomationPlacement,
     port_id: i64,
     entry_id: i64,
     live: &BTreeSet<i64>,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
 ) -> Result<bool> {
     if placement.id == entry_id {
         let builtin = action_builtin(conn, placement.action_id)?;
-        let port = read::automation_ports_of(
-            conn,
-            AutomationPortOwner::Action,
-            placement.action_id,
-            AutomationPortDirection::In,
-        )?
-        .into_iter()
-        .find(|p| p.id == port_id);
+        let port = defs[&placement.id].action_inputs().into_iter().find(|p| p.id == port_id);
         if port.is_some_and(|p| {
             crate::ops::automation_builtin_make::read_at_launch(builtin.as_deref(), &p.name)
         }) {
@@ -1381,12 +1359,7 @@ fn fed(
         }
     }
     let mut before = None;
-    for wire in read::automation_wires_to_port(
-        conn,
-        AutomationPictureOwner::Automation,
-        placement.id,
-        port_id,
-    )? {
+    for wire in pic.wires_to_port(placement.id, port_id) {
         if !live.contains(&wire.from_id) {
             continue;
         }
@@ -1394,41 +1367,57 @@ fn fed(
         // (`AMB-T-5641`): the placement's own way out, or one of a placement only reached through it,
         // leaves the input empty the first time the run arrives, and the run fails there on no_input.
         if before.is_none() {
-            before = Some(reachable_without(conn, entry_id, by_id, Some(placement.id))?);
+            before = Some(reachable_without(entry_id, pic, by_id, defs, Some(placement.id)));
         }
         if !before.as_ref().is_some_and(|b| b.contains(&wire.from_id)) {
             continue;
         }
         let Some(from) = by_id.get(&wire.from_id) else { continue };
-        let exit = declared_exit(conn, wire.from_exit_id, AutomationOwner::Action, from.action_id)?;
-        let Some(exit) = exit else { continue };
-        if outs_of(conn, &exit)?.iter().any(|p| p.id == wire.from_port_id) {
+        let far = &defs[&from.id];
+        let Some(exit) = declared_exit(far, wire.from_exit_id, AutomationOwner::Action, far.action_id) else {
+            continue;
+        };
+        if far.outs_of(exit.id).iter().any(|p| p.id == wire.from_port_id) {
             return Ok(true);
         }
     }
     Ok(false)
 }
 
-/// One placement's settings, **declaration and answer together**. Public because the build screen draws
-/// the same pair and must not put them back together a second way. The action declares and carries no
-/// answer; the placement answers on a row of its own under the same name
-/// ([`crate::ops::automation::cfg_set`]), so the two have to be put back together here.
 /// **The way out a placement never leaves by**, as it is set there
 /// ([`crate::ops::automation_builtin::never_leaves_by`]) — `None` for an action somebody wrote.
-fn never_taken(conn: &Connection, placement: &AutomationPlacement) -> Result<Option<&'static str>> {
+fn never_taken(
+    conn: &Connection,
+    pic: &Picture,
+    placement: &AutomationPlacement,
+    def: &ActionDef,
+) -> Result<Option<&'static str>> {
     let Some(key) = action_builtin(conn, placement.action_id)? else {
         return Ok(None);
     };
-    let settings = settings_of(conn, placement)?;
+    let settings = answers(pic, placement, def);
     Ok(crate::ops::automation_builtin::never_leaves_by(&key, |setting| {
         settings.iter().find(|cfg| cfg.name == setting).and_then(|cfg| cfg.value.as_deref())
     }))
 }
 
+/// One placement's settings, **declaration and answer together**. Public because the build screen draws
+/// the same pair and must not put them back together a second way. The action declares and carries no
+/// answer; the placement answers on a row of its own under the same name
+/// ([`crate::ops::automation::cfg_set`]), so the two have to be put back together here. What is declared
+/// is read off the version the placement stands on ([`ActionDef::placed`]).
 pub fn settings_of(conn: &Connection, placement: &AutomationPlacement) -> Result<Vec<AutomationCfg>> {
-    let declared = read::automation_cfgs_of(conn, AutomationCfgOwner::Action, placement.action_id)?;
-    let mut out = Vec::with_capacity(declared.len());
-    for mut cfg in declared {
+    answered(conn, placement, &ActionDef::placed(conn, placement)?)
+}
+
+/// [`settings_of`], with the action the placement stands on already read.
+pub(crate) fn answered(
+    conn: &Connection,
+    placement: &AutomationPlacement,
+    def: &ActionDef,
+) -> Result<Vec<AutomationCfg>> {
+    let mut out = Vec::with_capacity(def.cfgs.len());
+    for mut cfg in def.cfgs.iter().cloned() {
         cfg.value = read::automation_cfg_by_name(
             conn,
             AutomationCfgOwner::Placement,
@@ -1439,6 +1428,18 @@ pub fn settings_of(conn: &Connection, placement: &AutomationPlacement) -> Result
         out.push(cfg);
     }
     Ok(out)
+}
+
+/// [`answered`], with the answers read off `pic` — the draft or a saved version — rather than the store.
+fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> Vec<AutomationCfg> {
+    def.cfgs
+        .iter()
+        .cloned()
+        .map(|mut cfg| {
+            cfg.value = pic.answer(placement.id, &cfg.name);
+            cfg
+        })
+        .collect()
 }
 
 /// **Launch an automation**: check it, copy what is placed on it into a run, and start it.
@@ -1454,12 +1455,39 @@ pub fn settings_of(conn: &Connection, placement: &AutomationPlacement) -> Result
 ///
 /// The run is born `running`: nothing caps how many may be under way at once, so a launch never waits
 /// (`AMB-D-947`). `started_at` is the moment of the launch itself.
+///
+/// It reads the saved definition ([`ReadsFrom::Saved`]).
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
-    launch_handing(tx, automation_id, by, &HandedAtLaunch::default())
+    launch_handing(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved)
 }
 
-/// [`launch`], with what a person handed over along with it ([`HandedAtLaunch`]). The task to file is
-/// kept on the run and the files hang off it, both written before any step is opened.
+/// **Which definition of an automation a launch reads** — what is checked and copied down onto the run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReadsFrom {
+    /// Its newest saved version, so what is being written on the automation is not what runs. An
+    /// automation nobody has saved has only its draft, and that is read. A launch and a run picked up
+    /// before its next task read this.
+    Saved,
+    /// The draft — its picture as it is written now, saved or not. A test run reads this, to try what is
+    /// being written before it is saved.
+    Draft,
+}
+
+/// **The picture `reads` names, and the saved version it is** — `None` for the draft.
+fn definition(conn: &Connection, automation: &Automation, reads: ReadsFrom) -> Result<(Picture, Option<i64>)> {
+    let saved = match reads {
+        ReadsFrom::Saved => read::automation_version_latest(conn, automation.id)?,
+        ReadsFrom::Draft => None,
+    };
+    match saved {
+        Some(saved) => Ok((Picture::saved(&saved)?, Some(saved.version))),
+        None => Ok((Picture::read(conn, automation)?, None)),
+    }
+}
+
+/// [`launch`], with what a person handed over along with it ([`HandedAtLaunch`]), reading the definition
+/// `reads` names. The task to file is kept on the run and the files hang off it, both written before any
+/// step is opened.
 ///
 /// **A file needs somebody who handed it over.** An attachment says who put it there, and a launch
 /// whose caller says nothing about itself has no one to name, so it is refused rather than guessed at.
@@ -1468,6 +1496,7 @@ pub fn launch_handing(
     automation_id: i64,
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
+    reads: ReadsFrom,
 ) -> Result<AutomationRun> {
     let who = match (handed.files.is_empty(), by.by) {
         (true, _) => None,
@@ -1478,7 +1507,7 @@ pub fn launch_handing(
             ))
         }
     };
-    let run = launch_asking(tx, automation_id, by, handed, |_| true)?;
+    let run = launch_asking(tx, automation_id, by, handed, reads, |_| true)?;
     if let Some(who) = who {
         for file in &handed.files {
             crate::ops::attachment::add_blob(
@@ -1509,7 +1538,7 @@ pub(crate) fn launch_past_the_task_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, |unmet| {
         !matches!(unmet, Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. })
     })
 }
@@ -1524,7 +1553,7 @@ pub(crate) fn launch_past_the_setting_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, |unmet| {
         !matches!(
             unmet,
             Unmet::LeavesTaskOpen { .. }
@@ -1536,13 +1565,14 @@ pub(crate) fn launch_past_the_setting_checks(
     })
 }
 
-/// [`launch`], refusing only over what `counts` says counts, and keeping what was `handed` on the run.
-/// The files are the caller's to attach once the run exists.
+/// [`launch`] of the definition `reads` names, refusing only over what `counts` says counts, and keeping
+/// what was `handed` on the run. The files are the caller's to attach once the run exists.
 fn launch_asking(
     tx: &WriteTx<'_>,
     automation_id: i64,
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
+    reads: ReadsFrom,
     counts: impl Fn(&Unmet) -> bool,
 ) -> Result<AutomationRun> {
     let automation: Automation = read::automation(tx.conn(), automation_id)?
@@ -1557,8 +1587,11 @@ fn launch_asking(
             .with("automation", &automation.name),
         ));
     }
-    let unmet: Vec<Unmet> =
-        check(tx.conn(), automation_id, by.startable, by.models)?.into_iter().filter(|u| counts(u)).collect();
+    let (pic, version) = definition(tx.conn(), &automation, reads)?;
+    let unmet: Vec<Unmet> = check_picture(tx.conn(), &automation, &pic, by.startable, by.models)?
+        .into_iter()
+        .filter(|u| counts(u))
+        .collect();
     if !unmet.is_empty() {
         return Err(not_ready("launch", &automation.name, &unmet));
     }
@@ -1572,7 +1605,7 @@ fn launch_asking(
             .coded(ErrorCode::InvalidAutomationWorkspaceClosed),
         ));
     }
-    let handed_task = entry_reads(tx.conn(), &automation, handed)?
+    let handed_task = entry_reads(tx.conn(), &automation, &pic, handed)?
         .map(|task| serde_json::to_string(&task).map_err(Error::from))
         .transpose()?;
     let now = Timestamp::now();
@@ -1591,11 +1624,12 @@ fn launch_asking(
         acknowledged_at: None,
         handed_task,
         acknowledged_by_kind: None,
+        stopped_detail: None,
         created_at: now,
         updated_at: now,
     };
     emit_create(tx, record::automation_run(&run))?;
-    copy_down(tx, run.id, &automation, now)?;
+    copy_down(tx, run.id, &pic, version, now)?;
     Ok(run)
 }
 
@@ -1606,22 +1640,23 @@ fn launch_asking(
 /// were taken, each starting at its entry ([`current_defs`]). The rows of an earlier copy are kept:
 /// the executions opened from them still point at them.
 ///
-/// Every row of one copy records the automation's newest saved version at that moment, or none where
-/// nobody has saved one.
-fn copy_down(tx: &WriteTx<'_>, run_id: i64, automation: &Automation, now: Timestamp) -> Result<()> {
-    let version = read::automation_version_latest(tx.conn(), automation.id)?.map(|v| v.version);
+/// What is copied is `pic`, the definition the launch read ([`ReadsFrom`]), and every row of one copy
+/// records the saved version it is — `version`, `None` for the draft. **What is copied of each placement
+/// is the version of the action it stands on** ([`ActionDef::placed`]), not the action as it has since
+/// been written on.
+fn copy_down(tx: &WriteTx<'_>, run_id: i64, pic: &Picture, version: Option<i64>, now: Timestamp) -> Result<()> {
+    let defs = defs_of(tx.conn(), &pic.placements)?;
     let mut steps = Vec::new();
-    for placement in read::automation_placements_of(tx.conn(), automation.id)? {
-        let opens_first =
-            read::automation_action(tx.conn(), placement.action_id)?.and_then(|a| a.entry_step_id);
-        for step in steps_opened_by(tx.conn(), placement.action_id)? {
-            let entry = automation.entry_placement_id == Some(placement.id) && opens_first == Some(step.id);
-            steps.push((placement.clone(), step, entry));
+    for placement in &pic.placements {
+        let def = &defs[&placement.id];
+        for step in steps_opened_by(def) {
+            let entry = pic.entry_placement_id == Some(placement.id) && def.entry_step_id == Some(step.id);
+            steps.push((placement, step, entry));
         }
     }
     steps.sort_by_key(|(_, _, entry)| !entry);
     for (placement, step, entry) in steps {
-        if let Some(def) = snapshot(tx, run_id, version, &placement, &step, entry, now)? {
+        if let Some(def) = snapshot(tx, run_id, version, pic, placement, &defs, &step, entry, now)? {
             emit_create(tx, record::automation_run_def(&def))?;
         }
     }
@@ -1631,16 +1666,33 @@ fn copy_down(tx: &WriteTx<'_>, run_id: i64, automation: &Automation, now: Timest
 /// **Copy the automation down onto a run paused before its next task, afresh** (`AMB-D-1015`), and
 /// answer the copy of its entry — where the run picks up.
 ///
-/// The new copy is checked first, as a launch checks it ([`launch_asking`]): an archived automation, or
-/// one [`check`] finds anything unmet in, is refused, and nothing is written.
+/// It reads the saved definition, as a launch does ([`ReadsFrom::Saved`]). The new copy is checked
+/// first, as a launch checks it ([`checked_saved`]): an archived automation, or one [`check`] finds
+/// anything unmet in, is refused, and nothing is written.
 pub(crate) fn copy_down_again(
     tx: &WriteTx<'_>,
     run: &AutomationRun,
     startable: Option<&[String]>,
     models: &ModelsHere,
 ) -> Result<AutomationRunDef> {
-    let automation: Automation = read::automation(tx.conn(), run.automation_id)?
-        .ok_or_else(|| not_found("automation", run.automation_id))?;
+    let (pic, version) = checked_saved(tx.conn(), run, startable, models)?;
+    copy_down(tx, run.id, &pic, version, Timestamp::now())?;
+    entry_def(tx.conn(), run.id)?.ok_or_else(|| {
+        Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
+    })
+}
+
+/// **The automation's newest saved definition, checked as a launch checks it** ([`launch_asking`]) — for
+/// a run about to be copied down afresh. An archived automation, or one [`check`] finds anything unmet
+/// in, is refused.
+fn checked_saved(
+    conn: &Connection,
+    run: &AutomationRun,
+    startable: Option<&[String]>,
+    models: &ModelsHere,
+) -> Result<(Picture, Option<i64>)> {
+    let automation: Automation =
+        read::automation(conn, run.automation_id)?.ok_or_else(|| not_found("automation", run.automation_id))?;
     if automation.archived {
         return Err(Error::Invalid(
             Msg::new(format!(
@@ -1651,13 +1703,93 @@ pub(crate) fn copy_down_again(
             .with("automation", &automation.name),
         ));
     }
-    let unmet = check(tx.conn(), automation.id, startable, models)?;
+    let (pic, version) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let unmet = check_picture(conn, &automation, &pic, startable, models)?;
     if !unmet.is_empty() {
         return Err(not_ready("launch", &automation.name, &unmet));
     }
-    copy_down(tx, run.id, &automation, Timestamp::now())?;
-    entry_def(tx.conn(), run.id)?.ok_or_else(|| {
-        Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
+    Ok((pic, version))
+}
+
+/// **What [`take_up_newer`] did to a run.**
+#[derive(Clone, Debug)]
+pub enum TakenUp {
+    /// Nothing: the run is not standing at its entry, or nothing newer than its copy has been saved.
+    Same,
+    /// The run was copied down afresh from the newer version, and starts at this, the new copy's entry.
+    /// What was waiting to open the old entry is stale.
+    Copied(Box<AutomationRunDef>),
+    /// The newer version did not pass, so the run failed with
+    /// [`AutomationStoppedReason::FailedCheck`]; this is the run as it ended.
+    Failed(AutomationRun),
+}
+
+/// **Copy a run standing at its entry down afresh, where the automation has been saved since its copy
+/// was taken** (`AMB-D-1015`) — asked before the entry is opened, so a run that comes back to its entry,
+/// or waits there for a task to turn up, starts from the newest saved definition.
+///
+/// - **Standing at its entry** is a `running` run with nothing under way whose next step is the copy of
+///   the entry ([`next_def`]). Anywhere else the run may be partway through a task, and is left alone.
+/// - **Newer** is a saved version later than the one its entry's copy was taken from. A copy taken from
+///   the draft (`None`) is older than any saved version.
+/// - **The newer version is checked as a launch checks it** ([`checked_saved`]), and it may not start
+///   by filing a task: only a launch is handed what to file ([`entry_reads`]). Either refusal fails the
+///   run, with what it did not pass kept on it ([`AutomationRun::stopped_detail`]), and nothing is
+///   copied. The run holds no task here, so there is nothing to hand back (`AMB-D-967`).
+///
+/// The rows of the old copy are kept ([`copy_down`]).
+pub fn take_up_newer(
+    tx: &WriteTx<'_>,
+    run_id: i64,
+    startable: Option<&[String]>,
+    models: &ModelsHere,
+) -> Result<TakenUp> {
+    let run = read::automation_run(tx.conn(), run_id)?.ok_or_else(|| not_found("run", run_id))?;
+    let Waiting::Step(standing) = next_def(tx.conn(), run_id)? else { return Ok(TakenUp::Same) };
+    if !standing.entry {
+        return Ok(TakenUp::Same);
+    }
+    let Some(saved) = read::automation_version_latest(tx.conn(), run.automation_id)? else {
+        return Ok(TakenUp::Same);
+    };
+    if standing.automation_version.is_some_and(|copied| copied >= saved.version) {
+        return Ok(TakenUp::Same);
+    }
+    let refused = match checked_saved(tx.conn(), &run, startable, models) {
+        Ok((pic, version)) => match files_a_task(tx.conn(), &pic)? {
+            Some(step) => format!(
+                "cannot pick up run '{}' at version {}: the entry '{step}' files a task, and only a launch \
+                 is handed what to file",
+                run.id, saved.version
+            ),
+            None => {
+                copy_down(tx, run.id, &pic, version, Timestamp::now())?;
+                let entry = entry_def(tx.conn(), run.id)?.ok_or_else(|| {
+                    Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
+                })?;
+                return Ok(TakenUp::Copied(Box::new(entry)));
+            }
+        },
+        Err(refusal @ (Error::Invalid(_) | Error::NotReady(_))) => refusal.to_string(),
+        Err(other) => return Err(other),
+    };
+    let mut detailed = run.clone();
+    detailed.stopped_detail = Some(refused);
+    crate::ops::emit_update(tx, record::automation_run(&run), record::automation_run(&detailed))?;
+    let ended = crate::ops::automation_stop::ended(
+        tx,
+        detailed,
+        crate::ops::automation_stop::Ending::Failed(AutomationStoppedReason::FailedCheck),
+    )?;
+    Ok(TakenUp::Failed(ended.run))
+}
+
+/// The name of the entry's action where it is the built-in that files a task, `None` where it is not.
+fn files_a_task(conn: &Connection, pic: &Picture) -> Result<Option<String>> {
+    let Some(entry) = pic.entry_placement_id.and_then(|id| pic.placement(id)) else { return Ok(None) };
+    Ok(match action_builtin(conn, entry.action_id)?.as_deref() {
+        Some(crate::ops::automation_builtin_make::KEY) => Some(action_name(conn, entry.action_id)?),
+        _ => None,
     })
 }
 
@@ -1679,9 +1811,10 @@ pub(crate) fn copy_down_again(
 fn entry_reads(
     conn: &Connection,
     automation: &Automation,
+    pic: &Picture,
     handed: &HandedAtLaunch,
 ) -> Result<Option<HandedTask>> {
-    let Some(entry) = entry_of(conn, automation)? else {
+    let Some(entry) = pic.entry_placement_id.and_then(|id| pic.placement(id)) else {
         return Ok(None);
     };
     let step = action_name(conn, entry.action_id)?;
@@ -1699,9 +1832,10 @@ fn entry_reads(
                     "the entry '{step}' files a task, and no title for it was handed over at launch"
                 )));
             };
+            let settings = answers(pic, entry, &ActionDef::placed(conn, entry)?);
             let classification = crate::ops::automation_builtin_make::handed_at_launch(
                 conn,
-                &entry,
+                &settings,
                 automation.project_id,
                 &handed.classification,
             )?;
@@ -1803,40 +1937,43 @@ fn refused_over(head: String, code: ErrorCode, field: &'static str, name: &str, 
 /// No cycle can be met here: an action places no action (`AMB-D-949`), so opening a placement goes one
 /// level down and stops. A loop drawn inside an action is a way back between its steps, walked at run
 /// time and held by `max_times`, not something this expands.
+#[allow(clippy::too_many_arguments)]
 fn snapshot(
     tx: &WriteTx<'_>,
     run_id: i64,
     automation_version: Option<i64>,
+    pic: &Picture,
     placement: &AutomationPlacement,
+    defs: &Defs,
     step: &AutomationStep,
     entry: bool,
     now: Timestamp,
 ) -> Result<Option<AutomationRunDef>> {
     let conn = tx.conn();
+    let def = &defs[&placement.id];
     // A built-in is carried out by Amenbo and a script by its program, so nobody was chosen for either
     // and its copy names nobody.
     let chosen = if step.builtin.is_some() || step.script.is_some() {
         AutomationPlacementStep::default()
     } else {
-        match read::automation_placement_step_for(conn, placement.id, step.id)? {
-            Some(chosen) => chosen,
+        match pic.chosen(placement.id, step.id) {
+            Some(chosen) => chosen.clone(),
             None => return Ok(None),
         }
     };
     let mut exits = Vec::new();
-    for exit in read::automation_exits_of(conn, AutomationOwner::Step, step.id)? {
-        let outs = outs_of(conn, &exit)?
+    for exit in def.exits_of(AutomationOwner::Step, step.id) {
+        let outs = def
+            .outs_of(exit.id)
             .into_iter()
             .map(|p| RunDefPort { id: p.id, name: p.name, kind: p.kind, required: p.required })
             .collect();
-        let (then, returns_to) = line_after(conn, placement, step.id, exit.id)?;
+        let (then, returns_to) = line_after(pic, placement, defs, step.id, exit.id);
         exits.push(RunDefExit { id: exit.id, name: exit.name.clone(), outs, then, returns_to });
     }
     let mut ins: Vec<RunDefIn> = Vec::new();
-    let declared =
-        read::automation_ports_of(conn, AutomationPortOwner::Step, step.id, AutomationPortDirection::In)?;
-    for p in declared {
-        let from = wired_into(conn, placement, step.id, p.id)?;
+    for p in def.ports_of(AutomationPortOwner::Step, step.id, AutomationPortDirection::In) {
+        let from = wired_into(pic, placement, defs, step.id, p.id);
         let port = RunDefPort { id: p.id, name: p.name, kind: p.kind, required: p.required };
         ins.push(RunDefIn { port, from });
     }
@@ -1846,7 +1983,7 @@ fn snapshot(
         Some(_) => read::automation_action(conn, placement.action_id)?.and_then(|a| a.builtin_version),
         None => None,
     };
-    let cfg: Vec<RunDefCfg> = settings_of(conn, placement)?
+    let cfg: Vec<RunDefCfg> = answers(pic, placement, def)
         .into_iter()
         .map(|c| RunDefCfg {
             name: c.name,
@@ -1895,62 +2032,61 @@ fn snapshot(
 /// placement, on the action's way out that line keys — so a run crosses the action's edge exactly
 /// where its author drew it, and the line kept is the one it walks.
 fn line_after(
-    conn: &Connection,
+    pic: &Picture,
     placement: &AutomationPlacement,
+    defs: &Defs,
     step_id: i64,
     exit_id: i64,
-) -> Result<(Option<RunDefLine>, Option<i64>)> {
-    let Some(inner) = read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step_id, exit_id)?
-    else {
-        return Ok((None, None));
+) -> (Option<RunDefLine>, Option<i64>) {
+    let def = &defs[&placement.id];
+    let Some(inner) = def.edge_for_exit(step_id, exit_id) else {
+        return (None, None);
     };
     if inner.ends != AutomationEnds::Exit {
         let step = match inner.ends {
             AutomationEnds::Go => inner.to_id,
             _ => None,
         };
-        return Ok((Some(kept(conn, &inner, Some(placement.id).filter(|_| step.is_some()), step)?), None));
+        let line = kept(pic, def, inner, Some(placement.id).filter(|_| step.is_some()), step);
+        return (Some(line), None);
     }
-    let Some(action_exit) = inner.exit_to_id else { return Ok((None, None)) };
-    let outer =
-        read::automation_edge_for_exit(conn, AutomationPictureOwner::Automation, placement.id, action_exit)?;
-    let line = match outer {
+    let Some(action_exit) = inner.exit_to_id else { return (None, None) };
+    let line = match pic.edge_for_exit(placement.id, action_exit) {
         // An automation's picture has no edge of its own to return to, and the write side refuses one.
         None => None,
         Some(outer) if outer.ends == AutomationEnds::Exit => None,
         Some(outer) => {
             let (to, step) = match (outer.ends, outer.to_id) {
-                (AutomationEnds::Go, Some(to)) => {
-                    let opens = match read::automation_placement(conn, to)? {
-                        Some(p) => read::automation_action(conn, p.action_id)?.and_then(|a| a.entry_step_id),
-                        None => None,
-                    };
-                    (Some(to), opens)
-                }
+                (AutomationEnds::Go, Some(to)) => (Some(to), defs.get(&to).and_then(|d| d.entry_step_id)),
                 _ => (None, None),
             };
-            Some(kept(conn, &outer, to, step)?)
+            Some(kept(pic, def, outer, to, step))
         }
     };
-    Ok((line, Some(action_exit)))
+    (line, Some(action_exit))
 }
 
 /// One live line as the copy keeps it, going on to `placement_id` / `step_id` where it goes on at all.
 ///
-/// **The limit is kept on a line that goes back, and on no other** ([`automation::lines_back_on`]). A
-/// line going down carries the standing limit it was drawn with, and nobody is shown it — so counting
-/// it would stop a loop drawn to go round twenty times at the ten its way down happened to carry.
+/// **The limit is kept on a line that goes back, and on no other**
+/// ([`crate::ops::automation::lines_back`]). A line going down carries the standing limit it was drawn
+/// with, and nobody is shown it — so counting it would stop a loop drawn to go round twenty times at the
+/// ten its way down happened to carry.
+/// A line inside the action is asked of `def`, the version the placement stands on, and one on the
+/// automation's picture of `pic`, the definition the launch read.
 fn kept(
-    conn: &Connection,
+    pic: &Picture,
+    def: &ActionDef,
     edge: &AutomationEdge,
     placement_id: Option<i64>,
     step_id: Option<i64>,
-) -> Result<RunDefLine> {
-    let goes_back = match edge.max_times {
-        Some(_) => automation::lines_back_on(conn, edge.owner_kind, edge.owner_id)?.contains(&edge.id),
-        None => false,
+) -> RunDefLine {
+    let goes_back = match (edge.max_times, edge.owner_kind) {
+        (None, _) => false,
+        (Some(_), AutomationPictureOwner::Action) => def.lines_back().contains(&edge.id),
+        (Some(_), AutomationPictureOwner::Automation) => pic.lines_back().contains(&edge.id),
     };
-    Ok(RunDefLine {
+    RunDefLine {
         edge_id: edge.id,
         picture: edge.owner_kind,
         from_id: edge.from_id,
@@ -1959,7 +2095,7 @@ fn kept(
         placement_id,
         step_id,
         max_times: edge.max_times.filter(|_| goes_back),
-    })
+    }
 }
 
 /// **Every step output the wires join to one input of one step**, followed across the action's edge —
@@ -1973,13 +2109,14 @@ fn kept(
 /// way out of the action the automation's wire leaves by ([`returns_to`]) — the wire into the boundary
 /// does not name one, and the line from the step's way out is what says which.
 fn wired_into(
-    conn: &Connection,
+    pic: &Picture,
     placement: &AutomationPlacement,
+    defs: &Defs,
     step_id: i64,
     port_id: i64,
-) -> Result<Vec<RunDefSource>> {
+) -> Vec<RunDefSource> {
     let mut out = Vec::new();
-    for wire in read::automation_wires_of(conn, AutomationPictureOwner::Action, placement.action_id)? {
+    for wire in &defs[&placement.id].wires {
         if wire.to_id != step_id || wire.to_port_id != port_id {
             continue;
         }
@@ -1992,24 +2129,17 @@ fn wired_into(
             });
             continue;
         }
-        for outer in read::automation_wires_to_port(
-            conn,
-            AutomationPictureOwner::Automation,
-            placement.id,
-            wire.from_port_id,
-        )? {
-            let Some(far) = read::automation_placement(conn, outer.from_id)? else { continue };
-            for inner in
-                read::automation_wires_of(conn, AutomationPictureOwner::Action, far.action_id)?
-            {
+        for outer in pic.wires_to_port(placement.id, wire.from_port_id) {
+            let Some(far) = defs.get(&outer.from_id) else { continue };
+            for inner in &far.wires {
                 if inner.to_id != ACTION_BOUNDARY || inner.to_port_id != outer.from_port_id {
                     continue;
                 }
                 let Some(inner_exit) = inner.from_exit_id else { continue };
-                let leaves_by = returns_to(conn, inner.from_id, inner_exit)?;
+                let leaves_by = returns_to(far, inner.from_id, inner_exit);
                 if leaves_by.is_some() && leaves_by == outer.from_exit_id {
                     out.push(RunDefSource {
-                        placement_id: far.id,
+                        placement_id: outer.from_id,
                         step_id: inner.from_id,
                         exit_id: inner.from_exit_id,
                         port_id: inner.from_port_id,
@@ -2018,7 +2148,7 @@ fn wired_into(
             }
         }
     }
-    Ok(out)
+    out
 }
 
 /// **The copies a run reads from now** — the last time the automation was copied down onto it
@@ -2107,12 +2237,12 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
 
 /// **Which of an action's ways out one way out of a step inside it returns to** — the action's way out
 /// the line drawn from it inside the action keys, where that line is an [`AutomationEnds::Exit`].
-/// `None` where it leaves the action by no way out. Read off the live action, which is what a launch
-/// resolves its copies from; a run under way reads [`RunDefExit::returns_to`] instead.
-pub(crate) fn returns_to(conn: &Connection, step_id: i64, exit: i64) -> Result<Option<i64>> {
-    Ok(read::automation_edge_for_exit(conn, AutomationPictureOwner::Action, step_id, exit)?
+/// `None` where it leaves the action by no way out. Read off the version a placement stands on, which is
+/// what a launch resolves its copies from; a run under way reads [`RunDefExit::returns_to`] instead.
+fn returns_to(def: &ActionDef, step_id: i64, exit: i64) -> Option<i64> {
+    def.edge_for_exit(step_id, exit)
         .filter(|edge| edge.ends == AutomationEnds::Exit)
-        .and_then(|edge| edge.exit_to_id))
+        .and_then(|edge| edge.exit_to_id)
 }
 
 /// **What a run is waiting for**, in the three shapes a watcher has to tell apart.
@@ -3348,7 +3478,8 @@ mod tests {
                 HandedAtLaunch { title: Some("an issue".into()), ..Default::default() },
                 HandedAtLaunch { classification: vec![("職能".into(), "実装".into())], ..Default::default() },
             ] {
-                let err = launch_handing(tx, automation.id, &here(&startable), &handed).expect_err("not read");
+                let err = launch_handing(tx, automation.id, &here(&startable), &handed, ReadsFrom::Saved)
+                    .expect_err("not read");
                 assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
             }
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
@@ -3362,9 +3493,10 @@ mod tests {
             .expect("place it");
             let take = automation::set_entry(tx, take.id, Some(placed.id)).expect("entry");
             let titled = HandedAtLaunch { title: Some("an issue".into()), ..Default::default() };
-            let err = entry_reads(tx.conn(), &take, &titled).expect_err("reads nothing");
+            let pic = Picture::read(tx.conn(), &take).expect("the picture");
+            let err = entry_reads(tx.conn(), &take, &pic, &titled).expect_err("reads nothing");
             assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
-            assert_eq!(entry_reads(tx.conn(), &take, &HandedAtLaunch::default()).expect("nothing"), None);
+            assert_eq!(entry_reads(tx.conn(), &take, &pic, &HandedAtLaunch::default()).expect("nothing"), None);
         });
     }
 
@@ -3404,6 +3536,81 @@ mod tests {
             let copy = copy_of_it(tx);
             assert_eq!(copy.name, "直す", "the copy is what the run reads from here on");
             assert_eq!(copy.prompt.as_deref(), Some("fix it"));
+        });
+    }
+
+    /// **A placement standing on a saved version is checked and copied as that version holds the
+    /// action**, not as the action has been written on since: a way out and a required input written
+    /// after the save ask nothing of it, and the run copies the prompt as it was saved.
+    #[test]
+    fn a_placement_is_checked_and_copied_as_the_version_it_stands_on() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::action_version_add(tx, action.id).expect("save the action");
+            let stand_on = |version: Option<i64>| {
+                tx.conn()
+                    .execute(
+                        "UPDATE automation_placement SET version = ?1 WHERE id = ?2",
+                        rusqlite::params![version, placement.id],
+                    )
+                    .expect("stand the placement on a version");
+            };
+            stand_on(Some(1));
+            let again = Some("fix it again");
+            automation::step_update(tx, step.id, None, again, None, None, None, None, None, None, None, None)
+                .expect("write on");
+            automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
+                .expect("a way out written since");
+            mk_in(tx, &action, "仕様", AutomationPortKind::Value, true);
+            let unmet = checked(tx, &automation);
+            assert!(unmet.is_empty(), "version 1 has neither: {unmet:?}");
+
+            let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+            let copy = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| d.placement_id == Some(placement.id))
+                .expect("the placement's copy");
+            assert_eq!(copy.prompt.as_deref(), Some("fix it"), "the prompt as it was saved");
+
+            stand_on(None);
+            assert!(!checked(tx, &automation).is_empty(), "the action as it is written now has both");
+        });
+    }
+
+    /// **A launch reads the saved definition and a test run the draft** — checked and copied alike. Before
+    /// anybody saves, a launch has only the draft to read, and its copy records no version.
+    #[test]
+    fn a_launch_reads_the_saved_definition_and_a_test_run_the_draft() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            let startable = vec!["claude".to_string(), "codex".to_string()];
+            let copied = |tx: &WriteTx<'_>, run: &AutomationRun| {
+                let copy = read::automation_run_defs_of(tx.conn(), run.id)
+                    .expect("defs")
+                    .into_iter()
+                    .find(|d| d.placement_id == Some(placement.id))
+                    .expect("the placement's copy");
+                (copy.agent, copy.automation_version)
+            };
+            let unsaved = launch(tx, automation.id, &here(&startable)).expect("launch");
+            assert_eq!(copied(tx, &unsaved), ("claude".to_string(), None), "never saved: the draft");
+
+            automation::save(tx, automation.id).expect("save");
+            automation::placement_step_set(tx, placement.id, step.id, "codex", None).expect("choose another");
+            let saved = launch(tx, automation.id, &here(&startable)).expect("launch");
+            assert_eq!(copied(tx, &saved), ("claude".to_string(), Some(1)), "the saved version");
+            let tried = launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default(), ReadsFrom::Draft)
+                .expect("test run");
+            assert_eq!(copied(tx, &tried), ("codex".to_string(), None), "the draft");
+
+            automation::set_entry(tx, automation.id, None).expect("no entry in the draft");
+            launch(tx, automation.id, &here(&startable)).expect("the saved version still has its entry");
+            let err = launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default(), ReadsFrom::Draft)
+                .expect_err("the draft has none");
+            assert!(matches!(err, Error::NotReady(_)), "{err:?}");
         });
     }
 

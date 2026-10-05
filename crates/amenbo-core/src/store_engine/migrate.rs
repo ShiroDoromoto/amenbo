@@ -1197,7 +1197,71 @@ pub const STEPS: &[Step] = &[
         // at NULL: its `action_id` already names one version (`AMB-D-1000`).
         apply: Apply::Custom(save_what_is_there_as_version_one),
     },
+    Step {
+        to: 95,
+        name: "admit failed_check in automation_run.stopped_reason, and add automation_run.stopped_detail, what such a run did not pass",
+        // A run that comes back to its entry is copied down afresh from a newer saved version, and fails
+        // where that version does not pass the launch check, keeping what it did not pass.
+        //
+        // **Seeded with nothing.** The value and the column are new with this build, so no row carries
+        // either.
+        apply: Apply::Custom(admit_the_run_that_failed_the_check),
+    },
 ];
+
+/// v95: `automation_run.stopped_reason` admits `failed_check`, and `automation_run.stopped_detail` holds
+/// what such a run did not pass ([`crate::model::AutomationStoppedReason::FailedCheck`]).
+///
+/// **The `CHECK` is widened by v69's procedure, copied rather than called** — the reasons
+/// [`admit_rejected_task_status`] gives at length — and **the column is appended only where it is
+/// missing**, v68's guard and for v53's reason.
+fn admit_the_run_that_failed_the_check(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from v69 on declares it — frozen text, like every step's.
+    const NARROW: &str = "CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'no_input', \
+                          'no_way_on', 'halted', 'left_task_open'))";
+    /// The same set with the reason this step admits.
+    const WIDE: &str = "CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'no_input', \
+                        'no_way_on', 'halted', 'left_task_open', 'failed_check'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_run'",
+        [],
+        |r| r.get(0),
+    )?;
+    let already_wide =
+        declared.contains(WIDE) || (!declared.contains(NARROW) && declared.contains("'failed_check'"));
+    if !already_wide {
+        if !declared.contains(NARROW) {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "automation_run",
+                expected: NARROW,
+            });
+        }
+        let widened = declared.replace(NARROW, WIDE);
+
+        let before = column_names(ctx.tx, "automation_run")?;
+        ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+        let wrote = ctx.tx.execute(
+            "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_run'",
+            [&widened],
+        );
+        // `RESET` both shuts the door and drops the connection's parsed schema, so the very next
+        // statement sees the widened `CHECK` instead of the one this connection read at open.
+        ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+        wrote?;
+        let after = column_names(ctx.tx, "automation_run")?;
+        if before != after {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "automation_run",
+                expected: NARROW,
+            });
+        }
+    }
+    if !column_names(ctx.tx, "automation_run")?.iter().any(|c| c == "stopped_detail") {
+        ctx.tx.execute_batch("ALTER TABLE automation_run ADD COLUMN stopped_detail TEXT;")?;
+    }
+    Ok(())
+}
 
 /// v94: what every automation, and every action a person wrote, already holds is saved as its version 1,
 /// and every placement on such an action is pointed at it — so a store that arrives here has nothing
@@ -10591,6 +10655,51 @@ mod tests {
             .conn()
             .execute("UPDATE automation_run SET stopped_reason = 'halted' WHERE id = 4", [])
             .expect("the reason a halt now writes goes in");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v95 in full: the reason set admits `failed_check`, the run gains `stopped_detail`, and the
+    /// reasons already written are kept.
+    #[test]
+    fn the_run_that_failed_the_check_gets_a_reason_and_a_detail_the_columns_accept() {
+        let dir = scratch("run-failed-check");
+        let engine = store_at(&dir, 94);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, stopped_reason) VALUES
+                     (1, 1, 1, 'failed', 'left_task_open');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, steps_through(95), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 95);
+        let (kept, detail): (String, Option<String>) = engine
+            .conn()
+            .query_row("SELECT stopped_reason, stopped_detail FROM automation_run WHERE id = 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(kept, "left_task_open", "a reason already written stays");
+        assert_eq!(detail, None, "and no run already there carries a detail");
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation_run SET stopped_reason = 'failed_check', stopped_detail = 'no entry' \
+                 WHERE id = 1",
+                [],
+            )
+            .expect("the reason and the detail a run that failed the check writes go in");
+        assert!(
+            engine
+                .conn()
+                .execute("UPDATE automation_run SET stopped_reason = 'gave_up' WHERE id = 1", [])
+                .is_err(),
+            "and the set is still closed",
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

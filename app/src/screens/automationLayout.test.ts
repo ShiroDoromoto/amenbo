@@ -89,6 +89,8 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     edges: [],
     wires: [],
     heldBy: [],
+    unsaved: false,
+    saveBlocks: [],
     ...over,
   })!;
 }

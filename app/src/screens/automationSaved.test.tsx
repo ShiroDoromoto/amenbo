@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
-// What a build screen says about saving (`AMB-D-1005`): the head says when the last write landed, or
-// why it was refused, and "Saved" stands beside the field the write came from for two seconds. The
-// writes are `told` directly with promises the test settles, so what runs for real is the line they
-// report on and the hook that draws it.
+// What a build screen says about saving (`AMB-D-1005`): the head says the definition's saved state,
+// or why a write was refused, and "Written" stands beside the field the write came from for two
+// seconds. The writes are `told` directly with promises the test settles, so what runs for real is
+// the line they report on and the hook that draws it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { told } from "../core/automationSave";
 import { t } from "../core/i18n";
-import { MARK_MS, useSaved } from "./AutomationSaved";
+import { MARK_MS, useSaved, type SavedState } from "./AutomationSaved";
 
 /** A write the test settles by hand. */
 function pending() {
@@ -18,9 +18,11 @@ function pending() {
 }
 
 let write = pending();
+// The saved state the screen hands the hook.
+let state: SavedState | null;
 
 function Screen() {
-  const saved = useSaved();
+  const saved = useSaved(state);
   return createElement(
     "div",
     { ...saved.capture },
@@ -39,6 +41,7 @@ let host: HTMLDivElement;
 beforeEach(() => {
   vi.useFakeTimers();
   write = pending();
+  state = null;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -63,27 +66,53 @@ function leave() {
   });
 }
 
-describe("what a build screen says about saving (AMB-D-1005)", () => {
-  it("says editing saves on the spot before anything is written", () => {
-    expect(head()?.textContent).toBe(t("auto.saved.onTheSpot"));
-    expect(marks()).toHaveLength(0);
+describe("a head handed the definition's saved state", () => {
+  function draw(next: SavedState | null) {
+    state = next;
+    act(() => root.render(createElement(Screen)));
+  }
+
+  it("says nothing is saved yet, then that changes are unsaved, then the version saved last", () => {
+    draw({ unsaved: true });
+    expect(head()?.textContent).toBe(t("auto.saved.never"));
+    draw({ saved: { version: 2, savedAt: "2026-10-01T09:00:00Z" }, unsaved: true });
+    expect(head()?.textContent).toBe(t("auto.saved.unsaved"));
+    draw({ saved: { version: 2, savedAt: "2026-10-01T09:00:00Z" }, unsaved: false });
+    expect(head()?.textContent).toContain("2");
+    expect(head()?.textContent).not.toBe(t("auto.saved.unsaved"));
   });
 
-  it("says when the last write landed, and stands Saved beside its field for two seconds", async () => {
+  it("says nothing until the state is read", () => {
+    draw(null);
+    expect(head()?.textContent).toBe("");
+  });
+
+  it("stands Written beside the field a write came from for two seconds", async () => {
+    draw({ unsaved: false });
     leave();
     await act(async () => {
       write.settle().ok();
       await write.promise;
     });
-    expect(head()?.textContent).not.toBe(t("auto.saved.onTheSpot"));
-    expect(head()?.classList.contains("actsaved--failed")).toBe(false);
+    expect(head()?.textContent).toBe(t("auto.saved.never"));
     expect(marks()).toHaveLength(1);
-    expect(marks()[0].textContent).toBe(t("auto.saved.mark"));
+    expect(marks()[0].textContent).toBe(t("auto.saved.written"));
     act(() => vi.advanceTimersByTime(MARK_MS));
     expect(marks()).toHaveLength(0);
   });
 
-  it("turns the head red with the reason when a write is refused", async () => {
+  it("marks only the head for a write no event of the reader's started", async () => {
+    draw({ unsaved: false });
+    act(() => vi.runAllTimers());
+    await act(async () => {
+      const own = told(() => Promise.resolve());
+      await own;
+    });
+    expect(marks()).toHaveLength(0);
+  });
+
+  it("turns the head red when a write is refused", async () => {
+    draw({ unsaved: false });
     leave();
     await act(async () => {
       write.settle().no(new Error("held by a run"));
@@ -91,16 +120,6 @@ describe("what a build screen says about saving (AMB-D-1005)", () => {
     });
     expect(head()?.classList.contains("actsaved--failed")).toBe(true);
     expect(head()?.textContent).toContain("held by a run");
-    expect(marks()).toHaveLength(0);
-  });
-
-  it("marks only the head for a write no event of the reader's started", async () => {
-    act(() => vi.runAllTimers());
-    await act(async () => {
-      const own = told(() => Promise.resolve());
-      await own;
-    });
-    expect(head()?.textContent).not.toBe(t("auto.saved.onTheSpot"));
     expect(marks()).toHaveLength(0);
   });
 });

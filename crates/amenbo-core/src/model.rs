@@ -2075,6 +2075,11 @@ pub enum AutomationStoppedReason {
     /// (`AMB-D-967`). The launch check refuses a picture that can do this, so reaching it means the
     /// check missed a line: the machinery's fault, not the author's and not the agent's.
     LeftTaskOpen,
+    /// The run came back to its entry, the automation had been saved since it was copied, and the newer
+    /// version did not pass the check a launch asks — or starts by filing a task, which only a launch is
+    /// handed what to file ([`crate::ops::automation_run::take_up_newer`]). What it did not pass is kept
+    /// on the run ([`AutomationRun::stopped_detail`]).
+    FailedCheck,
 }
 
 impl AutomationStoppedReason {
@@ -2087,6 +2092,7 @@ impl AutomationStoppedReason {
             AutomationStoppedReason::NoWayOn => "no_way_on",
             AutomationStoppedReason::Halted => "halted",
             AutomationStoppedReason::LeftTaskOpen => "left_task_open",
+            AutomationStoppedReason::FailedCheck => "failed_check",
         }
     }
 
@@ -2099,6 +2105,7 @@ impl AutomationStoppedReason {
             "no_way_on" => Some(AutomationStoppedReason::NoWayOn),
             "halted" => Some(AutomationStoppedReason::Halted),
             "left_task_open" => Some(AutomationStoppedReason::LeftTaskOpen),
+            "failed_check" => Some(AutomationStoppedReason::FailedCheck),
             _ => None,
         }
     }
@@ -2190,6 +2197,10 @@ pub struct AutomationRun {
     /// ([`AttachmentTarget::AutomationRun`]) until that built-in moves them on to the task (`AMB-D-981`).
     #[serde(default)]
     pub handed_task: Option<String>,
+    /// **What a run failed with [`AutomationStoppedReason::FailedCheck`] did not pass**, as the refusal
+    /// said it. `None` for every other run.
+    #[serde(default)]
+    pub stopped_detail: Option<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

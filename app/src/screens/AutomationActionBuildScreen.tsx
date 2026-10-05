@@ -33,9 +33,10 @@
 // screen's it was reached from.
 //
 // **An action a run is going on is written all the same** (`AMB-D-1015`). A run of an automation
-// placing it goes on from the snapshot it took at its start, and what is written here is what the
-// next start takes. Those runs are named over the picture with the way to each one's pane
-// (`./AutomationHeldBy`).
+// placing it goes on from the copy it took, and what is saved here reaches it only once its placement
+// is moved to the new version and the automation saved: the run reads that saved automation afresh
+// when it comes back to its entry. Those runs are named over the picture with the version of their
+// automation each is on and the way to each one's pane (`./AutomationHeldBy`).
 //
 // **A built-in's action is read as its definition** (`./AutomationBuiltinScreen`). Its rows are Amenbo's
 // own and core refuses every edit of them (`AMB-D-964`), so a box on a picture opening one lands on the
@@ -45,8 +46,16 @@
 // the picture marks that box and the panel draws that step, so it is held where both can see it. A
 // step that is deleted takes the panel's selection with it.
 //
-// **The head says whether the last write was saved** (`./AutomationSaved`, `AMB-D-1005`). Nothing
-// here has a Save press, so the head says when a write landed and "Saved" stands beside its field.
+// **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
+// saved, or the version saved last and when. A write still marks the field it came from.
+//
+// **What the screen writes goes to the action's draft, and "Save" makes it the next version**
+// (`amenbo_core::ops::automation::action_save`), the way the automation's build screen does
+// (`./AutomationBuildScreen`). "Discard changes" puts the draft back as the newest version holds it
+// (`AMB-D-961`). Save asks only what the action answers for on its own, and while there is something
+// unsaved its reasons are listed under the head; one about a step opens that step. Neither press is
+// held down by a run going on an automation placing the action (`AMB-D-1015`). A built-in never
+// reaches here, so it has neither.
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AutomationActionDeclaresPanel } from "./AutomationActionDeclaresPanel";
@@ -57,10 +66,17 @@ import { useSaved } from "./AutomationSaved";
 import { ReachChip, usedCount } from "./automationParts";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationStepAdd, type AddTarget } from "./AutomationStepAdd";
-import { editAutomationAction, editAutomationStep, useAutomationAction } from "../core/automations";
+import {
+  discardAutomationAction,
+  editAutomationAction,
+  editAutomationStep,
+  saveAutomationAction,
+  useAutomationAction,
+} from "../core/automations";
+import { confirmDialog } from "../core/dialog";
 import type { WhereTo } from "./automationParts";
 import { actionGraph } from "./automationLayout";
-import { errText, t, tf } from "../core/i18n";
+import { errSentence, errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -83,24 +99,47 @@ function whereTo(action: AutomationActionDetailDto | null, target: AddTarget): W
 }
 
 /**
- * **The automations this action is placed on, by name** — each one where a rewrite here lands, and
- * each a press that goes to its build screen. The names say what "used by two" would leave the reader
- * to go and find.
+ * **What one automation stands on**: the versions its placements use, and, where any is older than
+ * the newest saved one, which that is — so after a save the reader sees which automations still run
+ * the old one. Nothing where none of its placements stands on a version.
+ */
+function placedVersions(one: AutomationPlacedOnDto, latest: number | undefined): string | null {
+  if (one.versions.length === 0) return null;
+  const used = one.versions.map((version) => tf("auto.place.version", { version })).join(", ");
+  if (latest === undefined) return used;
+  const behind = one.versions.some((version) => version < latest);
+  return `${used} · ${behind ? tf("auto.place.versionNewest", { version: latest }) : t("auto.place.versionLatest")}`;
+}
+
+/**
+ * **The automations this action is placed on, by name**, each with the versions it uses — each one
+ * where a rewrite here lands once it is saved and its placement moved on, and each a press that goes to
+ * its build screen. The names say what "used by two" would leave the reader to go and find.
  */
 function PlacedOn({
   placedOn,
+  latest,
   onGoTo,
 }: {
   placedOn: AutomationPlacedOnDto[];
+  /** The newest saved version, which each automation's versions are told against. */
+  latest: number | undefined;
   onGoTo?: (project: number, automation: number) => void;
 }) {
   if (placedOn.length === 0) return <span className="autostep__label">{t("auto.actions.unused")}</span>;
   return (
     <div className="actplaced">
-      {placedOn.map((one) =>
-        onGoTo === undefined ? (
-          <span key={one.id} className="actplaced__one">
+      {placedOn.map((one) => {
+        const versions = placedVersions(one, latest);
+        const label = (
+          <>
             {one.name}
+            {versions !== null && <span className="actplaced__ver"> {versions}</span>}
+          </>
+        );
+        return onGoTo === undefined ? (
+          <span key={one.id} className="actplaced__one">
+            {label}
           </span>
         ) : (
           <button
@@ -109,11 +148,11 @@ function PlacedOn({
             className="actplaced__one actplaced__one--go"
             onClick={() => onGoTo(one.project, one.id)}
           >
-            {one.name}
+            {label}
             <span aria-hidden="true"> ↗</span>
           </button>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -242,7 +281,30 @@ export function AutomationActionBuildScreen({
   const [adding, setAdding] = useState<AddTarget | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
   const [note, setNote] = useDraft(action?.note ?? "");
-  const saved = useSaved();
+  const saved = useSaved(action === null ? null : { saved: action.saved, unsaved: action.unsaved });
+  const [keeping, setKeeping] = useState(false);
+  const [keepRefused, setKeepRefused] = useState<string | null>(null);
+  const keep = async (write: () => Promise<void>) => {
+    setKeeping(true);
+    setKeepRefused(null);
+    try {
+      await write();
+    } catch (e) {
+      setKeepRefused(errText(e));
+    } finally {
+      setKeeping(false);
+    }
+  };
+  const save = () => void keep(() => saveAutomationAction(id));
+  const discard = async () => {
+    const version = action?.saved?.version;
+    if (version === undefined) return;
+    if (!(await confirmDialog(tf("auto.saved.discardConfirm", { version })))) return;
+    await keep(() => discardAutomationAction(id));
+  };
+  // Listed only while there is something to save: an action with nothing unsaved has nothing the
+  // reasons would hold back.
+  const saveBlocks = action?.unsaved === true ? action.saveBlocks : [];
 
   const run: Run = (write) => {
     setRefused(null);
@@ -283,7 +345,7 @@ export function AutomationActionBuildScreen({
 
   return (
     <div className="actbuild" {...saved.capture}>
-      <div className="actbuild__head">
+      <div className="actbuild__head actbuild__head--wraps">
         {onBack !== undefined && (
           <button type="button" className="btn" onClick={onBack}>
             <Icon name="chevronLeft" /> {backLabel ?? t("auto.build.back")}
@@ -296,18 +358,76 @@ export function AutomationActionBuildScreen({
             <ReachChip global={action.global} />
             <span className="actdecl__used">{usedCount(action.usedBy)}</span>
             {saved.head}
-            <button
-              type="button"
-              className={part === "about" ? "btn btn--on actbuild__edit" : "btn actbuild__edit"}
-              aria-pressed={part === "about"}
-              onClick={() => pickPart("about")}
-            >
-              {t("auto.act.edit")}
-            </button>
           </>
         )}
-        {headEnd}
+        <span className="actbuild__presses">
+          {action !== null && (
+            <>
+              <button
+                type="button"
+                className="btn"
+                disabled={!action.unsaved || saveBlocks.length > 0 || keeping}
+                onClick={save}
+              >
+                {t("auto.saved.save")}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={action.saved === undefined || !action.unsaved || keeping}
+                onClick={() => void discard()}
+              >
+                {t("auto.saved.discard")}
+              </button>
+              <button
+                type="button"
+                className={part === "about" ? "btn btn--on" : "btn"}
+                aria-pressed={part === "about"}
+                onClick={() => pickPart("about")}
+              >
+                {t("auto.act.edit")}
+              </button>
+            </>
+          )}
+          {headEnd}
+        </span>
       </div>
+
+      {(saveBlocks.length > 0 || keepRefused !== null) && (
+        <div className="autolaunch">
+          {saveBlocks.length > 0 && (
+            <>
+              <div className="autolaunch__head">{t("auto.saved.blocked")}</div>
+              <ul className="autolaunch__blocks">
+                {saveBlocks.map((block, nth) => {
+                  // A reason about one step opens that step, the way pressing its box does.
+                  const inside = action?.steps.find(
+                    (one) => String(one.id) === block.fields.inside_step,
+                  );
+                  return (
+                    <li key={`${block.code}-${nth}`}>
+                      {inside === undefined ? (
+                        errSentence(block)
+                      ) : (
+                        <button
+                          type="button"
+                          className="autolaunch__go"
+                          data-see={t("auto.launch.see")}
+                          title={t("auto.launch.see")}
+                          onClick={() => pickBox(inside.id)}
+                        >
+                          {errSentence(block)}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+          {keepRefused !== null && <div className="autolaunch__refused">{keepRefused}</div>}
+        </div>
+      )}
 
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
@@ -380,7 +500,7 @@ export function AutomationActionBuildScreen({
                 </span>
               </div>
               <Sec title={t("auto.act.placedOn")}>
-                <PlacedOn placedOn={action.placedOn} onGoTo={onGoToAutomation} />
+                <PlacedOn placedOn={action.placedOn} latest={action.saved?.version} onGoTo={onGoToAutomation} />
               </Sec>
             </>
           ) : (

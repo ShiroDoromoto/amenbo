@@ -546,7 +546,7 @@ impl From<amenbo_core::Error> for CliError {
             // reservation's ways out below: nothing here is a blocker, a premise or a creation. The
             // refusal already names every reason, so what is left to say is where they are fixed.
             E::NotReady(m) if m.code() == Some(ErrorCode::NotReadyAutomation) => Some(format!(
-                "Every reason is named above, and each is answered by writing on the automation: `{cmd} automation step-add`, `automation entry-replace`, `automation edge-add`, `automation wire-add`, `automation cfg-set`, `automation agent-set`."
+                "Every reason is named above, and each is answered by writing on the automation: `{cmd} automation step-add`, `automation entry-replace`, `automation edge-add`, `automation wire-add`, `automation cfg-set`, `automation agent-set` — then `{cmd} automation save <id>`, since a launch uses only what is saved."
             )),
             // Saving an action its own check turns away: the reasons are inside the action, so that is
             // where they are fixed.

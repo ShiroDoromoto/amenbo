@@ -476,6 +476,29 @@ impl Driver<'_> {
                 self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 Ok(Outcome::action(format!("setting `{name}` on placement {placement} {said}")))
             }
+            "save" => {
+                let automation = self.resolve(with)?;
+                self.run_json(&["automation", "save", &automation.to_string(), "--json"])?;
+                Ok(Outcome::action(format!("saved automation {automation}")))
+            }
+            "action-save" => {
+                let action = self.resolve(with)?;
+                let v = self.run_json(&["automation", "action-save", &action.to_string(), "--json"])?;
+                let version = v["automation_action_version"]["version"].as_i64().unwrap_or_default();
+                Ok(Outcome::action(format!("saved library action {action} as version {version}")))
+            }
+            "place-version" => {
+                let placement = self.resolve(with)?;
+                let version = req_i64(with, "version")?;
+                self.run_json(&[
+                    "automation",
+                    "place-version",
+                    &placement.to_string(),
+                    &version.to_string(),
+                    "--json",
+                ])?;
+                Ok(Outcome::action(format!("placement {placement} stands on version {version} of its action")))
+            }
             "start" => {
                 let automation = self.resolve(with)?;
                 let mut args = vec!["automation".into(), "start".into(), automation.to_string()];
@@ -780,7 +803,11 @@ impl Driver<'_> {
             // looked at.
             "placement-read" => {
                 let automation = self.resolve(with)?;
-                judge_placement(automation, &self.definition(automation)?, with)
+                let view = match opt_bool(with, "saved").unwrap_or(false) {
+                    true => self.run_json(&["automation", "show", &automation.to_string(), "--saved", "--json"])?,
+                    false => self.definition(automation)?,
+                };
+                judge_placement(automation, &view, with)
             }
             // The test run just before this one: every step it opened with the way out it left by, and
             // how it ended. Then the store, counted afterwards, for anything the walk should not have
@@ -1064,6 +1091,28 @@ fn judge_placement(automation: i64, view: &serde_json::Value, with: &Args) -> Re
     }
     if with.contains_key("settings") {
         let (ok, note) = judge_settings(with, rows_of(one, "settings"))?;
+        pass = pass && ok;
+        said.push_str(&note);
+    }
+    // Which saved version of the action it stands on, and the newest there is.
+    for (key, field, what) in [
+        ("version", "version", "standing on version"),
+        ("latest", "latest_version", "the newest being"),
+    ] {
+        if with.contains_key(key) {
+            let want = req_i64(with, key)?;
+            let got = one[field].as_i64();
+            pass = pass && got == Some(want);
+            let got = got.map_or("(none reported)".to_string(), |n| n.to_string());
+            said.push_str(&format!(", {what} {got} (expected {want})"));
+        }
+    }
+    if with.contains_key("steps") {
+        let names: Vec<String> = rows_of(one, "steps")
+            .iter()
+            .map(|s| s["step"]["name"].as_str().unwrap_or("(unnamed)").to_string())
+            .collect();
+        let (ok, note) = judge_names(with, "steps", &names, "holding the steps")?;
         pass = pass && ok;
         said.push_str(&note);
     }

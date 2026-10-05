@@ -38,6 +38,9 @@ steps_cli:
 
   - { type: action, domain: automation, op: cfg-set, with: { target: at_fetch, name: 形式, choice: コマンド } }
   - { type: action, domain: automation, op: cfg-set, with: { target: at_fetch, name: 見に行く先, text: "echo nothing to see" } }
+  # A run starts from the newest saved version, so it is saved first.
+  - { type: action, domain: automation, op: save, with: { target: taking } }
+  - { type: action, domain: automation, op: save, with: { target: plain } }
 
   - type: action
     domain: automation

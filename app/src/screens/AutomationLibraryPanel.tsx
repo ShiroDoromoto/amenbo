@@ -67,6 +67,7 @@ import { errText, t, tf } from "../core/i18n";
 import { ERROR_EXIT } from "./automationLayout";
 import { kindLabel } from "./automationPortKinds";
 import { ExitMark, ReachChip, usedCount, WhereMark, type WhereTo } from "./automationParts";
+import { SavedMark } from "./AutomationSaved";
 import { builtinShown } from "../core/builtinWords";
 import { getSnapshot } from "../core/snapshot";
 import type {
@@ -279,7 +280,10 @@ export function AutomationLibraryPanel({
           aria-expanded={picked === one.id}
           onClick={() => setPicked(picked === one.id ? null : one.id)}
         >
-          <span className="autolib__name">{one.name}</span>
+          <span className="autolib__name">
+            {one.name}
+            <SavedMark saved={one.saved} unsaved={one.unsaved} />
+          </span>
           <span className="autolib__meta">
             {usedCount(one.usedBy)}
           </span>

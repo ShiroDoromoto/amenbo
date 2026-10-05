@@ -105,6 +105,8 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     settings: [],
     heldBy: [],
     placedOn: [],
+    unsaved: false,
+    saveBlocks: [],
     ...over,
   };
 }

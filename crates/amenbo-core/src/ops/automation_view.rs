@@ -3,12 +3,16 @@
 //!
 //! The ten definition tables are written by [`super::automation`]; nothing here writes. What this
 //! module does is the resolving: a placement reads its ways out, its inputs and its settings off the
-//! library action standing on it, a step reads its own, and a caller that had to know which of the two
-//! declared a name would be reading the storage rather than the picture.
+//! version of the library action it stands on, a step reads its own, and a caller that had to know which
+//! of the two declared a name would be reading the storage rather than the picture.
 //!
 //! **Two pictures, two details.** [`detail`] reads one automation — the placements on it and the lines
 //! between them — and [`action_detail`] reads one library action, which is a picture in its own right:
 //! the steps inside it and the lines between those.
+//!
+//! **The draft, or the saved version.** Both read the draft — what the tables hold now — and say which
+//! version was saved last and whether the draft holds more. [`saved_detail`] and [`action_saved_detail`]
+//! read the newest saved version instead, which is what a launch uses.
 //!
 //! **It lives in core because two sides read it.** The build screen fetches one whole definition and
 //! the terminal prints one; resolved twice, the two would drift, and an automation that read one way
@@ -23,17 +27,24 @@ use crate::model::{
     AutomationPort,
     AutomationPortDirection, AutomationPortOwner, AutomationStep, AutomationWire,
 };
+use crate::ops::automation::ActionDef;
 use crate::store_engine::read;
-use crate::Result;
+use crate::time::Timestamp;
+use crate::{Error, Result};
 
-/// **One automation in a list**: the row itself, and how many actions are placed on it.
+/// **One automation in a list**: the row itself, how many actions are placed on it, and its saved
+/// state.
 ///
 /// The count comes with the row because "what is this" and "is it built yet" are the two things a
-/// list is read for.
+/// list is read for. The saved state comes too, so a draft left unsaved shows in the list.
 #[derive(Clone, Debug, Serialize)]
 pub struct AutomationCard {
     pub automation: Automation,
     pub placements: usize,
+    /// The newest saved version, or `None` for an automation nobody has saved.
+    pub saved: Option<SavedVersion>,
+    /// Does the draft hold anything the newest saved version does not?
+    pub unsaved: bool,
 }
 
 /// **One automation in the list that spans every project**: its card, and the name of the project it
@@ -57,6 +68,11 @@ pub struct ActionCard {
     pub action: AutomationAction,
     pub steps: usize,
     pub used_by: usize,
+    /// The newest saved version — `None` for a built-in, which has none (`AMB-D-1000`), and for an
+    /// action nobody has saved.
+    pub saved: Option<SavedVersion>,
+    /// Does the draft hold anything the newest saved version does not? Never, for a built-in.
+    pub unsaved: bool,
 }
 
 /// **One library action in the list that spans every project**: its card, and the name of the project
@@ -75,6 +91,12 @@ pub struct ProjectActionCard {
 #[derive(Clone, Debug, Serialize)]
 pub struct AutomationView {
     pub automation: Automation,
+    /// Which of the two this reads — the draft, or the newest saved version.
+    pub showing: Showing,
+    /// The newest saved version, or `None` for an automation nobody has saved.
+    pub saved: Option<SavedVersion>,
+    /// Does the draft hold anything the newest saved version does not?
+    pub unsaved: bool,
     pub placements: Vec<PlacementView>,
     pub edges: Vec<AutomationEdge>,
     pub wires: Vec<AutomationWire>,
@@ -87,6 +109,12 @@ pub struct PlacementView {
     pub placement: AutomationPlacement,
     /// The library action placed here, or `None` where that row is gone from under it.
     pub action: Option<AutomationAction>,
+    /// **The version of the action this placement stands on** — a built-in's off its record
+    /// (`AMB-D-1000`) — or `None` where it stands on none.
+    pub version: Option<i64>,
+    /// The newest version of that action there is — for a built-in, the one this build defines; for
+    /// another, its newest saved. `None` where it has none.
+    pub latest_version: Option<i64>,
     /// The step a run opens first at this spot — the action's entry, read in so a caller drawing its
     /// prompt does not have to go back for it. `None` where the action holds none.
     pub entry_step: Option<AutomationStep>,
@@ -121,7 +149,16 @@ pub struct ExitView {
 #[derive(Clone, Debug, Serialize)]
 pub struct ActionView {
     pub action: AutomationAction,
+    /// Which of the two this reads — the draft, or the newest saved version. A built-in is never
+    /// written on, so both read the same.
+    pub showing: Showing,
+    /// The newest saved version, or `None` for a built-in and for an action nobody has saved.
+    pub saved: Option<SavedVersion>,
+    /// Does the draft hold anything the newest saved version does not? Never, for a built-in.
+    pub unsaved: bool,
     pub used_by: usize,
+    /// Every placement of the action, with the version each stands on, in automation order.
+    pub placed_at: Vec<PlacedAt>,
     pub steps: Vec<StepView>,
     pub edges: Vec<AutomationEdge>,
     pub wires: Vec<AutomationWire>,
@@ -130,6 +167,30 @@ pub struct ActionView {
     pub inputs: Vec<AutomationPort>,
     /// The declarations alone. An action's rows carry no answer — the placement holds that.
     pub settings: Vec<AutomationCfg>,
+}
+
+/// **Which of the two a show reads**: the draft being written, or the newest saved version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Showing {
+    Draft,
+    Saved,
+}
+
+/// **One saved version, as a show names it**: its number, and when it was saved.
+#[derive(Clone, Debug, Serialize)]
+pub struct SavedVersion {
+    pub version: i64,
+    pub saved_at: Timestamp,
+}
+
+/// **One placement of an action**: the automation it sits on, and the version of the action it stands
+/// on — `None` where it stands on none.
+#[derive(Clone, Debug, Serialize)]
+pub struct PlacedAt {
+    pub automation_id: i64,
+    pub placement_id: i64,
+    pub version: Option<i64>,
 }
 
 /// **One step inside an action**: the prompt it runs on, the ways out it ends on, and what it takes in.
@@ -177,6 +238,8 @@ pub fn cards(conn: &Connection, project_id: i64) -> Result<Vec<AutomationCard>> 
         out.push(AutomationCard {
             automation,
             placements: read::automation_placement_ids(conn, id)?.len(),
+            saved: saved_version(conn, id)?,
+            unsaved: super::automation::unsaved(conn, id)?,
         });
     }
     Ok(out)
@@ -241,10 +304,13 @@ fn shelf_cards(conn: &Connection, reach: Option<i64>) -> Result<Vec<ActionCard>>
     let mut out = Vec::new();
     for (id, _) in read::automation_action_siblings(conn, reach, None)? {
         let Some(action) = read::automation_action(conn, id)? else { continue };
+        let (saved, unsaved) = action_saved_state(conn, &action)?;
         out.push(ActionCard {
             action,
             steps: read::automation_action_step_ids(conn, id)?.len(),
             used_by: used_by(conn, id)?,
+            saved,
+            unsaved,
         });
     }
     Ok(out)
@@ -305,7 +371,83 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
     }
     let edges = read::automation_edges_of(conn, AutomationPictureOwner::Automation, id)?;
     let wires = read::automation_wires_of(conn, AutomationPictureOwner::Automation, id)?;
-    Ok(Some(AutomationView { automation, placements, edges, wires }))
+    let saved = saved_version(conn, id)?;
+    let unsaved = super::automation::unsaved(conn, id)?;
+    Ok(Some(AutomationView {
+        automation,
+        showing: Showing::Draft,
+        saved,
+        unsaved,
+        placements,
+        edges,
+        wires,
+    }))
+}
+
+/// **One automation as its newest saved version holds it** — `None` where that id names none, refused
+/// where nobody has saved it.
+///
+/// What belongs to a placement itself — the answers to its settings and who carries out its steps — is
+/// read off the version. The action standing on it is read the way [`detail`] reads it.
+pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
+    let Some(mut automation) = read::automation(conn, id)? else { return Ok(None) };
+    let Some(version) = read::automation_version_latest(conn, id)? else {
+        return Err(Error::conflict(format!("automation '{id}' has no saved version")));
+    };
+    let answers: Vec<AutomationCfg> = rows(&version.cfgs)?;
+    let chosen: Vec<AutomationPlacementStep> = rows(&version.placement_steps)?;
+    let mut placements = Vec::new();
+    for placement in rows::<AutomationPlacement>(&version.placements)? {
+        let mut view = placement_view(conn, placement)?;
+        let placement_id = view.placement.id;
+        for setting in &mut view.settings {
+            setting.value = answers
+                .iter()
+                .find(|a| {
+                    a.owner_kind == AutomationCfgOwner::Placement
+                        && a.owner_id == placement_id
+                        && a.name == setting.name
+                })
+                .and_then(|a| a.value.clone());
+        }
+        for step in &mut view.steps {
+            step.chosen = chosen
+                .iter()
+                .find(|c| c.placement_id == placement_id && c.step_id == step.step.id)
+                .cloned();
+        }
+        placements.push(view);
+    }
+    automation.entry_placement_id = version.entry_placement_id;
+    Ok(Some(AutomationView {
+        automation,
+        showing: Showing::Saved,
+        saved: Some(SavedVersion { version: version.version, saved_at: version.created_at }),
+        unsaved: super::automation::unsaved(conn, id)?,
+        placements,
+        edges: rows(&version.edges)?,
+        wires: rows(&version.wires)?,
+    }))
+}
+
+/// The newest saved version of one automation, or `None` where nobody has saved it.
+fn saved_version(conn: &Connection, id: i64) -> Result<Option<SavedVersion>> {
+    Ok(read::automation_version_latest(conn, id)?
+        .map(|v| SavedVersion { version: v.version, saved_at: v.created_at }))
+}
+
+/// One action's newest saved version and whether its draft holds more. A built-in has neither
+/// (`AMB-D-1000`).
+fn action_saved_state(
+    conn: &Connection,
+    action: &AutomationAction,
+) -> Result<(Option<SavedVersion>, bool)> {
+    if action.builtin.is_some() {
+        return Ok((None, false));
+    }
+    let saved = read::automation_action_version_latest(conn, action.id)?
+        .map(|v| SavedVersion { version: v.version, saved_at: v.created_at });
+    Ok((saved, super::automation::action_unsaved(conn, action.id)?))
 }
 
 /// One library action in full, or `None` where that id names none.
@@ -320,8 +462,13 @@ pub fn action_detail(conn: &Connection, id: i64) -> Result<Option<ActionView>> {
     let exits = exit_views(conn, AutomationOwner::Action, id)?;
     let inputs = ports_of(conn, AutomationPortOwner::Action, id, AutomationPortDirection::In)?;
     let settings = read::automation_cfgs_of(conn, AutomationCfgOwner::Action, id)?;
+    let (saved, unsaved) = action_saved_state(conn, &action)?;
     Ok(Some(ActionView {
+        placed_at: placed_at(conn, &action)?,
         action,
+        showing: Showing::Draft,
+        saved,
+        unsaved,
         used_by: used_by(conn, id)?,
         steps,
         edges,
@@ -332,30 +479,149 @@ pub fn action_detail(conn: &Connection, id: i64) -> Result<Option<ActionView>> {
     }))
 }
 
-/// One placement, with the action standing on it read in: the ways out it can be left by, what it takes
-/// in, and what it is set to.
+/// **One library action as its newest saved version holds it** — `None` where that id names none,
+/// refused where nobody has saved it. A built-in's rows are its version, so it reads as [`action_detail`]
+/// does.
+pub fn action_saved_detail(conn: &Connection, id: i64) -> Result<Option<ActionView>> {
+    let Some(mut action) = read::automation_action(conn, id)? else { return Ok(None) };
+    if action.builtin.is_some() {
+        return Ok(action_detail(conn, id)?.map(|view| ActionView { showing: Showing::Saved, ..view }));
+    }
+    let Some(version) = read::automation_action_version_latest(conn, id)? else {
+        return Err(Error::conflict(format!("action '{id}' has no saved version")));
+    };
+    let saved = SavedRows {
+        exits: rows(&version.exits)?,
+        ports: rows(&version.ports)?,
+    };
+    let steps = rows::<AutomationStep>(&version.steps)?
+        .into_iter()
+        .map(|step| StepView {
+            exits: saved.exits(AutomationOwner::Step, step.id),
+            inputs: saved.ports(AutomationPortOwner::Step, step.id, AutomationPortDirection::In),
+            step,
+        })
+        .collect();
+    action.entry_step_id = version.entry_step_id;
+    Ok(Some(ActionView {
+        placed_at: placed_at(conn, &action)?,
+        action,
+        showing: Showing::Saved,
+        saved: Some(SavedVersion { version: version.version, saved_at: version.created_at }),
+        unsaved: super::automation::action_unsaved(conn, id)?,
+        used_by: used_by(conn, id)?,
+        steps,
+        edges: rows(&version.edges)?,
+        wires: rows(&version.wires)?,
+        exits: saved.exits(AutomationOwner::Action, id),
+        inputs: saved.ports(AutomationPortOwner::Action, id, AutomationPortDirection::In),
+        settings: rows(&version.cfgs)?,
+    }))
+}
+
+/// The ways out and the ports a saved version of an action holds, read back by their owner.
+struct SavedRows {
+    exits: Vec<AutomationExit>,
+    ports: Vec<AutomationPort>,
+}
+
+impl SavedRows {
+    fn exits(&self, owner_kind: AutomationOwner, owner_id: i64) -> Vec<ExitView> {
+        self.exits
+            .iter()
+            .filter(|e| e.owner_kind == owner_kind && e.owner_id == owner_id)
+            .map(|exit| ExitView {
+                outputs: self.ports(AutomationPortOwner::Exit, exit.id, AutomationPortDirection::Out),
+                exit: exit.clone(),
+            })
+            .collect()
+    }
+
+    fn ports(
+        &self,
+        owner_kind: AutomationPortOwner,
+        owner_id: i64,
+        direction: AutomationPortDirection,
+    ) -> Vec<AutomationPort> {
+        self.ports
+            .iter()
+            .filter(|p| p.owner_kind == owner_kind && p.owner_id == owner_id && p.direction == direction)
+            .cloned()
+            .collect()
+    }
+}
+
+/// The rows a saved version keeps as JSON.
+fn rows<T: serde::de::DeserializeOwned>(json: &str) -> Result<Vec<T>> {
+    serde_json::from_str(json).map_err(Error::from)
+}
+
+/// **Every placement of an action**, with the version each stands on, in automation order. Every
+/// placement of a built-in stands on the version its record is.
+fn placed_at(conn: &Connection, action: &AutomationAction) -> Result<Vec<PlacedAt>> {
+    let mut out = Vec::new();
+    for placement_id in read::automation_placement_ids_using_action(conn, action.id)? {
+        let Some(placement) = read::automation_placement(conn, placement_id)? else { continue };
+        let version = match action.builtin {
+            Some(_) => action.builtin_version,
+            None => placement.version,
+        };
+        out.push(PlacedAt { automation_id: placement.automation_id, placement_id, version });
+    }
+    out.sort_by_key(|p| (p.automation_id, p.placement_id));
+    Ok(out)
+}
+
+/// **Which version of its action a placement stands on, and the newest there is.** A built-in's comes
+/// off its record, and its newest is the one this build defines (`AMB-D-1000`).
+fn versions_of(
+    conn: &Connection,
+    placement: &AutomationPlacement,
+    action: Option<&AutomationAction>,
+) -> Result<(Option<i64>, Option<i64>)> {
+    if let Some(action) = action {
+        if let Some(key) = &action.builtin {
+            let latest = super::automation_builtin::find(key).map(|b| b.version);
+            return Ok((action.builtin_version, latest));
+        }
+    }
+    let latest = read::automation_action_version_latest(conn, placement.action_id)?.map(|v| v.version);
+    Ok((placement.version, latest))
+}
+
+/// One placement, with the action standing on it read in — as the version the placement stands on holds
+/// it ([`ActionDef::placed`]): the ways out it can be left by, what it takes in, what it is set to, and
+/// the steps inside it.
 fn placement_view(conn: &Connection, placement: AutomationPlacement) -> Result<PlacementView> {
     let action = read::automation_action(conn, placement.action_id)?;
-    let entry_step = match action.as_ref().and_then(|one| one.entry_step_id) {
-        Some(step_id) => read::automation_action_step(conn, step_id)?,
-        None => None,
-    };
-    let exits = exit_views(conn, AutomationOwner::Action, placement.action_id)?;
-    let inputs = ports_of(
-        conn,
-        AutomationPortOwner::Action,
-        placement.action_id,
-        AutomationPortDirection::In,
-    )?;
+    let def = ActionDef::placed(conn, &placement)?;
+    let entry_step = def.entry_step_id.and_then(|id| def.steps.iter().find(|s| s.id == id)).cloned();
+    let exits = def
+        .action_exits()
+        .into_iter()
+        .map(|exit| ExitView { outputs: def.outs_of(exit.id), exit })
+        .collect();
+    let inputs = def.action_inputs();
     // An action declares and the placement answers, and core is what puts the two rows back together —
     // the same pair the launch check reads, rather than a second reading of it.
-    let settings = super::automation_run::settings_of(conn, &placement)?;
+    let settings = super::automation_run::answered(conn, &placement, &def)?;
     let mut steps = Vec::new();
-    for step in read::automation_action_steps_of(conn, placement.action_id)? {
+    for step in def.steps {
         let chosen = read::automation_placement_step_for(conn, placement.id, step.id)?;
         steps.push(PlacementStepView { step, chosen });
     }
-    Ok(PlacementView { placement, action, entry_step, exits, inputs, settings, steps })
+    let (version, latest_version) = versions_of(conn, &placement, action.as_ref())?;
+    Ok(PlacementView {
+        placement,
+        action,
+        version,
+        latest_version,
+        entry_step,
+        exits,
+        inputs,
+        settings,
+        steps,
+    })
 }
 
 /// One step of an action, with its own declarations read in.
@@ -390,6 +656,188 @@ mod tests {
     use super::*;
     use crate::ops::automation::{action_add, add, NewAutomation};
     use crate::ops::test_support::{mk_project, with_tx};
+
+    /// **A placement is read as the version it stands on** — its steps, its ways out and what it takes
+    /// in — while the action itself is read as it is being written.
+    #[test]
+    fn a_placement_is_read_as_the_version_it_stands_on() {
+        use crate::model::AutomationPortKind;
+        use crate::ops::automation::{
+            action_from_prompt, action_version_add, exit_add, placement_add_by_hand, port_add, step_update,
+            NewStep,
+        };
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+            let action = action_from_prompt(tx, Some(project), NewStep::new("点検", "見る"), &[], &[]).unwrap();
+            action_version_add(tx, action.id).unwrap();
+            let placement = placement_add_by_hand(tx, automation.id, action.id).unwrap();
+            let step = action.entry_step_id.unwrap();
+            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None)
+                .unwrap();
+            exit_add(tx, AutomationOwner::Action, action.id, Some("直す")).unwrap();
+            let into = AutomationPortDirection::In;
+            port_add(tx, AutomationPortOwner::Action, action.id, into, "指摘", AutomationPortKind::Value, false)
+                .unwrap();
+
+            let view = detail(tx.conn(), automation.id).unwrap().unwrap();
+            let placed = view.placements.iter().find(|p| p.placement.id == placement.id).unwrap();
+            assert_eq!(placed.steps[0].step.prompt, "見る");
+            assert_eq!(placed.entry_step.as_ref().map(|s| s.prompt.as_str()), Some("見る"));
+            assert!(!placed.exits.iter().any(|x| x.exit.name == "直す"));
+            assert!(!placed.inputs.iter().any(|p| p.name == "指摘"));
+            let written = action_detail(tx.conn(), action.id).unwrap().unwrap();
+            assert_eq!(written.steps[0].step.prompt, "もう一度見る", "the action is read as it is written");
+            assert!(written.exits.iter().any(|x| x.exit.name == "直す"));
+        });
+    }
+
+    /// **A show names the version saved last and whether the draft holds more**, and each placement the
+    /// version it stands on beside the newest there is — a built-in's off its record and this build.
+    #[test]
+    fn a_show_names_the_saved_version_and_the_version_each_placement_stands_on() {
+        use crate::ops::automation::{placement_add, placement_version_set, version_add, action_version_add};
+        use crate::ops::test_support::mk_placed;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+            let take = crate::ops::automation_builtin::action(tx, "take_task").unwrap();
+            let entry = placement_add(tx, automation.id, take.id).unwrap();
+            let (action, placement) = mk_placed(tx, &automation, "点検", "見る", "claude");
+            action_version_add(tx, action.id).unwrap();
+
+            let view = detail(tx.conn(), automation.id).unwrap().unwrap();
+            assert_eq!(view.showing, Showing::Draft);
+            assert!(view.saved.is_none());
+            assert!(view.unsaved, "never saved");
+            let placed = |view: &AutomationView, id: i64| {
+                let one = view.placements.iter().find(|p| p.placement.id == id).unwrap();
+                (one.version, one.latest_version)
+            };
+            assert_eq!(placed(&view, placement.id), (None, Some(1)), "put down before the action was saved");
+            let built_in = crate::ops::automation_builtin::find("take_task").map(|b| b.version);
+            assert_eq!(placed(&view, entry.id), (take.builtin_version, built_in));
+
+            placement_version_set(tx, placement.id, 1).unwrap();
+            action_version_add(tx, action.id).unwrap();
+            version_add(tx, automation.id).unwrap();
+            let view = detail(tx.conn(), automation.id).unwrap().unwrap();
+            assert_eq!(placed(&view, placement.id), (Some(1), Some(2)));
+            assert_eq!(view.saved.as_ref().map(|v| v.version), Some(1));
+            assert!(!view.unsaved);
+        });
+    }
+
+    /// **`--saved` reads the newest saved version**: who carries a step out as it was saved, while the
+    /// draft reads what was chosen after. One nobody has saved is refused.
+    #[test]
+    fn the_saved_view_reads_the_placement_as_it_was_saved() {
+        use crate::ops::automation::{placement_step_set, version_add};
+        use crate::ops::test_support::mk_placed;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+            let (action, placement) = mk_placed(tx, &automation, "点検", "見る", "claude");
+            assert!(matches!(saved_detail(tx.conn(), automation.id), Err(Error::Conflict(_))));
+
+            version_add(tx, automation.id).unwrap();
+            placement_step_set(tx, placement.id, action.entry_step_id.unwrap(), "codex", None).unwrap();
+            let agent = |view: &AutomationView| {
+                let one = view.placements.iter().find(|p| p.placement.id == placement.id).unwrap();
+                one.steps[0].chosen.as_ref().map(|c| c.agent.clone())
+            };
+            let draft = detail(tx.conn(), automation.id).unwrap().unwrap();
+            assert_eq!(agent(&draft), Some("codex".to_string()));
+            let saved = saved_detail(tx.conn(), automation.id).unwrap().unwrap();
+            assert_eq!(saved.showing, Showing::Saved);
+            assert_eq!(agent(&saved), Some("claude".to_string()));
+            assert!(saved.unsaved, "the draft holds what was chosen after");
+            assert!(saved_detail(tx.conn(), automation.id + 1000).unwrap().is_none());
+        });
+    }
+
+    /// **An action's show reads its saved version, and where it is placed at which version.** A
+    /// built-in is never unsaved, and its saved view is its rows.
+    #[test]
+    fn an_action_show_reads_the_saved_version_and_where_it_is_placed() {
+        use crate::ops::automation::{action_from_prompt, action_version_add, step_update, NewStep};
+        use crate::ops::test_support::mk_placed;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+            let fresh = action_from_prompt(tx, Some(project), NewStep::new("直す", "直す"), &[], &[]).unwrap();
+            assert!(matches!(action_saved_detail(tx.conn(), fresh.id), Err(Error::Conflict(_))));
+
+            let (action, placement) = mk_placed(tx, &automation, "点検", "見る", "claude");
+            action_version_add(tx, action.id).unwrap();
+            let step = action.entry_step_id.unwrap();
+            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None)
+                .unwrap();
+
+            let draft = action_detail(tx.conn(), action.id).unwrap().unwrap();
+            assert_eq!(draft.steps[0].step.prompt, "もう一度見る");
+            assert_eq!(draft.saved.as_ref().map(|v| v.version), Some(1));
+            assert!(draft.unsaved);
+            let placed: Vec<_> =
+                draft.placed_at.iter().map(|p| (p.automation_id, p.placement_id, p.version)).collect();
+            assert_eq!(placed, vec![(automation.id, placement.id, None)]);
+
+            let saved = action_saved_detail(tx.conn(), action.id).unwrap().unwrap();
+            assert_eq!(saved.showing, Showing::Saved);
+            assert_eq!(saved.steps[0].step.prompt, "見る");
+            assert_eq!(saved.action.entry_step_id, Some(step));
+
+            let take = crate::ops::automation_builtin::action(tx, "take_task").unwrap();
+            let built_in = action_detail(tx.conn(), take.id).unwrap().unwrap();
+            assert!(built_in.saved.is_none() && !built_in.unsaved);
+            let built_in = action_saved_detail(tx.conn(), take.id).unwrap().unwrap();
+            assert_eq!(built_in.showing, Showing::Saved);
+        });
+    }
+
+    /// **A card says the version saved last and whether the draft holds more**, the way a show does —
+    /// and a built-in's says neither.
+    #[test]
+    fn a_card_names_the_saved_version_and_whether_the_draft_holds_more() {
+        use crate::ops::automation::{action_version_add, step_update, version_add};
+        use crate::ops::test_support::mk_placed;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+            let (action, _) = mk_placed(tx, &automation, "点検", "見る", "claude");
+            let take = crate::ops::automation_builtin::action(tx, "take_task").unwrap();
+
+            let card = |conn: &Connection| cards(conn, project).unwrap().remove(0);
+            let action_card = |conn: &Connection, id: i64| {
+                let all = action_cards(conn, Some(project)).unwrap();
+                all.into_iter().find(|c| c.action.id == id).unwrap()
+            };
+            let one = card(tx.conn());
+            assert!(one.saved.is_none() && one.unsaved, "never saved");
+            let one = action_card(tx.conn(), action.id);
+            assert!(one.saved.is_none() && one.unsaved, "never saved");
+
+            version_add(tx, automation.id).unwrap();
+            action_version_add(tx, action.id).unwrap();
+            let one = card(tx.conn());
+            assert_eq!(one.saved.map(|v| v.version), Some(1));
+            assert!(!one.unsaved);
+            let step = action.entry_step_id.unwrap();
+            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None)
+                .unwrap();
+            let one = action_card(tx.conn(), action.id);
+            assert_eq!(one.saved.map(|v| v.version), Some(1));
+            assert!(one.unsaved);
+
+            let built_in = action_card(tx.conn(), take.id);
+            assert!(built_in.saved.is_none() && !built_in.unsaved);
+        });
+    }
 
     fn names(cards: &[ProjectAutomationCard]) -> Vec<(String, String)> {
         cards

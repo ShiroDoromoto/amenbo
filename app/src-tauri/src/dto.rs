@@ -3320,6 +3320,13 @@ pub struct AutomationCardDto {
     #[ts(type = "number")]
     pub(crate) placements: usize,
     pub(crate) archived: bool,
+    /// The newest saved version. Absent for an automation nobody has saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved: Option<AutomationSavedDto>,
+    /// Does the draft hold anything the newest saved version does not? The row marks it, so a draft
+    /// left unsaved is noticed from the list.
+    pub(crate) unsaved: bool,
 }
 
 /// **One automation in the list that spans every project** — the row the sidebar's "automations"
@@ -3367,6 +3374,12 @@ pub struct AutomationActionCardDto {
     pub(crate) global: bool,
     #[ts(type = "number")]
     pub(crate) used_by: usize,
+    /// The newest saved version. Absent for an action nobody has saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved: Option<AutomationSavedDto>,
+    /// Does what is inside the action hold anything the newest saved version does not?
+    pub(crate) unsaved: bool,
 }
 
 /// **One library action in the list that spans every project** — the row the sidebar's "actions" tab
@@ -3454,6 +3467,25 @@ pub struct AutomationDetailDto {
     /// written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen
     /// names these, each with the way to its pane. Empty while nothing is going.
     pub(crate) held_by: Vec<AutomationRunCardDto>,
+    /// The newest saved version. Absent for an automation nobody has saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved: Option<AutomationSavedDto>,
+    /// Does what is written here hold anything the newest saved version does not?
+    pub(crate) unsaved: bool,
+    /// **Why a save would be refused** — the launch check asked the way the save asks it, without this
+    /// machine's agents and models ([`amenbo_core::ops::automation::save`]). Empty when it would pass.
+    pub(crate) save_blocks: Vec<AutomationLaunchBlockDto>,
+}
+
+/// **One saved version of an automation**: its number, and when it was saved.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationSavedDto {
+    #[ts(type = "number")]
+    pub(crate) version: i64,
+    pub(crate) saved_at: String,
 }
 
 /// **One spot on the picture**: the library action standing there, with everything it is read under
@@ -3484,6 +3516,17 @@ pub struct AutomationPlacementDto {
     /// with. Absent on every other spot.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) draft: bool,
+    /// **The version of the action this spot stands on** (`AMB-D-1000`) — a built-in's off its record.
+    /// Absent where it stands on none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) version: Option<i64>,
+    /// The newest version of that action there is — for a built-in, the one this build defines; for
+    /// another, its newest saved. Where it is above `version`, the spot stands on an older one, and
+    /// moving it is a person's or an AI's to do. Absent where there is none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) latest_version: Option<i64>,
     /// **The way out this spot never leaves by**, as its settings stand — a built-in that leaves by one
     /// of two ways out as a setting chooses, or that waits instead of leaving by one
     /// ([`amenbo_core::ops::automation_builtin::never_leaves_by`]). What it would hand on through that way
@@ -3588,6 +3631,15 @@ pub struct AutomationActionDetailDto {
     /// **The automations that place it**, each once, in id order — the ones `used_by` counts. Named
     /// rather than counted, so the panel shows where a rewrite here lands and goes to each of them.
     pub(crate) placed_on: Vec<AutomationPlacedOnDto>,
+    /// The newest saved version. Absent for an action nobody has saved, and for a built-in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved: Option<AutomationSavedDto>,
+    /// Does what is inside the action hold anything the newest saved version does not?
+    pub(crate) unsaved: bool,
+    /// **Why a save would be refused** — the action's own check, as the save asks it
+    /// ([`amenbo_core::ops::automation::action_save`]). Empty when it would pass.
+    pub(crate) save_blocks: Vec<AutomationLaunchBlockDto>,
 }
 
 /// **One automation an action is placed on**, with the project it is in — a global action stands on
@@ -3601,6 +3653,10 @@ pub struct AutomationPlacedOnDto {
     pub(crate) name: String,
     #[ts(type = "number")]
     pub(crate) project: i64,
+    /// **The versions of the action its placements stand on**, each once, oldest first — more than
+    /// one where it places the action more than once. Empty where none stands on a version.
+    #[ts(type = "number[]")]
+    pub(crate) versions: Vec<i64>,
 }
 
 /// **One step inside an action**: the terminal it stands up, and what it declares inside the picture.
@@ -3784,7 +3840,7 @@ pub struct AutomationTestRunDto {
     /// a real run would have been stopped, `running` where the walk was cut short (`cut`).
     #[ts(type = "\"running\" | \"paused\" | \"completed\" | \"failed\" | \"canceled\"")]
     pub(crate) status: &'static str,
-    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | null")]
+    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | \"failed_check\" | null")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) stopped_reason: Option<&'static str>,
@@ -4265,10 +4321,17 @@ pub struct AutomationRunCardDto {
     /// **Whether it stands before a built-in that is waiting** for something to turn up — still
     /// `running`, with nothing under way (`AMB-D-969`).
     pub(crate) waiting: bool,
-    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | null")]
+    #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | \"failed_check\" | null")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) stopped_reason: Option<&'static str>,
+    /// **The saved version of the automation its copy was taken from** (`AMB-D-1015`) — the newest
+    /// copy, which is what it goes on from and what it last took up at its entry. Absent where that
+    /// copy was taken from unsaved changes — a run every saved version is newer than — and on a run
+    /// that carries no copy of its entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) version: Option<i64>,
     /// The step it is on, or the last one it ran. Absent before the first step has opened.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

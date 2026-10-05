@@ -8,6 +8,9 @@
 //! decides where the run goes next. A second walker written for tests alone would be a second reading of
 //! the picture, and it would drift from the one that runs.
 //!
+//! **It tries the draft** ([`automation_run::ReadsFrom::Draft`]) — the automation as it is being written,
+//! saved or not — where a launch reads the saved definition.
+//!
 //! **What is stood in for is the work**: no agent is started, and no built-in is carried out — no task
 //! is filed, taken or closed, no worktree is cut or folded, nothing is fetched or merged. In their place
 //! every output of the way out a step leaves by is put down as a placeholder
@@ -38,7 +41,7 @@ use crate::model::{
 use crate::ops::automation_builtin_close;
 use crate::ops::automation_builtin_hand_back;
 use crate::ops::automation_report::{self, Next, Produced};
-use crate::ops::automation_run::{self, HandedAtLaunch, HandedTask, Launcher, Waiting};
+use crate::ops::automation_run::{self, HandedAtLaunch, HandedTask, Launcher, ReadsFrom, Waiting};
 use crate::ops::automation_step::{self, Opened};
 use crate::ops::task::{self, NewTask};
 use crate::store_engine::{read, WriteTx};
@@ -109,7 +112,7 @@ pub fn rehearse(
 ) -> Result<Rehearsal> {
     // No pane is opened, so whether the window is open is nobody's concern here.
     let by = Launcher { workspace_open: None, ..*by };
-    let run = automation_run::launch_handing(tx, automation_id, &by, handed)?;
+    let run = automation_run::launch_handing(tx, automation_id, &by, handed, ReadsFrom::Draft)?;
     let mut rehearsal = Rehearsal {
         steps: Vec::new(),
         status: run.status,

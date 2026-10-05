@@ -68,7 +68,7 @@ use crate::dto::{
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunStartedDto, AutomationRunTaskDto,
-    AutomationRunTrailDto, AutomationStepDto, AutomationStepScriptDto,
+    AutomationRunTrailDto, AutomationSavedDto, AutomationStepDto, AutomationStepScriptDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
@@ -95,6 +95,8 @@ pub fn automation_page(project_id: i64) -> Result<Vec<AutomationCardDto>, CmdErr
             notes: card.automation.notes,
             placements: card.placements,
             archived: card.automation.archived,
+            saved: card.saved.map(saved_dto),
+            unsaved: card.unsaved,
         })
         .collect())
 }
@@ -120,6 +122,8 @@ pub fn automation_page_everywhere() -> Result<Vec<EveryAutomationCardDto>, CmdEr
                 notes: one.card.automation.notes,
                 placements: one.card.placements,
                 archived: one.card.automation.archived,
+                saved: one.card.saved.map(saved_dto),
+                unsaved: one.card.unsaved,
             },
         })
         .collect())
@@ -229,6 +233,8 @@ pub fn automation_action_page(
             // inside one project would only ever read an id back as "mine" or "the device's".
             global: card.action.project_id.is_none(),
             used_by: card.used_by,
+            saved: card.saved.map(saved_dto),
+            unsaved: card.unsaved,
         });
     }
     Ok(out)
@@ -258,6 +264,8 @@ pub fn automation_action_page_everywhere() -> Result<Vec<EveryAutomationActionCa
                 steps: one.card.steps,
                 global: one.card.action.project_id.is_none(),
                 used_by: one.card.used_by,
+                saved: one.card.saved.map(saved_dto),
+                unsaved: one.card.unsaved,
             },
         })
         .collect())
@@ -434,14 +442,54 @@ pub fn automation_action_remove(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["automationActions"]))
 }
 
-/// **Save what is inside an action as its next version**
-/// ([`amenbo_core::ops::automation::action_save`]); the first save of an action made on the spot
-/// finishes its creation (`AMB-D-1005`). The pictures standing on it draw its mark and point at the
-/// version, so the ack moves the automations as well.
+/// **Save the automation as its next version** ([`amenbo_core::ops::automation::save`]). Refused with
+/// the reasons the build screen lists (`save_blocks`); not refused while a run of it goes on
+/// (`AMB-D-1015`).
+#[tauri::command]
+pub fn automation_save(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_save(id)?;
+        Ok(())
+    })?;
+    // A run of it standing at its entry takes the new version up on the watch's next look, so that
+    // look is taken now (`AMB-D-1015`).
+    crate::automation_watch::wake();
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Throw away what is written on the automation since its newest version**
+/// ([`amenbo_core::ops::automation::discard`]). Every row goes back under the id it was saved with
+/// (`AMB-D-961`); a placement only the draft held is gone.
+#[tauri::command]
+pub fn automation_discard(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_discard(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Save what is inside the action as its next version** ([`amenbo_core::ops::automation::action_save`]).
+/// Refused with the reasons the action build screen lists (`save_blocks`); not refused while a run of an
+/// automation placing it goes on (`AMB-D-1015`). The first save of an action made on the spot finishes
+/// its creation and points the placements standing on it at version 1 (`AMB-D-1005`). The automations
+/// placing it read which version each stands on, so their list is told too.
 #[tauri::command]
 pub fn automation_action_save(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.automation_action_save(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Throw away what is written inside the action since its newest version**
+/// ([`amenbo_core::ops::automation::action_discard`]). Every row goes back under the id it was saved
+/// with (`AMB-D-961`).
+#[tauri::command]
+pub fn automation_action_discard(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_action_discard(id)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -765,10 +813,28 @@ pub fn automation_action_detail(id: i64) -> Result<Option<AutomationActionDetail
     let mut placed_on = Vec::new();
     for automation_id in automation_view::automations_placing(conn, id)? {
         if let Some(one) = read::automation(conn, automation_id)? {
-            placed_on.push(AutomationPlacedOnDto { id: one.id, name: one.name, project: one.project_id });
+            // Each version once, oldest first: an automation may place the action more than once, each
+            // placement on a version of its own, and one that stands on none adds nothing.
+            let mut versions: Vec<i64> = view
+                .placed_at
+                .iter()
+                .filter(|p| p.automation_id == automation_id)
+                .filter_map(|p| p.version)
+                .collect();
+            versions.sort_unstable();
+            versions.dedup();
+            placed_on.push(AutomationPlacedOnDto {
+                id: one.id,
+                name: one.name,
+                project: one.project_id,
+                versions,
+            });
         }
     }
-    Ok(Some(action_detail_dto(view, held_by, placed_on)))
+    // Asked the way the save asks it (`amenbo_core::ops::automation::action_save`): only what the action
+    // answers for on its own.
+    let save_blocks = automation_run::check_action(conn, id)?;
+    Ok(Some(action_detail_dto(view, held_by, placed_on, &save_blocks)))
 }
 
 /// **Take one action off a picture**, with the answers written on it and every line naming it. The
@@ -1122,6 +1188,18 @@ pub fn automation_placement_step_set(
     Ok(WriteAck::new(&["automations"]))
 }
 
+/// **Move a placement onto another saved version of its action** (`AMB-D-1000`) — Amenbo never moves
+/// it by itself. A built-in's placement is refused
+/// ([`amenbo_core::ops::automation::placement_version_set`]).
+#[tauri::command]
+pub fn automation_placement_version_set(placement_id: i64, version: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_placement_version_set(placement_id, version)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
 /// **Put a library action in on a line** — the one road by which an action already on the shelf joins
 /// a picture already drawn. The way out that was pressed comes to point at the new placement, and the
 /// new placement goes on to where that way out used to reach.
@@ -1350,7 +1428,11 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
     let Some(view) = automation_view::detail(store.read_model().conn(), id)? else { return Ok(None) };
     let held_by =
         run_cards(&store, automation_view::run_ids_holding_automation(store.read_model().conn(), id)?)?;
-    Ok(Some(detail_dto(view, held_by)))
+    // Asked the way the save asks it (`amenbo_core::ops::automation::save`): without the agents and
+    // models of this machine, which are the launch's to judge and not the definition's.
+    let save_blocks =
+        automation_run::check(store.read_model().conn(), id, None, automation_run::nothing_asked())?;
+    Ok(Some(detail_dto(view, held_by, &save_blocks)))
 }
 
 /// Whether this automation could be started, and what is in the way — core's launch check, named for
@@ -1695,6 +1777,10 @@ fn run_card(
     let builtin = last_def.as_ref().and_then(|def| def.builtin.clone());
     let placement = last_def.as_ref().and_then(|def| def.placement_id);
     let step_name = last_def.map(|def| def.name);
+    // The version it goes on from: the newest copy of its entry, which a run back at its entry has
+    // taken afresh before its first step is opened (`take_up_newer`).
+    let version = amenbo_core::ops::automation_run::entry_def(conn, run.id)?
+        .and_then(|def| def.automation_version);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
     let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
     // The steps that owed the task their report and could not leave it, the task being closed.
@@ -1723,6 +1809,7 @@ fn run_card(
         waiting: run.status == amenbo_core::model::AutomationRunStatus::Running
             && amenbo_core::ops::automation_run::is_waiting(conn, run.id)?,
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
+        version,
         step_name,
         builtin,
         action_name,
@@ -2148,6 +2235,62 @@ fn standing_wait(app: &tauri::AppHandle, run_id: i64) -> Option<AutomationStepOp
     standing.get(&run_id).filter(|one| one.builtin.as_ref().is_some_and(|b| b.waiting)).cloned()
 }
 
+/// **Take up what has been saved since a run's copy was taken, before its entry is opened**
+/// (`AMB-D-1015`, [`automation_run::take_up_newer`]) — and answer the step to open now, or `None`
+/// where the newer version did not pass and the run failed.
+///
+/// **Asked of the store before it is written to.** The watch asks this of every run standing before a
+/// step on every look, and nearly always nothing has been saved since: the entry and the versions are
+/// read first, and the write is opened only where there is something newer to take up.
+///
+/// **The card a waiting run stood on is the old entry's**, so it is dropped: opening the new entry
+/// tells its own card, rather than handing back the old one ([`open_one`]). A run that failed is told
+/// with nothing to stand on, which takes its pane down.
+pub(crate) fn take_up_newer(
+    app: &tauri::AppHandle,
+    run_id: i64,
+    def: amenbo_core::model::AutomationRunDef,
+) -> Result<Option<amenbo_core::model::AutomationRunDef>, CmdError> {
+    if !def.entry {
+        return Ok(Some(def));
+    }
+    let newer = {
+        let store = open_store_read()?;
+        let conn = store.read_model().conn();
+        let Some(run) = read::automation_run(conn, run_id)? else { return Ok(Some(def)) };
+        read::automation_version_latest(conn, run.automation_id)?
+            .is_some_and(|saved| !matches!(def.automation_version, Some(copied) if copied >= saved.version))
+    };
+    if !newer {
+        return Ok(Some(def));
+    }
+    let mut store = crate::commands::open_store()?;
+    let startable = amenbo_core::wake::startable_ids(&store.config);
+    let offered = crate::agent_models::offered_here();
+    let taken = store.automation_take_up_newer(run_id, startable.as_deref(), &offered)?;
+    match taken {
+        automation_run::TakenUp::Same => Ok(Some(def)),
+        automation_run::TakenUp::Copied(entry) => {
+            log::info!("run {run_id} took up the newer saved version of its automation");
+            let standing = app.state::<StepsStanding>();
+            standing.0.lock().expect("steps standing lock").remove(&run_id);
+            Ok(Some(*entry))
+        }
+        automation_run::TakenUp::Failed(run) => {
+            log::info!("run {run_id} failed the check of the newer saved version of its automation");
+            tell(app, AutomationStepOpenDto {
+                run: run_id,
+                project: run.project_id,
+                step: None,
+                builtin: None,
+                session: None,
+                missing: Vec::new(),
+            });
+            Ok(None)
+        }
+    }
+}
+
 /// **A built-in about to be carried out**, as its pane is told before Amenbo starts on it — and which
 /// project's pane that is.
 ///
@@ -2360,8 +2503,10 @@ fn start_script(
 /// stopped with every process it started ([`still_running`]), core refuses the write, and only the log
 /// says so.
 ///
-/// Its terminal is ended by the next step, as an agent's is, and not here: it ending by itself is not a
-/// crash, since what it came to is written down here (`crate::pty::open_script`).
+/// Its terminal is left to the next step, as an agent's is, and not ended here: it ending by itself is
+/// not a crash, since what it came to is written down here (`crate::pty::open_script`). Once the program
+/// has ended the terminal stays for the run's pane to read what it wrote, until the next step takes it
+/// away (`crate::pty::end_steps_of`) — the run being over does not (`crate::pty::runs_with_steps`).
 ///
 /// Nothing here outlives the app: a step whose program was running when it went down is failed as a
 /// crash on the way back up (`crate::automation_watch`).
@@ -2542,6 +2687,7 @@ fn stop_if_going(
 fn detail_dto(
     view: automation_view::AutomationView,
     held_by: Vec<AutomationRunCardDto>,
+    save_blocks: &[Unmet],
 ) -> AutomationDetailDto {
     let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
@@ -2557,7 +2703,15 @@ fn detail_dto(
         wires,
         placements: view.placements.into_iter().map(placement_dto).collect(),
         held_by,
+        saved: view.saved.map(saved_dto),
+        unsaved: view.unsaved,
+        save_blocks: save_blocks.iter().map(block_dto).collect(),
     }
+}
+
+/// The newest saved version, as the build screen's head names it.
+fn saved_dto(saved: automation_view::SavedVersion) -> AutomationSavedDto {
+    AutomationSavedDto { version: saved.version, saved_at: saved.saved_at.to_rfc3339_z() }
 }
 
 /// One library action's whole definition, under the names the action build screen draws it by.
@@ -2565,6 +2719,7 @@ fn action_detail_dto(
     view: automation_view::ActionView,
     held_by: Vec<AutomationRunCardDto>,
     placed_on: Vec<AutomationPlacedOnDto>,
+    save_blocks: &[Unmet],
 ) -> AutomationActionDetailDto {
     let names = exit_names(view.steps.iter().flat_map(|s| s.exits.iter()).chain(view.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
@@ -2586,6 +2741,9 @@ fn action_detail_dto(
         settings: view.settings.into_iter().map(cfg_dto).collect(),
         held_by,
         placed_on,
+        saved: view.saved.map(saved_dto),
+        unsaved: view.unsaved,
+        save_blocks: save_blocks.iter().map(block_dto).collect(),
     }
 }
 
@@ -2682,6 +2840,8 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         global: action.as_ref().is_some_and(|one| one.project_id.is_none()),
         builtin: action.as_ref().and_then(|one| one.builtin.clone()),
         draft: action.as_ref().is_some_and(|one| one.draft),
+        version: view.version,
+        latest_version: view.latest_version,
         never_leaves_by: never_leaves_by.map(str::to_string),
         step_id: opens.as_ref().map(|s| s.id),
         prompt: opens.as_ref().map(|s| s.prompt.clone()).unwrap_or_default(),

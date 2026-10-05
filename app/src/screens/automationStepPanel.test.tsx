@@ -32,6 +32,7 @@ const hoisted = vi.hoisted(() => ({
   setWire: vi.fn(),
   clearWire: vi.fn(),
   replaceEntry: vi.fn(),
+  setVersion: vi.fn(),
   builtins: [] as AutomationBuiltinDto[],
   addEdge: vi.fn(),
   editEdge: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock("../core/automations", () => ({
   clearAutomationWire: hoisted.clearWire,
   ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
   replaceAutomationEntry: hoisted.replaceEntry,
+  setAutomationPlacementVersion: hoisted.setVersion,
   useAutomationBuiltins: () => hoisted.builtins,
   addAutomationEdge: hoisted.addEdge,
   editAutomationEdge: hoisted.editEdge,
@@ -120,6 +122,8 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     edges: [],
     wires: [],
     heldBy: [],
+    unsaved: false,
+    saveBlocks: [],
     ...over,
   };
 }
@@ -142,6 +146,8 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     settings: [],
     heldBy: [],
     placedOn: [],
+    unsaved: false,
+    saveBlocks: [],
     ...over,
   };
 }
@@ -201,7 +207,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   hoisted.action = action();
-  for (const one of [hoisted.answerCfg, hoisted.setWire, hoisted.clearWire, hoisted.replaceEntry,
+  for (const one of [hoisted.answerCfg, hoisted.setWire, hoisted.clearWire, hoisted.replaceEntry, hoisted.setVersion,
     hoisted.addEdge, hoisted.editEdge, hoisted.removeEdge, hoisted.removePlacement]) one.mockReset();
 });
 
@@ -289,6 +295,31 @@ describe("the panel of one spot", () => {
     )!;
     await act(async () => press.click());
     expect(opened).toHaveBeenCalledWith(4);
+  });
+
+  it("says the version the spot stands on and the newest, and moves it onto the newest", async () => {
+    await render({ automation: detail({ placements: [spot({ version: 2, latestVersion: 3 })] }), placementId: 1 });
+    const card = container.querySelector(".autoplace__action")!;
+    expect(card.textContent).toContain(tf("auto.place.version", { version: 2 }));
+    expect(card.textContent).toContain(tf("auto.place.versionNewest", { version: 3 }));
+    const press = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (one) => one.textContent === tf("auto.place.versionSet", { version: 3 }),
+    )!;
+    await act(async () => press.click());
+    expect(hoisted.setVersion).toHaveBeenCalledWith(1, 3);
+  });
+
+  it("offers no move to a spot on the newest version, nor to a built-in", async () => {
+    const pressFor = () =>
+      [...container.querySelectorAll("button")].find((one) => one.textContent === tf("auto.place.versionSet", { version: 3 }));
+    await render({ automation: detail({ placements: [spot({ version: 3, latestVersion: 3 })] }), placementId: 1 });
+    expect(container.querySelector(".autoplace__action")!.textContent).toContain(t("auto.place.versionLatest"));
+    expect(pressFor()).toBeUndefined();
+    await render({
+      automation: detail({ placements: [spot({ builtin: "take_task", version: 2, latestVersion: 3 })] }),
+      placementId: 1,
+    });
+    expect(pressFor()).toBeUndefined();
   });
 
   it("says an action with nothing in it cannot be started until it is built", async () => {

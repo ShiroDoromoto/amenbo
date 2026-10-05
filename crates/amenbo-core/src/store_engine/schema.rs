@@ -1348,7 +1348,7 @@ datasets! {
         pause_requested: bool_col,
         pause_before_next_task: bool_col,
         pause_kind: enum_opt("end_of_action", "before_next_task"),
-        stopped_reason: enum_opt("crashed", "max_times", "no_agent", "no_input", "no_way_on", "halted", "left_task_open"),
+        stopped_reason: enum_opt("crashed", "max_times", "no_agent", "no_input", "no_way_on", "halted", "left_task_open", "failed_check"),
         started_by_kind: actor_kind,
         started_at: ts_opt,
         ended_at: ts_opt,
@@ -1359,6 +1359,9 @@ datasets! {
         // Who said they had seen the failure, a person or their AI (`AMB-D-989`). Set with
         // `acknowledged_at` and only then.
         acknowledged_by_kind: actor_kind,
+        // What a run failed with `failed_check` did not pass, as the refusal said it. Set with that
+        // reason and only then.
+        stopped_detail: col(OPT),
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is

@@ -41,6 +41,8 @@ given:
 steps_cli:
   # A run's steps are opened by the app, so a run is started with one up on the store.
   - { type: action, domain: store, op: app-up }
+  # A run starts from the newest saved version, so it is saved first.
+  - { type: action, domain: automation, op: save, with: { target: auto } }
 
   - type: action
     domain: automation

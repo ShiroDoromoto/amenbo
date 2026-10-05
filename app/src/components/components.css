@@ -1406,6 +1406,7 @@ button.feed__target:hover { color: var(--c-accent); }
    under way rather than missing something. */
 .autopic__node--draft { border-color: var(--c-accent); border-style: dashed; }
 .autopic__draftmark { flex: none; font-size: var(--fs-xs); color: var(--c-accent); }
+.autopic__behindmark { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autopic__formark { flex: none; font-size: var(--fs-xs); color: var(--c-accent-text); background: var(--c-accent-weak); border-radius: var(--r-sm); padding: 0 var(--s-1); }
 .autopic__node--on { background: var(--c-accent-faint); border-color: var(--c-accent); }
 /* Two lines: the number and the name, and under them where the action comes from — or what it is
@@ -1814,6 +1815,7 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .actplaced__one--go { cursor: pointer; }
 .actplaced__one--go:hover { border-color: var(--c-accent); }
+.actplaced__ver { color: var(--c-text-faint); }
 
 /* ── The library of actions (`../screens/AutomationActionsTab`) ── */
 /* A place is named by a small caps word over it, the way the build screen names its three. */
@@ -1931,10 +1933,10 @@ button.feed__target:hover { color: var(--c-accent); }
   border-block-end: var(--border-w) var(--border-style) var(--c-rule);
 }
 .actbuild__name { font-size: var(--fs-md); font-weight: var(--fw-bold); }
-/* A panel open beside the screen narrows the head, and the one over an automation carries a longer
-   back and a press more. Its presses keep their words on one line and their places, and what gives
-   way is what is read — the name, which the reader opened the screen by, and the line saying when it
-   was saved — each cut short rather than broken inside a press or pushing one out. */
+/* A panel open beside the screen narrows the head. Its presses keep their words on one line and their
+   places, and what gives way is what is read — the name, which the reader opened the screen by, and
+   the line saying when it was saved — each cut short rather than broken inside a press or pushing one
+   out. A head with more presses goes further and sends them to a second line (below). */
 .actbuild__head > * { flex: none; white-space: nowrap; }
 .actbuild__head > .actbuild__name,
 .actbuild__head > .actsaved { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -2065,13 +2067,16 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ── One automation, opened (`../screens/AutomationBuildScreen`) ──
    The action build screen's frame (`.actbuild`). "Edit" and the start press stand at the far end of
    the head, and what keeps the press from being pressed is listed under the head. */
-.actbuild__edit { margin-inline-start: auto; }
-/* Whether the last write was saved, at the far end of a build screen's head, before "Edit"
-   (`../screens/AutomationSaved`). It takes the far end's space, so "Edit" stands right after it. */
+/* What is saved, on a build screen's head (`../screens/AutomationSaved`). */
 .actsaved { margin-inline-start: auto; font-size: var(--fs-xs); color: var(--c-text-muted); }
-.actsaved + .actbuild__edit { margin-inline-start: 0; }
 .actsaved--failed { color: var(--c-stop); font-weight: var(--fw-bold); }
-/* "Saved" beside the field a write came from, for two seconds. It stands over the page, not in the
+/* An automation's head, and an action's, carry more presses than a panel beside them leaves room for.
+   They stand together at the far end and go down to a second line as one, so the name and the saved
+   state beside it stay whole on the first. */
+.actbuild__head--wraps { flex-wrap: wrap; }
+.actbuild__head--wraps > .actsaved { margin-inline-start: 0; }
+.actbuild__presses { display: flex; align-items: center; gap: var(--s-2); margin-inline-start: auto; }
+/* "Written" beside the field a write came from, for two seconds. It stands over the page, not in the
    field's row, so its coming and going moves nothing. */
 .actsaved__mark {
   position: fixed; z-index: 50; transform: translateY(-50%); pointer-events: none; white-space: nowrap;
@@ -2079,6 +2084,13 @@ button.feed__target:hover { color: var(--c-accent); }
   color: var(--c-accent); background: var(--c-accent-weak);
 }
 .actsaved__mark--inside { transform: translate(-100%, -50%); }
+/* The saved state on a list row, after the name: the version saved last, and "Unsaved" where the draft
+   holds more, in the heed colour — a draft left unsaved does not launch. */
+.savedmark {
+  display: inline-flex; gap: var(--s-1); margin-inline-start: var(--s-2); white-space: nowrap;
+  font-size: var(--fs-xs); font-weight: var(--fw-normal); color: var(--c-text-muted);
+}
+.savedmark__unsaved { color: var(--c-heed); font-weight: var(--fw-bold); }
 /* Which action stands on the pressed spot, as one card at the head of its panel: a mark, the name with
    its reach and how many automations use it, and the one press — to where it is built — at the far
    end. Nothing on it takes a value, which is what says it is not changed here. */
@@ -2095,6 +2107,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoplace__actionname { font-size: var(--fs-md); font-weight: var(--fw-bold); overflow-wrap: anywhere; }
 .autoplace__empty { font-size: var(--fs-xs); color: var(--c-heed); font-weight: var(--fw-bold); }
 .autoplace__meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autoplace__version { display: flex; font-size: var(--fs-md); }
 .autoplace__open {
   flex: none; margin-inline-start: auto; padding: 0; border: 0; background: none; cursor: pointer;
   font: inherit; font-size: var(--fs-md); color: var(--c-accent-text); white-space: nowrap;
@@ -2119,6 +2132,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoheld__step { margin-inline-start: var(--s-2); color: var(--c-text-muted); }
 .autoheld__step::before { content: "("; }
 .autoheld__step::after { content: ")"; }
+.autoheld__version { margin-inline-start: var(--s-2); color: var(--c-text-muted); }
+.autoheld__next { margin-inline-start: var(--s-2); font-weight: var(--fw-bold); }
 /* The placement panel's writes, under the card that goes to the action. */
 .autostep__writes { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
 .autolaunch {
@@ -2142,6 +2157,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autolaunch__go::after { content: " → " attr(data-see); color: var(--c-accent-text); }
 .autolaunch__go:hover, .autolaunch__go:focus-visible { text-decoration: underline; }
 .autolaunch__refused { font-size: var(--fs-md); color: var(--c-stop); }
+/* What the save's reasons are listed under, apart from the start's below them. */
+.autolaunch__head { font-size: var(--fs-md); font-weight: 700; color: var(--c-stop); }
 /* A test run stepped through in the build screen's panel (`../screens/AutomationTestPane`): where it
    stands, the step it stands on, and the prompt an agent would get, in a box of its own that scrolls. */
 .autotest { display: flex; flex-direction: column; gap: var(--s-2); }

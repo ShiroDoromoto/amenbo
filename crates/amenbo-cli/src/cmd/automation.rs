@@ -17,8 +17,8 @@
 use serde_json::{json, Value};
 
 use amenbo_core::model::{
-    AutomationCfgKind, AutomationOwner, AutomationPortDirection, AutomationPortKind,
-    DEFAULT_MAX_TIMES,
+    AutomationCfgKind, AutomationCfgOwner, AutomationOwner, AutomationPortDirection, AutomationPortKind,
+    AutomationPortOwner, DEFAULT_MAX_TIMES,
 };
 use amenbo_core::model::{
     AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunTask, AutomationRunValue,
@@ -30,7 +30,10 @@ use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewScr
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{HandedAtLaunch, HandedFile, Launcher};
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
-use amenbo_core::ops::automation_view::{ActionView, AutomationView, PlacementView, StepView};
+use amenbo_core::ops::automation_view::{
+    ActionView, AutomationView, PlacementView, SavedVersion, Showing, StepView,
+};
+use amenbo_core::store_engine::read;
 use amenbo_core::time::Timestamp;
 use amenbo_core::Store;
 
@@ -39,7 +42,7 @@ use crate::cmd::arg::{body_arg, body_arg_opt};
 use crate::cmd::labels::task_label;
 use crate::cmd::place::project_or_bound;
 use crate::cmd::task::resolve_task;
-use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
+use crate::output::{confirm, human, print_json, write_envelope, write_envelope_with, CliError, Flags};
 
 /// Where an edge or a wire leaves from, as one token: `<box>:<way out>`. `4` and `4:` are both the
 /// done way out, `4:*` the error one.
@@ -68,6 +71,124 @@ fn picture(in_action: bool) -> AutomationPictureOwner {
     match in_action {
         true => AutomationPictureOwner::Action,
         false => AutomationPictureOwner::Automation,
+    }
+}
+
+/// **Whose draft a rewrite went into.** A rewrite of a definition lands in its draft, and a launch uses
+/// only what is saved — so every rewrite says which draft it touched and the command that saves it.
+#[derive(Clone, Copy)]
+enum Draft {
+    Automation(i64),
+    Action(i64),
+}
+
+impl Draft {
+    fn save_command(self) -> String {
+        match self {
+            Draft::Automation(id) => format!("amenbo automation save {id}"),
+            Draft::Action(id) => format!("amenbo automation action-save {id}"),
+        }
+    }
+
+    fn json(self) -> Value {
+        let (kind, id) = match self {
+            Draft::Automation(id) => ("automation", id),
+            Draft::Action(id) => ("action", id),
+        };
+        json!({ "kind": kind, "id": id, "save": self.save_command() })
+    }
+
+    fn line(self) -> String {
+        let whose = match self {
+            Draft::Automation(id) => format!("automation {id}"),
+            Draft::Action(id) => format!("action {id}"),
+        };
+        format!("  in the unsaved draft of {whose} — a launch uses only what is saved: `{}`", self.save_command())
+    }
+
+    fn of_picture(owner_kind: AutomationPictureOwner, owner_id: i64) -> Draft {
+        match owner_kind {
+            AutomationPictureOwner::Automation => Draft::Automation(owner_id),
+            AutomationPictureOwner::Action => Draft::Action(owner_id),
+        }
+    }
+
+    // The lookups below read the rows as they stand, past the reach check: what they find is printed only
+    // after the rewrite itself has passed it. A row that is not there leaves the line off, and the
+    // rewrite answers `not_found` on its own.
+
+    fn of_placement(store: &Store, id: i64) -> Option<Draft> {
+        let p = read::automation_placement(store.read_model().conn(), id).ok().flatten()?;
+        Some(Draft::Automation(p.automation_id))
+    }
+
+    fn of_step(store: &Store, id: i64) -> Option<Draft> {
+        let s = read::automation_action_step(store.read_model().conn(), id).ok().flatten()?;
+        Some(Draft::Action(s.action_id))
+    }
+
+    fn of_declarer(store: &Store, owner_kind: AutomationOwner, owner_id: i64) -> Option<Draft> {
+        match owner_kind {
+            AutomationOwner::Step => Draft::of_step(store, owner_id),
+            AutomationOwner::Action => Some(Draft::Action(owner_id)),
+        }
+    }
+
+    fn of_exit(store: &Store, id: i64) -> Option<Draft> {
+        let e = read::automation_exit(store.read_model().conn(), id).ok().flatten()?;
+        Draft::of_declarer(store, e.owner_kind, e.owner_id)
+    }
+
+    fn of_port_owner(store: &Store, owner_kind: AutomationPortOwner, owner_id: i64) -> Option<Draft> {
+        match owner_kind.declarer() {
+            Some(declarer) => Draft::of_declarer(store, declarer, owner_id),
+            None => Draft::of_exit(store, owner_id),
+        }
+    }
+
+    fn of_port(store: &Store, id: i64) -> Option<Draft> {
+        let p = read::automation_port(store.read_model().conn(), id).ok().flatten()?;
+        Draft::of_port_owner(store, p.owner_kind, p.owner_id)
+    }
+
+    fn of_cfg_owner(store: &Store, owner_kind: AutomationCfgOwner, owner_id: i64) -> Option<Draft> {
+        match owner_kind {
+            AutomationCfgOwner::Action => Some(Draft::Action(owner_id)),
+            AutomationCfgOwner::Placement => Draft::of_placement(store, owner_id),
+        }
+    }
+
+    fn of_cfg(store: &Store, id: i64) -> Option<Draft> {
+        let c = read::automation_cfg(store.read_model().conn(), id).ok().flatten()?;
+        Draft::of_cfg_owner(store, c.owner_kind, c.owner_id)
+    }
+
+    fn of_edge(store: &Store, id: i64) -> Option<Draft> {
+        let e = read::automation_edge(store.read_model().conn(), id).ok().flatten()?;
+        Some(Draft::of_picture(e.owner_kind, e.owner_id))
+    }
+
+    fn of_wire(store: &Store, id: i64) -> Option<Draft> {
+        let w = read::automation_wire(store.read_model().conn(), id).ok().flatten()?;
+        Some(Draft::of_picture(w.owner_kind, w.owner_id))
+    }
+}
+
+/// [`write_envelope`] for a rewrite of a definition: the envelope, then whose draft it went into — a
+/// `draft` key in the JSON, a second line for a person.
+fn write_draft(
+    flags: &Flags,
+    action: &str,
+    resource_key: &str,
+    resource: Value,
+    changed: Option<Vec<String>>,
+    human_line: impl AsRef<str>,
+    draft: Option<Draft>,
+) {
+    let extra: Vec<(&str, Value)> = draft.map(|d| ("draft", d.json())).into_iter().collect();
+    write_envelope_with(flags, action, resource_key, resource, changed, false, human_line, &extra);
+    if let (false, Some(d)) = (flags.json, draft) {
+        human(flags, d.line());
     }
 }
 
@@ -197,7 +318,7 @@ fn cfg_value(o: &CfgAnswer) -> Result<Option<Value>, CliError> {
         map.insert(k.to_string(), json!(v));
     }
     if let Some(sort) = &o.sort {
-        if !amenbo_core::store_engine::read::is_task_sort(sort) {
+        if !read::is_task_sort(sort) {
             return Err(CliError {
                 code: "invalid_value",
                 message: format!("'{sort}' is not an order `task list --sort` takes."),
@@ -268,8 +389,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
             }
         }
-        AutomationCmd::Show { id } => {
-            let view = store.automation_detail(id).map_err(CliError::from)?.ok_or_else(|| {
+        AutomationCmd::Show { id, saved } => {
+            let view = if saved { store.automation_saved_detail(id) } else { store.automation_detail(id) };
+            let view = view.map_err(CliError::from)?.ok_or_else(|| {
                 CliError::from(amenbo_core::Error::not_found(format!(
                     "automation '{id}' not found"
                 )))
@@ -297,7 +419,33 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         AutomationCmd::EntryReplace { id, builtin } => {
             let p = store.automation_entry_replace(id, &builtin).map_err(CliError::from)?;
             let line = format!("✓ Automation {id} starts at the built-in '{builtin}' (placement {})", p.id);
-            write_envelope(flags, "automation.entry-replace", "automation_placement", serde_json::to_value(&p).unwrap(), Some(vec!["action_id".to_string()]), false, line);
+            write_draft(flags, "automation.entry-replace", "automation_placement", serde_json::to_value(&p).unwrap(), Some(vec!["action_id".to_string()]), line, Some(Draft::Automation(p.automation_id)));
+        }
+        AutomationCmd::Save { id } => {
+            // Core hands the newest version straight back when nothing was written since it, so whether
+            // this call saved anything is asked before it.
+            let unsaved = store.automation_unsaved(id).map_err(CliError::from)?;
+            let v = store.automation_save(id).map_err(CliError::from)?;
+            let line = match unsaved {
+                true => format!("✓ Saved automation {id} as version {}", v.version),
+                false => format!("✓ Automation {id} has nothing unsaved — version {} stands", v.version),
+            };
+            let resource = json!({ "id": v.id, "automation_id": v.automation_id, "version": v.version });
+            write_envelope(flags, "automation.save", "automation_version", resource, None, !unsaved, line);
+        }
+        AutomationCmd::Discard { id } => {
+            if !confirm(flags, "throw away what is unsaved on automation")? {
+                return Ok(0);
+            }
+            // Asked before, for the reason `save` asks it.
+            let unsaved = store.automation_unsaved(id).map_err(CliError::from)?;
+            let v = store.automation_discard(id).map_err(CliError::from)?;
+            let line = match unsaved {
+                true => format!("✓ Put automation {id} back to version {}", v.version),
+                false => format!("✓ Automation {id} has nothing unsaved — version {} stands", v.version),
+            };
+            let resource = json!({ "id": v.id, "automation_id": v.automation_id, "version": v.version });
+            write_envelope(flags, "automation.discard", "automation_version", resource, None, !unsaved, line);
         }
         AutomationCmd::PlaceAdd { automation, action, builtin, axis } => {
             // clap holds exactly one of the two: `--action` is required unless `--builtin` is given.
@@ -322,14 +470,20 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
                 (None, None) => unreachable!("clap requires --action or --builtin"),
             };
-            write_envelope(flags, "automation.place-add", "automation_placement", serde_json::to_value(&p).unwrap(), None, false, format!("✓ Placed {what} on automation {automation} ({})", p.id));
+            write_draft(flags, "automation.place-add", "automation_placement", serde_json::to_value(&p).unwrap(), None, format!("✓ Placed {what} on automation {automation} ({})", p.id), Some(Draft::Automation(p.automation_id)));
         }
         AutomationCmd::PlaceRm { id } => {
             if !confirm(flags, "take placement off")? {
                 return Ok(0);
             }
+            let draft = Draft::of_placement(store, id);
             store.automation_placement_delete(id).map_err(CliError::from)?;
-            write_envelope(flags, "automation.place-rm", "automation_placement", json!({ "id": id, "deleted": true }), None, false, format!("✓ Took placement off: {id}"));
+            write_draft(flags, "automation.place-rm", "automation_placement", json!({ "id": id, "deleted": true }), None, format!("✓ Took placement off: {id}"), draft);
+        }
+        AutomationCmd::PlaceVersion { placement, version } => {
+            let p = store.automation_placement_version_set(placement, version).map_err(CliError::from)?;
+            let line = format!("✓ Placement {} stands on version {version} of action {}", p.id, p.action_id);
+            write_draft(flags, "automation.place-version", "automation_placement", serde_json::to_value(&p).unwrap(), Some(vec!["version".to_string()]), line, Some(Draft::Automation(p.automation_id)));
         }
 
         AutomationCmd::ActionAdd { project, global, name, note } => {
@@ -378,8 +532,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
             }
         }
-        AutomationCmd::ActionShow { id } => {
-            let view = store.automation_action_detail(id).map_err(CliError::from)?.ok_or_else(|| {
+        AutomationCmd::ActionShow { id, saved } => {
+            let view = if saved {
+                store.automation_action_saved_detail(id)
+            } else {
+                store.automation_action_detail(id)
+            };
+            let view = view.map_err(CliError::from)?.ok_or_else(|| {
                 CliError::from(amenbo_core::Error::not_found(format!("action '{id}' not found")))
             })?;
             if flags.json {
@@ -422,7 +581,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 Some(s) => format!("✓ Action {} opens step {s} first", a.id),
                 None => format!("✓ Action {} opens nothing", a.id),
             };
-            write_envelope(flags, "automation.action-entry-set", "automation_action", serde_json::to_value(&a).unwrap(), Some(vec!["entry_step_id".to_string()]), false, line);
+            write_draft(flags, "automation.action-entry-set", "automation_action", serde_json::to_value(&a).unwrap(), Some(vec!["entry_step_id".to_string()]), line, Some(Draft::Action(a.id)));
         }
         AutomationCmd::ActionScopeSet { id, project, global } => {
             // The same two shelves `action-add` puts an action on, read the same way. Core declares
@@ -446,8 +605,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             write_envelope(flags, "automation.action-rm", "automation_action", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted action: {id}"));
         }
         AutomationCmd::ActionSave { id } => {
-            // Core hands the newest version back without writing when nothing changed since it, and
-            // still finishes an action being created on it, so both are asked before the call.
+            // Asked before, for the reason `save` asks it — and whether it is still being created, since
+            // core finishes that on the newest version even with nothing to save.
             let saved = store.automation_action_unsaved(id).map_err(CliError::from)?;
             let was_draft = store
                 .automation_action_detail(id)
@@ -458,9 +617,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (true, true) => format!("✓ Saved action {id} as version {} and finished creating it", v.version),
                 (true, false) => format!("✓ Saved action {id} as version {}", v.version),
                 (false, true) => format!("✓ Finished creating action {id} on version {}", v.version),
-                (false, false) => format!("✓ Action {id} has nothing new since version {} — nothing to save", v.version),
+                (false, false) => format!("✓ Action {id} has nothing unsaved — version {} stands", v.version),
             };
-            write_envelope(flags, "automation.action-save", "automation_action_version", serde_json::to_value(&v).unwrap(), None, !saved && !was_draft, line);
+            let resource = json!({ "id": v.id, "action_id": v.action_id, "version": v.version });
+            write_envelope(flags, "automation.action-save", "automation_action_version", resource, None, !saved && !was_draft, line);
         }
         AutomationCmd::ActionAbandon { id } => {
             if !confirm(flags, "give up this action and the placements standing on it")? {
@@ -468,6 +628,20 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             store.automation_action_abandon(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.action-abandon", "automation_action", json!({ "id": id, "abandoned": true }), None, false, format!("✓ Gave up action: {id}"));
+        }
+        AutomationCmd::ActionDiscard { id } => {
+            if !confirm(flags, "throw away what is unsaved in action")? {
+                return Ok(0);
+            }
+            // Asked before, for the reason `save` asks it.
+            let unsaved = store.automation_action_unsaved(id).map_err(CliError::from)?;
+            let v = store.automation_action_discard(id).map_err(CliError::from)?;
+            let line = match unsaved {
+                true => format!("✓ Put action {id} back to version {}", v.version),
+                false => format!("✓ Action {id} has nothing unsaved — version {} stands", v.version),
+            };
+            let resource = json!({ "id": v.id, "action_id": v.action_id, "version": v.version });
+            write_envelope(flags, "automation.action-discard", "automation_action_version", resource, None, !unsaved, line);
         }
         AutomationCmd::StepAdd { action, name, prompt, program, args, timeout_minutes, interactive, work_dir, report_to_task, no_history, no_task_notes, no_task_decisions, no_task_comments } => {
             // A script step runs its program, not a prompt, so it may be written without one.
@@ -488,7 +662,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 script: program.map(|program| NewScript { program, args, timeout_minutes }),
             };
             let s = store.automation_step_add(action, new).map_err(CliError::from)?;
-            write_envelope(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Added step: {} ({})", s.name, s.id));
+            write_draft(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, format!("✓ Added step: {} ({})", s.name, s.id), Some(Draft::Action(s.action_id)));
         }
         AutomationCmd::StepUpdate { id, name, prompt, interactive, work_dir, clear_work_dir, report_to_task, history, task_notes, task_decisions, task_comments, program, args, timeout_minutes, clear_script } => {
             let prompt = body_arg_opt(prompt)?;
@@ -504,30 +678,32 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let s = store
                 .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history, task_notes, task_decisions, task_comments, script)
                 .map_err(CliError::from)?;
-            write_envelope(flags, "automation.step-update", "automation_step", serde_json::to_value(&s).unwrap(), None, false, format!("✓ Updated step: {} ({})", s.name, s.id));
+            write_draft(flags, "automation.step-update", "automation_step", serde_json::to_value(&s).unwrap(), None, format!("✓ Updated step: {} ({})", s.name, s.id), Some(Draft::Action(s.action_id)));
         }
         AutomationCmd::StepRm { id } => {
             if !confirm(flags, "delete step")? {
                 return Ok(0);
             }
+            let draft = Draft::of_step(store, id);
             store.automation_step_delete(id).map_err(CliError::from)?;
-            write_envelope(flags, "automation.step-rm", "automation_step", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted step: {id}"));
+            write_draft(flags, "automation.step-rm", "automation_step", json!({ "id": id, "deleted": true }), None, format!("✓ Deleted step: {id}"), draft);
         }
         AutomationCmd::ExitAdd { step, action, name } => {
             let (owner_kind, owner_id) = declarer_from_flags(step, action)?;
             let e = store.automation_exit_add(owner_kind, owner_id, Some(&name)).map_err(CliError::from)?;
-            write_envelope(flags, "automation.exit-add", "automation_exit", serde_json::to_value(&e).unwrap(), None, false, format!("✓ Added way out: {} ({})", name, e.id));
+            write_draft(flags, "automation.exit-add", "automation_exit", serde_json::to_value(&e).unwrap(), None, format!("✓ Added way out: {} ({})", name, e.id), Draft::of_declarer(store, e.owner_kind, e.owner_id));
         }
         AutomationCmd::ExitRename { id, name } => {
             let e = store.automation_exit_rename(id, Some(&name)).map_err(CliError::from)?;
-            write_envelope(flags, "automation.exit-rename", "automation_exit", serde_json::to_value(&e).unwrap(), Some(vec!["name".to_string()]), false, format!("✓ Renamed way out: {name} ({})", e.id));
+            write_draft(flags, "automation.exit-rename", "automation_exit", serde_json::to_value(&e).unwrap(), Some(vec!["name".to_string()]), format!("✓ Renamed way out: {name} ({})", e.id), Draft::of_declarer(store, e.owner_kind, e.owner_id));
         }
         AutomationCmd::ExitRm { id } => {
             if !confirm(flags, "delete way out")? {
                 return Ok(0);
             }
+            let draft = Draft::of_exit(store, id);
             store.automation_exit_delete(id).map_err(CliError::from)?;
-            write_envelope(flags, "automation.exit-rm", "automation_exit", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted way out: {id}"));
+            write_draft(flags, "automation.exit-rm", "automation_exit", json!({ "id": id, "deleted": true }), None, format!("✓ Deleted way out: {id}"), draft);
         }
         AutomationCmd::PortAdd { step, action, exit, name, kind, required } => {
             let kind = parse_port_kind(&kind)?;
@@ -535,9 +711,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             // or the action that reads it, an output to the way out that produced it, and neither is
             // sayable on the other's.
             let (owner_kind, owner_id, direction) = match (step, action, exit) {
-                (Some(id), None, None) => (amenbo_core::model::AutomationPortOwner::Step, id, AutomationPortDirection::In),
-                (None, Some(id), None) => (amenbo_core::model::AutomationPortOwner::Action, id, AutomationPortDirection::In),
-                (None, None, Some(id)) => (amenbo_core::model::AutomationPortOwner::Exit, id, AutomationPortDirection::Out),
+                (Some(id), None, None) => (AutomationPortOwner::Step, id, AutomationPortDirection::In),
+                (None, Some(id), None) => (AutomationPortOwner::Action, id, AutomationPortDirection::In),
+                (None, None, Some(id)) => (AutomationPortOwner::Exit, id, AutomationPortDirection::Out),
                 _ => {
                     return Err(CliError {
                         code: "invalid_value",
@@ -550,26 +726,27 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let p = store
                 .automation_port_add(owner_kind, owner_id, direction, &name, kind, required)
                 .map_err(CliError::from)?;
-            write_envelope(flags, "automation.port-add", "automation_port", serde_json::to_value(&p).unwrap(), None, false, format!("✓ Added {} port: {} ({})", direction.as_str(), p.name, p.id));
+            write_draft(flags, "automation.port-add", "automation_port", serde_json::to_value(&p).unwrap(), None, format!("✓ Added {} port: {} ({})", direction.as_str(), p.name, p.id), Draft::of_port_owner(store, p.owner_kind, p.owner_id));
         }
         AutomationCmd::PortUpdate { id, name, kind, required } => {
             let kind = kind.as_deref().map(parse_port_kind).transpose()?;
             let p = store.automation_port_update(id, name.as_deref(), kind, required).map_err(CliError::from)?;
-            write_envelope(flags, "automation.port-update", "automation_port", serde_json::to_value(&p).unwrap(), None, false, format!("✓ Updated port: {} ({})", p.name, p.id));
+            write_draft(flags, "automation.port-update", "automation_port", serde_json::to_value(&p).unwrap(), None, format!("✓ Updated port: {} ({})", p.name, p.id), Draft::of_port_owner(store, p.owner_kind, p.owner_id));
         }
         AutomationCmd::PortRm { id } => {
             if !confirm(flags, "delete port")? {
                 return Ok(0);
             }
+            let draft = Draft::of_port(store, id);
             store.automation_port_delete(id).map_err(CliError::from)?;
-            write_envelope(flags, "automation.port-rm", "automation_port", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted port: {id}"));
+            write_draft(flags, "automation.port-rm", "automation_port", json!({ "id": id, "deleted": true }), None, format!("✓ Deleted port: {id}"), draft);
         }
         AutomationCmd::CfgAdd { action, name, kind, required, options } => {
             let kind = parse_cfg_kind(&kind)?;
             let c = store
                 .automation_cfg_add(action, &name, kind, required, options.as_deref())
                 .map_err(CliError::from)?;
-            write_envelope(flags, "automation.cfg-add", "automation_cfg", serde_json::to_value(&c).unwrap(), None, false, format!("✓ Declared setting: {} ({})", c.name, c.id));
+            write_draft(flags, "automation.cfg-add", "automation_cfg", serde_json::to_value(&c).unwrap(), None, format!("✓ Declared setting: {} ({})", c.name, c.id), Draft::of_cfg_owner(store, c.owner_kind, c.owner_id));
         }
         AutomationCmd::CfgUpdate { id, name, kind, required, options, clear_options } => {
             let kind = kind.as_deref().map(parse_cfg_kind).transpose()?;
@@ -578,7 +755,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 false => options.as_deref().map(Some),
             };
             let c = store.automation_cfg_update(id, name.as_deref(), kind, required, options).map_err(CliError::from)?;
-            write_envelope(flags, "automation.cfg-update", "automation_cfg", serde_json::to_value(&c).unwrap(), None, false, format!("✓ Updated setting: {} ({})", c.name, c.id));
+            write_draft(flags, "automation.cfg-update", "automation_cfg", serde_json::to_value(&c).unwrap(), None, format!("✓ Updated setting: {} ({})", c.name, c.id), Draft::of_cfg_owner(store, c.owner_kind, c.owner_id));
         }
         AutomationCmd::CfgSet { placement, name, clear, folder, choice, number, text, filter } => {
             let TaskFilterArgs { status, priority, assignee, dim, ready, done, due, sort } = *filter;
@@ -590,7 +767,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 Some(v) => format!("✓ Answered setting: {} = {v}", c.name),
                 None => format!("✓ Left setting unanswered: {}", c.name),
             };
-            write_envelope(flags, "automation.cfg-set", "automation_cfg", serde_json::to_value(&c).unwrap(), Some(vec!["value".to_string()]), false, line);
+            write_draft(flags, "automation.cfg-set", "automation_cfg", serde_json::to_value(&c).unwrap(), Some(vec!["value".to_string()]), line, Draft::of_placement(store, placement));
         }
         AutomationCmd::AgentSet { placement, step, agent, model, clear } => {
             // clap holds `--agent` to be there unless `--clear` is, and the two apart.
@@ -603,18 +780,18 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                         Some(model) => format!("✓ Chose {} ({model}) for step {step} at placement {placement}", c.agent),
                         None => format!("✓ Chose {} for step {step} at placement {placement}", c.agent),
                     };
-                    write_envelope(flags, "automation.agent-set", "automation_placement_step", serde_json::to_value(&c).unwrap(), None, false, line);
+                    write_draft(flags, "automation.agent-set", "automation_placement_step", serde_json::to_value(&c).unwrap(), None, line, Draft::of_placement(store, placement));
                 }
                 None => {
                     store.automation_placement_step_clear(placement, step).map_err(CliError::from)?;
-                    write_envelope(
+                    write_draft(
                         flags,
                         "automation.agent-set",
                         "automation_placement_step",
                         json!({ "placement_id": placement, "step_id": step, "cleared": true }),
                         None,
-                        false,
                         format!("✓ Left nobody chosen for step {step} at placement {placement}"),
+                        Draft::of_placement(store, placement),
                     );
                 }
             }
@@ -623,8 +800,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             if !confirm(flags, "delete setting")? {
                 return Ok(0);
             }
+            let draft = Draft::of_cfg(store, id);
             store.automation_cfg_delete(id).map_err(CliError::from)?;
-            write_envelope(flags, "automation.cfg-rm", "automation_cfg", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted setting: {id}"));
+            write_draft(flags, "automation.cfg-rm", "automation_cfg", json!({ "id": id, "deleted": true }), None, format!("✓ Deleted setting: {id}"), draft);
         }
         AutomationCmd::EdgeAdd { in_action, from, to, exit_to, done, halt, max_times, no_max } => {
             let (from_id, exit_name) = parse_point(&from)?;
@@ -641,7 +819,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let e = store
                 .automation_edge_add(picture(in_action), from_id, exit_name.as_deref(), target, max_times)
                 .map_err(CliError::from)?;
-            write_envelope(flags, "automation.edge-add", "automation_edge", serde_json::to_value(&e).unwrap(), None, false, format!("✓ Added edge: {} ({})", from, e.id));
+            write_draft(flags, "automation.edge-add", "automation_edge", serde_json::to_value(&e).unwrap(), None, format!("✓ Added edge: {} ({})", from, e.id), Some(Draft::of_picture(e.owner_kind, e.owner_id)));
         }
         AutomationCmd::EdgeUpdate { id, to, exit_to, done, halt, max_times, no_max } => {
             let target = match (to, &exit_to, done, halt) {
@@ -654,14 +832,15 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (None, false) => None,
             };
             let e = store.automation_edge_update(id, target, max_times).map_err(CliError::from)?;
-            write_envelope(flags, "automation.edge-update", "automation_edge", serde_json::to_value(&e).unwrap(), None, false, format!("✓ Updated edge: {}", e.id));
+            write_draft(flags, "automation.edge-update", "automation_edge", serde_json::to_value(&e).unwrap(), None, format!("✓ Updated edge: {}", e.id), Some(Draft::of_picture(e.owner_kind, e.owner_id)));
         }
         AutomationCmd::EdgeRm { id } => {
             if !confirm(flags, "delete edge")? {
                 return Ok(0);
             }
+            let draft = Draft::of_edge(store, id);
             store.automation_edge_delete(id).map_err(CliError::from)?;
-            write_envelope(flags, "automation.edge-rm", "automation_edge", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted edge: {id}"));
+            write_draft(flags, "automation.edge-rm", "automation_edge", json!({ "id": id, "deleted": true }), None, format!("✓ Deleted edge: {id}"), draft);
         }
         AutomationCmd::WireAdd { in_action, from, from_port, to, to_port } => {
             let (from_id, exit_name) = parse_point(&from)?;
@@ -670,7 +849,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             // The same wire drawn again is answered as it stands, and said to be no change.
             if drawn {
-                write_envelope(flags, "automation.wire-add", "automation_wire", serde_json::to_value(&w).unwrap(), None, false, format!("✓ Added wire: {from}.{from_port} → {to}.{to_port} ({})", w.id));
+                write_draft(flags, "automation.wire-add", "automation_wire", serde_json::to_value(&w).unwrap(), None, format!("✓ Added wire: {from}.{from_port} → {to}.{to_port} ({})", w.id), Some(Draft::of_picture(w.owner_kind, w.owner_id)));
             } else {
                 write_envelope(flags, "automation.wire-add", "automation_wire", serde_json::to_value(&w).unwrap(), Some(vec![]), true, format!("• Wire {from}.{from_port} → {to}.{to_port} ({}) is already drawn — no change.", w.id));
             }
@@ -679,8 +858,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             if !confirm(flags, "delete wire")? {
                 return Ok(0);
             }
+            let draft = Draft::of_wire(store, id);
             store.automation_wire_delete(id).map_err(CliError::from)?;
-            write_envelope(flags, "automation.wire-rm", "automation_wire", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted wire: {id}"));
+            write_draft(flags, "automation.wire-rm", "automation_wire", json!({ "id": id, "deleted": true }), None, format!("✓ Deleted wire: {id}"), draft);
         }
         AutomationCmd::RunList { task, automation, limit } => {
             let (runs, about) = match (task, automation) {
@@ -745,6 +925,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     walked.push(json!({
                         "step": serde_json::to_value(m).unwrap(),
                         "name": named_step(&defs, m),
+                        "automation_version": version_of(&defs, m),
                         "values": serde_json::to_value(
                             store.automation_run_values(m.id).map_err(CliError::from)?,
                         )
@@ -754,6 +935,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 print_json(&json!({
                     "run": serde_json::to_value(&run).unwrap(),
                     "waiting": waiting,
+                    "versions": taken_up(&defs)
+                        .iter()
+                        .map(|(version, at)| json!({ "version": version, "taken_at": at.to_rfc3339_z() }))
+                        .collect::<Vec<_>>(),
                     "tasks": serde_json::to_value(&stretches).unwrap(),
                     "steps": walked,
                 }));
@@ -769,6 +954,22 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             if !amenbo_core::app_running::is_running(&paths).map_err(CliError::from)? {
                 return Err(CliError::app_not_running());
             }
+            // A launch reads the newest saved version, and core falls back to the draft for an
+            // automation never saved. That fallback is refused here, before any file is ingested.
+            let saved = store
+                .automation_detail(id)
+                .map_err(CliError::from)?
+                .ok_or_else(|| CliError::from(amenbo_core::Error::not_found(format!("automation '{id}' not found"))))?
+                .saved
+                .ok_or_else(|| CliError {
+                    code: "conflict",
+                    message: format!("automation '{id}' has never been saved, and a run starts from its newest saved version. No run was started."),
+                    hint: Some(format!(
+                        "Save it first with `{cmd} automation save {id}`, or try the draft without starting anything with `{cmd} automation test-run {id}`.",
+                        cmd = amenbo_core::config::Paths::command_name()
+                    )),
+                    exit: 1,
+                })?;
             let notes = crate::cmd::arg::body_arg_opt(notes)?;
             let classification = classification_of(&dim)?;
             // Every file is read and held to its limit before any is ingested, so a refusal of the last
@@ -803,7 +1004,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 by: Some(flags.facet()?),
             };
             let r = store.automation_launch(id, &by, &handed).map_err(CliError::from)?;
-            let line = format!("✓ Run {} started", r.id);
+            let line = format!("✓ Run {} started from version {}", r.id, saved.version);
             write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
         }
         AutomationCmd::TestRun { id, title, notes, dim } => {
@@ -820,7 +1021,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             };
             let walked = store.automation_rehearse(id, &by, &handed).map_err(CliError::from)?;
             if flags.json {
-                print_json(&json!({ "test_run": serde_json::to_value(&walked).unwrap() }));
+                // A launch reads the newest saved version; a test run reads the draft, and says so.
+                print_json(&json!({ "test_run": serde_json::to_value(&walked).unwrap(), "reads": "draft" }));
             } else {
                 render_rehearsal(flags, &walked);
             }
@@ -981,11 +1183,12 @@ fn classification_of(dim: &[String]) -> Result<Vec<(String, String)>, CliError> 
         .collect()
 }
 
-/// **A test run, as a terminal reads it**: each step it opened, the way out it was taken to leave by,
-/// and — for an agent's step — the whole prompt, indented under it. The last line says how it ended.
+/// **A test run, as a terminal reads it**: the first line says it tried the draft, then each step it
+/// opened, the way out it was taken to leave by, and — for an agent's step — the whole prompt, indented
+/// under it. The last line says how it ended.
 fn render_rehearsal(flags: &Flags, walked: &amenbo_core::ops::automation_rehearse::Rehearsal) {
     use amenbo_core::ops::automation_rehearse::Cut;
-    human(flags, "Test run — no agent was started, and nothing was kept");
+    human(flags, "Test run of the draft, unsaved changes included — no agent was started, and nothing was kept");
     for (n, step) in walked.steps.iter().enumerate() {
         let who = match (&step.builtin, &step.agent) {
             (Some(key), _) => format!("built-in {key}"),
@@ -1119,6 +1322,10 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
             view.placements.len()
         ),
     );
+    human(flags, saved_line(view.saved.as_ref(), view.unsaved));
+    if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
+        human(flags, line);
+    }
     write_body(flags, "notes", &a.notes);
     for placement in &view.placements {
         render_placement(flags, view, placement);
@@ -1132,7 +1339,12 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
     let boxes: Vec<i64> = view.placements.iter().map(|p| p.placement.id).collect();
     let back = lines_back(view.automation.entry_placement_id, &boxes, &view.edges);
     let named = match &placement.action {
-        Some(action) => format!("action {} ({})", action.id, action.name),
+        Some(action) => format!(
+            "action {} ({}) {}",
+            action.id,
+            action.name,
+            placed_version(placement.version, placement.latest_version)
+        ),
         None => "no action".to_string(),
     };
     human(flags, format!("\nplacement {} — {named}", row.id));
@@ -1229,6 +1441,31 @@ fn render_action(flags: &Flags, view: &ActionView) {
         flags,
         format!("{shelf}  {entry}  used by {} automation(s)", view.used_by),
     );
+    match &a.builtin {
+        Some(key) => {
+            let latest = amenbo_core::ops::automation_builtin::find(key).map(|b| b.version);
+            human(flags, format!("built-in {}", placed_version(a.builtin_version, latest)));
+        }
+        None => {
+            human(flags, saved_line(view.saved.as_ref(), view.unsaved));
+            if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
+                human(flags, line);
+            }
+        }
+    }
+    if !view.placed_at.is_empty() {
+        let mut places: Vec<String> = Vec::new();
+        for one in &view.placed_at {
+            let place = match one.version {
+                Some(version) => format!("automation {} version {version}", one.automation_id),
+                None => format!("automation {} no version", one.automation_id),
+            };
+            if !places.contains(&place) {
+                places.push(place);
+            }
+        }
+        human(flags, format!("placed at: {}", places.join(", ")));
+    }
     write_body(flags, "note", &a.note);
     for port in &view.inputs {
         human(flags, format!("takes  {}", one_port(port)));
@@ -1261,6 +1498,36 @@ fn render_action(flags: &Flags, view: &ActionView) {
     }
     for step in &view.steps {
         render_step(flags, view, step);
+    }
+}
+
+/// The version saved last, and whether the draft holds more.
+fn saved_line(saved: Option<&SavedVersion>, unsaved: bool) -> String {
+    let saved = match saved {
+        Some(one) => format!("version {} saved {}", one.version, one.saved_at.to_rfc3339_z()),
+        None => "not saved yet".to_string(),
+    };
+    let draft = if unsaved { "the draft has unsaved changes" } else { "no unsaved changes" };
+    format!("{saved} · {draft}")
+}
+
+/// Which of the two a show is reading, where there is a saved version to tell it from.
+fn showing_line(showing: Showing, saved: Option<&SavedVersion>) -> Option<String> {
+    let version = saved?.version;
+    Some(match showing {
+        Showing::Draft => format!("showing the draft; --saved shows version {version}"),
+        Showing::Saved => format!("showing version {version}; without --saved shows the draft"),
+    })
+}
+
+/// The version of its action a placement stands on, beside the newest there is.
+fn placed_version(version: Option<i64>, latest: Option<i64>) -> String {
+    match (version, latest) {
+        (Some(v), Some(l)) if v == l => format!("version {v} (latest)"),
+        (Some(v), Some(l)) => format!("version {v} (latest {l})"),
+        (Some(v), None) => format!("version {v}"),
+        (None, Some(l)) => format!("no version (latest {l})"),
+        (None, None) => "no saved version".to_string(),
     }
 }
 
@@ -1435,6 +1702,22 @@ fn render_run(
         flags,
         format!("status: {}{stopped}  {}", run.status.as_str(), span(run.started_at, run.ended_at)),
     );
+    if let Some(detail) = &run.stopped_detail {
+        human(flags, "did not pass:");
+        for line in detail.lines().filter(|l| !l.trim().is_empty()) {
+            human(flags, format!("  | {line}"));
+        }
+    }
+    // Each version the run took its copy from, in turn: a run taken up at its entry, or picked up after
+    // a pause before its next task, goes on from a newer one (`AMB-D-1015`).
+    let versions = taken_up(defs);
+    if let Some(((first, _), rest)) = versions.split_first() {
+        let mut line = format!("copied from: {}", version_label(*first));
+        for (version, at) in rest {
+            line.push_str(&format!(" → {} (taken up at {})", version_label(*version), at.to_rfc3339_z()));
+        }
+        human(flags, line);
+    }
     // A failure is waiting on somebody until it is seen, so a failed run says which it is — and a seen
     // one, by whom (`AMB-D-989`).
     if run.status == AutomationRunStatus::Failed {
@@ -1448,6 +1731,7 @@ fn render_run(
     if waiting {
         human(flags, "waiting: for a task — the next step opens once one turns up");
     }
+    let switched = switches(defs, moves);
     let last = stretches.last().map(|s| s.id);
     for stretch in stretches {
         let about = match stretch.task_id {
@@ -1470,7 +1754,7 @@ fn render_run(
         };
         human(flags, format!("\ntask {} — {about}  {stood}", stretch.seq));
         for m in moves.iter().filter(|m| m.run_task_id == Some(stretch.id)) {
-            render_move(store, flags, defs, m)?;
+            render_move(store, flags, defs, &switched, m)?;
         }
     }
     // A step that went looking for a task and found none belongs to no stretch, and is the whole of
@@ -1479,7 +1763,7 @@ fn render_run(
     if !loose.is_empty() {
         human(flags, "\nno task");
         for m in loose {
-            render_move(store, flags, defs, m)?;
+            render_move(store, flags, defs, &switched, m)?;
         }
     }
     Ok(())
@@ -1493,8 +1777,12 @@ fn render_move(
     store: &mut Store,
     flags: &Flags,
     defs: &[AutomationRunDef],
+    switched: &[(i64, Option<i64>, Option<i64>)],
     m: &AutomationRunStep,
 ) -> Result<(), CliError> {
+    if let Some((_, from, to)) = switched.iter().find(|(id, _, _)| *id == m.id) {
+        human(flags, format!("  ({} → {} from here)", version_label(*from), version_label(*to)));
+    }
     human(
         flags,
         format!(
@@ -1551,6 +1839,49 @@ fn named_step(defs: &[AutomationRunDef], m: &AutomationRunStep) -> String {
         .find(|d| d.id == m.run_def_id)
         .map(|d| d.name.clone())
         .unwrap_or_else(|| "a step".to_string())
+}
+
+/// The saved version of the automation the step's copy was taken from — `None` where it had none saved
+/// then, or the copy is gone.
+fn version_of(defs: &[AutomationRunDef], m: &AutomationRunStep) -> Option<i64> {
+    defs.iter().find(|d| d.id == m.run_def_id).and_then(|d| d.automation_version)
+}
+
+/// The versions the run's copies were taken from, in the order they were taken, each with when — a
+/// copy taken again from the version before it is no change, and is not listed.
+fn taken_up(defs: &[AutomationRunDef]) -> Vec<(Option<i64>, Timestamp)> {
+    let mut versions: Vec<(Option<i64>, Timestamp)> = Vec::new();
+    for d in defs {
+        if versions.last().map(|(v, _)| *v) != Some(d.automation_version) {
+            versions.push((d.automation_version, d.created_at));
+        }
+    }
+    versions
+}
+
+/// The step executions that ran on another version than the one before them, by the order they
+/// happened in: each with the version before and its own.
+fn switches(defs: &[AutomationRunDef], moves: &[AutomationRunStep]) -> Vec<(i64, Option<i64>, Option<i64>)> {
+    let mut found = Vec::new();
+    let mut before = None;
+    for m in moves {
+        let now = version_of(defs, m);
+        if let Some(from) = before {
+            if from != now {
+                found.push((m.id, from, now));
+            }
+        }
+        before = Some(now);
+    }
+    found
+}
+
+/// A saved version by its number, and a copy taken while nothing was saved as that.
+fn version_label(version: Option<i64>) -> String {
+    match version {
+        Some(n) => format!("version {n}"),
+        None => "no saved version".to_string(),
+    }
 }
 
 /// The name of the way out an execution left by, read from the run's copy of the step — the live row

@@ -120,8 +120,8 @@ mod tests {
     /// Every key the line is built from. The ending keys are the ones [`crate::ops::automation_stop`]
     /// names; a key missing here would print itself at the reader.
     const KEYS: &[&str] = &[
-        "crashed", "maxTimes", "noAgent", "noInput", "noWayOn", "leftTaskOpen", "halted", "canceled",
-        "completed", "reached", "reachedGone", "reachedNothing", "line",
+        "crashed", "maxTimes", "noAgent", "noInput", "noWayOn", "leftTaskOpen", "failedCheck", "halted",
+        "canceled", "completed", "reached", "reachedGone", "reachedNothing", "line",
     ];
 
     /// Every language Amenbo is read in says every sentence of the line — a language added to the

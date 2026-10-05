@@ -4508,6 +4508,9 @@ impl Instructor {
                 req(with, "output")?,
                 req(with, "from")?
             ),
+            // **Saving it as its next version**, pressed on the same head. The head then says the
+            // version it saved, and the press is not offered again until something else is written.
+            (Domain::Automation, "save") => "On the build screen's head, press the button that saves it. Confirm the head then says which version was saved, and the button cannot be pressed again.".to_string(),
             // The press that makes a run. It is the build screen's, and the two other ways in below
             // make the same run without handing anything over either.
             // A closed workspace is refused at the press itself, before the dialog asks what to hand

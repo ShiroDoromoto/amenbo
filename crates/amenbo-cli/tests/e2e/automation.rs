@@ -1279,6 +1279,8 @@ fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
 #[test]
 fn a_script_step_is_shown_carried_out_by_its_program() {
     let cli = Cli::new();
+    // A program is registered by its full path, and Windows only counts a path with its drive as one.
+    let program = if cfg!(windows) { r"C:\Windows\System32\cmd.exe" } else { "/bin/echo" };
     let (p, a, _, _) = an_automation(&cli);
     let action = id_of(
         &cli.json(&["automation", "action-add", "--project", &p, "--name", "run it", "--json"]),
@@ -1286,7 +1288,7 @@ fn a_script_step_is_shown_carried_out_by_its_program() {
     );
     let step = id_of(
         &cli.json(&[
-            "automation", "step-add", &action, "--name", "run it", "--program", "/bin/echo", "--arg",
+            "automation", "step-add", &action, "--name", "run it", "--program", program, "--arg",
             "--verbose", "--arg", "hello", "--json",
         ]),
         "automation_step",
@@ -1295,7 +1297,7 @@ fn a_script_step_is_shown_carried_out_by_its_program() {
     cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]);
 
     let (shown, _) = cli.run(&["automation", "show", &a]);
-    assert!(shown.contains("run it  carried out by a script: /bin/echo --verbose hello"), "{shown}");
+    assert!(shown.contains(&format!("run it  carried out by a script: {program} --verbose hello")), "{shown}");
     assert!(!shown.contains("run it  carried out by claude"), "{shown}");
 }
 

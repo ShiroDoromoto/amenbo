@@ -66,7 +66,8 @@
 #   AMENBO_CI_APPEAR_LIMIT — rounds to wait for something to appear before giving up.
 #                  Unset, there is no deadline and the evidence above is what ends it
 #   AMENBO_CI_MAIN_DEADLINE — seconds `main <sha>` waits for its run before exit code 3
-#   AMENBO_CI_STUCK_ROUNDS — rounds `pr` sees the same settled state before exit code 4
+#   AMENBO_CI_STUCK_ROUNDS — rounds `pr` sees the same settled state before exit code 4.
+#                  A CLEAN pull request with auto-merge on is not counted
 #   AMENBO_CI_STALL — seconds a run, a pull request or a check may read the same before
 #                  exit code 5. Resolving an id is not timed by it
 #
@@ -83,7 +84,7 @@ APPEAR_LIMIT="${AMENBO_CI_APPEAR_LIMIT:-}" # rounds before giving up on it; empt
 MISS_LIMIT="${AMENBO_CI_MISS_LIMIT:-3}"    # consecutive failed calls before calling the watch broken
 # Twice the slowest push run seen to be registered after its merge, which was 23 minutes.
 MAIN_DEADLINE="${AMENBO_CI_MAIN_DEADLINE:-2700}" # seconds `main <sha>` waits for its run to start
-STUCK_ROUNDS="${AMENBO_CI_STUCK_ROUNDS:-3}" # rounds a settled, still-open pull request is given to land
+STUCK_ROUNDS="${AMENBO_CI_STUCK_ROUNDS:-3}" # rounds a settled, still-open, not CLEAN pull request is given to land
 # Past the slowest run seen from start to finish, a release tag's at 90 minutes, so even a
 # run whose jobs all end together has moved before this runs out.
 STALL_SECONDS="${AMENBO_CI_STALL:-7200}" # seconds what is watched may read the same before exit code 5
@@ -303,8 +304,10 @@ watch_run() {
 #
 # A pull request whose checks have all finished green and that is still open ends the
 # watch too, with exit code 4 and the state `gh pr view` gave. Without auto-merge on it
-# nothing is going to merge it, so that ends it at once. With auto-merge on, GitHub
-# takes a moment to act, so it ends once the same merge state and the same check results
+# nothing is going to merge it, so that ends it at once. With auto-merge on and the
+# merge state CLEAN, GitHub has all it needs and only its own timing is left, which has
+# run to minutes, so that is waited on without a count; STALL_SECONDS is what ends it.
+# Any other merge state ends it once the same merge state and the same check results
 # have been seen for STUCK_ROUNDS rounds: BLOCKED, BEHIND or UNKNOWN on a green pull
 # request is otherwise a wait with nothing said. "Finished" needs both the checks read
 # with none pending and every run on the head commit completed — no checks at all, the
@@ -353,10 +356,15 @@ watch_pr() {
                     echo "settled but not merging: $v"
                     return 4
                 fi
-                settled="$ms $(jq -c 'sort_by(.name)' <<< "$checks")"
-                [ "$settled" = "$prevsettled" ] && stuck=$((stuck + 1)) || stuck=1
-                prevsettled=$settled
-                [ "$stuck" -ge "$STUCK_ROUNDS" ] && { echo "settled but not merging: $v"; return 4; }
+                if [ "$ms" = CLEAN ]; then
+                    stuck=0
+                    prevsettled=""
+                else
+                    settled="$ms $(jq -c 'sort_by(.name)' <<< "$checks")"
+                    [ "$settled" = "$prevsettled" ] && stuck=$((stuck + 1)) || stuck=1
+                    prevsettled=$settled
+                    [ "$stuck" -ge "$STUCK_ROUNDS" ] && { echo "settled but not merging: $v"; return 4; }
+                fi
             else
                 stuck=0
                 prevsettled=""

@@ -549,6 +549,7 @@ pub fn automation(a: &Automation) -> Record {
                 ("notes", tv(&a.notes)),
                 ("entry_placement_id", kv_opt(&a.entry_placement_id)),
                 ("archived", bv(a.archived)),
+                ("allow_concurrent_runs", bv(a.allow_concurrent_runs)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,

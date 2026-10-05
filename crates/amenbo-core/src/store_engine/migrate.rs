@@ -1217,7 +1217,32 @@ pub const STEPS: &[Step] = &[
         // written in was not kept, and nothing here says what it was.
         apply: Apply::Custom(put_the_tails_of_a_script_together),
     },
+    Step {
+        to: 97,
+        name: "add automation.allow_concurrent_runs, whether a run may start while another run of the automation is still going",
+        // Kept on the automation, not on a saved version, as `archived` is.
+        //
+        // **Seeded, and the seed is not a guess: `1` on every row.** A build before this one started
+        // every run it was asked for, however many were going (`AMB-D-947`).
+        apply: Apply::Custom(let_the_automations_run_side_by_side),
+    },
 ];
+
+/// v97: `automation.allow_concurrent_runs` — whether a run may start while another run of the
+/// automation is still going.
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason: a store raised from before
+/// the automation tables were created has them created in the live shape, column and all.
+fn let_the_automations_run_side_by_side(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation")?.iter().any(|c| c == "allow_concurrent_runs") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN allow_concurrent_runs BOOLEAN NOT NULL DEFAULT 1 \
+             CHECK(allow_concurrent_runs IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
 
 /// v96: `stdout_tail` and `stderr_tail` on `automation_run_step` become `output_tail` (`AMB-D-1016`).
 ///
@@ -10605,6 +10630,33 @@ mod tests {
         let mut stmt = engine.conn().prepare("SELECT draft FROM automation_action ORDER BY id").unwrap();
         let drafts: Vec<bool> = stmt.query_map([], |r| r.get::<_, bool>(0)).unwrap().map(|v| v.unwrap()).collect();
         assert_eq!(drafts, vec![false, false]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v97: every automation already written allows concurrent runs, and the column holds nothing but
+    /// `0` and `1`.
+    #[test]
+    fn every_automation_already_written_allows_concurrent_runs() {
+        let dir = scratch("allow-concurrent-runs");
+        let engine = store_at(&dir, 96);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'cut'), (2, 1, 'take');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let mut stmt =
+            engine.conn().prepare("SELECT allow_concurrent_runs FROM automation ORDER BY id").unwrap();
+        let flags: Vec<bool> = stmt.query_map([], |r| r.get::<_, bool>(0)).unwrap().map(|v| v.unwrap()).collect();
+        assert_eq!(flags, vec![true, true]);
+        let refused =
+            engine.conn().execute("UPDATE automation SET allow_concurrent_runs = 2 WHERE id = 1", []);
+        assert!(refused.is_err(), "the column admits only 0 and 1");
         std::fs::remove_dir_all(&dir).ok();
     }
 

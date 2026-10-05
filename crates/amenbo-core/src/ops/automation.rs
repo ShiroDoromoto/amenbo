@@ -1236,6 +1236,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         notes: new.notes,
         entry_placement_id: None,
         archived: false,
+        allow_concurrent_runs: true,
         order_key,
         created_at: now,
         updated_at: now,

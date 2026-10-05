@@ -259,6 +259,14 @@ impl Declarer {
         }
     }
 
+    /// The box's ways out, in display order — the error one among them.
+    fn exits(&self, conn: &Connection) -> Result<Vec<AutomationExit>> {
+        match self {
+            Declarer::Placement(def) => Ok(def.action_exits()),
+            Declarer::Step(id) => Ok(read::automation_exits_of(conn, AutomationOwner::Step, *id)?),
+        }
+    }
+
     /// What one of the box's ways out hands on under this name.
     fn out(&self, conn: &Connection, exit_id: i64, name: &str) -> Result<Option<AutomationPort>> {
         let (owner, direction) = (AutomationPortOwner::Exit, AutomationPortDirection::Out);
@@ -1755,7 +1763,7 @@ fn put_placement(tx: &WriteTx<'_>, automation: &Automation, action_id: i64) -> R
 }
 
 /// **Put an action in on a line**, which is the one road by which a placement joins a picture already
-/// drawn — the automation's twin of [`step_insert`]. The two edges it writes are that op's, and the
+/// drawn — the automation's twin of [`step_insert`]. The edges it writes are that op's, and the
 /// reasons are there.
 pub fn placement_insert(
     tx: &WriteTx<'_>,
@@ -2329,10 +2337,13 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
 }
 
 /// **Put a box in on a line**, which is the one road by which a box joins a picture already drawn: the
-/// way out that was pressed comes to point at the new box, and the new box goes on to the target that
-/// way out named — so nothing that was decided is lost, and the new box is never left with nothing
+/// way out that was pressed comes to point at the new box, so the new box is never left with nothing
 /// pointing at it. A box nothing points at is a box no run reaches, which is why there is no "add at the
 /// end".
+///
+/// Where the new box has one way out besides the error one, it goes on by that way out to the target the
+/// pressed edge named, so nothing that was decided is lost. Where it has more, which of them goes on is
+/// not for this to guess: they are all left saying nothing, for a person to decide (`AMB-D-1003`).
 ///
 /// The limit on how often an edge may be taken follows the pressed edge where that one carries a limit.
 /// A way out that closes or stops the run carries none, so both edges take the standing limit
@@ -2348,7 +2359,11 @@ fn splice_onto_edge(tx: &WriteTx<'_>, edge: &AutomationEdge, new_box: i64) -> Re
         EdgeTarget::Go(_) => Some(DEFAULT_MAX_TIMES),
         _ => None,
     };
-    edge_add(tx, edge.owner_kind, new_box, None, onward, onward_limit)?;
+    let declarer = box_declarer(tx, edge.owner_kind, new_box)?;
+    let mut leaving = declarer.exits(tx.conn())?.into_iter().filter(|x| x.name != ERROR_EXIT);
+    if let (Some(only), None) = (leaving.next(), leaving.next()) {
+        edge_add(tx, edge.owner_kind, new_box, Some(&only.name), onward, onward_limit)?;
+    }
     Ok(())
 }
 
@@ -2369,9 +2384,9 @@ fn edge_target(tx: &WriteTx<'_>, edge: &AutomationEdge) -> Result<EdgeTarget> {
 
 /// **Put a step in on a line** inside one action — [`splice_onto_edge`] with the step written first.
 ///
-/// **It is one transaction.** The step, the ways out and the inputs it is written with, and the two
-/// edges are one act as far as a reader is concerned: a press that leaves a step behind with the line
-/// running past it is a picture nobody asked for.
+/// **It is one transaction.** The step, the ways out and the inputs it is written with, and the
+/// edges it writes are one act as far as a reader is concerned: a press that leaves a step behind with
+/// the line running past it is a picture nobody asked for.
 ///
 /// `exits` and `inputs` are what the dialog took.
 pub fn step_insert(
@@ -4171,7 +4186,7 @@ mod tests {
                 tx,
                 edge.id,
                 NewStep::new("実装する", "やる"),
-                &["直すところがある".to_string()],
+                &[],
                 &[("要件".to_string(), AutomationPortKind::Value, true)],
             )
             .expect("insert");
@@ -4197,11 +4212,6 @@ mod tests {
                 Some(DEFAULT_MAX_TIMES),
                 "a way out that left the action carried no limit, and now it needs one",
             );
-            assert_eq!(
-                exit_names(tx, AutomationOwner::Step, put.id),
-                vec![DONE_EXIT.to_string(), ERROR_EXIT.to_string(), "直すところがある".to_string()],
-                "what the dialog wrote is declared on the step it made",
-            );
             let inputs = read::automation_ports_of(
                 tx.conn(),
                 AutomationPortOwner::Step,
@@ -4211,6 +4221,44 @@ mod tests {
             .expect("read inputs");
             assert_eq!(inputs.len(), 1);
             assert_eq!(inputs[0].name, "要件");
+        });
+    }
+
+    #[test]
+    fn a_step_put_in_on_a_line_with_more_than_one_way_out_goes_on_by_none_of_them() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, _) = mk_placed(tx, &automation, "取る");
+            let first = only_step(tx, &action);
+            let edge = edge_on(tx, AutomationPictureOwner::Action, first.id, None)
+                .expect("read the edge")
+                .expect("the action leaves by its done way out");
+
+            let put = step_insert(
+                tx,
+                edge.id,
+                NewStep::new("実装する", "やる"),
+                &["直すところがある".to_string()],
+                &[],
+            )
+            .expect("insert");
+
+            assert_eq!(
+                edge_of(tx, AutomationPictureOwner::Action, first.id, None),
+                (AutomationEnds::Go, Some(put.id)),
+                "the way out that was pressed still points at the new step",
+            );
+            assert_eq!(
+                exit_names(tx, AutomationOwner::Step, put.id),
+                vec![DONE_EXIT.to_string(), ERROR_EXIT.to_string(), "直すところがある".to_string()],
+                "what the dialog wrote is declared on the step it made",
+            );
+            for exit in [None, Some("直すところがある")] {
+                assert!(
+                    edge_on(tx, AutomationPictureOwner::Action, put.id, exit).expect("read").is_none(),
+                    "which way out goes on is left for a person to decide: {exit:?}",
+                );
+            }
         });
     }
 

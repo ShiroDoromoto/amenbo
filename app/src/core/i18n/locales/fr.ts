@@ -1315,7 +1315,7 @@ export const fr: Translation = {
     "auto.over.abandon": "Arrêter de la créer",
     "auto.over.abandonNote": "Arrêter supprime cette action et son placement, puis revient au schéma",
     "auto.over.abandonConfirm": "Arrêter de créer « {name} » ? L’action et son placement seront supprimés. Impossible d’annuler.",
-    "auto.over.finish": "Terminer la création et revenir",
+    "auto.over.save": "Enregistrer et revenir",
     "auto.saved.never": "Pas encore enregistré",
     "auto.saved.version": "Version {version} enregistrée · {time}",
     "auto.saved.unsaved": "Modifications non enregistrées",

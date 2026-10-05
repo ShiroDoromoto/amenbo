@@ -1304,7 +1304,7 @@ export const th: Translation = {
     "auto.over.abandon": "เลิกสร้าง",
     "auto.over.abandonNote": "เมื่อเลิก แอ็กชันนี้และตำแหน่งที่วางจะถูกลบ แล้วกลับไปที่แผนภาพ",
     "auto.over.abandonConfirm": "เลิกสร้าง “{name}” ไหม? แอ็กชันและตำแหน่งที่วางจะถูกลบ ย้อนกลับไม่ได้",
-    "auto.over.finish": "สร้างเสร็จแล้วกลับ",
+    "auto.over.save": "บันทึกแล้วกลับ",
     "auto.saved.never": "ยังไม่ได้บันทึก",
     "auto.saved.version": "บันทึกเวอร์ชัน {version} แล้ว · {time}",
     "auto.saved.unsaved": "มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก",

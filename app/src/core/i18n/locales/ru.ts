@@ -1320,7 +1320,7 @@ export const ru: Translation = {
     "auto.over.abandon": "Не создавать",
     "auto.over.abandonNote": "Действие и его размещение будут удалены, и вы вернётесь к схеме",
     "auto.over.abandonConfirm": "Не создавать «{name}»? Действие и его размещение будут удалены. Это нельзя отменить.",
-    "auto.over.finish": "Завершить создание и вернуться",
+    "auto.over.save": "Сохранить и вернуться",
     "auto.saved.never": "Ещё не сохранено",
     "auto.saved.version": "Версия {version} сохранена · {time}",
     "auto.saved.unsaved": "Есть несохранённые изменения",

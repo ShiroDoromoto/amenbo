@@ -1315,7 +1315,7 @@ export const es: Translation = {
     "auto.over.abandon": "Dejar de crearla",
     "auto.over.abandonNote": "Al dejarla se eliminan esta acción y su colocación, y se vuelve al diagrama",
     "auto.over.abandonConfirm": "¿Dejar de crear «{name}»? Se eliminan la acción y su colocación. No se puede deshacer.",
-    "auto.over.finish": "Terminar de crear y volver",
+    "auto.over.save": "Guardar y volver",
     "auto.saved.never": "Aún sin guardar",
     "auto.saved.version": "Versión {version} guardada · {time}",
     "auto.saved.unsaved": "Cambios sin guardar",

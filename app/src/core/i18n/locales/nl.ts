@@ -1303,7 +1303,7 @@ export const nl: Translation = {
     "auto.over.abandon": "Stoppen met maken",
     "auto.over.abandonNote": "Stoppen verwijdert deze actie en haar plaatsing, en gaat terug naar het schema",
     "auto.over.abandonConfirm": "Stoppen met het maken van „{name}”? De actie en haar plaatsing worden verwijderd. Dit kan niet ongedaan worden gemaakt.",
-    "auto.over.finish": "Klaar met maken en terug",
+    "auto.over.save": "Opslaan en terug",
     "auto.saved.never": "Nog niet opgeslagen",
     "auto.saved.version": "Versie {version} opgeslagen · {time}",
     "auto.saved.unsaved": "Niet-opgeslagen wijzigingen",

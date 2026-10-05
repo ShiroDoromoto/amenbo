@@ -1304,7 +1304,7 @@ export const vi: Translation = {
     "auto.over.abandon": "Thôi tạo",
     "auto.over.abandonNote": "Thôi tạo sẽ xóa hành động này và vị trí đặt nó, rồi quay lại sơ đồ",
     "auto.over.abandonConfirm": "Thôi tạo “{name}”? Hành động và vị trí đặt nó sẽ bị xóa. Không thể hoàn tác.",
-    "auto.over.finish": "Tạo xong và quay lại",
+    "auto.over.save": "Lưu và quay lại",
     "auto.saved.never": "Chưa lưu",
     "auto.saved.version": "Đã lưu phiên bản {version} · {time}",
     "auto.saved.unsaved": "Có thay đổi chưa lưu",

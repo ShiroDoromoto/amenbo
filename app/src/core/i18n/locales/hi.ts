@@ -1303,7 +1303,7 @@ export const hi: Translation = {
     "auto.over.abandon": "बनाना छोड़ें",
     "auto.over.abandonNote": "छोड़ने पर यह ऐक्शन और उसकी जगह हट जाएगी, और चित्र पर लौटेंगे",
     "auto.over.abandonConfirm": "“{name}” बनाना छोड़ें? ऐक्शन और उसकी जगह हट जाएँगे। इसे वापस नहीं किया जा सकता।",
-    "auto.over.finish": "बनाना पूरा करके लौटें",
+    "auto.over.save": "सहेजकर लौटें",
     "auto.saved.never": "अभी तक सहेजा नहीं गया",
     "auto.saved.version": "संस्करण {version} सहेजा गया · {time}",
     "auto.saved.unsaved": "बिना सहेजे बदलाव",

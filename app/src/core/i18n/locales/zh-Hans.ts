@@ -1305,7 +1305,7 @@ export const zhHans: Translation = {
     "auto.over.abandon": "不再创建",
     "auto.over.abandonNote": "不再创建会删除此动作和它的放置，并回到图中",
     "auto.over.abandonConfirm": "不再创建“{name}”？将删除该动作和它的放置。无法撤销。",
-    "auto.over.finish": "完成创建并返回",
+    "auto.over.save": "保存并返回",
     "auto.saved.never": "尚未保存",
     "auto.saved.version": "已保存版本 {version} · {time}",
     "auto.saved.unsaved": "有未保存的更改",

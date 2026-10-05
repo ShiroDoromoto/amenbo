@@ -1304,7 +1304,7 @@ export const id: Translation = {
     "auto.over.abandon": "Batal membuat",
     "auto.over.abandonNote": "Membatalkan akan menghapus aksi ini dan penempatannya, lalu kembali ke diagram",
     "auto.over.abandonConfirm": "Batal membuat “{name}”? Aksi dan penempatannya akan dihapus. Tidak bisa dibatalkan.",
-    "auto.over.finish": "Selesai membuat dan kembali",
+    "auto.over.save": "Simpan dan kembali",
     "auto.saved.never": "Belum disimpan",
     "auto.saved.version": "Versi {version} disimpan · {time}",
     "auto.saved.unsaved": "Ada perubahan yang belum disimpan",

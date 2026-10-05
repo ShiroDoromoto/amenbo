@@ -1305,7 +1305,7 @@ export const zhHant: Translation = {
     "auto.over.abandon": "不再建立",
     "auto.over.abandonNote": "不再建立會刪除此動作和它的放置，並回到圖中",
     "auto.over.abandonConfirm": "不再建立「{name}」？將刪除該動作和它的放置。無法復原。",
-    "auto.over.finish": "完成建立並返回",
+    "auto.over.save": "儲存並返回",
     "auto.saved.never": "尚未儲存",
     "auto.saved.version": "已儲存版本 {version} · {time}",
     "auto.saved.unsaved": "有未儲存的變更",

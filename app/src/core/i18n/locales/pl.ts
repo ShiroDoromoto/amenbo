@@ -1320,7 +1320,7 @@ export const pl: Translation = {
     "auto.over.abandon": "Przestań tworzyć",
     "auto.over.abandonNote": "Przerwanie usuwa tę akcję i jej umieszczenie oraz wraca do schematu",
     "auto.over.abandonConfirm": "Przestać tworzyć „{name}”? Akcja i jej umieszczenie zostaną usunięte. Tego nie można cofnąć.",
-    "auto.over.finish": "Zakończ tworzenie i wróć",
+    "auto.over.save": "Zapisz i wróć",
     "auto.saved.never": "Jeszcze nie zapisano",
     "auto.saved.version": "Zapisano wersję {version} · {time}",
     "auto.saved.unsaved": "Niezapisane zmiany",

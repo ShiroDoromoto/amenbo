@@ -113,14 +113,15 @@ export async function mountAgentFrame(
   // answered, by the person choosing one or by a terminal this frame took up saying where it runs,
   // it is not asked for again.
   let folder: string | null = start.cwd ?? null;
-  // Whether this frame still stands for a step whose terminal the host started (`PaneStart.runStep`).
-  // Spent at the first look: after that, what is started here is what a person asks for.
-  let stepping = start.runStep != null;
+  // Whether this frame still stands for a step whose terminal the host started (`PaneStart.runStep`),
+  // a script's among them (`PaneStart.readOnly`). Spent at the first look: after that, what is started
+  // here is what a person asks for.
+  let stepping = start.runStep != null || start.readOnly === true;
   // **A run's pane has no closed row** (`AMB-T-5529`). What would stand there is a way to start
   // something else in the run's place, under the run's header — a terminal the row would go on naming
   // as the run's step. The pane says how the run ended, and is taken away when the reader is done
   // with it.
-  const forRun = start.runStep != null;
+  const forRun = start.runStep != null || start.readOnly === true;
   /** The closed frame's row, where this frame has one. */
   const closedRow = (choice: string | null) => {
     if (!forRun) frame.append(row(choice));

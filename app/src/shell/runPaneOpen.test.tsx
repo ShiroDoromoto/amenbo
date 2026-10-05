@@ -14,12 +14,21 @@ import { t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const hoisted = vi.hoisted(() => ({
+  /** Every script tail a pane drew, in order. */
+  tails: [] as string[],
+}));
+
 // Nothing here opens a terminal, so what would draw one is stubbed out of the way.
 vi.mock("../talk/agent", () => ({ mountAgentFrame: () => Promise.resolve(() => {}) }));
 vi.mock("../talk/terminal", async (actual) => ({
   ...(await actual<typeof import("../talk/terminal")>()),
   endTerminal: vi.fn(async () => {}),
   pasteIntoTerminal: vi.fn(async () => {}),
+  mountTail: (_host: HTMLElement, tail: string) => {
+    hoisted.tails.push(tail);
+    return () => {};
+  },
 }));
 // The row is a live thing of its own; what it draws is not what this is about.
 vi.mock("../talk/plate", () => ({
@@ -40,6 +49,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  hoisted.tails = [];
   window.innerWidth = 1600;
   container = document.createElement("div");
   document.body.append(container);
@@ -51,8 +61,8 @@ afterEach(() => {
   container.remove();
 });
 
-/** A pane with no terminal in it, on a run or on none. */
-async function pane(run: Say | null): Promise<void> {
+/** A pane with no terminal in it, on a run or on none — with what a script step wrote, where one did. */
+async function pane(run: Say | null, tail: string | null = null): Promise<void> {
   await act(async () => {
     root.render(createElement(TerminalPane, {
       frame: run === null ? "1" : "run-15",
@@ -63,6 +73,7 @@ async function pane(run: Say | null): Promise<void> {
       autoStart: false,
       focused: true,
       run,
+      tail,
       onOpened: () => {},
       onSaid: () => {},
       onPath: () => {},
@@ -104,5 +115,11 @@ describe("opening a terminal in a pane with none in it", () => {
 
     await pane({ ...FAILED, state: { ...FAILED.state!, status: "paused", word: "Paused" } });
     expect(container.querySelector(".slot__runbody-line")?.textContent).toBe(t("auto.run.body.paused"));
+  });
+
+  it("draws what a script step wrote, kept on the run, in place of the body (AMB-D-1016)", async () => {
+    await pane(FAILED, "built 3 files\nerror: no such file");
+    expect(hoisted.tails).toEqual(["built 3 files\nerror: no such file"]);
+    expect(container.querySelector(".slot__runbody"), "the body stood over the script's tail").toBeNull();
   });
 });

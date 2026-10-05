@@ -727,17 +727,27 @@ describe("a built-in on a run's pane", () => {
     expect(q(".slot__builtin-does")).toHaveLength(0);
   });
 
-  it("names the program a script step runs, and does not call it a built-in (AMB-D-1016)", async () => {
+  it("draws a script step's terminal read-only in place of a card, and does not call it a built-in (AMB-D-1016)", async () => {
     await mount();
     const script = builtin({ name: "眠る", key: "", program: "/opt/tools/sleep.sh" });
-    await arrive({ step: undefined, builtin: script });
+    await arrive({ step: undefined, builtin: script, session: "script-1" });
 
-    expect(card()).toHaveLength(1);
+    expect(card()).toHaveLength(0);
     expect(q(".plate__builtin")[0]?.hidden).toBe(true);
-    expect(q(".slot__builtin-program")[0]?.textContent).toBe("/opt/tools/sleep.sh");
+    const start = hoisted.opened[hoisted.opened.length - 1]!;
+    expect(start.session).toBe("script-1");
+    expect(start.readOnly).toBe(true);
+    // Nothing reads what would be written to it: no box, no band, no way to hand it a path.
+    expect(q(".compose")).toHaveLength(0);
+    expect(q(".panerow")).toHaveLength(0);
+    expect(q(".slot__more")).toHaveLength(0);
 
-    await arrive({ step: undefined, builtin: { ...script, finished: true, exitName: "完了" } });
-    expect(q(".slot__builtin-program")).toHaveLength(0);
+    // Told again once its program has ended, with the same terminal: the pane stands as it is.
+    const openings = hoisted.opened.length;
+    await arrive({ step: undefined, builtin: { ...script, finished: true, exitName: "完了" }, session: "script-1" });
+    expect(hoisted.opened).toHaveLength(openings);
+    expect(card()).toHaveLength(0);
+    expect(hoisted.ended).toEqual([]);
   });
 
   it("stops saying it waits once the run waiting is stopped, and says where it stopped (AMB-T-5753)", async () => {

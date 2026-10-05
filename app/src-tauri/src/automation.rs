@@ -1820,6 +1820,7 @@ fn run_card(
         report_withheld,
         acknowledged: run.acknowledged_at.is_some(),
         acknowledged_by: run.acknowledged_by_kind.map(|by| by.as_str()),
+        output_tail: None,
     })
 }
 
@@ -1845,7 +1846,19 @@ fn left_by(def: &amenbo_core::model::AutomationRunDef, exit_id: Option<i64>) -> 
 pub fn automation_run_cards(run_ids: Vec<i64>) -> Result<Vec<AutomationRunCardDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_run_cards");
     let store = open_store_read()?;
-    run_cards(&store, run_ids)
+    let mut cards = run_cards(&store, run_ids)?;
+    for card in &mut cards {
+        card.output_tail = script_tail(&store, card.run)?;
+    }
+    Ok(cards)
+}
+
+/// **What a run's last step wrote, where that step was a script that has ended** (`AMB-D-1016`). Only
+/// a script's step keeps a tail, and only once its program has ended, so an empty one is every other
+/// step — and a script still running, or failed as a crash on the way back up (`AMB-D-961`).
+fn script_tail(store: &amenbo_core::Store, run_id: i64) -> Result<Option<String>, CmdError> {
+    let steps = read::automation_run_steps_of(store.read_model().conn(), run_id)?;
+    Ok(steps.into_iter().last().map(|last| last.output_tail).filter(|tail| !tail.is_empty()))
 }
 
 /// **What is keeping a run waiting** (`AMB-D-999`) — the tasks the built-in it waits on could take but

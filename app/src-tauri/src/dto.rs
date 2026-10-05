@@ -4104,7 +4104,8 @@ pub struct AutomationBuiltinRunDto {
     #[ts(optional)]
     pub(crate) held_until: Option<String>,
     /// **The program a script step runs** (`AMB-D-1016`), by the full path its step was written
-    /// with. Absent on a built-in: a card that carries it is a script's, not one Amenbo carries out.
+    /// with. Absent on a built-in: a step that carries it is a script's, drawn as its read-only
+    /// terminal rather than a card, and not one Amenbo carries out.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) program: Option<String>,
@@ -4385,4 +4386,11 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) acknowledged_by: Option<&'static str>,
+    /// **What the last step wrote, where it was a script that has ended** (`AMB-D-1016`) — the tail
+    /// kept on the step ([`amenbo_core::model::AutomationRunStep::output_tail`]), for the run's pane
+    /// to show once the app has come back and the terminal it ran on is gone. Read only for the panes
+    /// ([`crate::automation::automation_run_cards`]); absent on the tabs' rows, and on every other step.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) output_tail: Option<String>,
 }

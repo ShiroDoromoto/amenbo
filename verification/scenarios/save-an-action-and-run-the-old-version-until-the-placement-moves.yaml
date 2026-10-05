@@ -1,0 +1,116 @@
+# Saving an action is not the same as running it. A placement stands on the version of its action that
+# was newest when it was put down, and stays there through every later save of the action: Amenbo never
+# moves it by itself. A person or an AI moves it, on the automation's draft, and a start reads that
+# move only once the automation is saved again. A test run is the other side of it: it reads the draft,
+# so a move nobody has saved yet is already what it walks.
+#
+# A run started from the terminal opens no step — the host that opens them is the app's — so the run
+# itself never shows which steps it copied down. What a start copies is the automation's newest saved
+# version, so the road reads that version (`saved: true`) where it reads what the start stands on.
+id: save-an-action-and-run-the-old-version-until-the-placement-moves
+title: A saved action runs only once its placement is moved and the automation saved, and a test run tries the draft
+description: >
+  An action is saved and placed on an automation, which is saved. The action is then rewritten — a
+  step added in front of the one it had — and saved as version 2. The placement still stands on
+  version 1, on the draft and on what a start reads, and a test run walks version 1. The placement is
+  moved onto version 2 without saving the automation: a test run now walks version 2, while what a
+  start reads is still version 1, and a start goes through. Once the automation is saved, what a
+  start reads is version 2 as well.
+given:
+  # Two rather than one because the terminal's premise stands its programs up in front of the
+  # machine's own and cannot make a row shorter than two; the step names the first of them either way.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2 } }
+
+  # Version 1 of the work: one step, out by the action's done way out. It is saved before it is placed,
+  # so the placement stands on that version.
+  - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: fix, prompt: fix what the task asks for }, as: fix }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: fix } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: fix, exit_to: "" } }
+  - { type: action, domain: automation, op: action-save, with: { target: work } }
+
+  # Take → work → close → take again, and out once there is nothing left to take.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one standing on an older version" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: fix, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_work } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close, to: at_take } }
+
+steps_cli:
+  # A start asks for the app up on the store, and reads the newest saved version.
+  - { type: action, domain: store, op: app-up }
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
+  # Version 2 of the work: a step that looks first, handing on to the one it had.
+  - { type: action, domain: automation, op: step-add, with: { target: work, name: check, prompt: check what the task asks for }, as: check }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: check, to: fix } }
+  - { type: action, domain: automation, op: action-entry, with: { target: work, step: check } }
+  - { type: action, domain: automation, op: action-save, with: { target: work } }
+
+  # Saving the action moved nothing: the placement stands on version 1, on the draft and on what a
+  # start reads alike, with version 2 there to move onto.
+  - type: assert
+    domain: automation
+    op: placement-read
+    with: { target: auto, name: work, version: 1, latest: 2, steps: [fix] }
+  - type: assert
+    domain: automation
+    op: placement-read
+    with: { target: auto, name: work, saved: true, version: 1, steps: [fix] }
+
+  # The draft stands on version 1 too, so a test run walks the one step version 1 holds.
+  - { type: action, domain: automation, op: test-run, with: { target: auto } }
+  - type: assert
+    domain: automation
+    op: test-run-walked
+    with:
+      target: auto
+      walked:
+        - [タスクに着手する, 着手した]
+        - [fix, 完了]
+        - [タスクを閉じる, 完了]
+        - [タスクに着手する, 着手できるタスクが無い]
+      status: completed
+
+  # Moved onto version 2 on the draft, and nothing saved.
+  - { type: action, domain: automation, op: place-version, with: { target: at_work, version: 2 } }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: check, agent: claude-code } }
+
+  # A test run reads the draft, so it already walks version 2 — the new step first.
+  - { type: action, domain: automation, op: test-run, with: { target: auto } }
+  - type: assert
+    domain: automation
+    op: test-run-walked
+    with:
+      target: auto
+      walked:
+        - [タスクに着手する, 着手した]
+        - [check, 完了]
+        - [fix, 完了]
+        - [タスクを閉じる, 完了]
+        - [タスクに着手する, 着手できるタスクが無い]
+      status: completed
+      runs: 0
+
+  # What a start reads is still version 1, and a start goes through on it.
+  - type: assert
+    domain: automation
+    op: placement-read
+    with: { target: auto, name: work, saved: true, version: 1, steps: [fix] }
+  - { type: action, domain: automation, op: start, with: { target: auto }, as: run_on_1 }
+  - { type: assert, domain: automation, op: run, with: { target: run_on_1, status: running } }
+  - { type: action, domain: automation, op: stop, with: { target: run_on_1 } }
+
+  # Saved, the move is what a start reads.
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+  - type: assert
+    domain: automation
+    op: placement-read
+    with: { target: auto, name: work, saved: true, version: 2, latest: 2, steps: [check, fix] }
+  - { type: action, domain: automation, op: start, with: { target: auto }, as: run_on_2 }
+  - { type: assert, domain: automation, op: run, with: { target: run_on_2, status: running } }
+  - { type: action, domain: automation, op: stop, with: { target: run_on_2 } }

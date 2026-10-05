@@ -264,7 +264,15 @@ note: string,
 /**
  * How many steps it holds. One is the shape every action folded out of a v52 step has.
  */
-steps: number, global: boolean, usedBy: number, };
+steps: number, global: boolean, usedBy: number, 
+/**
+ * The newest saved version. Absent for an action nobody has saved.
+ */
+saved?: AutomationSavedDto, 
+/**
+ * Does what is inside the action hold anything the newest saved version does not?
+ */
+unsaved: boolean, };
 
 /**
  * **One library action's whole definition** — the steps inside it, the lines drawn between them, and
@@ -323,7 +331,20 @@ heldBy: Array<AutomationRunCardDto>,
  * **The automations that place it**, each once, in id order — the ones `used_by` counts. Named
  * rather than counted, so the panel shows where a rewrite here lands and goes to each of them.
  */
-placedOn: Array<AutomationPlacedOnDto>, };
+placedOn: Array<AutomationPlacedOnDto>, 
+/**
+ * The newest saved version. Absent for an action nobody has saved, and for a built-in.
+ */
+saved?: AutomationSavedDto, 
+/**
+ * Does what is inside the action hold anything the newest saved version does not?
+ */
+unsaved: boolean, 
+/**
+ * **Why a save would be refused** — the action's own check, as the save asks it
+ * ([`amenbo_core::ops::automation::action_save`]). Empty when it would pass.
+ */
+saveBlocks: Array<AutomationLaunchBlockDto>, };
 
 /**
  * **One built-in, as Amenbo defines it** (`AMB-D-964`) — what the library draws under its own head,
@@ -435,7 +456,17 @@ heldUntil?: string,
  * **The program a script step runs** (`AMB-D-1016`), by the full path its step was written
  * with. Absent on a built-in: a card that carries it is a script's, not one Amenbo carries out.
  */
-program?: string, };
+program?: string, 
+/**
+ * **The arguments the script is run with**, as its step was written with them. Absent on a
+ * built-in, beside `program`.
+ */
+args?: Array<string>, 
+/**
+ * **When the step was opened**, as an RFC3339 instant. Absent while it is about to be carried out
+ * and nothing is written for it yet.
+ */
+startedAt?: string, };
 
 /**
  * **One automation in the list** — what the "automations" tab draws a row from.
@@ -450,7 +481,16 @@ notes: string,
  * How many actions are placed on it. The row says it because "what is this" and "is it built
  * yet" are the two things a list is read for.
  */
-placements: number, archived: boolean, };
+placements: number, archived: boolean, 
+/**
+ * The newest saved version. Absent for an automation nobody has saved.
+ */
+saved?: AutomationSavedDto, 
+/**
+ * Does the draft hold anything the newest saved version does not? The row marks it, so a draft
+ * left unsaved is noticed from the list.
+ */
+unsaved: boolean, };
 
 /**
  * **A setting, and the answer written for it while building.** An action declares and the placement
@@ -483,7 +523,20 @@ entryPlacementId?: number, archived: boolean, placements: Array<AutomationPlacem
  * written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen
  * names these, each with the way to its pane. Empty while nothing is going.
  */
-heldBy: Array<AutomationRunCardDto>, };
+heldBy: Array<AutomationRunCardDto>, 
+/**
+ * The newest saved version. Absent for an automation nobody has saved.
+ */
+saved?: AutomationSavedDto, 
+/**
+ * Does what is written here hold anything the newest saved version does not?
+ */
+unsaved: boolean, 
+/**
+ * **Why a save would be refused** — the launch check asked the way the save asks it, without this
+ * machine's agents and models ([`amenbo_core::ops::automation::save`]). Empty when it would pass.
+ */
+saveBlocks: Array<AutomationLaunchBlockDto>, };
 
 /**
  * **What happens after a way out is taken.**
@@ -643,7 +696,12 @@ export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<Automatio
  * **One automation an action is placed on**, with the project it is in — a global action stands on
  * automations in more than one, and going to one is going to its project.
  */
-export type AutomationPlacedOnDto = { id: number, name: string, project: number, };
+export type AutomationPlacedOnDto = { id: number, name: string, project: number, 
+/**
+ * **The versions of the action its placements stand on**, each once, oldest first — more than
+ * one where it places the action more than once. Empty where none stands on a version.
+ */
+versions: number[], };
 
 /**
  * **One spot on the picture**: the library action standing there, with everything it is read under
@@ -673,6 +731,17 @@ builtin?: string,
  * with. Absent on every other spot.
  */
 draft?: boolean, 
+/**
+ * **The version of the action this spot stands on** (`AMB-D-1000`) — a built-in's off its record.
+ * Absent where it stands on none.
+ */
+version?: number, 
+/**
+ * The newest version of that action there is — for a built-in, the one this build defines; for
+ * another, its newest saved. Where it is above `version`, the spot stands on an older one, and
+ * moving it is a person's or an AI's to do. Absent where there is none.
+ */
+latestVersion?: number, 
 /**
  * **The way out this spot never leaves by**, as its settings stand — a built-in that leaves by one
  * of two ways out as a setting chooses, or that waits instead of leaving by one
@@ -777,7 +846,14 @@ pausableBeforeNextTask: boolean,
  * **Whether it stands before a built-in that is waiting** for something to turn up — still
  * `running`, with nothing under way (`AMB-D-969`).
  */
-waiting: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | null, 
+waiting: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | "failed_check" | null, 
+/**
+ * **The saved version of the automation its copy was taken from** (`AMB-D-1015`) — the newest
+ * copy, which is what it goes on from and what it last took up at its entry. Absent where that
+ * copy was taken from unsaved changes — a run every saved version is newer than — and on a run
+ * that carries no copy of its entry.
+ */
+version?: number, 
 /**
  * The step it is on, or the last one it ran. Absent before the first step has opened.
  */
@@ -927,6 +1003,11 @@ passed: Array<AutomationRunPassDto>,
 at?: number, };
 
 /**
+ * **One saved version of an automation**: its number, and when it was saved.
+ */
+export type AutomationSavedDto = { version: number, savedAt: string, };
+
+/**
  * **One step inside an action**: the terminal it stands up, and what it declares inside the picture.
  *
  * The prompt and the three flags are the step's own, which is why they are read here rather than off
@@ -971,6 +1052,12 @@ step?: AutomationStepRunDto,
  * an agent's step and for a run stopped instead.
  */
 builtin?: AutomationBuiltinRunDto, 
+/**
+ * **The terminal a script step's program runs on** (`AMB-D-1016`), which nobody writes into —
+ * for the pane to take up the way it takes up an agent's step. Absent for every other step, and
+ * for a script whose program could not be started.
+ */
+session?: string, 
 /**
  * The required inputs nothing filled, where the run was stopped. Empty otherwise.
  */
@@ -1036,7 +1123,11 @@ folder?: string,
 /**
  * Whether this step may stop and wait for a person (`automation_action_step.interactive`).
  */
-interactive: boolean, };
+interactive: boolean, 
+/**
+ * **When the step was opened**, as an RFC3339 instant (`automation_run_step.started_at`).
+ */
+startedAt?: string, };
 
 /**
  * **The program a script step starts**, by its full path, with the arguments handed to it as they
@@ -1054,7 +1145,7 @@ export type AutomationTestRunDto = { steps: Array<AutomationTestStepDto>,
  * Where the run stood when the walk ended: `completed` where the picture ran out, `failed` where
  * a real run would have been stopped, `running` where the walk was cut short (`cut`).
  */
-status: "running" | "paused" | "completed" | "failed" | "canceled", stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | null, 
+status: "running" | "paused" | "completed" | "failed" | "canceled", stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | "failed_check" | null, 
 /**
  * The required inputs the last step found nothing wired into. Empty otherwise.
  */

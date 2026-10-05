@@ -81,6 +81,10 @@ export type PicBox = {
   /** The action standing here was made on the spot and is still being made (`AMB-D-1005`). Absent on
    *  an action's picture, and wherever it is not. */
   draft?: boolean;
+  /** The version of the action this box stands on (`AMB-D-1000`). Absent on an action's picture. */
+  version?: number;
+  /** The newest version of that action there is. Absent on an action's picture. */
+  latestVersion?: number;
 };
 
 /** One picture, whichever of the two it is: the boxes, the lines, and the box a run opens first. */
@@ -106,6 +110,15 @@ export function automationGraph(detail: AutomationDetailDto | null): PicGraph | 
     edges: detail.edges,
     wires: detail.wires,
   };
+}
+
+/**
+ * **The versions of a placement standing on an older one than its action's newest**, or nothing. A
+ * built-in's placement is never moved (`AMB-D-1000`), so it is never marked as behind.
+ */
+export function behindOf(box: Pick<PicBox, "builtin" | "version" | "latestVersion">) {
+  if (box.builtin !== undefined || box.version === undefined || box.latestVersion === undefined) return undefined;
+  return box.version < box.latestVersion ? { version: box.version, latest: box.latestVersion } : undefined;
 }
 
 /** One library action as a picture — its boxes are the steps inside it. */
@@ -224,6 +237,9 @@ export type PicNode = {
   /** The action standing here is still being made (`PicBox`). It says so in place of "empty": an
    *  action being made is expected to have nothing in it yet. */
   draft?: boolean;
+  /** The box stands on an older version of its action than the newest — the two numbers
+   *  (`behindOf`). Absent where it stands on the newest, and on a built-in. */
+  behind?: { version: number; latest: number };
 };
 
 /** The dashed outline around the boxes one task is worked by. */
@@ -930,6 +946,7 @@ function layOutWith(
           builtin: box.builtin,
           empty: box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
           draft: box.draft === true,
+          behind: behindOf(box),
           unfed: !live.has(boxId)
             ? []
             : box.inputs

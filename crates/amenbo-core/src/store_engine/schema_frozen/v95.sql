@@ -366,6 +366,20 @@ CREATE TABLE IF NOT EXISTS automation_action_version (
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     UNIQUE (action_id, version)
 );
+CREATE TABLE IF NOT EXISTS automation_version (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    version BIGINT NOT NULL DEFAULT 0,
+    entry_placement_id BIGINT,
+    placements TEXT NOT NULL DEFAULT '',
+    cfgs TEXT NOT NULL DEFAULT '',
+    placement_steps TEXT NOT NULL DEFAULT '',
+    edges TEXT NOT NULL DEFAULT '',
+    wires TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (automation_id, version)
+);
 CREATE TABLE IF NOT EXISTS automation_run (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
@@ -374,13 +388,14 @@ CREATE TABLE IF NOT EXISTS automation_run (
     pause_requested BOOLEAN NOT NULL DEFAULT 0 CHECK(pause_requested IN (0, 1)),
     pause_before_next_task BOOLEAN NOT NULL DEFAULT 0 CHECK(pause_before_next_task IN (0, 1)),
     pause_kind TEXT CHECK(pause_kind IN ('end_of_action', 'before_next_task')),
-    stopped_reason TEXT CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'no_input', 'no_way_on', 'halted', 'left_task_open')),
+    stopped_reason TEXT CHECK(stopped_reason IN ('crashed', 'max_times', 'no_agent', 'no_input', 'no_way_on', 'halted', 'left_task_open', 'failed_check')),
     started_by_kind TEXT CHECK(started_by_kind IN ('human', 'ai')),
     started_at TEXT CHECK(started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     acknowledged_at TEXT CHECK(acknowledged_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     handed_task TEXT,
     acknowledged_by_kind TEXT CHECK(acknowledged_by_kind IN ('human', 'ai')),
+    stopped_detail TEXT,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
@@ -393,6 +408,7 @@ CREATE TABLE IF NOT EXISTS automation_run_def (
     prompt TEXT,
     builtin TEXT,
     builtin_version BIGINT,
+    automation_version BIGINT,
     script_program TEXT,
     script_args TEXT NOT NULL DEFAULT '',
     script_timeout_minutes BIGINT,

@@ -405,12 +405,17 @@ amenbo automation edge-add --from 35: --to 31          # and on to the next task
 amenbo automation place-add 3 --builtin wait           # 36: waits for as long as its <hours>, <minutes> and <seconds> add up to, then goes on by done
 amenbo automation cfg-set 36 --name "<minutes>" --number 30 # (unanswered ones count as none) — put it between two spots to space them apart
 amenbo automation entry-replace 3 --builtin make_task  # later: start at another of the three; the lines out of 31 go, the placements after it stay
+amenbo automation action-save 7                        # keep what is inside the action as its next version, once its own check passes (`action-discard 7` throws away what is written since)
+amenbo automation place-version 33 2                   # move a placement onto another saved version of its action — Amenbo never moves it by itself
+amenbo automation save 3                               # keep the automation as its next version, once the launch check passes (`discard 3` throws away what is written since)
 amenbo automation list                                 # what this project has, and how built each is
 amenbo automation show 3                               # one whole definition, every spot resolved
+amenbo automation show 3 --saved                       # ...as it was saved last, which is what a launch uses
 amenbo automation action-list                          # the library this project reaches
 amenbo automation action-show 7                        # one action, and the picture inside it
-amenbo automation test-run 3                           # walk it through first: every step and the prompt each agent would get, with nothing started and nothing kept
-amenbo automation start 3                              # away it goes (with the app up: it opens the steps, so with none running this is refused)
+amenbo automation action-show 7 --saved                # ...as it was saved last, which is what a placement put down now stands on
+amenbo automation test-run 3                           # walk the draft through first: every step and the prompt each agent would get, with nothing started and nothing kept
+amenbo automation start 3                              # away it goes, from the newest saved version (refused if never saved, and with no app up: the app opens the steps)
 amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand a make_task entry the task it files: title, notes, classification and attachments
 amenbo automation pause 7                              # ...at the end of the action under way (a wait under way included: the run pauses once its time is up)
 amenbo automation pause 7 --before-next-task           # ...or where it would take its next task (one waiting for a task pauses now)

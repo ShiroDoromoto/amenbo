@@ -1758,6 +1758,15 @@ export function WorkspaceFace({
                       // is not one Amenbo carries out, so the row does not call it a built-in.
                       builtin: builtin !== undefined && builtin.program === undefined,
                       interactive: step?.interactive ?? false,
+                      // Who carries the step out, and with what: the step's agent and model as the run
+                      // copied them, or the script and the command it runs. A built-in has its chip.
+                      by: step !== undefined
+                        ? { kind: "agent", agent: step.agent, model: step.model ?? null }
+                        : builtin?.program !== undefined ? { kind: "script" } : null,
+                      command: builtin?.program === undefined
+                        ? null
+                        : [builtin.program, ...(builtin.args ?? [])].join(" "),
+                      startedAt: on.startedAt === undefined ? null : Date.parse(on.startedAt),
                       // Which spot of the picture this step was opened from, said by the action
                       // standing there (`AMB-D-949`). Null where that spot has since been taken off.
                       action: on.actionName === undefined ? null : builtinWord(builtin?.key, on.actionName),

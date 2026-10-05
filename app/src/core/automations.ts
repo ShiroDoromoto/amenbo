@@ -299,6 +299,47 @@ export async function abandonAutomationAction(id: number): Promise<void> {
 }
 
 /**
+ * **Save the automation as its next version.** What the build screen writes goes to its draft, and
+ * this is what makes the draft the definition a launch stands on. Core refuses it with the reasons
+ * the detail lists (`saveBlocks`). It goes past `told`: it writes nothing a field holds, so the head
+ * reads it off the definition rather than off the write.
+ */
+export async function saveAutomation(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_save", { id });
+}
+
+/**
+ * **Throw away what is written on the automation since its newest saved version.** Every row goes back
+ * under the id it was saved with (`AMB-D-961`), and a placement only the draft held is gone. Core
+ * refuses it for an automation nobody has saved. There is no undo, so the screen asks first.
+ */
+export async function discardAutomation(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_discard", { id });
+}
+
+/**
+ * **Save what is inside the action as its next version.** What the action build screen writes goes to
+ * its draft, and this is what makes it the version an automation placing it can move to. Core refuses
+ * it with the reasons the detail lists (`saveBlocks`). It goes past `told`, as `saveAutomation` does.
+ */
+export async function saveAutomationAction(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_save", { id });
+}
+
+/**
+ * **Throw away what is written inside the action since its newest saved version.** Every row goes back
+ * under the id it was saved with (`AMB-D-961`). Core refuses it for an action nobody has saved. There
+ * is no undo, so the screen asks first.
+ */
+export async function discardAutomationAction(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("automation_action_discard", { id });
+}
+
+/**
  * Rename a library action, or rewrite what it is for. The name and the note are all that is the
  * action's own: the prompt and the flags belong to its steps (`editAutomationStep`), and who carries
  * each step out to where the action is placed (`chooseAutomationAgent`).
@@ -628,6 +669,15 @@ export async function answerAutomationCfg(
 }
 
 /**
+ * **Move a placement onto another saved version of its action** (`AMB-D-1000`) — Amenbo never moves
+ * it by itself. A built-in's placement is refused.
+ */
+export async function setAutomationPlacementVersion(placementId: number, version: number): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_placement_version_set", { placementId, version });
+}
+
+/**
  * **Choose who carries one step out at one placement** — the agent, and the model where one is
  * named (`null` is the agent's own default) — or, with `agent` `null`, leave nobody chosen
  * (`AMB-D-960`). The same action placed on two pictures is chosen for apart, step by step.
@@ -782,7 +832,10 @@ export async function editAutomationInput(
   });
 }
 
-/** **Take an input away.** The wires that fed it are left where they are, parted. */
+/**
+ * **Take an input away**, with the wires inside its action that fed it. An automation's wires into it
+ * stay: the version a placement points at still declares it.
+ */
 export async function removeAutomationInput(
   owner: Declarer,
   ownerId: number,

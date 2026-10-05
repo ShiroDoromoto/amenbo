@@ -1740,6 +1740,11 @@ pub struct AutomationPlacement {
     pub id: i64,
     pub automation_id: i64,
     pub action_id: i64,
+    /// **The saved version of the action this placement stands on** ([`AutomationActionVersion::version`]),
+    /// or `None`. A built-in's is `None`, because its `action_id` already names one version
+    /// (`AMB-D-1000`); so is one on an action nobody has saved yet.
+    #[serde(default)]
+    pub version: Option<i64>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -1937,6 +1942,68 @@ pub struct AutomationWire {
     pub updated_at: Timestamp,
 }
 
+/// **One saved version of an action a person wrote** — what was inside it at the moment it was saved,
+/// copied whole and never rewritten. A placement stands on one ([`AutomationPlacement::version`]), so
+/// writing on in the action changes no automation until a placement is moved onto a newer version.
+///
+/// The six JSON fields are the rows as they stood, each its own record under its own id: ids are never
+/// reused, so the edges and wires here key their ways out and ports exactly as the rows did
+/// (`AMB-D-961`), and a row deleted from the action afterwards still means the same thing here.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationActionVersion {
+    pub id: i64,
+    pub action_id: i64,
+    /// Counts up from 1 within one action.
+    pub version: i64,
+    /// The step the copy opens first, by its id in `steps`, or `None` where the action had none.
+    #[serde(default)]
+    pub entry_step_id: Option<i64>,
+    /// The steps — JSON, [`AutomationStep`]s.
+    pub steps: String,
+    /// The ways out of the action and of each step — JSON, [`AutomationExit`]s.
+    pub exits: String,
+    /// The inputs of the action and of each step, and the outputs on every one of those ways out —
+    /// JSON, [`AutomationPort`]s.
+    pub ports: String,
+    /// The settings the action declares — JSON, [`AutomationCfg`]s.
+    pub cfgs: String,
+    /// The edges drawn inside the action — JSON, [`AutomationEdge`]s.
+    pub edges: String,
+    /// The wires drawn inside the action — JSON, [`AutomationWire`]s.
+    pub wires: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **One saved version of an automation** — its picture at the moment it was saved, copied whole and
+/// never rewritten. A run records which one it was copied from ([`AutomationRunDef::automation_version`]).
+///
+/// The five JSON fields are the rows as they stood, each its own record under its own id, for the reason
+/// [`AutomationActionVersion`]'s are (`AMB-D-961`).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationVersion {
+    pub id: i64,
+    pub automation_id: i64,
+    /// Counts up from 1 within one automation.
+    pub version: i64,
+    /// The placement the copy opens first, by its id in `placements`, or `None` where the automation had
+    /// none.
+    #[serde(default)]
+    pub entry_placement_id: Option<i64>,
+    /// The placements, each with the version of its action it stood on — JSON, [`AutomationPlacement`]s.
+    pub placements: String,
+    /// The answers written for each placement's settings — JSON, [`AutomationCfg`]s.
+    pub cfgs: String,
+    /// The agents and models chosen for each placement's steps — JSON, [`AutomationPlacementStep`]s.
+    pub placement_steps: String,
+    /// The edges drawn on the automation — JSON, [`AutomationEdge`]s.
+    pub edges: String,
+    /// The wires drawn on the automation — JSON, [`AutomationWire`]s.
+    pub wires: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 // ───────────────────────── automation: what ran ─────────────────────────
 
 /// Where one launch of one automation stands (`AMB-D-955`).
@@ -2008,6 +2075,11 @@ pub enum AutomationStoppedReason {
     /// (`AMB-D-967`). The launch check refuses a picture that can do this, so reaching it means the
     /// check missed a line: the machinery's fault, not the author's and not the agent's.
     LeftTaskOpen,
+    /// The run came back to its entry, the automation had been saved since it was copied, and the newer
+    /// version did not pass the check a launch asks — or starts by filing a task, which only a launch is
+    /// handed what to file ([`crate::ops::automation_run::take_up_newer`]). What it did not pass is kept
+    /// on the run ([`AutomationRun::stopped_detail`]).
+    FailedCheck,
 }
 
 impl AutomationStoppedReason {
@@ -2020,6 +2092,7 @@ impl AutomationStoppedReason {
             AutomationStoppedReason::NoWayOn => "no_way_on",
             AutomationStoppedReason::Halted => "halted",
             AutomationStoppedReason::LeftTaskOpen => "left_task_open",
+            AutomationStoppedReason::FailedCheck => "failed_check",
         }
     }
 
@@ -2032,6 +2105,7 @@ impl AutomationStoppedReason {
             "no_way_on" => Some(AutomationStoppedReason::NoWayOn),
             "halted" => Some(AutomationStoppedReason::Halted),
             "left_task_open" => Some(AutomationStoppedReason::LeftTaskOpen),
+            "failed_check" => Some(AutomationStoppedReason::FailedCheck),
             _ => None,
         }
     }
@@ -2123,6 +2197,10 @@ pub struct AutomationRun {
     /// ([`AttachmentTarget::AutomationRun`]) until that built-in moves them on to the task (`AMB-D-981`).
     #[serde(default)]
     pub handed_task: Option<String>,
+    /// **What a run failed with [`AutomationStoppedReason::FailedCheck`] did not pass**, as the refusal
+    /// said it. `None` for every other run.
+    #[serde(default)]
+    pub stopped_detail: Option<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -2159,6 +2237,10 @@ pub struct AutomationRunDef {
     /// behave as the definition this copy's ways out were written from.
     #[serde(default)]
     pub builtin_version: Option<i64>,
+    /// The saved version of the automation this copy was taken from ([`AutomationVersion::version`]), or
+    /// `None` where the automation had none saved then. Every copy taken at one time carries the same one.
+    #[serde(default)]
+    pub automation_version: Option<i64>,
     /// The script the step was, or `None` for one that was not ([`StepScript`]).
     #[serde(default)]
     pub script: Option<StepScript>,

@@ -452,6 +452,9 @@ input[type="color"] {
    line would push the name's panel taller for a pane that has no run. */
 .plate-peek__task { display: block; }
 .plate-peek__task:empty { display: none; }
+/* A script's command, in full: the step's line cuts it as the pane narrows (`.plate__command`). */
+.plate-peek__command { display: block; font-family: var(--font-mono); }
+.plate-peek__command:empty { display: none; }
 /* The line while a name is being typed in its place. Out of sight and still on the page: what
    draws the row is mounted once and keeps drawing into this box, so taking it away would be taking
    the label down to type a name (`../talk/plate`). */
@@ -550,7 +553,8 @@ input[type="color"] {
    It is the frame's column again, with the frame's gap, so the face lays out as it did without it; it
    is a box of its own so that the picture has somewhere to be drawn over (`.runpic`). With the picture
    up it stays in the layout and only dims: the terminal keeps the size it had and is not refit when
-   the face is turned, and its last eight rows show through the bottom of the picture. The
+   the face is turned, and its last eight rows show through the bottom of the picture — with no
+   terminal up, nothing does (`.slot__body--bare`). The
    picture's `z-index` is kept inside this box (`isolation`), so the panel dropped from the row above
    (`.slot__plate`) is still drawn over the picture, as it is over the terminal. */
 .slot__body {
@@ -927,13 +931,18 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
    stands where the terminal would and takes the same room, so the pane does not change size between a
    step and a built-in. It says where the built-in has got to by a mark in the middle — turning while
    Amenbo is at it or waiting, a tick once it is done — with what it waits for or the way out it left by
-   under it. */
+   under it. What it says can run taller than the pane — a wait lists one line per thing holding tasks
+   back — so the card scrolls rather than spilling out of the pane. It is centred by the margins of its
+   first and last child rather than by `justify-content`, which would push the top past where a scroll
+   can reach once the card is taller than the pane. */
 .slot__builtin {
-  flex: 1; min-height: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; min-height: 0; overflow: auto;
+  display: flex; flex-direction: column; align-items: center;
   gap: var(--s-3); padding: var(--s-4);
   text-align: center;
 }
+.slot__builtin > :first-child { margin-block-start: auto; }
+.slot__builtin > :last-child { margin-block-end: auto; }
 .slot__builtin-spin {
   width: 20px; height: 20px; border-radius: 50%;
   border: 2px solid var(--c-edge); border-top-color: var(--c-accent);
@@ -2981,8 +2990,9 @@ body.dragging-row { user-select: none; }
 /* Spelled out for the reason `.plate[hidden]` is: the run's parts are drawn on the same row as an
    ordinary pane's name, and are away there — and the lamp is away on a run's pane (`../talk/nameplate`).
    The built-in's chip is one of them twice over: it wears `.actscope`'s `display`, and without this it
-   was drawn on every step of a run (`AMB-T-5589`). */
-.plate__dot[hidden], .plate__auto[hidden], .plate__no[hidden], .plate__builtin[hidden] { display: none; }
+   was drawn on every step of a run (`AMB-T-5589`). The chip saying who carries a step out wears it too. */
+.plate__dot[hidden], .plate__auto[hidden], .plate__no[hidden], .plate__builtin[hidden],
+.plate__by[hidden] { display: none; }
 /* **The mark glows while the run is under way** (`AMB-D-1010`), in place of a chip saying running: its
    edge brightens and dims at the pace the state chip's dot used to pulse at, so the page keeps one
    rhythm. It is a glow and not a light going round the edge, because four panes side by side would
@@ -3091,6 +3101,21 @@ body.dragging-row { user-select: none; }
 }
 .plate__step b { font-weight: 700; }
 .plate-step .plate__builtin { flex: 0 0 auto; }
+/* Who carries the step out, the command a script runs and how long the step has run, after the step
+   (`../talk/nameplate`). The command takes only the width the rest of the line leaves, so it is cut
+   down to nothing before the step's name loses a letter, and the panel has it whole
+   (`.plate-peek__command`). The time stands at the end of the line, so it does not move as the
+   command is cut. */
+.plate-step .plate__by { flex: 0 0 auto; }
+.plate__command {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+.plate__elapsed { flex: 0 0 auto; margin-inline-start: auto; font-variant-numeric: tabular-nums; }
+.plate__command:empty, .plate__elapsed:empty { display: none; }
 .plate__step .plate__into { margin-inline: var(--s-1); }
 /* The number of the box the step was opened from, drawn as the picture draws it (`AMB-T-5538`). */
 .plate__step .plate__box { margin-inline-end: var(--s-1); vertical-align: 1px; }

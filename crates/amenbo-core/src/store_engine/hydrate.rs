@@ -28,13 +28,14 @@ use super::sql::{Col, ColType, Int, NotNull, Nullability, Nullable, Read, Text};
 use super::Result;
 use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Automation, AutomationAction,
-    AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge, AutomationEnds,
+    AutomationActionVersion, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
+    AutomationEnds,
     AutomationExit, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
     AutomationPauseKind, AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationStoppedReason, AutomationWire, Database,
+    AutomationStep, AutomationStoppedReason, AutomationVersion, AutomationWire, Database,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
@@ -534,6 +535,7 @@ pub(super) fn automation_placement_row(r: &Row) -> rusqlite::Result<AutomationPl
         id: get(r, C.id)?,
         automation_id: get(r, C.automation_id)?,
         action_id: get(r, C.action_id)?,
+        version: get(r, C.version)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
@@ -683,6 +685,44 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         acknowledged_at: ts_opt(r, C.acknowledged_at)?,
         handed_task: get(r, C.handed_task)?,
         acknowledged_by_kind: enum_opt(r, C.acknowledged_by_kind, ActorKind::parse)?,
+        stopped_detail: get(r, C.stopped_detail)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_action_version_row(r: &Row) -> rusqlite::Result<AutomationActionVersion> {
+    const C: col::automation_action_version::Cols = col::automation_action_version::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationActionVersion {
+        id: get(r, C.id)?,
+        action_id: get(r, C.action_id)?,
+        version: get(r, C.version)?,
+        entry_step_id: get(r, C.entry_step_id)?,
+        steps: get(r, C.steps)?,
+        exits: get(r, C.exits)?,
+        ports: get(r, C.ports)?,
+        cfgs: get(r, C.cfgs)?,
+        edges: get(r, C.edges)?,
+        wires: get(r, C.wires)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_version_row(r: &Row) -> rusqlite::Result<AutomationVersion> {
+    const C: col::automation_version::Cols = col::automation_version::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationVersion {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        version: get(r, C.version)?,
+        entry_placement_id: get(r, C.entry_placement_id)?,
+        placements: get(r, C.placements)?,
+        cfgs: get(r, C.cfgs)?,
+        placement_steps: get(r, C.placement_steps)?,
+        edges: get(r, C.edges)?,
+        wires: get(r, C.wires)?,
         created_at,
         updated_at,
     })
@@ -700,6 +740,7 @@ pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunD
         prompt: get(r, C.prompt)?,
         builtin: get(r, C.builtin)?,
         builtin_version: get(r, C.builtin_version)?,
+        automation_version: get(r, C.automation_version)?,
         script: script(r, C.script_program, C.script_args, C.script_timeout_minutes)?,
         agent: get(r, C.agent)?,
         model: get(r, C.model)?,

@@ -1,0 +1,117 @@
+# A run waiting for a task stands at its entry, so before it looks again it reads the automation's
+# newest saved version, and goes on as the same run from that version's entry. That version is checked
+# first, the way a launch checks it. One the check turns away ends the run as failed, like any other
+# error: the run holds no task while it waits, so there is nothing to hand back.
+#
+# ── Why the agent is taken away ──────────────────────────────────────────────────────────────────
+# A save asks the launch check without this machine's agents, and a run picking up the newer version
+# asks it with them. So the version the run is turned away from is one the save lets through: its
+# step's agent is gone from the machine by the time it is saved. The build screen is opened twice
+# after that, since the first opening sets the look off and the second draws what it found — the
+# answer the run's pick-up reads as well.
+#
+# The failed run stays on the running tab until it is acknowledged, and its line says nothing of why:
+# the screen has no word for this reason yet, so the road reads only that it failed.
+#
+# A screen road alone: a run started at a terminal opens nothing, so it never waits there.
+id: fail-a-run-waiting-for-a-task-on-a-newer-definition-that-does-not-pass
+title: A run waiting for a task takes up the automation once it is saved, and fails if that version does not pass
+description: >
+  Start a run whose first box waits for a task, with none to take. Set the first box not to wait and
+  save the automation: the run takes the new version up and, finding no task, completes. Set it to
+  wait again, save, and start another run, which waits. Take Codex CLI, the agent of the step after the
+  first box, off the machine, and open the build screen twice so it says the automation could not be
+  started. Set the first box not to wait and save again: the save goes through, and the waiting run
+  is turned away by the check of the version it would take up and fails.
+given:
+  # Two agents, Claude Code and Codex CLI. The step is carried by Codex CLI, the one taken away.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2 } }
+
+  # The action a task goes through: one step, out by the action's done way out. Nothing is handed to
+  # the AI, so the run never reaches it — only the check reads its agent.
+  - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
+  - { type: action, domain: automation, op: step-add, with: { target: review, name: read, prompt: read what the task asks for }, as: read }
+  - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: read, exit_to: "" } }
+
+  # Take → review → close, and out once there is nothing to take.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one saved while a run waits" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_review, step: read, agent: codex-cli } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_review } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_review, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+steps_gui:
+  - { type: action, domain: workspace, op: show-face, with: { face: workspace } }
+  - { type: action, domain: workspace, op: show-face, with: { face: tasks } }
+  - { type: action, domain: automation, op: screen, with: { tab: automations } }
+  - { type: action, domain: automation, op: open, with: { target: auto } }
+
+  # Set to wait and saved, so the run started on it stays with nothing under way.
+  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
+  - type: action
+    domain: automation
+    op: answer-choice
+    with:
+      builtin: take_task
+      setting: 着手できるタスクが無いとき
+      value: 着手できるタスクが出るまで待つ
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+  - { type: action, domain: automation, op: start, with: { target: auto }, as: first }
+
+  # Saved not to wait. The waiting run takes that version up at its entry, finds no task, and ends —
+  # where the version it started on would have it waiting still.
+  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
+  - type: action
+    domain: automation
+    op: answer-choice
+    with:
+      builtin: take_task
+      setting: 着手できるタスクが無いとき
+      value: 待たずに出口「着手できるタスクが無い」へ進む
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+  - { type: action, domain: automation, op: screen, with: { tab: history } }
+  - { type: assert, domain: automation, op: history-row, with: { target: first, state: completed } }
+
+  # Saved to wait again, and a second run started on it.
+  - { type: action, domain: automation, op: screen, with: { tab: automations } }
+  - { type: action, domain: automation, op: open, with: { target: auto } }
+  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
+  - type: action
+    domain: automation
+    op: answer-choice
+    with:
+      builtin: take_task
+      setting: 着手できるタスクが無いとき
+      value: 着手できるタスクが出るまで待つ
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+  - { type: action, domain: automation, op: start, with: { target: auto }, as: second }
+  - { type: action, domain: automation, op: screen, with: { tab: running } }
+  - { type: assert, domain: automation, op: run-row, with: { target: second, state: running } }
+
+  # The step's agent goes while the run waits. Amenbo looks again: the first opening sets the look
+  # off, and the second draws what it found.
+  - { type: action, domain: workspace, op: take-away, with: { command: codex } }
+  - { type: action, domain: automation, op: screen, with: { tab: automations } }
+  - { type: action, domain: automation, op: open, with: { target: auto } }
+  - { type: action, domain: automation, op: screen, with: { tab: automations } }
+  - { type: action, domain: automation, op: open, with: { target: auto } }
+  - { type: assert, domain: automation, op: launch, with: { ready: false, reason: agent_missing } }
+
+  # Saved not to wait. The save does not ask for the agent, so it goes through; the waiting run asks
+  # for it as it takes the version up, is turned away, and fails.
+  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
+  - type: action
+    domain: automation
+    op: answer-choice
+    with:
+      builtin: take_task
+      setting: 着手できるタスクが無いとき
+      value: 待たずに出口「着手できるタスクが無い」へ進む
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+  - { type: action, domain: automation, op: screen, with: { tab: running } }
+  - { type: assert, domain: automation, op: run-row, with: { target: second, state: failed } }

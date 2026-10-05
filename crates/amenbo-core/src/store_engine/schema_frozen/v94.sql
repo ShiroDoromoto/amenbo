@@ -366,6 +366,20 @@ CREATE TABLE IF NOT EXISTS automation_action_version (
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     UNIQUE (action_id, version)
 );
+CREATE TABLE IF NOT EXISTS automation_version (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    version BIGINT NOT NULL DEFAULT 0,
+    entry_placement_id BIGINT,
+    placements TEXT NOT NULL DEFAULT '',
+    cfgs TEXT NOT NULL DEFAULT '',
+    placement_steps TEXT NOT NULL DEFAULT '',
+    edges TEXT NOT NULL DEFAULT '',
+    wires TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (automation_id, version)
+);
 CREATE TABLE IF NOT EXISTS automation_run (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
@@ -393,6 +407,7 @@ CREATE TABLE IF NOT EXISTS automation_run_def (
     prompt TEXT,
     builtin TEXT,
     builtin_version BIGINT,
+    automation_version BIGINT,
     script_program TEXT,
     script_args TEXT NOT NULL DEFAULT '',
     script_timeout_minutes BIGINT,

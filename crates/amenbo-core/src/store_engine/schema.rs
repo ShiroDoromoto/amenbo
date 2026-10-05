@@ -1007,7 +1007,7 @@ datasets! {
 
     // ───────────────────────── automation: what is built ─────────────────────────
     //
-    // Ten tables for the definition and five for the run, and the line between them is that a run
+    // Twelve tables for the definition and five for the run, and the line between them is that a run
     // never reads a definition again once it has started: `automation_run_def` is the copy taken at
     // the moment of launch, so editing an automation cannot change what a run already under way is
     // doing. The definition half is built through `crate::ops::automation`, and the run is opened by
@@ -1091,6 +1091,11 @@ datasets! {
     automation_placement {
         automation_id: fk("automation", "RESTRICT"),
         action_id: fk("automation_action", "RESTRICT"),
+        // The saved version of the action this placement stands on (`automation_action_version.version`),
+        // or NULL. A built-in's is NULL, because its `action_id` already names one version
+        // (`AMB-D-1000`); so is one on an action nobody has saved yet. A placement keeps the version it
+        // was put down with until it is moved onto another.
+        version: col(INT_OPT),
         order_key: col(ORDER_KEY),
     }
 
@@ -1146,8 +1151,9 @@ datasets! {
     // `model` NULL leaves the agent's own default. One row per pair, which is the constraint.
     automation_placement_step {
         placement_id: fk("automation_placement", "RESTRICT"),
-        // A plain id, not a key: deleting a step sweeps its rows here by hand, and a run under way
-        // still matches its copies to the step by this id after the step is gone.
+        // A plain id, not a key: a placement points at a saved version of its action, which keeps the
+        // step's id (`AMB-D-961`), so the choice stays when the step is deleted from the action; and a
+        // run under way still matches its copies to the step by this id after the step is gone.
         step_id: col(KEY_REF),
         agent: col(REQ),
         model: col(OPT),
@@ -1264,6 +1270,56 @@ datasets! {
         to_port_id: col(KEY_REF),
     }
 
+    // **One saved version of an action a person wrote** — what was inside the action at the moment it
+    // was saved, copied whole and never rewritten. The tables above are the action as it is being
+    // written; this is what a placement stands on (`automation_placement.version`), so writing on in the
+    // action changes no automation until a placement is moved onto a newer version.
+    //
+    // `version` counts up from 1 within one action. A built-in has no rows here: its versions are
+    // actions of their own (`AMB-D-1000`).
+    //
+    // The six JSON columns hold the rows as they stood — the steps, the ways out of the action and of
+    // each step, the inputs and the outputs on those ways out, the action's settings, and the edges and
+    // wires drawn inside it — each the row's own record, under its own id. Ids are never reused
+    // (`AUTOINCREMENT`), so an edge or a wire in the copy keys its way out and its ports exactly as the
+    // row did (`AMB-D-961`), and a row deleted from the action afterwards still means the same thing
+    // here. `entry_step_id` is the step the copy opens first, a key into `steps` rather than a reference
+    // to a step that may since have gone.
+    automation_action_version {
+        action_id: fk("automation_action", "RESTRICT"),
+        version: col(COUNT),
+        entry_step_id: col(KEY_REF_OPT),
+        steps: col(REQ),
+        exits: col(REQ),
+        ports: col(REQ),
+        cfgs: col(REQ),
+        edges: col(REQ),
+        wires: col(REQ),
+    } => "UNIQUE (action_id, version)"
+
+    // **One saved version of an automation** — its picture at the moment it was saved, copied whole and
+    // never rewritten. The tables above are the automation as it is being written; a run is copied
+    // down from it and records which version it was (`automation_run_def.automation_version`).
+    //
+    // `version` counts up from 1 within one automation.
+    //
+    // The five JSON columns hold the rows as they stood — the placements, the answers written for each
+    // placement's settings, the agents chosen for each placement's steps, and the edges and wires drawn
+    // on the automation — each the row's own record, under its own id, for the reason
+    // `automation_action_version`'s are (`AMB-D-961`). A placement in the copy keeps the version of its
+    // action it stood on. `entry_placement_id` is the placement the copy opens first, a key into
+    // `placements` rather than a reference to a placement that may since have been taken off.
+    automation_version {
+        automation_id: fk("automation", "RESTRICT"),
+        version: col(COUNT),
+        entry_placement_id: col(KEY_REF_OPT),
+        placements: col(REQ),
+        cfgs: col(REQ),
+        placement_steps: col(REQ),
+        edges: col(REQ),
+        wires: col(REQ),
+    } => "UNIQUE (automation_id, version)"
+
     // ───────────────────────── automation: what ran ─────────────────────────
 
     // **One launch of one automation.**
@@ -1292,7 +1348,7 @@ datasets! {
         pause_requested: bool_col,
         pause_before_next_task: bool_col,
         pause_kind: enum_opt("end_of_action", "before_next_task"),
-        stopped_reason: enum_opt("crashed", "max_times", "no_agent", "no_input", "no_way_on", "halted", "left_task_open"),
+        stopped_reason: enum_opt("crashed", "max_times", "no_agent", "no_input", "no_way_on", "halted", "left_task_open", "failed_check"),
         started_by_kind: actor_kind,
         started_at: ts_opt,
         ended_at: ts_opt,
@@ -1303,6 +1359,9 @@ datasets! {
         // Who said they had seen the failure, a person or their AI (`AMB-D-989`). Set with
         // `acknowledged_at` and only then.
         acknowledged_by_kind: actor_kind,
+        // What a run failed with `failed_check` did not pass, as the refusal said it. Set with that
+        // reason and only then.
+        stopped_detail: col(OPT),
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is
@@ -1337,6 +1396,9 @@ datasets! {
         // That built-in's version, copied with it (`AMB-D-1000`) — what its code reads to behave as the
         // definition the copy's ways out were written from.
         builtin_version: col(INT_OPT),
+        // The saved version of the automation the copy was taken from (`automation_version.version`), or
+        // NULL where the automation had none saved then. Every row of one copy carries the same one.
+        automation_version: col(INT_OPT),
         // The script the step was, copied with it: its program, its arguments and its timeout.
         script_program: col(OPT),
         script_args: col(REQ),

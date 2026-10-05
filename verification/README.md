@@ -734,7 +734,7 @@ settings, the identity it answers `whoami` with, the build in place, and the sto
 
 One domain reads the same thing two ways. **`automation`'s definition is read back at the
 terminal in the three layers it is built in**: the placements on an automation off
-`automation show` (`placement-read`), the steps inside a library action off `automation action-show`
+`automation show` (`placement-read`, with `saved` for the newest saved version a start copies down), the steps inside a library action off `automation action-show`
 (`step-read`), and what joins the boxes on either picture (`edge-read`, with `in_action` for an
 action's) — which is how a road that built one at the terminal proves what it built. A test run of
 one (`test-run`) is read the same way, off what it answered (`test-run-walked`): it keeps nothing in

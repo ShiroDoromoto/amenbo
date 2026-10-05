@@ -32,6 +32,9 @@ const hoisted = vi.hoisted(() => ({
   launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
   stop: vi.fn(async (..._args: unknown[]) => true),
   cancel: vi.fn(async (..._args: unknown[]) => {}),
+  save: vi.fn(async (..._args: unknown[]) => {}),
+  discard: vi.fn(async (..._args: unknown[]) => {}),
+  confirm: vi.fn(async (..._args: unknown[]) => true),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -45,6 +48,8 @@ vi.mock("../core/automations", () => ({
   insertAutomationAction: () => Promise.resolve([]),
   ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
   launchAutomation: hoisted.launch,
+  saveAutomation: hoisted.save,
+  discardAutomation: hoisted.discard,
   // An agent's step as the entry: the dialog every start opens asks for a text and files.
   useLaunchAsks: () => ({ reads: "nothing", axes: [] }),
   NOTHING_HANDED: { files: [], title: "", notes: "", classification: [] },
@@ -72,6 +77,7 @@ vi.mock("../mock/adapter", () => ({
     ],
   },
 }));
+vi.mock("../core/dialog", () => ({ confirmDialog: hoisted.confirm }));
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: [], live: [], answered: true }),
 }));
@@ -108,7 +114,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 function card(over: Partial<AutomationCardDto> = {}): AutomationCardDto {
-  return { id: 7, name: "Morning round", notes: "", placements: 3, archived: false, ...over };
+  return { id: 7, name: "Morning round", notes: "", placements: 3, archived: false, unsaved: false, ...over };
 }
 
 function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
@@ -122,6 +128,8 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     edges: [],
     wires: [],
     heldBy: [],
+    unsaved: false,
+    saveBlocks: [],
     ...over,
   };
 }
@@ -163,6 +171,10 @@ beforeEach(() => {
   hoisted.launch.mockClear();
   hoisted.launch.mockResolvedValue({ run: 1 });
   wentToRun.mockClear();
+  hoisted.save.mockClear();
+  hoisted.discard.mockClear();
+  hoisted.confirm.mockClear();
+  hoisted.confirm.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -216,6 +228,23 @@ describe("the automations screen", () => {
     await act(async () => { button(t("auto.start")).click(); });
     await handOver();
     expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true, { files: [], title: "", notes: "", classification: [] });
+  });
+
+  it("marks a row whose draft holds changes not saved, beside the version saved last", async () => {
+    hoisted.automations = [
+      card({ id: 1, name: "Saved", saved: { version: 2, savedAt: "2026-10-01T00:00:00Z" } }),
+      card({ id: 2, name: "Edited", saved: { version: 3, savedAt: "2026-10-01T00:00:00Z" }, unsaved: true }),
+      card({ id: 3, name: "Empty" }),
+    ];
+    await render();
+    const marks = [...container.querySelectorAll(".autolist__row")].map(
+      (one) => one.querySelector(".savedmark")?.textContent ?? null,
+    );
+    expect(marks).toEqual([
+      tf("auto.saved.listVersion", { version: 2 }),
+      tf("auto.saved.listVersion", { version: 3 }) + t("auto.saved.listUnsaved"),
+      null,
+    ]);
   });
 
   // Whether it could start is the press's state, and why not is read off it (`AMB-T-5523`).
@@ -684,6 +713,74 @@ describe("the start press on the build screen's head", () => {
   });
 });
 
+describe("saving on the build screen's head", () => {
+  async function open(over: Partial<AutomationDetailDto>, check: AutomationLaunchCheckDto = { ready: true, blocks: [] }) {
+    hoisted.automations = [card()];
+    hoisted.detail = detail(over);
+    hoisted.check = check;
+    await render();
+    await act(async () => { button("Morning round").click(); });
+  }
+  const head = () => container.querySelector(".actsaved")?.textContent;
+  const saved = { version: 3, savedAt: "2026-10-01T09:00:00Z" };
+  const noEntry: AutomationLaunchBlockDto = {
+    code: "not_ready_automation_no_entry",
+    message_en: "English for not_ready_automation_no_entry",
+    fields: {},
+  };
+
+  it("says nothing is saved yet, and offers no discard with no version to go back to", async () => {
+    await open({ unsaved: true });
+    expect(head()).toBe(t("auto.saved.never"));
+    expect(button(t("auto.saved.save")).disabled).toBe(false);
+    expect(button(t("auto.saved.discard")).disabled).toBe(true);
+  });
+
+  it("names the version saved last, with both presses shut while nothing is unsaved", async () => {
+    await open({ saved, unsaved: false });
+    expect(head()).toContain("3");
+    expect(head()).not.toBe(t("auto.saved.unsaved"));
+    expect(button(t("auto.saved.save")).disabled).toBe(true);
+    expect(button(t("auto.saved.discard")).disabled).toBe(true);
+  });
+
+  it("saves from its press", async () => {
+    await open({ saved, unsaved: true });
+    expect(head()).toBe(t("auto.saved.unsaved"));
+    await act(async () => { button(t("auto.saved.save")).click(); });
+    expect(hoisted.save).toHaveBeenCalledWith(7);
+  });
+
+  it("asks before discarding, and discards nothing when the answer is no", async () => {
+    await open({ saved, unsaved: true });
+    hoisted.confirm.mockResolvedValueOnce(false);
+    await act(async () => { button(t("auto.saved.discard")).click(); });
+    expect(hoisted.confirm).toHaveBeenCalledWith(tf("auto.saved.discardConfirm", { version: 3 }));
+    expect(hoisted.discard).not.toHaveBeenCalled();
+    await act(async () => { button(t("auto.saved.discard")).click(); });
+    expect(hoisted.discard).toHaveBeenCalledWith(7);
+  });
+
+  it("lists why it cannot be saved, shuts the press, and does not say a shared reason twice", async () => {
+    await open({ unsaved: true, saveBlocks: [noEntry] }, { ready: false, blocks: [noEntry] });
+    expect(container.querySelector(".autolaunch__head")?.textContent).toBe(t("auto.saved.blocked"));
+    expect(blocks()).toEqual([errSentence(noEntry)]);
+    expect(button(t("auto.saved.save")).disabled).toBe(true);
+  });
+
+  it("lists no reasons to save while nothing is unsaved", async () => {
+    await open({ saved, unsaved: false, saveBlocks: [noEntry] });
+    expect(container.querySelector(".autolaunch__head")).toBeNull();
+  });
+
+  it("puts a refused save where the reasons are", async () => {
+    hoisted.save.mockRejectedValueOnce(new Error("held"));
+    await open({ unsaved: true });
+    await act(async () => { button(t("auto.saved.save")).click(); });
+    expect(container.querySelector(".autolaunch__refused")?.textContent).toBe(errText(new Error("held")));
+  });
+});
+
 describe("the press that starts a run", () => {
   async function open(check: AutomationLaunchCheckDto, workspaceOpen = true) {
     hoisted.automations = [card()];
@@ -805,9 +902,9 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     reportWithheld: [],
     acknowledged: false,
   };
-  async function openHeld(heldBy: AutomationRunCardDto[] = [run]) {
+  async function openHeld(heldBy: AutomationRunCardDto[] = [run], over: Partial<AutomationDetailDto> = {}) {
     hoisted.automations = [card()];
-    hoisted.detail = detail({ heldBy });
+    hoisted.detail = detail({ heldBy, ...over });
     hoisted.check = { ready: true, blocks: [] };
     goToRun.mockClear();
     await act(async () => {
@@ -820,6 +917,30 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     expect(container.querySelector(".autoheld")?.textContent).toContain(tf("auto.held.by", { run: 31 }));
     await act(async () => { button(t("auto.held.openPane")).click(); });
     expect(goToRun).toHaveBeenCalledWith(1, 31);
+  });
+
+  it("names the version the run is on, and the one it switches to back at the start", async () => {
+    await openHeld([{ ...run, version: 2 }], { saved: { version: 3, savedAt: "2026-10-05T00:00:00Z" } });
+    expect(container.querySelector(".autoheld__version")?.textContent).toBe(tf("auto.held.version", { version: 2 }));
+    expect(container.querySelector(".autoheld__next")?.textContent).toBe(tf("auto.held.next", { version: 3 }));
+  });
+
+  it("names no switch for a run on the newest saved version", async () => {
+    await openHeld([{ ...run, version: 3 }], { saved: { version: 3, savedAt: "2026-10-05T00:00:00Z" } });
+    expect(container.querySelector(".autoheld__version")?.textContent).toBe(tf("auto.held.version", { version: 3 }));
+    expect(container.querySelector(".autoheld__next")).toBeNull();
+  });
+
+  it("switches a run on unsaved changes to any saved version", async () => {
+    // A copy taken from unsaved changes is older than every saved version, as the run itself counts it.
+    await openHeld([run], { saved: { version: 1, savedAt: "2026-10-05T00:00:00Z" } });
+    expect(container.querySelector(".autoheld__version")?.textContent).toBe(t("auto.held.unsaved"));
+    expect(container.querySelector(".autoheld__next")?.textContent).toBe(tf("auto.held.next", { version: 1 }));
+  });
+
+  it("names no switch while nothing is saved", async () => {
+    await openHeld();
+    expect(container.querySelector(".autoheld__next")).toBeNull();
   });
 
   /** The moves behind the band's run mark (`../shell/RunActs`), drawn on the page's body once it is opened. */

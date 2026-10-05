@@ -153,6 +153,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_action_empty",
   "not_ready_automation_action_draft",
   "not_ready_automation_entry_takes_no_task",
+  "not_ready_automation_back_to_entry",
   "not_ready_automation_open_exit",
   "not_ready_automation_unwired_input",
   "not_ready_automation_unanswered_cfg",
@@ -218,9 +219,10 @@ export const CORE_ERROR_CODES = [
  * another channel's build alone and says so (`pointer_other_store`, `AMB-D-685`); the nested-binding guard in `project_bind_folder`,
  * which binds an existing folder to an existing project; and every open blocked while a startup migration holds
  * the store (`migrate::gate()` — mid-migration the format is half-moved, and after a failure it is still old);
- * and the three the terminal in a pane answers with, which are the operating system refusing to open one
- * (`pty_failed`), a session whose terminal has already closed (`pty_gone`), and an image pasted into it
- * that could not be written down (`pty_paste_failed`); the two a window refuses with, which is the terminal being split out into a
+ * and the four the terminal in a pane answers with, which are the operating system refusing to open one
+ * (`pty_failed`), a session whose terminal has already closed (`pty_gone`), an image pasted into it
+ * that could not be written down (`pty_paste_failed`), and keys or an image sent to a script step's
+ * terminal, which nobody writes into (`pty_read_only`); the two a window refuses with, which is the terminal being split out into a
  * window of its own and the platform not building it (`window_failed`) or the window it built never
  * drawing anything (`talk_blank`); and the ones settling which
  * agent a folder opens with (`crate::wake`) — a folder that cannot be read (`wake_no_folder`), an
@@ -262,6 +264,7 @@ export const TAURI_ERROR_CODES = [
   "pty_failed",
   "pty_gone",
   "pty_paste_failed",
+  "pty_read_only",
   "talk_blank",
   "wake_no_config",
   "wake_no_folder",

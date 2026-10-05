@@ -677,6 +677,175 @@ fn a_definition_that_does_not_exist_is_said_to_be_missing() {
     }
 }
 
+/// **A show says which version was saved last and whether the draft holds more**, and each placement
+/// which version of its action it stands on beside the newest there is. One nobody has saved is shown
+/// as such, and `--saved` is refused for it rather than answered with the draft.
+#[test]
+fn a_show_names_the_versions_and_saved_is_refused_where_nothing_is_saved() {
+    let cli = Cli::new();
+    let (_, a, action, placement) = an_automation(&cli);
+
+    let (shown, _) = cli.run(&["automation", "show", &a]);
+    assert!(shown.contains("not saved yet · the draft has unsaved changes"), "{shown}");
+    assert!(shown.contains(&format!("placement {placement} — action {action} (one) no saved version")), "{shown}");
+    let json = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(json["showing"].as_str(), Some("draft"));
+    assert_eq!(json["unsaved"], serde_json::json!(true));
+    let entry = &json["placements"][0];
+    assert!(entry["version"].is_i64(), "a built-in stands on the version its record is: {entry}");
+    assert_eq!(entry["version"], entry["latest_version"], "{entry}");
+
+    let (inside, _) = cli.run(&["automation", "action-show", &action]);
+    assert!(inside.contains("not saved yet · the draft has unsaved changes"), "{inside}");
+    assert!(inside.contains(&format!("placed at: automation {a} no version")), "{inside}");
+
+    for args in [["automation", "show", a.as_str(), "--saved"], ["automation", "action-show", action.as_str(), "--saved"]] {
+        let (refused, code) = cli.run_err(&args);
+        assert_ne!(code, 0, "{refused}");
+        assert!(refused.contains("no saved version"), "{refused}");
+    }
+}
+
+// ───────────────────────────── saving one ─────────────────────────────
+
+/// An automation is saved once the launch check passes, and a save with nothing written since is said
+/// to be one. What is written after it is thrown away by `discard`, which confirms first.
+#[test]
+fn an_automation_is_saved_and_what_is_written_after_is_thrown_away() {
+    let cli = Cli::new();
+    let (half, _, _, _) = an_automation(&cli);
+    let (err, code) = cli.run_err(&["automation", "save", &half, "--json"]);
+    assert_ne!(code, 0, "a half-drawn automation is not saved: {err}");
+    assert!(err.contains("not_ready"), "{err}");
+    let (err, code) = cli.run_err(&["automation", "discard", &half, "--yes", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("never been saved"), "{err}");
+
+    let (a, _, _) = a_launchable(&cli);
+    let saved = cli.json(&["automation", "save", &a, "--json"]);
+    assert_eq!(saved["automation_version"]["version"].as_i64(), Some(1), "{saved}");
+    assert_eq!(saved["noop"], serde_json::json!(false));
+    let again = cli.json(&["automation", "save", &a, "--json"]);
+    assert_eq!(again["automation_version"]["version"].as_i64(), Some(1), "{again}");
+    assert_eq!(again["noop"], serde_json::json!(true), "nothing was written since");
+
+    cli.json(&["automation", "place-add", &a, "--builtin", "close_task", "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "discard", &a, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("confirmation"), "{refused}");
+    let discarded = cli.json(&["automation", "discard", &a, "--yes", "--json"]);
+    assert_eq!(discarded["automation_version"]["version"].as_i64(), Some(1), "{discarded}");
+    assert_eq!(discarded["noop"], serde_json::json!(false));
+    let shown = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(shown["placements"].as_array().map(Vec::len), Some(3), "the placement added since went: {shown}");
+}
+
+/// An action is saved as versions of its own, and a placement keeps the one it stands on until
+/// `place-version` moves it. What is written inside it after a save is thrown away by `action-discard`.
+#[test]
+fn an_action_is_saved_and_a_placement_is_moved_onto_its_version() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    an_entry(&cli, &a, "take_task");
+    let (action, step) = an_action(&cli, &p, "one", "do it");
+    let placement = id_of(
+        &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
+        "automation_placement",
+    );
+    let (err, code) = cli.run_err(&["automation", "action-discard", &action, "--yes", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("never been saved"), "{err}");
+    let (err, code) = cli.run_err(&["automation", "action-save", &action, "--json"]);
+    assert_ne!(code, 0, "the step inside leaves by a way out with nothing after it: {err}");
+    assert!(err.contains("not_ready"), "{err}");
+
+    cli.json(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:"), "--exit-to", "--json"]);
+    let first = cli.json(&["automation", "action-save", &action, "--json"]);
+    assert_eq!(first["automation_action_version"]["version"].as_i64(), Some(1), "{first}");
+    assert_eq!(first["noop"], serde_json::json!(false));
+    let again = cli.json(&["automation", "action-save", &action, "--json"]);
+    assert_eq!(again["noop"], serde_json::json!(true), "nothing was written since: {again}");
+
+    cli.json(&["automation", "step-update", &step, "--prompt", "do it again", "--json"]);
+    let second = cli.json(&["automation", "action-save", &action, "--json"]);
+    assert_eq!(second["automation_action_version"]["version"].as_i64(), Some(2), "{second}");
+
+    let moved = cli.json(&["automation", "place-version", &placement, "2", "--json"]);
+    assert_eq!(moved["automation_placement"]["version"].as_i64(), Some(2), "{moved}");
+    let back = cli.json(&["automation", "place-version", &placement, "1", "--json"]);
+    assert_eq!(back["automation_placement"]["version"].as_i64(), Some(1), "{back}");
+    let (err, code) = cli.run_err(&["automation", "place-version", &placement, "3", "--json"]);
+    assert_ne!(code, 0, "a version the action does not have: {err}");
+    assert!(err.contains("not_found"), "{err}");
+
+    cli.json(&["automation", "step-update", &step, "--prompt", "never mind", "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "action-discard", &action, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("confirmation"), "{refused}");
+    let discarded = cli.json(&["automation", "action-discard", &action, "--yes", "--json"]);
+    assert_eq!(discarded["automation_action_version"]["version"].as_i64(), Some(2), "{discarded}");
+    assert_eq!(discarded["noop"], serde_json::json!(false));
+    let after = cli.json(&["automation", "action-save", &action, "--json"]);
+    assert_eq!(after["noop"], serde_json::json!(true), "the draft is version 2 again: {after}");
+}
+
+/// **A rewrite says whose draft it went into and the command that saves it**, the automation's for
+/// what is drawn on it and the action's for what is inside one — a port on a step's way out included.
+/// A rewrite a version does not hold, such as a name, says nothing of a draft.
+#[test]
+fn a_rewrite_names_the_draft_it_went_into_and_how_to_save_it() {
+    let cli = Cli::new();
+    let (_, a, action, placement) = an_automation(&cli);
+
+    let placed = cli.json(&["automation", "place-add", &a, "--builtin", "close_task", "--json"]);
+    assert_eq!(placed["draft"]["kind"].as_str(), Some("automation"), "{placed}");
+    assert_eq!(placed["draft"]["id"].as_i64().map(|i| i.to_string()), Some(a.clone()), "{placed}");
+    assert_eq!(placed["draft"]["save"].as_str(), Some(format!("amenbo automation save {a}").as_str()));
+    let (told, _) = cli.run(&["automation", "edge-add", "--from", &format!("{placement}:"), "--halt"]);
+    assert!(told.contains(&format!("in the unsaved draft of automation {a}")), "{told}");
+    assert!(told.contains(&format!("`amenbo automation save {a}`")), "{told}");
+
+    let (told, _) = cli.run(&["automation", "step-add", &action, "--name", "two", "--prompt", "then this"]);
+    assert!(told.contains(&format!("`amenbo automation action-save {action}`")), "{told}");
+    let step = id_of(
+        &cli.json(&["automation", "step-add", &action, "--name", "three", "--prompt", "last", "--json"]),
+        "automation_step",
+    );
+    let exit = id_of(&cli.json(&["automation", "exit-add", "--step", &step, "--name", "found", "--json"]), "automation_exit");
+    let port = cli.json(&["automation", "port-add", "--exit", &exit, "--name", "report", "--kind", "file", "--json"]);
+    assert_eq!(port["draft"]["kind"].as_str(), Some("action"), "{port}");
+    assert_eq!(port["draft"]["save"].as_str(), Some(format!("amenbo automation action-save {action}").as_str()));
+    let gone = cli.json(&["automation", "step-rm", &step, "--yes", "--json"]);
+    assert_eq!(gone["draft"]["kind"].as_str(), Some("action"), "a deleted row still names its draft: {gone}");
+
+    let renamed = cli.json(&["automation", "update", &a, "--name", "B", "--json"]);
+    assert!(renamed.get("draft").is_none(), "a name is not part of a version: {renamed}");
+    let shelved = cli.json(&["automation", "action-update", &action, "--name", "uno", "--json"]);
+    assert!(shelved.get("draft").is_none(), "{shelved}");
+}
+
+/// A built-in's action is Amenbo's, one version already, so its placement is not moved and the
+/// action is neither saved nor thrown back by hand.
+#[test]
+fn a_built_in_is_not_saved_or_moved_by_hand() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    let take = an_entry(&cli, &a, "take_task");
+    let (err, code) = cli.run_err(&["automation", "place-version", &take, "1", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("built into Amenbo"), "{err}");
+
+    let builtin = id_str(&cli.json(&["automation", "show", &a, "--json"])["placements"][0]["placement"]["action_id"]);
+    let (err, code) = cli.run_err(&["automation", "action-save", &builtin, "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("built into Amenbo"), "{err}");
+    let (err, code) = cli.run_err(&["automation", "action-discard", &builtin, "--yes", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("built into Amenbo"), "{err}");
+}
+
 // ───────────────────────────── running one ─────────────────────────────
 
 /// An automation that launches as it stands: the built-in that takes a task, with one there for it to
@@ -686,6 +855,18 @@ fn a_definition_that_does_not_exist_is_said_to_be_missing() {
 fn a_launchable(cli: &Cli) -> (String, String, String) {
     let (a, placement, step, _) = a_picture(cli, true);
     (a, placement, step)
+}
+
+/// [`a_launchable`], saved — a launch starts from the newest saved version.
+fn a_saved_launchable(cli: &Cli) -> (String, String, String) {
+    let (a, placement, step) = a_launchable(cli);
+    saved(cli, &a);
+    (a, placement, step)
+}
+
+/// Save the automation as its next version.
+fn saved(cli: &Cli, a: &str) {
+    cli.json(&["automation", "save", a, "--json"]);
 }
 
 /// [`a_launchable`], with the placement of its entry handed back too, and a task for it to take only
@@ -731,7 +912,7 @@ fn a_picture(cli: &Cli, with_task: bool) -> (String, String, String, String) {
 fn a_launch_makes_a_run_and_the_run_is_what_pause_and_cancel_name() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
-    let (a, _, _) = a_launchable(&cli);
+    let (a, _, _) = a_saved_launchable(&cli);
 
     let started = cli.json(&["automation", "start", &a, "--json"]);
     assert_eq!(started["automation_run"]["status"].as_str(), Some("running"));
@@ -760,7 +941,7 @@ fn a_launch_makes_a_run_and_the_run_is_what_pause_and_cancel_name() {
 fn pause_before_next_task_asks_the_run() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
-    let (a, _, _) = a_launchable(&cli);
+    let (a, _, _) = a_saved_launchable(&cli);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     let project = cli.json(&["automation", "run-show", &run, "--json"])["run"]["project_id"].to_string();
 
@@ -788,7 +969,7 @@ fn pause_before_next_task_asks_the_run() {
 fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
-    let (a, _, _) = a_launchable(&cli);
+    let (a, _, _) = a_saved_launchable(&cli);
     let own = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     let other = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     // No watch opens a step here, so the run's first one — the built-in that takes a task — is opened
@@ -843,6 +1024,7 @@ fn pause_before_next_task_pauses_a_run_waiting_for_a_task_at_once() {
         "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
         "--choice", "着手できるタスクが出るまで待つ", "--json",
     ]);
+    saved(&cli, &a);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     assert_eq!(cli.json(&["automation", "run-show", &run, "--json"])["waiting"].as_bool(), Some(true));
 
@@ -865,7 +1047,7 @@ fn pause_before_next_task_pauses_a_run_waiting_for_a_task_at_once() {
 fn only_a_failed_run_is_acknowledged() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
-    let (a, _, _) = a_launchable(&cli);
+    let (a, _, _) = a_saved_launchable(&cli);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 
@@ -890,6 +1072,7 @@ fn run_show_says_when_a_run_is_waiting_for_a_task() {
         "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
         "--choice", "着手できるタスクが出るまで待つ", "--json",
     ]);
+    saved(&cli, &a);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
 
     let shown = cli.json(&["automation", "run-show", &run, "--json"]);
@@ -903,6 +1086,43 @@ fn run_show_says_when_a_run_is_waiting_for_a_task() {
     assert_eq!(shown["waiting"].as_bool(), Some(false), "{shown}");
     let (text, _) = cli.run(&["automation", "run-show", &run]);
     assert!(!text.contains("waiting:"), "{text}");
+}
+
+/// **A run picked up after a pause before its next task goes on from the newest saved version**
+/// (`AMB-D-1015`), and `run-show` says which versions it was copied from, in turn. A run waiting at its
+/// entry has run no step yet, so which version each step ran on is not held here.
+#[test]
+fn run_show_names_the_versions_a_run_was_copied_from() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _, take) = a_picture(&cli, false);
+    cli.json(&[
+        "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
+        "--choice", "着手できるタスクが出るまで待つ", "--json",
+    ]);
+    saved(&cli, &a);
+    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    let versions: Vec<Option<i64>> =
+        shown["versions"].as_array().unwrap().iter().map(|v| v["version"].as_i64()).collect();
+    assert_eq!(versions, vec![Some(1)], "{shown}");
+    let (text, _) = cli.run(&["automation", "run-show", &run]);
+    assert!(text.contains("copied from: version 1"), "{text}");
+    assert!(!text.contains("taken up at"), "{text}");
+
+    cli.json(&["automation", "pause", &run, "--before-next-task", "--json"]);
+    cli.json(&["automation", "cfg-set", &take, "--name", "絞り込み", "--status", "in_progress", "--json"]);
+    saved(&cli, &a);
+    cli.json(&["automation", "resume", &run, "--json"]);
+
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    let versions: Vec<Option<i64>> =
+        shown["versions"].as_array().unwrap().iter().map(|v| v["version"].as_i64()).collect();
+    assert_eq!(versions, vec![Some(1), Some(2)], "{shown}");
+    let (text, _) = cli.run(&["automation", "run-show", &run]);
+    assert!(text.contains("copied from: version 1 → version 2 (taken up at "), "{text}");
+
+    cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 }
 
 /// **What a person hands over comes in on the launch itself** (`AMB-D-981`): for a run that starts by
@@ -926,6 +1146,7 @@ fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
     );
     cli.json(&["automation", "edge-add", "--from", &format!("{make}:起票して着手した"), "--to", &close, "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{close}:"), "--done", "--json"]);
+    saved(&cli, &a);
 
     let brief = cli.home.join("brief.md");
     std::fs::write(&brief, "the login page loses the password field\n").expect("write the brief");
@@ -956,7 +1177,7 @@ fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
 #[test]
 fn a_launch_is_refused_while_the_app_is_not_running() {
     let cli = Cli::new();
-    let (a, _, _) = a_launchable(&cli);
+    let (a, _, _) = a_saved_launchable(&cli);
 
     let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
     assert_ne!(code, 0, "{err}");
@@ -972,21 +1193,52 @@ fn a_launch_is_refused_while_the_app_is_not_running() {
     assert!(err.contains("app_not_running"), "an app that quit is no app: {err}");
 }
 
-/// The launch check refuses an unfinished automation and names what is missing. Nothing on the
-/// building side ever did: a picture is half-built for as long as somebody is drawing it, and this is
-/// the moment a person is about to be let down by one.
+/// The launch check refuses an unfinished automation and names what is missing. It is asked on the
+/// save, since a launch starts from a saved version and only one that passes it is saved. Nothing on
+/// the building side ever did: a picture is half-built for as long as somebody is drawing it.
 #[test]
-fn a_launch_is_refused_while_a_way_out_has_nothing_after_it() {
+fn a_save_is_refused_while_a_way_out_has_nothing_after_it() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Half drawn", "--json"]), "automation");
     an_entry(&cli, &a, "take_task");
 
-    let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
-    assert_ne!(code, 0, "an unfinished automation does not launch: {err}");
+    let (err, code) = cli.run_err(&["automation", "save", &a, "--json"]);
+    assert_ne!(code, 0, "an unfinished automation is not saved: {err}");
     assert!(err.contains("not_ready"), "{err}");
     assert!(err.contains("nothing is set to happen after"), "it names what is missing: {err}");
+    let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
+    assert_ne!(code, 0, "so it does not launch either: {err}");
+}
+
+/// **A launch starts from the newest saved version, and a test run tries the draft.** An automation
+/// never saved is refused before anything is started, and the refusal names the save; a test run of
+/// the same draft needs no save and says it read the draft.
+#[test]
+fn a_launch_is_refused_until_the_automation_is_saved_and_a_test_run_tries_the_draft() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_launchable(&cli);
+
+    let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("conflict"), "{err}");
+    assert!(err.contains("never been saved"), "{err}");
+    assert!(err.contains(&format!("automation save {a}")), "the hint names the save: {err}");
+    let runs = cli.json(&["automation", "run-list", "--automation", &a, "--json"]);
+    assert_eq!(runs["count"].as_u64(), Some(0), "no run was made: {runs}");
+
+    let (shown, code) = cli.run(&["automation", "test-run", &a]);
+    assert_eq!(code, 0, "{shown}");
+    assert!(shown.contains("Test run of the draft, unsaved changes included"), "{shown}");
+    let walked = cli.json(&["automation", "test-run", &a, "--json"]);
+    assert_eq!(walked["reads"].as_str(), Some("draft"), "{walked}");
+
+    saved(&cli, &a);
+    let (out, code) = cli.run(&["automation", "start", &a]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("started from version 1"), "{out}");
 }
 
 /// Who carries a step out is chosen where its action is placed (`AMB-D-960`): with nobody chosen the
@@ -1013,12 +1265,38 @@ fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
     cli.json(&["automation", "agent-set", &placement, "--step", &step, "--clear", "--json"]);
     let (shown, _) = cli.run(&["automation", "show", &a]);
     assert_eq!(shown.matches("nobody chosen to carry it out").count(), 1, "only the agent's step: {shown}");
-    let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
+    // The launch check is asked on the save, and a draft that fails it is not saved.
+    let (err, code) = cli.run_err(&["automation", "save", &a, "--json"]);
     assert_ne!(code, 0, "{err}");
     assert!(err.contains("nobody is chosen to carry out"), "{err}");
 
     let (err, code) = cli.run_err(&["automation", "agent-set", &placement, "--step", &step, "--json"]);
     assert_eq!(code, 2, "an agent or --clear has to be said: {err}");
+}
+
+/// A script step runs its own program (`AMB-D-1016`), so `show` names the program and its arguments
+/// where an agent's step names the agent — never the agent chosen by default where it was placed.
+#[test]
+fn a_script_step_is_shown_carried_out_by_its_program() {
+    let cli = Cli::new();
+    let (p, a, _, _) = an_automation(&cli);
+    let action = id_of(
+        &cli.json(&["automation", "action-add", "--project", &p, "--name", "run it", "--json"]),
+        "automation_action",
+    );
+    let step = id_of(
+        &cli.json(&[
+            "automation", "step-add", &action, "--name", "run it", "--program", "/bin/echo", "--arg",
+            "--verbose", "--arg", "hello", "--json",
+        ]),
+        "automation_step",
+    );
+    cli.json(&["automation", "action-entry-set", &action, "--step", &step, "--json"]);
+    cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]);
+
+    let (shown, _) = cli.run(&["automation", "show", &a]);
+    assert!(shown.contains("run it  carried out by a script: /bin/echo --verbose hello"), "{shown}");
+    assert!(!shown.contains("run it  carried out by claude"), "{shown}");
 }
 
 /// The two verbs a step's own agent types refuse outside a step, and say why.

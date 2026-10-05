@@ -136,6 +136,8 @@ describe("a built-in, opened", () => {
       settings: [],
       heldBy: [],
       placedOn: [],
+      unsaved: false,
+      saveBlocks: [],
     };
     await act(async () => {
       root.render(createElement(AutomationActionBuildScreen, { id: 40, onBack: back }));

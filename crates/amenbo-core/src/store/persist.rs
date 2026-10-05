@@ -1292,6 +1292,22 @@ impl Store {
         })
     }
 
+    /// Save what is inside an action as its next version, once its own check passes (one operation =
+    /// one transaction) — [`crate::ops::automation::action_save`].
+    pub fn automation_action_save(&mut self, id: i64) -> Result<crate::model::AutomationActionVersion> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, id)], |tx| {
+            crate::ops::automation::action_save(tx, id)
+        })
+    }
+
+    /// Throw away what is written inside an action since its newest version (one operation = one
+    /// transaction) — [`crate::ops::automation::action_discard`].
+    pub fn automation_action_discard(&mut self, id: i64) -> Result<crate::model::AutomationActionVersion> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, id)], |tx| {
+            crate::ops::automation::action_discard(tx, id)
+        })
+    }
+
     /// Give up an action made on the spot, with every placement standing on it, the lines into them put
     /// back as they were (`AMB-D-1005`; one operation = one transaction). Each placement is declared as
     /// well as the action: a device's action can stand on another project's automation, and that
@@ -1336,6 +1352,22 @@ impl Store {
     ) -> Result<crate::model::Automation> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
             crate::ops::automation::move_to(tx, id, pos)
+        })
+    }
+
+    /// Save an automation as its next version, once the launch check passes (one operation = one
+    /// transaction) — [`crate::ops::automation::save`].
+    pub fn automation_save(&mut self, id: i64) -> Result<crate::model::AutomationVersion> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
+            crate::ops::automation::save(tx, id)
+        })
+    }
+
+    /// Throw away what is written on an automation since its newest version (one operation = one
+    /// transaction) — [`crate::ops::automation::discard`].
+    pub fn automation_discard(&mut self, id: i64) -> Result<crate::model::AutomationVersion> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
+            crate::ops::automation::discard(tx, id)
         })
     }
 
@@ -1537,6 +1569,18 @@ impl Store {
         })
     }
 
+    /// Move a placement onto another saved version of its action (`AMB-D-1000`; one operation = one
+    /// transaction) — [`crate::ops::automation::placement_version_set`].
+    pub fn automation_placement_version_set(
+        &mut self,
+        id: i64,
+        version: i64,
+    ) -> Result<crate::model::AutomationPlacement> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, id)], |tx| {
+            crate::ops::automation::placement_version_set(tx, id, version)
+        })
+    }
+
     /// Take a placement off its automation with the answers and lines hanging on it (one operation =
     /// one transaction).
     pub fn automation_placement_delete(&mut self, id: i64) -> Result<()> {
@@ -1612,7 +1656,15 @@ impl Store {
     ) -> Result<crate::model::AutomationRun> {
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::launch_handing(tx, automation_id, by, handed),
+            |tx| {
+                crate::ops::automation_run::launch_handing(
+                    tx,
+                    automation_id,
+                    by,
+                    handed,
+                    crate::ops::automation_run::ReadsFrom::Saved,
+                )
+            },
         )
     }
 
@@ -1734,6 +1786,20 @@ impl Store {
     ) -> Result<crate::ops::automation_stop::Resumed> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
             crate::ops::automation_stop::resume(tx, run_id, startable, models)
+        })
+    }
+
+    /// **Copy a run standing at its entry down afresh from a newer saved version**
+    /// ([`crate::ops::automation_run::take_up_newer`]). `startable` and `models` are a launch's, as
+    /// [`Self::automation_resume`]'s are. The reach is the run's.
+    pub fn automation_take_up_newer(
+        &mut self,
+        run_id: i64,
+        startable: Option<&[String]>,
+        models: &crate::ops::automation_run::ModelsHere,
+    ) -> Result<crate::ops::automation_run::TakenUp> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
+            crate::ops::automation_run::take_up_newer(tx, run_id, startable, models)
         })
     }
 

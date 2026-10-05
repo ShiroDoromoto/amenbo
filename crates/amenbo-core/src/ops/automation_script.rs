@@ -265,7 +265,6 @@ fn run_prepared(prepared: Prepared, stop: impl FnMut() -> bool) -> Ran {
     let output_tail = tail.until(deadline);
     Ran { ended: prepared.finish(waited), output_tail }
 }
-}
 
 /// Write `input.json`, and each file input beside it, and answer the path to `input.json`.
 fn write_input(dir: &Path, given: &[(String, Given)]) -> std::io::Result<PathBuf> {

@@ -167,7 +167,7 @@ pub fn automation_edit(
     archived: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_update(id, name.as_deref(), notes.as_deref(), archived)?;
+        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))

@@ -9,6 +9,9 @@
 // - **Beside the field, for a moment.** "Written" stands next to the field the write came from for two
 //   seconds, then goes.
 //
+// The lists say the saved state too, shorter (`SavedMark`): the version saved last, and a mark where the
+// draft holds more — a draft left unsaved does not launch, so the list is where it is noticed.
+//
 // **Which field a write came from is read off the event that made it.** Every write on a definition is
 // sent from a handler — a box losing the caret, a pulldown changed, a press — and core tells its start
 // before the call returns (`../core/automationSave`). So the screen notes the field
@@ -61,6 +64,20 @@ function stateLine(state: SavedState): string {
   if (state.saved === undefined) return t("auto.saved.never");
   if (state.unsaved) return t("auto.saved.unsaved");
   return tf("auto.saved.version", { version: state.saved.version, time: savedWhen(state.saved.savedAt) });
+}
+
+/**
+ * **A definition's saved state on a list row**: the version saved last, and "Unsaved" where the draft
+ * holds more. Nothing for a definition with nothing saved and nothing written.
+ */
+export function SavedMark({ saved, unsaved }: { saved?: { version: number }; unsaved: boolean }) {
+  if (saved === undefined && !unsaved) return null;
+  return (
+    <span className="savedmark">
+      {saved !== undefined && tf("auto.saved.listVersion", { version: saved.version })}
+      {unsaved && <span className="savedmark__unsaved">{t("auto.saved.listUnsaved")}</span>}
+    </span>
+  );
 }
 
 /**

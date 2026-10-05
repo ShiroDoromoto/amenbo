@@ -1316,6 +1316,8 @@ export const fr: Translation = {
     "auto.saved.never": "Pas encore enregistré",
     "auto.saved.version": "Version {version} enregistrée · {time}",
     "auto.saved.unsaved": "Modifications non enregistrées",
+    "auto.saved.listVersion": "Version {version}",
+    "auto.saved.listUnsaved": "Non enregistré",
     "auto.saved.written": "Écrit",
     "auto.saved.writeFailed": "Non écrit : {reason}",
     "auto.saved.save": "Enregistrer",

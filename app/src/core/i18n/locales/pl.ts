@@ -1321,6 +1321,8 @@ export const pl: Translation = {
     "auto.saved.never": "Jeszcze nie zapisano",
     "auto.saved.version": "Zapisano wersję {version} · {time}",
     "auto.saved.unsaved": "Niezapisane zmiany",
+    "auto.saved.listVersion": "Wersja {version}",
+    "auto.saved.listUnsaved": "Niezapisane",
     "auto.saved.written": "Zapisano zmianę",
     "auto.saved.writeFailed": "Nie zapisano zmiany: {reason}",
     "auto.saved.save": "Zapisz",

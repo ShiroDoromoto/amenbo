@@ -1308,6 +1308,8 @@ export const de: Translation = {
     "auto.saved.never": "Noch nicht gespeichert",
     "auto.saved.version": "Version {version} gespeichert · {time}",
     "auto.saved.unsaved": "Ungespeicherte Änderungen",
+    "auto.saved.listVersion": "Version {version}",
+    "auto.saved.listUnsaved": "Ungespeichert",
     "auto.saved.written": "Geschrieben",
     "auto.saved.writeFailed": "Nicht geschrieben: {reason}",
     "auto.saved.save": "Speichern",

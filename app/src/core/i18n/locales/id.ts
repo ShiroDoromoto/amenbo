@@ -1305,6 +1305,8 @@ export const id: Translation = {
     "auto.saved.never": "Belum disimpan",
     "auto.saved.version": "Versi {version} disimpan · {time}",
     "auto.saved.unsaved": "Ada perubahan yang belum disimpan",
+    "auto.saved.listVersion": "Versi {version}",
+    "auto.saved.listUnsaved": "Belum disimpan",
     "auto.saved.written": "Tertulis",
     "auto.saved.writeFailed": "Tidak tertulis: {reason}",
     "auto.saved.save": "Simpan",

@@ -69,6 +69,7 @@ function action(over: Partial<AutomationActionCardDto> = {}): AutomationActionCa
     steps: 1,
     global: false,
     usedBy: 2,
+    unsaved: false,
     ...over,
   };
 }
@@ -189,6 +190,18 @@ describe("the library", () => {
       (one) => one.querySelector(".auto__note")?.textContent ?? null,
     );
     expect(notes).toEqual(["Says what the run did", null]);
+  });
+
+  it("marks an action whose draft holds changes not saved, beside the version saved last", async () => {
+    hoisted.actions = [
+      action({ id: 1, name: "Never saved", unsaved: true }),
+      action({ id: 2, name: "Saved", saved: { version: 4, savedAt: "2026-10-01T00:00:00Z" } }),
+    ];
+    await render();
+    const marks = [...container.querySelectorAll(".auto__row")].map(
+      (one) => one.querySelector(".savedmark")?.textContent ?? null,
+    );
+    expect(marks).toEqual([t("auto.saved.listUnsaved"), tf("auto.saved.listVersion", { version: 4 })]);
   });
 
   it("says an action with no step is empty, in the colour of what stops a launch", async () => {

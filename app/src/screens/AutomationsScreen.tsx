@@ -67,6 +67,7 @@ import { AutomationActionsTab, firstLine } from "./AutomationActionsTab";
 import { AutomationBuiltinScreen } from "./AutomationBuiltinScreen";
 import { AutomationBuildScreen } from "./AutomationBuildScreen";
 import { HistoryTab } from "./HistoryTab";
+import { SavedMark } from "./AutomationSaved";
 import { RunningTab } from "./RunningTab";
 import { useAutomationStart } from "../components/StartAutomation";
 import { addAutomation, useAutomations, useEveryAutomation, useLaunchCheck } from "../core/automations";
@@ -428,6 +429,7 @@ function AutomationLine({
           <span className="autolist__name">
             <span className="autoid">{tf("auto.id", { id: card.id })}</span>
             {card.name}
+            <SavedMark saved={card.saved} unsaved={card.unsaved} />
             {firstLine(card.notes) !== "" && <span className="auto__note">{firstLine(card.notes)}</span>}
           </span>
           {projectName !== undefined && <span className="autolist__project">{projectName}</span>}

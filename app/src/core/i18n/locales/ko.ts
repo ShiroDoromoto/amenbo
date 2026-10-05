@@ -1301,6 +1301,8 @@ export const ko: Translation = {
     "auto.saved.never": "아직 저장하지 않았습니다",
     "auto.saved.version": "버전 {version} 저장됨 · {time}",
     "auto.saved.unsaved": "저장하지 않은 변경 사항이 있습니다",
+    "auto.saved.listVersion": "버전 {version}",
+    "auto.saved.listUnsaved": "저장 안 됨",
     "auto.saved.written": "기록됨",
     "auto.saved.writeFailed": "기록하지 못했습니다: {reason}",
     "auto.saved.save": "저장",

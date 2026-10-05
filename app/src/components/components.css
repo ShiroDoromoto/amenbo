@@ -2083,6 +2083,13 @@ button.feed__target:hover { color: var(--c-accent); }
   color: var(--c-accent); background: var(--c-accent-weak);
 }
 .actsaved__mark--inside { transform: translate(-100%, -50%); }
+/* The saved state on a list row, after the name: the version saved last, and "Unsaved" where the draft
+   holds more, in the heed colour — a draft left unsaved does not launch. */
+.savedmark {
+  display: inline-flex; gap: var(--s-1); margin-inline-start: var(--s-2); white-space: nowrap;
+  font-size: var(--fs-xs); font-weight: var(--fw-normal); color: var(--c-text-muted);
+}
+.savedmark__unsaved { color: var(--c-heed); font-weight: var(--fw-bold); }
 /* Which action stands on the pressed spot, as one card at the head of its panel: a mark, the name with
    its reach and how many automations use it, and the one press — to where it is built — at the far
    end. Nothing on it takes a value, which is what says it is not changed here. */

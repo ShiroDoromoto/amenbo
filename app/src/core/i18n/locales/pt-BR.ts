@@ -1317,6 +1317,8 @@ export const ptBR: Translation = {
     "auto.saved.never": "Ainda não salvo",
     "auto.saved.version": "Versão {version} salva · {time}",
     "auto.saved.unsaved": "Alterações não salvas",
+    "auto.saved.listVersion": "Versão {version}",
+    "auto.saved.listUnsaved": "Não salvo",
     "auto.saved.written": "Gravado",
     "auto.saved.writeFailed": "Não gravado: {reason}",
     "auto.saved.save": "Salvar",

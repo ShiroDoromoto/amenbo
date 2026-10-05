@@ -1551,6 +1551,8 @@ const ui = {
   "auto.saved.never": "Not saved yet",
   "auto.saved.version": "Version {version} saved · {time}",
   "auto.saved.unsaved": "Unsaved changes",
+  "auto.saved.listVersion": "Version {version}",
+  "auto.saved.listUnsaved": "Unsaved",
   "auto.saved.written": "Written",
   "auto.saved.writeFailed": "Not written: {reason}",
   "auto.saved.save": "Save",

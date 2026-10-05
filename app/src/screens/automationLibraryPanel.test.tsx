@@ -64,7 +64,7 @@ const placed = vi.fn();
 const make = vi.fn();
 
 function card(over: Partial<AutomationActionCardDto> & { id: number; name: string }): AutomationActionCardDto {
-  return { note: "", steps: 1, global: false, usedBy: 0, ...over };
+  return { note: "", steps: 1, global: false, usedBy: 0, unsaved: false, ...over };
 }
 
 async function render(target: PlaceTarget = { edgeId: 9 }) {
@@ -137,6 +137,18 @@ describe("the library in the panel", () => {
     const groups = [...container.querySelectorAll(".autolib__group")];
     expect(groups[0]!.textContent).toContain("Review");
     expect(groups[1]!.textContent).toContain("Publish");
+  });
+
+  it("marks an action whose draft holds changes not saved, beside the version saved last", async () => {
+    hoisted.actions = [
+      card({ id: 4, name: "Review", saved: { version: 2, savedAt: "2026-10-01T00:00:00Z" }, unsaved: true }),
+      card({ id: 5, name: "Publish", global: true }),
+    ];
+    await render();
+    const marks = [...container.querySelectorAll(".autolib__row")].map(
+      (one) => one.querySelector(".savedmark")?.textContent ?? null,
+    );
+    expect(marks).toEqual([tf("auto.saved.listVersion", { version: 2 }) + t("auto.saved.listUnsaved"), null]);
   });
 
   it("narrows by what the name and the note say, and leaves out a group with nothing left", async () => {

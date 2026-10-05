@@ -175,9 +175,10 @@ scripts/              what the Makefile calls out to — build, sign, notarise, 
                       bake the brand set — and a few meant to be typed by hand, such as
                       watch-ci.sh, which watches one CI run and prints only what changes
   automation/         programs an automation's script step runs, such as watch-ci-run.sh,
-                      which reads one CI run's verdict into the step's ways out, and
-                      ensure-release-tasks.sh, which files a release task for each open
-                      release that has none
+                      which reads one CI run's verdict into the step's ways out,
+                      watch-pr-land.sh, which does the same for a pull request's
+                      landing, and ensure-release-tasks.sh, which files a release task
+                      for each open release that has none
   windows/            drive a real Windows desktop from here, for the roads out of the
                       app that only a physical machine can walk
 ```

@@ -56,7 +56,8 @@ export function onStep(heard: (one: StepOpened) => void): () => void {
 
 /**
  * **The steps whose terminal is running now**, one per run — for a face coming up after they were
- * told (`crate::automation::automation_steps_standing`).
+ * told (`crate::automation::automation_steps_standing`). Only a run running or paused is in it: a run
+ * stopped, from its pane or from the command line, does not stand its pane again.
  *
  * The event reaches only a face that is up, and the workspace is put up the first time it is asked
  * for. A run started before then has its step's terminal running with no pane standing for it, and

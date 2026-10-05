@@ -43,7 +43,8 @@ use crate::error::CmdError;
 /// The synchronous commands that reach the store, directly or through what they call. They run on the
 /// store thread, in the order they arrive.
 pub const ON_WORKER: &[&str] = &[
-    "snapshot", "automation_page", "automation_page_everywhere", "automation_add", "automation_edit",
+    "snapshot", "automation_steps_standing", "automation_page", "automation_page_everywhere",
+    "automation_add", "automation_edit",
     "automation_entry_replace", "automation_remove", "automation_action_page",
     "automation_action_page_everywhere", "automation_action_add",
     "automation_action_edit", "automation_action_set_scope", "automation_action_remove",
@@ -113,7 +114,7 @@ pub const ON_WORKER: &[&str] = &[
 /// the test that holds every registered command to one side reads it.
 #[cfg_attr(not(test), allow(dead_code))]
 pub const OFF_WORKER: &[&str] = &[
-    "automation_steps_standing", "skin_add", "skin_font_licence", "skin_in_use", "skin_read",
+    "skin_add", "skin_font_licence", "skin_in_use", "skin_read",
     "skin_template_to", "skin_write_out", "skin_list", "skin_tables", "skin_use", "store_locations",
     "dev_badge", "cli_command_name", "open_logs_dir", "config_set_perf_log", "config_set_update_check",
     "config_set_default_view", "config_set_autostart", "notify_os", "cancel_data_op", "ui_language",

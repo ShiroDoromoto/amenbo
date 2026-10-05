@@ -232,31 +232,42 @@ fn advance(
         .map_or(WHILE_IDLE, |due| due.saturating_duration_since(Instant::now()).min(WHILE_IDLE)))
 }
 
-/// **End the terminal of a run that is over** — completed, failed or canceled.
+/// **End the terminal of a run that is over** — completed, failed or canceled — and forget what was
+/// kept of its step for a face coming up ([`crate::automation::StepsStanding`]).
 ///
 /// A step's terminal is otherwise ended only as the next step opens ([`crate::pty::end_steps_of`]), so
 /// the last one of a run would stand there after it: the agent waiting for input, still typing
 /// commands, over a task the run has handed back. A run ends by many roads, one of
-/// them a `step-done` typed in another process, and this look is the one place all of them pass.
+/// them a `step-done` typed in another process, and this look is the one place all of them pass. A
+/// built-in or a script step a run stopped on was kept the same way, and without this a workspace put
+/// up again stood the stopped run's pane once more.
 ///
-/// A paused run keeps its terminal: it is not over, and the step it paused after may be asked why. A
-/// script step's terminal whose program has ended is not one this looks at: there is nothing in it to
-/// stop, and it stays for its pane to read (`crate::pty::runs_with_steps`).
-/// The store is read only where a terminal stands for a run that is not running, which is none on
-/// most looks.
+/// A paused run keeps its terminal and what was kept of it: it is not over, and the step it paused
+/// after may be asked why. A script step's terminal whose program has ended is not one this looks at:
+/// there is nothing in it to stop, and it stays for its pane to read (`crate::pty::runs_with_steps`).
+/// The store is read only where a terminal or a kept step stands for a run that is not running, which
+/// is none on most looks.
 fn end_what_is_over(app: &tauri::AppHandle, running: &[i64]) -> Result<(), crate::error::CmdError> {
-    let standing: Vec<i64> =
+    let terminals: Vec<i64> =
         crate::pty::runs_with_steps(app).into_iter().filter(|run| !running.contains(run)).collect();
-    if standing.is_empty() {
+    let kept: Vec<i64> = crate::automation::runs_standing(app)
+        .into_iter()
+        .filter(|run| !running.contains(run))
+        .collect();
+    if terminals.is_empty() && kept.is_empty() {
         return Ok(());
     }
     let store = crate::commands::open_store_read()?;
-    for run in standing {
-        let paused = amenbo_core::store_engine::read::automation_run(store.read_model().conn(), run)?
-            .is_some_and(|it| it.status == amenbo_core::model::AutomationRunStatus::Paused);
-        if !paused {
-            crate::pty::end_steps_of(app, run);
-        }
+    let conn = store.read_model().conn();
+    let live = crate::automation::runs_still_standing(
+        terminals.iter().chain(kept.iter()).copied(),
+        |run| Ok(amenbo_core::store_engine::read::automation_run(conn, run)?.map(|it| it.status)),
+    )?;
+    for run in terminals.into_iter().filter(|run| !live.contains(run)) {
+        crate::pty::end_steps_of(app, run);
+    }
+    for run in kept.into_iter().filter(|run| !live.contains(run)) {
+        crate::automation::forget_standing(app, run);
     }
     Ok(())
 }

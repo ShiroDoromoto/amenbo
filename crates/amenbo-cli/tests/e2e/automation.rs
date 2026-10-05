@@ -557,6 +557,38 @@ fn the_listing_counts_the_placements_and_keeps_an_archived_one() {
     assert_eq!(after["automations"][0]["automation"]["archived"], serde_json::json!(true));
 }
 
+/// The most runs an automation may have going at once is set and lifted on `update`, and an update
+/// that names neither leaves it as it was. Zero is no most at all, so it is refused rather than read as
+/// "none may run"; setting and lifting it in one call is refused for saying two things.
+#[test]
+fn an_update_sets_and_lifts_the_most_runs_at_once() {
+    let cli = Cli::new();
+    let (_, a, _, _) = an_automation(&cli);
+
+    let shown = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(shown["automation"]["max_concurrent_runs"], serde_json::Value::Null, "none by default: {shown}");
+
+    let set = cli.json(&["automation", "update", &a, "--max-concurrent-runs", "2", "--json"]);
+    assert_eq!(set["automation"]["max_concurrent_runs"], serde_json::json!(2), "{set}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("at most 2 run(s) at once"), "{text}");
+
+    let kept = cli.json(&["automation", "update", &a, "--name", "Renamed", "--json"]);
+    assert_eq!(kept["automation"]["max_concurrent_runs"], serde_json::json!(2), "{kept}");
+
+    let lifted = cli.json(&["automation", "update", &a, "--no-max-concurrent-runs", "--json"]);
+    assert_eq!(lifted["automation"]["max_concurrent_runs"], serde_json::Value::Null, "{lifted}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(!text.contains("at once"), "{text}");
+
+    let (_, code) = cli.run_err(&["automation", "update", &a, "--max-concurrent-runs", "0"]);
+    assert_ne!(code, 0, "zero is refused");
+    let (_, code) = cli.run_err(&["automation", "update", &a, "--max-concurrent-runs", "2", "--no-max-concurrent-runs"]);
+    assert_ne!(code, 0, "setting and lifting at once is refused");
+    let after = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(after["automation"]["max_concurrent_runs"], serde_json::Value::Null, "a refused update changes nothing: {after}");
+}
+
 /// The library answers as the one list an automation could place, and `--global` narrows it to the
 /// device's shelf rather than opening a second place to look.
 #[test]

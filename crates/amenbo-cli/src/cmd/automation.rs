@@ -402,10 +402,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 render_automation(flags, &view);
             }
         }
-        AutomationCmd::Update { id, name, notes, archived } => {
+        AutomationCmd::Update { id, name, notes, archived, max_concurrent_runs, no_max_concurrent_runs } => {
             let notes = body_arg_opt(notes)?;
+            let max_concurrent_runs = if no_max_concurrent_runs { Some(None) } else { max_concurrent_runs.map(Some) };
             let a = store
-                .automation_update(id, name.as_deref(), notes.as_deref(), archived, None)
+                .automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
@@ -1313,10 +1314,14 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
         None => "starts nowhere".to_string(),
     };
     let archived = if a.archived { "  archived" } else { "" };
+    let at_most = match a.max_concurrent_runs {
+        Some(n) => format!("  at most {n} run(s) at once"),
+        None => String::new(),
+    };
     human(
         flags,
         format!(
-            "project {}  {}  {} placement(s){archived}",
+            "project {}  {}  {} placement(s){at_most}{archived}",
             a.project_id,
             entry,
             view.placements.len()

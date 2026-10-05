@@ -20,8 +20,8 @@
 //! and the same key crosses the boundary (an `i64` in Rust, a `number` in TS), so nothing renders a
 //! key as text on the way through. The constructors are `col!` (plain text/integer), `ts!`/`ts_opt!`
 //! (RFC3339Z instant), `date_opt!` (`%Y-%m-%d` day), `enum_col!`/`enum_opt!` (closed value set),
-//! `bool_col!`/`bool_col_on!`, `hash_opt!` (blake3 hex) and `fk!`/`fk_opt!` (foreign key) — declared
-//! below in this module.
+//! `bool_col!`, `limit_opt!` (an upper bound of at least 1), `hash_opt!` (blake3 hex) and
+//! `fk!`/`fk_opt!` (foreign key) — declared below in this module.
 //!
 //! The **spelling** of an integer type says what the column is, not how SQLite stores it: `INTEGER` and
 //! `BIGINT` carry the same affinity and the same 64-bit storage, so to the database they are one type.
@@ -266,12 +266,13 @@ macro_rules! bool_col {
     };
 }
 
-/// The same truth value, for a flag that starts out on.
-macro_rules! bool_col_on {
+/// Nullable upper bound: a whole number of at least 1, or `NULL` for no bound at all. `0` is refused,
+/// so "none allowed" and "no bound" are never spelled the same.
+macro_rules! limit_opt {
     ($name:ident) => {
         Column {
             name: stringify!($name),
-            decl: concat!("BOOLEAN NOT NULL DEFAULT 1 CHECK(", stringify!($name), " IN (0, 1))"),
+            decl: concat!("BIGINT CHECK(", stringify!($name), " IS NULL OR ", stringify!($name), " >= 1)"),
         }
     };
 }
@@ -333,7 +334,7 @@ macro_rules! column {
     ($name:ident : ts_opt)                               => { ts_opt!($name) };
     ($name:ident : date_opt)                             => { date_opt!($name) };
     ($name:ident : bool_col)                             => { bool_col!($name) };
-    ($name:ident : bool_col_on)                          => { bool_col_on!($name) };
+    ($name:ident : limit_opt)                            => { limit_opt!($name) };
     ($name:ident : hash_opt)                             => { hash_opt!($name) };
     ($name:ident : actor_kind)                           => { actor_kind!($name) };
     ($name:ident : enum_col($($v:literal),+ $(,)?))      => { enum_col!($name, $($v),+) };
@@ -369,7 +370,7 @@ macro_rules! column_type {
     ($name:ident : enum_col($($v:literal),+ $(,)?)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
     ($name:ident : enum_opt($($v:literal),+ $(,)?)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : bool_col)            => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Bool> };
-    ($name:ident : bool_col_on)         => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Bool> };
+    ($name:ident : limit_opt)           => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int, $crate::store_engine::sql::Nullable> };
     ($name:ident : fk($parent:literal, $od:literal))     => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     ($name:ident : fk_opt($parent:literal, $od:literal)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int, $crate::store_engine::sql::Nullable> };
 }
@@ -1092,9 +1093,9 @@ datasets! {
         notes: col(REQ),
         entry_placement_id: fk_opt("automation_placement", "RESTRICT"),
         archived: bool_col,
-        // Whether a run may start while another run of this automation is still going. On unless a
-        // person turns it off; like `archived`, it is not part of a saved version.
-        allow_concurrent_runs: bool_col_on,
+        // How many runs of this automation may be going at once; `NULL` for no limit. Like
+        // `archived`, it is not part of a saved version.
+        max_concurrent_runs: limit_opt,
         order_key: col(ORDER_KEY),
     }
 

@@ -1226,7 +1226,41 @@ pub const STEPS: &[Step] = &[
         // every run it was asked for, however many were going (`AMB-D-947`).
         apply: Apply::Custom(let_the_automations_run_side_by_side),
     },
+    Step {
+        to: 98,
+        name: "replace automation.allow_concurrent_runs with max_concurrent_runs, how many runs of the automation may be going at once",
+        // One value, so a flag that refuses and a number that allows three cannot both be written.
+        //
+        // **Seeded, and the seed is not a guess.** A flag that allowed overlap is no limit (`NULL`); one
+        // that refused it is a limit of `1`.
+        apply: Apply::Custom(count_the_runs_side_by_side),
+    },
 ];
+
+/// v98: `automation.allow_concurrent_runs` becomes `automation.max_concurrent_runs` — `NULL` where the
+/// flag was on, `1` where it was off.
+///
+/// **Appended only where it is missing, and the flag dropped only where it is there**, v68's guard and
+/// v80's. The column is dropped in place, not by rebuilding the table: `automation_run` and
+/// `automation_placement` reference `automation` with `RESTRICT`.
+fn count_the_runs_side_by_side(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let columns = column_names(tx, "automation")?;
+    let has = |column: &str| columns.iter().any(|c| c == column);
+    if !has("max_concurrent_runs") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN max_concurrent_runs BIGINT \
+             CHECK(max_concurrent_runs IS NULL OR max_concurrent_runs >= 1);",
+        )?;
+    }
+    if has("allow_concurrent_runs") {
+        tx.execute_batch(
+            "UPDATE automation SET max_concurrent_runs = CASE allow_concurrent_runs WHEN 0 THEN 1 ELSE NULL END;
+             ALTER TABLE automation DROP COLUMN allow_concurrent_runs;",
+        )?;
+    }
+    Ok(())
+}
 
 /// v97: `automation.allow_concurrent_runs` — whether a run may start while another run of the
 /// automation is still going.
@@ -10647,9 +10681,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v97: v98 takes the column away again, for `max_concurrent_runs`.
+        run(&engine, &dir, steps_through(97), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         let mut stmt =
             engine.conn().prepare("SELECT allow_concurrent_runs FROM automation ORDER BY id").unwrap();
         let flags: Vec<bool> = stmt.query_map([], |r| r.get::<_, bool>(0)).unwrap().map(|v| v.unwrap()).collect();
@@ -10657,6 +10691,44 @@ mod tests {
         let refused =
             engine.conn().execute("UPDATE automation SET allow_concurrent_runs = 2 WHERE id = 1", []);
         assert!(refused.is_err(), "the column admits only 0 and 1");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v98: an automation that allowed concurrent runs has no limit, one that refused them a limit of
+    /// one, and the flag is gone. The new column admits `NULL` and anything from 1 up, never `0`.
+    #[test]
+    fn the_flag_on_concurrent_runs_becomes_a_limit() {
+        let dir = scratch("max-concurrent-runs");
+        let engine = store_at(&dir, 97);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, allow_concurrent_runs) VALUES
+                     (1, 1, 'cut', 1), (2, 1, 'take', 0);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let mut stmt =
+            engine.conn().prepare("SELECT max_concurrent_runs FROM automation ORDER BY id").unwrap();
+        let limits: Vec<Option<i64>> =
+            stmt.query_map([], |r| r.get::<_, Option<i64>>(0)).unwrap().map(|v| v.unwrap()).collect();
+        assert_eq!(limits, vec![None, Some(1)]);
+        let flags: i64 = engine
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('automation') WHERE name = 'allow_concurrent_runs'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(flags, 0, "the flag is gone");
+        let refused = engine.conn().execute("UPDATE automation SET max_concurrent_runs = 0 WHERE id = 1", []);
+        assert!(refused.is_err(), "the column does not admit 0");
+        engine.conn().execute("UPDATE automation SET max_concurrent_runs = 3 WHERE id = 1", []).unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

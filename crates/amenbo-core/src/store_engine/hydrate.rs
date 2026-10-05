@@ -522,7 +522,9 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         notes: get(r, C.notes)?,
         entry_placement_id: get(r, C.entry_placement_id)?,
         archived: get(r, C.archived)?,
-        allow_concurrent_runs: get(r, C.allow_concurrent_runs)?,
+        max_concurrent_runs: get(r, C.max_concurrent_runs)?
+            .map(|n| u32::try_from(n).map_err(|_| bad(format!("bad max_concurrent_runs {n}"))))
+            .transpose()?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

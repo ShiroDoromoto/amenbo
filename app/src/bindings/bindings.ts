@@ -518,7 +518,12 @@ export type AutomationDetailDto = { id: number, projectId: number, name: string,
 /**
  * The placement a run opens first. Absent while the automation is still being built.
  */
-entryPlacementId?: number, archived: boolean, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
+entryPlacementId?: number, archived: boolean, 
+/**
+ * How many runs of it may be going at once; a launch past it is refused. Absent where nothing
+ * limits them.
+ */
+maxConcurrentRuns?: number, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
 /**
  * **The runs going on this definition** — its own that are running or paused. The definition is
  * written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen

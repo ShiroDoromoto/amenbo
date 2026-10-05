@@ -1334,6 +1334,8 @@ export const vi: Translation = {
     "auto.about.copy": "Sao chép",
     "auto.about.copied": "Đã sao chép",
     "auto.about.notesHint": "Một dòng hiện trong danh sách",
+    "auto.about.limitRuns": "Giới hạn số lần chạy cùng lúc",
+    "auto.about.mostRuns": "Tối đa cùng lúc",
     "auto.about.archive": "Đã lưu trữ",
     "auto.about.remove": "Xoá tự động hoá này",
     "auto.about.removeConfirm": "Xoá tự động hoá này? Các vị trí, việc tiếp theo sau mỗi vị trí và các chuyển giao giữa chúng sẽ mất theo. Các hành động đã đặt vẫn còn trong thư viện. Không thể hoàn tác.",

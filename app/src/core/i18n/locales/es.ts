@@ -1345,6 +1345,8 @@ export const es: Translation = {
     "auto.about.copy": "Copiar",
     "auto.about.copied": "Copiado",
     "auto.about.notesHint": "Una línea que aparece en la lista",
+    "auto.about.limitRuns": "Limitar ejecuciones simultáneas",
+    "auto.about.mostRuns": "Máximo a la vez",
     "auto.about.archive": "Archivada",
     "auto.about.remove": "Eliminar esta automatización",
     "auto.about.removeConfirm": "¿Eliminar esta automatización? Sus colocaciones, lo que sigue a cada una y las entregas entre ellas se van con ella. Las acciones colocadas se quedan en la biblioteca. No se puede deshacer.",

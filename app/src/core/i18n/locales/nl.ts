@@ -1333,6 +1333,8 @@ export const nl: Translation = {
     "auto.about.copy": "Kopiëren",
     "auto.about.copied": "Gekopieerd",
     "auto.about.notesHint": "Eén regel die in de lijst staat",
+    "auto.about.limitRuns": "Gelijktijdige runs beperken",
+    "auto.about.mostRuns": "Hoogstens tegelijk",
     "auto.about.archive": "Gearchiveerd",
     "auto.about.remove": "Deze automatisering verwijderen",
     "auto.about.removeConfirm": "Deze automatisering verwijderen? De plaatsingen, wat na elk volgt en de overdrachten ertussen gaan mee. De geplaatste acties blijven in de bibliotheek. Dit kan niet ongedaan worden gemaakt.",

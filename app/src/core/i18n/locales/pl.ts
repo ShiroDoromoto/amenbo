@@ -1350,6 +1350,8 @@ export const pl: Translation = {
     "auto.about.copy": "Kopiuj",
     "auto.about.copied": "Skopiowano",
     "auto.about.notesHint": "Jedna linijka widoczna na liście",
+    "auto.about.limitRuns": "Ogranicz równoczesne uruchomienia",
+    "auto.about.mostRuns": "Najwyżej naraz",
     "auto.about.archive": "Zarchiwizowana",
     "auto.about.remove": "Usuń tę automatyzację",
     "auto.about.removeConfirm": "Usunąć tę automatyzację? Jej umieszczenia, to, co następuje po każdym, i przekazania między nimi znikną razem z nią. Umieszczone akcje zostaną w bibliotece. Tego nie da się cofnąć.",

@@ -1339,6 +1339,8 @@ export const ja: Translation = {
     "auto.about.copy": "コピー",
     "auto.about.copied": "コピーしました",
     "auto.about.notesHint": "一覧に出る一言",
+    "auto.about.limitRuns": "同時起動の数に上限を設ける",
+    "auto.about.mostRuns": "同時起動の上限",
     "auto.about.archive": "アーカイブ",
     "auto.about.remove": "このオートメーションを消す",
     "auto.about.removeConfirm": "このオートメーションを消します。中の配置・次にすること・受け渡しも一緒に消えます。配置していたアクションはライブラリに残ります。戻せません",

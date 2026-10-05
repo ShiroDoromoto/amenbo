@@ -1346,6 +1346,8 @@ export const ptBR: Translation = {
     "auto.about.copy": "Copiar",
     "auto.about.copied": "Copiado",
     "auto.about.notesHint": "Uma linha exibida na lista",
+    "auto.about.limitRuns": "Limitar execuções simultâneas",
+    "auto.about.mostRuns": "No máximo ao mesmo tempo",
     "auto.about.archive": "Arquivada",
     "auto.about.remove": "Excluir esta automação",
     "auto.about.removeConfirm": "Excluir esta automação? Suas colocações, o que vem depois de cada uma e os repasses entre elas vão junto. As ações colocadas continuam na biblioteca. Não dá para desfazer.",

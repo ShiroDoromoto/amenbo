@@ -1334,6 +1334,8 @@ export const th: Translation = {
     "auto.about.copy": "คัดลอก",
     "auto.about.copied": "คัดลอกแล้ว",
     "auto.about.notesHint": "ข้อความหนึ่งบรรทัดที่แสดงในรายการ",
+    "auto.about.limitRuns": "จำกัดจำนวนการรันพร้อมกัน",
+    "auto.about.mostRuns": "สูงสุดพร้อมกัน",
     "auto.about.archive": "เก็บเข้าคลัง",
     "auto.about.remove": "ลบออโตเมชันนี้",
     "auto.about.removeConfirm": "ลบออโตเมชันนี้หรือไม่ การวาง สิ่งที่ทำต่อจากแต่ละการวาง และการส่งต่อระหว่างกันจะหายไปด้วย แอ็กชันที่วางไว้ยังอยู่ในไลบรารี และย้อนกลับไม่ได้",

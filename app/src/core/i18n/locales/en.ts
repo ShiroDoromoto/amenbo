@@ -1580,6 +1580,8 @@ const ui = {
   "auto.about.copy": "Copy",
   "auto.about.copied": "Copied",
   "auto.about.notesHint": "A line shown on the list",
+  "auto.about.limitRuns": "Limit runs at once",
+  "auto.about.mostRuns": "Most at once",
   "auto.about.archive": "Archived",
   "auto.about.remove": "Delete this automation",
   "auto.about.removeConfirm": "Delete this automation? Its placements, what happens after each and the handoffs between them go with it. The actions it placed stay in the library. This cannot be undone.",

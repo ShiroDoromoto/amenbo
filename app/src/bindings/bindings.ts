@@ -3142,6 +3142,14 @@ folder: string | null,
  */
 agent: string | null, 
 /**
+ * **The frame this terminal was opened in**, or absent for one opened without any.
+ *
+ * It is what a face putting its panes back puts each session in by: a frame's id is its own
+ * across arrangements (`AMB-D-897`), where a folder is shared by every pane working in it and by
+ * ended ones too. A session whose frame is not in the arrangement is opened in a new place.
+ */
+frame?: string, 
+/**
  * **The automation run this terminal carries a step of**, or absent for every other terminal
  * (`crate::pty::open_step`). A step's terminal belongs to the run's own pane and to nothing
  * else, so a face putting its panes back never hands it to an ordinary one.

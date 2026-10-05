@@ -812,6 +812,11 @@ pub struct Terminal {
     /// terminal started, and a pane that adopts this session has no other way to learn what is
     /// running in it ([`crate::dto::PtySessionDto`]).
     agent: Option<String>,
+    /// The place of the arrangement this terminal was opened in, or `None` for one opened without
+    /// any. A frame's id is its own across arrangements (`AMB-D-897`), so a face putting its panes
+    /// back finds each session's place by it rather than guessing from the folder
+    /// ([`crate::dto::PtySessionDto`]).
+    frame: Option<String>,
     /// The master side, kept for one purpose: telling the terminal how large the pane is. Let go of
     /// once the program has ended ([`Terminal::ended`]), with the pty it holds.
     master: Option<Box<dyn MasterPty + Send>>,
@@ -1475,6 +1480,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
     }
 
     let opened_in = folder.as_ref().map(|f| f.to_string_lossy().into_owned());
+    let placed = frame.clone();
     let pane = spawn(
         app,
         target,
@@ -1485,6 +1491,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
             at: (cols, rows),
             folder,
             agent: agent_id.clone(),
+            frame: placed.clone(),
             started_at,
             run: step.map(|(run, _)| run),
             read_only: false,
@@ -1539,6 +1546,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
         session,
         folder: opened_in,
         agent: agent_id,
+        frame: placed,
         run: step.map(|(run, _)| run),
     })
 }
@@ -1549,6 +1557,7 @@ struct Spawn {
     at: Size,
     folder: Option<PathBuf>,
     agent: Option<String>,
+    frame: Option<String>,
     started_at: String,
     run: Option<i64>,
     read_only: bool,
@@ -1583,7 +1592,7 @@ fn spawn(
     parts: Spawn,
     ended: impl FnOnce(&tauri::AppHandle, bool, bool) -> bool + Send + 'static,
 ) -> Result<Spawned, CmdError> {
-    let Spawn { session, at, folder, agent, started_at, run, read_only } = parts;
+    let Spawn { session, at, folder, agent, frame, started_at, run, read_only } = parts;
     let child = pair.slave.spawn_command(cmd).map_err(failed)?;
     let killer = child.clone_killer();
     let pid = child.process_id();
@@ -1604,6 +1613,7 @@ fn spawn(
         Terminal {
             folder,
             agent,
+            frame,
             master: Some(pair.master),
             keys: write_keys(session.clone(), writer),
             killer,
@@ -2039,14 +2049,13 @@ impl CursorQuery {
 /// only part of a terminal that outlives the window: a webview that went away took its emulator with
 /// it and could tell nothing to whatever draws next.
 ///
-/// **The order is part of the answer.** The face puts each session back in the place whose folder it
-/// is running in, and two panes working in one folder are told apart by nothing else — so the oldest
-/// session goes in the oldest place, which is the pairing they were opened in. Left as the registry
-/// holds them the order is a `HashMap`'s, which is to say a different one each run: the two panes
-/// would trade contents at some splits and not others, and each would then be drawn under the other
-/// one's name, since a name belongs to the place (`amenbo_core::frames`). `started_at` alone can tie
-/// — two panes opened in the same second — so the session's own id settles it, arbitrarily but the
-/// same way every time.
+/// Each session carries the frame it was opened in, and the face puts it back in that place. Only a
+/// session opened without a frame is put back by its folder, and two of those working in one folder
+/// are told apart by nothing else — so **the order is part of the answer**: the oldest such session
+/// goes in the oldest place, which is the pairing they were opened in. Left as the registry holds
+/// them the order is a `HashMap`'s, a different one each run. `started_at` alone can tie — two panes
+/// opened in the same second — so the session's own id settles it, arbitrarily but the same way every
+/// time.
 #[tauri::command]
 pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto> {
     in_open_order(
@@ -2062,6 +2071,7 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
                         session: session.clone(),
                         folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
                         agent: terminal.agent.clone(),
+                        frame: terminal.frame.clone(),
                         run: terminal.run,
                     },
                 )
@@ -2240,6 +2250,7 @@ pub fn open_script(
             at: STEP_SIZE,
             folder: None,
             agent: None,
+            frame: None,
             started_at: amenbo_core::time::Timestamp::now().to_rfc3339_z(),
             run: Some(run),
             read_only: true,
@@ -2988,10 +2999,10 @@ mod tests {
         assert_eq!(run_bytes(&replay), b"plain".to_vec());
     }
 
-    /// A pane put back in its place is put there by folder and by nothing else, so two terminals
-    /// running in one folder are told apart only by the order they come back in. Oldest first is
-    /// what pairs them with the places they were opened in; a `HashMap`'s order would trade their
-    /// contents at some splits and not others, and each would then be drawn under the other's name.
+    /// A terminal opened without a frame is put back in its place by folder, so two of them running
+    /// in one folder are told apart only by the order they come back in. Oldest first is what pairs
+    /// them with the places they were opened in; a `HashMap`'s order would trade their contents at
+    /// some splits and not others.
     #[test]
     fn the_sessions_come_back_in_the_order_they_were_started() {
         let at = |session: &str, started_at: &str| {
@@ -3001,6 +3012,7 @@ mod tests {
                     session: session.into(),
                     folder: Some("/work/repo".into()),
                     agent: None,
+                    frame: None,
                     run: None,
                 },
             )
@@ -3173,6 +3185,7 @@ mod tests {
             Terminal {
                 folder: None,
                 agent: None,
+                frame: None,
                 master: Some(pair.master),
                 keys: write_keys(session.to_owned(), writer),
                 killer: child.clone_killer(),

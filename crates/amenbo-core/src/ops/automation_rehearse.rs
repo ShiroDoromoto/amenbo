@@ -112,7 +112,7 @@ pub fn rehearse(
 ) -> Result<Rehearsal> {
     // No pane is opened, so whether the window is open is nobody's concern here.
     let by = Launcher { workspace_open: None, ..*by };
-    let run = automation_run::launch_handing(tx, automation_id, &by, handed, ReadsFrom::Draft)?;
+    let run = automation_run::launch_handing_past_the_limit(tx, automation_id, &by, handed, ReadsFrom::Draft)?;
     let mut rehearsal = Rehearsal {
         steps: Vec::new(),
         status: run.status,

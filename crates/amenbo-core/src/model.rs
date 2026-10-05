@@ -2012,10 +2012,10 @@ pub struct AutomationVersion {
 
 /// Where one launch of one automation stands (`AMB-D-955`).
 ///
-/// `Running` is where every launch begins: nothing limits how many may be under way at once, so a
-/// launch never waits (`AMB-D-947`). `Paused` keeps the place. The three ends say what happened rather
-/// than how it was reached: `Completed` is the picture run out, `Failed` is a run that could not get
-/// there, and `Canceled` is a person who said stop.
+/// `Running` is where every launch begins, so a launch never waits (`AMB-D-947`): one past the
+/// automation's `max_concurrent_runs` is refused rather than queued. `Paused` keeps the place. The
+/// three ends say what happened rather than how it was reached: `Completed` is the picture run out,
+/// `Failed` is a run that could not get there, and `Canceled` is a person who said stop.
 ///
 /// **`Completed` is not success.** Reaching the end of the picture says nothing about whether the work
 /// went well — an automation can wire a "could not fix it" way out to the end — and nothing here judges

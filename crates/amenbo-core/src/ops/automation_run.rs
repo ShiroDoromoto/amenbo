@@ -1457,8 +1457,9 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 ///   holds a place as much as a running one. It is counted in the same transaction the run is written in.
 ///   Last, since it is the only one that goes away by waiting.
 ///
-/// The run is born `running`: nothing caps how many may be under way at once, so a launch never waits
-/// (`AMB-D-947`). `started_at` is the moment of the launch itself.
+/// The run is born `running`: a launch is made or refused, never kept waiting for a place, and where
+/// `max_concurrent_runs` is unset nothing caps how many may be under way at once (`AMB-D-947`).
+/// `started_at` is the moment of the launch itself.
 ///
 /// It reads the saved definition ([`ReadsFrom::Saved`]).
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
@@ -3987,12 +3988,14 @@ mod tests {
         });
     }
 
-    /// **A second launch does not wait for the first** (`AMB-D-947`). Nothing caps how many runs may be
-    /// under way, so both are `running` from the moment they are made and both carry a `started_at`.
+    /// **A second launch does not wait for the first** (`AMB-D-947`). With `max_concurrent_runs` unset,
+    /// nothing caps how many runs may be under way, so both are `running` from the moment they are made
+    /// and both carry a `started_at`.
     #[test]
     fn a_second_launch_starts_beside_the_first_rather_than_behind_it() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
+            assert_eq!(automation.max_concurrent_runs, None, "an automation is born without a most");
             let startable = claude();
             let first = launch(tx, automation.id, &here(&startable)).expect("launch");
             let second = launch(tx, automation.id, &here(&startable)).expect("launch");
@@ -4006,6 +4009,42 @@ mod tests {
                 2,
                 "both are going at once",
             );
+        });
+    }
+
+    /// **A launch past the most runs an automation may have going is refused** — and a paused run holds
+    /// its place as much as a running one (`AMB-D-961`), so pausing one does not make room.
+    #[test]
+    fn a_launch_past_the_most_runs_under_way_is_refused_and_a_paused_one_counts() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let automation =
+                automation::update(tx, automation.id, None, None, None, Some(Some(2))).expect("set a most");
+            let startable = claude();
+            let first = launch(tx, automation.id, &here(&startable)).expect("the first is under the most");
+            let second = launch(tx, automation.id, &here(&startable)).expect("the second reaches it");
+            let refused = |tx: &WriteTx<'_>| {
+                let err = launch(tx, automation.id, &here(&startable)).expect_err("a third is past the most");
+                let Error::Invalid(msg) = err else { panic!("a launch past the most is invalid") };
+                assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationRunLimit));
+                assert_eq!(
+                    msg.fields().iter().collect::<Vec<_>>(),
+                    vec![
+                        ("automation", automation.name.as_str()),
+                        ("max", "2"),
+                        ("runs", format!("{}, {}", first.id, second.id).as_str()),
+                    ],
+                );
+            };
+            refused(tx);
+
+            crate::ops::automation_stop::pause(tx, first.id).expect("pause");
+            let pausing = read::automation_run(tx.conn(), first.id).expect("read").expect("the run");
+            let at_end = crate::model::AutomationPauseKind::EndOfAction;
+            crate::ops::automation_stop::settle(tx, pausing, at_end).expect("settle");
+            let paused = read::automation_run(tx.conn(), first.id).expect("read").expect("the run");
+            assert_eq!(paused.status, AutomationRunStatus::Paused);
+            refused(tx);
         });
     }
 

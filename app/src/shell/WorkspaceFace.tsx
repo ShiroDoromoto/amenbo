@@ -1314,6 +1314,20 @@ export function WorkspaceFace({
     watch.observe(track);
     return () => watch.disconnect();
   }, []);
+  // A sideways swipe over a terminal is the row's, not the terminal's. A program that asked for the
+  // mouse (`vim` with `mouse=a`) has xterm.js take every wheel and stop it, the sideways part with
+  // it, so the row never scrolled under one. The row catches the swipe on the way down and keeps it
+  // from the pane; left to itself the browser then scrolls the row, snap and all. A wheel that is
+  // mostly up and down goes on to the terminal, whose history it scrolls (`AMB-D-1028`).
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const swiped = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.stopPropagation();
+    };
+    track.addEventListener("wheel", swiped, { capture: true, passive: true });
+    return () => track.removeEventListener("wheel", swiped, { capture: true });
+  }, []);
   // Where the row came to rest, as the page being read. It is read once the scrolling has stopped —
   // a page passed on the way to another is not one the reader went to — and a row at rest on the
   // page already in force writes nothing, which is what keeps a scroll this face asked for from

@@ -306,6 +306,27 @@ describe("turning a page", () => {
     expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
     expect(shown()).toBe(q(".workspace__page-grid")[1]);
   });
+
+  it("keeps a sideways swipe over a terminal from the terminal, and lets an up-and-down one through", async () => {
+    await twoPages();
+    // What the terminal hears, standing in for xterm.js, which stops every wheel it is handed when the
+    // program in it asked for the mouse.
+    const heard: string[] = [];
+    const pane = here(".slot:not(.slot--empty)")[0]!;
+    pane.addEventListener("wheel", (e) => { heard.push(e.deltaX ? "sideways" : "down"); });
+
+    const wheel = (deltaX: number, deltaY: number) => {
+      const e = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaX, deltaY });
+      pane.dispatchEvent(e);
+      return e;
+    };
+    // Mostly sideways is the row's, and the row is left to scroll the way the browser scrolls it.
+    expect(wheel(-40, 6).defaultPrevented).toBe(false);
+    expect(heard, "a sideways swipe reached the terminal").toEqual([]);
+    // Mostly up and down is the terminal's history.
+    wheel(0, 40);
+    expect(heard).toEqual(["down"]);
+  });
 });
 
 describe("the empty frame", () => {

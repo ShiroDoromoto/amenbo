@@ -973,9 +973,14 @@ export async function pressIntoTerminal(session: string, data: string): Promise<
  * person writes a line in stands outside the frame and is never found from here (`AMB-D-864`). A
  * place with no terminal in it has none, and the focus then stays where it was: taking it off
  * whatever holds it, to give it to nothing, is worse than leaving it alone.
+ *
+ * **The focus does not scroll anything.** That box is kept far off to the left of the terminal, and
+ * a plain focus scrolls the row the pages are laid in until it shows — back to the first page,
+ * whichever page the pane is on (`../shell/WorkspaceFace`). The emulator's own focus asks for the
+ * same thing.
  */
 export function focusTerminal(host: HTMLElement | null): void {
-  host?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+  host?.querySelector<HTMLTextAreaElement>("textarea")?.focus({ preventScroll: true });
 }
 
 /**

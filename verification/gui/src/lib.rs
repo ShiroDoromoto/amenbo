@@ -3112,10 +3112,10 @@ impl Instructor {
                 )
             }
             // Paging. The digits are the pages, so the step names the one it presses and says the
-            // whole screen moves: a pane that was on the page being left is not on the screen after
-            // this, which is the state half these roads are about.
+            // pages slide along: a pane that was on the page being left is scrolled off the screen
+            // after this, which is the state half these roads are about.
             (Domain::Workspace, "go-page") => format!(
-                "At the top of the workspace, in the row of page digits, press {}. The whole screen moves to that page.",
+                "At the top of the workspace, in the row of page digits, press {}. The pages slide along until that page is the one on the screen, and the page that was there has gone off to one side.",
                 count(with, "page")?
             ),
             // Putting a column away, and asking for it again. Each is said with *where* its control

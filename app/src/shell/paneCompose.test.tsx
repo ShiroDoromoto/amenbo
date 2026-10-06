@@ -92,7 +92,7 @@ afterEach(() => {
  * The window the pane is drawn in, as far as this is about: the one that holds what has been written
  * and hands it back down (`../talk/layout`). It is played rather than stubbed because where the
  * draft lives is half of what is pinned here — a pane holding its own would pass every test below
- * and still lose a sentence on the next page turn.
+ * and still lose a sentence the next time it is carried onto another page.
  */
 function Window(
   { autoStart = true, put, working = true, open, run = null }:

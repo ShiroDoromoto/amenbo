@@ -1011,8 +1011,8 @@ with the pane above still drawing the rows as they were printed to hold it again
 
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
 most of what there is: `stretch-pane` gives one pane a share of the page and the rest are laid down
-again around it, `go-page` moves
-the whole screen to another page, `go-project` moves it to another project's panes altogether, and
+again around it, `go-page` slides
+the pages along to another one, `go-project` moves it to another project's panes altogether, and
 `open-pane` starts a terminal where there is not one yet — `from: face` at the empty frame a page with
 room draws, `from: strip` at the thin strip a full page draws instead, which opens nothing itself and
 moves the screen to the page with room, where that same frame is waiting. What they are

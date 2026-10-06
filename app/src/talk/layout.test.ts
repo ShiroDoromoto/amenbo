@@ -577,8 +577,9 @@ describe("an arrangement kept between runs", () => {
   });
 
   it("stops calling a place one that came back, once a terminal has started in it", () => {
-    // A page turned away from and back again mounts the pane afresh, and a mark left standing would
-    // read as a second reason to start something there.
+    // A pane taken down and put up again — carried onto another page, or the project left and come
+    // back to — mounts afresh, and a mark left standing would read as a second reason to start
+    // something there.
     const back = restored({
       project: 1,
       frames: [{ id: "1", project: 1, folder: "/work/repo", agent: "claude", resumes: true }],
@@ -779,7 +780,7 @@ describe("what is written in the box under a pane", () => {
     expect(layout.frames.find((one) => one.id === frame)?.written).toBe("run the tests");
   });
 
-  it("stays where it is when the page turns, which is the pane being put away and not written in", () => {
+  it("stays where it is when the page turns, which is the pane going off the screen and not written in", () => {
     const { layout, frame } = half();
     const away = goPage(goPage(layout, 2), 1);
     expect(away.frames.find((one) => one.id === frame)?.written).toBe("run the tests");
@@ -816,9 +817,9 @@ describe("what is written in the box under a pane", () => {
 });
 
 // The box is opened by a press on one pane's band, and what that press answers is that pane
-// (`AMB-D-890`). A pane is taken down and drawn again all through a run — a page turned, a pane
-// resized, the terminal put in a window of its own — and a reader who opened the box did not ask for
-// it to shut at any of those; nor did the readers of every other pane on the screen.
+// (`AMB-D-890`). A pane is taken down and drawn again all through a run — a pane resized onto
+// another page, the terminal put in a window of its own — and a reader who opened the box did not
+// ask for it to shut at any of those; nor did the readers of every other pane on the screen.
 describe("whether the box under a pane is open", () => {
   /** Two panes in one project, with the box opened under the first. */
   function opened() {

@@ -26,3 +26,14 @@ class UnlaidOutResizeObserver implements ResizeObserver {
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = UnlaidOutResizeObserver;
 }
+
+/**
+ * An `Element.scrollTo` that takes the call and moves nothing.
+ *
+ * **jsdom has no scrolling box**, so it has no `scrollTo` on an element either, and the row the
+ * workspace's pages are laid along is scrolled with it (`./shell/WorkspaceFace`). Inert for the same
+ * reason as the observer above: a test about where the row was scrolled to stands its own in.
+ */
+if (typeof Element !== "undefined" && typeof Element.prototype.scrollTo !== "function") {
+  Element.prototype.scrollTo = function scrollTo() {};
+}

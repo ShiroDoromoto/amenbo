@@ -55,6 +55,10 @@ import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal"
  *  ordinary mark of the pane being worked in. */
 const LANDED_MS = 900;
 
+/** How long the row of pages has to go without scrolling to be at rest on one. A swipe, its momentum
+ *  and the snap at the end all report a scroll every frame, so a gap this long is the end of them. */
+export const SCROLL_REST_MS = 120;
+
 /**
  * Where a carried pane would land — the pane it is over, which side of it, and which way that pane's
  * neighbours run (`./paneDrag`).
@@ -154,8 +158,9 @@ async function settledRunsLeftOut(saved: SavedLayout | null): Promise<SavedLayou
  *
  * What it holds is the arrangement — which panes there are, whose project each is, which page is up,
  * how many it shows (`../talk/layout`) — because that is the one thing no pane can know: a pane is a
- * drawing of a session, and the places the drawings go are the face's. Turning a page takes panes down
- * and leaves the terminals in them running, which is the same thing splitting a window out does.
+ * drawing of a session, and the places the drawings go are the face's. A pane carried onto another
+ * page is taken down and put up again there, and the terminal in it goes on running, which is the same
+ * thing splitting a window out does.
  *
  * When the window *stops* being the workspace's home — the user splits it out, or a language change
  * rebuilds the interface — this does come down, and the sessions do not: the panes detach, and this
@@ -1220,6 +1225,68 @@ export function WorkspaceFace({
   const panes = panesOf(layout, layout.project);
 
   /**
+   * The row every page of the project is laid side by side in, scrolled one page at a time.
+   *
+   * **Every page stays drawn.** One left is scrolled off the screen rather than hidden or taken down:
+   * a terminal opened under `display: none` measures its characters at zero (`AMB-D-860`), and one
+   * taken down has to read its output back when the page comes round again (`AMB-D-1028`).
+   *
+   * **The page number is still the arrangement's.** Every press that moves the reader says which page
+   * to be on (`../talk/layout`), and the row is scrolled to it; a swipe is the one move that starts
+   * on the row, and the page is written once the row has come to rest on one.
+   */
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const pageNow = useRef(page);
+  pageNow.current = page;
+  const projectDrawn = useRef(layout.project);
+  useEffect(() => {
+    const track = trackRef.current;
+    // Another project is another row, and a slide across it would be through pages of the one left.
+    const jump = projectDrawn.current !== layout.project;
+    projectDrawn.current = layout.project;
+    if (!track) return;
+    const left = (page - 1) * track.clientWidth;
+    if (track.scrollLeft !== left) track.scrollTo({ left, behavior: jump ? "instant" : "smooth" });
+  }, [page, pages, layout.project]);
+  // A row that changed width keeps the scroll it had in pixels, which is part of one page and part of
+  // the next: the page being read is put back square on the screen.
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(() => {
+      track.scrollTo({ left: (pageNow.current - 1) * track.clientWidth, behavior: "instant" });
+    });
+    watch.observe(track);
+    return () => watch.disconnect();
+  }, []);
+  // Where the row came to rest, as the page being read. It is read once the scrolling has stopped —
+  // a page passed on the way to another is not one the reader went to — and a row at rest on the
+  // page already in force writes nothing, which is what keeps a scroll this face asked for from
+  // coming back round as a second move.
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    let wait: ReturnType<typeof setTimeout> | undefined;
+    const rested = () => {
+      const across = track.clientWidth;
+      if (across === 0) return;
+      const at = Math.round(track.scrollLeft / across) + 1;
+      if (at === pageNow.current) return;
+      setAsking(null);
+      setLayout((was) => goPage(was, at));
+    };
+    const scrolled = () => {
+      clearTimeout(wait);
+      wait = setTimeout(rested, SCROLL_REST_MS);
+    };
+    track.addEventListener("scroll", scrolled, { passive: true });
+    return () => {
+      clearTimeout(wait);
+      track.removeEventListener("scroll", scrolled);
+    };
+  }, []);
+
+  /**
    * The pane being carried and where letting go would put it, or nothing.
    *
    * **The order is not written while the hand is moving.** These panes have terminals running in
@@ -1547,7 +1614,15 @@ export function WorkspaceFace({
     // blank: a hole is where the next pane did not fit, and a grid that closed up around it would
     // move the panes a reader is watching.
     return (
-      <div className={`workspace__page-grid${spare === null ? " workspace__page-grid--add" : ""}`}>
+      <div
+        key={one}
+        className={`workspace__page-grid${spare === null ? " workspace__page-grid--add" : ""}`}
+        aria-current={one === page ? "page" : undefined}
+        // A page scrolled off the screen is still drawn, and nothing on it is the reader's to reach
+        // until the row has come to rest on it: not by Tab, not by a press, and not by a screen
+        // reader listing what is on the window.
+        inert={one !== page}
+      >
         {/* Nothing until the arrangement has been read back, and nothing while the face has been
             told there are projects but not yet which one it is on. **A machine with no project at
             all is not that**: the way in is what this page draws, and a page that waited for a
@@ -1910,7 +1985,9 @@ export function WorkspaceFace({
             />
           </div>
         )}
-        {drawPage(page)}
+        <div className="workspace__track" ref={trackRef}>
+          {Array.from({ length: pages }, (_, i) => i + 1).map(drawPage)}
+        </div>
         {/* The file face, a column on the other side of the panes. It is closed from its own cross
             and opened again from the top row: whichever way it went away, the way back is in front
             of the reader (`../files/FilesPanel`). */}

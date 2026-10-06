@@ -14,7 +14,7 @@
 # with one pane could say only the first half.
 #
 # ── Why the second line, typed at the end ────────────────────────────────────────────────────────
-# Going to another project takes a running terminal off the screen exactly as a page turn does, and a
+# Going to another project takes a running terminal off the screen and takes its pane down, and a
 # pane is drawn rather than held, so the same thing has to be true of it: what a reader has running is
 # theirs until they end it. Words on a pane outlive the process that wrote them — what a terminal
 # printed stays printed — so the first line coming back says only that the screen was restored. A line

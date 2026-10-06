@@ -3190,7 +3190,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "drop-order", required: &["how"], refs: &[], strings: &["how"], binds: false },
     // Which page is being shown, counted from 1. Paging is one of the two ways to a pane that is not
     // on the screen and by far the commoner, so it is the move a terminal has to be able to outlive:
-    // a page is drawn rather than held, and the panes it took away are still running behind it.
+    // the page left is scrolled off the screen, and the panes on it are still running there.
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "go-page", required: &["page"], refs: &[], strings: &[], binds: false },
     // The columns beside the panes, put away and brought back. `side` says which of the two: the rail
     // that lists the panes, and the file face on the other edge.

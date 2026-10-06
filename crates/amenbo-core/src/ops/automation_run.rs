@@ -3994,6 +3994,7 @@ mod tests {
     fn a_second_launch_starts_beside_the_first_rather_than_behind_it() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
+            assert_eq!(automation.max_concurrent_runs, None, "an automation is born without a most");
             let startable = claude();
             let first = launch(tx, automation.id, &here(&startable)).expect("launch");
             let second = launch(tx, automation.id, &here(&startable)).expect("launch");
@@ -4007,6 +4008,42 @@ mod tests {
                 2,
                 "both are going at once",
             );
+        });
+    }
+
+    /// **A launch past the most runs an automation may have going is refused** — and a paused run holds
+    /// its place as much as a running one (`AMB-D-961`), so pausing one does not make room.
+    #[test]
+    fn a_launch_past_the_most_runs_under_way_is_refused_and_a_paused_one_counts() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let automation =
+                automation::update(tx, automation.id, None, None, None, Some(Some(2))).expect("set a most");
+            let startable = claude();
+            let first = launch(tx, automation.id, &here(&startable)).expect("the first is under the most");
+            let second = launch(tx, automation.id, &here(&startable)).expect("the second reaches it");
+            let refused = |tx: &WriteTx<'_>| {
+                let err = launch(tx, automation.id, &here(&startable)).expect_err("a third is past the most");
+                let Error::Invalid(msg) = err else { panic!("a launch past the most is invalid") };
+                assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationRunLimit));
+                assert_eq!(
+                    msg.fields().iter().collect::<Vec<_>>(),
+                    vec![
+                        ("automation", automation.name.as_str()),
+                        ("max", "2"),
+                        ("runs", format!("{}, {}", first.id, second.id).as_str()),
+                    ],
+                );
+            };
+            refused(tx);
+
+            crate::ops::automation_stop::pause(tx, first.id).expect("pause");
+            let pausing = read::automation_run(tx.conn(), first.id).expect("read").expect("the run");
+            let at_end = crate::model::AutomationPauseKind::EndOfAction;
+            crate::ops::automation_stop::settle(tx, pausing, at_end).expect("settle");
+            let paused = read::automation_run(tx.conn(), first.id).expect("read").expect("the run");
+            assert_eq!(paused.status, AutomationRunStatus::Paused);
+            refused(tx);
         });
     }
 

@@ -6,7 +6,7 @@ import { TerminalPane } from "./TerminalPane";
 import { FolderRail } from "./FolderRail";
 import { RootPick } from "../files/RootPick";
 import { PaneOrder } from "./PaneOrder";
-import type { Plate as Row } from "../talk/nameplate";
+import type { Plate as Row, Say } from "../talk/nameplate";
 import { hueOf } from "../talk/moving";
 import { ProjectTabs } from "./ProjectTabs";
 import {
@@ -16,7 +16,7 @@ import {
   addPane, closedFrame, closedIn, EMPTY_LAYOUT, filledPages, focusOn, folding, goPage, goProject,
   gridAt, landingOn, laidOut, movedTo, movedWithin, needsNobody, openedFrame, openedIn, pageCount,
   paneIn, panesOf, reordered, resized, restored, runFrameId, runsKept, slotsOf, stoodForRun,
-  withoutRuns, writing, type Layout, type SavedLayout, type Size,
+  withoutRuns, writing, type Frame, type Layout, type SavedLayout, type Size,
 } from "../talk/layout";
 import { onStep, standingSteps, type BuiltinRun, type StepOpened, type StepRun } from "../talk/automationStep";
 import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
@@ -419,6 +419,61 @@ export function WorkspaceFace({
   );
   const runCards = useRunCards(paneRuns);
   const runCardOf = useMemo(() => new Map(runCards.map((one) => [one.run, one])), [runCards]);
+  /**
+   * What the row says under the name, on a run's pane, by the frame (`../talk/nameplate`). It is the
+   * run the place is standing for and the step it is on — both Amenbo's own values, neither of them
+   * the agent's word about itself (`AMB-D-858`).
+   *
+   * **Where no step has arrived, the row is said off the run** (`AMB-T-5635`): a pane the store kept
+   * comes back with the app, and a run held or failed opens no terminal to say it by (`runSayOf`).
+   *
+   * It is worked out here rather than in the pane because the panes being put in order include ones
+   * on pages not drawn (`./PaneOrder`), and a card there says what that pane's row would.
+   */
+  const sayOf = useCallback((frame: Frame): Say | null => {
+    if (frame.run === null) return null;
+    const step = steps.get(frame.id);
+    const builtin = step === undefined ? builtins.get(frame.id) : undefined;
+    const on = step ?? builtin;
+    if (on === undefined) return runSayOf(runCardOf.get(frame.run));
+    return {
+      run: frame.run,
+      automation: on.automationName,
+      // A built-in's name, and the action standing where it was opened from, are
+      // drawn in the screen's language (`builtinWord`); an agent's step has no key.
+      step: builtinWord(builtin?.key, on.name),
+      // Which box of the picture the step was opened from, which the pane numbers
+      // it by once the picture has been read (`./TerminalPane`).
+      automationId: on.automation,
+      placement: on.placement ?? null,
+      box: null,
+      // A script step comes by the built-ins' road, but it runs the project's own
+      // program and is not one Amenbo carries out, so the row does not call it a built-in.
+      builtin: builtin !== undefined && builtin.program === undefined,
+      interactive: step?.interactive ?? false,
+      // Who carries the step out, and with what: the step's agent and model as the run
+      // copied them, or the script and the command it runs. A built-in has its chip.
+      by: step !== undefined
+        ? { kind: "agent", agent: step.agent, model: step.model ?? null }
+        : builtin?.program !== undefined ? { kind: "script" } : null,
+      command: builtin?.program === undefined
+        ? null
+        : [builtin.program, ...(builtin.args ?? [])].join(" "),
+      startedAt: on.startedAt === undefined ? null : Date.parse(on.startedAt),
+      // Which spot of the picture this step was opened from, said by the action
+      // standing there (`AMB-D-949`). Null where that spot has since been taken off.
+      action: on.actionName === undefined ? null : builtinWord(builtin?.key, on.actionName),
+      // A built-in waiting for the next task is on none: what it still carries is the task
+      // the run closed before it, and a line naming that one would say the run was on it.
+      task: builtin?.waiting ? null : on.task ?? null,
+      // Whether the run is going, held or over, and where a failure failed
+      // (`AMB-T-5506`). Null until it has been read. A run whose built-in is waiting
+      // for a task is still running, and the row says what it is doing: waiting.
+      state: builtin?.waiting
+        ? waitingState(runCardOf.get(frame.run))
+        : runStateOf(runCardOf.get(frame.run)),
+    };
+  }, [steps, builtins, runCardOf]);
   /**
    * The arrangement as it stands, read by what arrives from outside a render.
    *
@@ -1612,50 +1667,7 @@ export function WorkspaceFace({
                     // A script step's terminal is taken up and never written into (`AMB-D-1016`).
                     readOnly: builtin?.program !== undefined,
                   }}
-                  // What the row says under the name, on a run's pane (`../talk/nameplate`). It is
-                  // the run the place is standing for and the step it is on — both Amenbo's own
-                  // values, neither of them the agent's word about itself (`AMB-D-858`).
-                  //
-                  // **Where no step has arrived, the row is said off the run** (`AMB-T-5635`): a
-                  // pane the store kept comes back with the app, and a run held or failed opens no
-                  // terminal to say it by (`runSayOf`).
-                  run={frame.run === null ? null : on === undefined ? runSayOf(runCardOf.get(frame.run)) : {
-                    run: frame.run,
-                    automation: on.automationName,
-                    // A built-in's name, and the action standing where it was opened from, are
-                    // drawn in the screen's language (`builtinWord`); an agent's step has no key.
-                    step: builtinWord(builtin?.key, on.name),
-                    // Which box of the picture the step was opened from, which the pane numbers
-                    // it by once the picture has been read (`./TerminalPane`).
-                    automationId: on.automation,
-                    placement: on.placement ?? null,
-                    box: null,
-                    // A script step comes by the built-ins' road, but it runs the project's own
-                    // program and is not one Amenbo carries out, so the row does not call it a built-in.
-                    builtin: builtin !== undefined && builtin.program === undefined,
-                    interactive: step?.interactive ?? false,
-                    // Who carries the step out, and with what: the step's agent and model as the run
-                    // copied them, or the script and the command it runs. A built-in has its chip.
-                    by: step !== undefined
-                      ? { kind: "agent", agent: step.agent, model: step.model ?? null }
-                      : builtin?.program !== undefined ? { kind: "script" } : null,
-                    command: builtin?.program === undefined
-                      ? null
-                      : [builtin.program, ...(builtin.args ?? [])].join(" "),
-                    startedAt: on.startedAt === undefined ? null : Date.parse(on.startedAt),
-                    // Which spot of the picture this step was opened from, said by the action
-                    // standing there (`AMB-D-949`). Null where that spot has since been taken off.
-                    action: on.actionName === undefined ? null : builtinWord(builtin?.key, on.actionName),
-                    // A built-in waiting for the next task is on none: what it still carries is the task
-                    // the run closed before it, and a line naming that one would say the run was on it.
-                    task: builtin?.waiting ? null : on.task ?? null,
-                    // Whether the run is going, held or over, and where a failure failed
-                    // (`AMB-T-5506`). Null until it has been read. A run whose built-in is waiting
-                    // for a task is still running, and the row says what it is doing: waiting.
-                    state: builtin?.waiting
-                      ? waitingState(runCardOf.get(frame.run))
-                      : runStateOf(runCardOf.get(frame.run)),
-                  }}
+                  run={sayOf(frame)}
                   builtin={builtin ?? null}
                   // What a script step wrote, kept on the run, for a pane come back with the app
                   // with no step arrived and its terminal gone (`AMB-D-1016`).
@@ -1982,6 +1994,7 @@ export function WorkspaceFace({
           panes={panes}
           names={names}
           rows={rows.current}
+          sayOf={sayOf}
           onClose={() => setOrdering(false)}
           onOrder={(order) => {
             setLayout((was) => reordered(was, order));

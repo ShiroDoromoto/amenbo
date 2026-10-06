@@ -54,6 +54,20 @@ export type Plate = {
 };
 
 /**
+ * The name a pane's row is headed with.
+ *
+ * A run's pane is headed with the automation it is running, not with the place: the place is named
+ * by a person for what they do in it, and what is in it now is the run. A folder standing in for a
+ * name would say less still.
+ *
+ * It is the one answer, so a card for a pane that is not drawn (`../shell/PaneOrder`) is named as
+ * the pane's row would be.
+ */
+export function plateName(run: Say | null, names: FrameNames, frame: string, folder: string | null): string | null {
+  return run !== null && run.automation !== "" ? run.automation : frameLabel(names, frame, folder);
+}
+
+/**
  * Put a label above a pane and keep it there.
  *
  * `frame` is which of the arrangement's places this pane is in (`./layout`), because the name on the
@@ -133,10 +147,7 @@ export function mountPlate(
    */
   function row(): Row | null {
     if (!(ran || run !== null || names.has(frame))) return null;
-    // A run's pane is headed with the automation it is running, not with the place: the place is
-    // named by a person for what they do in it, and what is in it now is the run. A folder standing
-    // in for a name would say less still.
-    const name = run !== null && run.automation !== "" ? run.automation : frameLabel(names, frame, folder);
+    const name = plateName(run, names, frame, folder);
     return stoppedAt === null
       ? { name, dot: { hue, face: faceOf(moving) }, run }
       : { name, dot: { hue, face: faceOf(moving) }, run, now: stoppedAt };

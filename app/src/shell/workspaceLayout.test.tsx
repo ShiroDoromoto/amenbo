@@ -414,6 +414,31 @@ describe("moving and sizing a pane where it is drawn", () => {
     expect(panes()[0]!.style.gridColumn).toBe("1 / span 12");
   });
 
+  it("measures a corner against the grid of the page it is on, wherever that page is drawn", async () => {
+    await mount();
+    await openPane();
+    await atSize("half");
+    await openPane();                              // two halves, so page 1 is full
+    await openPane();                              // the strip goes to page 2, and the pane opens there
+    expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
+    // Page 2 as drawn to the right of page 1, so a corner measured against any box but its own page's
+    // would come out a page too wide.
+    const grid = q(".slot__corner")[0]!.closest<HTMLElement>(".workspace__page-grid")!;
+    grid.getBoundingClientRect = () => ({
+      top: 0, left: 1200, width: 1200, height: 400, right: 2400, bottom: 400,
+      x: 1200, y: 0, toJSON: () => ({}),
+    }) as DOMRect;
+
+    // Six cells across and one row down from the page's own left edge, which is a quarter.
+    await carry(q(".slot__corner")[0]!, { x: 1800, y: 200 }, null, () => {
+      const outline = q(".workspace__stretch")[0]!;
+      expect(outline.style.gridColumn).toBe("1 / span 6");
+      expect(outline.style.gridRow).toBe("1 / span 1");
+    });
+    expect(panes()[0]!.style.gridColumn).toBe("1 / span 6");
+    expect(panes()[0]!.style.gridRow).toBe("1 / span 1");
+  });
+
   it("puts a pane carried onto another where the half it was let go over says", async () => {
     await mount();
     await openPane();

@@ -14,7 +14,7 @@ vi.mock("./frames", async (orig) => ({
   frameNames: async () => new Map<string, string>(),
 }));
 
-const { mountPlate } = await import("./plate");
+const { mountPlate, plateName } = await import("./plate");
 
 let host: HTMLElement;
 let plate: ReturnType<typeof mountPlate>;
@@ -91,5 +91,13 @@ describe("the row above a run's pane", () => {
     plate = mountPlate(host, FRAME, 199, run);
     await settled();
     expect(heading()).toBe("nightly triage");
+  });
+
+  // A card for a pane that is not drawn is named by the same answer (`../shell/PaneOrder`).
+  it("is the automation over the place's name, and the place's name where the automation is gone", () => {
+    const names = new Map([[FRAME, "place"]]);
+    expect(plateName(run, names, FRAME, "/work/repo")).toBe("nightly triage");
+    expect(plateName({ ...run, automation: "" }, names, FRAME, "/work/repo")).toBe("place");
+    expect(plateName(null, new Map(), FRAME, "/work/repo")).toBe("repo");
   });
 });

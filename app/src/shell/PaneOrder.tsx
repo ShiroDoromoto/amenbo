@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { gridAt, movedWithin, placing, type Frame } from "../talk/layout";
-import { frameLabel, type FrameNames } from "../talk/frames";
+import type { FrameNames } from "../talk/frames";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
-import { faceOf, type Face, type Plate as Row } from "../talk/nameplate";
+import { faceOf, type Face, type Plate as Row, type Say } from "../talk/nameplate";
+import { plateName } from "../talk/plate";
 import { hueOf } from "../talk/moving";
 import { sideOnPane } from "./paneDrag";
 import { t, tf } from "../core/i18n";
@@ -37,15 +38,18 @@ import { t, tf } from "../core/i18n";
  *
  * **A card carries what the pane's own label carries** (`../talk/nameplate`), because three panes
  * open on one repository are three cards reading `repo` otherwise — and which of them a person wants
- * moved is exactly what the lamp and the one thing said tell them apart by. It is the row itself,
- * read off the pane rather than worked out again, so a pane is never described two ways at once.
+ * moved is exactly what the lamp and the one thing said tell them apart by. Where the pane is drawn it
+ * is the row itself, read off the pane rather than worked out again; where it is not, it is named by
+ * the same answer the row is (`plateName`), so a pane is never described two ways at once.
  */
-export function PaneOrder({ panes, names, rows, onClose, onOrder }: {
+export function PaneOrder({ panes, names, rows, sayOf, onClose, onOrder }: {
   /** The panes of the project on the screen, in the order they stand in now. */
   panes: readonly Frame[];
   names: FrameNames;
   /** How to read the row of each pane that is drawn, by frame (`../talk/plate`). */
   rows: ReadonlyMap<string, () => Row | null>;
+  /** What a run's pane's row says under its name, for any pane, drawn or not (`./WorkspaceFace`). */
+  sayOf: (frame: Frame) => Say | null;
   onClose: () => void;
   /** The order the reader pressed for. Nothing is written until they do. */
   onOrder: (order: readonly Frame[]) => void;
@@ -57,7 +61,8 @@ export function PaneOrder({ panes, names, rows, onClose, onOrder }: {
    * **A pane that is drawn is read; one that is not has its lamp out.** Only the page on the screen
    * has panes mounted on it, so the one thing a row measures — whether output is arriving — is known
    * for those and for no others. It is left unsaid rather than filled in: a lamp out is a lamp out
-   * (`AMB-D-858`).
+   * (`AMB-D-858`). What a run's pane says is Amenbo's own and not measured, so a card for one that is
+   * not drawn is still named by its automation and says where the run stands.
    *
    * The hue the lamp is drawn in is not taken from the row: it belongs to the slot the card is in,
    * and the cards here are being dragged between slots (`../talk/moving`).
@@ -65,7 +70,8 @@ export function PaneOrder({ panes, names, rows, onClose, onOrder }: {
   function rowOf(frame: Frame): { name: string | null; face: Face; state: string | null } {
     const drawn = rows.get(frame.id)?.() ?? null;
     if (drawn !== null) return { name: drawn.name, face: drawn.dot.face, state: drawn.run?.state?.word ?? null };
-    return { name: frameLabel(names, frame.id, frame.folder), face: faceOf(false), state: null };
+    const run = sayOf(frame);
+    return { name: plateName(run, names, frame.id, frame.folder), face: faceOf(false), state: run?.state?.word ?? null };
   }
   // Read once, as the modal opens. What is drawn in here is a proposal about an arrangement, not a
   // second screen for watching the panes on: a card that moved under the hand carrying it would be

@@ -12,7 +12,7 @@ import {
   EMPTY_LAYOUT, openedFrame, openedIn, panesOf, resized, runFrameId, stoodForRun, type Frame, type Layout,
   type Size,
 } from "../talk/layout";
-import type { Plate as Row } from "../talk/nameplate";
+import type { Plate as Row, Say } from "../talk/nameplate";
 import { PaneOrder } from "./PaneOrder";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -61,12 +61,14 @@ function draw(
   layout: Layout,
   names: ReadonlyMap<string, string> = new Map(),
   rows: ReadonlyMap<string, () => Row | null> = new Map(),
+  says: ReadonlyMap<string, Say> = new Map(),
 ) {
   act(() => {
     root.render(createElement(PaneOrder, {
       panes: panesOf(layout, layout.project),
       names,
       rows,
+      sayOf: (frame: Frame) => says.get(frame.id) ?? null,
       onClose: () => { closed += 1; },
       onOrder: (order: readonly Frame[]) => { taken.push([...order]); },
     }));
@@ -257,6 +259,20 @@ describe("what a card says about its pane", () => {
     ]));
     expect(cardOf(card).querySelector(".paneorder__ended")).toBeNull();
     expect(cardOf(card).querySelector(".paneorder__state")!.textContent).toBe("タスク待ち");
+  });
+
+  it("names a run's pane that is not drawn by its automation, and says where the run stands", () => {
+    // A pane on another page has no row to read, but what a run's row says is Amenbo's own: the
+    // automation and the state of the run. Only the lamp, which is measured, stays out.
+    const { layout } = stoodForRun(faceOf(1), 1, 13);
+    const card = runFrameId(13);
+    const state = { status: "running" as const, word: "実行中", pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, why: null, exit: null, errorExit: false, acknowledged: false };
+    draw(layout, new Map([[card, "place"]]), new Map(), new Map([
+      [card, { automation: "nightly", run: 13, step: "build", automationId: 3, placement: null, box: null, builtin: false, interactive: false, by: null, command: null, startedAt: null, action: null, task: null, state }],
+    ]));
+    expect(cardOf(card).querySelector(".paneorder__name")!.textContent).toBe("nightly");
+    expect(cardOf(card).querySelector(".paneorder__state")!.textContent).toBe("実行中");
+    expect(cardOf(card).querySelector(".plate__dot")!.getAttribute("data-face")).toBe("out");
   });
 
   it("carries the folder the pane works in, beside the name that may be nothing else", () => {

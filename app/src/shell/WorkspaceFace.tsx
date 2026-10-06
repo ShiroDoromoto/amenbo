@@ -1269,22 +1269,11 @@ export function WorkspaceFace({
   // rail's git half and the history across from it are two readers of one choice (`AMB-D-905`).
   const gitRoot = rootShown(folderRoots, pickedRoot)?.path ?? null;
   const page = layout.page;
-  const slots = slotsOf(layout, page);
   const pages = pageCount(layout);
   // The panes of this project as one list, which is what the reorder is about — the pages are that
   // list laid down in order, so the modal is handed the list and not the page (`../talk/layout`).
   const panes = panesOf(layout, layout.project);
-  // The one empty frame this page draws, where it has a gap to draw it in (`../talk/layout`). The
-  // question about where a pane works stands in its place while it is up, because that is where the
-  // answer appears: a question drawn anywhere else is one the reader has to go and find.
-  // Where a pane opened on this page would land, and at what size — null where it does not fit. It
-  // is where the empty frame is drawn, and the page saying whether it has room at all
-  // (`../talk/layout`).
-  const spare = landingOn(layout, page);
 
-  // The grid the panes are drawn on, which is what a corner being pulled is measured against: a size
-  // is a rectangle of the page and the page is this box (`./paneDrag`).
-  const gridRef = useRef<HTMLDivElement | null>(null);
   /**
    * The pane being carried and where letting go would put it, or nothing.
    *
@@ -1389,11 +1378,6 @@ export function WorkspaceFace({
     });
   }, [dragPane, layout]);
 
-  // Where the pane being pulled stands on this page, which is where the outline is drawn from. It
-  // is read off the page rather than kept with the press: the corner is let go of at a size and the
-  // spot it was pulled from is the one it still holds.
-  const stretchAt = slots.find(({ frame }) => frame.id === stretch?.id);
-
   /** Pull a pane's corner, and leave it at the size the pointer let go over (`./paneDrag`). */
   const stretchPane = useCallback((
     e: ReactPointerEvent<HTMLElement>,
@@ -1401,9 +1385,12 @@ export function WorkspaceFace({
     spot: { readonly across: number; readonly down: number },
   ) => {
     let size: Size | null = null;
+    // The grid of the page this corner is on, which is what a size is a rectangle of: taken as the
+    // press goes down, because the corner itself is redrawn under the hand (`./paneDrag`).
+    const sheet = e.currentTarget.closest<HTMLElement>(".workspace__page-grid");
     dragPane(e, id, (point) => {
-      const grid = gridRef.current?.getBoundingClientRect();
-      if (grid === undefined) return;
+      if (sheet === null) return;
+      const grid = sheet.getBoundingClientRect();
       size = sizeStretchedTo(grid, spot, point);
       setStretch({ id, size });
     }, (dragged) => {
@@ -1591,6 +1578,214 @@ export function WorkspaceFace({
     />
   );
 
+  /**
+   * Draw one page: its panes on the grid, and the empty frame or the strip that is its way in.
+   *
+   * Everything on it is read off that page alone, and the corner of a pane is measured against the
+   * grid it stands on (`stretchPane`), so nothing here leans on which page is the one showing but the
+   * question about where a pane works, which is asked on that one.
+   */
+  const drawPage = (one: number) => {
+    const slots = slotsOf(layout, one);
+    // Where a pane opened on this page would land, and at what size — null where it does not fit. It
+    // is where the empty frame is drawn, and the page saying whether it has room at all
+    // (`../talk/layout`). The question about where a pane works stands in its place while it is up,
+    // because that is where the answer appears: a question drawn anywhere else is one the reader has
+    // to go and find.
+    const spare = landingOn(layout, one);
+    // Where the pane being pulled stands on this page, which is where the outline is drawn from. It
+    // is read off the page rather than kept with the press: the corner is let go of at a size and the
+    // spot it was pulled from is the one it still holds.
+    const stretchAt = slots.find(({ frame }) => frame.id === stretch?.id);
+    // A page is one grid whatever is on it — twelve cells across and two down — and each pane is
+    // placed on it by the rectangle its size comes to (`../talk/layout`). What is left over stays
+    // blank: a hole is where the next pane did not fit, and a grid that closed up around it would
+    // move the panes a reader is watching.
+    return (
+      <div className={`workspace__page-grid${spare === null ? " workspace__page-grid--add" : ""}`}>
+        {/* Nothing until the arrangement has been read back, and nothing while the face has been
+            told there are projects but not yet which one it is on. **A machine with no project at
+            all is not that**: the way in is what this page draws, and a page that waited for a
+            project would be waiting for the thing the press is about to make (`AMB-T-4358`). */}
+        {!settled || (layout.project === null && projects.length > 0)
+          ? null
+          : (
+            <>
+              {slots.map(({ frame, across, down }, slot) => {
+                // The step this place is standing on, where it is a run's (`../talk/automationStep`).
+                const step = steps.get(frame.id);
+                // Or the built-in Amenbo is carrying out there instead (`builtinArrived`).
+                const builtin = step === undefined ? builtins.get(frame.id) : undefined;
+                // Whichever of the two the row above the pane is about.
+                const on = step ?? builtin;
+                return (
+                <TerminalPane
+                  // A run's pane is keyed by the step as well as by the place, which is what swaps
+                  // the terminal: the place is the same one and what is drawn in it is taken down
+                  // and built again. Keyed by the place alone, the emulator would be handed a
+                  // second session to draw while still holding the first one's screen.
+                  //
+                  // A built-in's card is keyed by the spot it was opened from, for the same reason
+                  // (`AMB-T-5550`): two built-ins in a row are two steps on two spots, and the row
+                  // above the card is put up once per pane. Its start and its end are the same spot,
+                  // so the card is written over, not built again, between them. Where the run's copy
+                  // names no spot, the built-in's key stands in for it.
+                  key={step !== undefined
+                    ? `${frame.id}:${step.runStep}`
+                    : builtin !== undefined ? `${frame.id}:builtin:${builtin.placement ?? builtin.key}` : frame.id}
+                  frame={frame.id}
+                  // Where this pane sits on the page's grid, worked out from the order rather than
+                  // held against the pane (`../talk/layout`).
+                  at={gridAt(frame.size, across, down)}
+                  // The lamp above the pane is told apart by where the pane sits, not by which
+                  // pane it is (`../talk/moving`).
+                  hue={hueOf(slot)}
+                  project={frame.project}
+                  names={names}
+                  start={{
+                    frame: frame.id,
+                    session: frame.session,
+                    // A step's terminal was started by the host and is on the frame's session
+                    // already (`stepArrived`); what is started here is only what a person opens
+                    // in the run's place after it, on a session of its own.
+                    fresh: step !== undefined,
+                    runStep: step?.runStep ?? null,
+                    // Nothing on this face takes up a terminal it was not given: which session
+                    // belongs where is answered once, as the face comes up, and a pane left to
+                    // guess would take the one running terminal off whichever pane had it.
+                    adopt: false,
+                    // Where the step runs, and who carries it out: both are the run's answer for
+                    // this step — who carries it out being what was chosen where its action is
+                    // placed, copied at launch — and neither is asked of the reader
+                    // (`amenbo_core::ops::automation_step`).
+                    cwd: step?.folder ?? frame.folder,
+                    agent: step?.agent ?? startWith.current.get(frame.id) ?? null,
+                    // What this place comes back on, where it came back holding a way in
+                    // (`../talk/layout`). It is the row's own agent and not a fresh choice: the
+                    // reader answered this a run ago.
+                    resume: frame.resumes ? frame.agent : null,
+                    // A script step's terminal is taken up and never written into (`AMB-D-1016`).
+                    readOnly: builtin?.program !== undefined,
+                  }}
+                  run={sayOf(frame)}
+                  builtin={builtin ?? null}
+                  // What a script step wrote, kept on the run, for a pane come back with the app
+                  // with no step arrived and its terminal gone (`AMB-D-1016`).
+                  tail={frame.run !== null && on === undefined ? runCardOf.get(frame.run)?.outputTail ?? null : null}
+                  // A place that came back holding a way into what was running in it is opened
+                  // without being pressed — that press is what `AMB-D-869` is about.
+                  // A run's pane is never pressed to open: the step arrived by itself, and a way
+                  // in drawn on it would be a button nobody is there to press.
+                  autoStart={frame.session !== null || startNow.current.has(frame.id) || frame.resumes || step !== undefined ||
+                    builtin?.program !== undefined}
+                  focused={layout.focus === frame.id}
+                  landed={landed === frame.id}
+                  offered={overFrame === frame.id}
+                  held={carried?.id === frame.id}
+                  goes={carried?.over?.id === frame.id
+                    ? { side: carried.over.side, axis: carried.over.axis }
+                    : null}
+                  // A pane on its own is already in order and has nothing to be carried past, so
+                  // the row is not a handle on a project with one pane.
+                  onGrab={panes.length > 1 ? (e) => grabPane(e, frame.id) : undefined}
+                  onStretch={(e) => stretchPane(e, frame.id, { across, down })}
+                  size={frame.size}
+                  onSize={(to) => {
+                    // As the corner does on letting go: the question about where a pane works
+                    // would otherwise stand on whatever page this lands on.
+                    setAsking(null);
+                    setLayout((was) => resized(was, frame.id, to));
+                  }}
+                  onOpened={opened}
+                  onPath={pathClicked}
+                  onSaid={(statement) => {
+                    if (statement.cwd) {
+                      setLayout((was) => movedTo(was, statement.session, statement.cwd!));
+                    }
+                  }}
+                  // A script's terminal stays on the frame once its program has ended: the host keeps
+                  // it for the pane to read until the next step takes it away (`crate::pty`).
+                  onClosed={(session) => {
+                    if (builtin?.program === undefined) setLayout((was) => closedIn(was, session));
+                  }}
+                  onDrop={(id) => {
+                    setLayout((was) => closedFrame(was, id));
+                    startNow.current.delete(id);
+                    startWith.current.delete(id);
+                    // A run's pane takes its step with it. Its run is over — the pane cannot be taken
+                    // away before (`./TerminalPane`) — and a step left here would put the row back the
+                    // moment a pane of that id stood again.
+                    setSteps((had) => droppedFrom(had, id));
+                    setBuiltins((had) => droppedFrom(had, id));
+                  }}
+                  onName={named}
+                  onFocus={(id) => setLayout((was) => focusOn(was, id))}
+                  onRow={paneRow}
+                  written={frame.written}
+                  inserted={frame.inserted}
+                  onWrite={(id, text, put) => setLayout((was) => writing(was, id, text, put))}
+                  composeOpen={frame.composeOpen}
+                  onFold={(id, open) => setLayout((was) => folding(was, id, open))}
+                />
+                );
+              })}
+              {/* What the corner would leave this pane at, drawn from where the pane stands now.
+                  The pane itself is untouched until the press ends: it holds a terminal, and one
+                  that was resized on every report of the pointer would be telling the program in
+                  it a new width dozens of times for one gesture (`./paneDrag`). */}
+              {stretch !== null && stretchAt !== undefined && (
+                <div
+                  className="workspace__stretch"
+                  aria-hidden="true"
+                  style={gridAt(stretch.size, stretchAt.across, stretchAt.down)}
+                />
+              )}
+              {asking !== null && one === page && (
+                <FolderChoice
+                  at={spare === null ? undefined : gridAt(spare.size, spare.across, spare.down)}
+                  folders={bound.live}
+                  onPick={(folder) => openPane(layout.project!, folder, asking.agent)}
+                  // With no project the folder raises one; with a project it is bound to that one.
+                  // There is no list either way, so the question standing here is a refusal from
+                  // the last press and the same way in under it.
+                  onBind={() => (layout.project === null
+                    ? raiseFirstProject(asking.agent)
+                    : bindFirstFolder(layout.project, asking.agent))}
+                  note={asking.note}
+                />
+              )}
+              {/* One empty frame, exactly where the next pane would land and at the size it would
+                  be, and none at all on a page the next pane does not fit: it is this page saying
+                  it has room (`./EmptySlot`, `../talk/layout`). */}
+              {asking === null && spare !== null && (
+                <EmptySlot
+                  at={gridAt(spare.size, spare.across, spare.down)}
+                  folders={boundPaths}
+                  project={layout.project}
+                  onOpen={(agent) => askToOpen(layout.project, agent)}
+                />
+              )}
+              {/* A full page draws no empty frame — there is no gap to draw — so the way in is put
+                  beside the panes instead, as a strip too thin to cost one of them its place. It
+                  is the only way in a full page has, and it is on the face the page filled up on:
+                  it goes to where the room is, bringing a page into being where every one of them
+                  is full (`../talk/layout`). */}
+              {asking === null && spare === null && (
+                <button
+                  className="workspace__addstrip"
+                  title={t("face.openHere")}
+                  aria-label={t("face.openHere")}
+                  onClick={askForRoom}
+                >
+                  <Icon name="plus" />
+                </button>
+              )}
+            </>
+          )}
+      </div>
+    );
+  };
+
   return (
     <div
       className="workspace"
@@ -1727,194 +1922,7 @@ export function WorkspaceFace({
             />
           </div>
         )}
-        {/* The page is one grid whatever is on it — twelve cells across and two down — and each pane
-            is placed on it by the rectangle its size comes to (`../talk/layout`). What is left over
-            stays blank: a hole is where the next pane did not fit, and a grid that closed up around
-            it would move the panes a reader is watching. */}
-        <div
-          ref={gridRef}
-          className={`workspace__page-grid${spare === null ? " workspace__page-grid--add" : ""}`}
-        >
-          {/* Nothing until the arrangement has been read back, and nothing while the face has been
-              told there are projects but not yet which one it is on. **A machine with no project at
-              all is not that**: the way in is what this page draws, and a page that waited for a
-              project would be waiting for the thing the press is about to make (`AMB-T-4358`). */}
-          {!settled || (layout.project === null && projects.length > 0)
-            ? null
-            : (
-              <>
-                {slots.map(({ frame, across, down }, slot) => {
-                  // The step this place is standing on, where it is a run's (`../talk/automationStep`).
-                  const step = steps.get(frame.id);
-                  // Or the built-in Amenbo is carrying out there instead (`builtinArrived`).
-                  const builtin = step === undefined ? builtins.get(frame.id) : undefined;
-                  // Whichever of the two the row above the pane is about.
-                  const on = step ?? builtin;
-                  return (
-                  <TerminalPane
-                    // A run's pane is keyed by the step as well as by the place, which is what swaps
-                    // the terminal: the place is the same one and what is drawn in it is taken down
-                    // and built again. Keyed by the place alone, the emulator would be handed a
-                    // second session to draw while still holding the first one's screen.
-                    //
-                    // A built-in's card is keyed by the spot it was opened from, for the same reason
-                    // (`AMB-T-5550`): two built-ins in a row are two steps on two spots, and the row
-                    // above the card is put up once per pane. Its start and its end are the same spot,
-                    // so the card is written over, not built again, between them. Where the run's copy
-                    // names no spot, the built-in's key stands in for it.
-                    key={step !== undefined
-                      ? `${frame.id}:${step.runStep}`
-                      : builtin !== undefined ? `${frame.id}:builtin:${builtin.placement ?? builtin.key}` : frame.id}
-                    frame={frame.id}
-                    // Where this pane sits on the page's grid, worked out from the order rather than
-                    // held against the pane (`../talk/layout`).
-                    at={gridAt(frame.size, across, down)}
-                    // The lamp above the pane is told apart by where the pane sits, not by which
-                    // pane it is (`../talk/moving`).
-                    hue={hueOf(slot)}
-                    project={frame.project}
-                    names={names}
-                    start={{
-                      frame: frame.id,
-                      session: frame.session,
-                      // A step's terminal was started by the host and is on the frame's session
-                      // already (`stepArrived`); what is started here is only what a person opens
-                      // in the run's place after it, on a session of its own.
-                      fresh: step !== undefined,
-                      runStep: step?.runStep ?? null,
-                      // Nothing on this face takes up a terminal it was not given: which session
-                      // belongs where is answered once, as the face comes up, and a pane left to
-                      // guess would take the one running terminal off whichever pane had it.
-                      adopt: false,
-                      // Where the step runs, and who carries it out: both are the run's answer for
-                      // this step — who carries it out being what was chosen where its action is
-                      // placed, copied at launch — and neither is asked of the reader
-                      // (`amenbo_core::ops::automation_step`).
-                      cwd: step?.folder ?? frame.folder,
-                      agent: step?.agent ?? startWith.current.get(frame.id) ?? null,
-                      // What this place comes back on, where it came back holding a way in
-                      // (`../talk/layout`). It is the row's own agent and not a fresh choice: the
-                      // reader answered this a run ago.
-                      resume: frame.resumes ? frame.agent : null,
-                      // A script step's terminal is taken up and never written into (`AMB-D-1016`).
-                      readOnly: builtin?.program !== undefined,
-                    }}
-                    run={sayOf(frame)}
-                    builtin={builtin ?? null}
-                    // What a script step wrote, kept on the run, for a pane come back with the app
-                    // with no step arrived and its terminal gone (`AMB-D-1016`).
-                    tail={frame.run !== null && on === undefined ? runCardOf.get(frame.run)?.outputTail ?? null : null}
-                    // A place that came back holding a way into what was running in it is opened
-                    // without being pressed — that press is what `AMB-D-869` is about.
-                    // A run's pane is never pressed to open: the step arrived by itself, and a way
-                    // in drawn on it would be a button nobody is there to press.
-                    autoStart={frame.session !== null || startNow.current.has(frame.id) || frame.resumes || step !== undefined ||
-                      builtin?.program !== undefined}
-                    focused={layout.focus === frame.id}
-                    landed={landed === frame.id}
-                    offered={overFrame === frame.id}
-                    held={carried?.id === frame.id}
-                    goes={carried?.over?.id === frame.id
-                      ? { side: carried.over.side, axis: carried.over.axis }
-                      : null}
-                    // A pane on its own is already in order and has nothing to be carried past, so
-                    // the row is not a handle on a project with one pane.
-                    onGrab={panes.length > 1 ? (e) => grabPane(e, frame.id) : undefined}
-                    onStretch={(e) => stretchPane(e, frame.id, { across, down })}
-                    size={frame.size}
-                    onSize={(to) => {
-                      // As the corner does on letting go: the question about where a pane works
-                      // would otherwise stand on whatever page this lands on.
-                      setAsking(null);
-                      setLayout((was) => resized(was, frame.id, to));
-                    }}
-                    onOpened={opened}
-                    onPath={pathClicked}
-                    onSaid={(statement) => {
-                      if (statement.cwd) {
-                        setLayout((was) => movedTo(was, statement.session, statement.cwd!));
-                      }
-                    }}
-                    // A script's terminal stays on the frame once its program has ended: the host keeps
-                    // it for the pane to read until the next step takes it away (`crate::pty`).
-                    onClosed={(session) => {
-                      if (builtin?.program === undefined) setLayout((was) => closedIn(was, session));
-                    }}
-                    onDrop={(id) => {
-                      setLayout((was) => closedFrame(was, id));
-                      startNow.current.delete(id);
-                      startWith.current.delete(id);
-                      // A run's pane takes its step with it. Its run is over — the pane cannot be taken
-                      // away before (`./TerminalPane`) — and a step left here would put the row back the
-                      // moment a pane of that id stood again.
-                      setSteps((had) => droppedFrom(had, id));
-                      setBuiltins((had) => droppedFrom(had, id));
-                    }}
-                    onName={named}
-                    onFocus={(id) => setLayout((was) => focusOn(was, id))}
-                    onRow={paneRow}
-                    written={frame.written}
-                    inserted={frame.inserted}
-                    onWrite={(id, text, put) => setLayout((was) => writing(was, id, text, put))}
-                    composeOpen={frame.composeOpen}
-                    onFold={(id, open) => setLayout((was) => folding(was, id, open))}
-                  />
-                  );
-                })}
-                {/* What the corner would leave this pane at, drawn from where the pane stands now.
-                    The pane itself is untouched until the press ends: it holds a terminal, and one
-                    that was resized on every report of the pointer would be telling the program in
-                    it a new width dozens of times for one gesture (`./paneDrag`). */}
-                {stretch !== null && stretchAt !== undefined && (
-                  <div
-                    className="workspace__stretch"
-                    aria-hidden="true"
-                    style={gridAt(stretch.size, stretchAt.across, stretchAt.down)}
-                  />
-                )}
-                {asking !== null && (
-                  <FolderChoice
-                    at={spare === null ? undefined : gridAt(spare.size, spare.across, spare.down)}
-                    folders={bound.live}
-                    onPick={(folder) => openPane(layout.project!, folder, asking.agent)}
-                    // With no project the folder raises one; with a project it is bound to that one.
-                    // There is no list either way, so the question standing here is a refusal from
-                    // the last press and the same way in under it.
-                    onBind={() => (layout.project === null
-                      ? raiseFirstProject(asking.agent)
-                      : bindFirstFolder(layout.project, asking.agent))}
-                    note={asking.note}
-                  />
-                )}
-                {/* One empty frame, exactly where the next pane would land and at the size it would
-                    be, and none at all on a page the next pane does not fit: it is this page saying
-                    it has room (`./EmptySlot`, `../talk/layout`). */}
-                {asking === null && spare !== null && (
-                  <EmptySlot
-                    at={gridAt(spare.size, spare.across, spare.down)}
-                    folders={boundPaths}
-                    project={layout.project}
-                    onOpen={(agent) => askToOpen(layout.project, agent)}
-                  />
-                )}
-                {/* A full page draws no empty frame — there is no gap to draw — so the way in is put
-                    beside the panes instead, as a strip too thin to cost one of them its place. It
-                    is the only way in a full page has, and it is on the face the page filled up on:
-                    it goes to where the room is, bringing a page into being where every one of them
-                    is full (`../talk/layout`). */}
-                {asking === null && spare === null && (
-                  <button
-                    className="workspace__addstrip"
-                    title={t("face.openHere")}
-                    aria-label={t("face.openHere")}
-                    onClick={askForRoom}
-                  >
-                    <Icon name="plus" />
-                  </button>
-                )}
-              </>
-            )}
-        </div>
+        {drawPage(page)}
         {/* The file face, a column on the other side of the panes. It is closed from its own cross
             and opened again from the top row: whichever way it went away, the way back is in front
             of the reader (`../files/FilesPanel`). */}

@@ -480,6 +480,11 @@ body.is-dragging { user-select: none; }
    what the task is and not that anything is wrong with it — the chips it shares the card with report
    trouble, and a classification must not be read as one of those. */
 .chip--dim { white-space: nowrap; cursor: default; color: var(--c-text-muted); }
+/* On a card, a value longer than the card stops at the card's edge and ends in an ellipsis, so a cut
+   name reads as cut; the whole of it is in the chip's tooltip. A block rather than the chip's flex box,
+   since text-overflow does not reach text laid out inside a flex container. Card chips only: the detail
+   pane's chip holds its remove button beside the value and keeps the flex box. */
+.card__row > .chip--dim { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 /* The values a record carries on a multi-select axis (`AMB-D-826`), in the detail pane: the chips and
    the select that offers what is not carried yet, wrapping onto a second line where the row runs out
    rather than pushing the field wider. */

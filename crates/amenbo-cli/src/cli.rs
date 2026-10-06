@@ -1832,7 +1832,8 @@ pub enum AutomationCmd {
         #[arg(long)]
         saved: bool,
     },
-    /// Change an automation's name, notes, or whether it is archived (only the given fields change)
+    /// Change an automation's name, notes, whether it is archived, or the most runs it may have going
+    /// at once (only the given fields change)
     Update {
         /// automation id
         id: i64,
@@ -1844,6 +1845,12 @@ pub enum AutomationCmd {
         /// whether it is archived (`--archived true|false`)
         #[arg(long)]
         archived: Option<bool>,
+        /// the most runs it may have going at once (1 or more); a launch past it is refused
+        #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
+        max_concurrent_runs: Option<u32>,
+        /// lift the most runs it may have going at once
+        #[arg(long, conflicts_with = "max_concurrent_runs")]
+        no_max_concurrent_runs: bool,
     },
     /// Delete an automation with every placement, edge and wire built onto it — confirms unless -y.
     /// One that runs were launched from cannot be deleted: archive it (`update --archived true`)

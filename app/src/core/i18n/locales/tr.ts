@@ -1333,6 +1333,8 @@ export const tr: Translation = {
     "auto.about.copy": "Kopyala",
     "auto.about.copied": "Kopyalandı",
     "auto.about.notesHint": "Listede görünen tek satır",
+    "auto.about.limitRuns": "Aynı anda çalışmaları sınırla",
+    "auto.about.mostRuns": "Aynı anda en fazla",
     "auto.about.archive": "Arşivlenmiş",
     "auto.about.remove": "Bu otomasyonu sil",
     "auto.about.removeConfirm": "Bu otomasyon silinsin mi? Yerleşimleri, her birinden sonra olanlar ve aralarındaki aktarımlar onunla gider. Yerleştirilen eylemler kütüphanede kalır. Bu geri alınamaz.",

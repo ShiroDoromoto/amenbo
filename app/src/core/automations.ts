@@ -111,16 +111,19 @@ export async function addAutomation(projectId: number, name: string): Promise<nu
 }
 
 /**
- * **Rename an automation, rewrite its notes, or put it out of the way.** Only what is passed is
- * written.
+ * **Rename an automation, rewrite its notes, put it out of the way, or set how many of its runs may
+ * be going at once.** Only what is passed is written.
  *
  * Archiving takes nothing away and stops nothing already running. It keeps a definition nobody
  * launches any more out of a reader's way, and the row stays in the list with the mark on it —
  * which is what the list draws, rather than dropping the row.
+ *
+ * `maxConcurrentRuns` is a number, at least 1, to set the most at, or `null` to lift it; left out, it
+ * is kept. A launch past it is refused rather than queued.
  */
 export async function editAutomation(
   id: number,
-  patch: { name?: string; notes?: string; archived?: boolean },
+  patch: { name?: string; notes?: string; archived?: boolean; maxConcurrentRuns?: number | null },
 ): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_edit", {
@@ -128,6 +131,8 @@ export async function editAutomation(
     name: patch.name ?? null,
     notes: patch.notes ?? null,
     archived: patch.archived ?? null,
+    maxConcurrentRuns: patch.maxConcurrentRuns ?? null,
+    noMaxConcurrentRuns: patch.maxConcurrentRuns === null ? true : null,
   });
 }
 
@@ -1291,8 +1296,9 @@ export async function pauseBeforeNextTask(run: number): Promise<void> {
 /**
  * **Pick a paused run up again** — one paused at the end of an action from the way out its last step
  * left through, on the copy it launched with; one paused before its next task from the entry of the
- * automation as it stands now (`AMB-D-1015`). It opens a terminal on the spot — nothing caps how
- * many runs may be under way (`AMB-D-947`).
+ * automation as it stands now (`AMB-D-1015`). It opens a terminal on the spot rather than waiting
+ * (`AMB-D-947`): a paused run already counts toward `max_concurrent_runs`, so picking it up is never
+ * refused for it.
  *
  * Refused for a run that is not paused, which is the answer a reader gets rather than nothing
  * happening: the row they pressed was drawn from a picture that has since moved.

@@ -1457,9 +1457,8 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 ///   holds a place as much as a running one. It is counted in the same transaction the run is written in.
 ///   Last, since it is the only one that goes away by waiting.
 ///
-/// The run is born `running`: a launch is made or refused, never kept waiting for a place, and where
-/// `max_concurrent_runs` is unset nothing caps how many may be under way at once (`AMB-D-947`).
-/// `started_at` is the moment of the launch itself.
+/// The run is born `running`, so a launch never waits (`AMB-D-947`): it is either refused or under
+/// way. `started_at` is the moment of the launch itself.
 ///
 /// It reads the saved definition ([`ReadsFrom::Saved`]).
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
@@ -3988,9 +3987,9 @@ mod tests {
         });
     }
 
-    /// **A second launch does not wait for the first** (`AMB-D-947`). With `max_concurrent_runs` unset,
-    /// nothing caps how many runs may be under way, so both are `running` from the moment they are made
-    /// and both carry a `started_at`.
+    /// **A second launch does not wait for the first** (`AMB-D-947`). The automation sets no
+    /// `max_concurrent_runs`, so both are `running` from the moment they are made and both carry a
+    /// `started_at`.
     #[test]
     fn a_second_launch_starts_beside_the_first_rather_than_behind_it() {
         with_tx(|tx| {

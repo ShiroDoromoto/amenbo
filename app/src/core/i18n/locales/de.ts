@@ -1337,6 +1337,8 @@ export const de: Translation = {
     "auto.about.copy": "Kopieren",
     "auto.about.copied": "Kopiert",
     "auto.about.notesHint": "Eine Zeile für die Liste",
+    "auto.about.limitRuns": "Gleichzeitige Läufe begrenzen",
+    "auto.about.mostRuns": "Höchstens gleichzeitig",
     "auto.about.archive": "Archiviert",
     "auto.about.remove": "Diese Automation löschen",
     "auto.about.removeConfirm": "Diese Automation löschen? Ihre Platzierungen, was nach jeder geschieht, und die Übergaben dazwischen gehen mit. Die platzierten Aktionen bleiben in der Bibliothek. Das lässt sich nicht rückgängig machen.",

@@ -1335,6 +1335,8 @@ export const zhHans: Translation = {
     "auto.about.copy": "复制",
     "auto.about.copied": "已复制",
     "auto.about.notesHint": "显示在列表中的一句话",
+    "auto.about.limitRuns": "限制同时运行的数量",
+    "auto.about.mostRuns": "同时运行上限",
     "auto.about.archive": "已归档",
     "auto.about.remove": "删除此自动化",
     "auto.about.removeConfirm": "要删除此自动化吗？其中的放置、每个放置之后要做的事，以及它们之间的传递都会一并消失。放置过的动作仍留在库中。此操作无法撤销。",

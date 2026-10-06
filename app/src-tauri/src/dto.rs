@@ -3468,6 +3468,11 @@ pub struct AutomationDetailDto {
     #[ts(optional, type = "number")]
     pub(crate) entry_placement_id: Option<i64>,
     pub(crate) archived: bool,
+    /// How many runs of it may be going at once; a launch past it is refused. Absent where nothing
+    /// limits them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) max_concurrent_runs: Option<u32>,
     pub(crate) placements: Vec<AutomationPlacementDto>,
     pub(crate) edges: Vec<AutomationEdgeDto>,
     pub(crate) wires: Vec<AutomationWireDto>,

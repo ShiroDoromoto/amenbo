@@ -1333,6 +1333,8 @@ export const hi: Translation = {
     "auto.about.copy": "कॉपी करें",
     "auto.about.copied": "कॉपी हो गया",
     "auto.about.notesHint": "सूची में दिखने वाली एक पंक्ति",
+    "auto.about.limitRuns": "एक साथ चलने वाले रन सीमित करें",
+    "auto.about.mostRuns": "एक साथ अधिकतम",
     "auto.about.archive": "संग्रहित",
     "auto.about.remove": "यह ऑटोमेशन हटाएँ",
     "auto.about.removeConfirm": "यह ऑटोमेशन हटाएँ? इसके प्लेसमेंट, हर एक के बाद क्या होता है, और उनके बीच के हस्तांतरण साथ चले जाएँगे। रखे गए ऐक्शन लाइब्रेरी में बने रहेंगे। इसे वापस नहीं लाया जा सकता।",

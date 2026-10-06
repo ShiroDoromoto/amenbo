@@ -1330,6 +1330,8 @@ export const ko: Translation = {
     "auto.about.copy": "복사",
     "auto.about.copied": "복사했습니다",
     "auto.about.notesHint": "목록에 표시되는 한 줄",
+    "auto.about.limitRuns": "동시 실행 수 제한",
+    "auto.about.mostRuns": "동시 실행 최대 수",
     "auto.about.archive": "보관함",
     "auto.about.remove": "이 오토메이션 삭제",
     "auto.about.removeConfirm": "이 오토메이션을 삭제할까요? 안의 배치, 각 배치 다음에 할 일, 그 사이의 전달까지 함께 사라집니다. 배치했던 액션은 라이브러리에 남습니다. 되돌릴 수 없습니다.",

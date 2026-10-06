@@ -42,6 +42,7 @@ import { openExternalUrl } from "../core/mutations";
 import { hostOs, type HostOs } from "../core/platform";
 import { tidiedCopy } from "./copied";
 import type { NamedBy } from "./frames";
+import { holdSelectionOffscreen } from "./offscreenSelection";
 import { httpUrl, pathsOnRow, refFromUrl, refsOnRow, urlsOnRow, type Cell, type Rows } from "./refLinks";
 
 // The events the host sends this pane. Output is a chunk; closed is the program in the terminal
@@ -1109,6 +1110,7 @@ export async function mountTerminal(
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(host);
+  holdSelectionOffscreen(term);
   refit(fit, host);
 
   // The first way, and the one that works on any program's output: read the refs back out of what was
@@ -1404,6 +1406,7 @@ export function mountTail(host: HTMLElement, tail: string): () => void {
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(host);
+  holdSelectionOffscreen(term);
   refit(fit, host);
   term.write(`\x1b[?25l${tail.replace(/\r?\n/g, "\r\n")}`);
   const resize = new ResizeObserver(() => refit(fit, host));

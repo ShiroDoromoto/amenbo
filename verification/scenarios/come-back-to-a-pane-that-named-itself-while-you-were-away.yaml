@@ -2,9 +2,11 @@
 # the way back.
 #
 # What an agent says about its session goes past on its way to a window, and it is heard only where a
-# pane is drawing that session. A pane on another page has nobody listening for it, so the name and
-# the count used to be gone the moment they were said — which is a thing only a screen shows, and only
-# a screen that was looking somewhere else while it happened.
+# pane is drawing that session. A pane on another page used to have nobody listening for it, so the
+# name and the count were gone the moment they were said. Every page is drawn now and scrolled off the
+# screen rather than taken down, and what this road holds is that the scroll takes nothing with it —
+# which is a thing only a screen shows, and only a screen that was looking somewhere else while it
+# happened.
 #
 # ── Why the wait, and why it cannot be typed ─────────────────────────────────────────────────────
 # The one move this road is about is made **by the pane that is not on the screen**, and there is no
@@ -116,8 +118,8 @@ steps_gui:
       shows: SCENARIO the pane nobody was looking at
       present: false
 
-  # Back to the page the first pane is on. By now the commands armed on it have run, with nothing
-  # drawing that pane and nothing listening for what it said.
+  # Back to the page the first pane is on. By now the commands armed on it have run, with that pane
+  # scrolled off the screen and nobody looking at it.
   - type: action
     domain: workspace
     op: go-page

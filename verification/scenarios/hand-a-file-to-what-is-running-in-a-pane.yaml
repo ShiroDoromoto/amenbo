@@ -413,8 +413,9 @@ steps_gui:
 
   # The pane the menu is about, off the screen. This is what the reading after the hand-over is
   # measured against — without it, "the pane is there" would be said of a pane that never left. A
-  # page that is not being shown draws neither the pane nor the row above it, so the row answers the
-  # same question — and it answers the other half of it, further down, where the pane cannot.
+  # page that is not being shown is scrolled off the screen and left out of what the window lists, so
+  # the row answers the same question — and it answers the other half of it, further down, where the
+  # pane cannot.
   - type: assert
     domain: workspace
     op: label

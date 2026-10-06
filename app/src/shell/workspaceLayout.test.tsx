@@ -6,8 +6,8 @@
 // opening one — a face with nothing open draws one way in and no boxes, and a question walked away
 // from leaves nothing behind. A pane opens in a folder of the project it belongs to, and in nothing
 // else, which is what keeps one screen to one project (`../talk/layout`). And turning a page takes
-// panes down and *picks the terminals up* when it comes back rather than starting them again — a
-// second shell where the reader left one is a lost session with nothing to say it happened.
+// no pane down — every page is drawn side by side and scrolled to — so the terminal the reader left on
+// one is the same terminal when they come back, not one started again or read back in.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,7 +53,7 @@ vi.mock("../core/dialog", () => ({ confirmDialog: async () => true }));
 
 import { ACROSS, BOXES, DOWN, type Size } from "../talk/layout";
 import { t } from "../core/i18n";
-import { WorkspaceFace } from "./WorkspaceFace";
+import { SCROLL_REST_MS, WorkspaceFace } from "./WorkspaceFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -62,6 +62,12 @@ let root: Root;
 
 const mounts = () => hoisted.mounts as Mounted[];
 const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
+/** The page being read. Every page of the project is drawn side by side (`./WorkspaceFace`), so what
+ *  a reader sees is what is on this one. */
+const shown = (host: ParentNode = container) =>
+  host.querySelector<HTMLElement>(".workspace__page-grid[aria-current=\"page\"]")!;
+/** What is on the page being read. */
+const here = (sel: string) => [...shown().querySelectorAll<HTMLElement>(sel)];
 const click = async (el: HTMLElement) => {
   await act(async () => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 };
@@ -72,16 +78,16 @@ const goPage = async (n: number) => { await click(q(".workspace__page")[n - 1]!)
  *  into being where every page is full — and the empty frame there is what opens it
  *  (`../talk/layout`). */
 const openPaneIn = async (host: HTMLElement) => {
-  const strip = [...host.querySelectorAll<HTMLElement>(".workspace__addstrip")][0];
+  const strip = [...shown(host).querySelectorAll<HTMLElement>(".workspace__addstrip")][0];
   if (strip) await click(strip);
-  await click([...host.querySelectorAll<HTMLElement>(".slot--empty .slot__open")][0]!);
+  await click([...shown(host).querySelectorAll<HTMLElement>(".slot--empty .slot__open")][0]!);
 };
 const openPane = () => openPaneIn(container);
 /** The page as 1200 across and 400 down at the origin, so one cell is 100 wide and one row 200.
  *  jsdom measures nothing, so the page answers for its own rectangle and the drag is arithmetic on
  *  what it says. */
 const pageIs1200By400 = () => {
-  q(".workspace__page-grid")[0]!.getBoundingClientRect = () => ({
+  shown().getBoundingClientRect = () => ({
     top: 0, left: 0, width: 1200, height: 400, right: 1200, bottom: 400,
     x: 0, y: 0, toJSON: () => ({}),
   }) as DOMRect;
@@ -93,7 +99,7 @@ const pageIs1200By400 = () => {
  *  gaps and the strip beside them sizes it first. */
 const atSize = async (size: Size) => {
   pageIs1200By400();
-  const open = q(".slot:not(.slot--empty)");
+  const open = here(".slot:not(.slot--empty)");
   const slot = open.find((one) => one.classList.contains("slot--focused")) ?? open[open.length - 1]!;
   // Where the pane stands on the grid, which is what the corner is pulled from: the cell it is let
   // go over is that spot plus the box the size comes to (`./paneDrag`).
@@ -191,49 +197,114 @@ describe("a pane works in a folder of its project", () => {
     await mount();
     await openPane();
     expect(mounts(), "a pane was opened before the question was answered").toHaveLength(0);
-    const choices = q(".slot--asking .agent__choice");
+    const choices = here(".slot--asking .agent__choice");
     expect(choices.map((one) => one.textContent)).toEqual(["/repo", "/site"]);
 
     await click(choices[1]!);
     expect(mounts()).toHaveLength(1);
     expect(mounts()[0]!.start.cwd).toBe("/site");
-    expect(q(".slot--asking"), "the question stayed up behind the pane").toHaveLength(0);
+    expect(here(".slot--asking"), "the question stayed up behind the pane").toHaveLength(0);
   });
 
   it("leaves nothing behind when the question is walked away from", async () => {
     hoisted.folders = [{ path: "/repo", exists: true }, { path: "/site", exists: true }];
     await mount();
     await openPane();
-    await click(q(".slot--asking .agent__choice")[0]!);
+    await click(here(".slot--asking .agent__choice")[0]!);
     await atSize("half");
     // The question about the second pane, walked away from: resizing a pane, like going to a pane or
     // a project, is a person doing something else, and the question goes with it.
-    await click(q(".slot--empty .slot__open")[0]!);
-    expect(q(".slot--asking")).toHaveLength(1);
+    await click(here(".slot--empty .slot__open")[0]!);
+    expect(here(".slot--asking")).toHaveLength(1);
     await atSize("quarter");
-    expect(q(".slot--asking")).toHaveLength(0);
-    expect(q(".slot--empty"), "a place was left where nothing was opened").toHaveLength(1);
+    expect(here(".slot--asking")).toHaveLength(0);
+    expect(here(".slot--empty"), "a place was left where nothing was opened").toHaveLength(1);
   });
 });
 
 describe("turning a page", () => {
-  it("takes the panes down and picks the same terminals up again — never starts a second", async () => {
+  /** The row the pages are laid along, as 1200 across, scrolled to this page and then wherever it is
+   *  asked to be. jsdom scrolls nothing, so the row answers for its own width and keeps its own
+   *  scroll. */
+  const trackIs1200 = (page: number) => {
+    const track = q(".workspace__track")[0]!;
+    let left = (page - 1) * 1200;
+    Object.defineProperty(track, "clientWidth", { configurable: true, value: 1200 });
+    Object.defineProperty(track, "scrollLeft", {
+      configurable: true, get: () => left, set: (to: number) => { left = to; },
+    });
+    const asked: number[] = [];
+    Object.defineProperty(track, "scrollTo", {
+      configurable: true, value: (to: ScrollToOptions) => { asked.push(to.left!); left = to.left!; },
+    });
+    return { track, asked };
+  };
+  /** Three panes at a half each, so two pages. */
+  const twoPages = async () => {
     await mount();
     await openPane();
     await atSize("half");
     await openPane();
-    await openPane();               // a third pane, which is page 2 at half the page each
-    const started = mounts().slice(0, 2).map((one) => one.session);
+    await openPane();
     expect(q(".workspace__page")).toHaveLength(2);
+  };
 
-    await goPage(2);
-    expect(hoisted.detached, "the panes were left drawn on a page nobody is on").toBe(2);
-    expect(mounts(), "turning a page started a terminal").toHaveLength(3);
+  it("keeps every page's panes up, and never starts or picks up a terminal again", async () => {
+    await twoPages();
+    expect(q(".workspace__page-grid"), "a page that is not being read was not drawn").toHaveLength(2);
 
     await goPage(1);
-    expect(mounts()).toHaveLength(5);
-    expect(mounts().slice(3).map((one) => one.start.session), "the panes were given different terminals")
-      .toEqual(started);
+    await goPage(2);
+    await goPage(1);
+    expect(hoisted.detached, "a pane was taken down on a page nobody is on").toBe(0);
+    expect(mounts(), "turning a page put a terminal up again").toHaveLength(3);
+  });
+
+  it("scrolls the row to the page a digit is pressed for", async () => {
+    await twoPages();                              // on page 2, where the third pane opened
+    const { asked } = trackIs1200(2);
+
+    await goPage(1);
+    expect(asked).toEqual([0]);
+    await goPage(2);
+    expect(asked).toEqual([0, 1200]);
+    expect(shown()).toBe(q(".workspace__page-grid")[1]);
+    // The page scrolled away is still drawn, and is nobody's to reach until it is scrolled back.
+    expect(q(".workspace__page-grid")[0]!.hasAttribute("inert")).toBe(true);
+    expect(shown().hasAttribute("inert")).toBe(false);
+  });
+
+  it("scrolls the row to the page a press on a pane moved the screen to", async () => {
+    await mount();
+    await openPane();
+    await atSize("half");
+    await openPane();                              // two halves on page 1
+    const { asked } = trackIs1200(1);
+
+    // The pane being worked in, given the whole page, starts page 2 and the screen follows it.
+    await atSize("whole");
+    expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
+    expect(asked).toEqual([1200]);
+  });
+
+  it("goes to the page the row came to rest on", async () => {
+    await twoPages();
+    await goPage(1);
+    const { track } = trackIs1200(1);
+
+    // A swipe: the row moves, and nothing is written until it has stopped.
+    await act(async () => {
+      track.scrollLeft = 700;
+      track.dispatchEvent(new Event("scroll"));
+    });
+    expect(q(".workspace__page--on")[0]!.textContent).toBe("1");
+    await act(async () => {
+      track.scrollLeft = 1200;
+      track.dispatchEvent(new Event("scroll"));
+      await new Promise((done) => setTimeout(done, SCROLL_REST_MS + 30));
+    });
+    expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
+    expect(shown()).toBe(q(".workspace__page-grid")[1]);
   });
 });
 
@@ -243,10 +314,10 @@ describe("the empty frame", () => {
     await openPane();
     await atSize("half");
     // One pane at half the page: the other half is a gap, and one frame says so.
-    expect(q(".slot--empty")).toHaveLength(1);
+    expect(here(".slot--empty")).toHaveLength(1);
 
     await openPane();
-    expect(q(".slot--empty"), "a full page offered somewhere to open a pane").toHaveLength(0);
+    expect(here(".slot--empty"), "a full page offered somewhere to open a pane").toHaveLength(0);
   });
 
   it("is on the page the strip goes to, which it brings into being when every page is full", async () => {
@@ -254,11 +325,11 @@ describe("the empty frame", () => {
     await openPane();
     await atSize("half");
     await openPane();                              // page 1 full at half the page each
-    await click(q(".workspace__addstrip")[0]!);
+    await click(here(".workspace__addstrip")[0]!);
 
     expect(q(".workspace__page")).toHaveLength(2);
     expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
-    expect(q(".slot--empty")).toHaveLength(1);
+    expect(here(".slot--empty")).toHaveLength(1);
     expect(mounts(), "asking for room opened a terminal by itself").toHaveLength(2);
   });
 });
@@ -272,11 +343,11 @@ describe("taking a pane away", () => {
     await openPane();                              // three panes at a half each, so two pages
     expect(q(".workspace__page")).toHaveLength(2);
 
-    await act(async () => { q(".slot__end")[0]!.click(); });
+    await act(async () => { here(".slot__end")[0]!.click(); });
     await act(async () => { await Promise.resolve(); });
 
     // Two panes left, both on one page — and the page nobody can go to any more is gone with them.
-    expect(q(".slot")).toHaveLength(2);
+    expect(here(".slot")).toHaveLength(2);
     expect(q(".workspace__page")).toHaveLength(0);
   });
 });
@@ -292,8 +363,10 @@ describe("how much of the page a pane takes", () => {
     // The pane being worked in took the whole page, so it is page 2 — and that is where the screen
     // is, because the press was about that pane.
     expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
-    expect(q(".slot")).toHaveLength(1);
-    expect(mounts(), "the pane carried across was restarted rather than kept").toHaveLength(2);
+    expect(here(".slot")).toHaveLength(1);
+    // Drawn on another page is put up again there, and on the terminal it had.
+    const [, carried, again] = mounts();
+    expect(again!.start.session, "the pane carried across was given another terminal").toBe(carried!.session);
   });
 
   it("puts the way in beside the panes once the page is full, and nowhere else", async () => {
@@ -302,17 +375,17 @@ describe("how much of the page a pane takes", () => {
     await atSize("half");
     // A page with a gap draws the empty frame, and that frame is the way in. A second one beside it
     // would be the same offer twice.
-    expect(q(".workspace__addstrip")).toHaveLength(0);
+    expect(here(".workspace__addstrip")).toHaveLength(0);
 
     await openPane();                              // two halves, so the page is now full
-    expect(q(".slot--empty")).toHaveLength(0);
-    expect(q(".workspace__addstrip")).toHaveLength(1);
+    expect(here(".slot--empty")).toHaveLength(0);
+    expect(here(".workspace__addstrip")).toHaveLength(1);
 
     // Pressing it goes to where the room is, which is the next page — the same thing the rail's own
     // way in does.
-    await click(q(".workspace__addstrip")[0]!);
+    await click(here(".workspace__addstrip")[0]!);
     expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
-    expect(q(".slot--empty")).toHaveLength(1);
+    expect(here(".slot--empty")).toHaveLength(1);
   });
 
   it("draws the pane at the size that was asked for, and leaves the rest of the page blank", async () => {
@@ -322,10 +395,10 @@ describe("how much of the page a pane takes", () => {
 
     // The box is the size. A pane that grew to fill what is open would make the control look as
     // though it had done nothing.
-    const slot = q(".slot:not(.slot--empty)")[0]!;
+    const slot = here(".slot:not(.slot--empty)")[0]!;
     expect(slot.style.gridColumn).toBe("1 / span 6");
     expect(slot.style.gridRow).toBe("1 / span 1");
-    expect(q(".slot--empty")).toHaveLength(1);
+    expect(here(".slot--empty")).toHaveLength(1);
   });
 
   it("takes half the page both ways round", async () => {
@@ -333,12 +406,12 @@ describe("how much of the page a pane takes", () => {
     await openPane();
 
     await atSize("half");
-    expect(q(".slot:not(.slot--empty)")[0]!.style.gridColumn).toBe("1 / span 6");
-    expect(q(".slot:not(.slot--empty)")[0]!.style.gridRow).toBe("1 / span 2");
+    expect(here(".slot:not(.slot--empty)")[0]!.style.gridColumn).toBe("1 / span 6");
+    expect(here(".slot:not(.slot--empty)")[0]!.style.gridRow).toBe("1 / span 2");
 
     await atSize("half-down");
-    expect(q(".slot:not(.slot--empty)")[0]!.style.gridColumn).toBe("1 / span 12");
-    expect(q(".slot:not(.slot--empty)")[0]!.style.gridRow).toBe("1 / span 1");
+    expect(here(".slot:not(.slot--empty)")[0]!.style.gridColumn).toBe("1 / span 12");
+    expect(here(".slot:not(.slot--empty)")[0]!.style.gridRow).toBe("1 / span 1");
   });
 
   it("is the pane being worked in that it is about, and each pane keeps its own answer", async () => {
@@ -348,7 +421,7 @@ describe("how much of the page a pane takes", () => {
     await openPane();                              // the second pane is a quarter too
     await atSize("sixth");                         // and only it is resized
 
-    const boxes = q(".slot:not(.slot--empty)").map((one) => one.style.gridColumn);
+    const boxes = here(".slot:not(.slot--empty)").map((one) => one.style.gridColumn);
     expect(boxes).toEqual(["1 / span 6", "7 / span 4"]);
   });
 });
@@ -382,7 +455,7 @@ describe("moving and sizing a pane where it is drawn", () => {
     });
   }
 
-  const panes = () => q(".slot:not(.slot--empty)");
+  const panes = () => here(".slot:not(.slot--empty)");
 
   it("leaves a pane at the size its corner was let go over", async () => {
     await mount();
@@ -390,16 +463,16 @@ describe("moving and sizing a pane where it is drawn", () => {
     pageIs1200By400();
 
     // Pulled in to six cells across and one row down, which is a quarter of the page.
-    await carry(q(".slot__corner")[0]!, { x: 600, y: 200 }, null, () => {
+    await carry(here(".slot__corner")[0]!, { x: 600, y: 200 }, null, () => {
       // While the hand is down the pane is untouched and the size is an outline over the page: it
       // holds a terminal, and one resized on every report of the pointer would be told a new width
       // dozens of times for one gesture.
       expect(panes()[0]!.style.gridColumn).toBe("1 / span 12");
-      const outline = q(".workspace__stretch")[0]!;
+      const outline = here(".workspace__stretch")[0]!;
       expect(outline.style.gridColumn).toBe("1 / span 6");
       expect(outline.style.gridRow).toBe("1 / span 1");
     });
-    expect(q(".workspace__stretch")).toHaveLength(0);
+    expect(here(".workspace__stretch")).toHaveLength(0);
     expect(panes()[0]!.style.gridColumn).toBe("1 / span 6");
     expect(panes()[0]!.style.gridRow).toBe("1 / span 1");
   });
@@ -410,7 +483,7 @@ describe("moving and sizing a pane where it is drawn", () => {
     pageIs1200By400();
 
     // Down and up in the same place: a press on the corner is not a gesture that settled anywhere.
-    await carry(q(".slot__corner")[0]!, { x: 0, y: 0 });
+    await carry(here(".slot__corner")[0]!, { x: 0, y: 0 });
     expect(panes()[0]!.style.gridColumn).toBe("1 / span 12");
   });
 
@@ -423,15 +496,15 @@ describe("moving and sizing a pane where it is drawn", () => {
     expect(q(".workspace__page--on")[0]!.textContent).toBe("2");
     // Page 2 as drawn to the right of page 1, so a corner measured against any box but its own page's
     // would come out a page too wide.
-    const grid = q(".slot__corner")[0]!.closest<HTMLElement>(".workspace__page-grid")!;
+    const grid = here(".slot__corner")[0]!.closest<HTMLElement>(".workspace__page-grid")!;
     grid.getBoundingClientRect = () => ({
       top: 0, left: 1200, width: 1200, height: 400, right: 2400, bottom: 400,
       x: 1200, y: 0, toJSON: () => ({}),
     }) as DOMRect;
 
     // Six cells across and one row down from the page's own left edge, which is a quarter.
-    await carry(q(".slot__corner")[0]!, { x: 1800, y: 200 }, null, () => {
-      const outline = q(".workspace__stretch")[0]!;
+    await carry(here(".slot__corner")[0]!, { x: 1800, y: 200 }, null, () => {
+      const outline = here(".workspace__stretch")[0]!;
       expect(outline.style.gridColumn).toBe("1 / span 6");
       expect(outline.style.gridRow).toBe("1 / span 1");
     });
@@ -462,18 +535,18 @@ describe("moving and sizing a pane where it is drawn", () => {
       expect(first!.className).toContain("slot--held");
     });
 
-    expect(q(".slot__goes")).toHaveLength(0);
+    expect(here(".slot__goes")).toHaveLength(0);
     expect(panes().map((one) => one.dataset.hand)).toEqual([was[1], was[0]]);
   });
 
   it("gives no handle to a project with one pane, which is already in order", async () => {
     await mount();
     await openPane();
-    expect(q(".slot__bar--grab")).toHaveLength(0);
+    expect(here(".slot__bar--grab")).toHaveLength(0);
 
     await atSize("quarter");
     await openPane();
-    expect(q(".slot__bar--grab")).toHaveLength(2);
+    expect(here(".slot__bar--grab")).toHaveLength(2);
   });
 });
 
@@ -499,7 +572,7 @@ describe("the way to carrying a pane onto another page", () => {
     await openPane();
     await atSize("half");
     await openPane();                              // page 1 is full
-    await click(q(".workspace__addstrip")[0]!);
+    await click(here(".workspace__addstrip")[0]!);
     expect(q(".workspace__page")).toHaveLength(2);
     expect(wayIn()).toBeUndefined();
   });

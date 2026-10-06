@@ -2,7 +2,7 @@
 // Which face a run's pane is turned to — its picture or its terminal (`AMB-T-5775`).
 //
 // **A run's pane opens on its picture**, every run and every time, and the reader's turn is kept for
-// that run's pane alone: back up after a page turn it is as they left it, and the next run opens on
+// that run's pane alone: put up again on another page it is as they left it, and the next run opens on
 // its picture again — save while a step that may wait for a person runs, when it is turned to its
 // terminal and turned back after (`AMB-T-5776`). **The terminal face stays mounted under the
 // picture**, in the layout and dimmed, so the program in it is not ended by looking away and can be

@@ -90,10 +90,11 @@ async function handOver(session: string, paths: string[]) {
 type Face = "picture" | "terminal";
 
 /**
- * **The face each run's pane was last turned to**, by run. A pane comes down when its page is turned
- * and goes up again for the same run, which is the pane still, and should come back as the reader left
- * it. A run not in here opens on its picture — every run does, the first time — and nothing is kept for
- * the app as a whole: one reader turning one pane to its terminal says nothing about the next run.
+ * **The face each run's pane was last turned to**, by run. A pane comes down when it is carried onto
+ * another page or its project is left, and goes up again for the same run, which is the pane still, and
+ * should come back as the reader left it. A run not in here opens on its picture — every run does, the
+ * first time — and nothing is kept for the app as a whole: one reader turning one pane to its terminal
+ * says nothing about the next run.
  */
 const faces = new Map<number, Face>();
 
@@ -114,10 +115,11 @@ const CLEAR_ROWS = 8;
  * process: what runs in it, what is offered when nothing can be started, and the row a closed frame
  * carries are all the frame's (`../talk/agent`).
  *
- * The pane comes down when the slot stops being on the screen — the page turned, or fewer panes were
- * asked for — and **the terminal does not**: a pane is a drawing of a session, and detaching leaves
- * the session running for whichever slot draws it next (`../talk/terminal`). That is why the slot's
- * session id is handed back up: the frame is what remembers, and this is only what draws.
+ * The pane comes down when the slot stops being on the face — carried onto another page, or fewer
+ * panes were asked for — and **the terminal does not**: a pane is a drawing of a session, and
+ * detaching leaves the session running for whichever slot draws it next (`../talk/terminal`). That is
+ * why the slot's session id is handed back up: the frame is what remembers, and this is only what
+ * draws.
  *
  * **The one control on the row removes the place**, which is the only thing on this face that does
  * (`../talk/layout`). It is not the same act as a program ending: what a terminal exits with stays on
@@ -236,9 +238,10 @@ export function TerminalPane({
    * What has been written in the box under this pane and not sent yet (`AMB-D-864`).
    *
    * **Held by the window rather than here** (`../talk/layout`). A pane is taken down whenever it
-   * stops being on the screen — the page turned, the count changed, the tasks face came up — and a
-   * half-written sentence kept in the drawing would go down with it. The terminal is the same shape
-   * of thing from the other side: what is running belongs to the host, and this pane only draws it.
+   * stops being on the face — carried onto another page, the count changed, the tasks face came up —
+   * and a half-written sentence kept in the drawing would go down with it. The terminal is the same
+   * shape of thing from the other side: what is running belongs to the host, and this pane only draws
+   * it.
    */
   written: string;
   /** What is in the box now, on its way to the window that holds it. Said as it is written and again
@@ -616,7 +619,7 @@ export function TerminalPane({
     onFocus(frame);
     if (!moving || onPicture) return;
     if (folded) focusTerminal(paneRef.current);
-    else boxRef.current?.focus();
+    else boxRef.current?.focus({ preventScroll: true });
   };
 
   /** What the press beside the box is called, with the keys that do the same thing in it
@@ -721,9 +724,10 @@ export function TerminalPane({
       plate.stop();
       plateRef.current = null;
       on.current.onRow?.(frame, null);
-      // **The turn is not taken down with the pane.** A pane goes away when the person turns to
-      // another page, which is exactly when they are not looking at it — saying the turn was over
-      // because the page turned. What ends a turn is the pane saying so, or the session ending.
+      // **The turn is not taken down with the pane.** A pane goes away when it is carried onto
+      // another page or the tasks face comes up, and neither of those is the agent finishing:
+      // saying the turn was over would be saying it because of where the pane is drawn. What ends a
+      // turn is the pane saying so, or the session ending.
       //
       // Nothing here has to hold that open. The row above the pane goes with the pane and says so on
       // its way out (`../talk/plate`).
@@ -787,7 +791,7 @@ export function TerminalPane({
   useEffect(() => {
     if (live === null || !focused || onPicture) return;
     if (folded) focusTerminal(paneRef.current);
-    else boxRef.current?.focus();
+    else boxRef.current?.focus({ preventScroll: true });
     // `focused` is read as it stands: the two reasons are the ones said above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, folded]);

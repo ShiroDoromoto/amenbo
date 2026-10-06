@@ -91,8 +91,13 @@ let root: Root;
 const pressed = vi.fn();
 
 const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
+/** What is on the page being read. Every page of the project is drawn side by side
+ *  (`./WorkspaceFace`), so what a reader sees is what is on this one. */
+const here = (sel: string) => [
+  ...container.querySelector(".workspace__page-grid[aria-current=\"page\"]")!.querySelectorAll<HTMLElement>(sel),
+];
 /** The places drawn on the page that is up, as the frames they are (`../talk/layout`). */
-const drawnPanes = () => q(".slot").map((el) => el.getAttribute("data-hand"));
+const drawnPanes = () => here(".slot").map((el) => el.getAttribute("data-hand"));
 /** Which place the face says is being worked in — read off the pane itself, which is the only thing
  *  that says so now that the list of them is gone (`AMB-D-838`). */
 const worked = () => container.querySelector(".slot--focused")?.getAttribute("data-hand") ?? null;
@@ -150,7 +155,7 @@ describe("the window the terminal is split out into", () => {
     // Each pane's size is pullable by its corner, and the pages of this project are reachable:
     // without either, the panes beyond the one on screen are panes the reader cannot get to
     // (`../talk/layout`, `./paneDrag`).
-    expect(q(".slot__corner")).toHaveLength(2);
+    expect(here(".slot__corner")).toHaveLength(2);
     expect(q(".workspace__page")).toHaveLength(2);
   });
 

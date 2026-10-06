@@ -183,8 +183,8 @@ export type Frame = {
    * (`AMB-D-869`). The face opens those without being pressed, and asks nothing on the way in.
    *
    * **It is true of a place that came back, and of nothing else.** Opening a terminal here settles
-   * it — the place has been come back to, and a page turned away from and back again is not a
-   * second reason to start something. A place a person made in this run was never away.
+   * it — the place has been come back to, and a pane taken down and put up again is not a second
+   * reason to start something. A place a person made in this run was never away.
    */
   readonly resumes: boolean;
   /**
@@ -225,8 +225,8 @@ export type Frame = {
   /**
    * Whether the box under this pane is open (`AMB-D-890`).
    *
-   * **It is here for the reason the draft is**: the pane comes and goes — a page turned, a pane
-   * resized, the tasks face brought up, the workspace put in a window of its own — and a reader who
+   * **It is here for the reason the draft is**: the pane comes and goes — a pane resized onto another
+   * page, the tasks face brought up, the workspace put in a window of its own — and a reader who
    * opened the box did not ask for it to shut at any of those. Kept in the drawing, it went down
    * with every one of them.
    *
@@ -668,8 +668,8 @@ export function stoodForRun(
  * What is written in the box under a pane, as far as it has been written (`Frame.written`).
  *
  * Emptied by the send, which is what makes the next sentence a sentence of its own rather than the
- * tail of the one before it, and left alone by everything else — a pane taken down for a page turn
- * has not been written in, it has been put away.
+ * tail of the one before it, and left alone by everything else — a pane taken down to be drawn on
+ * another page has not been written in, it has been put away.
  *
  * `put` names the paths Amenbo has just put into the body, where this write is one of those
  * (`Frame.inserted`). They are let go of when the box is emptied and kept through everything else:
@@ -712,7 +712,7 @@ export function openedIn(
   agent: string | null,
 ): Layout {
   // And the place has been come back to, whatever it came back holding: what happens in it now is
-  // this run's, and a page turned away from and back again must not start a second terminal here
+  // this run's, and a pane taken down and put up again must not start a second terminal here
   // (`Frame.resumes`).
   return withFrame(layout, frame, (was) => ({
     ...was,

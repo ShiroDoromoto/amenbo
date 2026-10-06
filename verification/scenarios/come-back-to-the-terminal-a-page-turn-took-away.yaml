@@ -1,9 +1,12 @@
 # A terminal went off the screen when the page turned, and came back still running.
 #
 # The workspace is one list of frames cut into pages, and there are three ways to cut it: the
-# count, the page digits, and asking for another pane. Every one of them takes panes off the screen. What a reader has running in one is theirs until they end it, so the whole of this
-# road is the thing those moves must not do — and a pane is drawn rather than held, so there is no
-# way to find out except by turning away and coming back.
+# count, the page digits, and asking for another pane. Every one of them takes panes off the screen:
+# the page they are on is scrolled to one side, and a pane a new size lays down on another page is
+# taken down and put up again there. What a reader has running in one is theirs until they end it, so
+# the whole of this road is the thing those moves must not do — and nothing on the screen says whether
+# a terminal off it is still running, so there is no way to find out except by turning away and coming
+# back.
 #
 # ── Why the line, and why a second one ───────────────────────────────────────────────────────────
 # The road types a line into the pane and reads it back afterwards, for the reason

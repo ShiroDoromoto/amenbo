@@ -271,6 +271,19 @@ input[type="color"] {
 .workspace__grip--side { left: -4px; }
 .workspace__grip:hover { background: var(--c-edge); }
 
+/* Every page of the project, side by side, a page to the width of the screen. **It comes to rest on
+   the edge of a page and nowhere else**: a pane cut off at the edge of the screen is a terminal whose
+   columns cannot be read, and a swipe goes one page whatever its speed (`AMB-D-1028`). The bar is not
+   drawn — the digits beside the panes already say where the reader is. */
+.workspace__track {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex;
+  overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.workspace__track::-webkit-scrollbar { display: none; }
+
 /* The page: twelve cells across and two down, with every pane placed on it by the rectangle its size
    comes to (`app/src/talk/layout.ts`). Twelve is the smallest number every size divides — an eighth
    is three cells, a sixth four, a quarter six — so one grid draws all six of them and the shape a
@@ -284,7 +297,8 @@ input[type="color"] {
    the panes down in order, so there is no rule that could name it: what this holds is the grid the
    places are counted in (`AMB-D-939`). */
 .workspace__page-grid {
-  flex: 1; min-width: 0; min-height: 0;
+  flex: 0 0 100%; min-width: 0; min-height: 0;
+  scroll-snap-align: start; scroll-snap-stop: always;
   display: grid; gap: var(--s-2);
   grid-template: 1fr 1fr / repeat(12, 1fr);
   padding: var(--s-3);

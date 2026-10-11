@@ -679,6 +679,103 @@ describe("the picture of a run", () => {
   });
 });
 
+/// The box the run is under way in, grown with its action's picture inside (`AMB-T-6505`).
+describe("the box a run is under way in", () => {
+  const two = () =>
+    detail({
+      placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] })],
+      edges: [{ id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" }],
+    });
+  /** The action standing on the second box: two steps, the first going on to the second. */
+  const action = (): PicGraph => ({
+    ...detail({
+      entryPlacementId: 5,
+      placements: [
+        step({ id: 5, name: "draft", exits: [{ id: 50, name: "完了", outputs: [] }] }),
+        step({ id: 6, name: "review", exits: [{ id: 60, name: "完了", outputs: [] }] }),
+      ],
+      edges: [
+        { id: 7, fromId: 5, exitName: "完了", toId: 6, ends: "go" },
+        { id: 8, fromId: 6, exitName: "完了", ends: "exit", exitTo: "完了" },
+      ],
+    }),
+    boundary: { inputs: [], exits: [{ id: 80, name: "完了", outputs: [] }] },
+  });
+  const trail = { boxes: new Set([1, 2]), edges: new Set([1]), at: 2 };
+  const inside = { boxId: 2, graph: action(), trail: { boxes: new Set([5, 6]), edges: new Set([7]), at: 6 } };
+  const grown = () => container.querySelector<HTMLElement>(".autopic__node--grown");
+  const steps = () => [...(grown()?.querySelectorAll<HTMLButtonElement>("button.autopic__node") ?? [])];
+
+  it("grows the box with the action's picture inside, and blinks the step under way, not the box", async () => {
+    await render({ graph: two(), selectedBoxId: 2, trail, inside });
+    expect(grown()).not.toBeNull();
+    expect(grown()!.className).not.toContain("autopic__node--at");
+    expect(parseFloat(grown()!.style.height)).toBeGreaterThan(parseFloat(nodes()[0]!.style.height));
+    expect(steps().map((one) => one.querySelector(".autopic__nodename")?.textContent)).toEqual(["draft", "review"]);
+    expect(steps()[0]!.className).toContain("autopic__node--lit");
+    expect(steps()[0]!.className).not.toContain("autopic__node--at");
+    expect(steps()[1]!.className).toContain("autopic__node--at");
+    expect(steps()[1]!.className).toContain("autopic__node--on");
+    expect(container.querySelectorAll(".autopic__node--at")).toHaveLength(1);
+    // The action's input over its steps, and its ways out under them, as its build screen draws them.
+    expect(grown()!.querySelector(".autopic__frame--in")).not.toBeNull();
+    expect(grown()!.querySelectorAll(".autopic__frame")).toHaveLength(2);
+    expect(grown()!.querySelector("polyline.autopic__line--lit")).not.toBeNull();
+    // Its head says which of the steps the run is at.
+    expect(grown()!.querySelector(".autopic__grownat")?.textContent).toBe(tf("auto.run.body.stepOf", { total: 2, no: 2 }));
+    expect(plusses()).toHaveLength(0);
+  });
+
+  it("dashes the step waiting for a task inside it, not the box", async () => {
+    await render({
+      graph: two(),
+      selectedBoxId: 2,
+      trail: { ...trail, waiting: true },
+      inside: { ...inside, trail: { boxes: new Set<number>(), edges: new Set<number>(), at: 5, waiting: true } },
+    });
+    expect(grown()!.className).not.toContain("autopic__node--wait");
+    expect(steps()[0]!.className).toContain("autopic__node--wait");
+    const waits = [...container.querySelectorAll(".autopic__takes--wait")];
+    expect(waits).toHaveLength(1);
+    expect(grown()!.contains(waits[0]!)).toBe(true);
+  });
+
+  it("draws the box as it was where the action has no step", async () => {
+    await render({ graph: two(), selectedBoxId: 2, trail, inside: { ...inside, graph: { ...action(), boxes: [], edges: [] } } });
+    expect(grown()).toBeNull();
+    expect(nodes()[1]!.className).toContain("autopic__node--at");
+  });
+
+  it("lights no step for a step the action no longer has", async () => {
+    await render({ graph: two(), selectedBoxId: 2, trail, inside: { ...inside, trail: { ...inside.trail, at: 99 } } });
+    expect(steps()).toHaveLength(2);
+    expect(container.querySelectorAll(".autopic__node--at")).toHaveLength(0);
+    expect(grown()!.querySelector(".autopic__grownat")).toBeNull();
+  });
+
+  it("brings the step under way to the middle", async () => {
+    const wasObserver = globalThis.IntersectionObserver;
+    const wasScroll = Element.prototype.scrollIntoView;
+    const scrolled: Element[] = [];
+    globalThis.IntersectionObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof IntersectionObserver;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      await render({ graph: two(), selectedBoxId: 2, trail, inside });
+      expect(scrolled.length).toBeGreaterThan(0);
+      for (const one of scrolled) expect(one).toBe(steps()[1]);
+    } finally {
+      globalThis.IntersectionObserver = wasObserver;
+      Element.prototype.scrollIntoView = wasScroll;
+    }
+  });
+});
+
 describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   const lone = () => detail({ entryPlacementId: 1, placements: [step({ id: 1, name: "write" })] });
   const presses = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__open")];

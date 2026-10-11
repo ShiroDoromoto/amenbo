@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 import {
   automationGraph,
   edgeWord,
+  grownTo,
   layOut,
+  GROWN_HEAD,
   openWord,
   wordLeft,
   TAKES_INSET,
@@ -2274,5 +2276,80 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
       }),
     );
     expect(picture.opens).toEqual([]);
+  });
+});
+
+/// The box a run is under way in, grown with its action's picture inside (`AMB-T-6505`).
+describe("a grown box", () => {
+  /** One box branching to two side by side, both going on to a fourth under them. */
+  function branching(): PicGraph {
+    return detail({
+      entryPlacementId: 1,
+      placements: [
+        step({
+          id: 1,
+          name: "split",
+          exits: [
+            { id: 101, name: "left", outputs: [] },
+            { id: 102, name: "right", outputs: [] },
+            { id: 103, name: "*", outputs: [] },
+          ],
+        }),
+        step({ id: 2, name: "one side" }),
+        step({ id: 3, name: "other side" }),
+        step({ id: 4, name: "join" }),
+      ],
+      edges: [
+        edge({ id: 11, fromId: 1, exitName: "left", toId: 2 }),
+        edge({ id: 12, fromId: 1, exitName: "right", toId: 3 }),
+        edge({ id: 13, fromId: 2, toId: 4 }),
+        edge({ id: 14, fromId: 3, toId: 4 }),
+      ],
+    });
+  }
+  const grow = { boxId: 2, w: 520, h: 300 };
+
+  it("is as big as it was grown, and the rest keep their size", () => {
+    const picture = layOut(branching(), undefined, grow);
+    expect(at(picture, 2)).toMatchObject({ w: 520, h: 300 });
+    const plain = layOut(branching());
+    for (const boxId of [1, 3, 4]) {
+      expect(at(picture, boxId).w).toBe(at(plain, boxId).w);
+      expect(at(picture, boxId).h).toBe(at(plain, boxId).h);
+    }
+  });
+
+  it("pushes the box beside it right and the row under it down by as much as it grew", () => {
+    const plain = layOut(branching());
+    const picture = layOut(branching(), undefined, grow);
+    const beside = (one: ReturnType<typeof layOut>) => at(one, 3).x - at(one, 2).x;
+    const under = (one: ReturnType<typeof layOut>) => at(one, 4).y - at(one, 2).y;
+    expect(beside(picture) - beside(plain)).toBe(520 - at(plain, 2).w);
+    expect(under(picture) - under(plain)).toBe(300 - at(plain, 2).h);
+    expect(picture.width).toBeGreaterThan(plain.width);
+    expect(picture.height).toBe(plain.height + 300 - at(plain, 2).h);
+  });
+
+  it("turns the line down from a shorter box beside it under it, not across it", () => {
+    const picture = layOut(branching(), undefined, grow);
+    const grown = at(picture, 2);
+    const down = picture.lines.find((one) => one.key === "edge-14")!;
+    expect(down.points[0]!.y).toBe(at(picture, 3).y + at(picture, 3).h);
+    expect(down.points[1]!.y).toBeGreaterThan(grown.y + grown.h);
+    for (const piece of picture.lines.filter((one) => one.key !== "edge-13").flatMap(pieces)) {
+      expect(overlaps(piece, { left: grown.x, right: grown.x + grown.w, top: grown.y, bottom: grown.y + grown.h })).toBe(
+        false,
+      );
+    }
+  });
+
+  it("is grown to hold the picture inside it under its head", () => {
+    expect(grownTo(2, { width: 400, height: 250 })).toEqual({ boxId: 2, w: 404, h: GROWN_HEAD + 252 });
+    // Never narrower than a box is.
+    expect(grownTo(2, { width: 40, height: 50 }).w).toBe(at(layOut(branching()), 2).w);
+  });
+
+  it("is drawn as it was for a box the picture does not have", () => {
+    expect(layOut(branching(), undefined, { boxId: 99, w: 520, h: 300 })).toEqual(layOut(branching()));
   });
 });

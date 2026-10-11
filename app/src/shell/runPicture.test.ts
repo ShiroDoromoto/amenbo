@@ -3,8 +3,8 @@
 // **Only the lap under way is lit.** A run that goes back to a spot it passed starts a lap there:
 // the boxes and lines it walked before are left dark, and the line it came back by stays lit.
 import { describe, expect, it } from "vitest";
-import { picTrail } from "./RunPicture";
-import type { AutomationRunPassDto } from "../bindings/bindings";
+import { picTrail, stepTrail } from "./RunPicture";
+import type { AutomationRunPassDto, AutomationRunPassedStepDto } from "../bindings/bindings";
 
 const pass = (placement: number, edge?: number): AutomationRunPassDto =>
   ({ placement, status: edge === undefined ? "running" : "done", edge });
@@ -46,5 +46,32 @@ describe("picTrail", () => {
     expect(lit.boxes.size).toBe(0);
     expect(lit.edges.size).toBe(0);
     expect(lit.at).toBeUndefined();
+  });
+});
+
+/// Inside the box under way, the steps are lit by the same rule (`AMB-T-6505`).
+describe("stepTrail", () => {
+  const passed = (step: number, edge?: number): AutomationRunPassedStepDto =>
+    ({ step, status: edge === undefined ? "running" : "done", edge });
+
+  it("lights the steps it passed in the spot it is in, and stands at the step under way", () => {
+    const lit = stepTrail({ passed: [pass(1, 10), pass(2)], at: 2, steps: [passed(5, 50), passed(6)], step: 6 });
+    expect([...lit.boxes]).toEqual([5, 6]);
+    expect([...lit.edges]).toEqual([50]);
+    expect(lit.at).toBe(6);
+  });
+
+  it("leaves the lap before dark once it goes back to a step", () => {
+    // 5 → 6, back to 5 by 65, under way at 5.
+    const lit = stepTrail({ passed: [pass(2)], at: 2, steps: [passed(5, 56), passed(6, 65), passed(5)], step: 5 });
+    expect([...lit.boxes]).toEqual([5]);
+    expect([...lit.edges]).toEqual([65]);
+  });
+
+  it("lights nothing inside before it opens a step there, and for no trail", () => {
+    const opening = stepTrail({ passed: [pass(2)], at: 2, steps: [], step: 5 });
+    expect(opening.boxes.size).toBe(0);
+    expect(opening.at).toBe(5);
+    expect(stepTrail(null).at).toBeUndefined();
   });
 });

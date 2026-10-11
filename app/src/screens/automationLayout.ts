@@ -142,8 +142,9 @@ export const ERROR_EXIT = "*";
 /** The name core gives the way out every step and action is born with — core's `DONE_EXIT`. */
 export const DONE_EXIT = "完了";
 
-/** How big a box is, and how much room is left around it. All of it fixed. Two lines tall — the
- *  name, and under it where the action comes from or what it is missing — as the mock draws it. */
+/** How big a box is, and how much room is left around it. All of it fixed, save the one box a run's
+ *  pane grows (`PicGrow`). Two lines tall — the name, and under it where the action comes from or
+ *  what it is missing — as the mock draws it. */
 const NODE_W = 220;
 const NODE_H = 46;
 /** A step's box on an action's picture, one line taller: what it takes in and what it hands on have a
@@ -333,6 +334,24 @@ export type PicMark = {
 
 /** A rectangle of the picture, in its own pixels. */
 export type PicRect = { x: number; y: number; w: number; h: number };
+
+/**
+ * **One box drawn bigger than the rest** (`AMB-T-6505`): the one a run is under way in, with its
+ * action's own picture inside it. Its row is as tall as it is, its column as wide, and the rows and
+ * boxes around it stand as much further off.
+ */
+export type PicGrow = { boxId: number; w: number; h: number };
+
+/** Over the picture inside a grown box, the room its head takes: the action's name, and which of its
+ *  steps the run is at. */
+export const GROWN_HEAD = 28;
+/** Round the picture inside a grown box, for the box's own border. */
+const GROWN_EDGE = 2;
+
+/** How big the box `boxId` grows to hold the picture `inner`. */
+export function grownTo(boxId: number, inner: Pick<Picture, "width" | "height">): PicGrow {
+  return { boxId, w: Math.max(NODE_W, inner.width + GROWN_EDGE * 2), h: GROWN_HEAD + inner.height + GROWN_EDGE };
+}
 
 /** One picture, laid out. */
 export type Picture = {
@@ -758,12 +777,12 @@ const LAYOUT_ROUNDS = 16;
  * Standing two boxes further apart need not move a name off the leg it ran over, so the rows are laid
  * out `rounds` times at the most, and the picture of the last is drawn as it stands.
  */
-export function layOut(graph: PicGraph | null, rounds = LAYOUT_ROUNDS): Picture {
+export function layOut(graph: PicGraph | null, rounds = LAYOUT_ROUNDS, grow?: PicGrow): Picture {
   let legs = new Map<string, number>();
   let turns = new Map<number, number>();
   let gaps = new Map<number, number>();
   for (let round = 1; ; round++) {
-    const { picture, legsOf, turnsOf, gapsOf } = layOutWith(graph, legs, turns, gaps);
+    const { picture, legsOf, turnsOf, gapsOf } = layOutWith(graph, legs, turns, gaps, grow);
     const more = [...legsOf].filter(([key, count]) => count > (legs.get(key) ?? 0));
     const lower = [...turnsOf].filter(([boxId, count]) => count > (turns.get(boxId) ?? 1));
     const wider = [...gapsOf].filter(([boxId, gap]) => gap > (gaps.get(boxId) ?? 0));
@@ -775,13 +794,15 @@ export function layOut(graph: PicGraph | null, rounds = LAYOUT_ROUNDS): Picture 
 }
 
 /** Lay one picture out with `legs` lines leaving each box for each of the margins at the most, its
- *  lines down to the next row turning at `turns` heights, and `gaps` of room at the least before the
- *  next box in its row, and say how many each box turned out to need of each. */
+ *  lines down to the next row turning at `turns` heights, `gaps` of room at the least before the
+ *  next box in its row, and the box `grow` names grown, and say how many each box turned out to need
+ *  of each. */
 function layOutWith(
   graph: PicGraph | null,
   legs: ReadonlyMap<string, number>,
   turns: ReadonlyMap<number, number>,
   gaps: ReadonlyMap<number, number>,
+  grow: PicGrow | undefined,
 ): { picture: Picture; legsOf: Map<string, number>; turnsOf: Map<number, number>; gapsOf: Map<number, number> } {
   const legsOf = new Map<string, number>();
   const turnsOf = new Map<number, number>();
@@ -791,6 +812,8 @@ function layOutWith(
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
   const nodeH = graph.boundary !== undefined ? STEP_H : NODE_H;
+  const wOf = (boxId: number) => (boxId === grow?.boxId ? grow.w : NODE_W);
+  const hOf = (boxId: number) => (boxId === grow?.boxId ? grow.h : nodeH);
   const { laps, live, back: goesBack } = walk(graph);
   // The action's ways out, the error one last — the order the declaration lists them in.
   const outs = [...(graph.boundary?.exits ?? [])].sort(
@@ -868,24 +891,24 @@ function layOutWith(
       0,
       ...undecidedOf(box).map(
         (exit, nth) =>
-          Math.min(ATTACH + (lines + nth) * EXIT_GAP, NODE_W - ATTACH) -
+          Math.min(ATTACH + (lines + nth) * EXIT_GAP, wOf(box.id) - ATTACH) -
           6 +
           wordW(exitWord({ exitName: exit.name, builtin: box.builtin })) +
           BESIDE / 2 +
           pressW,
       ),
     );
-    return Math.max(COL_GAP, reach + BESIDE - NODE_W - ATTACH, gaps.get(box.id) ?? 0);
+    return Math.max(COL_GAP, reach + BESIDE - wOf(box.id) - ATTACH, gaps.get(box.id) ?? 0);
   };
   /** Where each box of a row stands from the row's left edge, and how wide the row is. */
   const columnsOf = (row: readonly number[]): { xs: number[]; w: number } => {
     const xs: number[] = [];
     let x = 0;
     row.forEach((_, column) => {
-      if (column > 0) x += NODE_W + gapAfter(boxes.get(row[column - 1])!);
+      if (column > 0) x += wOf(row[column - 1]!) + gapAfter(boxes.get(row[column - 1])!);
       xs.push(x);
     });
-    return { xs, w: row.length === 0 ? 0 : x + NODE_W };
+    return { xs, w: row.length === 0 ? 0 : x + wOf(row[row.length - 1]!) };
   };
   const contentW = Math.max(
     NODE_W,
@@ -904,6 +927,9 @@ function layOutWith(
   // How much lower the lowest of the lines down from each box's row turns than the highest — a row of
   // words for each height past the first one of its boxes needs.
   const stairUnder = new Map<number, number>();
+  // Where the bottom of each box's row is — under a box shorter than a grown one beside it, the lines
+  // it sends out turn under the grown one, not across it.
+  const rowBottom = new Map<number, number>();
   // The mark a placement comes in by stands over everything, with a row's room under it.
   const over = graph.boundary === undefined ? 0 : IN_H + ROW_GAP;
   let y = PAD + over;
@@ -915,14 +941,16 @@ function layOutWith(
     let rowY = top + over;
     let hang = 0;
     let stair = 0;
+    let rowH = nodeH;
     lap.rows.forEach((row, depth) => {
       // Under a row a press, or the name of a line that goes nowhere, hangs from, the next row stands as
       // much lower as it hangs, so neither that row nor the lines down to it run through the press
       // (`AMB-T-5789`) or across the name. Every other row keeps its room.
       // It stands lower again by the stair the lines down to it turn on.
       if (depth > 0) {
-        rowY += nodeH + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2)) + stair;
+        rowY += rowH + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2)) + stair;
       }
+      rowH = Math.max(...row.map(hOf));
       hang = Math.max(0, ...row.map((boxId) => hangOf(boxes.get(boxId)!)));
       stair = Math.max(0, ...row.map((boxId) => ((turns.get(boxId) ?? 1) - 1) * WORD_H));
       const columns = columnsOf(row);
@@ -932,14 +960,15 @@ function layOutWith(
         at.set(boxId, { lap: nth, row: depth });
         hangUnder.set(boxId, hang);
         stairUnder.set(boxId, stair);
+        rowBottom.set(boxId, rowY + rowH);
         nodes.push({
           boxId,
           // A built-in's words are drawn in the screen's language; the box's own name stays the store's.
           name: builtinWord(box.builtin, box.name),
           x: startX + columns.xs[column],
           y: rowY,
-          w: NODE_W,
-          h: nodeH,
+          w: wOf(boxId),
+          h: hOf(boxId),
           no: nodes.length + 1,
           takes: takesTask(box),
           global: box.global,
@@ -959,7 +988,7 @@ function layOutWith(
     // first row of the next stretch turn on, as a row stands lower for it. Without it they turned as
     // high as the bottom of the row they leave, and a name over its turn ran under a box of that row.
     const endRoom = (hang === 0 ? END_ROOM : Math.max(END_ROOM, hang + 12)) + stair;
-    const inner = rowY + nodeH - (top + over) + endRoom;
+    const inner = rowY + rowH - (top + over) + endRoom;
     const height = inner + over + pad;
     if (lap.head !== null) {
       outlines.push({ headBoxId: lap.head, x: -LAP_PAD, y: top, w: contentW + LAP_PAD * 2, h: height });
@@ -1021,6 +1050,8 @@ function layOutWith(
   }
 
   const node = new Map([...nodes, ...spots].map((one) => [one.boxId, one]));
+  /** Where the lines a box sends to a margin or down to the next row turn under: its row's bottom. */
+  const bottomOf = (one: PicNode): number => rowBottom.get(one.boxId) ?? one.y + one.h;
   /** The mark of the way out of the action an `exit` edge returns to. */
   const returnsTo = (edge: AutomationEdgeDto | undefined): number | undefined =>
     edge?.ends === "exit" ? outOf.get(edge.exitTo ?? "") : undefined;
@@ -1091,7 +1122,7 @@ function layOutWith(
       const from = node.get(edge.fromId);
       if (toId === undefined || from === undefined || neighbours(edge.fromId, toId)) return [];
       const to = node.get(toId)!;
-      const out = from.y + nodeH + DROP;
+      const out = bottomOf(from) + DROP;
       const into = to.y - DROP;
       return [{ id: edge.id, from, to, top: Math.min(out, into), bottom: Math.max(out, into) }];
     });
@@ -1278,7 +1309,7 @@ function layOutWith(
     const from = node.get(open.boxId)!;
     const { nth, below } = openSlot.get(open.key)!;
     const sx = attach(from, nth);
-    const sy = from.y + nodeH;
+    const sy = from.y + from.h;
     const foot = sy + STUB + below;
     const word = exitWord({ exitName: open.exitName, builtin: from.builtin });
     undecidedLines.push({
@@ -1317,7 +1348,7 @@ function layOutWith(
     if (from === undefined) continue;
     const { nth, below } = slot.get(edge.id)!;
     const sx = attach(from, nth);
-    const sy = from.y + nodeH;
+    const sy = from.y + from.h;
     const key = lineKey(edge.id);
 
     const toId = toOf(edge);
@@ -1349,7 +1380,8 @@ function layOutWith(
       // of them; and a row of words lower for each line of its row's turning over it.
       const hang = hangUnder.get(edge.fromId) ?? 0;
       const stair = stairUnder.get(edge.fromId) ?? 0;
-      const top = Math.max(Math.round((sy + ty - stair) / 2), hang === 0 ? 0 : sy + hang + LEG_CLEAR);
+      const under = bottomOf(from);
+      const top = Math.max(Math.round((under + ty - stair) / 2), hang === 0 ? 0 : under + hang + LEG_CLEAR);
       const mid = top + (turnOf.get(edge.id) ?? 0) * WORD_H;
       const across = Math.round((sx + tx) / 2);
       inserts.push({ edgeId: edge.id, x: across, y: mid });
@@ -1401,8 +1433,8 @@ function layOutWith(
       from,
       to,
       // The rows it runs past, however far along the stair out of its box it turns.
-      top: Math.min(sy + DROP, ty - DROP),
-      bottom: Math.max(sy + DROP + (legsTo(`${sideOf.get(edge.id)!}-${edge.fromId}`) - 1) * WORD_H, ty - DROP),
+      top: Math.min(bottomOf(from) + DROP, ty - DROP),
+      bottom: Math.max(bottomOf(from) + DROP + (legsTo(`${sideOf.get(edge.id)!}-${edge.fromId}`) - 1) * WORD_H, ty - DROP),
       word: wordW(exitWord({ exitName: edge.exitName, builtin: from.builtin })),
     });
   }
@@ -1454,7 +1486,7 @@ function layOutWith(
   // other, and each has its name written over its own leg. Six points apart, two names side by side
   // over two legs could not be told apart, nor which of them a run went down (`AMB-T-5824`).
   const outY = (line: Aside): number =>
-    line.from.y + nodeH + DROP + (legsOver.get(`${line.side}-${line.from.boxId}`)! + outStair.get(line.key)!) * WORD_H;
+    bottomOf(line.from) + DROP + (legsOver.get(`${line.side}-${line.from.boxId}`)! + outStair.get(line.key)!) * WORD_H;
 
   // `wordsAt`: where the name of each line in a margin is written — over the leg it leaves its box
   // by, just beside that box on the side the line goes, so it reads as that box's way out. Past the
@@ -1493,7 +1525,7 @@ function layOutWith(
     for (const line of asides) {
       const x = outX(line);
       const y = outY(line);
-      taken.push([x - 2, x + 2, line.from.y + nodeH, y + 1]);
+      taken.push([x - 2, x + 2, line.from.y + line.from.h, y + 1]);
       taken.push(line.side === "left" ? [-Infinity, x + 1, y - 1, y + 1] : [x - 1, Infinity, y - 1, y + 1]);
     }
     const hits = (one: Rect) =>
@@ -1592,7 +1624,7 @@ function layOutWith(
     }
     for (const line of group) {
       const sx = outX(line);
-      const sy = line.from.y + nodeH;
+      const sy = line.from.y + line.from.h;
       const oy = outY(line);
       const stop = stops.get(line.key)!;
       const stair = outStair.get(line.key)!;
@@ -1604,7 +1636,7 @@ function layOutWith(
       // line sooner than a `+` is tall has no lane of its own to hold it, so it sits on the leg
       // it comes out to the lane by, a `+` short of the lane.
       const along = Math.sign(stop - oy);
-      const near = sy + DROP + along * (LANE_PLUS / 2 + stair * LANE_PLUS);
+      const near = bottomOf(line.from) + DROP + along * (LANE_PLUS / 2 + stair * LANE_PLUS);
       const room = along * (stop - near) >= LANE_PLUS / 2 && along * (near - oy) > 0;
       const inward = line.side === "left" ? 1 : -1;
       const plus = room
@@ -1718,7 +1750,7 @@ function layOutWith(
       const past = pastOf(leg.x);
       if (past <= 0) continue;
       if (leg.bottom === to.y && beyond(to, leg.x)) widen(nextTo(to, left), past);
-      else if (leg.top === from.y + nodeH && beyond(from, leg.x)) widen(nextTo(from, left), past * 2);
+      else if (leg.top === from.y + from.h && beyond(from, leg.x)) widen(nextTo(from, left), past * 2);
     }
     // What stands at `x` with the box `box`: that box stands further out, where it is past one of the
     // name's own two boxes in the same row, on the side the name runs to.

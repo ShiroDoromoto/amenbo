@@ -2386,6 +2386,15 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The box under way waiting for a task it can take: still, with a dashed border, and a spinner and the
    words for the wait over it in place of the word that it takes the task. */
 .autopic__node--wait { border-color: var(--c-accent); border-style: dashed; }
+/* The box the run is under way in, grown with its action's picture inside (`AMB-T-6505`): its border
+   lit and still — the step under way inside is what blinks. Its head is the action's name and which
+   step the run is at; the action's picture stands under it. */
+.autopic__node--grown {
+  justify-content: flex-start; gap: 0; padding: 0; overflow: visible; cursor: default;
+  border: 1.5px solid var(--c-accent);
+}
+.autopic__grownhead { flex: none; box-sizing: border-box; padding: 0 var(--s-2); }
+.autopic__grownat { flex: none; font-size: var(--fs-xs); color: var(--c-accent-text); white-space: nowrap; }
 .autopic__takes--wait { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--c-accent-text); }
 .autopic__spin {
   flex: none; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;

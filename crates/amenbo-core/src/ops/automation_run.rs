@@ -2385,13 +2385,33 @@ pub fn held_back(conn: &Connection, run_id: i64) -> Result<Option<crate::ops::au
 }
 
 /// **The way a run has come on the task it is working** — the spots of the automation's picture it
-/// passed, in the order it passed them, and the spot it stands at now ([`trail`]).
+/// passed, in the order it passed them, the spot it stands at now, and the steps it passed inside
+/// that spot and the one it stands at ([`trail`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct Trail {
     pub passed: Vec<Passed>,
     /// The placement whose step is under way, or the one the run is about to open or waiting on.
     /// `None` for a run that is not `running`, and where the copy names no spot.
     pub at: Option<i64>,
+    /// The steps the run passed inside the spot it is in, in the order it passed them — empty once it
+    /// has left that spot, and before it opens one there. A step passed twice is two of these.
+    pub steps: Vec<PassedStep>,
+    /// The step under way, or the one the run is about to open or waiting on — the first step of the
+    /// spot for a run waiting for a task. `None` where [`Trail::at`] is `None`, and where the copy
+    /// names no step.
+    pub step: Option<i64>,
+}
+
+/// **One pass through one step inside a spot**, keyed the way the action's picture keys its boxes
+/// and lines.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct PassedStep {
+    /// `None` where the run's copy names no step.
+    pub step_id: Option<i64>,
+    pub status: AutomationRunStepStatus,
+    /// The line on the action's picture the run walked from there to the next step. `None` while the
+    /// step is under way, and where the run left the spot from it.
+    pub edge_id: Option<i64>,
 }
 
 /// **One pass through one spot.** A spot passed twice — sent back to it by a review — is two of these,
@@ -2416,7 +2436,8 @@ pub struct Passed {
 ///
 /// Only the stretch the run is in counts ([`read::automation_run_task_last`]): the step that takes the
 /// next task opens a new one, so what lights up starts again with each task. The steps inside one
-/// spot fold into one pass, so the picture — which draws spots, not steps — reads one box per pass.
+/// spot fold into one pass, so the picture — which draws spots, not steps — reads one box per pass;
+/// the steps of the spot the run is in are kept beside them, for the action's picture inside it.
 /// Read off the run's copies, the same as the run goes on by them (`AMB-D-961`).
 pub fn trail(conn: &Connection, run_id: i64) -> Result<Trail> {
     if read::automation_run(conn, run_id)?.is_none() {
@@ -2425,6 +2446,10 @@ pub fn trail(conn: &Connection, run_id: i64) -> Result<Trail> {
     let defs: BTreeMap<i64, AutomationRunDef> =
         read::automation_run_defs_of(conn, run_id)?.into_iter().map(|def| (def.id, def)).collect();
     let mut passed: Vec<Passed> = Vec::new();
+    let mut steps: Vec<PassedStep> = Vec::new();
+    // Whether the run is still in the spot of the last pass — its step is under way, or went on to
+    // another of the action's.
+    let mut open = false;
     if let Some(stretch) = read::automation_run_task_last(conn, run_id)? {
         // Whether the last pass is still inside its spot — its step went on to another of the action's.
         let mut inside = false;
@@ -2449,23 +2474,36 @@ pub fn trail(conn: &Connection, run_id: i64) -> Result<Trail> {
                     .filter(|line| line.picture == AutomationPictureOwner::Automation)
                     .map(|line| line.edge_id),
             };
+            let walked = PassedStep {
+                step_id: def.step_id,
+                status: step.status,
+                edge_id: then.filter(|_| stays).map(|line| line.edge_id),
+            };
             match passed.last_mut() {
                 Some(last) if inside && last.placement_id == pass.placement_id => *last = pass,
-                _ => passed.push(pass),
+                _ => {
+                    passed.push(pass);
+                    steps.clear();
+                }
             }
+            steps.push(walked);
             inside = stays;
+            open = stays || step.status == AutomationRunStepStatus::Running;
         }
     }
-    let at = match read::automation_run_steps_of(conn, run_id)?.pop() {
-        Some(last) if last.status == AutomationRunStepStatus::Running => {
-            defs.get(&last.run_def_id).and_then(|def| def.placement_id)
-        }
+    if !open {
+        steps.clear();
+    }
+    let (at, step) = match read::automation_run_steps_of(conn, run_id)?.pop() {
+        Some(last) if last.status == AutomationRunStepStatus::Running => defs
+            .get(&last.run_def_id)
+            .map_or((None, None), |def| (def.placement_id, def.step_id)),
         _ => match next_def(conn, run_id)? {
-            Waiting::Step(def) => def.placement_id,
-            Waiting::Nothing | Waiting::NoWayOn => None,
+            Waiting::Step(def) => (def.placement_id, def.step_id),
+            Waiting::Nothing | Waiting::NoWayOn => (None, None),
         },
     };
-    Ok(Trail { passed, at })
+    Ok(Trail { passed, at, steps, step })
 }
 
 #[cfg(test)]
@@ -3931,6 +3969,12 @@ mod tests {
                 }],
             );
             assert_eq!(between.at, Some(second), "the spot it is about to open is where it stands");
+            let placement = read::automation_placement(tx.conn(), second).expect("read").expect("the spot");
+            let action =
+                read::automation_action(tx.conn(), placement.action_id).expect("read").expect("its action");
+            let step = only_step(tx, &action).id;
+            assert!(between.steps.is_empty(), "it has opened nothing in the spot yet");
+            assert_eq!(between.step, Some(step), "the step it is about to open is the one it stands at");
 
             open_next(tx, run.id);
             let on = trail(tx.conn(), run.id).expect("trail");
@@ -3945,6 +3989,32 @@ mod tests {
                 },
             );
             assert_eq!(on.at, Some(second));
+            assert_eq!(
+                on.steps,
+                vec![PassedStep { step_id: Some(step), status: AutomationRunStepStatus::Running, edge_id: None }],
+            );
+            assert_eq!(on.step, Some(step));
+        });
+    }
+
+    /// **A run waiting for a task to take stands at the step it opens first** — the built-in that takes
+    /// one, though nothing is open there yet.
+    #[test]
+    fn a_run_waiting_for_a_task_stands_at_the_step_it_opens_first() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let run = crate::ops::automation_run::launch_past_the_task_checks(tx, automation.id, &here(&claude()))
+                .expect("launch");
+            let Waiting::Step(entry) = next_def(tx.conn(), run.id).expect("next") else {
+                panic!("the entry is what a fresh run waits for")
+            };
+
+            let waiting = trail(tx.conn(), run.id).expect("trail");
+            assert!(waiting.passed.is_empty());
+            assert_eq!(waiting.at, automation.entry_placement_id);
+            assert!(waiting.steps.is_empty());
+            assert!(entry.step_id.is_some());
+            assert_eq!(waiting.step, entry.step_id);
         });
     }
 
@@ -3958,9 +4028,18 @@ mod tests {
             let placement = read::automation_placement(tx.conn(), second).expect("read").expect("the spot");
             let action =
                 read::automation_action(tx.conn(), placement.action_id).expect("read").expect("its action");
+            let outer = only_step(tx, &action);
             let inner = a_second_step(tx, &action, &placement);
             automation::edge_add(tx, AutomationPictureOwner::Action, inner.id, None, EdgeTarget::Exit(None), None)
                 .expect("the second step leaves the action by its done way out");
+            let between_steps = read::automation_edge_for_exit(
+                tx.conn(),
+                AutomationPictureOwner::Action,
+                outer.id,
+                exit_id(tx, AutomationOwner::Step, outer.id, None),
+            )
+            .expect("read")
+            .expect("the line from the first step to the second");
             let run = standing_between(tx, &automation);
 
             let opened = open_next(tx, run.id);
@@ -3971,9 +4050,25 @@ mod tests {
             assert_eq!(inside.passed[1].exit_id, None, "it has not left the spot yet");
             assert_eq!(inside.passed[1].edge_id, None);
             assert_eq!(inside.at, Some(second));
+            let first_step = PassedStep {
+                step_id: Some(outer.id),
+                status: AutomationRunStepStatus::Done,
+                edge_id: Some(between_steps.id),
+            };
+            assert_eq!(inside.steps, vec![first_step.clone()], "the step it passed, and the line it walked on");
+            assert_eq!(inside.step, Some(inner.id), "the step it is about to open");
 
             let last = open_next(tx, run.id);
-            assert_eq!(trail(tx.conn(), run.id).expect("trail").passed.len(), 2);
+            let on = trail(tx.conn(), run.id).expect("trail");
+            assert_eq!(on.passed.len(), 2);
+            assert_eq!(
+                on.steps,
+                vec![
+                    first_step,
+                    PassedStep { step_id: Some(inner.id), status: AutomationRunStepStatus::Running, edge_id: None },
+                ],
+            );
+            assert_eq!(on.step, Some(inner.id));
             crate::ops::automation_report::done(tx, last.id, None, "read it again").expect("report");
             let left = trail(tx.conn(), run.id).expect("trail");
             assert_eq!(left.passed.len(), 2);
@@ -3984,6 +4079,7 @@ mod tests {
                 "the pass ends on the action's way out the last step returned to",
             );
             assert!(left.passed[1].edge_id.is_some(), "the line the automation draws after it");
+            assert!(left.steps.is_empty(), "once it has left the spot, no step inside it is lit");
         });
     }
 

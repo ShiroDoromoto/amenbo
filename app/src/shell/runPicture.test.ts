@@ -11,7 +11,7 @@ const pass = (placement: number, edge?: number): AutomationRunPassDto =>
 
 describe("picTrail", () => {
   it("lights all it passed while it has not gone back", () => {
-    const lit = picTrail({ passed: [pass(1, 10), pass(2, 20), pass(3)], at: 3 });
+    const lit = picTrail({ passed: [pass(1, 10), pass(2, 20), pass(3)], at: 3, steps: [] });
     expect([...lit.boxes]).toEqual([1, 2, 3]);
     expect([...lit.edges]).toEqual([10, 20]);
     expect(lit.at).toBe(3);
@@ -19,7 +19,7 @@ describe("picTrail", () => {
 
   it("leaves the lap before dark once it goes back", () => {
     // 1 → 2 → 3, back to 1 by 30, then 1 → 2 and under way at 2.
-    const lit = picTrail({ passed: [pass(1, 10), pass(2, 20), pass(3, 30), pass(1, 10), pass(2)], at: 2 });
+    const lit = picTrail({ passed: [pass(1, 10), pass(2, 20), pass(3, 30), pass(1, 10), pass(2)], at: 2, steps: [] });
     expect([...lit.boxes].sort((a, b) => a - b)).toEqual([1, 2]);
     expect([...lit.edges].sort((a, b) => a - b)).toEqual([10, 30]);
   });
@@ -27,7 +27,7 @@ describe("picTrail", () => {
   it("does not light a line of the lap before that the lap under way has not walked", () => {
     // 1 → 2 → 4 → 5, back to 2 by 50; under way at 3 after 2 → 3.
     const lit = picTrail({
-      passed: [pass(1, 10), pass(2, 24), pass(4, 45), pass(5, 50), pass(2, 23), pass(3)], at: 3,
+      passed: [pass(1, 10), pass(2, 24), pass(4, 45), pass(5, 50), pass(2, 23), pass(3)], at: 3, steps: [],
     });
     expect([...lit.boxes].sort((a, b) => a - b)).toEqual([2, 3]);
     expect([...lit.edges].sort((a, b) => a - b)).toEqual([23, 50]);
@@ -35,7 +35,7 @@ describe("picTrail", () => {
 
   it("starts from the last lap of several", () => {
     const lit = picTrail({
-      passed: [pass(1, 12), pass(2, 21), pass(1, 12), pass(2, 21), pass(1)], at: 1,
+      passed: [pass(1, 12), pass(2, 21), pass(1, 12), pass(2, 21), pass(1)], at: 1, steps: [],
     });
     expect([...lit.boxes]).toEqual([1]);
     expect([...lit.edges]).toEqual([21]);

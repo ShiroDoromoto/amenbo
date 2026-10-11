@@ -4036,6 +4036,34 @@ pub struct AutomationRunTrailDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) at: Option<i64>,
+    /// The steps it passed inside the spot it is in, in the order it passed them. Empty once it has
+    /// left that spot, and before it opens one there.
+    pub(crate) steps: Vec<AutomationRunPassedStepDto>,
+    /// The step under way, or the one it is about to open or waiting on ([`AutomationStepDto`]'s
+    /// `id`). Absent where `at` is absent, and where the run's copy names no step.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) step: Option<i64>,
+}
+
+/// **One pass through one step inside a spot**, keyed the way the action's picture keys its boxes
+/// and lines.
+#[derive(Serialize, TS, Clone)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunPassedStepDto {
+    /// The step ([`AutomationStepDto`]'s `id`). Absent where the run's copy names no step.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) step: Option<i64>,
+    #[ts(type = "\"running\" | \"done\" | \"failed\" | \"stopped\"")]
+    pub(crate) status: &'static str,
+    /// The line on the action's picture it walked from there to the next step
+    /// ([`AutomationEdgeDto`]'s `id`). Absent while the step is under way, and where it left the spot
+    /// from it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) edge: Option<i64>,
 }
 
 /// **One pass through one spot**, keyed the way the automation's picture keys its boxes and lines.

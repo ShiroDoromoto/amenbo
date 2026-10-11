@@ -978,6 +978,22 @@ exit?: number,
 edge?: number, };
 
 /**
+ * **One pass through one step inside a spot**, keyed the way the action's picture keys its boxes
+ * and lines.
+ */
+export type AutomationRunPassedStepDto = { 
+/**
+ * The step ([`AutomationStepDto`]'s `id`). Absent where the run's copy names no step.
+ */
+step?: number, status: "running" | "done" | "failed" | "stopped", 
+/**
+ * The line on the action's picture it walked from there to the next step
+ * ([`AutomationEdgeDto`]'s `id`). Absent while the step is under way, and where it left the spot
+ * from it.
+ */
+edge?: number, };
+
+/**
  * **A run, just launched** — what the press is answered with.
  *
  * A run says nothing beyond its id: it starts on the spot, nothing being in line ahead of it
@@ -1013,7 +1029,17 @@ passed: Array<AutomationRunPassDto>,
  * The placement whose step is under way, or the one the run is about to open or waiting on.
  * Absent for a run that is not going.
  */
-at?: number, };
+at?: number, 
+/**
+ * The steps it passed inside the spot it is in, in the order it passed them. Empty once it has
+ * left that spot, and before it opens one there.
+ */
+steps: Array<AutomationRunPassedStepDto>, 
+/**
+ * The step under way, or the one it is about to open or waiting on ([`AutomationStepDto`]'s
+ * `id`). Absent where `at` is absent, and where the run's copy names no step.
+ */
+step?: number, };
 
 /**
  * **One saved version of an automation**: its number, and when it was saved.

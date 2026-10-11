@@ -67,7 +67,8 @@ use crate::dto::{
     AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
-    AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunStartedDto, AutomationRunTaskDto,
+    AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunPassedStepDto, AutomationRunStartedDto,
+    AutomationRunTaskDto,
     AutomationRunTrailDto, AutomationSavedDto, AutomationStepDto, AutomationStepScriptDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
@@ -1913,8 +1914,8 @@ pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBack
 }
 
 /// **The way a run has come on the task it is working** (`automation_run::trail`) — the spots it
-/// passed with the way out and the line it left each by, and the spot it stands at now. What the
-/// picture on the run's pane lights up.
+/// passed with the way out and the line it left each by, the spot it stands at now, and the steps it
+/// passed inside that spot and the one it stands at. What the picture on the run's pane lights up.
 #[tauri::command]
 pub fn automation_run_trail(run_id: i64) -> Result<AutomationRunTrailDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_run_trail");
@@ -1932,6 +1933,16 @@ pub fn automation_run_trail(run_id: i64) -> Result<AutomationRunTrailDto, CmdErr
             })
             .collect(),
         at: trail.at,
+        steps: trail
+            .steps
+            .into_iter()
+            .map(|step| AutomationRunPassedStepDto {
+                step: step.step_id,
+                status: step.status.as_str(),
+                edge: step.edge_id,
+            })
+            .collect(),
+        step: trail.step,
     })
 }
 

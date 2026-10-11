@@ -1156,7 +1156,8 @@ export function useHeldBack(run: number | null): AutomationHeldBackDto | null {
 
 /**
  * **Where a run has been on its task, and where it stands** (`AMB-T-5774`): the spots it passed in the
- * order it passed them, and the one under way. Null outside Tauri.
+ * order it passed them, the one under way, and the steps passed inside it and the one under way there.
+ * Null outside Tauri.
  */
 export async function fetchRunTrail(run: number): Promise<AutomationRunTrailDto | null> {
   if (!inTauri()) return null;

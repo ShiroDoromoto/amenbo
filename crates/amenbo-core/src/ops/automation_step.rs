@@ -645,7 +645,9 @@ fn write_in(
 // ───────────────────────── the text ─────────────────────────
 
 /// The whole launch text, in the order the specification sets: what holds for every step — ending on
-/// the task the run is working, once one has been taken ([`working_on`]) — then what holds for this one, then what it is being asked to do, and last how to hand the work back.
+/// the task the run is working, once one has been taken ([`working_on`]), and on a step nobody is
+/// watching, that nobody is ([`UNWATCHED`]) — then what holds for this one, then what it is being
+/// asked to do, and last how to hand the work back.
 ///
 /// **English, like every other sentence this crate writes.** The words that carry the work — the
 /// prompt — is the person's own and arrives in whatever language it was written in; what is added
@@ -661,6 +663,9 @@ fn compose(
     let mut preamble = crate::agents::preamble(crate::config::Paths::command_name());
     if let Some(task) = stretch.and_then(|s| s.task_id) {
         preamble.push_str(&format!("\n\n{}", working_on(task)));
+    }
+    if !def.interactive {
+        preamble.push_str(&format!("\n\n{UNWATCHED}"));
     }
     push_block(&mut out, &preamble);
     let parts = TaskParts { notes: def.show_notes, decisions: def.show_decisions, comments: def.show_comments };
@@ -737,7 +742,11 @@ fn choices_for(tx: &WriteTx<'_>, def: &AutomationRunDef) -> Result<Vec<Choices>>
     Ok(out)
 }
 
-/// **The task this run is on**, the line the preamble ends with (`AMB-T-5413`).
+/// Said to a step that is not interactive: nobody is in its terminal, so a question asked there stops
+/// the run instead of being answered.
+const UNWATCHED: &str = "Nobody is watching this step. A question written in this terminal gets no answer.";
+
+/// **The task this run is on**, written at the end of the preamble (`AMB-T-5413`).
 ///
 /// It is written at every launch rather than carried along a wire, so a step knows its task wherever it
 /// is placed and nobody has to join anything for it. The step that takes the task is not told one:
@@ -1270,6 +1279,23 @@ mod tests {
                 !text.contains("## What you have been handed"),
                 "the first step is handed nothing: {text}"
             );
+        });
+    }
+
+    #[test]
+    fn only_a_step_nobody_watches_is_told_so() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let watched = p.second_action.entry_step_id.expect("an entry step");
+            automation::step_update(tx, watched, None, None, Some(true), None, None, None, None, None, None, None)
+                .expect("make the step interactive");
+            let run = a_run(tx, &p.automation);
+
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            assert!(first.text.contains(UNWATCHED), "{}", first.text);
+            reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open")).text;
+            assert!(!second.contains(UNWATCHED), "{second}");
         });
     }
 

@@ -1472,6 +1472,7 @@ export const uk: Translation = {
     "auto.run.heldUntil": "Очікування до {at}",
     "auto.run.body.taskWait": "Чекає на задачу, яку можна взяти",
     "auto.run.body.taskWaitNext": "Коли відповідну задачу можна буде взяти, запуск візьме її й піде далі сам. Щоб перестати чекати, натисніть угорі «Призупинити» або «Скасувати негайно».",
+    "auto.run.body.stepOf": "Крок {no} з {total}",
     "auto.run.heldBack": "Завдання, які поки не можна взяти: {count}",
     "auto.run.body.paused": "Призупинено. Після відновлення продовжить з наступного кроку.",
     "auto.run.body.completed": "Дійшов до кінця схеми. Останній крок — «{step}».",

@@ -1452,6 +1452,7 @@ export const ko: Translation = {
     "auto.run.heldUntil": "{at}까지 대기",
     "auto.run.body.taskWait": "착수할 수 있는 작업을 기다리는 중",
     "auto.run.body.taskWaitNext": "조건에 맞는 작업에 착수할 수 있게 되면 자동으로 착수하고 진행합니다. 기다리기를 그만하려면 위의 일시 중지나 강제 취소를 누르세요.",
+    "auto.run.body.stepOf": "{total}단계 중 {no}단계",
     "auto.run.heldBack": "아직 시작할 수 없는 작업: {count}개",
     "auto.run.body.paused": "일시정지 중입니다. 재개하면 다음 단계부터 이어갑니다.",
     "auto.run.body.completed": "그림의 끝까지 진행했습니다. 마지막 단계는 “{step}”였습니다.",

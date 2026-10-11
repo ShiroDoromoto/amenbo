@@ -4,9 +4,10 @@
 // one action. What it is handed is the laid-out shape both are read as (`./automationLayout`), so
 // nothing here knows which of the two it is drawing — the screen above it does.
 //
-// **A box is one placement, and the name on it is the action standing there** (`AMB-D-949`). Nothing
-// on the picture is a step: a step is inside the action, and which of them a run opens is read on the
-// action's own screen.
+// **A box is one placement, and the name on it is the action standing there** (`AMB-D-949`). On the
+// build screen nothing on the automation's picture is a step: a step is inside the action, and which of
+// them a run opens is read on the action's own screen. In a run's pane the box the run is under way in
+// is the one exception (below).
 //
 // **Boxes are elements and lines are one drawing under them.** The boxes carry a name that has to
 // wrap and shorten, a press, and a focus ring, which is all a button already does; the lines are
@@ -40,9 +41,10 @@
 // the number of the step it comes from, and its outputs — so what flows through a step is read without
 // opening its panel, and still no line crosses the picture.
 //
-// **It scrolls, and it does nothing else.** No zoom, no folding a stretch away: an automation is
-// tens of steps, and a picture with a state of its own is one more thing to put back where it was
-// every time the definition is read again. The one move it makes is to bring a box newly picked into
+// **It scrolls, and it does nothing else.** No zoom, and no folding a stretch away by hand: an
+// automation is tens of steps, and a picture with a state of its own is one more thing to put back
+// where it was every time the definition is read again. What a box holds is opened by the run alone,
+// never by the reader (below). The one move it makes is to bring a box newly picked into
 // sight — the box a run stopped at arrives picked from its pane (`AMB-T-5594`), and a band over the
 // screen can push it out of view. It stops moving once the reader's own hand has moved the screen,
 // so a reader scrolling away from the box that stays picked is not pulled back.
@@ -53,8 +55,27 @@
 // its border is dashed, and a spinner and the words for the wait stand over it. Each box the run moves
 // on to is picked and brought to the middle. Nothing is put in there, so no `+` is drawn, and the
 // legend is left to the build screen: what a line means is read where the picture is made.
+//
+// **The box the run is under way in is grown, with its action's picture inside** (`AMB-T-6505`). The
+// rows and boxes around it stand further off to make the room (`PicGrow`), and inside it the action's
+// picture is drawn as its build screen draws it — the step cards, the lines between them, the action's
+// input over them and its ways out under them — lit by the same rule as the picture outside it. Its
+// border is lit and still; the step under way inside it is what blinks, and what is picked and brought
+// to the middle. Once the run moves on to another box, it is drawn as it was.
 import { useEffect, useId, useRef, useState } from "react";
-import { edgeWord, layOut, openWord, ACTION_BOUNDARY, ERROR_EXIT, TAKES_INSET, type PicGraph, type PicLine, type PicMark } from "./automationLayout";
+import {
+  edgeWord,
+  grownTo,
+  layOut,
+  openWord,
+  ACTION_BOUNDARY,
+  ERROR_EXIT,
+  GROWN_HEAD,
+  TAKES_INSET,
+  type PicGraph,
+  type PicLine,
+  type PicMark,
+} from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { cardIo } from "./automationWires";
@@ -162,6 +183,11 @@ function lineLit(line: PicLine, trail: PicTrail | undefined): boolean {
   return trail.edges.has(Number(line.key.slice("edge-".length)));
 }
 
+/** The number the step `stepId` is shown with on the picture `inner`, if it has that step. */
+function stepAt(inner: { nodes: readonly { boxId: number; no?: number }[] }, stepId: number | undefined): number | undefined {
+  return stepId === undefined ? undefined : inner.nodes.find((node) => node.boxId === stepId)?.no;
+}
+
 export function AutomationPicture({
   graph,
   insertLabel,
@@ -173,6 +199,8 @@ export function AutomationPicture({
   onPickPart,
   selectedPart,
   trail,
+  inside,
+  inBox = false,
 }: {
   graph: PicGraph | null;
   /**
@@ -205,11 +233,24 @@ export function AutomationPicture({
   /** What a run has walked, where the picture is drawn in its pane. A box picked there is brought to
    *  the middle, not only into sight. */
   trail?: PicTrail;
+  /**
+   * The box a run is under way in, grown with the picture of the action standing there inside it, and
+   * what the run has walked in that picture (`AMB-T-6505`). The step under way there is picked in
+   * place of the box.
+   */
+  inside?: { boxId: number; graph: PicGraph; trail: PicTrail };
+  /** It is drawn inside a grown box: it does not scroll on its own, but with the picture it is in. */
+  inBox?: boolean;
 }) {
   // Arrowheads are looked up by id, and two pictures on one page must not answer for each other's.
   const ids = useId();
   const head = (kind: Head) => `url(#${ids}-${kind})`;
-  const picture = layOut(graph);
+  // An action with no step has no picture to grow its box for.
+  const inner = inside === undefined ? null : layOut(inside.graph);
+  const grown = inner === null || inner.nodes.length === 0 ? undefined : inside!.boxId;
+  const picture = layOut(graph, undefined, grown === undefined ? undefined : grownTo(grown, inner!));
+  // The step under way inside the grown box is picked there, and the box itself is not.
+  const pickedId = selectedBoxId === grown ? undefined : selectedBoxId;
   // What a step's card says it takes in and hands on, on an action's picture — each input with the
   // number of the step that hands it its value, or the action's own input.
   const ioWords = (boxId: number): { takes?: string; hands?: string } => {
@@ -235,7 +276,7 @@ export function AutomationPicture({
   // (`AMB-D-1003`).
   const around = new Set(
     (graph?.edges ?? [])
-      .filter((edge) => selectedBoxId !== undefined && (edge.fromId === selectedBoxId || (edge.ends === "go" && edge.toId === selectedBoxId)))
+      .filter((edge) => pickedId !== undefined && (edge.fromId === pickedId || (edge.ends === "go" && edge.toId === pickedId)))
       .map((edge) => edge.id),
   );
   // A box picked before the definition has loaded has no element yet, so the move waits for the
@@ -255,9 +296,9 @@ export function AutomationPicture({
   // their content overflows, so no size of theirs says it grew. What does is the page changing: each
   // change to the document, and each change of the box's own size (a face coming up), asks the
   // observer again from the start.
-  const drawn = picture.nodes.some((node) => node.boxId === selectedBoxId);
+  const drawn = picture.nodes.some((node) => node.boxId === pickedId);
   const centred = trail !== undefined;
-  const waitingAt = (boxId: number) => trail?.waiting === true && trail.at === boxId;
+  const waitingAt = (boxId: number) => trail?.waiting === true && trail.at === boxId && boxId !== grown;
   useEffect(() => {
     const box = pickedRef.current;
     if (!drawn || box === null || typeof IntersectionObserver === "undefined") return;
@@ -289,12 +330,14 @@ export function AutomationPicture({
     changed.observe(document.body, { childList: true, subtree: true, characterData: true });
     for (const kind of reader) window.addEventListener(kind, stop, true);
     return stop;
-  }, [selectedBoxId, drawn, centred]);
+  }, [pickedId, drawn, centred]);
   if (picture.nodes.length === 0) return null;
 
+  // Which of its steps the run is at, in the grown box's head — by the number its card is shown with.
+  const stepNo = inner === null ? undefined : stepAt(inner, inside?.trail.at);
   return (
     <>
-      <div className="autopic">
+      <div className={inBox ? undefined : "autopic"}>
         <div
           className="autopic__sheet"
           style={{ width: `${picture.width}px`, height: `${picture.height}px` }}
@@ -472,17 +515,42 @@ export function AutomationPicture({
                 )}
               </span>
             ))}
-          {picture.nodes.map((node) => (
+          {picture.nodes.map((node) => node.boxId === grown ? (
+            <div
+              key={node.boxId}
+              className="autopic__node autopic__node--grown"
+              style={{
+                left: `${node.x}px`,
+                top: `${node.y}px`,
+                width: `${node.w}px`,
+                height: `${node.h}px`,
+              }}
+            >
+              <span className="autopic__nodehead autopic__grownhead" style={{ height: `${GROWN_HEAD}px` }}>
+                {node.no !== undefined && <span className="autopic__no">{node.no}</span>}
+                <span className="autopic__nodename">{node.name}</span>
+                {stepNo !== undefined && (
+                  <span className="autopic__grownat">{tf("auto.run.body.stepOf", { total: inner!.nodes.length, no: stepNo })}</span>
+                )}
+              </span>
+              <AutomationPicture
+                graph={inside!.graph}
+                selectedBoxId={inside!.trail.at}
+                trail={inside!.trail}
+                inBox
+              />
+            </div>
+          ) : (
             <button
               key={node.boxId}
-              ref={node.boxId === selectedBoxId ? pickedRef : undefined}
+              ref={node.boxId === pickedId ? pickedRef : undefined}
               type="button"
               className={[
                 "autopic__node",
                 node.unfed.length > 0 ? "autopic__node--unfed" : "",
                 node.empty === true ? "autopic__node--empty" : "",
                 node.draft === true ? "autopic__node--draft" : "",
-                node.boxId === selectedBoxId ? "autopic__node--on" : "",
+                node.boxId === pickedId ? "autopic__node--on" : "",
                 trail?.boxes.has(node.boxId) === true ? "autopic__node--lit" : "",
                 trail?.at === node.boxId ? (trail.waiting === true ? "autopic__node--wait" : "autopic__node--at") : "",
               ]
@@ -494,7 +562,7 @@ export function AutomationPicture({
                 width: `${node.w}px`,
                 height: `${node.h}px`,
               }}
-              aria-pressed={node.boxId === selectedBoxId}
+              aria-pressed={node.boxId === pickedId}
               disabled={onPickBox === undefined}
               onClick={() => onPickBox?.(node.boxId)}
             >

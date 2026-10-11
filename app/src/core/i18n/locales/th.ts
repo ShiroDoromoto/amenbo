@@ -1456,6 +1456,7 @@ export const th: Translation = {
     "auto.run.heldUntil": "รอจนถึง {at}",
     "auto.run.body.taskWait": "กำลังรองานที่เริ่มได้",
     "auto.run.body.taskWaitNext": "เมื่อมีงานที่ตรงเงื่อนไขและเริ่มได้ จะรับงานนั้นและทำต่อเอง หากต้องการเลิกรอ ให้กดหยุดชั่วคราวหรือบังคับยกเลิกด้านบน",
+    "auto.run.body.stepOf": "ขั้นตอน {no} จาก {total}",
     "auto.run.heldBack": "งานที่ยังรับไม่ได้: {count}",
     "auto.run.body.paused": "หยุดชั่วคราวอยู่ เมื่อทำต่อ จะเริ่มจากขั้นถัดไป",
     "auto.run.body.completed": "ไปถึงท้ายแผนภาพแล้ว ขั้นสุดท้ายคือ “{step}”",

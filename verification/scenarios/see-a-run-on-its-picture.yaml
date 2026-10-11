@@ -1,9 +1,9 @@
 # A reader watching a run wants to know where it is and where it has been, which a terminal's output
-# does not say. So a run's pane opens on the automation's picture: the box the run is on blinks and is
-# brought to the middle, and what it has passed on the task it is working is lit. A step that may wait
-# for a person turns the pane to its terminal while it runs, so the question it asks is not left behind
-# the picture; once it is over, the pane goes back to the picture. The line over the pane turns it
-# either way by hand.
+# does not say. So a run's pane opens on the automation's picture: the box the run is on is grown with
+# its action's picture inside, the step under way there blinks and is brought to the middle, and what
+# it has passed on the task it is working is lit. A step that may wait for a person turns the pane to
+# its terminal while it runs, so the question it asks is not left behind the picture; once it is over,
+# the pane goes back to the picture. The line over the pane turns it either way by hand.
 #
 # The picture is the one hold-a-run-from-its-pane walks, with its first step made one that may wait for
 # a person.
@@ -12,8 +12,8 @@ title: A run's pane shows where the run is on its picture, and turns to the term
 description: >
   Start a run whose first step may wait for a person, and read its pane: turned to the terminal while
   that step runs. Report the step, and the pane is back on the picture, with the box of the next step
-  blinking in the middle and the boxes it passed lit. Turn it to the terminal and back from the line
-  over the pane.
+  grown with its step blinking in the middle and the boxes it passed lit. Turn it to the terminal and
+  back from the line over the pane.
 given:
   # Two rather than one because the terminal's premise stands its programs up in front of the
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
@@ -110,7 +110,8 @@ steps_gui:
       report: worked the task, and the pane goes back to its picture
 
   # The step after does not wait for a person, so the pane is back on the picture: the run is on the
-  # box of the action it went on to, and what it passed to get there is lit.
+  # box of the action it went on to, grown with that action's step blinking inside it, and what it
+  # passed to get there is lit.
   - type: assert
     domain: automation
     op: run-picture
@@ -118,6 +119,7 @@ steps_gui:
       target: run
       face: picture
       box: after
+      step: wait
       passed: [take]
       passed_builtins: [take_task]
 
@@ -151,3 +153,4 @@ steps_gui:
       target: run
       face: picture
       box: after
+      step: wait

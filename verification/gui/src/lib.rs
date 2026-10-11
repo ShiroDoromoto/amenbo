@@ -6786,11 +6786,19 @@ impl Instructor {
             (Domain::Automation, "run-picture") => match req(with, "face")? {
                 "picture" => {
                     let mut line = "In the workspace, confirm the pane this run is drawn in has \"Picture\" pressed on the line over it, and that its body is the automation's picture rather than a terminal".to_string();
+                    // A box whose action has steps is drawn grown, with that action's picture inside,
+                    // and the step under way there is what blinks; a box with none blinks itself.
                     if with.contains_key("box") || with.contains_key("builtin") {
-                        line.push_str(&format!(
-                            ". Confirm {} blinks, stands picked, and has been brought to the middle of the pane",
-                            box_named(with, "box", "builtin")?
-                        ));
+                        line.push_str(&match with.get("step").and_then(|v| v.as_str()) {
+                            Some(step) => format!(
+                                ". Confirm {} is drawn larger than the boxes around it, with its border lit and still and the picture of its action inside it, and that the step \"{step}\" in that picture blinks, stands picked, and has been brought to the middle of the pane",
+                                box_named(with, "box", "builtin")?
+                            ),
+                            None => format!(
+                                ". Confirm {} blinks, stands picked, and has been brought to the middle of the pane",
+                                box_named(with, "box", "builtin")?
+                            ),
+                        });
                     }
                     let mut passed: Vec<String> = Vec::new();
                     if let Some(names) = with.get("passed") {
@@ -9521,11 +9529,15 @@ steps_gui:
   - type: assert
     domain: automation
     op: run-picture
-    with: { face: picture, box: after, passed: [take], passed_builtins: [take_task] }
+    with: { face: picture, box: after, step: wait, passed: [take], passed_builtins: [take_task] }
   - type: assert
     domain: automation
     op: run-picture
     with: { face: terminal }
+  - type: assert
+    domain: automation
+    op: run-picture
+    with: { face: picture, builtin: take_task }
   - type: action
     domain: automation
     op: press-run
@@ -9534,10 +9546,12 @@ steps_gui:
         let mut ins = Instructor::new();
         let lines: Vec<String> =
             s.steps(Driver::Gui).iter().map(|st| ins.render(st).expect("every step renders")).collect();
-        assert!(lines[0].contains("\"Picture\" pressed") && lines[0].contains("the box \"after\" blinks"), "{}", lines[0]);
+        assert!(lines[0].contains("\"Picture\" pressed") && lines[0].contains("the box \"after\" is drawn larger"), "{}", lines[0]);
+        assert!(lines[0].contains("the step \"wait\" in that picture blinks") && !lines[0].contains("\"after\" blinks"), "{}", lines[0]);
         assert!(lines[0].contains("the box \"take\"") && lines[0].contains("the box of"), "{}", lines[0]);
         assert!(lines[1].contains("\"Terminal\" pressed") && !lines[1].contains("blinks"), "{}", lines[1]);
-        assert!(lines[2].contains("line over the pane") && lines[2].contains("press \"Terminal\""), "{}", lines[2]);
+        assert!(lines[2].contains("blinks, stands picked") && !lines[2].contains("drawn larger"), "{}", lines[2]);
+        assert!(lines[3].contains("line over the pane") && lines[3].contains("press \"Terminal\""), "{}", lines[3]);
 
         let row = load(r#"
 id: x

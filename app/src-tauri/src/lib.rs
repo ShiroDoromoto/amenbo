@@ -541,6 +541,7 @@ pub fn run() {
       automation::automation_launch_check,
       automation::automation_save,
       automation::automation_discard,
+      automation::automation_export,
       automation::automation_launch,
       automation::automation_launch_asks,
       automation::automation_test_run,

@@ -1313,6 +1313,7 @@ export const nl: Translation = {
     "auto.saved.writeFailed": "Niet geschreven: {reason}",
     "auto.saved.save": "Opslaan",
     "auto.saved.discard": "Wijzigingen verwerpen",
+    "auto.saved.export": "Exporteren",
     "auto.saved.discardConfirm": "De niet-opgeslagen wijzigingen verwerpen en teruggaan naar versie {version}? Dit kan niet ongedaan worden gemaakt.",
     "auto.saved.blocked": "Kan niet opslaan:",
     "auto.act.about": "Deze actie",

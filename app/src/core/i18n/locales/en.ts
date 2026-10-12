@@ -1560,6 +1560,7 @@ const ui = {
   "auto.saved.writeFailed": "Not written: {reason}",
   "auto.saved.save": "Save",
   "auto.saved.discard": "Discard changes",
+  "auto.saved.export": "Export",
   "auto.saved.discardConfirm": "Discard the unsaved changes and go back to version {version}? This can't be undone.",
   "auto.saved.blocked": "Can't save:",
   "auto.act.about": "This action",

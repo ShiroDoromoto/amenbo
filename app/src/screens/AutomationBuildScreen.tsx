@@ -62,6 +62,10 @@
 // is held down by a run going on it (`AMB-D-1015`). A box only the draft held is gone after a discard,
 // and its panel with it: the panel is drawn from the box it was pressed on.
 //
+// **"Export" writes the newest saved version out as one file**, with the actions it places
+// (`amenbo_core::ops::automation_export`). What is being written on the draft is not in it, so the
+// press stands only once there is a saved version, and its refusal is drawn where the save's is.
+//
 // **The press can still be refused, and its refusal is drawn where the reasons are.** Two things move
 // between the screen being drawn and the button being pressed — the machine, and whether the
 // workspace is standing — and core raises both as a sentence rather than as a reason on the list
@@ -100,8 +104,14 @@ import { AutomationStepPanel } from "./AutomationStepPanel";
 import { AutomationTestPane, useAutomationTestRun } from "./AutomationTestPane";
 import type { WhereTo } from "./automationParts";
 import { useAutomationStart } from "../components/StartAutomation";
-import { discardAutomation, saveAutomation, useAutomation, useLaunchCheck } from "../core/automations";
-import { confirmDialog } from "../core/dialog";
+import {
+  discardAutomation,
+  exportAutomation,
+  saveAutomation,
+  useAutomation,
+  useLaunchCheck,
+} from "../core/automations";
+import { confirmDialog, pickSaveAs } from "../core/dialog";
 import { useBoundFolders } from "../core/boundFolders";
 import { errSentence, errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
@@ -239,6 +249,13 @@ export function AutomationBuildScreen({
     if (!(await confirmDialog(tf("auto.saved.discardConfirm", { version })))) return;
     await keep(() => discardAutomation(id));
   };
+  // What is written out is the newest saved version, whatever is being written on it now. The file is
+  // named after the automation; a path separator in the name would put it in another folder.
+  const exportOut = async () => {
+    const dest = await pickSaveAs(`${(automation?.name ?? "").replace(/[\\/]/g, "_")}.json`);
+    if (dest === null) return;
+    await keep(() => exportAutomation(id, dest));
+  };
   // Listed only while there is something to save: a definition with nothing unsaved has nothing the
   // reasons would hold back.
   const saveBlocks = automation?.unsaved === true ? automation.saveBlocks : [];
@@ -335,6 +352,14 @@ export function AutomationBuildScreen({
             onClick={() => void discard()}
           >
             {t("auto.saved.discard")}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={automation?.saved === undefined || keeping}
+            onClick={() => void exportOut()}
+          >
+            {t("auto.saved.export")}
           </button>
           <button
             type="button"

@@ -1314,6 +1314,7 @@ export const id: Translation = {
     "auto.saved.writeFailed": "Tidak tertulis: {reason}",
     "auto.saved.save": "Simpan",
     "auto.saved.discard": "Buang perubahan",
+    "auto.saved.export": "Ekspor",
     "auto.saved.discardConfirm": "Buang perubahan yang belum disimpan dan kembali ke versi {version}? Ini tidak bisa dibatalkan.",
     "auto.saved.blocked": "Tidak bisa disimpan:",
     "auto.act.about": "Aksi ini",

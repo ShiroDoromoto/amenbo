@@ -479,6 +479,18 @@ pub fn automation_discard(id: i64) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["automations"]))
 }
 
+/// **Write the automation out as one file** at the path the user picked
+/// ([`amenbo_core::ops::automation_export::export`]) — its newest saved version with the actions it
+/// places, never what is being written on it. The same body the terminal's `automation export` writes.
+/// `dest` comes through the OS save dialog, which is where overwrite confirmation happens.
+#[tauri::command]
+pub fn automation_export(id: i64, dest: String) -> Result<(), CmdError> {
+    let store = open_store_read()?;
+    let file = store.automation_export(id)?;
+    let body = serde_json::to_string_pretty(&file).map_err(|e| CmdError::from(e.to_string()))?;
+    std::fs::write(&dest, body + "\n").map_err(|e| format!("cannot write to '{dest}': {e}").into())
+}
+
 /// **Save what is inside the action as its next version** ([`amenbo_core::ops::automation::action_save`]).
 /// Refused with the reasons the action build screen lists (`save_blocks`); not refused while a run of an
 /// automation placing it goes on (`AMB-D-1015`). The first save of an action made on the spot finishes

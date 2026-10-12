@@ -1330,6 +1330,7 @@ export const ru: Translation = {
     "auto.saved.writeFailed": "Не записано: {reason}",
     "auto.saved.save": "Сохранить",
     "auto.saved.discard": "Отменить изменения",
+    "auto.saved.export": "Экспортировать",
     "auto.saved.discardConfirm": "Отменить несохранённые изменения и вернуться к версии {version}? Это действие нельзя отменить.",
     "auto.saved.blocked": "Нельзя сохранить:",
     "auto.act.about": "Это действие",

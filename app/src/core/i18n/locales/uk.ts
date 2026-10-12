@@ -1330,6 +1330,7 @@ export const uk: Translation = {
     "auto.saved.writeFailed": "Не записано: {reason}",
     "auto.saved.save": "Зберегти",
     "auto.saved.discard": "Скасувати зміни",
+    "auto.saved.export": "Експортувати",
     "auto.saved.discardConfirm": "Скасувати незбережені зміни й повернутися до версії {version}? Цю дію не можна скасувати.",
     "auto.saved.blocked": "Не можна зберегти:",
     "auto.act.about": "Ця дія",

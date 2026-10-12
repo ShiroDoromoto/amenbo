@@ -1313,6 +1313,7 @@ export const tr: Translation = {
     "auto.saved.writeFailed": "Yazılamadı: {reason}",
     "auto.saved.save": "Kaydet",
     "auto.saved.discard": "Değişiklikleri at",
+    "auto.saved.export": "Dışa aktar",
     "auto.saved.discardConfirm": "Kaydedilmemiş değişiklikler atılıp sürüm {version}’e dönülsün mü? Bu geri alınamaz.",
     "auto.saved.blocked": "Kaydedilemiyor:",
     "auto.act.about": "Bu eylem",

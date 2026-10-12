@@ -752,18 +752,7 @@ fn an_automation_is_written_out_once_it_is_saved() {
     assert!(refused.contains("never been saved"), "{refused}");
     assert!(!std::path::Path::new(out).exists(), "nothing is written for a refusal");
 
-    let shown = cli.json(&["automation", "show", &a, "--json"]);
-    let action = shown["placements"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|p| id_str(&p["placement"]["id"]) == placement)
-        .map(|p| id_str(&p["action"]["id"]))
-        .unwrap();
-    cli.json(&["automation", "action-save", &action, "--json"]);
-    // A placement keeps the draft it was placed on until it is moved onto a saved version.
-    cli.json(&["automation", "place-version", &placement, "1", "--json"]);
-    saved(&cli, &a);
+    saved_with_its_action(&cli, &a, &placement);
 
     let written = cli.json(&["automation", "export", &a, "--out", out, "--json"]);
     assert_eq!(written["automation"]["format"].as_str(), Some("amenbo-automation/v1"), "{written}");
@@ -776,6 +765,57 @@ fn an_automation_is_written_out_once_it_is_saved() {
     assert_ne!(code, 0, "{refused}");
     assert!(refused.contains("file_exists"), "{refused}");
     cli.json(&["automation", "export", &a, "--out", out, "--force", "--json"]);
+}
+
+/// **A file written out is taken in as a new automation**, into the project named, and a second import
+/// of the same file makes another. A file that is not one Amenbo wrote out is refused, and so is one
+/// that is not there.
+#[test]
+fn a_written_out_automation_is_taken_in_as_new() {
+    let cli = Cli::new();
+    let (a, placement, _, _) = a_picture(&cli, false);
+    saved_with_its_action(&cli, &a, &placement);
+    let out = cli.home.join("automation.json");
+    let out = out.to_str().unwrap();
+    cli.json(&["automation", "export", &a, "--out", out, "--json"]);
+
+    let q = cli.a_project();
+    let first = cli.json(&["automation", "import", out, "--project", &q, "--json"]);
+    assert_eq!(first["automation"]["name"].as_str(), Some("Do one"), "{first}");
+    let imported = id_of(&first, "automation");
+    assert_ne!(imported, a, "an import is a new automation");
+    let second = id_of(&cli.json(&["automation", "import", out, "--project", &q, "--json"]), "automation");
+    assert_ne!(second, imported, "the same file taken in twice makes two");
+    let listed = cli.json(&["automation", "list", "--project", &q, "--json"]);
+    assert_eq!(listed["count"].as_u64(), Some(2), "{listed}");
+
+    let broken = cli.home.join("broken.json");
+    std::fs::write(&broken, "{").unwrap();
+    let (refused, code) = cli.run_err(&["automation", "import", broken.to_str().unwrap(), "--project", &q, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("not an automation written out"), "{refused}");
+
+    let missing = cli.home.join("missing.json");
+    let (refused, code) = cli.run_err(&["automation", "import", missing.to_str().unwrap(), "--project", &q, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("io_error"), "{refused}");
+}
+
+/// Save the action placed at `placement`, move the placement onto that version, and save the
+/// automation — what an export asks of the saved version it writes out.
+fn saved_with_its_action(cli: &Cli, a: &str, placement: &str) {
+    let shown = cli.json(&["automation", "show", a, "--json"]);
+    let action = shown["placements"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| id_str(&p["placement"]["id"]) == placement)
+        .map(|p| id_str(&p["action"]["id"]))
+        .unwrap();
+    cli.json(&["automation", "action-save", &action, "--json"]);
+    // A placement keeps the draft it was placed on until it is moved onto a saved version.
+    cli.json(&["automation", "place-version", placement, "1", "--json"]);
+    saved(cli, a);
 }
 
 // ───────────────────────────── saving one ─────────────────────────────

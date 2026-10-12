@@ -1833,7 +1833,7 @@ pub enum AutomationCmd {
         saved: bool,
     },
     /// Write one automation out as a JSON file — its newest saved version, with the actions it places,
-    /// to be taken into another project. Refused for one nobody has saved
+    /// to be taken into another project with `automation import`. Refused for one nobody has saved
     Export {
         /// automation id
         id: i64,
@@ -1843,6 +1843,15 @@ pub enum AutomationCmd {
         /// overwrite the file if it exists
         #[arg(long)]
         force: bool,
+    },
+    /// Take an automation in from a file `automation export` wrote, always as a new automation with new
+    /// actions. The actions come in saved; the automation comes in unsaved
+    Import {
+        /// the file to read
+        file: String,
+        /// project to take it into (name or ID; defaults to the bound project)
+        #[arg(long)]
+        project: Option<String>,
     },
     /// Change an automation's name, notes, whether it is archived, or the most runs it may have going
     /// at once (only the given fields change)

@@ -430,6 +430,27 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 format!("✓ Wrote automation {} ({id}) → {}", file.name, dest.display()),
             );
         }
+        AutomationCmd::Import { file, project } => {
+            let pid = project_or_bound(store, project)?;
+            let src = std::path::PathBuf::from(&file);
+            let text = std::fs::read_to_string(&src).map_err(|e: std::io::Error| CliError {
+                code: "io_error",
+                message: format!("cannot read {}: {e}", src.display()),
+                hint: None,
+                exit: 1,
+            })?;
+            let parsed = amenbo_core::ops::automation_import::parse(&text).map_err(CliError::from)?;
+            let a = store.automation_import(pid, &parsed).map_err(CliError::from)?;
+            write_envelope(
+                flags,
+                "automation.import",
+                "automation",
+                serde_json::to_value(&a).unwrap(),
+                None,
+                false,
+                format!("✓ Imported automation: {} ({}) from {}", a.name, a.id, src.display()),
+            );
+        }
         AutomationCmd::Update { id, name, notes, archived, max_concurrent_runs, no_max_concurrent_runs } => {
             let notes = body_arg_opt(notes)?;
             let max_concurrent_runs = if no_max_concurrent_runs { Some(None) } else { max_concurrent_runs.map(Some) };

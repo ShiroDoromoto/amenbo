@@ -1293,12 +1293,11 @@ pub fn move_to(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automation> {
     Ok(after)
 }
 
-/// **Name any placement as the entry, for a test.** No op does this any more: the entry is the first
-/// thing put on a picture, one of the built-ins a run can start at, and it is changed by
-/// [`entry_replace`] (`AMB-D-977`). A store written before that can still name any placement — an
-/// action somebody wrote, taking a task itself — and the run side goes on answering for that shape;
-/// this is how its tests draw it.
-#[cfg(test)]
+/// **Name any placement as the entry**, whatever stands on it. No op a person presses does this: the
+/// entry is the first thing put on a picture, one of the built-ins a run can start at, and it is changed
+/// by [`entry_replace`] (`AMB-D-977`). Two roads still need it — an imported file names its entry as
+/// it was drawn ([`crate::ops::automation_import`]), and a store written before that rule can name any
+/// placement, a shape the run side goes on answering for and its tests draw this way.
 pub(crate) fn set_entry(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -1755,11 +1754,11 @@ fn answer_as_entry(tx: &WriteTx<'_>, placement: &AutomationPlacement, key: Optio
     Ok(())
 }
 
-/// **Put an action on an automation, for a test, whatever stands on it already.** [`placement_add`]
-/// refuses anything but a built-in a run can start at as the first placement (`AMB-D-977`); a store
-/// written before that can hold a picture that began with any action, and this is how the tests of
-/// the run side draw one.
-#[cfg(test)]
+/// **Put an action on an automation whatever stands on it already**, with nothing added beside it.
+/// [`placement_add`] refuses anything but a built-in a run can start at as the first placement
+/// (`AMB-D-977`). An imported file is put down as it was drawn ([`crate::ops::automation_import`]), and
+/// a store written before that rule can hold a picture that began with any action, which is how the
+/// tests of the run side draw one.
 pub(crate) fn placement_add_by_hand(
     tx: &WriteTx<'_>,
     automation_id: i64,

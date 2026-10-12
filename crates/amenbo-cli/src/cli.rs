@@ -1832,6 +1832,18 @@ pub enum AutomationCmd {
         #[arg(long)]
         saved: bool,
     },
+    /// Write one automation out as a JSON file — its newest saved version, with the actions it places,
+    /// to be taken into another project. Refused for one nobody has saved
+    Export {
+        /// automation id
+        id: i64,
+        /// the file to write
+        #[arg(long)]
+        out: String,
+        /// overwrite the file if it exists
+        #[arg(long)]
+        force: bool,
+    },
     /// Change an automation's name, notes, whether it is archived, or the most runs it may have going
     /// at once (only the given fields change)
     Update {

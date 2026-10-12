@@ -402,6 +402,34 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 render_automation(flags, &view);
             }
         }
+        AutomationCmd::Export { id, out, force } => {
+            let dest = std::path::PathBuf::from(&out);
+            if dest.exists() && !force {
+                return Err(CliError {
+                    code: "file_exists",
+                    message: format!("{} already exists", dest.display()),
+                    hint: Some("pass --force to overwrite".to_string()),
+                    exit: 1,
+                });
+            }
+            let file = store.automation_export(id).map_err(CliError::from)?;
+            let body = serde_json::to_string_pretty(&file).unwrap();
+            std::fs::write(&dest, body + "\n").map_err(|e: std::io::Error| CliError {
+                code: "io_error",
+                message: format!("cannot write {}: {e}", dest.display()),
+                hint: None,
+                exit: 1,
+            })?;
+            write_envelope(
+                flags,
+                "automation.export",
+                "automation",
+                json!({ "id": id, "name": file.name, "format": file.format, "out": dest.display().to_string() }),
+                None,
+                false,
+                format!("✓ Wrote automation {} ({id}) → {}", file.name, dest.display()),
+            );
+        }
         AutomationCmd::Update { id, name, notes, archived, max_concurrent_runs, no_max_concurrent_runs } => {
             let notes = body_arg_opt(notes)?;
             let max_concurrent_runs = if no_max_concurrent_runs { Some(None) } else { max_concurrent_runs.map(Some) };

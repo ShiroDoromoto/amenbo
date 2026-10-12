@@ -738,6 +738,46 @@ fn a_show_names_the_versions_and_saved_is_refused_where_nothing_is_saved() {
     }
 }
 
+/// **An automation is written out as a file of its newest saved version**, with the action it places
+/// in it. One nobody has saved is refused, and so is a file already there unless `--force`.
+#[test]
+fn an_automation_is_written_out_once_it_is_saved() {
+    let cli = Cli::new();
+    let (a, placement, _, _) = a_picture(&cli, false);
+    let out = cli.home.join("automation.json");
+    let out = out.to_str().unwrap();
+
+    let (refused, code) = cli.run_err(&["automation", "export", &a, "--out", out, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("never been saved"), "{refused}");
+    assert!(!std::path::Path::new(out).exists(), "nothing is written for a refusal");
+
+    let shown = cli.json(&["automation", "show", &a, "--json"]);
+    let action = shown["placements"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| id_str(&p["placement"]["id"]) == placement)
+        .map(|p| id_str(&p["action"]["id"]))
+        .unwrap();
+    cli.json(&["automation", "action-save", &action, "--json"]);
+    // A placement keeps the draft it was placed on until it is moved onto a saved version.
+    cli.json(&["automation", "place-version", &placement, "1", "--json"]);
+    saved(&cli, &a);
+
+    let written = cli.json(&["automation", "export", &a, "--out", out, "--json"]);
+    assert_eq!(written["automation"]["format"].as_str(), Some("amenbo-automation/v1"), "{written}");
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(out).unwrap()).unwrap();
+    assert_eq!(file["format"].as_str(), Some("amenbo-automation/v1"), "{file}");
+    assert_eq!(file["name"].as_str(), Some("Do one"), "{file}");
+    assert_eq!(file["actions"].as_array().map(Vec::len), Some(1), "the action it places is in the file: {file}");
+
+    let (refused, code) = cli.run_err(&["automation", "export", &a, "--out", out, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("file_exists"), "{refused}");
+    cli.json(&["automation", "export", &a, "--out", out, "--force", "--json"]);
+}
+
 // ───────────────────────────── saving one ─────────────────────────────
 
 /// An automation is saved once the launch check passes, and a save with nothing written since is said

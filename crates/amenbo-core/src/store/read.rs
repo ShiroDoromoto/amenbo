@@ -863,6 +863,13 @@ impl Store {
         crate::ops::automation_view::saved_detail(self.engine.conn(), id)
     }
 
+    /// **One automation written out as one file** — its newest saved version with the actions it places,
+    /// [`crate::ops::automation_export::export`].
+    pub fn automation_export(&self, id: i64) -> Result<crate::ops::automation_export::AutomationFile> {
+        self.reachable(&format!("automation #{id}"), |c| super::owner::automation(c, id))?;
+        crate::ops::automation_export::export(self.engine.conn(), id)
+    }
+
     /// **The library one project reaches** — the device's shelf, then that project's own.
     ///
     /// `project_id` `None` is the device's shelf alone, and it is within reach from anywhere: an

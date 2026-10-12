@@ -43,6 +43,7 @@ pub mod automation_builtin_split;
 pub mod automation_builtin_take;
 pub mod automation_builtin_wait;
 pub mod automation_export;
+pub mod automation_import;
 pub mod automation_rehearse;
 pub mod automation_report;
 pub mod automation_run;

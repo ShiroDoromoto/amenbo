@@ -1328,6 +1328,22 @@ impl Store {
         })
     }
 
+    /// **Take one automation in from a file, as new**, into `project_id` (one operation = one
+    /// transaction) — [`crate::ops::automation_import::import`]. A refusal anywhere leaves nothing behind.
+    /// A file carrying an action of the device's library writes there too, which is a human's to do: an
+    /// AI bound to a project is turned away from it, as [`Self::automation_action_add`] is.
+    pub fn automation_import(
+        &mut self,
+        project_id: i64,
+        file: &crate::ops::automation_export::AutomationFile,
+    ) -> Result<crate::model::Automation> {
+        let mut targets = vec![WriteTarget::NewIn(Some(project_id))];
+        if file.actions.iter().any(|a| a.global) {
+            targets.push(WriteTarget::NewIn(None));
+        }
+        self.write_one(&targets, |tx| crate::ops::automation_import::import(tx, project_id, file))
+    }
+
     /// Change an automation's name, notes, archived flag or most runs going at once (one operation =
     /// one transaction) — [`crate::ops::automation::update`].
     pub fn automation_update(

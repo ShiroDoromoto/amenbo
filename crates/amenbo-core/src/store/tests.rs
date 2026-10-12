@@ -1760,3 +1760,77 @@ fn a_builtin_put_on_after_a_way_out_that_says_nothing_is_pointed_at_by_it() {
     );
     fs::remove_dir_all(&dir).ok();
 }
+
+/// **An import is one transaction**: a file refused part-way leaves no automation and no action behind,
+/// and one carrying an action of the device's library is a human's to import — an AI bound to the
+/// project is turned away before anything is written.
+#[test]
+fn an_import_leaves_nothing_when_refused_and_the_device_library_is_a_humans() {
+    use crate::ops::automation_export::{ActionFile, AutomationFile, BuiltinFile, PlacementFile, StandsOn, StepFile, FORMAT};
+
+    let (mut s, dir) = fresh_store("automation-import");
+    let p = s.project_add(project("PJ")).unwrap();
+    let step = StepFile {
+        name: "点検".into(),
+        prompt: "見る".into(),
+        script: None,
+        interactive: false,
+        work_dir_ref: None,
+        report_to_task: false,
+        show_history: true,
+        show_notes: true,
+        show_decisions: true,
+        show_comments: true,
+        inputs: vec![],
+        exits: vec![],
+    };
+    let placement = |stands_on| PlacementFile { stands_on, settings: vec![], agents: vec![] };
+    let file = AutomationFile {
+        format: FORMAT.into(),
+        amenbo_version: crate::export::APP_VERSION.into(),
+        name: "取り込み".into(),
+        notes: String::new(),
+        entry: Some(0),
+        placements: vec![
+            placement(StandsOn::Builtin(BuiltinFile { key: "take_task".into(), version: 1, dimension: None })),
+            placement(StandsOn::Action(0)),
+        ],
+        edges: vec![],
+        wires: vec![],
+        actions: vec![ActionFile {
+            name: "点検".into(),
+            note: String::new(),
+            global: true,
+            entry_step: Some(0),
+            settings: vec![],
+            inputs: vec![],
+            exits: vec![],
+            steps: vec![step],
+            edges: vec![],
+            wires: vec![],
+        }],
+    };
+    let rows = |s: &Store, table: &str| -> i64 {
+        s.engine.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+    };
+
+    let broken = AutomationFile { placements: vec![placement(StandsOn::Action(5))], ..file.clone() };
+    assert!(s.automation_import(p.id, &broken).is_err(), "no action 5 in the file");
+    assert_eq!((rows(&s, "automation"), rows(&s, "automation_action")), (0, 0), "nothing is left behind");
+
+    let mut ai = s.with_reach(crate::reach::Reach::binding(p.id));
+    let refused = ai.automation_import(p.id, &file);
+    assert!(matches!(refused, Err(crate::error::Error::OutOfReach(_))), "{refused:?}");
+    assert_eq!(rows(&ai, "automation"), 0);
+
+    let mut human = ai.with_reach(crate::reach::Reach::default());
+    let imported = human.automation_import(p.id, &file).unwrap();
+    assert_eq!(imported.project_id, p.id);
+    let global: i64 = human
+        .engine
+        .conn()
+        .query_row("SELECT COUNT(*) FROM automation_action WHERE project_id IS NULL AND builtin IS NULL", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(global, 1, "the action goes to the device's library");
+    fs::remove_dir_all(&dir).ok();
+}

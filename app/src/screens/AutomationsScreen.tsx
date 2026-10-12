@@ -60,6 +60,10 @@
 // automation is for is the picture, and a form asking for its notes first would be asked before
 // there is anything to write them about (`AutomationNew`). With none yet, that press is the whole
 // list: a sentence saying the list is empty would stand beside the one move it leaves.
+//
+// **"Import" stands beside "new"**: it takes in a file written out by "Export", always as a new
+// automation, matched against nothing already here (`AMB-D-1033`). It asks which project, the way
+// "new" does, when none is picked.
 import { useState } from "react";
 import type { Nav } from "../shell/AppShell";
 import { AutomationActionBuildScreen } from "./AutomationActionBuildScreen";
@@ -70,12 +74,19 @@ import { HistoryTab } from "./HistoryTab";
 import { SavedMark } from "./AutomationSaved";
 import { RunningTab } from "./RunningTab";
 import { useAutomationStart } from "../components/StartAutomation";
-import { addAutomation, useAutomations, useEveryAutomation, useLaunchCheck } from "../core/automations";
+import {
+  addAutomation,
+  importAutomation,
+  useAutomations,
+  useEveryAutomation,
+  useLaunchCheck,
+} from "../core/automations";
 import { Icon } from "../components/Icon";
 import { useBoundFolders } from "../core/boundFolders";
 import { dataAdapter } from "../mock/adapter";
 import { asTyped, isEnterSubmit } from "../core/keys";
-import { errSentence, t, tf } from "../core/i18n";
+import { pickFiles } from "../core/dialog";
+import { errSentence, errText, t, tf } from "../core/i18n";
 import type { AutomationCardDto } from "../bindings/bindings";
 
 /** Which of the four tabs the screen is on. */
@@ -466,6 +477,10 @@ function AutomationLine({
  *
  * **With every project picked, it asks which project first** (`AMB-D-992`): an automation is its
  * project's, and the pulldown does not say which. The press stays down until one is picked.
+ *
+ * **"Import" stands beside it** and lands the same way, on what the file was taken in as. With a
+ * project picked, the press goes straight to the file picker; with none, it asks which project first.
+ * A file that is not taken in leaves its reason under the head.
  */
 function AutomationNew({
   projectId,
@@ -479,7 +494,7 @@ function AutomationNew({
   /** Open the build screen on what was just made, in the project it was made in. */
   onMade: (id: number, project: number) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<"new" | "import" | null>(null);
   const [name, setName] = useState("");
   // Where it is made, where the pulldown does not say: nothing picked until the reader picks.
   const [into, setInto] = useState("");
@@ -487,38 +502,111 @@ function AutomationNew({
   // automation out of one name.
   const [making, setMaking] = useState(false);
   const project = projectId ?? (into === "" ? null : Number(into));
+  const [refused, setRefused] = useState<string | null>(null);
+
+  const close = () => {
+    setOpen(null);
+    setName("");
+    setInto("");
+    setRefused(null);
+  };
 
   async function make() {
     if (project === null || making || name.trim() === "") return;
     setMaking(true);
     try {
       const id = await addAutomation(project, name.trim());
-      setOpen(false);
-      setName("");
-      setInto("");
+      close();
       if (id !== null) onMade(id, project);
     } finally {
       setMaking(false);
     }
   }
 
-  if (!open && first) {
+  async function take(dest: number) {
+    if (making) return;
+    const [src] = await pickFiles({ name: "JSON", extensions: ["json"] });
+    if (src === undefined) return;
+    setMaking(true);
+    setRefused(null);
+    try {
+      const id = await importAutomation(dest, src);
+      close();
+      if (id !== null) onMade(id, dest);
+    } catch (e) {
+      setRefused(errText(e));
+    } finally {
+      setMaking(false);
+    }
+  }
+
+  // With a project picked the file picker opens at once; with none, the form asks which project.
+  const importPress = (
+    <button
+      type="button"
+      className="btn"
+      disabled={making}
+      onClick={() => (projectId === null ? setOpen("import") : void take(projectId))}
+    >
+      {t("auto.import")}
+    </button>
+  );
+  const refusal = refused !== null && <div className="autolist__refused">{refused}</div>;
+
+  if (open === null && first) {
     return (
-      <div className="autolist__first">
-        <button type="button" className="btn btn--primary" onClick={() => setOpen(true)}>
-          <Icon name="plus" /> {t("auto.newFirst")}
-        </button>
-      </div>
+      <>
+        <div className="autolist__first">
+          <button type="button" className="btn btn--primary" onClick={() => setOpen("new")}>
+            <Icon name="plus" /> {t("auto.newFirst")}
+          </button>
+          {importPress}
+        </div>
+        {refusal}
+      </>
     );
   }
 
-  if (!open) {
+  if (open === null) {
     return (
-      <div className="autolist__head">
-        <button type="button" className="btn" onClick={() => setOpen(true)}>
-          <Icon name="plus" /> {t("auto.new")}
-        </button>
-      </div>
+      <>
+        <div className="autolist__head">
+          <button type="button" className="btn" onClick={() => setOpen("new")}>
+            <Icon name="plus" /> {t("auto.new")}
+          </button>
+          {importPress}
+        </div>
+        {refusal}
+      </>
+    );
+  }
+
+  if (open === "import") {
+    return (
+      <>
+        <div className="autolist__head">
+          <div className="autolist__new">
+            <select aria-label={t("auto.import.which")} value={into} onChange={(e) => setInto(e.target.value)}>
+              <option value="">{t("auto.import.which")}</option>
+              {dataAdapter.listProjects().map((p) => (
+                <option key={p.id} value={String(p.id)}>{p.name}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={making || project === null}
+              onClick={() => { if (project !== null) void take(project); }}
+            >
+              {t("auto.import.pick")}
+            </button>
+            <button type="button" className="btn" onClick={close}>
+              {t("auto.new.cancel")}
+            </button>
+          </div>
+        </div>
+        {refusal}
+      </>
     );
   }
 
@@ -554,11 +642,7 @@ function AutomationNew({
         <button
           type="button"
           className="btn"
-          onClick={() => {
-            setOpen(false);
-            setName("");
-            setInto("");
-          }}
+          onClick={close}
         >
           {t("auto.new.cancel")}
         </button>

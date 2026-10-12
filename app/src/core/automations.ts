@@ -111,6 +111,20 @@ export async function addAutomation(projectId: number, name: string): Promise<nu
 }
 
 /**
+ * **Take an automation in from the file at `src`, as a new one** in this project, and answer with its
+ * id so the screen can open the build screen on it.
+ *
+ * Nothing in the file is matched against what is already here: the automation and the actions it
+ * places are all made anew, the library's in the library and the project's in this project
+ * (`amenbo_core::ops::automation_import`). `null` outside Tauri, where there is no file to read.
+ */
+export async function importAutomation(projectId: number, src: string): Promise<number | null> {
+  if (!inTauri()) return null;
+  const ack = await forAck("automation_import", { projectId, src });
+  return ack.automations[0] ?? null;
+}
+
+/**
  * **Rename an automation, rewrite its notes, put it out of the way, or set how many of its runs may
  * be going at once.** Only what is passed is written.
  *

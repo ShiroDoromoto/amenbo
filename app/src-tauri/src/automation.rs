@@ -149,6 +149,22 @@ pub fn automation_add(project_id: i64, name: String) -> Result<WriteAck, CmdErro
     Ok(WriteAck::new(&["automations"]).automation(made.id))
 }
 
+/// **Take an automation in from a file, as a new one** in `project_id`
+/// ([`amenbo_core::ops::automation_import::import`]) — the file the terminal's `automation export` and
+/// the build screen's "Export" write. Nothing in it is matched against what is already here: the
+/// automation and every action it places are made anew, the device's library actions in the library
+/// and the project's in `project_id`. `src` comes through the OS file picker.
+///
+/// The ack names the new automation, as [`automation_add`]'s does, so the list opens the build screen
+/// on it; the actions are named too, since the ones the file carries are made anew.
+#[tauri::command]
+pub fn automation_import(project_id: i64, src: String) -> Result<WriteAck, CmdError> {
+    let text = std::fs::read_to_string(&src).map_err(|e| CmdError::from(format!("cannot read '{src}': {e}")))?;
+    let file = amenbo_core::ops::automation_import::parse(&text)?;
+    let made = with_store_mut(|store| Ok(store.automation_import(project_id, &file)?))?;
+    Ok(WriteAck::new(&["automations", "automationActions"]).automation(made.id))
+}
+
 /// **Rename an automation, rewrite its notes, put it out of the way, or set how many of its runs may
 /// be going at once.** Only what is `Some` is written.
 ///

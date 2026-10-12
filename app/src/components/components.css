@@ -2184,7 +2184,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The list of definitions: one bordered stack of rows, each the press that opens one. */
 .autolist__head { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-2); }
 /* A project with none: the press that makes the first one, alone in the middle of the tab. */
-.autolist__first { display: flex; justify-content: center; padding: var(--s-6) var(--s-3); }
+.autolist__first { display: flex; justify-content: center; gap: var(--s-2); padding: var(--s-6) var(--s-3); }
 .autolist__new {
   display: flex; align-items: flex-end; flex-wrap: wrap; gap: var(--s-2); flex: 1 1 auto;
   padding: var(--s-2); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);

@@ -44,7 +44,7 @@ use crate::error::CmdError;
 /// store thread, in the order they arrive.
 pub const ON_WORKER: &[&str] = &[
     "snapshot", "automation_steps_standing", "automation_page", "automation_page_everywhere",
-    "automation_add", "automation_edit",
+    "automation_add", "automation_import", "automation_edit",
     "automation_entry_replace", "automation_remove", "automation_action_page",
     "automation_action_page_everywhere", "automation_action_add",
     "automation_action_edit", "automation_action_set_scope", "automation_action_remove",

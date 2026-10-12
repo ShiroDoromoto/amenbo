@@ -1520,6 +1520,26 @@ impl Picture {
         })
     }
 
+    /// The answers written for one placement's settings.
+    pub(crate) fn placement_cfgs(&self, placement_id: i64) -> impl Iterator<Item = &AutomationCfg> {
+        self.cfgs.iter().filter(move |c| c.owner_id == placement_id)
+    }
+
+    /// Who carries out each of one placement's steps.
+    pub(crate) fn placement_steps_of(&self, placement_id: i64) -> impl Iterator<Item = &AutomationPlacementStep> {
+        self.placement_steps.iter().filter(move |c| c.placement_id == placement_id)
+    }
+
+    /// The edges drawn on the automation.
+    pub(crate) fn edges(&self) -> &[AutomationEdge] {
+        &self.edges
+    }
+
+    /// The wires drawn on the automation.
+    pub(crate) fn wires(&self) -> &[AutomationWire] {
+        &self.wires
+    }
+
     /// One of its placements.
     pub(crate) fn placement(&self, id: i64) -> Option<&AutomationPlacement> {
         self.placements.iter().find(|p| p.id == id)

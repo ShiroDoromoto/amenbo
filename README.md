@@ -412,6 +412,7 @@ amenbo automation list                                 # what this project has, 
 amenbo automation show 3                               # one whole definition, every spot resolved
 amenbo automation show 3 --saved                       # ...as it was saved last, which is what a launch uses
 amenbo automation export 3 --out review.json           # write the newest saved version out as one file, with the actions it places, to take into another project
+amenbo automation import review.json                   # take that file in as a new automation with new actions; save it once looked over
 amenbo automation action-list                          # the library this project reaches
 amenbo automation action-show 7                        # one action, and the picture inside it
 amenbo automation action-show 7 --saved                # ...as it was saved last, which is what a placement put down now stands on

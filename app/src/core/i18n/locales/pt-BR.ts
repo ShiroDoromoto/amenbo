@@ -1326,6 +1326,7 @@ export const ptBR: Translation = {
     "auto.saved.writeFailed": "Não gravado: {reason}",
     "auto.saved.save": "Salvar",
     "auto.saved.discard": "Descartar alterações",
+    "auto.saved.export": "Exportar",
     "auto.saved.discardConfirm": "Descartar as alterações não salvas e voltar à versão {version}? Isso não pode ser desfeito.",
     "auto.saved.blocked": "Não é possível salvar:",
     "auto.act.about": "Esta ação",

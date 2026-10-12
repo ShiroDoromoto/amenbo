@@ -316,6 +316,16 @@ export async function discardAutomation(id: number): Promise<void> {
 }
 
 /**
+ * **Write the automation out as one file at `dest`** — its newest saved version with the actions it
+ * places, not what is being written on it. Core refuses it for an automation nobody has saved. `dest`
+ * comes through the OS save dialog, which is where overwrite confirmation happens.
+ */
+export async function exportAutomation(id: number, dest: string): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_export", { id, dest });
+}
+
+/**
  * **Save what is inside the action as its next version.** What the action build screen writes goes to
  * its draft, and this is what makes it the version an automation placing it can move to. Core refuses
  * it with the reasons the detail lists (`saveBlocks`). The first save of an action made on the spot

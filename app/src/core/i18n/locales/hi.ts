@@ -1313,6 +1313,7 @@ export const hi: Translation = {
     "auto.saved.writeFailed": "नहीं लिखा गया: {reason}",
     "auto.saved.save": "सहेजें",
     "auto.saved.discard": "बदलाव छोड़ें",
+    "auto.saved.export": "निर्यात करें",
     "auto.saved.discardConfirm": "बिना सहेजे बदलाव छोड़कर संस्करण {version} पर लौटें? इसे पूर्ववत नहीं किया जा सकता।",
     "auto.saved.blocked": "सहेजा नहीं जा सकता:",
     "auto.act.about": "यह ऐक्शन",

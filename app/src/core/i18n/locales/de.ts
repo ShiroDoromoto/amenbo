@@ -1317,6 +1317,7 @@ export const de: Translation = {
     "auto.saved.writeFailed": "Nicht geschrieben: {reason}",
     "auto.saved.save": "Speichern",
     "auto.saved.discard": "Änderungen verwerfen",
+    "auto.saved.export": "Exportieren",
     "auto.saved.discardConfirm": "Die ungespeicherten Änderungen verwerfen und zu Version {version} zurückkehren? Das lässt sich nicht rückgängig machen.",
     "auto.saved.blocked": "Speichern nicht möglich:",
     "auto.act.about": "Diese Aktion",

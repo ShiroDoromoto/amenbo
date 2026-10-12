@@ -1314,6 +1314,7 @@ export const vi: Translation = {
     "auto.saved.writeFailed": "Không ghi được: {reason}",
     "auto.saved.save": "Lưu",
     "auto.saved.discard": "Bỏ thay đổi",
+    "auto.saved.export": "Xuất",
     "auto.saved.discardConfirm": "Bỏ các thay đổi chưa lưu và quay về phiên bản {version}? Không thể hoàn tác.",
     "auto.saved.blocked": "Không thể lưu:",
     "auto.act.about": "Hành động này",

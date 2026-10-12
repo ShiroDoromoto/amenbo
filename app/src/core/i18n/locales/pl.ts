@@ -1330,6 +1330,7 @@ export const pl: Translation = {
     "auto.saved.writeFailed": "Nie zapisano zmiany: {reason}",
     "auto.saved.save": "Zapisz",
     "auto.saved.discard": "Odrzuć zmiany",
+    "auto.saved.export": "Eksportuj",
     "auto.saved.discardConfirm": "Odrzucić niezapisane zmiany i wrócić do wersji {version}? Tego nie można cofnąć.",
     "auto.saved.blocked": "Nie można zapisać:",
     "auto.act.about": "Ta akcja",

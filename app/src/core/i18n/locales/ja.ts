@@ -1319,6 +1319,7 @@ export const ja: Translation = {
     "auto.saved.writeFailed": "書き込めませんでした：{reason}",
     "auto.saved.save": "保存する",
     "auto.saved.discard": "変更を捨てる",
+    "auto.saved.export": "書き出す",
     "auto.saved.discardConfirm": "保存していない変更を捨てて、バージョン {version} に戻しますか？ 元に戻せません。",
     "auto.saved.blocked": "保存できない理由：",
     "auto.act.about": "このアクション",

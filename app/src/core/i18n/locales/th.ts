@@ -1314,6 +1314,7 @@ export const th: Translation = {
     "auto.saved.writeFailed": "เขียนไม่สำเร็จ: {reason}",
     "auto.saved.save": "บันทึก",
     "auto.saved.discard": "ทิ้งการเปลี่ยนแปลง",
+    "auto.saved.export": "ส่งออก",
     "auto.saved.discardConfirm": "ทิ้งการเปลี่ยนแปลงที่ยังไม่ได้บันทึกและกลับไปที่เวอร์ชัน {version} หรือไม่? ย้อนกลับไม่ได้",
     "auto.saved.blocked": "บันทึกไม่ได้เพราะ:",
     "auto.act.about": "แอ็กชันนี้",

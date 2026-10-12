@@ -1310,6 +1310,7 @@ export const ko: Translation = {
     "auto.saved.writeFailed": "기록하지 못했습니다: {reason}",
     "auto.saved.save": "저장",
     "auto.saved.discard": "변경 사항 버리기",
+    "auto.saved.export": "내보내기",
     "auto.saved.discardConfirm": "저장하지 않은 변경 사항을 버리고 버전 {version}(으)로 되돌릴까요? 되돌릴 수 없습니다.",
     "auto.saved.blocked": "저장할 수 없는 이유:",
     "auto.act.about": "이 액션",

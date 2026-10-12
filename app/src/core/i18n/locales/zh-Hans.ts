@@ -1315,6 +1315,7 @@ export const zhHans: Translation = {
     "auto.saved.writeFailed": "未能写入：{reason}",
     "auto.saved.save": "保存",
     "auto.saved.discard": "放弃更改",
+    "auto.saved.export": "导出",
     "auto.saved.discardConfirm": "放弃未保存的更改并回到版本 {version}？此操作无法撤销。",
     "auto.saved.blocked": "无法保存：",
     "auto.act.about": "这个动作",

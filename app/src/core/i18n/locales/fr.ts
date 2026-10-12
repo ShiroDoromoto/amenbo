@@ -1325,6 +1325,7 @@ export const fr: Translation = {
     "auto.saved.writeFailed": "Non écrit : {reason}",
     "auto.saved.save": "Enregistrer",
     "auto.saved.discard": "Abandonner les modifications",
+    "auto.saved.export": "Exporter",
     "auto.saved.discardConfirm": "Abandonner les modifications non enregistrées et revenir à la version {version} ? Cette action est irréversible.",
     "auto.saved.blocked": "Impossible d’enregistrer :",
     "auto.act.about": "Cette action",

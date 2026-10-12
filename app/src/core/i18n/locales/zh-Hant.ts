@@ -1315,6 +1315,7 @@ export const zhHant: Translation = {
     "auto.saved.writeFailed": "未能寫入：{reason}",
     "auto.saved.save": "儲存",
     "auto.saved.discard": "捨棄變更",
+    "auto.saved.export": "匯出",
     "auto.saved.discardConfirm": "捨棄未儲存的變更並回到版本 {version}？此操作無法復原。",
     "auto.saved.blocked": "無法儲存：",
     "auto.act.about": "這個動作",

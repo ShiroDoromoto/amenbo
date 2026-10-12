@@ -1325,6 +1325,7 @@ export const it: Translation = {
     "auto.saved.writeFailed": "Non scritto: {reason}",
     "auto.saved.save": "Salva",
     "auto.saved.discard": "Scarta modifiche",
+    "auto.saved.export": "Esporta",
     "auto.saved.discardConfirm": "Scartare le modifiche non salvate e tornare alla versione {version}? L’operazione non è reversibile.",
     "auto.saved.blocked": "Impossibile salvare:",
     "auto.act.about": "Questa azione",

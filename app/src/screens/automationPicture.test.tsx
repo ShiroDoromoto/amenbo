@@ -66,6 +66,24 @@ async function render(props: Parameters<typeof AutomationPicture>[0]) {
   });
 }
 
+/** Lays a run's picture out as a browser would, which jsdom does not: its frame 400 by 300 at
+ *  (200, 100), and every box in it 80 by 40 at (900, 500), out of the frame's sight. Gives back what
+ *  puts jsdom's own back. */
+function layOutSight(): () => void {
+  const wasRect = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    const [left, top, width, height] = this.classList.contains("autopic") ? [200, 100, 400, 300] : [900, 500, 80, 40];
+    return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top } as DOMRect;
+  };
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 400 });
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 300 });
+  return () => {
+    Element.prototype.getBoundingClientRect = wasRect;
+    Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+    Reflect.deleteProperty(HTMLElement.prototype, "clientHeight");
+  };
+}
+
 const nodes = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__node")];
 const plusses = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__plus")];
 
@@ -656,23 +674,36 @@ describe("the picture of a run", () => {
     expect(nth("edge-2")).toBeGreaterThan(nth("edge-1"));
   });
 
-  it("brings the box the run reaches to the middle, though it is in sight already", async () => {
+  it("brings the box the run reaches to the middle of the picture, though it is in sight already", async () => {
     const wasObserver = globalThis.IntersectionObserver;
     const wasScroll = Element.prototype.scrollIntoView;
-    const scrolled = vi.fn();
+    const roots: (Element | Document | null | undefined)[] = [];
     globalThis.IntersectionObserver = class {
+      constructor(_: IntersectionObserverCallback, how?: IntersectionObserverInit) {
+        roots.push(how?.root);
+      }
       observe() {}
       unobserve() {}
       disconnect() {}
     } as unknown as typeof IntersectionObserver;
+    const scrolled = vi.fn();
     Element.prototype.scrollIntoView = scrolled;
+    const putBack = layOutSight();
     try {
       await render({ graph: two(), selectedBoxId: 1, trail: { ...trail, at: 1 } });
-      expect(scrolled).toHaveBeenLastCalledWith({ block: "center", inline: "center" });
-      scrolled.mockClear();
+      const frame = container.querySelector<HTMLElement>(".autopic")!;
+      // The box's middle (940, 520) onto the frame's (400, 250).
+      expect([frame.scrollLeft, frame.scrollTop]).toEqual([540, 270]);
+      frame.scrollLeft = 0;
+      frame.scrollTop = 0;
       await render({ graph: two(), selectedBoxId: 2, trail });
-      expect(scrolled).toHaveBeenCalledTimes(1);
+      expect([frame.scrollLeft, frame.scrollTop]).toEqual([540, 270]);
+      // Only the frame moves, and only its sight is looked at: the workspace around the pane stays
+      // on the page the reader is on.
+      expect(scrolled).not.toHaveBeenCalled();
+      expect(roots).toEqual([frame, frame]);
     } finally {
+      putBack();
       globalThis.IntersectionObserver = wasObserver;
       Element.prototype.scrollIntoView = wasScroll;
     }
@@ -753,23 +784,26 @@ describe("the box a run is under way in", () => {
     expect(grown()!.querySelector(".autopic__grownat")).toBeNull();
   });
 
-  it("brings the step under way to the middle", async () => {
+  it("brings the step under way to the middle of the picture", async () => {
     const wasObserver = globalThis.IntersectionObserver;
     const wasScroll = Element.prototype.scrollIntoView;
-    const scrolled: Element[] = [];
     globalThis.IntersectionObserver = class {
       observe() {}
       unobserve() {}
       disconnect() {}
     } as unknown as typeof IntersectionObserver;
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled.push(this);
-    };
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
+    const putBack = layOutSight();
     try {
       await render({ graph: two(), selectedBoxId: 2, trail, inside });
-      expect(scrolled.length).toBeGreaterThan(0);
-      for (const one of scrolled) expect(one).toBe(steps()[1]);
+      // The picture's frame, not the one drawn inside the grown box, is what scrolls.
+      const frames = container.querySelectorAll<HTMLElement>(".autopic");
+      expect(frames).toHaveLength(1);
+      expect([frames[0]!.scrollLeft, frames[0]!.scrollTop]).toEqual([540, 270]);
+      expect(scrolled).not.toHaveBeenCalled();
     } finally {
+      putBack();
       globalThis.IntersectionObserver = wasObserver;
       Element.prototype.scrollIntoView = wasScroll;
     }

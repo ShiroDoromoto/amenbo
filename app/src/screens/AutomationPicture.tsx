@@ -188,6 +188,14 @@ function stepAt(inner: { nodes: readonly { boxId: number; no?: number }[] }, ste
   return stepId === undefined ? undefined : inner.nodes.find((node) => node.boxId === stepId)?.no;
 }
 
+/** Scrolls the picture's frame, and nothing around it, to stand the box at its middle. */
+function centreIn(frame: HTMLElement, box: HTMLElement) {
+  const sight = frame.getBoundingClientRect();
+  const at = box.getBoundingClientRect();
+  frame.scrollTop += at.top + at.height / 2 - (sight.top + frame.clientTop + frame.clientHeight / 2);
+  frame.scrollLeft += at.left + at.width / 2 - (sight.left + frame.clientLeft + frame.clientWidth / 2);
+}
+
 export function AutomationPicture({
   graph,
   insertLabel,
@@ -302,9 +310,15 @@ export function AutomationPicture({
   useEffect(() => {
     const box = pickedRef.current;
     if (!drawn || box === null || typeof IntersectionObserver === "undefined") return;
-    const inline = centred ? "center" : "nearest";
+    // A run's picture stands in a pane of the workspace, which scrolls too: brought into sight
+    // through it, the box would carry the reader off to that pane's page each time the run moves on.
+    // The move and the look there are the picture's own frame's. The build screen's picture grows
+    // as tall as it draws, and the screen scrolls it down, so its box is brought into sight on it.
+    const frame = centred ? box.closest<HTMLElement>(".autopic") : null;
+    const bring = () =>
+      frame === null ? box.scrollIntoView?.({ block: "center", inline: "nearest" }) : centreIn(frame, box);
     // A run's box goes to the middle as it is reached, whether or not it was in sight already.
-    if (centred) box.scrollIntoView?.({ block: "center", inline });
+    if (centred) bring();
     const reader = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
     const stop = () => {
       watch.disconnect();
@@ -315,10 +329,8 @@ export function AutomationPicture({
     const watch = new IntersectionObserver(([seen]) => {
       // A box with no size is on a face not shown yet and has no place to be brought to.
       const laidOut = seen !== undefined && (seen.boundingClientRect?.height ?? 1) > 0;
-      if (laidOut && seen.intersectionRatio < 1) {
-        box.scrollIntoView?.({ block: "center", inline });
-      }
-    }, { threshold: 1 });
+      if (laidOut && seen.intersectionRatio < 1) bring();
+    }, { root: frame, threshold: 1 });
     const askAgain = () => {
       watch.unobserve(box);
       watch.observe(box);

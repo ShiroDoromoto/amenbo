@@ -23,8 +23,10 @@
 //!    was held. The path is the exception: where one watch covers the tree, the kernel reports the
 //!    build output the walk prunes away — 100% of what a 47-second build fired (`AMB-T-3752`) — and
 //!    pruning it is now something this does on arrival rather than by declining to watch it
-//!    ([`crate::folder_walk::pruned`]). ⚠ That has to stay cheap: 50 µs an event took Windows from 0.1%
-//!    of events missed to 69% (`AMB-T-3753`).
+//!    ([`crate::folder_walk::pruned`]). Only what is *inside* the machine's folders is dropped: the
+//!    tree draws `node_modules` itself, so its being made or removed is let through (`AMB-D-1039`).
+//!    ⚠ That has to stay cheap: 50 µs an event took Windows from 0.1% of events missed to 69%
+//!    (`AMB-T-3753`).
 //! 3. **A kernel that dropped events says so, and that is not a burst to settle.** FSEvents'
 //!    `MustScanSubDirs` and inotify's `Q_OVERFLOW` do not mean "something moved" but "what moved is
 //!    not known", so they are not held back for the quiet that follows: nothing arriving after can
@@ -522,6 +524,13 @@ mod tests {
             .add_path(root.join(quiet))));
         }
         assert!(rx.try_recv().is_err(), "the machine's folders are not the reader's");
+
+        // The folder itself is a row in the tree: its coming and going is something to see.
+        wake(Ok(notify::Event::new(notify::EventKind::Remove(
+            notify::event::RemoveKind::Folder,
+        ))
+        .add_path(root.join("node_modules"))));
+        assert!(matches!(rx.try_recv(), Ok(Wake::Moved)));
 
         wake(Ok(notify::Event::new(notify::EventKind::Modify(
             notify::event::ModifyKind::Any,

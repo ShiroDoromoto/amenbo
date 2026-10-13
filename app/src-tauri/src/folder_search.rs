@@ -124,9 +124,10 @@ impl FolderSearches {
 /// the reader has already moved on from can be dropped rather than drawn.
 ///
 /// `ignored` is the switch `AMB-D-910` puts on the screen. Left off, the folder's own `.gitignore`
-/// is read and what it calls noise is not searched; turned on, the walk is the one the tree is drawn
-/// from. The difference is not small — 24,042 files against 177,752, and 148 MB against 1,652 MB —
-/// which is why the switch exists rather than one walk being picked for both.
+/// is read and what it calls noise is not searched; turned on, it is not, though the machine's own
+/// folders — `node_modules`, `target` — are still never walked into (`AMB-D-1039`). The difference
+/// is not small — 24,042 files against 177,752, and 148 MB against 1,652 MB — which is why
+/// the switch exists rather than one walk being picked for both.
 ///
 /// `regex` says the query is a pattern rather than a word. Either way it is compiled to one, because
 /// a literal compiles to a pattern whose whole body is a literal and the engine searches that with
@@ -259,7 +260,7 @@ fn hunt(
     let batch: Mutex<(Vec<FolderSearchFileDto>, Instant)> = Mutex::new((Vec::new(), Instant::now()));
 
     let mut walk = if ignored {
-        crate::folder_walk::shown(root)
+        crate::folder_walk::combed(root)
     } else {
         crate::folder_walk::walker(root)
     };
@@ -491,8 +492,8 @@ mod tests {
     }
 
     /// The switch `AMB-D-910` puts on the screen is the whole difference between the two walks: off,
-    /// the folder's own ignore file is read; on, the walk is the one the tree is drawn from. The
-    /// floor is under both, so what a build wrote is never searched either way.
+    /// the folder's own ignore file is read; on, it is not. The floor is under both, so the machine's
+    /// own folders are never searched either way (`AMB-D-1039`).
     #[test]
     fn the_ignore_file_is_read_unless_the_reader_says_not_to() {
         let dir = folder();

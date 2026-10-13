@@ -16,7 +16,7 @@ use std::sync::Mutex;
 use crate::dto::{FolderEntryDto, FolderNameDto, FolderNamesDto};
 use crate::error::CmdError;
 use crate::folder_fence::{gone, plain, root_of, rooted, under};
-use crate::folder_walk::{level, shown, walker};
+use crate::folder_walk::{combed, level, shown, walker};
 
 /// The front of the name a save writes its bytes into before it puts them in place
 /// (`crate::folder_save`).
@@ -119,7 +119,7 @@ pub async fn folder_names(
         if wanted.is_empty() {
             return Ok(FolderNamesDto { rows: Vec::new(), capped: false });
         }
-        let (mut found, capped) = matches(&mut shown(&dir), &dir, wanted);
+        let (mut found, capped) = matches(&mut combed(&dir), &dir, wanted);
         let (kept, _) = matches(&mut walker(&dir), &dir, wanted);
         let kept: HashSet<Vec<String>> = kept.into_iter().map(|(path, _)| path).collect();
 
@@ -257,7 +257,7 @@ mod tests {
     }
 
     fn found(root: &Path, wanted: &str) -> Vec<String> {
-        let (rows, _) = matches(&mut shown(root), root, wanted);
+        let (rows, _) = matches(&mut combed(root), root, wanted);
         let mut names: Vec<String> = rows.into_iter().map(|(path, _)| path.join("/")).collect();
         names.sort();
         names
@@ -265,7 +265,7 @@ mod tests {
 
     /// A reader filtering a tree is doing it instead of opening folders to look, so the filter
     /// looks past what is open — all the way down, and into what the repository ignores, which the
-    /// tree draws too (`AMB-D-786`). What a build wrote is off the tree either way.
+    /// tree draws too (`AMB-D-786`). The machine's folders are never walked into (`AMB-D-1039`).
     #[test]
     fn it_finds_a_name_however_deep_it_is() {
         let dir = folder();

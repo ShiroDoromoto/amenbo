@@ -7,7 +7,7 @@
 import { act } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  aFile, button, click, container, drawOpen, hoisted, last, openFile, pressable, ROOT, settle,
+  aFile, button, click, container, draw, drawOpen, hoisted, last, openFile, pressable, ROOT, settle,
 } from "./filesPanelKit";
 import { t, tf } from "../core/i18n";
 
@@ -55,14 +55,42 @@ describe("the file face", () => {
       expect(onTop()).toBe("a.md");
     });
 
-    it("says nothing is open once the last of them has gone", async () => {
+    /** The draft page is drawn and its tab is the one marked, with no line saying nothing is open. */
+    const onMemo = () => {
+      expect(container.querySelector(".workspace__column--side .memo__field")).not.toBeNull();
+      expect(container.querySelector(".workspace__column--side .files__none")).toBeNull();
+      expect(container.querySelector(".files__tab--on .files__tabname")?.textContent)
+        .toBe(t("files.memo"));
+    };
+
+    it("comes down on the draft page once the last of them has gone", async () => {
       await twoOpen();
       await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[1]);
       await settle();
       await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[0]);
       await settle();
-      expect(container.querySelector(".workspace__column--side .files__none")?.textContent)
-        .toBe(t("files.nothingOpen"));
+      expect(tabs()).toEqual([t("files.memo")]);
+      onMemo();
+    });
+
+    // A project with no file open is the same column with nothing to draw on the files face, which
+    // is what the face hands over after moving to one (`../shell/WorkspaceFace`).
+    it("draws the draft page for a project with nothing open on the files face", async () => {
+      await draw({ tab: "files" });
+      onMemo();
+    });
+
+    // Only what is drawn moves: the next file opened comes up on the files face, not under the page.
+    it("draws the next file opened on the files face", async () => {
+      await twoOpen();
+      await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[1]);
+      await settle();
+      await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[0]);
+      await settle();
+      await openFile(button("a.md"));
+      await settle();
+      expect(onTop()).toBe("a.md");
+      expect(container.querySelector(".workspace__column--side .memo__field")).toBeNull();
     });
 
     /** What a file that is not on top is holding (`AMB-D-835`).

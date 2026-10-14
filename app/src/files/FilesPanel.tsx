@@ -4,9 +4,9 @@
 // **It draws what is read and never what is found.** Finding a file is the tree's, and the tree is
 // in the rail on the other side of the panes (`AMB-D-835`); what stands here is the file, the draft
 // page, the history of the folder the window is on, the patches of the rows picked out in the rail's
-// git half, or the line saying nothing is open. The tree used to share this column, and a file being
-// read was drawn over it — which is what made picking a second row out impossible once the first was
-// open.
+// git half, or — with no project — the line saying nothing is open. The tree used to share this
+// column, and a file being read was drawn over it — which is what made picking a second row out
+// impossible once the first was open.
 //
 // **The file it draws belongs to the project.** It is opened from a folder the project is bound to,
 // so switching panes does not move it — what changed in the repository is the same question
@@ -75,10 +75,10 @@ export function openKey(one: OpenFile): string {
 export type Typed = { text: string; edited: boolean; seen: string | undefined };
 
 export function FilesPanel({
-  projectId, tab, onTab, open, reading, typed, onTyped, onPick, onCloseTab, onBack, onGone, onClose,
-  wide, onWide, gitRoot = null, gitPrefix = "", history = false, historyOnly = null, onHistoryOnly,
-  diff = false, diffPick = null, search = false, searchRoot = null, onOpenAt, goTo = null, onWent,
-  onFileHistory, onOpenLedger, onHandOver,
+  projectId, tab: asked, onTab, open, reading, typed, onTyped, onPick, onCloseTab, onBack, onGone,
+  onClose, wide, onWide, gitRoot = null, gitPrefix = "", history = false, historyOnly = null,
+  onHistoryOnly, diff = false, diffPick = null, search = false, searchRoot = null, onOpenAt,
+  goTo = null, onWent, onFileHistory, onOpenLedger, onHandOver,
 }: {
   /** The project the file belongs to; nothing is drawn without one. */
   projectId: number | null;
@@ -90,6 +90,9 @@ export function FilesPanel({
    * the right one; the row that stayed is the one that can also say which files are open, and that
    * draws the draft page as a tab beside them. What the top row kept is opening the column and
    * closing it (`../shell/WorkspaceFace`).
+   *
+   * This is the half asked for, not always the one drawn: the files half with no file to draw is
+   * drawn as the draft page.
    */
   tab: SideTab;
   /** Ask for another face — the tabs, which are the one door to each of them. */
@@ -175,6 +178,12 @@ export function FilesPanel({
   /** Told once it has been taken there, so the face can put the ask down. */
   onWent?: () => void;
 }) {
+  // The files face with no file left to draw is the draft page: the last file closed, or a project
+  // with none open come to, lands on the tab beside them rather than on an empty page. Only what is
+  // drawn is moved — the face asked for stays where it was put, so the next file opened is drawn on
+  // the files face again.
+  const tab: SideTab = asked === "files" && reading === null ? "memo" : asked;
+
   // The bin, for the file on the screen. The tree in the rail holds one of its own for the rows
   // picked out there: what is shared is how a press behaves, not one question for the two of them
   // (`./trash`).
@@ -405,9 +414,9 @@ export function FilesPanel({
     );
   }
 
-  // Nothing opened yet. The column is where a file is read and no longer where one is found — the
-  // tree is in the rail (`AMB-D-835`) — so what stands here is the line saying where to press,
-  // rather than a list this column no longer holds.
+  // No project, so no draft page to fall back on: what stands here is the line saying nothing is
+  // open. The column is where a file is read and no longer where one is found — the tree is in the
+  // rail (`AMB-D-835`).
   if (projectId === null || reading === null) {
     return (
       <div className="files files--empty" tabIndex={-1} onKeyDown={onKey}>

@@ -4,7 +4,8 @@
 // The panel opens on the memo, and the reason is not which of the two is used more: the memo is
 // opened by a person who wants it, and nothing is lost by its being closed (`../talk/columns`).
 // After the first run the default has nothing to say — what is up is whichever half the person left
-// up, which is this device's own answer and is kept between runs.
+// up, which is this device's own answer and is kept between runs. With no file open, the files half
+// is drawn as the memo.
 //
 // **The top row does not choose a half.** It opens the column and closes it, and the half is the
 // column's own row of tabs (`../files/FilesPanel`), so what is pinned here is the answer being kept
@@ -91,10 +92,13 @@ describe("the half the file face opens on", () => {
     expect(sides()).toEqual([t("files.side")]);
   });
 
-  it("is whichever half was up last, so the default is only the first run's", async () => {
+  // With no file open the files half has nothing to draw, so the memo is what is up whichever half
+  // was kept (`../files/FilesPanel`) — and drawing it leaves the kept answer as it was.
+  it("is the memo while nothing is open, without rewriting the half that was up last", async () => {
     localStorage.setItem("amenbo.workspace.sideTab", "files");
     await mount();
-    expect(q(".memo__field")).toBeNull();
+    expect(q(".memo__field")).not.toBeNull();
+    expect(localStorage.getItem("amenbo.workspace.sideTab")).toBe("files");
   });
 
   it("is put away and brought back by the one control, on the half it was left on", async () => {

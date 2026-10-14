@@ -152,6 +152,16 @@ type Opened = {
  */
 const AT_FIRST: Opened = { treeOpen: true, open: [], cursor: null, picked: [], anchor: null };
 
+/**
+ * Which tree an `Opened` is about: the project and the folder together.
+ *
+ * **The folder alone is not enough.** Two projects can be bound to the same path, and a reader who
+ * opened it one way in each is asking for two trees.
+ */
+function openedKey(projectId: number | null, root: string): string {
+  return `${projectId ?? ""}\0${root}`;
+}
+
 /** The name being typed in one section, and the end of typing it. */
 type Naming = {
   /** The one being typed here, or nothing — a section is handed only its own. */
@@ -343,9 +353,10 @@ export function FolderTree({
     }, 100);
     return () => { alive = false; window.clearTimeout(soon); };
   }, [projectId, drawn?.path, filter]);
-  // How each bound folder's tree is opened, by the folder it is about — the folder is the key
-  // because only one of them is drawn at a time and a reader coming back to another one is asking
-  // for the tree they left (`Opened`).
+  // How each bound folder's tree is opened, by the project and the folder it is about
+  // (`openedKey`). Kept for every project the reader has been on, because only one folder is drawn
+  // at a time and a reader coming back to another one — in this project or another — is asking for
+  // the tree they left (`Opened`).
   const [opened, setOpened] = useState<Record<string, Opened>>({});
   const box = useRef<HTMLDivElement | null>(null);
   // The bin, and the question before it. The reading column holds one of its own for the file it is
@@ -361,36 +372,51 @@ export function FolderTree({
    *  reads it (`./restore`). */
   const dirty = (path: string[]) => isDirty(named, path);
 
-  // A folder nobody is bound to any more takes how it was opened with it. Unbinding one, or moving
-  // to another project, leaves a key here that names a folder nobody can reach — and it would be
-  // read again by whoever bound the same path back, as an answer about a tree they never opened.
-  // The recorded folders rather than the live ones decide: a folder that has gone is still on the
-  // picker and still says so, and a reader who left it open should find it that way when it comes
-  // back.
+  // A folder nobody is bound to any more takes how it was opened with it. Unbinding one leaves a key
+  // here that names a folder nobody can reach — and it would be read again by whoever bound the same
+  // path back, as an answer about a tree they never opened. The recorded folders rather than the
+  // live ones decide: a folder that has gone is still on the picker and still says so, and a reader
+  // who left it open should find it that way when it comes back.
+  //
+  // **Only this project's keys are measured against this project's folders.** Moving to another
+  // project unbinds nothing, and the trees left in the one before are what a reader coming back is
+  // asking for.
+  //
+  // **The list read for the project before is not this project's.** The first draw after a switch
+  // still holds it, and the host has not answered for the new one until `answered` says so; either
+  // way, measuring against it would throw away trees this project never lost.
   const recorded = sections.map((one) => one.path).join("\0");
+  const measured = useRef(projectId);
   useEffect(() => {
+    const switched = measured.current !== projectId;
+    measured.current = projectId;
+    if (switched || !folders.answered) return;
+    const here = openedKey(projectId, "");
     setOpened((was) => {
-      const kept = Object.entries(was).filter(([root]) => sections.some((one) => one.path === root));
+      const kept = Object.entries(was).filter(([key]) =>
+        !key.startsWith(here) || sections.some((one) => openedKey(projectId, one.path) === key));
       return kept.length === Object.keys(was).length ? was : Object.fromEntries(kept);
     });
     // Watched as `recorded`, the paths said as one word, so the same folders read again do nothing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recorded]);
+  }, [projectId, folders.answered, recorded]);
 
   /**
    * Pick rows out of one folder's tree, which puts down whatever was picked in another.
    *
    * **One selection for the rail, wherever it was made.** Only one folder is drawn at a time
    * (`AMB-D-905`), so what this guards is the walk away and back: rows left picked in a folder
-   * nobody is looking at would come back under a reader who has since picked others, and what is
-   * done with picked rows is done to one folder's paths.
+   * nobody is looking at — in this project or another — would come back under a reader who has
+   * since picked others, and what is done with picked rows is done to one folder's paths.
    */
   const onPicked = (root: string, picked: string[], anchor: string | null) =>
-    setOpened((was) => Object.fromEntries(sections.map((one) => {
-      const now = was[one.path] ?? AT_FIRST;
-      if (one.path === root) return [one.path, { ...now, picked, anchor }];
-      return [one.path, now.picked.length === 0 ? now : { ...now, picked: [], anchor: null }];
-    })));
+    setOpened((was) => {
+      const here = openedKey(projectId, root);
+      const next = Object.fromEntries(Object.entries(was).map(([key, now]) =>
+        [key, now.picked.length === 0 ? now : { ...now, picked: [], anchor: null }]));
+      next[here] = { ...(was[here] ?? AT_FIRST), picked, anchor };
+      return next;
+    });
 
   /**
    * The rows an act is about: the ones picked out, where the act was aimed at one of them — and the
@@ -407,7 +433,7 @@ export function FolderTree({
    * of them happen to be drawn.
    */
   const actOn = (root: string, path: string[]): string[][] =>
-    rowsAbout((opened[root] ?? AT_FIRST).picked, path);
+    rowsAbout((opened[openedKey(projectId, root)] ?? AT_FIRST).picked, path);
 
   // Files dragged in from the desktop. The tree hears about them from the host rather than from
   // the DOM, so the highlight under the pointer — and the scroll when the pointer hangs at an edge —
@@ -636,11 +662,11 @@ export function FolderTree({
         landing={landing}
         scroller={box}
         found={found}
-        opened={opened[drawn.path] ?? AT_FIRST}
-        onOpened={(change) => setOpened((was) => ({
-          ...was,
-          [drawn.path]: change(was[drawn.path] ?? AT_FIRST),
-        }))}
+        opened={opened[openedKey(projectId, drawn.path)] ?? AT_FIRST}
+        onOpened={(change) => setOpened((was) => {
+          const here = openedKey(projectId, drawn.path);
+          return { ...was, [here]: change(was[here] ?? AT_FIRST) };
+        })}
         edit={edit?.root === drawn.path ? edit : null}
         onEdit={setEdit}
         onRead={(path) => { setEdit(null); onRead({ root: drawn.path, path }); }}

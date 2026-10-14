@@ -113,6 +113,24 @@ describe("a project bound to several folders", () => {
     expect(pickedIn(container)).toEqual([]);
   });
 
+  it("keeps how a folder's tree was opened through a walk to another project and back", async () => {
+    both();
+    await draw();
+    const head = () => container.querySelector(".files__head--button");
+    await click(head());
+    expect(head()?.getAttribute("aria-expanded")).toBe("false");
+
+    // The same path bound to another project is another tree, and nobody has folded that one.
+    hoisted.bound = [{ path: OTHER, exists: true }];
+    await draw({ projectId: 2 });
+    expect(head()?.getAttribute("aria-expanded")).toBe("true");
+
+    // Coming back is asking for the tree as it was left.
+    both();
+    await draw({ projectId: 1 });
+    expect(head()?.getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("opens on a folder that is there, and keeps the one that has gone on the list", async () => {
     // `plugins` sorts first and is the one that went. Opening on it would say the project has
     // nothing while the folder beside it sits there — which is the reading the stacked rail was

@@ -555,15 +555,32 @@ function decode(base64: string): Uint8Array {
 }
 
 /**
- * Measure the pane and tell the terminal its size in characters, unless the pane is not on screen.
+ * The element a terminal is opened in: a box of its own inside the pane, with no padding or border.
+ *
+ * `FitAddon` counts rows and columns from the computed size of the element the terminal is opened
+ * in, and takes away only the padding of xterm's own element. Opened straight in the pane, whose
+ * padding and border are inside its border-box size, it counted nearly one row and a few columns more
+ * than are drawn, and the last row of `vi` or `less` was cut off. The pane keeps its padding and
+ * border; this is what is measured.
+ */
+function screenIn(host: HTMLElement): HTMLElement {
+  const screen = document.createElement("div");
+  screen.className = "workspace__screen";
+  host.append(screen);
+  return screen;
+}
+
+/**
+ * Measure the box the terminal is opened in (`screenIn`) and tell the terminal its size in
+ * characters, unless the pane is not on screen.
  *
  * A hidden pane measures zero, and fitting to zero is what would make the program inside reflow to
  * nothing while nobody was looking. Switching to the other face hides this one and leaves the
  * terminal running (`AMB-D-753`), so "no size" here means "not being shown", and the size it had is
  * the size to keep until it is shown again.
  */
-function refit(fit: FitAddon, host: HTMLElement): boolean {
-  if (host.clientWidth === 0 || host.clientHeight === 0) return false;
+function refit(fit: FitAddon, screen: HTMLElement): boolean {
+  if (screen.clientWidth === 0 || screen.clientHeight === 0) return false;
   fit.fit();
   return true;
 }
@@ -1114,9 +1131,10 @@ export async function mountTerminal(
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
-  term.open(host);
+  const screen = screenIn(host);
+  term.open(screen);
   holdSelectionOffscreen(term);
-  refit(fit, host);
+  refit(fit, screen);
 
   // The first way, and the one that works on any program's output: read the refs back out of what was
   // drawn. It covers what the escape cannot — an agent's own words, a git log, a grep — and the escape
@@ -1220,7 +1238,7 @@ export async function mountTerminal(
     else if (payload.session === session) take(payload);
   });
 
-  const { running, named, made } = await draw(term, fit, host, start);
+  const { running, named, made } = await draw(term, fit, screen, start);
   session = running.session;
   // Which agent is in the pane, for the copy rules above. It comes off the session and not off
   // `start` for the reason the folder below does: a pane that took up a running terminal is running
@@ -1363,7 +1381,7 @@ export async function mountTerminal(
   // for — what the program is told is where the pane ended up, never a size it passed through.
   let settling: ReturnType<typeof setTimeout> | null = null;
   const resize = new ResizeObserver(() => {
-    if (!refit(fit, host)) return;
+    if (!refit(fit, screen)) return;
     if (settling !== null) clearTimeout(settling);
     settling = setTimeout(() => {
       settling = null;
@@ -1371,7 +1389,7 @@ export async function mountTerminal(
     }, SETTLED_MS);
     on.sized?.(term.cols, term.rows);
   });
-  resize.observe(host);
+  resize.observe(screen);
   // Said once for the size the pane came up at. The observer above fires on changes, and a pane that
   // never changed size would otherwise leave the window with no answer at all.
   on.sized?.(term.cols, term.rows);
@@ -1390,6 +1408,7 @@ export async function mountTerminal(
     void unlistenSaid();
     void unlistenUnsent();
     term.dispose();
+    screen.remove();
   };
 }
 
@@ -1410,14 +1429,16 @@ export function mountTail(host: HTMLElement, tail: string): () => void {
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
-  term.open(host);
+  const screen = screenIn(host);
+  term.open(screen);
   holdSelectionOffscreen(term);
-  refit(fit, host);
+  refit(fit, screen);
   term.write(`\x1b[?25l${tail.replace(/\r?\n/g, "\r\n")}`);
-  const resize = new ResizeObserver(() => refit(fit, host));
-  resize.observe(host);
+  const resize = new ResizeObserver(() => refit(fit, screen));
+  resize.observe(screen);
   return () => {
     resize.disconnect();
     term.dispose();
+    screen.remove();
   };
 }

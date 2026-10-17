@@ -67,9 +67,9 @@ import { invoke } from "../core/ipc";
 import { chooseFolderFor, chooseWorkFolder, fetchBoundFolders } from "../core/mutations";
 import { mountTerminal, SHELL, type PaneEvents, type PaneStart } from "./terminal";
 
-/** The class the terminal's box is drawn with. xterm.js measures the element it was opened in, so
- *  this is the rule that decides how many columns and rows the program inside is told it has
- *  (`app/src/styles/global.css`). One name, because there is one face that draws a pane — the board
+/** The class the terminal's box is drawn with: its edge, ground and padding. The terminal is opened
+ *  in a box of its own inside it, which is what is measured (`./terminal`,
+ *  `app/src/styles/global.css`). One name, because there is one face that draws a pane — the board
  *  shows it and the split-out window shows the same one (`../shell/WorkspaceFace`). */
 const PANE_CLASS = "workspace__pane";
 

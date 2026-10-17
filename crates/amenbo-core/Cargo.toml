@@ -51,7 +51,7 @@ sha2 = "0.11"
 # amenbo's embedded catalog public key. Verify-only crate — the catalog private key lives solely in the
 # catalog CI, never in a shipped binary; every amenbo carries only the public key, which can check but
 # never sign. Same minisign format the updater already trusts.
-minisign-verify = "0.2"
+minisign-verify = "0.3"
 # The SQLite truth source: each field write UPSERTs straight into an indexed read-model table.
 # `bundled-sqlcipher-vendored-openssl` compiles SQLCipher with FTS5 enabled, vendoring OpenSSL so no
 # system crypto lib is required for cross-OS builds. Nothing keys a store — SQLCipher stays linked

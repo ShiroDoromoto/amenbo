@@ -917,9 +917,10 @@ pub fn document(bytes: &[u8]) -> Result<(Packing, String), Error> {
     let mut zip = open_pack(bytes)?;
     for at in 0..zip.len() {
         let entry = zip.by_index(at).map_err(unreadable_pack)?;
-        held_in_the_pack(entry.name())?;
+        let name = entry.name().map_err(unreadable_pack)?;
+        held_in_the_pack(&name)?;
         if entry.size() > PACK_FILE_MAX_BYTES {
-            return Err(too_heavy(entry.name(), entry.size(), PACK_FILE_MAX_BYTES));
+            return Err(too_heavy(&name, entry.size(), PACK_FILE_MAX_BYTES));
         }
     }
     let mut found = zip.by_name(PACK_DOCUMENT).map_err(|_| {
@@ -952,7 +953,7 @@ fn weigh(bytes: &[u8]) -> Result<u64, Error> {
     let mut sink = [0u8; 64 * 1024];
     for at in 0..zip.len() {
         let mut entry = zip.by_index(at).map_err(unreadable_pack)?;
-        let name = entry.name().to_string();
+        let name = entry.name().map_err(unreadable_pack)?.into_owned();
         held_in_the_pack(&name)?;
         let mut weighs = 0u64;
         loop {
@@ -1260,7 +1261,7 @@ pub fn carries(pack: &[u8]) -> Result<Vec<Carried>, Error> {
     let mut sink = [0u8; 64 * 1024];
     for at in 0..zip.len() {
         let mut entry = zip.by_index(at).map_err(unreadable_pack)?;
-        let file = entry.name().to_string();
+        let file = entry.name().map_err(unreadable_pack)?.into_owned();
         held_in_the_pack(&file)?;
         if file == PACK_DOCUMENT || file.ends_with('/') {
             continue;

@@ -18,9 +18,20 @@
 # exist. Drop these two lines when upstream bumps; you will be told to, rather than
 # having to remember: the weekly rot gate runs guards/check-audit-ignores.sh, which
 # fails as soon as an ignore here stops matching anything in either lockfile.
+#
+# The three zip advisories below reach only the Tauri host's lockfile, through
+# tauri-plugin-updater, which pins zip ^4 (2.14.0 and 3.0.0-alpha.3 still do) — our
+# own zip is on 9, where all three are fixed. All three are about
+# `ZipArchive::extract` honouring Unix permission bits and symlinks in an archive.
+# The updater calls it only on Windows, and only on a bundle whose minisign
+# signature has already been checked against the pubkey in tauri.conf.json, so the
+# archive it unpacks is one we signed — nobody else can hand it one.
 
 [advisories]
 ignore = [
   "RUSTSEC-2026-0194", # quick-xml: quadratic time on duplicate attribute names (DoS)
   "RUSTSEC-2026-0195", # quick-xml: unbounded namespace-declaration allocation (DoS)
+  "RUSTSEC-2026-0367", # zip 4: SUID/SGID bits kept on extraction
+  "RUSTSEC-2026-0368", # zip 4: extract creates symlinks pointing outside the destination
+  "RUSTSEC-2026-0369", # zip 4: extract applies Unix permissions through symlinks
 ]

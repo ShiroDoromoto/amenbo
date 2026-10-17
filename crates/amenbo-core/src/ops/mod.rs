@@ -35,6 +35,7 @@ pub mod automation;
 pub mod automation_builtin;
 pub mod automation_builtin_close;
 pub mod automation_builtin_cut;
+pub mod automation_builtin_defer;
 pub mod automation_builtin_fetch;
 pub mod automation_builtin_fold;
 pub mod automation_builtin_hand_back;

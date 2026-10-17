@@ -18,6 +18,7 @@ const SECTIONS: Record<string, string> = {
   fold_worktree: "foldWorktree",
   close_task: "closeTask",
   hand_back_task: "handBackTask",
+  defer_task: "deferTask",
   fetch: "fetch",
   split_by_dim: "splitByDim",
   wait: "wait",

@@ -7085,6 +7085,11 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
         words: &[("完了", "the way out for having handed the task back")],
     },
     BuiltinWords {
+        key: "defer_task",
+        called: "the built-in that puts the task off (back in todo, on whoever it was on)",
+        words: &[("完了", "the way out for having put the task off")],
+    },
+    BuiltinWords {
         key: "fetch",
         called: "the built-in that goes and fetches (it looks at a URL, a file or a command set beforehand)",
         words: &[

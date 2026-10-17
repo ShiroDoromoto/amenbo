@@ -19,6 +19,7 @@ describe("a built-in's words", () => {
     expect(builtinWord("take_task", "着手できるタスクが無い")).toBe("No task to take");
     expect(builtinWord("fold_worktree", "未マージ")).toBe("Unmerged");
     expect(builtinWord("hand_back_task", "タスクを人に返す")).toBe("Hand the task back to a person");
+    expect(builtinWord("defer_task", "タスクを後回しにする")).toBe("Put the task off");
     lang.now = "de";
     expect(builtinWord("take_task", "着手した")).toBe("Aufgabe übernommen");
   });

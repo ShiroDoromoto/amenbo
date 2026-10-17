@@ -39,6 +39,7 @@ use crate::model::{
     AutomationStoppedReason, RunDefExit, TaskStatus, ERROR_EXIT,
 };
 use crate::ops::automation_builtin_close;
+use crate::ops::automation_builtin_defer;
 use crate::ops::automation_builtin_hand_back;
 use crate::ops::automation_report::{self, Next, Produced};
 use crate::ops::automation_run::{self, HandedAtLaunch, HandedTask, Launcher, ReadsFrom, Waiting};
@@ -189,8 +190,9 @@ fn choose<'e>(def: &AutomationRunDef, exits: &'e [RunDefExit], seen: usize) -> R
 }
 
 /// **Put down what the step would have handed on through `exit`**, each output a placeholder of its
-/// kind — and, for the built-ins that close the task or hand it back to a person, close the one the run
-/// holds or put it back in `todo`, so the next task it takes is not taken with this one still open.
+/// kind — and, for the built-ins that close the task, hand it back to a person or put it off, close the
+/// one the run holds or put it back in `todo`, so the next task it takes is not taken with this one still
+/// open.
 fn stand_in(
     tx: &WriteTx<'_>,
     run: &crate::model::AutomationRun,
@@ -233,6 +235,7 @@ fn stand_in(
     let lets_go = match def.builtin.as_deref() {
         Some(key) if key == automation_builtin_close::CLOSE_TASK.key => Some(TaskStatus::Done),
         Some(key) if key == automation_builtin_hand_back::HAND_BACK_TASK.key => Some(TaskStatus::Todo),
+        Some(key) if key == automation_builtin_defer::DEFER_TASK.key => Some(TaskStatus::Todo),
         _ => None,
     };
     let Some(into) = lets_go else { return Ok(()) };

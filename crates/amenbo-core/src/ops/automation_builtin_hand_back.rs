@@ -77,7 +77,7 @@ fn hand_back(carry: &Carry<'_, '_>) -> Result<Carried> {
 }
 
 /// Close the stretch this step is in, the one the task was taken in.
-fn end_stretch(carry: &Carry<'_, '_>) -> Result<()> {
+pub(crate) fn end_stretch(carry: &Carry<'_, '_>) -> Result<()> {
     let Some(stretch_id) = carry.run_step.run_task_id else { return Ok(()) };
     let Some(before) = read::automation_run_task(carry.tx.conn(), stretch_id)? else { return Ok(()) };
     if before.ended_at.is_some() {

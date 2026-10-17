@@ -172,7 +172,8 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
 /// since. A stretch with no task in it, or none at all, has nothing left open.
 ///
 /// **A stretch already ended has let its task go** — the run handed it back
-/// ([`crate::ops::automation_builtin_hand_back`]). What it is in now is whoever reserved it since, not
+/// ([`crate::ops::automation_builtin_hand_back`]) or put it off
+/// ([`crate::ops::automation_builtin_defer`]). What it is in now is whoever reserved it since, not
 /// this run's to answer for.
 ///
 /// Asked where the run is about to leave the stretch behind: at its end ([`ended`]) and where a step
@@ -245,7 +246,8 @@ fn close_stretch(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>, now: Tim
 /// the agent said what it needs, and the line alone says only that it stopped.
 ///
 /// **A stretch already ended handed its task back before the run stopped**
-/// ([`crate::ops::automation_builtin_hand_back`]), so it is not handed back twice. Another run or a
+/// ([`crate::ops::automation_builtin_hand_back`]) or put it off
+/// ([`crate::ops::automation_builtin_defer`]), so it is not handed back twice. Another run or a
 /// session may have reserved it since, and its state and comments are theirs. `stretch` is read before
 /// [`ended`] closes it, so this tells that apart from the close the ending itself makes.
 fn hand_the_task_back(

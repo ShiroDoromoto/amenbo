@@ -46,6 +46,7 @@ use crate::model::{
 use crate::ops::automation::{self, EdgeTarget, NewStep};
 use crate::ops::automation_builtin_close::CLOSE_TASK;
 use crate::ops::automation_builtin_cut::CUT_WORKTREE;
+use crate::ops::automation_builtin_defer::DEFER_TASK;
 use crate::ops::automation_builtin_fetch::FETCH;
 use crate::ops::automation_builtin_fold::FOLD_WORKTREE;
 use crate::ops::automation_builtin_hand_back::HAND_BACK_TASK;
@@ -450,6 +451,7 @@ const BUILTINS: &[Builtin] = &[
     FOLD_WORKTREE,
     CLOSE_TASK,
     HAND_BACK_TASK,
+    DEFER_TASK,
     FETCH,
     SPLIT_BY_DIM,
     WAIT,
@@ -462,6 +464,7 @@ const BUILTINS: &[Builtin] = &[
     FOLD_WORKTREE,
     CLOSE_TASK,
     HAND_BACK_TASK,
+    DEFER_TASK,
     FETCH,
     SPLIT_BY_DIM,
     WAIT,

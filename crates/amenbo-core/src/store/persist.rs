@@ -327,12 +327,14 @@ impl Store {
         pos: crate::ops::Position,
         actor: crate::model::ActorKind,
     ) -> Result<crate::model::Task> {
-        self.write_one(
-            // Re-homing touches the destination too: both where it comes from and where it lands
-            // have to be within reach.
-            &[WriteTarget::Task(id), WriteTarget::NewIn(target_project)],
-            |tx| crate::ops::task::move_to(tx, id, target_project, pos, actor),
-        )
+        // Re-homing touches the destination too: both where it comes from and where it lands have
+        // to be within reach. With no destination the task stays in its own project, which
+        // `Task(id)` already covers.
+        let mut targets = vec![WriteTarget::Task(id)];
+        if let Some(project) = target_project {
+            targets.push(WriteTarget::NewIn(Some(project)));
+        }
+        self.write_one(&targets, |tx| crate::ops::task::move_to(tx, id, target_project, pos, actor))
     }
 
     /// Add a dependency edge (one operation = one transaction). Idempotent: if the edge already

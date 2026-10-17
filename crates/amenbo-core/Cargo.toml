@@ -100,7 +100,7 @@ pulldown-cmark = { version = "0.13", default-features = false }
 # platform — which is why the dependency is here rather than under `cfg(windows)`. Default features
 # off keeps only Deflate (the method wharfy writes and a bundle is read with), dropping the
 # aes/bzip2/zstd/time extras.
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 # TOML, read and written, for the one app whose MCP settings are a `config.toml` (`mcp_apps`). Reading
 # is the half that needs a parser rather than a scan: what is being read is a person's own hand-edited
 # configuration, where a quoted key, an inline table, a comment or a wrapped array is ordinary — and a

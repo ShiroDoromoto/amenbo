@@ -397,6 +397,24 @@ fn an_ai_writes_only_inside_the_project_its_folder_is_bound_to() {
         id_str(&cli.json(&["comment", "add", &mine, "--text", "進捗", "--actor", "ai", "--json"])["comment"]["id"]);
     let edited = cli.json(&["comment", "edit", &mine_comment, "--text", "進捗（直した）", "--actor", "ai", "--json"]);
     assert_eq!(edited["comment"]["text"], "進捗（直した）");
+
+    // Reordering within the binding needs no `--project`; re-homing elsewhere and touching their task stay refused.
+    let ahead = cli.json(&["task", "add", "--title", "先にある", "--actor", "ai", "--json"]);
+    let ahead_key = ahead["task"]["placement"]["order_key"].as_str().unwrap().to_string();
+    let moved = cli.json(&["task", "move", &mine, "--top", "--actor", "ai", "--json"]);
+    assert_eq!(id_str(&moved["task"]["placement"]["project"]["id"]), bound, "it stays in the binding");
+    assert!(
+        moved["task"]["placement"]["order_key"].as_str().unwrap() < ahead_key.as_str(),
+        "the AI's move put its task on top"
+    );
+    for args in [
+        vec!["task", "move", mine.as_str(), "--top", "--project", other.as_str(), "--json"],
+        vec!["task", "move", theirs.as_str(), "--top", "--json"],
+    ] {
+        let (err, code) = cli.run_err(&[args.clone(), vec!["--actor", "ai"]].concat());
+        assert_ne!(code, 0, "{args:?} moves a task outside the binding");
+        assert!(err.contains("out_of_reach"), "{args:?} is out_of_reach: {err}");
+    }
 }
 
 /// An AI in an unbound folder is given nothing — **neither reads nor writes**. Reach is drawn from the

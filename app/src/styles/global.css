@@ -201,19 +201,19 @@ input[type="color"] {
    (`app/src/talk/agent.ts`). It takes the room the bar above it leaves. */
 .workspace__face { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 
-/* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
-   many columns and rows the program inside is told it has.
+/* The terminal's box: the edge, the ground and the room around the text. The terminal is opened in
+   `.workspace__screen` inside it, which is what decides how many columns and rows the program inside
+   is told it has (`app/src/talk/terminal.ts`).
    The ground inside is `--c-pane-bg` and stays dark whichever theme is up (`styles/tokens.css`), so on
    the light one this is a dark rectangle inside a light face — which is the point, not a slip. The
    edge is the face's still: what is fixed is what the pane holds, and the border is where it stops.
    `color-scheme` goes with the ground, or the scrollbar the emulator's viewport puts up is drawn for
    a light one over a dark pane. */
 .workspace__pane {
-  flex: 1; min-height: 0;
+  display: flex; flex: 1; flex-direction: column; min-height: 0;
   padding: var(--s-3);
   /* **Drawn and invisible.** What says where the focus is is the frame around the whole pane
-     (`.slot__frame`), so this one has no colour to add — but it keeps its room: this is the element
-     xterm.js measures, and 2px off its height is a row the program inside is no longer told it has. */
+     (`.slot__frame`), so this one has no colour to add. */
   border: var(--border-w) var(--border-style) transparent;
   border-radius: var(--r-md);
   background: var(--c-pane-bg-pic) var(--c-pane-bg);
@@ -223,6 +223,10 @@ input[type="color"] {
      mark that blinks on says less clearly than one the eye catches arriving. */
   transition: box-shadow 160ms ease-out;
 }
+/* What xterm.js is opened in and measures. `FitAddon` counts from this element's computed size and
+   takes no padding or border off it, so it has none: any it had would be rows and columns the program
+   is told of and never shown — the last row of `vi` cut off. */
+.workspace__screen { flex: 1; min-width: 0; min-height: 0; }
 /* The control that picks which page is on screen. It is a row of every page with the one in force
    marked, rather than a control that says the next step: which page is on is the thing being chosen
    between, and a reader should not have to press to find out. **A page is a place to go**, so it is
@@ -858,7 +862,7 @@ input[type="color"] {
 body.dragging-row .slot__bar--grab { cursor: grabbing; }
 /* The pane in hand, held back while it is out of its place. It is drawn on the frame rather than on
    the slot so the terminal's own ground goes with it, and nothing here takes room: the box xterm
-   measures is what the program inside is told its width from (`.slot--landed`). */
+   measures sits inside the frame, and its size is what the program inside is told (`.slot--landed`). */
 .slot--held .slot__frame { opacity: 0.55; }
 /* Where the pane in hand would go — down the edge it would go in at, along whichever axis this pane
    has its neighbours on (`../shell/paneDrag`). It lies over the pane and answers to no pointer, for
@@ -902,9 +906,9 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
    is not where the reader's eye is — they were in the panel, and the page may have turned since they
    last looked at a pane — so the pane says the path arrived rather than leaving them to find it
    (`../shell/WorkspaceFace`).
-   **It is a shadow and not a border**: this element is the box xterm measures, and its size is what
-   the program inside is told its number of columns from — so nothing that goes up here may take room.
-   A shadow takes none, and drawing it inset puts it on the pane's own dark ground rather than over
+   **It is a shadow and not a border**: the box xterm measures is inside this element, and its size is
+   what the program inside is told its number of columns from — so nothing that goes up here may take
+   room. A shadow takes none, and drawing it inset puts it on the pane's own dark ground rather than over
    the gap between two panes. */
 .slot--landed .workspace__pane { box-shadow: inset 0 0 0 2px var(--c-accent); }
 /* Motion turned down: the ring still goes up and comes down — it is what says where the path went —

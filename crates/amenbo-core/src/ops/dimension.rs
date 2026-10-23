@@ -2673,7 +2673,7 @@ mod tests {
         let names = |w: &[crate::view::WaitingOnValue]| w.iter().map(|w| format!("{}={}", w.axis, w.value)).collect();
         let card = listed(None).into_iter().find(|t| t.id == task).expect("every task is listed");
         let detail = crate::query::task_detail(tx.conn(), task).unwrap();
-        let refused = read::reserve_blockers(tx.conn(), task, crate::time::today())
+        let refused = read::reserve_blockers(tx.conn(), task, crate::time::today(), crate::time::Timestamp::now())
             .unwrap()
             .into_iter()
             .filter_map(|b| match b {

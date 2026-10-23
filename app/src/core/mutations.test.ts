@@ -272,7 +272,7 @@ describe("the two days (browser-loop mock)", () => {
   it("writes and takes away the due date, and nothing else moves with it", async () => {
     seedTasks([full(10)]);
     await setDue(10, "2099-12-31");
-    expect(getSnapshot().tasks[0].due).toBe("2099-12-31");
+    expect(getSnapshot().tasks[0].due).toEqual({ kind: "day", day: "2099-12-31" });
     // The due date is not a premise: a task with one due long ago is still reservable.
     expect(getSnapshot().tasks[0].ready).toBe(true);
 
@@ -285,22 +285,22 @@ describe("the two days (browser-loop mock)", () => {
     const ahead = dayFromNow(3);
     await setStart(10, ahead);
     let t = getSnapshot().tasks[0];
-    expect(t.startOn).toBe(ahead);
-    expect(t.notStartedUntil).toBe(ahead);
+    expect(t.start).toEqual({ kind: "day", day: ahead });
+    expect(t.notStartedUntil).toEqual({ kind: "day", day: ahead });
     expect(t.ready).toBe(false);
 
     // A day that has come is still the value that was written — it just stops being a reason to wait.
     const past = dayFromNow(-3);
     await setStart(10, past);
     t = getSnapshot().tasks[0];
-    expect(t.startOn).toBe(past);
+    expect(t.start).toEqual({ kind: "day", day: past });
     expect(t.notStartedUntil).toBeNull();
     expect(t.ready).toBe(true);
 
     await setStart(10, ahead);
     await setStart(10, null);
     t = getSnapshot().tasks[0];
-    expect(t.startOn).toBeNull();
+    expect(t.start).toBeNull();
     expect(t.notStartedUntil).toBeNull();
     expect(t.ready).toBe(true);
   });

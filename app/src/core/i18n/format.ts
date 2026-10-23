@@ -14,6 +14,7 @@
 //
 // Formatters are cached because constructing one is the expensive half — these run inside render, one
 // call per row — while selecting from a built one is cheap.
+import type { ScheduleDto } from "../../bindings/bindings";
 import { currentLang, dateLocale, type Lang } from "./lang";
 
 /** Built once per (locale, shape). The key is the locale plus the options it was asked for. */
@@ -125,18 +126,20 @@ export function exactLabel(at: string, locale: string = dateLocale()): string {
 }
 
 /**
- * The due chip's wording, from the bare date core holds. Days are counted in whole calendar days from
- * today, so "tomorrow" means the next date rather than 24 hours from now — which is what a due date
- * means to the person who set it.
+ * The due chip's wording. Days are counted in whole calendar days from today, so "tomorrow" means the
+ * next date rather than 24 hours from now — which is what a due date means to the person who set it. A
+ * due at an instant is counted on the reader's day it falls on, and its local time follows the day.
  */
-export function dueLabel(due: string, locale: string = dateLocale(), today: Date = new Date()): string {
-  // A due date is a day. Anything a caller has attached to it is cut off first, the same way
-  // `dueKind` colours the chip, so the two never disagree about which day this is.
-  const at = new Date(`${due.slice(0, 10)}T00:00:00`);
+export function dueLabel(due: ScheduleDto, locale: string = dateLocale(), today: Date = new Date()): string {
+  // Read on the same day `dueKind` colours the chip by, so the two never disagree about which day this is.
+  const at = due.kind === "day" ? new Date(`${due.day}T00:00:00`) : new Date(due.at);
+  const day = new Date(at.getFullYear(), at.getMonth(), at.getDate());
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const diff = Math.round((at.getTime() - start.getTime()) / 86_400_000);
+  const diff = Math.round((day.getTime() - start.getTime()) / 86_400_000);
   if (!Number.isFinite(diff)) return "";
-  return relative(diff, "day", locale);
+  const rel = relative(diff, "day", locale);
+  if (due.kind === "day") return rel;
+  return `${rel} ${dateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(at)}`;
 }
 
 /** A calendar date — the day a decision was settled on, and anything else dated to the day. */

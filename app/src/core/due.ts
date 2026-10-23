@@ -5,7 +5,8 @@
 // of the inbox, and it would come straight back if the badge counted one set and the row opened another.
 //
 // Two steps, in the vocabulary the palette already speaks (`styles/tokens.css`):
-//   - **stop** — its day has gone, or its day is today. Nothing moves until a hand is put to it.
+//   - **stop** — its day has gone (or, for a due at an instant, the instant has), or its day is today.
+//     Nothing moves until a hand is put to it.
 //   - **heed** — its day is tomorrow. It moves on its own; know it while it comes.
 //
 // The same two days take the same two steps on a task's own due chip (`--c-due-*`), so a row read in a
@@ -15,7 +16,7 @@
 // against both drop out. "Tomorrow" needs no filter arm of its own: the day keys parse the relative
 // forms, so `due:tomorrow` is the day after the store's own today (`amenbo-core/src/time.rs`).
 
-/** Its day has gone. */
+/** Its day has gone — or, for a due at an instant, the instant has. */
 export const DUE_OVERDUE = "done:false due:overdue";
 /** Its day is today. */
 export const DUE_TODAY = "done:false due:today";

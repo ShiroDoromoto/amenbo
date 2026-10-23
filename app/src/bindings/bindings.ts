@@ -3246,6 +3246,14 @@ export type ResyncReportDto = { scanned: number, updated: Array<ResyncedDto>, };
 export type ResyncedDto = { dir: string, file: string, };
 
 /**
+ * When a task starts or is due, as one value (`AMB-D-1082`): a calendar day, or an instant — the wire
+ * form of [`amenbo_core::model::Schedule`]. A day (`YYYY-MM-DD`) is the reader's own calendar day; an
+ * instant (RFC3339 UTC) is shown in the reader's zone, and wherever the screen cuts by day it is read on
+ * the reader's day it falls on.
+ */
+export type ScheduleDto = { "kind": "day", day: string, } | { "kind": "at", at: string, };
+
+/**
  * Which face of a record the words landed on — the wire form of
  * [`amenbo_core::query::HitFace`]. Crossing as a name rather than a rank keeps the face something the
  * screen can label and icon; the rank is the engine's business.
@@ -3897,13 +3905,13 @@ export type TaskCardDto = { id: number, title: string,
 /**
  * The name it goes by on screen, `#<n>` (the display form of `id`).
  */
-ref: string, notes: string, projectId: number | null, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", assignee: ActorDto | null, priority: "high" | "medium" | "low" | null, due: string | null, 
+ref: string, notes: string, projectId: number | null, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", assignee: ActorDto | null, priority: "high" | "medium" | "low" | null, due: ScheduleDto | null, 
 /**
- * The declared start day (`YYYY-MM-DD`), whether or not it has come. `not_started_until` below is
- * the premise this field can raise; this is the field itself, which is what the pane editing it has
- * to show — a day that has already come is still a value the person put there and may want back.
+ * The declared start, whether or not it has come. `not_started_until` below is the premise this
+ * field can raise; this is the field itself, which is what the pane editing it has to show — a start
+ * that has already come is still a value the person put there and may want back.
  */
-startOn: string | null, 
+start: ScheduleDto | null, 
 /**
  * Completion timestamp (RFC3339 UTC). Used to sort the Done column newest-first, among other
  * things. None while the task is still open.
@@ -3938,11 +3946,11 @@ linkedDecisions: Array<DecisionRefDto>,
  */
 blockedByDecisions: Array<DecisionRefDto>, 
 /**
- * The declared start day, when it is still ahead (`YYYY-MM-DD`) — the third reason `ready` is
- * false, beside `blocked_by` and `blocked_by_decisions`. Always serialized, `null` when the start
- * day is no reason, so every `ready: false` the GUI draws carries a reason it can name on screen.
+ * The declared start, when it is still ahead — the third reason `ready` is false, beside
+ * `blocked_by` and `blocked_by_decisions`. Always serialized, `null` when the start is no reason,
+ * so every `ready: false` the GUI draws carries a reason it can name on screen.
  */
-notStartedUntil: string | null, 
+notStartedUntil: ScheduleDto | null, 
 /**
  * Is the task still being put together — the fourth reason `ready` is false (`AMB-D-553`). A draft
  * is drawn on the board like any other card (`AMB-D-555`), so the card has to carry the reason it

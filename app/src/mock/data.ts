@@ -42,7 +42,7 @@ type MockTaskInput = Partial<TaskCard> &
 const mt = (t: MockTaskInput): TaskCard => ({
   ref: taskRef(t.id), notes: "", completedAt: null,
   createdAt: MOCK_FILED_AT, updatedAt: MOCK_FILED_AT,
-  ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [], startOn: null, notStartedUntil: null,
+  ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [], start: null, notStartedUntil: null,
   draft: false,
   ...t,
 });
@@ -55,7 +55,7 @@ export const tasks: TaskCard[] = [
     status: "in_progress",
     assignee: A_H,
     priority: "high",
-    due: "2026-06-22",
+    due: { kind: "day", day: "2026-06-22" },
     comments: 3,
     createdBy: A_H,
     // The one fixture that has been written to since it was filed — the mock needs both readings of the
@@ -80,7 +80,8 @@ export const tasks: TaskCard[] = [
     status: "in_progress",
     assignee: A_AI,
     priority: "high",
-    due: "2026-06-23",
+    // Due at an instant rather than on a day, so the mock draws a due with its time too.
+    due: { kind: "at", at: "2026-06-23T06:00:00Z" },
     comments: 1,
     createdBy: A_AI,
   }),
@@ -91,7 +92,7 @@ export const tasks: TaskCard[] = [
     status: "blocked",
     assignee: A_H,
     priority: "high",
-    due: "2026-06-20",
+    due: { kind: "day", day: "2026-06-20" },
     comments: 5,
     createdBy: A_H,
   }),

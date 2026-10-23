@@ -137,10 +137,6 @@ fn facet_actor(config: &amenbo_core::config::Config, kind: Option<ActorKind>) ->
     ActorDto { name, kind: kind.as_str(), avatar: None }
 }
 
-fn date_iso(d: NaiveDate) -> String {
-    amenbo_core::time::date_to_string(d)
-}
-
 /// Take a system event apart into the kind that names a sentence template and the values that fill
 /// it, leaving the sentence itself to the GUI's dictionary (`eventText` in app/src/core/i18n). A
 /// kind carries only the fields its own template asks for, so everything else stays absent; a kind
@@ -188,14 +184,10 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
     let assignee = row.assignee.as_ref().map(|a| facet_actor(config, card_kind(a)));
     let created_by = row.created_by.as_ref().map(|a| facet_actor(config, card_kind(a)));
 
-    // The card still carries days alone: a start or a due at an instant is shown on the day it falls on
-    // for the reader.
-    let due_date = row.due.map(|d| d.day());
-    // The start day is read through core's own predicate, so the card cannot drift from what the
-    // reserve enforces — the GUI must not call a task startable that `task status` would refuse.
-    let start_date = row.start.map(|s| s.day());
+    // The start is read through core's own predicate, so the card cannot drift from what the reserve
+    // enforces — the GUI must not call a task startable that `task status` would refuse.
     let (today, now) = (amenbo_core::time::today(), Timestamp::now());
-    let not_started_until = amenbo_core::view::not_started_until(row.start, today, now).map(|s| s.day());
+    let not_started_until = amenbo_core::view::not_started_until(row.start, today, now);
     // Core's own predicate rather than a fourth restatement of it: `ready` on a card and `ready` at the
     // reserve are the same question, and the only way they cannot drift is by being one call.
     let ready = amenbo_core::view::is_ready(
@@ -241,8 +233,8 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         status: status.as_str(),
         assignee,
         priority: row.priority.as_deref().and_then(Priority::parse).map(|p| p.as_str()),
-        due: due_date.map(date_iso),
-        start_on: start_date.map(date_iso),
+        due: row.due.map(ScheduleDto::from),
+        start: row.start.map(ScheduleDto::from),
         completed_at: row
             .completed_at
             .as_deref()
@@ -255,7 +247,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         created_by,
         linked_decisions,
         blocked_by_decisions,
-        not_started_until: not_started_until.map(date_iso),
+        not_started_until: not_started_until.map(ScheduleDto::from),
         draft: row.draft,
         waiting_on_values,
         premise_change,
@@ -6167,8 +6159,8 @@ pub(crate) mod tests {
         let c = card(task);
         assert!(!c.ready, "a start day still ahead holds the reservation down");
         assert_eq!(
-            c.not_started_until.as_deref(),
-            Some((today + chrono::Duration::days(7)).to_string().as_str()),
+            c.not_started_until,
+            Some(ScheduleDto::Day { day: (today + chrono::Duration::days(7)).to_string() }),
             "and the card names the day, so the reason is on screen"
         );
 
@@ -6176,6 +6168,20 @@ pub(crate) mod tests {
         let c = card(task);
         assert!(c.ready, "the day arrives and the task is startable");
         assert!(c.not_started_until.is_none(), "a day that has come is no longer a reason");
+
+        // A start at an instant crosses as the instant, not as the day it falls on (`AMB-D-1082`).
+        let at = Timestamp::parse_rfc3339("2099-01-01T09:30:00Z").unwrap();
+        Store::open()
+            .unwrap()
+            .update_task(task, amenbo_core::ops::task::TaskPatch {
+                start: Some(amenbo_core::model::Schedule::At(at)),
+                ..Default::default()
+            })
+            .unwrap();
+        let c = card(task);
+        assert!(!c.ready, "an instant still ahead holds the reservation down");
+        assert_eq!(c.not_started_until, Some(ScheduleDto::At { at: at.to_rfc3339_z() }), "and is named with its time");
+        assert_eq!(c.start, Some(ScheduleDto::At { at: at.to_rfc3339_z() }), "as is the field itself");
     }
 
     /// The reason a reservation was refused shows up only in a toast that vanishes in seconds. The
@@ -6459,6 +6465,7 @@ pub(crate) mod tests {
                 .id
         };
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().expect("task");
+        let on = |day: &str| Some(ScheduleDto::Day { day: day.into() });
 
         // Given at creation, both days are on the card the board draws from — no second visit needed.
         let id = task_add(
@@ -6472,41 +6479,38 @@ pub(crate) mod tests {
         .unwrap()
         .tasks[0];
         finish_creating(id);
-        assert_eq!(card(id).due.as_deref(), Some("2099-12-31"));
-        assert_eq!(card(id).start_on.as_deref(), Some("2099-01-01"));
+        assert_eq!(card(id).due, on("2099-12-31"));
+        assert_eq!(card(id).start, on("2099-01-01"));
         assert!(!card(id).ready, "a start day still ahead holds the task unready");
         assert_eq!(
-            card(id).not_started_until.as_deref(),
-            Some("2099-01-01"),
+            card(id).not_started_until,
+            on("2099-01-01"),
             "and says so as the premise, beside the field itself"
         );
 
         // Edited afterwards, one field at a time.
         task_set_due(id, Some("2099-06-30".into())).unwrap();
-        assert_eq!(card(id).due.as_deref(), Some("2099-06-30"));
+        assert_eq!(card(id).due, on("2099-06-30"));
 
         // A day that has come is still the value the person put there, so the card carries it even
         // though it is no longer a reason to wait.
         task_set_start(id, Some("2000-01-01".into())).unwrap();
         let c = card(id);
-        assert_eq!(c.start_on.as_deref(), Some("2000-01-01"), "the field holds what was written");
+        assert_eq!(c.start, on("2000-01-01"), "the field holds what was written");
         assert!(c.not_started_until.is_none(), "a day that has come is no longer a premise");
         assert!(c.ready, "and the task is reservable again");
 
         // Relative forms are read the way the CLI reads them, off this machine's own today
         // (`AMB-D-429`) — the GUI's date input sends `YYYY-MM-DD`, but the face does not narrow to it.
         task_set_due(id, Some("today".into())).unwrap();
-        assert_eq!(
-            card(id).due.as_deref(),
-            Some(amenbo_core::time::date_to_string(amenbo_core::time::today()).as_str())
-        );
+        assert_eq!(card(id).due, on(&amenbo_core::time::date_to_string(amenbo_core::time::today())));
 
         // Both ways of saying "no day": nothing at all, and the empty string a cleared date input sends.
         let ack = task_set_due(id, None).unwrap();
         assert!(ack.scopes.contains(&"tasks"), "the cards draw the due date, so they refetch");
         assert!(card(id).due.is_none(), "the due date comes off");
         task_set_start(id, Some(String::new())).unwrap();
-        assert!(card(id).start_on.is_none(), "and so does the start day");
+        assert!(card(id).start.is_none(), "and so does the start day");
 
         // A date that is not one is refused rather than quietly ignored.
         let err = task_set_due(id, Some("31/12/2099".into())).err().expect("not a date");

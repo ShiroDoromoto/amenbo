@@ -64,29 +64,34 @@ describe("the due chip", () => {
   // Local noon, so the day is the same one whatever timezone the test runs in.
   const today = new Date(2026, 5, 21, 12, 0, 0);
 
+  const day = (d: string) => ({ kind: "day", day: d }) as const;
+  // An instant at a local time, so the day it falls on is the same whatever timezone the test runs in.
+  const at = (h: number, m: number, d = 21) => ({ kind: "at", at: new Date(2026, 5, d, h, m).toISOString() }) as const;
+
   it("counts whole calendar days, so tomorrow is the next date", () => {
-    expect(dueLabel("2026-06-21", "en-US", today)).toBe("today");
-    expect(dueLabel("2026-06-22", "en-US", today)).toBe("tomorrow");
-    expect(dueLabel("2026-06-20", "en-US", today)).toBe("yesterday");
-    expect(dueLabel("2026-06-23", "en-US", today)).toBe("in 2 days");
-    expect(dueLabel("2026-06-18", "en-US", today)).toBe("3 days ago");
+    expect(dueLabel(day("2026-06-21"), "en-US", today)).toBe("today");
+    expect(dueLabel(day("2026-06-22"), "en-US", today)).toBe("tomorrow");
+    expect(dueLabel(day("2026-06-20"), "en-US", today)).toBe("yesterday");
+    expect(dueLabel(day("2026-06-23"), "en-US", today)).toBe("in 2 days");
+    expect(dueLabel(day("2026-06-18"), "en-US", today)).toBe("3 days ago");
   });
 
   // The reason the wording is not counted out by hand: several of the nineteen have a word here that
   // English does not, and writing "in 2 days" in every language would throw it away.
   it("takes the word a language has for the day after tomorrow", () => {
-    expect(dueLabel("2026-06-23", "ja-JP", today)).toBe("明後日");
-    expect(dueLabel("2026-06-23", "de-DE", today)).toBe("übermorgen");
+    expect(dueLabel(day("2026-06-23"), "ja-JP", today)).toBe("明後日");
+    expect(dueLabel(day("2026-06-23"), "de-DE", today)).toBe("übermorgen");
   });
 
-  // The chip colours by the day alone (`dueKind`); the wording has to cut the same way, or a date
-  // carrying a time would read "tomorrow" under a chip coloured for today.
-  it("judges by the day even when a time is attached", () => {
-    expect(dueLabel("2026-06-21T23:00:00Z", "en-US", today)).toBe("today");
+  // The chip colours an instant by the reader's day it falls on (`dueKind`); the wording has to cut the
+  // same way, or a late time would read "tomorrow" under a chip coloured for today.
+  it("words an instant by the reader's day it falls on, and adds its time", () => {
+    expect(dueLabel(at(23, 0), "en-US", today)).toMatch(/^today 11:00\sPM$/);
+    expect(dueLabel(at(9, 30, 22), "ja-JP", today)).toBe("明日 09:30");
   });
 
   it("renders nothing for a date it cannot read", () => {
-    expect(dueLabel("", "en-US", today)).toBe("");
+    expect(dueLabel(day(""), "en-US", today)).toBe("");
   });
 });
 

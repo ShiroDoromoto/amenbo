@@ -19,6 +19,7 @@ import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
 import { invoke } from "../core/ipc";
 import { useRefNav } from "../core/refNav";
+import { scheduleDay, scheduleText } from "../core/calendar";
 import { axesFor } from "../core/appliesTo";
 import { DimensionField } from "../components/DimensionField";
 import type { DimensionDto } from "../bindings/bindings";
@@ -316,11 +317,11 @@ export function TaskDetailPane({
               those is a way of changing one, which is what these are. */}
           <div className="detail__field">
             <span className="detail__flabel">{t("date.due")}</span>
-            <DateField label={t("date.due")} value={task.due} onChange={(day) => store.setDue(taskId, day)} />
+            <DateField label={t("date.due")} value={task.due && scheduleDay(task.due)} onChange={(day) => store.setDue(taskId, day)} />
           </div>
           <div className="detail__field">
             <span className="detail__flabel">{t("date.start")}</span>
-            <DateField label={t("date.start")} value={task.startOn} onChange={(day) => store.setStart(taskId, day)} />
+            <DateField label={t("date.start")} value={task.start && scheduleDay(task.start)} onChange={(day) => store.setStart(taskId, day)} />
           </div>
           {taskAxes.map((dim) => (
             <div className="detail__field" key={dim.id}>
@@ -396,8 +397,8 @@ export function TaskDetailPane({
           {task.notStartedUntil && (
             <div className="detail__field">
               <span className="detail__flabel">{t("detail.notStarted")}</span>
-              <span title={tf("block.notStarted", { date: task.notStartedUntil })}>
-                <Icon name="hourglass" /> {task.notStartedUntil}
+              <span title={tf("block.notStarted", { date: scheduleText(task.notStartedUntil) })}>
+                <Icon name="hourglass" /> {scheduleText(task.notStartedUntil)}
               </span>
             </div>
           )}

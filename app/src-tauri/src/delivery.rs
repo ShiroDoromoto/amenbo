@@ -114,8 +114,8 @@ mod tests {
             .add_task(amenbo_core::ops::task::NewTask {
                 title: title.to_string(),
                 project_id: Some(project),
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Human),

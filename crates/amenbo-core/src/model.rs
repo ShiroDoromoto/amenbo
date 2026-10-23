@@ -271,6 +271,94 @@ pub struct Project {
     pub updated_at: Timestamp,
 }
 
+/// When a task starts or is due: a calendar day, or an instant (`AMB-D-1082`). A task holds one of the
+/// two for each, never both, and nothing reads the columns it is stored in apart from this type — a day
+/// is in `start_on` / `due_on`, an instant in `start_at` / `due_at`, and the schema refuses a row that
+/// fills both.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Schedule {
+    /// A day with no time in it: the reader's own calendar day, the same `2026-10-24` in Tokyo and in
+    /// London (`AMB-D-429`).
+    Day(NaiveDate),
+    /// A moment every reader shares, shown in each reader's own zone.
+    At(Timestamp),
+}
+
+impl Schedule {
+    /// The two columns read back as one value. A row the schema let through holds at most one of them.
+    pub fn from_columns(on: Option<NaiveDate>, at: Option<Timestamp>) -> Option<Self> {
+        at.map(Schedule::At).or(on.map(Schedule::Day))
+    }
+
+    /// What `start_on` / `due_on` holds: the day, when this is one.
+    pub fn on(&self) -> Option<NaiveDate> {
+        match self {
+            Schedule::Day(d) => Some(*d),
+            Schedule::At(_) => None,
+        }
+    }
+
+    /// What `start_at` / `due_at` holds: the instant, when this is one.
+    pub fn at(&self) -> Option<Timestamp> {
+        match self {
+            Schedule::Day(_) => None,
+            Schedule::At(t) => Some(*t),
+        }
+    }
+
+    /// The reader's calendar day this falls on: the day itself, or the day the instant falls on for the
+    /// reader ([`Timestamp::local_date`]).
+    pub fn day(&self) -> NaiveDate {
+        match self {
+            Schedule::Day(d) => *d,
+            Schedule::At(t) => t.local_date(),
+        }
+    }
+}
+
+/// How an `Option<Schedule>` is carried through serde: as the two keys of its columns, side by side
+/// (`AMB-D-807`). `#[serde(flatten, with = "schedule_wire::start")]` on a field writes `start_on` and
+/// `start_at`; `due` writes `due_on` and `due_at`. Both keys are always written, the empty one as
+/// `null`, and reading refuses a value that fills both.
+pub mod schedule_wire {
+    macro_rules! wire {
+        ($m:ident, $on:ident, $at:ident) => {
+            pub mod $m {
+                use chrono::NaiveDate;
+                use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+                use crate::model::Schedule;
+                use crate::time::Timestamp;
+
+                #[derive(Serialize, Deserialize)]
+                struct Wire {
+                    #[serde(default)]
+                    $on: Option<NaiveDate>,
+                    #[serde(default)]
+                    $at: Option<Timestamp>,
+                }
+
+                pub fn serialize<S: Serializer>(v: &Option<Schedule>, s: S) -> Result<S::Ok, S::Error> {
+                    Wire { $on: v.and_then(|v| v.on()), $at: v.and_then(|v| v.at()) }.serialize(s)
+                }
+
+                pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Schedule>, D::Error> {
+                    let w = Wire::deserialize(d)?;
+                    if w.$on.is_some() && w.$at.is_some() {
+                        return Err(serde::de::Error::custom(concat!(
+                            "`", stringify!($on), "` and `", stringify!($at), "` cannot both hold a value"
+                        )));
+                    }
+                    Ok(Schedule::from_columns(w.$on, w.$at))
+                }
+            }
+        };
+    }
+
+    wire!(start, start_on, start_at);
+    wire!(due, due_on, due_at);
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Task {
     /// The primary key, and also the conversational number (displayed as `AMB-T-<n>`). They are one and the
@@ -309,8 +397,13 @@ pub struct Task {
     /// assignee is one of exactly two facets, human or ai; `None` means unassigned.
     #[serde(default)]
     pub assignee_kind: Option<ActorKind>,
-    pub start_on: Option<NaiveDate>,
-    pub due_on: Option<NaiveDate>,
+    /// When it starts, as a day or an instant (`AMB-D-1082`). Carried as the two keys the columns are
+    /// named, `start_on` and `start_at`, of which at most one holds a value.
+    #[serde(flatten, with = "schedule_wire::start")]
+    pub start: Option<Schedule>,
+    /// When it is due, the same way: `due_on` and `due_at`.
+    #[serde(flatten, with = "schedule_wire::due")]
+    pub due: Option<Schedule>,
     pub priority: Option<Priority>,
     /// The project it belongs to. A task lives in exactly one project — it never multi-homes — so
     /// placement is held on the task itself. `None` means unfiled (the inbox).

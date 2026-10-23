@@ -210,8 +210,8 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
         NewTask {
             title: title.to_string(),
             project_id: Some(carry.run.project_id),
-            due_on: None,
-            start_on: None,
+            due: None,
+            start: None,
             priority,
             notes: carry.input(NOTES).unwrap_or_default().to_string(),
             created_by_kind: Some(ActorKind::Ai),

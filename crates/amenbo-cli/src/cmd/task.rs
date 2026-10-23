@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use amenbo_core::config::Paths;
-use amenbo_core::model::{ActorKind, AttachmentTarget, ClassifiedSide, TaskStatus};
+use amenbo_core::model::{ActorKind, AttachmentTarget, ClassifiedSide, Schedule, TaskStatus};
 use amenbo_core::{activity_log, ops, query, time, Store};
 
 use crate::cli::*;
@@ -55,8 +55,8 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             // names. An AI cannot pass `--project`, so for it this is the binding either way; without a
             // binding there is nothing to fill the slot with, and the create is refused.
             let project_id = project_or_bound(store, project)?;
-            let due_on = parse_date_opt(&due)?;
-            let start_on = parse_date_opt(&start)?;
+            let due = parse_date_opt(&due)?.map(Schedule::Day);
+            let start = parse_date_opt(&start)?.map(Schedule::Day);
             let priority = match priority { Some(p) => Some(parse_priority(&p)?), None => None };
             // Resolved before the create, like `--to` above: a misspelled axis or value is an error with
             // no task left behind to go and classify by hand.
@@ -72,7 +72,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             // Read before the create and handed to it, never read inside it (`AMB-D-897`).
             let made_in = made_in(store);
             let t = store.add_task_with_dimensions(ops::task::NewTask {
-                title, project_id: Some(project_id), due_on, start_on, priority, notes,
+                title, project_id: Some(project_id), due, start, priority, notes,
                 created_by_kind: Some(flags.facet()?), at_binding_id,
                 made_in,
             }, &dimension_values).map_err(CliError::from)?;
@@ -142,7 +142,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 }
                 for t in &result.tasks {
                     let check = if t.completed { "x" } else { " " };
-                    let due = t.due_on.map(|d| format!(" due:{}", time::date_to_string(d))).unwrap_or_default();
+                    let due = t.due.map(|d| format!(" due:{}", time::date_to_string(d.day()))).unwrap_or_default();
                     let pri = t.priority.map(|p| format!(" [{}]", p.as_str())).unwrap_or_default();
                     // Why this row is not in the mailbox, said on the row itself. A plain `task list` shows
                     // everything, so a task held back by a start day still ahead has to carry its reason
@@ -201,7 +201,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 // One name only: the ref. The id is the conversational number, so there is no second
                 // identifier to print alongside it.
                 human(flags, format!("{}  {}", detail.r#ref, detail.title));
-                let due = detail.due_on.map(time::date_to_string).unwrap_or_else(|| "-".to_string());
+                let due = detail.due.map(|d| time::date_to_string(d.day())).unwrap_or_else(|| "-".to_string());
                 // All five states, not the two-valued reading of them: whether a task is reserved
                 // (`in_progress`) or free to take (`todo`) is what a reader opening this page acts on,
                 // and both terminals (`AMB-D-397`) name themselves rather than collapsing into one
@@ -384,8 +384,8 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             if start.is_some() || clear_start { changed.push("start_on".to_string()); }
             if priority.is_some() || clear_priority { changed.push("priority".to_string()); }
             if at.is_some() || clear_at { changed.push("at_binding_id".to_string()); }
-            let due_on = parse_date_opt(&due)?;
-            let start_on = parse_date_opt(&start)?;
+            let due = parse_date_opt(&due)?.map(Schedule::Day);
+            let start = parse_date_opt(&start)?.map(Schedule::Day);
             let priority = match priority { Some(p) => Some(parse_priority(&p)?), None => None };
             // The folder is named among the task's **own project's** — which is where a task's folder comes
             // from, so an unplaced task has none to name and is refused rather than pointed anywhere.
@@ -401,7 +401,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 None => None,
             };
             let t = store.update_task(tid, ops::task::TaskPatch {
-                title, notes, due_on, start_on, priority, clear_due, clear_priority, clear_start,
+                title, notes, due, start, priority, clear_due, clear_priority, clear_start,
                 at_binding_id, clear_at,
             }).map_err(CliError::from)?;
             let detail = store.task_detail(t.id).map_err(CliError::from)?;

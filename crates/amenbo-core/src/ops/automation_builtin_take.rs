@@ -530,7 +530,7 @@ mod tests {
             // And one waits for its start day.
             let later = for_ai(tx, "later", project, None);
             let day = crate::time::today() + chrono::Days::new(30);
-            task::update(tx, later, TaskPatch { start_on: Some(day), ..Default::default() }).expect("start");
+            task::update(tx, later, TaskPatch { start: Some(crate::model::Schedule::Day(day)), ..Default::default() }).expect("start");
 
             let run = launched(tx, &automation);
             assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));

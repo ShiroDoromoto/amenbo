@@ -19,8 +19,9 @@
 //! called by, a decision's id is what renders as `D-<id>` — so there is no separate `number` column,
 //! and the same key crosses the boundary (an `i64` in Rust, a `number` in TS), so nothing renders a
 //! key as text on the way through. The constructors are `col!` (plain text/integer), `ts!`/`ts_opt!`
-//! (RFC3339Z instant), `date_opt!` (`%Y-%m-%d` day), `enum_col!`/`enum_opt!` (closed value set),
-//! `bool_col!`, `limit_opt!` (an upper bound of at least 1), `hash_opt!` (blake3 hex) and
+//! (RFC3339Z instant), `ts_opt_apart!` (an instant beside a day it excludes), `date_opt!` (`%Y-%m-%d`
+//! day), `enum_col!`/`enum_opt!` (closed value set), `bool_col!`, `limit_opt!` (an upper bound of at
+//! least 1), `hash_opt!` (blake3 hex) and
 //! `fk!`/`fk_opt!` (foreign key) — declared below in this module.
 //!
 //! The **spelling** of an integer type says what the column is, not how SQLite stores it: `INTEGER` and
@@ -221,6 +222,23 @@ macro_rules! ts_opt {
     };
 }
 
+/// `ts_opt!` for the instant half of a day-or-instant pair (`AMB-D-1082`): `start_at` beside
+/// `start_on`, `due_at` beside `due_on`. The second `CHECK` refuses a row that fills both. It names the
+/// other column from a column's own declaration, which SQLite allows, so a migration step adds it with a
+/// plain `ALTER TABLE … ADD COLUMN` where a table constraint would need the table rebuilt.
+macro_rules! ts_opt_apart {
+    ($name:ident, $day:ident) => {
+        Column {
+            name: stringify!($name),
+            decl: concat!(
+                "TEXT CHECK(", stringify!($name), " GLOB '",
+                "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z", "') ",
+                "CHECK(", stringify!($day), " IS NULL OR ", stringify!($name), " IS NULL)"
+            ),
+        }
+    };
+}
+
 /// Nullable calendar day — a *day*, never an instant (`due_on` is not `completed_at`).
 macro_rules! date_opt {
     ($name:ident) => {
@@ -332,6 +350,7 @@ macro_rules! column {
     ($name:ident : col($decl:ident))                     => { col!($name, $decl) };
     ($name:ident : ts)                                   => { ts!($name) };
     ($name:ident : ts_opt)                               => { ts_opt!($name) };
+    ($name:ident : ts_opt_apart($day:ident))             => { ts_opt_apart!($name, $day) };
     ($name:ident : date_opt)                             => { date_opt!($name) };
     ($name:ident : bool_col)                             => { bool_col!($name) };
     ($name:ident : limit_opt)                            => { limit_opt!($name) };
@@ -364,6 +383,7 @@ macro_rules! column_type {
     ($name:ident : col(COUNT))          => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     ($name:ident : ts)                  => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
     ($name:ident : ts_opt)              => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
+    ($name:ident : ts_opt_apart($day:ident)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : date_opt)            => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : hash_opt)            => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : actor_kind)          => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
@@ -590,8 +610,12 @@ datasets! {
         draft: bool_col,
         created_by_kind: actor_kind,
         assignee_kind: actor_kind,
+        // When the task starts and when it is due, each a day or an instant and never both
+        // (`AMB-D-1082`): the day in `_on`, the instant in `_at`. Read as one value, `model::Schedule`.
         start_on: date_opt,
         due_on: date_opt,
+        start_at: ts_opt_apart(start_on),
+        due_at: ts_opt_apart(due_on),
         priority: enum_opt("high", "medium", "low"),
         // A task has exactly one home, so its project and order key live on the task itself rather
         // than on a 1:1 satellite row. Both are nullable — an unplaced (inbox) task carries NULL,

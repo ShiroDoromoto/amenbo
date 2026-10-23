@@ -936,8 +936,8 @@ mod tests {
             .add_task(crate::ops::task::NewTask {
                 title: "something to read".into(),
                 project_id: Some(project),
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
@@ -1409,8 +1409,8 @@ mod tests {
             .add_task(crate::ops::task::NewTask {
                 title: "one more".into(),
                 project_id: Some(project),
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
@@ -1452,8 +1452,8 @@ mod tests {
             .add_task(crate::ops::task::NewTask {
                 title: "written while nothing lands".into(),
                 project_id: Some(project),
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,

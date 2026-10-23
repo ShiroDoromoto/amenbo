@@ -44,8 +44,8 @@ fn new_task(title: &str, project_id: i64) -> amenbo_core::ops::task::NewTask {
     amenbo_core::ops::task::NewTask {
         title: title.to_string(),
         project_id: Some(project_id),
-        due_on: None,
-        start_on: None,
+        due: None,
+        start: None,
         priority: None,
         notes: String::new(),
         created_by_kind: Some(ActorKind::Ai),

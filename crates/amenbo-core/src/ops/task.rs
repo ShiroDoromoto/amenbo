@@ -15,7 +15,7 @@ use chrono::NaiveDate;
 use crate::activity_log;
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    ActorKind, AttachmentTarget, DecisionStatus, Priority, Subtype, Task, TaskStatus,
+    ActorKind, AttachmentTarget, DecisionStatus, Priority, Schedule, Subtype, Task, TaskStatus,
 };
 use crate::ops::{emit_create, emit_update, event, place, MadeIn, Noun, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -67,8 +67,8 @@ pub struct NewTask {
     pub title: String,
     /// The already-resolved project id.
     pub project_id: Option<i64>,
-    pub due_on: Option<NaiveDate>,
-    pub start_on: Option<NaiveDate>,
+    pub due: Option<Schedule>,
+    pub start: Option<Schedule>,
     pub priority: Option<Priority>,
     pub notes: String,
     /// The creator's facet. Left unset, the creator is unknown (and treated as "not authored by the AI").
@@ -127,8 +127,8 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
         draft: true,
         created_by_kind: input.created_by_kind,
         assignee_kind: None,
-        start_on: input.start_on,
-        due_on: input.due_on,
+        start: input.start,
+        due: input.due,
         priority: input.priority,
         project_id,
         order_key,
@@ -260,8 +260,8 @@ fn unmet_required_axes(tx: &WriteTx<'_>, task: &Task) -> Result<Vec<String>> {
 pub struct TaskPatch {
     pub title: Option<String>,
     pub notes: Option<String>,
-    pub due_on: Option<NaiveDate>,
-    pub start_on: Option<NaiveDate>,
+    pub due: Option<Schedule>,
+    pub start: Option<Schedule>,
     pub priority: Option<Priority>,
     pub clear_due: bool,
     pub clear_priority: bool,
@@ -312,14 +312,14 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: TaskPatch) -> Result<Task> {
         t.notes = notes;
     }
     if patch.clear_due {
-        t.due_on = None;
-    } else if let Some(d) = patch.due_on {
-        t.due_on = Some(d);
+        t.due = None;
+    } else if let Some(d) = patch.due {
+        t.due = Some(d);
     }
     if patch.clear_start {
-        t.start_on = None;
-    } else if let Some(d) = patch.start_on {
-        t.start_on = Some(d);
+        t.start = None;
+    } else if let Some(d) = patch.start {
+        t.start = Some(d);
     }
     if patch.clear_priority {
         t.priority = None;
@@ -685,8 +685,8 @@ mod tests {
             NewTask {
                 title: title.to_string(),
                 project_id,
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
@@ -729,8 +729,8 @@ mod tests {
                 NewTask {
                     title: "組み立て中".to_string(),
                     project_id: Some(pid),
-                    due_on: None,
-                    start_on: None,
+                    due: None,
+                    start: None,
                     priority: None,
                     notes: String::new(),
                     created_by_kind: None,
@@ -923,6 +923,23 @@ mod tests {
         )
         .unwrap()
         .id
+    }
+
+    /// A date moves between a day and an instant both ways, and the half it leaves is emptied — the
+    /// schema refuses a row holding both (`AMB-D-1082`), so a write that filled the new half before
+    /// emptying the old one would fail here.
+    #[test]
+    fn a_due_date_moves_between_a_day_and_an_instant() {
+        with_numbered_task(|tx, _pid, tid| {
+            let day = Schedule::Day("2026-10-24".parse().unwrap());
+            let at = Schedule::At(Timestamp::parse_rfc3339("2026-10-24T08:00:00Z").unwrap());
+            for want in [day, at, day] {
+                update(tx, tid, TaskPatch { due: Some(want), ..TaskPatch::default() }).unwrap();
+                assert_eq!(read::task(tx.conn(), tid).unwrap().unwrap().due, Some(want));
+            }
+            update(tx, tid, TaskPatch { clear_due: true, ..TaskPatch::default() }).unwrap();
+            assert_eq!(read::task(tx.conn(), tid).unwrap().unwrap().due, None);
+        });
     }
 
     #[test]
@@ -1129,7 +1146,7 @@ mod tests {
             // The third premise rides the same symmetry: a start day still ahead has to hide the task
             // from the mailbox and refuse the reserve, or the two would disagree about one task.
             let tomorrow = crate::time::today() + chrono::Duration::days(1);
-            update(tx, tid, TaskPatch { start_on: Some(tomorrow), ..TaskPatch::default() }).unwrap();
+            update(tx, tid, TaskPatch { start: Some(Schedule::Day(tomorrow)), ..TaskPatch::default() }).unwrap();
             check(tx);
             update(tx, tid, TaskPatch { clear_start: true, ..TaskPatch::default() }).unwrap();
             check(tx);
@@ -1265,7 +1282,7 @@ mod tests {
         // There is no force: the way through is to correct the declaration, which is what the message says.
         with_numbered_task(|tx, _pid, tid| {
             let tomorrow = crate::time::today() + chrono::Duration::days(1);
-            update(tx, tid, TaskPatch { start_on: Some(tomorrow), ..TaskPatch::default() }).unwrap();
+            update(tx, tid, TaskPatch { start: Some(Schedule::Day(tomorrow)), ..TaskPatch::default() }).unwrap();
 
             let err = set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap_err();
             assert_eq!(err.code(), "not_ready");
@@ -1274,7 +1291,7 @@ mod tests {
             assert_eq!(status_of(tx, tid), TaskStatus::Todo, "rejected, and the status has not moved");
 
             // Correcting the declaration is the way through — the same move the message names.
-            update(tx, tid, TaskPatch { start_on: Some(crate::time::today()), ..TaskPatch::default() })
+            update(tx, tid, TaskPatch { start: Some(Schedule::Day(crate::time::today())), ..TaskPatch::default() })
                 .unwrap();
             assert_eq!(
                 set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap().status,
@@ -1290,7 +1307,7 @@ mod tests {
         with_numbered_task(|tx, _pid, tid| {
             set_status(tx, tid, TaskStatus::InProgress, crate::model::ActorKind::Ai).unwrap();
             let tomorrow = crate::time::today() + chrono::Duration::days(1);
-            update(tx, tid, TaskPatch { start_on: Some(tomorrow), ..TaskPatch::default() }).unwrap();
+            update(tx, tid, TaskPatch { start: Some(Schedule::Day(tomorrow)), ..TaskPatch::default() }).unwrap();
 
             assert_eq!(status_of(tx, tid), TaskStatus::InProgress, "a start day set after the fact does not strip the reservation");
             assert_eq!(set_status(tx, tid, TaskStatus::Todo, crate::model::ActorKind::Ai).unwrap().status, TaskStatus::Todo);
@@ -1310,7 +1327,7 @@ mod tests {
                 update(
                     tx,
                     tid,
-                    TaskPatch { start_on: d, clear_start: d.is_none(), ..TaskPatch::default() },
+                    TaskPatch { start: d.map(Schedule::Day), clear_start: d.is_none(), ..TaskPatch::default() },
                 )
                 .unwrap();
             };
@@ -1380,7 +1397,7 @@ mod tests {
                     tx,
                     tid,
                     TaskPatch {
-                        start_on: start,
+                        start: start.map(Schedule::Day),
                         clear_start: start.is_none(),
                         ..TaskPatch::default()
                     },
@@ -1425,8 +1442,8 @@ mod tests {
                     NewTask {
                         title: title.to_string(),
                         project_id: Some(pid),
-                        due_on: None,
-                        start_on: start,
+                        due: None,
+                        start: start.map(Schedule::Day),
                         priority: None,
                         notes: String::new(),
                         created_by_kind: None,
@@ -1443,7 +1460,7 @@ mod tests {
             update(
                 tx,
                 arrived,
-                TaskPatch { start_on: Some(today), ..TaskPatch::default() },
+                TaskPatch { start: Some(Schedule::Day(today)), ..TaskPatch::default() },
             )
             .unwrap();
             let long_arrived = with_start(tx, "started yesterday", Some(today - chrono::Duration::days(1)));
@@ -1491,8 +1508,8 @@ mod tests {
                     NewTask {
                         title: title.to_string(),
                         project_id: Some(pid),
-                        due_on: None,
-                        start_on: Some(start),
+                        due: None,
+                        start: Some(Schedule::Day(start)),
                         priority: None,
                         notes: String::new(),
                         created_by_kind: None,
@@ -1637,8 +1654,8 @@ mod tests {
             NewTask {
                 title: title.to_string(),
                 project_id: None,
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,

@@ -34,8 +34,8 @@ fn new_task(title: &str) -> NewTask {
     NewTask {
         title: title.into(),
         project_id: None,
-        due_on: None,
-        start_on: None,
+        due: None,
+        start: None,
         priority: None,
         notes: String::new(),
         created_by_kind: None,

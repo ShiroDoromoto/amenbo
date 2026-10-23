@@ -11,14 +11,16 @@
 use chrono::NaiveDate;
 use serde::Serialize;
 
-use crate::model::{ActorKind, Decision, DecisionStatus, Priority, Subtype, Task, TaskStatus};
+use crate::model::{
+    schedule_wire, ActorKind, Decision, DecisionStatus, Priority, Schedule, Subtype, Task, TaskStatus,
+};
 use crate::time::Timestamp;
 
 /// **The** ready predicate — every read that projects `ready` derives it here, so the task card, the
 /// task detail and the reserve guard cannot come to disagree about what "this can be started" means.
 /// Four premises, all of them the user's own rather than Amenbo's: no blocker still open, no linked
 /// decision still unsettled, the declared start day arrived, and the task's creation finished. No
-/// `start_on` means nothing was declared about when to start, which is not a reason to hold the task
+/// `start` means nothing was declared about when to start, which is not a reason to hold the task
 /// back.
 ///
 /// The fourth is `draft` (`AMB-D-553`): while a task is still being put together its other premises have
@@ -39,14 +41,14 @@ use crate::time::Timestamp;
 pub fn is_ready(
     has_open_blocker: bool,
     has_unsettled_premise: bool,
-    start_on: Option<NaiveDate>,
+    start: Option<Schedule>,
     today: NaiveDate,
     draft: bool,
     waiting_on_order: bool,
 ) -> bool {
     !has_open_blocker
         && !has_unsettled_premise
-        && not_started_until(start_on, today).is_none()
+        && not_started_until(start, today).is_none()
         && !draft
         && !waiting_on_order
 }
@@ -72,10 +74,10 @@ pub struct WaitingOnValue {
 /// A read projects this beside `blocked_by_open` / `blocked_by_decisions` so that every `ready: false` on
 /// a face carries the reason for it: a task in a listing is never left saying "not ready" with nothing to
 /// point at. [`is_ready`] derives its third premise from here, so the reason and the verdict are one
-/// thing.
+/// thing. A start at an instant is read as the reader's day it falls on ([`Schedule::day`]).
 #[must_use]
-pub fn not_started_until(start_on: Option<NaiveDate>, today: NaiveDate) -> Option<NaiveDate> {
-    start_on.filter(|start| *start > today)
+pub fn not_started_until(start: Option<Schedule>, today: NaiveDate) -> Option<NaiveDate> {
+    start.map(|s| s.day()).filter(|start| *start > today)
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -178,8 +180,12 @@ pub struct TaskCompact {
     pub title: String,
     pub completed: bool,
     pub status: TaskStatus,
-    pub due_on: Option<NaiveDate>,
-    pub start_on: Option<NaiveDate>,
+    /// Written as `due_on` and `due_at`, the columns' own names (`AMB-D-807`).
+    #[serde(flatten, with = "schedule_wire::due")]
+    pub due: Option<Schedule>,
+    /// Written as `start_on` and `start_at`.
+    #[serde(flatten, with = "schedule_wire::start")]
+    pub start: Option<Schedule>,
     pub priority: Option<Priority>,
     /// The conversational ref, i.e. the displayed `AMB-T-<n>`. The primary key *is* the conversational
     /// number, so this is rendered straight from `id`.
@@ -290,8 +296,12 @@ pub struct TaskDetail {
     /// config.
     pub created_by_kind: Option<ActorKind>,
     pub assignee_kind: Option<ActorKind>,
-    pub start_on: Option<NaiveDate>,
-    pub due_on: Option<NaiveDate>,
+    /// Written as `start_on` and `start_at`, the columns' own names (`AMB-D-807`).
+    #[serde(flatten, with = "schedule_wire::start")]
+    pub start: Option<Schedule>,
+    /// Written as `due_on` and `due_at`.
+    #[serde(flatten, with = "schedule_wire::due")]
+    pub due: Option<Schedule>,
     pub priority: Option<Priority>,
     /// The conversational ref, i.e. the displayed `AMB-T-<n>` (rendered from `id`).
     pub r#ref: String,

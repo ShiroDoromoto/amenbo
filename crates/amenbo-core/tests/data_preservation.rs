@@ -29,8 +29,8 @@ fn add_task(store: &mut Store, title: &str) {
     store.add_task(ops::task::NewTask {
         title: title.to_string(),
         project_id: None,
-        due_on: None,
-        start_on: None,
+        due: None,
+        start: None,
         priority: None,
         notes: String::new(),
         created_by_kind: None,

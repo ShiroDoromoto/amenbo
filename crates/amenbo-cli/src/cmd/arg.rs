@@ -5,7 +5,7 @@ use std::io::IsTerminal;
 
 use chrono::NaiveDate;
 
-use amenbo_core::model::{DimensionAppliesTo, DimensionCardinality, Priority, View};
+use amenbo_core::model::{DimensionAppliesTo, DimensionCardinality, Priority, Schedule, View};
 use amenbo_core::ops::Position;
 use amenbo_core::time;
 
@@ -18,6 +18,13 @@ pub(crate) fn parse_date_opt(s: &Option<String>) -> Result<Option<NaiveDate>, Cl
         )),
         None => Ok(None),
     }
+}
+
+/// A task's `--start` / `--due`: a date, or a time on one (`17:00`, `"tomorrow 9:00"`, `+8h`).
+pub(crate) fn parse_schedule_opt(s: &Option<String>) -> Result<Option<Schedule>, CliError> {
+    s.as_deref()
+        .map(|v| time::parse_schedule(v, time::Timestamp::now()).map_err(CliError::from))
+        .transpose()
 }
 
 pub(crate) fn parse_priority(s: &str) -> Result<Priority, CliError> {

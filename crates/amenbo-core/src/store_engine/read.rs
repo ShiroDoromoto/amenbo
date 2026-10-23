@@ -252,7 +252,8 @@ pub struct TaskQuery<'a> {
     pub sort: &'a str,
     /// Today (referent of the relative `due:` filters), supplied by the caller.
     pub today: NaiveDate,
-    /// Now, which a start at an instant is held to by `ready:` (`AMB-D-1082`), supplied by the caller.
+    /// Now, which a start or deadline at an instant is held to by `ready:`, `start:` and `due:` (`AMB-D-1082`),
+    /// supplied by the caller.
     pub now: crate::time::Timestamp,
     /// Page size; `None` = no limit (all rows from `offset`).
     pub limit: Option<usize>,
@@ -579,10 +580,10 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         preds.push(Pred::is_in(T.status, statuses.iter().map(|s| s.as_str())));
     }
     if let Some(due) = &f.due {
-        preds.push(due_pred(due, q.today));
+        preds.push(due_pred(due, q.today, q.now));
     }
     if let Some(start) = &f.start {
-        preds.push(start_pred(start, q.today));
+        preds.push(start_pred(start, q.today, q.now));
     }
     if let Some(priorities) = &f.priority {
         preds.push(priority_pred(priorities));
@@ -637,32 +638,53 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
     preds
 }
 
-/// `due:` — the day keys, all read off the one `due_on` column. Dates compare lexicographically
-/// (`YYYY-MM-DD`), as everywhere a day column is compared here.
-fn due_pred(due: &DueFilter, today: NaiveDate) -> Pred {
+/// `due:` — the day keys, read off whichever of `due_on` / `due_at` the task holds (`AMB-D-1082`). Each
+/// column compares lexicographically against its own shape (`YYYY-MM-DD`, RFC3339 with `Z`); the two are
+/// never compared with each other. A deadline at an instant is cut by the reader's day — the instant
+/// that day begins here (`time::local_day_start_utc`), not UTC's midnight — except where the arm is
+/// about the deadline having passed: `overdue` takes it the moment `now` goes by, and `today` / `week`
+/// then let go of it, so the arms the due warning reads (`overdue`, `today`, a named day) stay disjoint
+/// for an instant as they are for a day.
+fn due_pred(due: &DueFilter, today: NaiveDate, now: crate::time::Timestamp) -> Pred {
     let day = today.to_string();
+    let now = now.to_rfc3339_z();
+    let day_start = |d: NaiveDate| crate::time::local_day_start_utc(d).to_rfc3339_z();
+    let at = || !Pred::is_blank(T.due_at);
+    // An instant from `from` to the end of the reader's day `to`.
+    let at_within = |from: String, to: NaiveDate| {
+        at().and(Pred::cmp(T.due_at, ">=", from))
+            .and(Pred::cmp(T.due_at, "<", day_start(to + Duration::days(1))))
+    };
     match due {
-        DueFilter::Today => Pred::eq(T.due_on, day),
-        DueFilter::Overdue => Pred::is_not_null(T.due_on)
-            .and(Pred::ne(T.due_on, ""))
-            .and(Pred::cmp(T.due_on, "<", day)),
-        DueFilter::Week => Pred::cmp(T.due_on, ">=", day)
-            .and(Pred::cmp(T.due_on, "<=", (today + Duration::days(7)).to_string())),
-        DueFilter::None => Pred::is_blank(T.due_on),
-        DueFilter::On(d) => Pred::eq(T.due_on, d.to_string()),
+        DueFilter::Today => Pred::eq(T.due_on, day).or(at_within(now, today)),
+        DueFilter::Overdue => (!Pred::is_blank(T.due_on))
+            .and(Pred::cmp(T.due_on, "<", day))
+            .or(at().and(Pred::cmp(T.due_at, "<", now))),
+        DueFilter::Week => {
+            let last = today + Duration::days(7);
+            Pred::cmp(T.due_on, ">=", day)
+                .and(Pred::cmp(T.due_on, "<=", last.to_string()))
+                .or(at_within(now, last))
+        }
+        DueFilter::None => Pred::is_blank(T.due_on).and(Pred::is_blank(T.due_at)),
+        DueFilter::On(d) => Pred::eq(T.due_on, d.to_string()).or(at_within(day_start(*d), *d)),
     }
 }
 
-/// `start:` — the same reading of `start_on` the ready predicate makes (`view::not_started_until`), said
-/// in SQL: declared and still ahead is the waiting queue, declared and arrived is startable, blank is
-/// nothing declared.
-fn start_pred(start: &StartFilter, today: NaiveDate) -> Pred {
+/// `start:` — the same reading the ready predicate makes ([`held_back`]), said on its own: declared and
+/// still ahead is the waiting queue, declared and arrived is startable, blank is nothing declared. A
+/// start day is held to today and a start at an instant to `now` (`AMB-D-1082`), not to the day the
+/// instant falls on: cut by the day, a start later today would be neither ready nor `start:future`, and
+/// the empty mailbox that counts `start:future` would not see it.
+fn start_pred(start: &StartFilter, today: NaiveDate, now: crate::time::Timestamp) -> Pred {
     let day = today.to_string();
-    let declared = !Pred::is_blank(T.start_on);
+    let now = now.to_rfc3339_z();
+    let on = |op: &str| (!Pred::is_blank(T.start_on)).and(Pred::cmp(T.start_on, op, day.as_str()));
+    let at = |op: &str| (!Pred::is_blank(T.start_at)).and(Pred::cmp(T.start_at, op, now.as_str()));
     match start {
-        StartFilter::Today => declared.and(Pred::cmp(T.start_on, "<=", day.as_str())),
-        StartFilter::Future => declared.and(Pred::cmp(T.start_on, ">", day.as_str())),
-        StartFilter::None => Pred::is_blank(T.start_on),
+        StartFilter::Today => on("<=").or(at("<=")),
+        StartFilter::Future => on(">").or(at(">")),
+        StartFilter::None => Pred::is_blank(T.start_on).and(Pred::is_blank(T.start_at)),
     }
 }
 

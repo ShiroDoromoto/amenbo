@@ -322,8 +322,8 @@ amenbo task undepend 13 --on 12
 # holding it back. Reserving a task that is not ready is refused (not_ready) — resolve the
 # premise; there is no --force
 amenbo task list --filter "ready:yes" --json
-# start:future is the waiting queue on its own — what a start day still ahead holds back
-# (start:today = the day has come, start:none = no start day declared)
+# start:future is the waiting queue on its own — what a start still ahead holds back (a day after
+# today, or a time after now; start:today = the start has come, start:none = no start declared)
 amenbo task list --filter "start:future" --json
 # draft:yes is the same doorway onto the fourth premise — the tasks still being put
 # together, which are listed like any other but cannot be reserved (draft:no is the rest)

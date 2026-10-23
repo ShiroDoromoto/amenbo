@@ -24,7 +24,8 @@ export const DUE_TOMORROW = "done:false due:tomorrow";
 
 /**
  * The three windows the row is built from, in the order the list shows them — the soonest deadline
- * first. They are disjoint (one `due_on`, three different days), so nothing is counted twice.
+ * first. They are disjoint (one deadline, three stretches that do not meet — a time already past is
+ * overdue, not today), so nothing is counted twice.
  */
 export const DUE_WINDOWS = [DUE_OVERDUE, DUE_TODAY, DUE_TOMORROW];
 

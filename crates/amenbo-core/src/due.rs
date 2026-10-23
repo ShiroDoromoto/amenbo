@@ -32,8 +32,9 @@ pub const PURPOSE: &str = "due";
 /// The windows the warning is built from, most urgent first, each with the event a task in it fires.
 ///
 /// `done:false` is closed-or-not (`AMB-D-397`), so work that was finished and work that was decided
-/// against both drop out. The three are disjoint — one `due_on`, three different days — so no task is
-/// named twice, and the two that share an event share it because they share a step.
+/// against both drop out. The three are disjoint — one deadline, three stretches that do not meet, an
+/// instant already past counting as overdue and not today — so no task is named twice, and the two that
+/// share an event share it because they share a step.
 const WINDOWS: [(&str, &str); 3] = [
     ("done:false due:overdue", name::TASK_DUE),
     ("done:false due:today", name::TASK_DUE),

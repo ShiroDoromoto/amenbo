@@ -1447,14 +1447,15 @@ mod tests {
                 ids.sort_unstable();
                 ids
             };
-            let with_start = |tx: &WriteTx<'_>, title: &str, start: Option<NaiveDate>| {
+            let in_hours = |h| Timestamp(Timestamp::now().0 + chrono::Duration::hours(h));
+            let with_start = |tx: &WriteTx<'_>, title: &str, start: Option<Schedule>| {
                 add(
                     tx,
                     NewTask {
                         title: title.to_string(),
                         project_id: Some(pid),
                         due: None,
-                        start: start.map(Schedule::Day),
+                        start,
                         priority: None,
                         notes: String::new(),
                         created_by_kind: None,
@@ -1474,14 +1475,20 @@ mod tests {
                 TaskPatch { start: Some(Schedule::Day(today)), ..TaskPatch::default() },
             )
             .unwrap();
-            let long_arrived = with_start(tx, "started yesterday", Some(today - chrono::Duration::days(1)));
-            let ahead = with_start(tx, "starts tomorrow", Some(today + chrono::Duration::days(1)));
+            let long_arrived =
+                with_start(tx, "started yesterday", Some(Schedule::Day(today - chrono::Duration::days(1))));
+            let ahead = with_start(tx, "starts tomorrow", Some(Schedule::Day(today + chrono::Duration::days(1))));
+            // An instant is held to now, as `ready` holds it (`AMB-D-1082`), whichever day it falls on.
+            let arrived_at = with_start(tx, "started an hour ago", Some(Schedule::At(in_hours(-1))));
+            let ahead_at = with_start(tx, "starts in an hour", Some(Schedule::At(in_hours(1))));
             let undeclared = with_start(tx, "no start day", None);
 
-            let mut want_arrived = vec![arrived, long_arrived];
+            let mut want_arrived = vec![arrived, long_arrived, arrived_at];
             want_arrived.sort_unstable();
+            let mut want_ahead = vec![ahead, ahead_at];
+            want_ahead.sort_unstable();
             assert_eq!(matches(tx, "start:today"), want_arrived, "start:today = the day has come");
-            assert_eq!(matches(tx, "start:future"), vec![ahead], "start:future = still ahead");
+            assert_eq!(matches(tx, "start:future"), want_ahead, "start:future = still ahead");
             assert_eq!(matches(tx, "start:none"), vec![undeclared], "start:none = nothing declared");
 
             // The three partition the store: no task is missing from all of them, and none is in two.
@@ -1492,6 +1499,78 @@ mod tests {
             let mut every = matches(tx, "");
             every.sort_unstable();
             assert_eq!(all, every, "the three arms partition the store");
+        });
+    }
+
+    #[test]
+    fn the_due_filter_reads_a_deadline_at_an_instant_on_the_readers_day() {
+        // `due:` cuts by the reader's day whichever way the deadline is held (`AMB-D-1082`): an instant
+        // lands on the day it falls on here, and once now passes it, it is overdue rather than today. The
+        // three windows the due warning reads — overdue, today, tomorrow — must stay disjoint for both.
+        with_numbered_task(|tx, pid, undeclared| {
+            let today = crate::time::today();
+            let day = |n| today + chrono::Duration::days(n);
+            let start_of = |n| crate::time::local_day_start_utc(day(n)).0;
+            let second = chrono::Duration::seconds(1);
+            let matches = |tx: &WriteTx<'_>, filter: &str| -> Vec<i64> {
+                let mut ids = crate::query::list(
+                    tx.conn(),
+                    crate::reach::Reach::All,
+                    list_params(Some(filter)),
+                )
+                .unwrap()
+                .tasks
+                .iter()
+                .map(|t| t.id)
+                .collect::<Vec<_>>();
+                ids.sort_unstable();
+                ids
+            };
+            let with_due = |tx: &WriteTx<'_>, title: &str, due: Schedule| {
+                add(
+                    tx,
+                    NewTask {
+                        title: title.to_string(),
+                        project_id: Some(pid),
+                        due: Some(due),
+                        start: None,
+                        priority: None,
+                        notes: String::new(),
+                        created_by_kind: None,
+                        at_binding_id: None,
+                        made_in: None,
+                    },
+                )
+                .unwrap()
+                .id
+            };
+            let sorted = |mut ids: Vec<i64>| {
+                ids.sort_unstable();
+                ids
+            };
+
+            let yesterday = with_due(tx, "due yesterday", Schedule::Day(day(-1)));
+            let on_today = with_due(tx, "due today", Schedule::Day(today));
+            let tomorrow = with_due(tx, "due tomorrow", Schedule::Day(day(1)));
+            let week_end = with_due(tx, "due in seven days", Schedule::Day(day(7)));
+            let _past_week = with_due(tx, "due in eight days", Schedule::Day(day(8)));
+            // An instant just gone is overdue whether it fell today or, just after midnight, yesterday.
+            let at = |t| Schedule::At(Timestamp(t));
+            let passed_at = with_due(tx, "due a second ago", at(Timestamp::now().0 - second));
+            let later_today_at = with_due(tx, "due at the end of today", at(start_of(1) - second));
+            let tomorrow_at = with_due(tx, "due tomorrow at one", at(start_of(1) + chrono::Duration::hours(1)));
+            let week_end_at = with_due(tx, "due at the end of the seventh day", at(start_of(8) - second));
+            let _past_week_at = with_due(tx, "due as the eighth day begins", at(start_of(8)));
+
+            assert_eq!(matches(tx, "due:overdue"), sorted(vec![yesterday, passed_at]), "due:overdue");
+            assert_eq!(matches(tx, "due:today"), sorted(vec![on_today, later_today_at]), "due:today");
+            assert_eq!(matches(tx, "due:tomorrow"), sorted(vec![tomorrow, tomorrow_at]), "due:tomorrow");
+            assert_eq!(
+                matches(tx, "due:week"),
+                sorted(vec![on_today, tomorrow, week_end, later_today_at, tomorrow_at, week_end_at]),
+                "due:week = today through seven days on, not yet past"
+            );
+            assert_eq!(matches(tx, "due:none"), vec![undeclared], "due:none = neither a day nor an instant");
         });
     }
 

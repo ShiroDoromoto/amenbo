@@ -1285,8 +1285,11 @@ pub enum TaskCmd {
         /// naming a project is refused.
         #[arg(long)]
         project: Option<String>,
+        /// due date: YYYY-MM-DD / today / tomorrow / +3d, or a time on one — 17:00 (today),
+        /// "tomorrow 9:00", "2026-10-24 9:00", +8h — read on this machine's clock.
         #[arg(long)]
         due: Option<String>,
+        /// start date, in the same forms as --due.
         #[arg(long)]
         start: Option<String>,
         #[arg(long)]
@@ -1351,8 +1354,11 @@ pub enum TaskCmd {
         /// Pass `-` to read it from stdin (a shell eats code spans out of a quoted argument).
         #[arg(long)]
         notes: Option<String>,
+        /// due date: YYYY-MM-DD / today / tomorrow / +3d, or a time on one — 17:00 (today),
+        /// "tomorrow 9:00", "2026-10-24 9:00", +8h — read on this machine's clock.
         #[arg(long)]
         due: Option<String>,
+        /// start date, in the same forms as --due.
         #[arg(long)]
         start: Option<String>,
         #[arg(long)]

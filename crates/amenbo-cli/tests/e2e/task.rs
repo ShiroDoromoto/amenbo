@@ -545,6 +545,38 @@ fn status_lists_the_reserved_as_in_progress_and_not_the_merely_startable() {
     assert_eq!(s["counts"]["in_progress"], 1, "the count reads the section, not a second rule: {s}");
 }
 
+/// `--due` / `--start` with a time on them hold an instant and leave the day empty; a plain date puts
+/// the day back and empties the instant. The slot holds one or the other, never both.
+#[test]
+fn a_time_on_due_or_start_holds_an_instant_in_place_of_the_day() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.bound_project();
+
+    let t = cli.json(&[
+        "task", "add", "--title", "時刻つき", "--project", &pid,
+        "--due", "2026-10-24 9:00", "--start", "tomorrow 8:30", "--json",
+    ]);
+    let tid = id_str(&t["task"]["id"]);
+    assert!(t["task"]["due_at"].as_str().is_some_and(|s| s.ends_with('Z')), "{t}");
+    assert!(t["task"]["due_on"].is_null(), "{t}");
+    assert!(t["task"]["start_at"].as_str().is_some(), "{t}");
+    assert!(t["task"]["start_on"].is_null(), "{t}");
+
+    let u = cli.json(&["task", "update", &tid, "--due", "2026-10-25", "--start", "+8h", "--json"]);
+    assert_eq!(u["task"]["due_on"], "2026-10-25");
+    assert!(u["task"]["due_at"].is_null(), "{u}");
+    assert!(u["task"]["start_at"].as_str().is_some(), "{u}");
+    let changed: Vec<&str> = u["changed"].as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
+    for c in ["due_on", "due_at", "start_on", "start_at"] {
+        assert!(changed.contains(&c), "{c} is not among what changed: {u}");
+    }
+
+    let (err, code) = cli.run_err(&["task", "update", &tid, "--due", "tomorrow 25:00", "--json"]);
+    assert_ne!(code, 0);
+    assert!(err.contains("H:MM"), "{err}");
+}
+
 #[test]
 fn assign_is_plain_reassignment() {
     // Assignment is plain reassignment: no special state, no mandatory-reason gate.

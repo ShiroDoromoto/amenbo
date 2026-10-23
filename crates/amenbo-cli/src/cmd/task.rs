@@ -8,7 +8,7 @@ use amenbo_core::model::{ActorKind, AttachmentTarget, ClassifiedSide, Schedule, 
 use amenbo_core::{activity_log, ops, query, time, Store};
 
 use crate::cli::*;
-use crate::cmd::arg::{body_arg, body_arg_opt, parse_date_opt, parse_priority, pos_from_keys};
+use crate::cmd::arg::{body_arg, body_arg_opt, parse_priority, parse_schedule_opt, pos_from_keys};
 use crate::cmd::attach::{attach_add, attach_line};
 use crate::cmd::comment::comment_section;
 use crate::cmd::decision::decision_ref_name;
@@ -55,8 +55,8 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             // names. An AI cannot pass `--project`, so for it this is the binding either way; without a
             // binding there is nothing to fill the slot with, and the create is refused.
             let project_id = project_or_bound(store, project)?;
-            let due = parse_date_opt(&due)?.map(Schedule::Day);
-            let start = parse_date_opt(&start)?.map(Schedule::Day);
+            let due = parse_schedule_opt(&due)?;
+            let start = parse_schedule_opt(&start)?;
             let priority = match priority { Some(p) => Some(parse_priority(&p)?), None => None };
             // Resolved before the create, like `--to` above: a misspelled axis or value is an error with
             // no task left behind to go and classify by hand.
@@ -378,12 +378,13 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             let mut changed = Vec::new();
             if title.is_some() { changed.push("title".to_string()); }
             if notes.is_some() { changed.push("notes".to_string()); }
-            if due.is_some() || clear_due { changed.push("due_on".to_string()); }
-            if start.is_some() || clear_start { changed.push("start_on".to_string()); }
+            // A day and an instant share the slot, so setting either empties the other: both columns change.
+            if due.is_some() || clear_due { changed.extend(["due_on".to_string(), "due_at".to_string()]); }
+            if start.is_some() || clear_start { changed.extend(["start_on".to_string(), "start_at".to_string()]); }
             if priority.is_some() || clear_priority { changed.push("priority".to_string()); }
             if at.is_some() || clear_at { changed.push("at_binding_id".to_string()); }
-            let due = parse_date_opt(&due)?.map(Schedule::Day);
-            let start = parse_date_opt(&start)?.map(Schedule::Day);
+            let due = parse_schedule_opt(&due)?;
+            let start = parse_schedule_opt(&start)?;
             let priority = match priority { Some(p) => Some(parse_priority(&p)?), None => None };
             // The folder is named among the task's **own project's** — which is where a task's folder comes
             // from, so an unplaced task has none to name and is refused rather than pointed anywhere.

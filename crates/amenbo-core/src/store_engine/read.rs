@@ -252,6 +252,8 @@ pub struct TaskQuery<'a> {
     pub sort: &'a str,
     /// Today (referent of the relative `due:` filters), supplied by the caller.
     pub today: NaiveDate,
+    /// Now, which a start at an instant is held to by `ready:` (`AMB-D-1082`), supplied by the caller.
+    pub now: crate::time::Timestamp,
     /// Page size; `None` = no limit (all rows from `offset`).
     pub limit: Option<usize>,
     /// Rows to skip; `None` = 0.
@@ -618,7 +620,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         preds.push(Pred::eq(T.draft, draft));
     }
     if let Some(ready) = f.ready {
-        preds.push(held_back(q.today).negated_if(ready));
+        preds.push(held_back(q.today, q.now).negated_if(ready));
     }
     if let Some(waiting) = f.waiting_on_values {
         // `waiting_on_values:` — the fifth premise asked for on its own (`AMB-D-990`), the way `draft:`
@@ -703,13 +705,13 @@ fn ai_pred(ai: bool) -> Pred {
 ///
 /// This is `crate::view::is_ready` restated in SQL, because a filter cannot ask four booleans of a row it
 /// has not read yet. A task is held back by an *open* blocker (a live dependency edge to a live blocker
-/// that has not ended), by an *unsettled premise* ([`unsettled_premise`]), by a *start day that has not
-/// arrived*, by a *creation not yet finished*, or by a *value ordered before its own that is not closed*
-/// ([`waiting_on_order`]). The reserve guard ([`reserve_blockers`]) reads the same
+/// that has not ended), by an *unsettled premise* ([`unsettled_premise`]), by a *start (a day or an
+/// instant) that has not arrived*, by a *creation not yet finished*, or by a *value ordered before its
+/// own that is not closed* ([`waiting_on_order`]). The reserve guard ([`reserve_blockers`]) reads the same
 /// derivations, so the filter and the guard cannot drift apart, and
 /// `a_start_day_still_ahead_holds_the_task_back_on_every_read` holds this restatement to the predicate on
 /// every arm.
-fn held_back(today: NaiveDate) -> Pred {
+fn held_back(today: NaiveDate, now: crate::time::Timestamp) -> Pred {
     const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
     const DC: col::decision::Cols = col::decision::of("dc");
     const D: col::task_dependency::Cols = col::task_dependency::of("d");
@@ -727,11 +729,13 @@ fn held_back(today: NaiveDate) -> Pred {
         .filter(still_open(B.status))
         .pred();
 
-    // A `start_on` that is set and still ahead of today. Blank means nothing was declared about when to
-    // start, which holds nothing back. The dates compare lexicographically (`YYYY-MM-DD`), as everywhere
-    // else the read model compares a day column.
-    let not_started =
-        (!Pred::is_blank(T.start_on)).and(Pred::cmp(T.start_on, ">", today.to_string().as_str()));
+    // A `start_on` that is set and still ahead of today, or a `start_at` still ahead of now
+    // (`AMB-D-1082`). Blank means nothing was declared about when to start, which holds nothing back.
+    // Each column compares lexicographically against its own shape (`YYYY-MM-DD`, RFC3339 with `Z`),
+    // as everywhere else the read model compares a day or an instant column.
+    let not_started = (!Pred::is_blank(T.start_on))
+        .and(Pred::cmp(T.start_on, ">", today.to_string().as_str()))
+        .or((!Pred::is_blank(T.start_at)).and(Pred::cmp(T.start_at, ">", now.to_rfc3339_z().as_str())));
 
     // The fourth premise, read straight off the column — the creation has not been finished.
     let still_draft = Pred::eq(T.draft, true);
@@ -835,10 +839,10 @@ pub fn newly_ready_by_closing(conn: &Connection, value_id: i64) -> Result<Vec<i6
         .map_err(StoreEngineError::from)?
         .collect::<rusqlite::Result<Vec<i64>>>()
         .map_err(StoreEngineError::from)?;
-    let today = crate::time::today();
+    let (today, now) = (crate::time::today(), crate::time::Timestamp::now());
     let mut ready = Vec::new();
     for task_id in holders {
-        if reserve_blockers(conn, task_id, today)?.is_empty() {
+        if reserve_blockers(conn, task_id, today, now)?.is_empty() {
             ready.push(task_id);
         }
     }
@@ -1688,14 +1692,15 @@ pub fn task_project_id(conn: &Connection, id: i64) -> Result<Option<i64>> {
 /// What holds `ready` down for this task ([`crate::view::ReserveBlocker`]), read inside the reserving
 /// transaction so the guard sees the truth source rather than the caller's snapshot (the same reason the
 /// CAS reads [`task_status`] here). Open blockers first, then unsettled premises, each in edge-`id`
-/// order, then a start day that has not arrived; the premise query resolves the superseding decision in
+/// order, then a start that has not arrived; the premise query resolves the superseding decision in
 /// the same pass, so the error can name the relink target. The three arms are the three premises of
-/// [`crate::view::is_ready`], so the guard refuses exactly what the reads call not ready — `today` is the
-/// caller's reference day, for the same reason the reads take one.
+/// [`crate::view::is_ready`], so the guard refuses exactly what the reads call not ready — `today` and
+/// `now` are the caller's reference day and instant, for the same reason the reads take them.
 pub fn reserve_blockers(
     conn: &Connection,
     task_id: i64,
     today: NaiveDate,
+    now: crate::time::Timestamp,
 ) -> Result<Vec<crate::view::ReserveBlocker>> {
     use crate::view::ReserveBlocker;
 
@@ -1768,16 +1773,16 @@ pub fn reserve_blockers(
     }
     {
         // The last two premises, both read off the row this guard is about, from the same transaction as
-        // the two above — a `start_on` the caller edited a moment ago, or a creation they finished a
+        // the two above — a start the caller edited a moment ago, or a creation they finished a
         // moment ago, is already in view.
         const TA: col::task::Cols = col::task::ALL;
-        let stored = scalar_by_id(conn, TA.id, TA.start_on, task_id)?.flatten();
-        // A date that will not parse is raised, not shrugged off: letting a reservation through on an
+        let on = scalar_by_id(conn, TA.id, TA.start_on, task_id)?.flatten();
+        let at = scalar_by_id(conn, TA.id, TA.start_at, task_id)?.flatten();
+        // A start that will not parse is raised, not shrugged off: letting a reservation through on an
         // unreadable declaration is the one answer that cannot be right.
-        if let Some(start_on) = parse_card_date(stored).map_err(StoreEngineError::from)? {
-            if start_on > today {
-                out.push(ReserveBlocker::NotStartedYet { start_on });
-            }
+        let start = parse_card_schedule(on, at).map_err(StoreEngineError::from)?;
+        if let Some(start) = crate::view::not_started_until(start, today, now) {
+            out.push(ReserveBlocker::NotStartedYet { start });
         }
         // The values a person has yet to close, before the draft for the reason the draft is last.
         for waiting in waiting_on_values(conn, [task_id])?.remove(&task_id).unwrap_or_default() {
@@ -2226,6 +2231,8 @@ pub struct SearchQuery<'a> {
     pub filter: Option<&'a crate::query::SearchNarrowing>,
     /// Today, for the filter's day-relative keys (`due:today` and friends).
     pub today: NaiveDate,
+    /// Now, for the filter's `ready:` — the same slot [`TaskQuery`] carries.
+    pub now: crate::time::Timestamp,
     /// Which record the words are on, and which face of it — the two axes, kept apart ([`kept_by_axes`]).
     pub kind: Option<crate::query::SearchKind>,
     pub face: Option<HitFace>,
@@ -2385,6 +2392,7 @@ fn search_sides(
             filter: f,
             sort: "",
             today: q.today,
+            now: q.now,
             limit: None,
             offset: None,
         })),
@@ -3934,8 +3942,8 @@ pub struct TaskCardRow {
     pub priority: Option<String>,
     pub due: Option<crate::model::Schedule>,
     /// The declared start, as stored. It rides along unread against a clock, the way `due` does: whether
-    /// the day has come is [`crate::view::not_started_until`]'s to say, and the surface asks it against
-    /// its own `today` rather than the row freezing an answer.
+    /// the start has come is [`crate::view::not_started_until`]'s to say, and the surface asks it against
+    /// its own `today` and `now` rather than the row freezing an answer.
     pub start: Option<crate::model::Schedule>,
     /// Whether the creation is still unfinished — the fourth premise of `ready` (`AMB-D-553`). Unlike
     /// `start` it needs no reading against a clock: the stage a creation is at is stored, so the row
@@ -4892,6 +4900,7 @@ pub fn hydrate_task_cards(
     reach: crate::reach::Reach,
     ids: &[i64],
     today: NaiveDate,
+    now: crate::time::Timestamp,
 ) -> Result<Vec<TaskCompact>> {
     if ids.is_empty() {
         return Ok(Vec::new());
@@ -5039,10 +5048,11 @@ pub fn hydrate_task_cards(
             !blocked_by_decisions.is_empty(),
             b.start,
             today,
+            now,
             b.draft,
             !waiting_on_values.is_empty(),
         );
-        let not_started_until = crate::view::not_started_until(b.start, today);
+        let not_started_until = crate::view::not_started_until(b.start, today, now).map(|s| s.day());
         out.push(TaskCompact {
             id: b.id,
             title: b.title.clone(),
@@ -5734,11 +5744,11 @@ pub fn newly_ready_by(conn: &Connection, blocker_id: i64) -> Result<Vec<i64>> {
         .collect::<rusqlite::Result<Vec<i64>>>()
         .map_err(StoreEngineError::from)?;
     let mut ready = Vec::new();
-    // The reference day the guard would judge against, taken once for the whole sweep so every dependent
-    // is measured against the same "today".
-    let today = crate::time::today();
+    // The reference day and instant the guard would judge against, taken once for the whole sweep so
+    // every dependent is measured against the same "today" and "now".
+    let (today, now) = (crate::time::today(), crate::time::Timestamp::now());
     for task_id in dependents {
-        if reserve_blockers(conn, task_id, today)?.is_empty() {
+        if reserve_blockers(conn, task_id, today, now)?.is_empty() {
             ready.push(task_id);
         }
     }
@@ -8066,7 +8076,8 @@ mod tests {
 
         // Cards: hydration is the last step before content reaches a face, so an out-of-reach id yields
         // no card — it drops out exactly as a non-live id does.
-        let cards = hydrate_task_cards(conn, bound, &[1, 2], crate::time::today()).unwrap();
+        let (today, now) = (crate::time::today(), crate::time::Timestamp::now());
+        let cards = hydrate_task_cards(conn, bound, &[1, 2], today, now).unwrap();
         assert_eq!(cards.iter().map(|c| c.id).collect::<Vec<_>>(), vec![1], "no card from project 2");
 
         // The overview shows the one project, with its dimensions and counts and no sight of the other.
@@ -8466,6 +8477,7 @@ mod tests {
             project_id: None,
             filter: None,
             today: crate::time::today(),
+            now: crate::time::Timestamp::now(),
             kind: None,
             face: None,
             sort: crate::query::SearchSort::Face,

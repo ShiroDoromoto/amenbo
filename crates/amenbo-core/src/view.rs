@@ -19,9 +19,9 @@ use crate::time::Timestamp;
 /// **The** ready predicate — every read that projects `ready` derives it here, so the task card, the
 /// task detail and the reserve guard cannot come to disagree about what "this can be started" means.
 /// Four premises, all of them the user's own rather than Amenbo's: no blocker still open, no linked
-/// decision still unsettled, the declared start day arrived, and the task's creation finished. No
-/// `start` means nothing was declared about when to start, which is not a reason to hold the task
-/// back.
+/// decision still unsettled, the declared start arrived (a day or an instant), and the task's creation
+/// finished. No `start` means nothing was declared about when to start, which is not a reason to hold
+/// the task back.
 ///
 /// The fourth is `draft` (`AMB-D-553`): while a task is still being put together its other premises have
 /// not been declared yet, so a `ready` taken before the creation finished would be saying "every premise
@@ -35,6 +35,7 @@ use crate::time::Timestamp;
 ///
 /// `today` is the caller's reference day ([`crate::time::today`]), the same one the `status` view's
 /// buckets are cut against — a task the status view calls started must not read as not-yet-started here.
+/// `now` is the instant a start at an instant is held to (`AMB-D-1082`).
 /// The `ready:` filter says the same thing in SQL, where the premises are predicates rather than
 /// booleans; that is the one restatement, and it is held to this one by test.
 #[must_use]
@@ -43,12 +44,13 @@ pub fn is_ready(
     has_unsettled_premise: bool,
     start: Option<Schedule>,
     today: NaiveDate,
+    now: Timestamp,
     draft: bool,
     waiting_on_order: bool,
 ) -> bool {
     !has_open_blocker
         && !has_unsettled_premise
-        && not_started_until(start, today).is_none()
+        && not_started_until(start, today, now).is_none()
         && !draft
         && !waiting_on_order
 }
@@ -67,17 +69,21 @@ pub struct WaitingOnValue {
     pub value: String,
 }
 
-/// The third premise as a *reason* rather than a boolean: the declared start day, when it is still ahead
-/// of `today` — i.e. the date this task is waiting for. `None` means the start day is no reason to hold
-/// the task back, either because none was declared or because it has arrived.
+/// The third premise as a *reason* rather than a boolean: the declared start, when it is still ahead —
+/// i.e. what this task is waiting for. `None` means the start is no reason to hold the task back, either
+/// because none was declared or because it has arrived.
 ///
 /// A read projects this beside `blocked_by_open` / `blocked_by_decisions` so that every `ready: false` on
 /// a face carries the reason for it: a task in a listing is never left saying "not ready" with nothing to
 /// point at. [`is_ready`] derives its third premise from here, so the reason and the verdict are one
-/// thing. A start at an instant is read as the reader's day it falls on ([`Schedule::day`]).
+/// thing. A start on a day arrives when the reader's `today` reaches it; a start at an instant arrives
+/// at that instant, `now` (`AMB-D-1082`) — not at the start of the day it falls on.
 #[must_use]
-pub fn not_started_until(start: Option<Schedule>, today: NaiveDate) -> Option<NaiveDate> {
-    start.map(|s| s.day()).filter(|start| *start > today)
+pub fn not_started_until(start: Option<Schedule>, today: NaiveDate, now: Timestamp) -> Option<Schedule> {
+    start.filter(|start| match start {
+        Schedule::Day(day) => *day > today,
+        Schedule::At(at) => *at > now,
+    })
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -201,7 +207,8 @@ pub struct TaskCompact {
     pub blocked_by_decisions: Vec<i64>,
     /// Derived from the declared start day: the date this task is waiting for, when that day is still
     /// ahead ([`not_started_until`]). The third reason a task is not ready, beside the two above — always
-    /// serialized, `null` when the start day is no reason.
+    /// serialized, `null` when the start day is no reason. A start at an instant still ahead is the
+    /// reader's day it falls on.
     pub not_started_until: Option<NaiveDate>,
     /// Still being put together: the fourth reason a task is not ready (`AMB-D-553`). Carried on the row
     /// rather than derived, because the stage a creation is at is stored and not computed — and carried
@@ -321,7 +328,8 @@ pub struct TaskDetail {
     /// Premises: linked decisions that are not live grounds (id + title). Empty means the premises hold.
     pub blocked_by_decisions: Vec<DecisionRef>,
     /// The declared start day, when it is still ahead ([`not_started_until`]) — the third reason this task
-    /// is not ready, beside the two above. Always serialized, `null` when the start day is no reason.
+    /// is not ready, beside the two above. Always serialized, `null` when the start day is no reason. A
+    /// start at an instant still ahead is the reader's day it falls on.
     pub not_started_until: Option<NaiveDate>,
     /// Still being put together — the fourth reason this task is not ready (`AMB-D-553`). The one premise
     /// the reader of a detail page can settle on the spot: finishing the creation is what clears it.
@@ -492,10 +500,10 @@ pub enum ReserveBlocker {
         status: DecisionStatus,
         superseded_by: Option<String>,
     },
-    /// The task declares a start day that has not arrived. Unlike the two above, this one clears itself:
-    /// the day comes and the task is ready, with nothing to do. `start_on` is the declared day, so the
-    /// error can say when the wait ends.
-    NotStartedYet { start_on: NaiveDate },
+    /// The task declares a start that has not arrived. Unlike the two above, this one clears itself:
+    /// the day or the instant comes and the task is ready, with nothing to do. `start` is the declared
+    /// start, so the error can say when the wait ends.
+    NotStartedYet { start: Schedule },
     /// The task is still being put together (`AMB-D-553`). It carries no value: the whole of the reason
     /// is that the creation has not been finished, and what clears it is finishing it — there is nothing
     /// further for the refusal to name.

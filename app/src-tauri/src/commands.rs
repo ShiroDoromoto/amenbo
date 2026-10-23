@@ -194,15 +194,16 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
     // The start day is read through core's own predicate, so the card cannot drift from what the
     // reserve enforces — the GUI must not call a task startable that `task status` would refuse.
     let start_date = row.start.map(|s| s.day());
-    let not_started_until =
-        amenbo_core::view::not_started_until(row.start, amenbo_core::time::today());
+    let (today, now) = (amenbo_core::time::today(), Timestamp::now());
+    let not_started_until = amenbo_core::view::not_started_until(row.start, today, now).map(|s| s.day());
     // Core's own predicate rather than a fourth restatement of it: `ready` on a card and `ready` at the
     // reserve are the same question, and the only way they cannot drift is by being one call.
     let ready = amenbo_core::view::is_ready(
         !row.blocked_by.is_empty(),
         !row.blocked_by_decisions.is_empty(),
         row.start,
-        amenbo_core::time::today(),
+        today,
+        now,
         row.draft,
         !row.waiting_on_values.is_empty(),
     );
@@ -1485,6 +1486,7 @@ pub fn task_page(
             filter: &parsed,
             sort: &sort,
             today,
+            now: Timestamp::now(),
             limit,
             offset,
         },

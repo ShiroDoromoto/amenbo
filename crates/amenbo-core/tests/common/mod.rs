@@ -298,6 +298,7 @@ pub fn run_mailbox_list(s: &Seeded) -> (usize, usize) {
         filter: &filter,
         sort: "priority",
         today: time::today(),
+        now: time::Timestamp::now(),
         limit: Some(HOT_TASKS),
         offset: None,
     };
@@ -321,6 +322,7 @@ pub fn run_board_list(s: &Seeded) -> (usize, usize) {
         filter: &filter,
         sort: "order",
         today: time::today(),
+        now: time::Timestamp::now(),
         limit: Some(50),
         offset: None,
     };
@@ -341,6 +343,7 @@ pub fn run_count_only_list(s: &Seeded) -> (usize, usize) {
         filter: &filter,
         sort: "order",
         today: time::today(),
+        now: time::Timestamp::now(),
         limit: Some(0),
         offset: None,
     };

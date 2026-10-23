@@ -432,13 +432,18 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
             // let the declaration rot into decoration. The English names the command that corrects it;
             // the template the GUI writes from names the field on screen instead, because a person in
             // front of a window has no command line in front of them.
-            ReserveBlocker::NotStartedYet { start_on } => {
+            // A start at an instant is said in the reader's own zone, to the minute (`AMB-D-1082`).
+            ReserveBlocker::NotStartedYet { start } => {
+                let start = match start {
+                    Schedule::Day(day) => crate::time::date_to_string(*day),
+                    Schedule::At(at) => at.0.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string(),
+                };
                 reasons.push(
                     Msg::new(format!(
-                        "it is not due to start until {start_on} — run `task update {subject} --start today` if that is wrong"
+                        "it is not due to start until {start} — run `task update {subject} --start today` if that is wrong"
                     ))
                     .coded(ErrorCode::NotReadyNotStarted)
-                    .with("start", start_on),
+                    .with("start", start),
                 );
             }
             // The one reason the reserver can clear where they stand, so the sentence is the next thing
@@ -540,7 +545,7 @@ pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus, actor: ActorKin
     // A reservation only goes through once the declared premises hold: no open blocker, and every decision
     // linked as a premise settled.
     if status == TaskStatus::InProgress {
-        let blockers = read::reserve_blockers(tx.conn(), id, crate::time::today())?;
+        let blockers = read::reserve_blockers(tx.conn(), id, crate::time::today(), Timestamp::now())?;
         if !blockers.is_empty() {
             return Err(not_ready(&subject(tx, id), &blockers));
         }
@@ -1129,7 +1134,7 @@ mod tests {
             };
             let check = |tx: &WriteTx<'_>| {
                 assert_eq!(
-                    read::reserve_blockers(tx.conn(), tid, crate::time::today()).unwrap().is_empty(),
+                    read::reserve_blockers(tx.conn(), tid, crate::time::today(), Timestamp::now()).unwrap().is_empty(),
                     ready_in_mailbox(tx),
                     "reserve_blockers が空 ⇔ mailbox の ready:yes に出る"
                 );
@@ -1148,6 +1153,12 @@ mod tests {
             let tomorrow = crate::time::today() + chrono::Duration::days(1);
             update(tx, tid, TaskPatch { start: Some(Schedule::Day(tomorrow)), ..TaskPatch::default() }).unwrap();
             check(tx);
+            // A start at an instant is held to that instant on both sides (`AMB-D-1082`).
+            for hours in [1, -1] {
+                let at = Timestamp(Timestamp::now().0 + chrono::Duration::hours(hours));
+                update(tx, tid, TaskPatch { start: Some(Schedule::At(at)), ..TaskPatch::default() }).unwrap();
+                check(tx);
+            }
             update(tx, tid, TaskPatch { clear_start: true, ..TaskPatch::default() }).unwrap();
             check(tx);
             // And the fourth: a creation still unfinished has to hide the task from the mailbox and
@@ -1156,7 +1167,7 @@ mod tests {
             check(tx);
             set_draft(tx, tid, false);
             check(tx);
-            assert!(read::reserve_blockers(tx.conn(), tid, crate::time::today()).unwrap().is_empty());
+            assert!(read::reserve_blockers(tx.conn(), tid, crate::time::today(), Timestamp::now()).unwrap().is_empty());
         });
     }
 
@@ -1323,13 +1334,10 @@ mod tests {
         // restates — or the mailbox and `task show` would disagree about the same task.
         with_numbered_task(|tx, _pid, tid| {
             let today = crate::time::today();
-            let set_start = |tx: &WriteTx<'_>, d: Option<NaiveDate>| {
-                update(
-                    tx,
-                    tid,
-                    TaskPatch { start: d.map(Schedule::Day), clear_start: d.is_none(), ..TaskPatch::default() },
-                )
-                .unwrap();
+            let in_hours = |h| Timestamp(Timestamp::now().0 + chrono::Duration::hours(h));
+            let set_start = |tx: &WriteTx<'_>, start: Option<Schedule>| {
+                update(tx, tid, TaskPatch { start, clear_start: start.is_none(), ..TaskPatch::default() })
+                    .unwrap();
             };
             // The card path (`task list`), the detail path (`task show`), and the filter path.
             let card = |tx: &WriteTx<'_>| {
@@ -1356,9 +1364,12 @@ mod tests {
 
             for (start, want, what) in [
                 (None, true, "no start day declared"),
-                (Some(today - chrono::Duration::days(1)), true, "started yesterday"),
-                (Some(today), true, "starts today"),
-                (Some(today + chrono::Duration::days(1)), false, "starts tomorrow"),
+                (Some(Schedule::Day(today - chrono::Duration::days(1))), true, "started yesterday"),
+                (Some(Schedule::Day(today)), true, "starts today"),
+                (Some(Schedule::Day(today + chrono::Duration::days(1))), false, "starts tomorrow"),
+                // An instant is held to the instant, not to the day it falls on (`AMB-D-1082`).
+                (Some(Schedule::At(in_hours(-1))), true, "started an hour ago"),
+                (Some(Schedule::At(in_hours(1))), false, "starts in an hour"),
             ] {
                 set_start(tx, start);
                 assert_eq!(card(tx), want, "card: {what}");

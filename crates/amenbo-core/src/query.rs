@@ -656,7 +656,16 @@ pub fn any(conn: &rusqlite::Connection, reach: crate::reach::Reach, filter_expr:
     filter.project_id = reach.narrow(filter.project_id)?;
     store_engine::any_task(
         conn,
-        &TaskQuery { reach, project_id, filter: &filter, sort: "", today, limit: None, offset: None },
+        &TaskQuery {
+            reach,
+            project_id,
+            filter: &filter,
+            sort: "",
+            today,
+            now: Timestamp::now(),
+            limit: None,
+            offset: None,
+        },
     )
     .map_err(crate::error::engine_on(conn))
 }
@@ -675,7 +684,7 @@ pub fn list(
 ) -> Result<TaskListResult> {
     use crate::store_engine::{self, TaskQuery};
 
-    let today = time::today();
+    let (today, now) = (time::today(), Timestamp::now());
     let mut filter = match &params.filter_expr {
         Some(e) => Filter::parse(e, today)?,
         None => Filter::default(),
@@ -709,6 +718,7 @@ pub fn list(
             filter: &filter,
             sort: &params.sort,
             today,
+            now,
             limit: params.limit,
             offset: params.offset,
         },
@@ -717,7 +727,7 @@ pub fn list(
 
     // Keeping the order SQL produced, hydrate only the ids on this page, straight from the
     // read-model. Ids with no live row drop out (an invariant of `hydrate_task_cards`).
-    let tasks = store_engine::hydrate_task_cards(conn, reach, &page.ids, today)
+    let tasks = store_engine::hydrate_task_cards(conn, reach, &page.ids, today, now)
         .map_err(crate::error::engine_on(conn))?;
     let count = tasks.len();
 
@@ -735,6 +745,7 @@ pub fn list(
                 filter: &waiting,
                 sort: &params.sort,
                 today,
+                now,
                 limit: None,
                 offset: None,
             },
@@ -755,6 +766,7 @@ pub fn list(
                 filter: &waiting,
                 sort: &params.sort,
                 today,
+                now,
                 limit: None,
                 offset: None,
             },
@@ -835,14 +847,14 @@ pub struct StatusResult {
 /// [`crate::store_engine::hydrate_task_cards`], both O(output) — neither walks the whole store. The
 /// order within each bucket is decided by the read-model's `ORDER BY`.
 pub fn status(conn: &rusqlite::Connection, scope: &str, reach: crate::reach::Reach) -> Result<StatusResult> {
-    let today = time::today();
+    let (today, now) = (time::today(), Timestamp::now());
     // Buckets and counts alike only see inside the reach (an AI's `status` must not mirror the whole
     // store back at it).
     let buckets = crate::store_engine::read::status_bucket_ids(conn, today, reach)
         .map_err(crate::error::engine_on(conn))?;
 
     let hydrate = |ids: &[i64]| -> Result<Vec<TaskCompact>> {
-        crate::store_engine::hydrate_task_cards(conn, reach, ids, today)
+        crate::store_engine::hydrate_task_cards(conn, reach, ids, today, now)
             .map_err(crate::error::engine_on(conn))
     };
 
@@ -2097,7 +2109,7 @@ pub fn task_detail(
         row.blocked_by.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
     let blocked_by_decisions: Vec<DecisionRef> =
         row.blocked_by_decisions.into_iter().map(|(id, name)| DecisionRef { id, name: Some(name) }).collect();
-    let today = time::today();
+    let (today, now) = (time::today(), Timestamp::now());
     // The one ready predicate, shared with the task card and the `ready:` filter, and beside it the
     // third reason it can return false (the fourth rides on the row as `draft`, the fifth as the values
     // it waits on).
@@ -2106,10 +2118,11 @@ pub fn task_detail(
         !blocked_by_decisions.is_empty(),
         row.start,
         today,
+        now,
         row.draft,
         !row.waiting_on_values.is_empty(),
     );
-    let not_started_until = crate::view::not_started_until(row.start, today);
+    let not_started_until = crate::view::not_started_until(row.start, today, now).map(|s| s.day());
     let blocks: Vec<crate::view::TaskRef> =
         row.blocks.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
 
@@ -2544,6 +2557,7 @@ pub fn search(
             project_id,
             filter: filter.as_ref(),
             today,
+            now: Timestamp::now(),
             kind: params.kind,
             face: params.face,
             sort: params.sort,
@@ -3513,6 +3527,7 @@ mod filter_tests {
                 filter: &Filter::default(),
                 sort: "title",
                 today: time::today(),
+                now: Timestamp::now(),
                 limit: None,
                 offset: None,
             },

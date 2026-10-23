@@ -1833,7 +1833,7 @@ export const tr: Translation = {
       fix: "Metni açıp düzenleyin: göndermeyi çıkarın ya da onun yerini alana yöneltin. Ne demek istediğini yalnızca yazan bilir.",
     },
     start_after_due: {
-      message: "{task} {start_on} tarihinde başlayacak ayarlanmış ama son tarihi {due_on} idi — teslim tarihini çoktan geçmiş bir güne kadar gelen kutusunun dışında kalır.",
+      message: "{task} {start} tarihinde başlayacak ayarlanmış ama son tarihi {due} idi — teslim tarihini çoktan geçmiş bir güne kadar gelen kutusunun dışında kalır.",
       fix: "İkisinden biri yanlış: ya başlangıç gününü ya da son tarihi düzeltin. Hangisinin yazım hatası olduğu belli olmadığı için aralarında seçim yapan yoktur.",
     },
     project_without_folder: {

@@ -1833,7 +1833,7 @@ export const vi: Translation = {
       fix: "Hãy mở nội dung ra và sửa: bỏ mã tham chiếu, hoặc trỏ nó tới thứ đã thế chỗ. Nó định nói gì thì chỉ người viết mới biết.",
     },
     start_after_due: {
-      message: "{task} được đặt bắt đầu vào {start_on} trong khi hạn là {due_on} — nó nằm ngoài hộp thư cho tới một ngày vốn đã quá hạn.",
+      message: "{task} được đặt bắt đầu vào {start} trong khi hạn là {due} — nó nằm ngoài hộp thư cho tới một ngày vốn đã quá hạn.",
       fix: "Một trong hai là sai: hãy sửa ngày bắt đầu hoặc hạn chót. Không gì phân xử giúp được, vì lỗi gõ có thể nằm ở bên nào cũng được.",
     },
     project_without_folder: {

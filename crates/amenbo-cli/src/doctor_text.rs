@@ -72,8 +72,8 @@ pub fn message(issue: &DoctorIssue) -> String {
             "Task {} is declared to start on {} but was due on {}: it stays out of the mailbox until \
              a day that has already passed its deadline.",
             p(issue, "task"),
-            p(issue, "start_on"),
-            p(issue, "due_on"),
+            p(issue, "start"),
+            p(issue, "due"),
         ),
         DoctorIssueKind::ProjectWithoutFolder => format!(
             "Project #{project} '{}' has no folder on this machine leading to it: there is nowhere to \

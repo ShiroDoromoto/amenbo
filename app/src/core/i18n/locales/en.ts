@@ -2137,7 +2137,7 @@ const doctor = {
     fix: "Open the body and edit it: drop the ref, or point it at what stands in its place. Only the person who wrote it knows what it meant to say.",
   },
   start_after_due: {
-    message: "{task} is set to start on {start_on} but was due on {due_on} — it stays out of the inbox until a day that is already past its deadline.",
+    message: "{task} is set to start on {start} but was due on {due} — it stays out of the inbox until a day that is already past its deadline.",
     fix: "One of the two is wrong: correct either the start day or the due day. Nothing picks a winner between them, since either one could be the typo.",
   },
   project_without_folder: {

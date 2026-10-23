@@ -1835,7 +1835,7 @@ export const nl: Translation = {
       fix: "Open de tekst en pas hem aan: haal de verwijzing weg, of richt hem op wat er nu staat. Wat er bedoeld werd, weet alleen wie het schreef.",
     },
     start_after_due: {
-      message: "{task} moet beginnen op {start_on} maar had als deadline {due_on} — hij blijft buiten het postvak tot een dag die de deadline al voorbij is.",
+      message: "{task} moet beginnen op {start} maar had als deadline {due} — hij blijft buiten het postvak tot een dag die de deadline al voorbij is.",
       fix: "Een van de twee klopt niet: pas de startdag aan of de deadline. Niemand kiest daartussen, want de typefout kan aan beide kanten zitten.",
     },
     project_without_folder: {

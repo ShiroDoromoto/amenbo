@@ -1834,7 +1834,7 @@ export const id: Translation = {
       fix: "Buka teksnya dan suntinglah: buang rujukannya, atau arahkan ke apa yang kini menggantikannya. Hanya penulisnya yang tahu apa yang hendak dikatakan.",
     },
     start_after_due: {
-      message: "{task} disetel mulai {start_on} padahal tenggatnya {due_on} — ia tetap di luar kotak masuk sampai hari yang sudah melewati tenggatnya.",
+      message: "{task} disetel mulai {start} padahal tenggatnya {due} — ia tetap di luar kotak masuk sampai hari yang sudah melewati tenggatnya.",
       fix: "Salah satu dari keduanya keliru: perbaiki hari mulainya atau tenggatnya. Tidak ada yang memilihkan, karena salah ketik bisa ada di mana saja.",
     },
     project_without_folder: {

@@ -264,31 +264,40 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
         ))
     })?);
 
-    // A task declared to start after the day it is due. Neither declaration is wrong on its own, so
+    // A task declared to start after it is due. Neither declaration is wrong on its own, so
     // nothing on the write path refuses the pair — but together they hide the task: it stays out of the
-    // mailbox until a start day that falls after the day it was already due. Raising it here is what was
+    // mailbox until a start that falls after it was already due. Raising it here is what was
     // chosen over an exception in the ready predicate ("it is due, so ignore the start day"), which would
     // have left nobody able to read which of the two declarations won.
     //
     // Tasks that have ended are left out, whichever way they ended: the contradiction is only worth a
     // sentence while the work is outstanding.
-    // Both columns are stored as `YYYY-MM-DD`, so this is the lexicographic comparison the read model uses
-    // everywhere for a day column.
+    //
+    // Each side is a day or an instant (`AMB-D-1082`), and a day starts at its beginning and is due at its
+    // end. Two days or two instants compare as they are — each column is fixed-width text, whose order is
+    // time order. An instant against a day compares the reader's day the instant falls on (SQLite's
+    // `'localtime'`, the zone `crate::time::today` reads): a start at 17:00 on the day a task is due is
+    // not after it, and a start the day after a deadline at 17:00 is. A day column is never compared with
+    // an instant column directly — `'2026-10-23T08:00:00Z' <= '2026-10-23'` is false.
     const S: col::task::Cols = col::task::ALL;
     let mut sel = Select::new();
-    let (bad_id, bad_start, bad_due) = (sel.col(S.id), sel.col(S.start_on), sel.col(S.due_on));
+    let (bad_id, start_on, due_on) = (sel.col(S.id), sel.col(S.start_on), sel.col(S.due_on));
+    let (start_at, due_at) = (sel.col(S.start_at), sel.col(S.due_at));
+    let after = |start: String, due: String| Pred::plain(format!("{start} > {due}"));
+    let local_day = |at: String| format!("date({at}, 'localtime')");
+    let (s_on, s_at, d_on, d_at) = (S.start_on.to_sql(), S.start_at.to_sql(), S.due_on.to_sql(), S.due_at.to_sql());
+    let start_after_due = Pred::any([
+        (!Pred::is_blank(S.start_on)).and(!Pred::is_blank(S.due_on)).and(after(s_on.clone(), d_on.clone())),
+        (!Pred::is_blank(S.start_at)).and(!Pred::is_blank(S.due_at)).and(after(s_at.clone(), d_at.clone())),
+        (!Pred::is_blank(S.start_at)).and(!Pred::is_blank(S.due_on)).and(after(local_day(s_at), d_on)),
+        (!Pred::is_blank(S.start_on)).and(!Pred::is_blank(S.due_at)).and(after(s_on, local_day(d_at))),
+    ]);
     let mut sql = Sql::from(&sel, S.table);
     sql.push_where(
         Pred::all(
-            [
-                Some(!Pred::is_blank(S.start_on)),
-                Some(!Pred::is_blank(S.due_on)),
-                Some(Pred::plain(format!("{} > {}", S.start_on.to_sql(), S.due_on.to_sql()))),
-                Some(crate::store_engine::read::still_open(S.status)),
-                reach_pred(reach, S),
-            ]
-            .into_iter()
-            .flatten(),
+            [start_after_due, Some(crate::store_engine::read::still_open(S.status)), reach_pred(reach, S)]
+                .into_iter()
+                .flatten(),
         )
         .as_ref(),
     )
@@ -301,8 +310,8 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
             format!("task:{id}"),
             &[
                 ("task", &crate::idref::task(id)),
-                ("start_on", &bad_start.get(r)?.unwrap_or_default()),
-                ("due_on", &bad_due.get(r)?.unwrap_or_default()),
+                ("start", &schedule_text(start_on.get(r)?, start_at.get(r)?)),
+                ("due", &schedule_text(due_on.get(r)?, due_at.get(r)?)),
             ],
         ))
     })?);
@@ -314,6 +323,15 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
         issues,
         summary: Summary { error, warning },
     })
+}
+
+/// A start or a deadline as an issue's sentence says it: a day as `YYYY-MM-DD`, an instant in the reader's
+/// zone to the minute (`AMB-D-1082`). A row holds at most one of the two columns.
+fn schedule_text(on: Option<String>, at: Option<String>) -> String {
+    match at.as_deref().and_then(crate::time::Timestamp::parse_rfc3339) {
+        Some(t) => t.0.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string(),
+        None => on.unwrap_or_default(),
+    }
 }
 
 /// Bodies whose prose points at refs that resolve to nothing.
@@ -874,9 +892,64 @@ mod tests {
              alone, and not the one already done"
         );
         // The sentence a surface assembles needs both days, so the issue has to carry both.
-        assert_eq!(raised[0].params.get("start_on").map(String::as_str), Some("2026-09-01"));
-        assert_eq!(raised[0].params.get("due_on").map(String::as_str), Some("2026-08-01"));
+        assert_eq!(raised[0].params.get("start").map(String::as_str), Some("2026-09-01"));
+        assert_eq!(raised[0].params.get("due").map(String::as_str), Some("2026-08-01"));
         assert!(r.ok, "a contradiction between two declarations has broken nothing in the store");
+    }
+
+    /// `at` o'clock on `day` for the reader, as `start_at` / `due_at` holds it. The hours used here are well
+    /// inside the reader's day, so which zone the run is set to does not move them onto another day.
+    fn local_instant(day: &str, at: u32) -> String {
+        use chrono::TimeZone;
+        let d = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").unwrap();
+        let t = chrono::Local.from_local_datetime(&d.and_hms_opt(at, 0, 0).unwrap()).single().unwrap();
+        crate::time::Timestamp(t.with_timezone(&chrono::Utc)).to_rfc3339_z()
+    }
+
+    #[test]
+    fn a_start_or_deadline_at_an_instant_is_read_as_a_day_starts_and_ends() {
+        let e = StoreEngine::open_in_memory_unchecked().unwrap();
+        e.put_record("project", 7, &[("name", text("Alpha")), ("order_key", text("a"))]).unwrap();
+        for (id, start, due, key) in [
+            // Starting at 17:00 on the day it is due is still inside that day.
+            (1, ("start_at", local_instant("2026-10-24", 17)), ("due_on", "2026-10-24".to_string()), "a"),
+            // Starting the day after a deadline at 17:00 starts after it.
+            (2, ("start_on", "2026-10-25".to_string()), ("due_at", local_instant("2026-10-24", 17)), "b"),
+            // Two instants compare as instants, even on one day.
+            (3, ("start_at", local_instant("2026-10-24", 15)), ("due_at", local_instant("2026-10-24", 11)), "c"),
+            (4, ("start_at", local_instant("2026-10-24", 11)), ("due_at", local_instant("2026-10-24", 15)), "d"),
+            // A start on the deadline's own day begins before that deadline.
+            (5, ("start_on", "2026-10-24".to_string()), ("due_at", local_instant("2026-10-24", 9)), "e"),
+            // A start at an instant the day after a day-only deadline.
+            (6, ("start_at", local_instant("2026-10-25", 9)), ("due_on", "2026-10-24".to_string()), "f"),
+        ] {
+            e.put_record(
+                "task",
+                id,
+                &[
+                    ("title", text("t")),
+                    ("project_id", Value::Integer(7)),
+                    ("order_key", text(key)),
+                    ("status", text("todo")),
+                    (start.0, text(&start.1)),
+                    (due.0, text(&due.1)),
+                ],
+            )
+            .unwrap();
+        }
+
+        let r = doctor(e.conn(), Reach::All).unwrap();
+
+        let raised: Vec<&DoctorIssue> =
+            r.issues.iter().filter(|i| i.kind == DoctorIssueKind::StartAfterDue).collect();
+        assert_eq!(
+            raised.iter().map(|i| i.target.as_str()).collect::<Vec<_>>(),
+            vec!["task:2", "task:3", "task:6"],
+            "a day starts at its beginning and is due at its end; two instants compare as instants"
+        );
+        // An instant is said in the reader's zone, to the minute.
+        assert_eq!(raised[0].params.get("start").map(String::as_str), Some("2026-10-25"));
+        assert_eq!(raised[0].params.get("due").map(String::as_str), Some("2026-10-24 17:00"));
     }
 
     // ─────────────────────── dead refs ───────────────────────

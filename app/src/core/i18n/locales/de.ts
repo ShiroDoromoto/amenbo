@@ -1844,7 +1844,7 @@ export const de: Translation = {
       fix: "Öffne den Text und bearbeite ihn: Lass die Referenz weg, oder richte sie auf das, was an ihre Stelle getreten ist. Was sie sagen wollte, weiß nur, wer sie geschrieben hat.",
     },
     start_after_due: {
-      message: "{task} soll am {start_on} beginnen, war aber am {due_on} fällig — sie bleibt bis zu einem Tag aus dem Eingang, der die Frist schon überschritten hat.",
+      message: "{task} soll am {start} beginnen, war aber am {due} fällig — sie bleibt bis zu einem Tag aus dem Eingang, der die Frist schon überschritten hat.",
       fix: "Eines von beiden ist falsch: Korrigiere entweder den Starttag oder den Fälligkeitstag. Nichts entscheidet zwischen ihnen, denn der Tippfehler kann in jedem von beiden stecken.",
     },
     project_without_folder: {

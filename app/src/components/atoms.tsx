@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { Actor, Priority, Schedule, Status, TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
-import { dueKind, scheduleText, todayStr } from "../core/calendar";
+import { dueKind, scheduleDay, scheduleText, scheduleTime, todayStr } from "../core/calendar";
 import {
   dueLabel, exactLabel, formatDayTime, formatNumber, priorityLabel, statusLabel, t, tf, whenLabel,
 } from "../core/i18n";
@@ -268,22 +268,31 @@ export function DueChip({ due }: { due: Schedule | null }) {
 }
 
 /**
- * The field that writes one of a task's two days. It is the platform's own date input, so the picker is
- * the one the reader already knows and the value crossing this boundary is `YYYY-MM-DD` both ways — the
- * shape core stores, with no time and no zone to lose on the road (`AMB-D-429`).
+ * The field that writes a task's start or due. It is the platform's own date input, with the platform's own
+ * time input beside it, so the pickers are the ones the reader already knows. What crosses this boundary is
+ * `YYYY-MM-DD` for a day, the shape core stores with no time and no zone to lose on the road (`AMB-D-429`),
+ * or `YYYY-MM-DD HH:MM` once the time is filled — read on the reader's own clock, the way the CLI's
+ * `--due "2026-10-24 9:00"` is, and held as the UTC instant it names (`AMB-D-1082`).
+ *
+ * The time field is drawn only where `timed` asks for it — the task detail. A task being created takes a
+ * day alone, as `task_add` reads it.
+ *
+ * **The time is optional, and only ever rides on a day.** Emptying it leaves the day alone; taking the day
+ * off takes the time with it, since a time on no day names nothing. Changing the day keeps the time on it.
  *
  * **No day is drawn as no day, not as an empty picker.** An empty date input fills itself in with a date
  * of its own as the placeholder, and on the pane that reads as a day somebody set — the one thing this
  * field must never say. So the absence is written out ("none", with the button that begins one), and the
- * picker appears once there is a day to show or the reader has asked to name one.
+ * pickers appear once there is a day to show or the reader has asked to name one.
  *
  * Taking the day off again has its own button rather than relying on the picker's, which not every
  * platform draws: a date that will not come off is a date the reader cannot take back.
  */
-export function DateField({ label, value, onChange }: {
+export function DateField({ label, value, onChange, timed = false }: {
   label: string;
-  value: string | null;
-  onChange: (day: string | null) => void;
+  value: Schedule | null;
+  onChange: (value: string | null) => void;
+  timed?: boolean;
 }) {
   // Asked for, but not named yet — the picker is open on a task that has no day. It is local to the
   // field: what the store holds is still nothing, and nothing is written until a day is chosen.
@@ -299,6 +308,8 @@ export function DateField({ label, value, onChange }: {
       </span>
     );
   }
+  const day = value && scheduleDay(value);
+  const time = value && scheduleTime(value);
   return (
     <span>
       <input
@@ -306,9 +317,23 @@ export function DateField({ label, value, onChange }: {
         className="inlineselect"
         aria-label={label}
         autoFocus={naming}
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
+        value={day ?? ""}
+        onChange={(e) => {
+          const d = e.target.value;
+          onChange(d === "" ? null : time ? `${d} ${time}` : d);
+        }}
       />
+      {/* No time before there is a day: the time names an hour of that day and nothing else. */}
+      {timed && day !== null && (
+        <input
+          type="time"
+          className="inlineselect"
+          style={{ marginLeft: 6 }}
+          aria-label={tf("date.timeOf", { field: label })}
+          value={time ?? ""}
+          onChange={(e) => onChange(e.target.value === "" ? day : `${day} ${e.target.value}`)}
+        />
+      )}
       <button
         className="btn"
         style={{ marginLeft: 6 }}

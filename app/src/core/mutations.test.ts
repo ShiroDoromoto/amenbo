@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { addComment, addTask, completeTask, deleteProject, deleteTask, finishTaskCreation, rejectTask, setDue, setStart, setStatus } from "./mutations";
 import { whenLabel } from "./i18n";
-import { addDays, todayStr } from "./calendar";
+import { addDays, scheduleText, todayStr } from "./calendar";
 import { applySnapshot, getSnapshot, type Snapshot } from "./snapshot";
 import type { TaskCard } from "../mock/types";
 
@@ -278,6 +278,31 @@ describe("the two days (browser-loop mock)", () => {
 
     await setDue(10, null);
     expect(getSnapshot().tasks[0].due).toBeNull();
+  });
+
+  it("takes a local time on the day as the instant it names, and the day alone again once it is off", async () => {
+    seedTasks([full(10)]);
+    await setDue(10, "2099-12-31 17:30");
+    const due = getSnapshot().tasks[0].due!;
+    expect(due.kind).toBe("at");
+    expect(scheduleText(due)).toBe("2099-12-31 17:30");
+
+    await setDue(10, "2099-12-31");
+    expect(getSnapshot().tasks[0].due).toEqual({ kind: "day", day: "2099-12-31" });
+  });
+
+  it("holds the task unready while a timed start is still ahead, as a day does", async () => {
+    seedTasks([full(10)]);
+    await setStart(10, `${dayFromNow(3)} 09:00`);
+    let t = getSnapshot().tasks[0];
+    expect(t.start?.kind).toBe("at");
+    expect(t.notStartedUntil).toEqual(t.start);
+    expect(t.ready).toBe(false);
+
+    await setStart(10, `${dayFromNow(-3)} 09:00`);
+    t = getSnapshot().tasks[0];
+    expect(t.notStartedUntil).toBeNull();
+    expect(t.ready).toBe(true);
   });
 
   it("holds the task unready while the start day is still ahead, and hands it back when it is not", async () => {

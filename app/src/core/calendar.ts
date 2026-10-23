@@ -33,13 +33,29 @@ export function scheduleDay(s: Schedule): string {
   return s.kind === "day" ? s.day : fmtDate(new Date(s.at));
 }
 
-// A start or a due as plain text: the day, and for an instant the reader's local time after it.
-export function scheduleText(s: Schedule): string {
-  if (s.kind === "day") return s.day;
+// The reader's local time (`HH:MM`) a start or a due names, or null for a bare day.
+export function scheduleTime(s: Schedule): string | null {
+  if (s.kind === "day") return null;
   const at = new Date(s.at);
   const hh = String(at.getHours()).padStart(2, "0");
   const mm = String(at.getMinutes()).padStart(2, "0");
-  return `${fmtDate(at)} ${hh}:${mm}`;
+  return `${hh}:${mm}`;
+}
+
+// A start or a due as plain text: the day, and for an instant the reader's local time after it.
+export function scheduleText(s: Schedule): string {
+  const time = scheduleTime(s);
+  return time === null ? scheduleDay(s) : `${scheduleDay(s)} ${time}`;
+}
+
+// A start or a due as the task detail writes it — `YYYY-MM-DD`, or `YYYY-MM-DD HH:MM` on the reader's
+// own clock — read back into the value a card carries: a day, or the UTC instant that local time names.
+export function parseSchedule(s: string): Schedule {
+  const [day, time] = s.split(" ");
+  if (!time) return { kind: "day", day };
+  const [y, m, d] = parseYmd(day);
+  const [hh, mm] = time.split(":").map(Number);
+  return { kind: "at", at: new Date(y, m - 1, d, hh, mm).toISOString().replace(".000Z", "Z") };
 }
 
 // The order of two dues: by the reader's day, and within one day the instants first, in time order, with

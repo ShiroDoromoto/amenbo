@@ -278,6 +278,7 @@ export const vi: Translation = {
     "cal.more": "+{n} nữa", "cal.overdueDays": "trễ {n} ngày", "cal.inDays": "còn {n} ngày",
     "date.due": "Hạn", "date.start": "Ngày bắt đầu",
     "date.clear": "Xóa",
+    "date.timeOf": "Giờ của {field}",
     "card.assignee": "Người phụ trách",
     "detail.tab.detail": "Chi tiết", "detail.tab.activity": "Hoạt động",
     "detail.notFound": "Không thấy việc",

@@ -276,6 +276,7 @@ export const tr: Translation = {
     "cal.more": "+{n} daha", "cal.overdueDays": "{n} gün gecikmiş", "cal.inDays": "{n} gün sonra",
     "date.due": "Son tarih", "date.start": "Başlangıç tarihi",
     "date.clear": "Kaldır",
+    "date.timeOf": "{field} saati",
     "card.assignee": "Sorumlu",
     "detail.tab.detail": "Ayrıntılar", "detail.tab.activity": "Hareketler",
     "detail.notFound": "İş bulunamadı",

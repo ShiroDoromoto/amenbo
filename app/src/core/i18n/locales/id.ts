@@ -278,6 +278,7 @@ export const id: Translation = {
     "cal.more": "+{n} lagi", "cal.overdueDays": "lewat {n} hari", "cal.inDays": "{n} hari lagi",
     "date.due": "Tenggat", "date.start": "Tanggal mulai",
     "date.clear": "Hapus",
+    "date.timeOf": "Jam {field}",
     "card.assignee": "Penanggung jawab",
     "detail.tab.detail": "Rincian", "detail.tab.activity": "Aktivitas",
     "detail.notFound": "Tugas tidak ditemukan",

@@ -280,6 +280,7 @@ export const it: Translation = {
     "cal.more": "+{n} altre", "cal.overdueDays": "{n} g di ritardo", "cal.inDays": "tra {n} g",
     "date.due": "Scadenza", "date.start": "Data di inizio",
     "date.clear": "Rimuovi",
+    "date.timeOf": "Ora di {field}",
     "card.assignee": "Responsabile",
     "detail.tab.detail": "Dettagli", "detail.tab.activity": "Attività",
     "detail.notFound": "Attività non trovata",

@@ -275,6 +275,7 @@ export const ko: Translation = {
     "cal.more": "+{n}건 더", "cal.overdueDays": "{n}일 지남", "cal.inDays": "{n}일 후",
     "date.due": "기한", "date.start": "시작일",
     "date.clear": "지우기",
+    "date.timeOf": "{field} 시각",
     "card.assignee": "담당",
     "detail.tab.detail": "상세", "detail.tab.activity": "활동",
     "detail.notFound": "작업을 찾을 수 없습니다",

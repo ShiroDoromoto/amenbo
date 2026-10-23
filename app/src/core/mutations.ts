@@ -17,7 +17,7 @@ import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Schedule, Status, TaskCard } from "../mock/types";
 import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DimensionDecisionValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HandoverDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
-import { scheduleText, todayStr } from "./calendar";
+import { parseSchedule, scheduleText, todayStr } from "./calendar";
 
 /**
  * What a write command returns (mirrors the Rust `WriteAck`). It is never a whole snapshot: the GUI
@@ -223,9 +223,9 @@ function notReadyParts(t: TaskCard): CmdErrorPart[] {
   return parts;
 }
 
-/** A day the mock was handed (`YYYY-MM-DD`, or null), as the value a card carries. */
-function onDay(day: string | null): Schedule | null {
-  return day ? { kind: "day", day } : null;
+/** A start or a due the mock was handed (`YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or null), as the value a card carries. */
+function onSchedule(value: string | null): Schedule | null {
+  return value ? parseSchedule(value) : null;
 }
 
 /**
@@ -326,13 +326,13 @@ export async function addTask(
 
     const task: TaskCard = {
       id, title, notes: notes ?? "", status: "todo", assignee: null, priority: null,
-      due: onDay(due ?? null), comments: 0, createdBy: me(),
+      due: onSchedule(due ?? null), comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       // A creation lands unfinished, exactly as core's `add` leaves it (`AMB-D-554`): the task is on the
       // board and refused a reservation until the detail pane's "finish creating" ends the second stage.
       ready: false, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [],
-      start: onDay(start ?? null), notStartedUntil: startAhead(onDay(start ?? null)),
+      start: onSchedule(start ?? null), notStartedUntil: startAhead(onSchedule(start ?? null)),
       draft: true,
     };
     return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, { kind: "task.created" }), ...s.activity] };
@@ -509,19 +509,19 @@ export async function setPriority(id: number, priority: Priority | null): Promis
 }
 
 /**
- * Set or clear the due date (`YYYY-MM-DD`, or null to take it away). Silent on the timeline for the same
+ * Set or clear the due date (`YYYY-MM-DD`, `YYYY-MM-DD HH:MM` on the reader's clock, or null to take it away). Silent on the timeline for the same
  * reason `setPriority` is: core keeps no system event for an edited date.
  */
 export async function setDue(id: number, due: string | null): Promise<void> {
   if (inTauri()) return invokeAck("task_set_due", { id, due });
   mockMutate((s) => ({
     ...s,
-    tasks: s.tasks.map((x) => (x.id === id ? { ...x, due: onDay(due) } : x)),
+    tasks: s.tasks.map((x) => (x.id === id ? { ...x, due: onSchedule(due) } : x)),
   }));
 }
 
 /**
- * Set or clear the start day (`YYYY-MM-DD`, or null to take it away). Unlike the due date this one is a
+ * Set or clear the start (`YYYY-MM-DD`, `YYYY-MM-DD HH:MM` on the reader's clock, or null to take it away). Unlike the due date this one is a
  * premise: while the day is still ahead the task cannot be reserved, so the mock re-derives that here —
  * browser iteration shows the same card the desktop would.
  */
@@ -531,8 +531,8 @@ export async function setStart(id: number, start: string | null): Promise<void> 
     ...s,
     tasks: s.tasks.map((x) => {
       if (x.id !== id) return x;
-      const notStartedUntil = startAhead(onDay(start));
-      return { ...x, start: onDay(start), notStartedUntil, ready: readyOf({ ...x, notStartedUntil }) };
+      const notStartedUntil = startAhead(onSchedule(start));
+      return { ...x, start: onSchedule(start), notStartedUntil, ready: readyOf({ ...x, notStartedUntil }) };
     }),
   }));
 }

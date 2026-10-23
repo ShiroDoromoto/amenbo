@@ -281,6 +281,7 @@ export const uk: Translation = {
     "cal.more": "+{n} ще", "cal.overdueDays": "прострочено на {n} дн.", "cal.inDays": "через {n} дн.",
     "date.due": "Термін", "date.start": "Дата початку",
     "date.clear": "Прибрати",
+    "date.timeOf": "Час: {field}",
     "card.assignee": "Відповідальний",
     "detail.tab.detail": "Подробиці", "detail.tab.activity": "Активність",
     "detail.notFound": "Завдання не знайдено",

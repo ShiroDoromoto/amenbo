@@ -2842,9 +2842,9 @@ pub fn task_set_title(id: i64, title: String) -> Result<WriteAck, CmdError> {
 }
 
 /// Read a day off this face: nothing at all, and the empty string a cleared date input sends, both mean
-/// "no day"; anything else goes through core's own parser, so the GUI reads a date exactly as the CLI's
-/// `--due` / `--start` does — a calendar day, or a relative form counted from this machine's own today
-/// (`AMB-D-429`).
+/// "no day"; anything else goes through core's own parser — a calendar day, or a relative form counted
+/// from this machine's own today (`AMB-D-429`). Only `task_add` reads a day alone now: the task detail's
+/// fields go through [`schedule_arg`], which takes a time on the day as well.
 fn day_arg(input: Option<&str>) -> Result<Option<NaiveDate>, CmdError> {
     match input.map(str::trim) {
         None | Some("") => Ok(None),
@@ -2852,19 +2852,30 @@ fn day_arg(input: Option<&str>) -> Result<Option<NaiveDate>, CmdError> {
     }
 }
 
-/// Set the due date; due=None (or the empty string) clears it. Same shape as the CLI's
+/// Read a start or a due off this face (`AMB-D-1082`): the "no day" of [`day_arg`], or core's own
+/// [`parse_schedule`](amenbo_core::time::parse_schedule) — a day stays a day, and one with a time on it
+/// (`YYYY-MM-DD H:MM`, the shape the task detail sends once its time field is filled) is the instant that
+/// time names on this machine's clock, the one the window that typed it reads too.
+fn schedule_arg(input: Option<&str>) -> Result<Option<amenbo_core::model::Schedule>, CmdError> {
+    match input.map(str::trim) {
+        None | Some("") => Ok(None),
+        Some(s) => Ok(Some(amenbo_core::time::parse_schedule(s, Timestamp::now())?)),
+    }
+}
+
+/// Set the due date, a day or a day with a time; due=None (or the empty string) clears it. Same shape as the CLI's
 /// `task update --due/--clear-due`. The date shows on the list cards, so the tasks scope is raised and
 /// the board and list refetch too.
 #[tauri::command]
 pub fn task_set_due(id: i64, due: Option<String>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        let patch = match day_arg(due.as_deref())? {
+        let patch = match schedule_arg(due.as_deref())? {
             None => amenbo_core::ops::task::TaskPatch {
                 clear_due: true,
                 ..Default::default()
             },
-            Some(d) => amenbo_core::ops::task::TaskPatch {
-                due: Some(amenbo_core::model::Schedule::Day(d)),
+            Some(s) => amenbo_core::ops::task::TaskPatch {
+                due: Some(s),
                 ..Default::default()
             },
         };
@@ -2874,20 +2885,20 @@ pub fn task_set_due(id: i64, due: Option<String>) -> Result<WriteAck, CmdError> 
     Ok(WriteAck::new(&["tasks"]).task(id))
 }
 
-/// Set the start day; start=None (or the empty string) clears it. Same shape as the CLI's
+/// Set the start, a day or a day with a time; start=None (or the empty string) clears it. Same shape as the CLI's
 /// `task update --start/--clear-start`. A day still ahead is the third premise of `ready`, so this write
 /// moves whether the task can be reserved at all — the tasks scope is raised for that as much as for the
 /// chip the cards draw from it.
 #[tauri::command]
 pub fn task_set_start(id: i64, start: Option<String>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        let patch = match day_arg(start.as_deref())? {
+        let patch = match schedule_arg(start.as_deref())? {
             None => amenbo_core::ops::task::TaskPatch {
                 clear_start: true,
                 ..Default::default()
             },
-            Some(d) => amenbo_core::ops::task::TaskPatch {
-                start: Some(amenbo_core::model::Schedule::Day(d)),
+            Some(s) => amenbo_core::ops::task::TaskPatch {
+                start: Some(s),
                 ..Default::default()
             },
         };
@@ -6505,6 +6516,18 @@ pub(crate) mod tests {
         task_set_due(id, Some("today".into())).unwrap();
         assert_eq!(card(id).due, on(&amenbo_core::time::date_to_string(amenbo_core::time::today())));
 
+        // With a time on it, the value is the instant that time names on this machine's clock
+        // (`AMB-D-1082`), and it replaces the day rather than sitting beside it.
+        task_set_due(id, Some("2099-06-30 17:00".into())).unwrap();
+        let five_pm = amenbo_core::time::parse_schedule("2099-06-30 17:00", Timestamp::now()).unwrap();
+        assert!(matches!(five_pm, amenbo_core::model::Schedule::At(_)), "a time makes it an instant");
+        assert_eq!(card(id).due, Some(ScheduleDto::from(five_pm)));
+        task_set_start(id, Some("2099-01-01 09:00".into())).unwrap();
+        assert!(matches!(card(id).start, Some(ScheduleDto::At { .. })), "the start takes a time too");
+        assert!(!card(id).ready, "and an instant still ahead holds the task unready as a day does");
+        task_set_start(id, Some("2000-01-01".into())).unwrap();
+        assert_eq!(card(id).start, on("2000-01-01"), "taking the time off is the day alone again");
+
         // Both ways of saying "no day": nothing at all, and the empty string a cleared date input sends.
         let ack = task_set_due(id, None).unwrap();
         assert!(ack.scopes.contains(&"tasks"), "the cards draw the due date, so they refetch");
@@ -6514,6 +6537,8 @@ pub(crate) mod tests {
 
         // A date that is not one is refused rather than quietly ignored.
         let err = task_set_due(id, Some("31/12/2099".into())).err().expect("not a date");
+        assert_eq!(err.code, "invalid_value");
+        let err = task_set_due(id, Some("2099-12-31 25:00".into())).err().expect("not a time");
         assert_eq!(err.code, "invalid_value");
         assert!(card(id).due.is_none(), "and the refusal wrote nothing");
 

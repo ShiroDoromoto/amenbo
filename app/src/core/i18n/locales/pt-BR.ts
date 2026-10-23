@@ -281,6 +281,7 @@ export const ptBR: Translation = {
     "cal.more": "+{n} a mais", "cal.overdueDays": "{n} d de atraso", "cal.inDays": "em {n} d",
     "date.due": "Prazo", "date.start": "Data de início",
     "date.clear": "Remover",
+    "date.timeOf": "Hora de {field}",
     "card.assignee": "Responsável",
     "detail.tab.detail": "Detalhes", "detail.tab.activity": "Atividade",
     "detail.notFound": "Tarefa não encontrada",

@@ -276,6 +276,7 @@ export const nl: Translation = {
     "cal.more": "+{n} meer", "cal.overdueDays": "{n} d over tijd", "cal.inDays": "over {n} d",
     "date.due": "Deadline", "date.start": "Begindatum",
     "date.clear": "Wissen",
+    "date.timeOf": "Tijd van {field}",
     "card.assignee": "Verantwoordelijke",
     "detail.tab.detail": "Details", "detail.tab.activity": "Activiteit",
     "detail.notFound": "Taak niet gevonden",

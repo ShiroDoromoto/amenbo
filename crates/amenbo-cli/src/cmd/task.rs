@@ -125,15 +125,13 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 // An empty mailbox that means "not yet" has to say so on the spot. A start day mistyped far
                 // into the future hides a task in the one way nothing else catches — the list is empty and
                 // reads as finished — so the count and the first day arrive with the emptiness.
+                // A start at an instant is said in the reader's own zone, to the minute (`AMB-D-1082`).
                 if let Some(w) = &result.waiting_on_start {
-                    human(
-                        flags,
-                        format!(
-                            "  ({} waiting on a start day — earliest {})",
-                            w.count,
-                            time::date_to_string(w.earliest)
-                        ),
-                    );
+                    let earliest = match w.earliest {
+                        Schedule::Day(day) => time::date_to_string(day),
+                        Schedule::At(at) => at.0.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string(),
+                    };
+                    human(flags, format!("  ({} waiting on a start day — earliest {earliest})", w.count));
                 }
                 // The same, for the tasks a value still open before theirs is holding back (`AMB-D-990`).
                 // There is no date to give: closing a value is a person's call.

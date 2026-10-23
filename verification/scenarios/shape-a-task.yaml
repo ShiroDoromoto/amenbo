@@ -3,7 +3,8 @@
 # — what it says, when it is due, when it may start, how it ranks — is filled in afterwards, and can
 # be taken away again. Two of those fields are not decoration: a start day still ahead holds the task
 # unready, and priority is what the mailbox sorts on. So each one is read back off the store rather
-# than trusted to a write that exited zero.
+# than trusted to a write that exited zero. Both days take a time as well as a day, and one written
+# with a time is held as that instant instead of the day — so the terminal's road writes them both ways.
 #
 # The screen walks the two days rather than the whole form. They are the fields it could read and not
 # write until lately — a due date drawn on every card, with nowhere on the pane to put one there — so
@@ -14,9 +15,11 @@ title: A task registered with nothing but a title starts todo, is filled in fiel
 description: >
   Register a task with only a title and read the state it starts in. Set title, notes, due date and
   priority, and read each one back — off the task's own page, and through the listing that filters on
-  them. Declare a start day still ahead and watch readiness go with it. Then clear the start day and
-  the priority and read the absence back: clearing is its own command, and a field that will not
-  clear is a field the user cannot take back.
+  them. Declare a start day still ahead and watch readiness go with it. Write both days again with a
+  time of day and read that they are held as instants instead of days, while the listing and the
+  readiness still answer by the day they fall on. Then clear the start, the due and the priority and
+  read the absence back: clearing is its own command, and a field that will not clear is a field the
+  user cannot take back.
 # One card of ordinary work, and the only premise either road has. The screen's road files its own task
 # from a column head, and a board with nothing on it draws the first loop where the columns would be —
 # so the world puts the columns there and nothing else. The terminal's road asks nothing of it.
@@ -134,6 +137,59 @@ steps_cli:
       target: seed
       present: true
 
+  # Either day may carry a time, and then it is that instant the task holds rather than a day: the day
+  # field empties. What the instant reads as is the reader's own clock, so it is read back by the day it
+  # falls on — through the listing and the readiness — rather than as a fixed string that would answer
+  # differently in another time zone.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: seed
+      due: "2099-12-31 17:00"
+      start: "2099-01-01 9:00"
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: due_on
+      equals: null
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: start_on
+      equals: null
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "due:2099-12-31 start:future"
+      target: seed
+      present: true
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: not_started_until
+      equals: "2099-01-01"
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: false
+
+  # Taking a day back takes the instant with it: nothing is left over to hold the task unready.
   - type: action
     domain: task
     op: clear
@@ -146,8 +202,31 @@ steps_cli:
     op: field
     with:
       target: seed
+      field: start_at
+      equals: null
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
       field: ready
       equals: true
+
+  - type: action
+    domain: task
+    op: clear
+    with:
+      target: seed
+      field: due
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: due_at
+      equals: null
 
   - type: action
     domain: task

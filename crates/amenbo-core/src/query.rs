@@ -866,7 +866,7 @@ pub fn status(conn: &rusqlite::Connection, scope: &str, reach: crate::reach::Rea
     // first).
     let mut suggestions: Vec<Suggestion> = Vec::new();
     for t in overdue_cards.iter().take(3) {
-        let days = t.due_on.map(|d| today.signed_duration_since(d).num_days()).unwrap_or(0);
+        let days = t.due.map(|d| today.signed_duration_since(d.day()).num_days()).unwrap_or(0);
         let pri = t.priority.map(|p| format!("・優先度 {}", p.as_str())).unwrap_or_default();
         suggestions.push(Suggestion {
             id: t.id,
@@ -890,7 +890,7 @@ pub fn status(conn: &rusqlite::Connection, scope: &str, reach: crate::reach::Rea
         .into_iter()
         .map(|t| {
             let days_overdue =
-                t.due_on.map(|d| today.signed_duration_since(d).num_days()).unwrap_or(0);
+                t.due.map(|d| today.signed_duration_since(d.day()).num_days()).unwrap_or(0);
             OverdueTask { task: t, days_overdue }
         })
         .collect();
@@ -2067,8 +2067,6 @@ pub fn task_detail(
             Error::not_found(format!("task '{task_id}' not found"))
         })?;
 
-    let parse_date =
-        |s: &Option<String>| s.as_deref().and_then(|v| NaiveDate::parse_from_str(v, "%Y-%m-%d").ok());
     let parse_kind = |s: &Option<String>| s.as_deref().and_then(ActorKind::parse);
 
     let placement = row.placement.map(|m| crate::view::PlacementView {
@@ -2099,7 +2097,6 @@ pub fn task_detail(
         row.blocked_by.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
     let blocked_by_decisions: Vec<DecisionRef> =
         row.blocked_by_decisions.into_iter().map(|(id, name)| DecisionRef { id, name: Some(name) }).collect();
-    let start_on = parse_date(&row.start_on);
     let today = time::today();
     // The one ready predicate, shared with the task card and the `ready:` filter, and beside it the
     // third reason it can return false (the fourth rides on the row as `draft`, the fifth as the values
@@ -2107,12 +2104,12 @@ pub fn task_detail(
     let ready = crate::view::is_ready(
         !blocked_by.is_empty(),
         !blocked_by_decisions.is_empty(),
-        start_on,
+        row.start,
         today,
         row.draft,
         !row.waiting_on_values.is_empty(),
     );
-    let not_started_until = crate::view::not_started_until(start_on, today);
+    let not_started_until = crate::view::not_started_until(row.start, today);
     let blocks: Vec<crate::view::TaskRef> =
         row.blocks.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
 
@@ -2135,8 +2132,8 @@ pub fn task_detail(
         status,
         created_by_kind: parse_kind(&row.created_by_kind),
         assignee_kind: parse_kind(&row.assignee_kind),
-        start_on,
-        due_on: parse_date(&row.due_on),
+        start: row.start,
+        due: row.due,
         priority: row.priority.as_deref().and_then(Priority::parse),
         placement,
         at,
@@ -3533,8 +3530,8 @@ mod filter_tests {
                 title: title.to_string(),
                 notes: notes.to_string(),
                 project_id: Some(project_id),
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: None,
                 created_by_kind: None,
                 at_binding_id: None,
@@ -3616,8 +3613,8 @@ mod filter_tests {
                 title: "索引の設計".to_string(),
                 notes: String::new(),
                 project_id: Some(pj),
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: Some(crate::model::Priority::High),
                 created_by_kind: None,
                 at_binding_id: None,

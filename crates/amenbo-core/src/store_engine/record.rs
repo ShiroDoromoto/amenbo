@@ -50,16 +50,22 @@ impl Record {
     /// The columns an update has to write: exactly those whose value changed from `before`. Both field
     /// lists come from the same projection function, so their column order matches — which is what makes
     /// the zip comparison sound.
+    ///
+    /// The columns it empties come first. The writes land one column at a time, and a pair the schema
+    /// lets hold only one value (`start_on` / `start_at`, `AMB-D-1082`) has to be emptied on the old side
+    /// before the new side is filled, whichever way the value moves.
     pub fn changed_from(&self, before: &Record) -> Vec<(&'static str, Value)> {
         debug_assert_eq!(self.dataset, before.dataset);
         debug_assert_eq!(self.id, before.id);
-        before
+        let mut changed: Vec<(&'static str, Value)> = before
             .fields
             .iter()
             .zip(&self.fields)
             .filter(|((_, b), (_, a))| b != a)
             .map(|(_, (col, a))| (*col, a.clone()))
-            .collect()
+            .collect();
+        changed.sort_by_key(|(_, v)| *v != Value::Null);
+        changed
     }
 }
 
@@ -163,8 +169,10 @@ pub fn task(t: &Task) -> Record {
                 ("draft", bv(t.draft)),
                 ("created_by_kind", kov(&t.created_by_kind)),
                 ("assignee_kind", kov(&t.assignee_kind)),
-                ("start_on", dov(&t.start_on)),
-                ("due_on", dov(&t.due_on)),
+                ("start_on", dov(&t.start.and_then(|s| s.on()))),
+                ("due_on", dov(&t.due.and_then(|s| s.on()))),
+                ("start_at", tsov(&t.start.and_then(|s| s.at()))),
+                ("due_at", tsov(&t.due.and_then(|s| s.at()))),
                 ("priority", t.priority.map(|p| tv(p.as_str())).unwrap_or(Value::Null)),
                 ("project_id", kv_opt(&t.project_id)),
                 ("order_key", ov(&t.order_key)),

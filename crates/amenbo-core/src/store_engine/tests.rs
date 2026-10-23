@@ -155,6 +155,23 @@ mod constraints {
         e.put_record("task", 3, &[("completed_at", text("2026-07-11T09:30:00Z"))]).unwrap();
     }
 
+    /// A start or a due date is a day or an instant, never both (`AMB-D-1082`): the instant half takes
+    /// only the RFC3339Z form, and a row that fills both halves of one pair is refused.
+    #[test]
+    fn a_check_refuses_a_day_and_an_instant_on_one_date() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        assert!(e.put_record("task", 1, &[("due_at", text("2026-07-11"))]).is_err(), "a bare day");
+        e.put_record("task", 2, &[("due_at", text("2026-07-11T09:30:00Z"))]).unwrap();
+        assert!(e.put_record("task", 2, &[("due_on", text("2026-07-11"))]).is_err(), "due_on beside due_at");
+        e.put_record("task", 3, &[("start_on", text("2026-07-11"))]).unwrap();
+        assert!(
+            e.put_record("task", 3, &[("start_at", text("2026-07-11T09:30:00Z"))]).is_err(),
+            "start_at beside start_on"
+        );
+        // The pairs are apart from each other: a start day beside a due instant is a task like any other.
+        e.put_record("task", 3, &[("due_at", text("2026-07-12T17:00:00Z"))]).unwrap();
+    }
+
     /// A `HASH` column refuses anything that is not 64 lower-case hex digits (the blake3 blob address).
     #[test]
     fn a_check_refuses_a_non_hex_or_wrong_length_hash() {
@@ -304,8 +321,8 @@ mod projection {
                     .add_task(ops::task::NewTask {
                         title: title.to_string(),
                         project_id: Some(p1),
-                        due_on: None,
-                        start_on: None,
+                        due: None,
+                        start: None,
                         priority: pri,
                         notes: String::new(),
                         created_by_kind: Some(ActorKind::Human),

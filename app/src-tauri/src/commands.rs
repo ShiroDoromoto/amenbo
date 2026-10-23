@@ -188,18 +188,20 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
     let assignee = row.assignee.as_ref().map(|a| facet_actor(config, card_kind(a)));
     let created_by = row.created_by.as_ref().map(|a| facet_actor(config, card_kind(a)));
 
-    let due_date = row.due_on.as_deref().and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    // The card still carries days alone: a start or a due at an instant is shown on the day it falls on
+    // for the reader.
+    let due_date = row.due.map(|d| d.day());
     // The start day is read through core's own predicate, so the card cannot drift from what the
     // reserve enforces — the GUI must not call a task startable that `task status` would refuse.
-    let start_date = row.start_on.as_deref().and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok());
+    let start_date = row.start.map(|s| s.day());
     let not_started_until =
-        amenbo_core::view::not_started_until(start_date, amenbo_core::time::today());
+        amenbo_core::view::not_started_until(row.start, amenbo_core::time::today());
     // Core's own predicate rather than a fourth restatement of it: `ready` on a card and `ready` at the
     // reserve are the same question, and the only way they cannot drift is by being one call.
     let ready = amenbo_core::view::is_ready(
         !row.blocked_by.is_empty(),
         !row.blocked_by_decisions.is_empty(),
-        start_date,
+        row.start,
         amenbo_core::time::today(),
         row.draft,
         !row.waiting_on_values.is_empty(),
@@ -2054,8 +2056,8 @@ pub fn task_add(
         let t = store.add_task(amenbo_core::ops::task::NewTask {
             title,
             project_id,
-            due_on: day_arg(due.as_deref())?,
-            start_on: day_arg(start.as_deref())?,
+            due: day_arg(due.as_deref())?.map(amenbo_core::model::Schedule::Day),
+            start: day_arg(start.as_deref())?.map(amenbo_core::model::Schedule::Day),
             priority: None,
             notes: notes.unwrap_or_default(),
             created_by_kind: Some(ActorKind::Human),
@@ -2868,7 +2870,7 @@ pub fn task_set_due(id: i64, due: Option<String>) -> Result<WriteAck, CmdError> 
                 ..Default::default()
             },
             Some(d) => amenbo_core::ops::task::TaskPatch {
-                due_on: Some(d),
+                due: Some(amenbo_core::model::Schedule::Day(d)),
                 ..Default::default()
             },
         };
@@ -2891,7 +2893,7 @@ pub fn task_set_start(id: i64, start: Option<String>) -> Result<WriteAck, CmdErr
                 ..Default::default()
             },
             Some(d) => amenbo_core::ops::task::TaskPatch {
-                start_on: Some(d),
+                start: Some(amenbo_core::model::Schedule::Day(d)),
                 ..Default::default()
             },
         };
@@ -5645,8 +5647,8 @@ pub(crate) mod tests {
                 .add_task(amenbo_core::ops::task::NewTask {
                     title: "外から届いたタスク".into(),
                     project_id: Some(project_id),
-                    due_on: None,
-                    start_on: None,
+                    due: None,
+                    start: None,
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
@@ -5712,8 +5714,8 @@ pub(crate) mod tests {
                 .add_task(amenbo_core::ops::task::NewTask {
                     title: "先に届いたタスク".into(),
                     project_id: Some(project_id),
-                    due_on: None,
-                    start_on: None,
+                    due: None,
+                    start: None,
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
@@ -5736,8 +5738,8 @@ pub(crate) mod tests {
             .add_task(amenbo_core::ops::task::NewTask {
                 title: "巻き添えを免れたタスク".into(),
                 project_id: Some(project_id),
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Human),
@@ -5854,8 +5856,8 @@ pub(crate) mod tests {
                 .add_task(amenbo_core::ops::task::NewTask {
                     title: title.into(),
                     project_id: Some(project_id),
-                    due_on: None,
-                    start_on: None,
+                    due: None,
+                    start: None,
                     priority: None,
                     notes: notes.into(),
                     created_by_kind: Some(ActorKind::Ai),
@@ -5910,8 +5912,8 @@ pub(crate) mod tests {
             .add_task(amenbo_core::ops::task::NewTask {
                 title: "いつ書かれたか".into(),
                 project_id: Some(project_id),
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Ai),
@@ -5962,8 +5964,8 @@ pub(crate) mod tests {
                 .add_task(amenbo_core::ops::task::NewTask {
                     title: title.into(),
                     project_id: Some(project_id),
-                    due_on: None,
-                    start_on: None,
+                    due: None,
+                    start: None,
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
@@ -6152,7 +6154,7 @@ pub(crate) mod tests {
             let mut store = Store::open().unwrap();
             store
                 .update_task(task, amenbo_core::ops::task::TaskPatch {
-                    start_on: Some(d),
+                    start: Some(amenbo_core::model::Schedule::Day(d)),
                     ..Default::default()
                 })
                 .unwrap();
@@ -7623,8 +7625,8 @@ pub(crate) mod tests {
                 let t = store.add_task(amenbo_core::ops::task::NewTask {
                     title: format!("T{i}"),
                     project_id: Some(p.id),
-                    due_on: None,
-                    start_on: None,
+                    due: None,
+                    start: None,
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
@@ -7694,8 +7696,8 @@ pub(crate) mod tests {
                 let t = store.add_task(amenbo_core::ops::task::NewTask {
                     title: format!("B{i}"),
                     project_id: Some(p.id),
-                    due_on: None,
-                    start_on: None,
+                    due: None,
+                    start: None,
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
@@ -7736,8 +7738,8 @@ pub(crate) mod tests {
                 store.add_task(amenbo_core::ops::task::NewTask {
                     title: title.into(),
                     project_id: None,
-                    due_on: None,
-                    start_on: None,
+                    due: None,
+                    start: None,
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
@@ -7935,8 +7937,8 @@ pub(crate) mod tests {
                     .add_task(amenbo_core::ops::task::NewTask {
                         title: title.into(),
                         project_id: Some(p.id),
-                        due_on: None,
-                        start_on: None,
+                        due: None,
+                        start: None,
                         priority: Some(amenbo_core::model::Priority::High),
                         notes: "本文".into(),
                         created_by_kind: Some(ActorKind::Human),

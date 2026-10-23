@@ -3777,8 +3777,8 @@ pub struct TaskDetailRow {
     pub completed_at: Option<String>,
     pub created_by_kind: Option<String>,
     pub assignee_kind: Option<String>,
-    pub start_on: Option<String>,
-    pub due_on: Option<String>,
+    pub start: Option<crate::model::Schedule>,
+    pub due: Option<crate::model::Schedule>,
     pub priority: Option<String>,
     /// Whether the creation is still unfinished — the fourth premise of `ready` (`AMB-D-553`), read
     /// straight off the row like `status`.
@@ -3811,6 +3811,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
     let (subtype, status, completed_at) = (sel.col(T.subtype), sel.col(T.status), sel.col(T.completed_at));
     let (created_by_kind, assignee_kind) = (sel.col(T.created_by_kind), sel.col(T.assignee_kind));
     let (start_on, due_on, priority) = (sel.col(T.start_on), sel.col(T.due_on), sel.col(T.priority));
+    let (start_at, due_at) = (sel.col(T.start_at), sel.col(T.due_at));
     let (draft, at_binding_id) = (sel.col(T.draft), sel.col(T.at_binding_id));
     let (created_at, updated_at) = (sel.col(T.created_at), sel.col(T.updated_at));
     let mut sql = Sql::from(&sel, T.table);
@@ -3826,8 +3827,8 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
                 completed_at: completed_at.get(r)?,
                 created_by_kind: created_by_kind.get(r)?,
                 assignee_kind: assignee_kind.get(r)?,
-                start_on: start_on.get(r)?,
-                due_on: due_on.get(r)?,
+                start: parse_card_schedule(start_on.get(r)?, start_at.get(r)?)?,
+                due: parse_card_schedule(due_on.get(r)?, due_at.get(r)?)?,
                 priority: priority.get(r)?,
                 draft: draft.get(r)?,
                 at_binding_id: at_binding_id.get(r)?,
@@ -3931,13 +3932,13 @@ pub struct TaskCardRow {
     pub notes: String,
     pub status: String,
     pub priority: Option<String>,
-    pub due_on: Option<String>,
-    /// The declared start day, raw. It rides along unread, the way `due_on` does: whether the day has
-    /// come is [`crate::view::not_started_until`]'s to say, and the surface asks it against its own
-    /// `today` rather than the row freezing an answer.
-    pub start_on: Option<String>,
+    pub due: Option<crate::model::Schedule>,
+    /// The declared start, as stored. It rides along unread against a clock, the way `due` does: whether
+    /// the day has come is [`crate::view::not_started_until`]'s to say, and the surface asks it against
+    /// its own `today` rather than the row freezing an answer.
+    pub start: Option<crate::model::Schedule>,
     /// Whether the creation is still unfinished — the fourth premise of `ready` (`AMB-D-553`). Unlike
-    /// `start_on` it needs no reading against a clock: the stage a creation is at is stored, so the row
+    /// `start` it needs no reading against a clock: the stage a creation is at is stored, so the row
     /// carries the answer itself.
     pub draft: bool,
     pub completed_at: Option<String>,
@@ -3973,6 +3974,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
     let (id, title, notes, status) = (sel.col(T.id), sel.col(T.title), sel.col(T.notes), sel.col(T.status));
     let (priority, due_on, completed_at) = (sel.col(T.priority), sel.col(T.due_on), sel.col(T.completed_at));
     let (start_on, draft) = (sel.col(T.start_on), sel.col(T.draft));
+    let (due_at, start_at) = (sel.col(T.due_at), sel.col(T.start_at));
     let (assignee, creator) = (sel.col(T.assignee_kind), sel.col(T.created_by_kind));
     let (created_at, updated_at) = (sel.col(T.created_at), sel.col(T.updated_at));
     let mut sql = Sql::from(&sel, T.table);
@@ -3987,8 +3989,8 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
                 notes: notes.get(r)?,
                 status: status.get(r)?,
                 priority: priority.get(r)?,
-                due_on: due_on.get(r)?,
-                start_on: start_on.get(r)?,
+                due: parse_card_schedule(due_on.get(r)?, due_at.get(r)?)?,
+                start: parse_card_schedule(start_on.get(r)?, start_at.get(r)?)?,
                 draft: draft.get(r)?,
                 completed_at: completed_at.get(r)?,
                 assignee: assignee_kind
@@ -4817,6 +4819,22 @@ fn parse_card_date(stored: Option<String>) -> rusqlite::Result<Option<NaiveDate>
     }
 }
 
+/// A day-or-instant pair (`AMB-D-1082`), parsed from the two values a [`Select`] slot pair read — the
+/// card path's `hydrate::schedule`.
+fn parse_card_schedule(
+    on: Option<String>,
+    at: Option<String>,
+) -> rusqlite::Result<Option<crate::model::Schedule>> {
+    let at = match at {
+        Some(s) => Some(
+            crate::time::Timestamp::parse_rfc3339(&s)
+                .ok_or_else(|| card_bad(format!("bad instant {s:?}")))?,
+        ),
+        None => None,
+    };
+    Ok(crate::model::Schedule::from_columns(parse_card_date(on)?, at))
+}
+
 /// A required enum-as-text value, parsed through the model's `parse` (the same vocabulary the forward
 /// projection writes), so the card path cannot drift from what was written. The column comes along
 /// to name itself in the error — it is the identifier the projection already carries, not a second
@@ -4847,8 +4865,8 @@ struct CardBase {
     id: i64,
     title: String,
     status: TaskStatus,
-    due_on: Option<NaiveDate>,
-    start_on: Option<NaiveDate>,
+    due: Option<crate::model::Schedule>,
+    start: Option<crate::model::Schedule>,
     priority: Option<Priority>,
     assignee_kind: Option<ActorKind>,
     draft: bool,
@@ -4887,6 +4905,7 @@ pub fn hydrate_task_cards(
         let mut sel = Select::new();
         let (id, title, status) = (sel.col(TA.id), sel.col(TA.title), sel.col(TA.status));
         let (due_on, start_on) = (sel.col(TA.due_on), sel.col(TA.start_on));
+        let (due_at, start_at) = (sel.col(TA.due_at), sel.col(TA.start_at));
         let (priority, assignee_kind) = (sel.col(TA.priority), sel.col(TA.assignee_kind));
         let draft = sel.col(TA.draft);
         let mut pred = Pred::is_in(TA.id, ids.iter().copied());
@@ -4902,8 +4921,8 @@ pub fn hydrate_task_cards(
                     id: id.get(r)?,
                     title: title.get(r)?,
                     status: card_enum_req(TA.status, status.get(r)?, TaskStatus::parse)?,
-                    due_on: parse_card_date(due_on.get(r)?)?,
-                    start_on: parse_card_date(start_on.get(r)?)?,
+                    due: parse_card_schedule(due_on.get(r)?, due_at.get(r)?)?,
+                    start: parse_card_schedule(start_on.get(r)?, start_at.get(r)?)?,
                     priority: card_enum_opt(TA.priority, priority.get(r)?, Priority::parse)?,
                     assignee_kind: card_enum_opt(
                         TA.assignee_kind,
@@ -5018,19 +5037,19 @@ pub fn hydrate_task_cards(
         let ready = crate::view::is_ready(
             !blocked_by_open.is_empty(),
             !blocked_by_decisions.is_empty(),
-            b.start_on,
+            b.start,
             today,
             b.draft,
             !waiting_on_values.is_empty(),
         );
-        let not_started_until = crate::view::not_started_until(b.start_on, today);
+        let not_started_until = crate::view::not_started_until(b.start, today);
         out.push(TaskCompact {
             id: b.id,
             title: b.title.clone(),
             completed: b.status == TaskStatus::Done,
             status: b.status,
-            due_on: b.due_on,
-            start_on: b.start_on,
+            due: b.due,
+            start: b.start,
             priority: b.priority,
             draft: b.draft,
             r#ref: crate::idref::task(b.id),

@@ -126,8 +126,8 @@ mod tests {
             .add_task(NewTask {
                 title: title.to_string(),
                 project_id: Some(project_id),
-                due_on: due,
-                start_on: None,
+                due: due.map(crate::model::Schedule::Day),
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Human),

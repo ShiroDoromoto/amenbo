@@ -38,8 +38,8 @@ fn fresh_store_reads_as_content_empty_then_not_after_a_task() {
             .add_task(NewTask {
                 title: "real work".to_string(),
                 project_id: None,
-                due_on: None,
-                start_on: None,
+                due: None,
+                start: None,
                 priority: Some(Priority::High),
                 notes: String::new(),
                 created_by_kind: None,

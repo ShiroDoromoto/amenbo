@@ -87,8 +87,8 @@ fn generate(store: &mut Store, opts: &Opts) -> amenbo_core::Result<Summary> {
         let task = store.add_task(ops::task::NewTask {
             title: format!("シードタスク #{}", i + 1),
             project_id: Some(project.id),
-            due_on: None,
-            start_on: None,
+            due: None,
+            start: None,
             priority: Some(priorities[i % priorities.len()]),
             notes: format!("scale-test seed task index={i}"),
             created_by_kind: Some(ActorKind::Ai),

@@ -1235,7 +1235,46 @@ pub const STEPS: &[Step] = &[
         // that refused it is a limit of `1`.
         apply: Apply::Custom(count_the_runs_side_by_side),
     },
+    Step {
+        to: 99,
+        name: "add task.start_at and task.due_at, a start and a due date that carry a time, each refusing a row that also fills its day",
+        // A task starts and is due on a day or at an instant, never both (`AMB-D-1082`).
+        //
+        // **Seeded with nothing.** A day already written stays a day: given a time, it would fall on
+        // the day before or after for a reader in another zone.
+        apply: Apply::Custom(give_the_task_dates_a_time),
+    },
 ];
+
+/// v99: `task.start_at` and `task.due_at`, the instant halves of the start and the due date
+/// (`AMB-D-1082`).
+///
+/// **Added, not rebuilt.** The `CHECK` that refuses a row filling both `start_on` and `start_at` sits
+/// on the new column's own declaration, where SQLite lets it name the other column — so it reaches an
+/// existing store through `ALTER TABLE … ADD COLUMN`, and the rebuild a table constraint would need is
+/// closed here for the reason [`admit_rejected_task_status`] gives: other tables reference `task`.
+///
+/// **Appended only where it is missing**, v68's guard.
+fn give_the_task_dates_a_time(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let columns = column_names(tx, "task")?;
+    let has = |column: &str| columns.iter().any(|c| c == column);
+    if !has("start_at") {
+        tx.execute_batch(
+            "ALTER TABLE task ADD COLUMN start_at TEXT \
+             CHECK(start_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z') \
+             CHECK(start_on IS NULL OR start_at IS NULL);",
+        )?;
+    }
+    if !has("due_at") {
+        tx.execute_batch(
+            "ALTER TABLE task ADD COLUMN due_at TEXT \
+             CHECK(due_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z') \
+             CHECK(due_on IS NULL OR due_at IS NULL);",
+        )?;
+    }
+    Ok(())
+}
 
 /// v98: `automation.allow_concurrent_runs` becomes `automation.max_concurrent_runs` — `NULL` where the
 /// flag was on, `1` where it was off.
@@ -10729,6 +10768,40 @@ mod tests {
         let refused = engine.conn().execute("UPDATE automation SET max_concurrent_runs = 0 WHERE id = 1", []);
         assert!(refused.is_err(), "the column does not admit 0");
         engine.conn().execute("UPDATE automation SET max_concurrent_runs = 3 WHERE id = 1", []).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v99: a task already carrying a day keeps it, and the instant beside it is refused until the day
+    /// is emptied.
+    #[test]
+    fn a_task_date_takes_an_instant_only_in_place_of_its_day() {
+        let dir = scratch("task-date-instant");
+        let engine = store_at(&dir, 98);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO task (id, title, start_on, due_on) VALUES (1, 'a', '2026-10-23', '2026-10-24');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let (due_on, due_at): (Option<String>, Option<String>) = engine
+            .conn()
+            .query_row("SELECT due_on, due_at FROM task WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!((due_on.as_deref(), due_at), (Some("2026-10-24"), None), "a day stays a day");
+        let refused =
+            engine.conn().execute("UPDATE task SET due_at = '2026-10-24T08:00:00Z' WHERE id = 1", []);
+        assert!(refused.is_err(), "an instant beside the day is refused");
+        engine
+            .conn()
+            .execute("UPDATE task SET due_on = NULL, due_at = '2026-10-24T08:00:00Z' WHERE id = 1", [])
+            .unwrap();
+        let refused =
+            engine.conn().execute("UPDATE task SET start_at = '2026-10-23T08:00:00Z' WHERE id = 1", []);
+        assert!(refused.is_err(), "the start pair is held the same way");
         std::fs::remove_dir_all(&dir).ok();
     }
 

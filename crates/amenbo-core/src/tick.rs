@@ -603,8 +603,8 @@ mod tests {
             .add_task(crate::ops::task::NewTask {
                 title: title.into(),
                 project_id: Some(project),
-                due_on: due,
-                start_on: None,
+                due: due.map(crate::model::Schedule::Day),
+                start: None,
                 priority: None,
                 notes: String::new(),
                 created_by_kind: Some(crate::model::ActorKind::Human),

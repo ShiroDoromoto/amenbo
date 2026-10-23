@@ -273,8 +273,8 @@ fn made_up(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, def: &Automation
         NewTask {
             title,
             project_id: None,
-            due_on: None,
-            start_on: None,
+            due: None,
+            start: None,
             priority: None,
             notes,
             created_by_kind: Some(ActorKind::Ai),

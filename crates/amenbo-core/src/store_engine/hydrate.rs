@@ -39,7 +39,7 @@ use crate::model::{
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
-    DimensionRole, DimensionValue, NotifyKind, NotifyTarget, Priority,
+    DimensionRole, DimensionValue, NotifyKind, NotifyTarget, Priority, Schedule,
     ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret, SecretArea,
     Project, StepScript, Subtype, Task, TaskComment, TaskCommit, TaskDependency, TaskMadeIn,
     TaskDimensionValue, TaskStatus, View,
@@ -88,6 +88,16 @@ fn date_opt(r: &Row, c: Col<Text, Nullable>) -> rusqlite::Result<Option<NaiveDat
             .map_err(|e| bad(format!("bad date {s:?}: {e}"))),
         None => Ok(None),
     }
+}
+
+/// A day-or-instant pair read back as one value (`AMB-D-1082`). The schema refuses a row that fills
+/// both, so there is no third case to say anything about.
+fn schedule(
+    r: &Row,
+    on: Col<Text, Nullable>,
+    at: Col<Text, Nullable>,
+) -> rusqlite::Result<Option<Schedule>> {
+    Ok(Schedule::from_columns(date_opt(r, on)?, ts_opt(r, at)?))
 }
 
 fn enum_req<T>(r: &Row, c: Col<Text, NotNull>, f: impl Fn(&str) -> Option<T>) -> rusqlite::Result<T> {
@@ -188,8 +198,8 @@ pub(super) fn task_row(r: &Row) -> rusqlite::Result<Task> {
         draft: get(r, C.draft)?,
         created_by_kind: enum_opt(r, C.created_by_kind, ActorKind::parse)?,
         assignee_kind: enum_opt(r, C.assignee_kind, ActorKind::parse)?,
-        start_on: date_opt(r, C.start_on)?,
-        due_on: date_opt(r, C.due_on)?,
+        start: schedule(r, C.start_on, C.start_at)?,
+        due: schedule(r, C.due_on, C.due_at)?,
         priority: enum_opt(r, C.priority, Priority::parse)?,
         project_id: get(r, C.project_id)?,
         order_key: get(r, C.order_key)?,
@@ -943,8 +953,10 @@ mod tests {
                 draft: true,
                 created_by_kind: Some(ActorKind::Ai),
                 assignee_kind: Some(ActorKind::Ai),
-                start_on: Some("2026-07-01".parse().unwrap()),
-                due_on: Some("2026-07-15".parse().unwrap()),
+                // A day on one side and an instant on the other, so each of the four columns is
+                // either what is read back or what has to come back empty.
+                start: Some(Schedule::Day("2026-07-01".parse().unwrap())),
+                due: Some(Schedule::At(now)),
                 priority: Some(Priority::High),
                 project_id: Some(1),
                 order_key: Some("a0".to_string()),

@@ -1833,7 +1833,7 @@ export const zhHant: Translation = {
       fix: "打開內文改一改：刪掉這個參照，或是把它指向取而代之的東西。它想說什麼，只有寫它的人知道。",
     },
     start_after_due: {
-      message: "{task} 設定在 {start_on} 開始，到期日卻是 {due_on}——它要到一個已經過了截止的日子才會出現在收件匣裡。",
+      message: "{task} 設定在 {start} 開始，到期日卻是 {due}——它要到一個已經過了截止的日子才會出現在收件匣裡。",
       fix: "兩者之中有一個是錯的：改開始日或改到期日。沒人替你在兩者之間挑一個，因為打錯的可能是任何一個。",
     },
     project_without_folder: {

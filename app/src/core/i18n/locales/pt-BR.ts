@@ -1851,7 +1851,7 @@ export const ptBR: Translation = {
       fix: "Abra o texto e edite: tire a referência, ou aponte-a para o que ocupa o lugar dela. Só quem escreveu sabe o que queria dizer.",
     },
     start_after_due: {
-      message: "{task} começa em {start_on} mas vencia em {due_on} — ela fica fora da caixa de entrada até um dia que já passou do prazo.",
+      message: "{task} começa em {start} mas vencia em {due} — ela fica fora da caixa de entrada até um dia que já passou do prazo.",
       fix: "Uma das duas está errada: corrija o dia de início ou o de vencimento. Nada escolhe entre elas, já que o erro pode estar em qualquer uma.",
     },
     project_without_folder: {

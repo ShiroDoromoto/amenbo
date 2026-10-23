@@ -59,8 +59,8 @@ pub enum DoctorIssueKind {
     OrphanBinding,
     /// A body whose prose points at refs that resolve to nothing.
     DeadRef,
-    /// A task declared to start after the day it is due. Two declarations that contradict each other,
-    /// and the pair hides: the task stays out of the mailbox while the day it was due goes by.
+    /// A task declared to start after it is due, each on a day or at an instant. Two declarations that
+    /// contradict each other, and the pair hides: the task stays out of the mailbox while its deadline goes by.
     StartAfterDue,
     /// A live project no folder on this machine leads to — nothing can operate it.
     ProjectWithoutFolder,
@@ -143,7 +143,7 @@ impl DoctorIssueKind {
             Self::MissingPointerAmbiguous => &["dir", "claims"],
             Self::OrphanBinding => &["dir"],
             Self::DeadRef => &["at", "refs"],
-            Self::StartAfterDue => &["task", "start_on", "due_on"],
+            Self::StartAfterDue => &["task", "start", "due"],
             Self::ProjectWithoutFolder => &["project", "name"],
             Self::UnwiredFolder => &["dir", "tools"],
             Self::UnwiredFolderAmbiguous => &["dir"],

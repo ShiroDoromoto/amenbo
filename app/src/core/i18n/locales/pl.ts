@@ -1859,7 +1859,7 @@ export const pl: Translation = {
       fix: "Otwórz treść i popraw ją: usuń odwołanie albo skieruj je na to, co zajęło tamto miejsce. Co miało zostać powiedziane, wie tylko autor.",
     },
     start_after_due: {
-      message: "{task} ma ruszyć {start_on}, a termin minął {due_on} — zostaje poza skrzynką do dnia, który już jest po terminie.",
+      message: "{task} ma ruszyć {start}, a termin minął {due} — zostaje poza skrzynką do dnia, który już jest po terminie.",
       fix: "Jedno z dwóch jest błędne: popraw albo dzień startu, albo termin. Nikt nie rozstrzygnie tego za Ciebie, bo literówka może być po każdej ze stron.",
     },
     project_without_folder: {

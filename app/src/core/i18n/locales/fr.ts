@@ -1852,7 +1852,7 @@ export const fr: Translation = {
       fix: "Ouvrez le texte et corrigez-le : retirez la référence, ou pointez-la vers ce qui prend sa place. Seul celui qui l'a écrite sait ce qu'elle voulait dire.",
     },
     start_after_due: {
-      message: "{task} doit commencer le {start_on} mais était due le {due_on} — elle reste hors de la boîte jusqu'à un jour déjà passé après l'échéance.",
+      message: "{task} doit commencer le {start} mais était due le {due} — elle reste hors de la boîte jusqu'à un jour déjà passé après l'échéance.",
       fix: "L'une des deux est fausse : corrigez soit le jour de départ, soit l'échéance. Rien ne tranche entre elles, puisque l'erreur peut venir de l'une comme de l'autre.",
     },
     project_without_folder: {

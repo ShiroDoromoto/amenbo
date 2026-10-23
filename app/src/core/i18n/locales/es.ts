@@ -1852,7 +1852,7 @@ export const es: Translation = {
       fix: "Abre el texto y edítalo: quita la referencia, o apúntala a lo que ocupa su lugar. Solo quien lo escribió sabe qué quería decir.",
     },
     start_after_due: {
-      message: "{task} empieza el {start_on} pero vencía el {due_on}: no aparece en la bandeja hasta un día que ya pasó su plazo.",
+      message: "{task} empieza el {start} pero vencía el {due}: no aparece en la bandeja hasta un día que ya pasó su plazo.",
       fix: "Una de las dos está mal: corrige el día de inicio o el de vencimiento. Nada elige entre ellas, porque el error podría estar en cualquiera.",
     },
     project_without_folder: {

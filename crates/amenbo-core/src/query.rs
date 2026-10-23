@@ -273,12 +273,20 @@ impl DimensionFilter {
     }
 }
 
+/// The value of `due:`. A deadline held as a day is read on that day; one held at an instant is read on
+/// the reader's day it falls on, except that once `now` passes it, it is `overdue` and no longer `today` or
+/// `week` (`AMB-D-1082`).
 #[derive(Clone, Debug)]
 pub enum DueFilter {
+    /// Due today and not yet past.
     Today,
+    /// Past: a day before today, or an instant before now.
     Overdue,
+    /// Due within today and the next seven days, and not yet past.
     Week,
+    /// No deadline at all.
     None,
+    /// Due on the named day.
     On(NaiveDate),
 }
 
@@ -287,12 +295,13 @@ pub enum DueFilter {
 /// lumps the three premises together.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StartFilter {
-    /// The start day has arrived (declared, and on or before today) — the arm that is startable as far as
-    /// the start day is concerned. Not "declared as today": a day that came and went is still arrived.
+    /// The start has arrived (a day on or before today, or an instant at or before now) — the arm that is
+    /// startable as far as the start is concerned. Not "declared as today": a day that came and went is
+    /// still arrived.
     Today,
-    /// The start day is still ahead. The waiting queue.
+    /// The start is still ahead (a day after today, or an instant after now). The waiting queue.
     Future,
-    /// No start day declared at all.
+    /// No start declared at all, neither a day nor an instant.
     None,
 }
 

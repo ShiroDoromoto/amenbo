@@ -14,10 +14,10 @@ import { invalidateAllQueries, invalidateQueries, type QueryKey } from "./query"
 import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart, type ViewKind } from "./i18n";
 import { isClosed } from "./status";
-import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
+import type { ActivityItem, Facet, Priority, Schedule, Status, TaskCard } from "../mock/types";
 import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DimensionDecisionValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HandoverDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
-import { todayStr } from "./calendar";
+import { scheduleText, todayStr } from "./calendar";
 
 /**
  * What a write command returns (mirrors the Rust `WriteAck`). It is never a whole snapshot: the GUI
@@ -202,8 +202,8 @@ function notReadyParts(t: TaskCard): CmdErrorPart[] {
   if (t.notStartedUntil) {
     parts.push({
       code: "not_ready_not_started",
-      message_en: `it is not due to start until ${t.notStartedUntil}`,
-      fields: { start: t.notStartedUntil },
+      message_en: `it is not due to start until ${scheduleText(t.notStartedUntil)}`,
+      fields: { start: scheduleText(t.notStartedUntil) },
     });
   }
   for (const w of t.waitingOnValues) {
@@ -223,13 +223,20 @@ function notReadyParts(t: TaskCard): CmdErrorPart[] {
   return parts;
 }
 
+/** A day the mock was handed (`YYYY-MM-DD`, or null), as the value a card carries. */
+function onDay(day: string | null): Schedule | null {
+  return day ? { kind: "day", day } : null;
+}
+
 /**
- * The mock's copy of core's `not_started_until`: a start day is a reason to wait only while it is still
- * ahead. Dates are `YYYY-MM-DD` and hold no time zone (`AMB-D-429`), so the comparison is the strings'
- * own order, against this machine's calendar day.
+ * The mock's copy of core's `not_started_until`: a start is a reason to wait only while it is still
+ * ahead. A day is `YYYY-MM-DD` and holds no time zone (`AMB-D-429`), so it is compared as a string
+ * against this machine's calendar day; an instant is ahead until this moment reaches it.
  */
-function startAhead(start: string | null): string | null {
-  return start && start > todayStr() ? start : null;
+function startAhead(start: Schedule | null): Schedule | null {
+  if (!start) return null;
+  const ahead = start.kind === "day" ? start.day > todayStr() : new Date(start.at).getTime() > Date.now();
+  return ahead ? start : null;
 }
 
 /**
@@ -319,13 +326,13 @@ export async function addTask(
 
     const task: TaskCard = {
       id, title, notes: notes ?? "", status: "todo", assignee: null, priority: null,
-      due: due ?? null, comments: 0, createdBy: me(),
+      due: onDay(due ?? null), comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       // A creation lands unfinished, exactly as core's `add` leaves it (`AMB-D-554`): the task is on the
       // board and refused a reservation until the detail pane's "finish creating" ends the second stage.
       ready: false, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [],
-      startOn: start ?? null, notStartedUntil: startAhead(start ?? null),
+      start: onDay(start ?? null), notStartedUntil: startAhead(onDay(start ?? null)),
       draft: true,
     };
     return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, { kind: "task.created" }), ...s.activity] };
@@ -509,7 +516,7 @@ export async function setDue(id: number, due: string | null): Promise<void> {
   if (inTauri()) return invokeAck("task_set_due", { id, due });
   mockMutate((s) => ({
     ...s,
-    tasks: s.tasks.map((x) => (x.id === id ? { ...x, due } : x)),
+    tasks: s.tasks.map((x) => (x.id === id ? { ...x, due: onDay(due) } : x)),
   }));
 }
 
@@ -524,8 +531,8 @@ export async function setStart(id: number, start: string | null): Promise<void> 
     ...s,
     tasks: s.tasks.map((x) => {
       if (x.id !== id) return x;
-      const notStartedUntil = startAhead(start);
-      return { ...x, startOn: start, notStartedUntil, ready: readyOf({ ...x, notStartedUntil }) };
+      const notStartedUntil = startAhead(onDay(start));
+      return { ...x, start: onDay(start), notStartedUntil, ready: readyOf({ ...x, notStartedUntil }) };
     }),
   }));
 }

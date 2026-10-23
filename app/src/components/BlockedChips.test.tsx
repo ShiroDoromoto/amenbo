@@ -16,7 +16,7 @@ function card(over: Partial<TaskCard>): TaskCard {
     id: 1, title: "t", ref: "#1", notes: "", projectId: null, status: "todo",
     assignee: null, priority: null, due: null, completedAt: null,
     comments: 0, ready: true, blockedBy: [], placement: null, createdBy: null,
-    linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [], startOn: null, notStartedUntil: null, draft: false,
+    linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [], start: null, notStartedUntil: null, draft: false,
     createdAt: "2026-06-01T09:00:00Z", updatedAt: "2026-06-01T09:00:00Z",
     ...over,
   };
@@ -73,11 +73,17 @@ describe("BlockedChips", () => {
   });
 
   it("shows a start day that has not come as an hourglass, carrying the day itself rather than a count", () => {
-    render(card({ ready: false, notStartedUntil: "2026-08-01" }));
+    render(card({ ready: false, notStartedUntil: { kind: "day", day: "2026-08-01" } }));
     expect(chips()).toHaveLength(1);
     expect(markOf(chips()[0])).toBe("hourglass");
     expect(chips()[0].textContent).toContain("2026-08-01");
     expect(chips()[0].getAttribute("title")).toContain("2026-08-01");
+  });
+
+  it("carries the time too when the start is an instant", () => {
+    const at = new Date(2026, 7, 1, 9, 30).toISOString();
+    render(card({ ready: false, notStartedUntil: { kind: "at", at } }));
+    expect(chips()[0].textContent).toContain("2026-08-01 09:30");
   });
 
   it("shows an unfinished creation as a pencil, naming the state rather than a count", () => {
@@ -105,7 +111,7 @@ describe("BlockedChips", () => {
       blockedBy: [{ id: 2, name: "先行" }],
       blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
       waitingOnValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }],
-      notStartedUntil: "2026-08-01",
+      notStartedUntil: { kind: "day", day: "2026-08-01" },
       draft: true,
     }));
     expect(chips()).toHaveLength(5);
@@ -131,7 +137,7 @@ describe("BlockedChips", () => {
       blockedBy: [{ id: 2, name: "先行" }],
       blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
       waitingOnValues: [{ dimensionId: 7, axis: "リリース", value: "v1" }],
-      notStartedUntil: "2026-08-01",
+      notStartedUntil: { kind: "day", day: "2026-08-01" },
       draft: true,
     }));
     const stepOf = (mark: string) => {
@@ -169,7 +175,7 @@ describe("BlockedChips compact", () => {
   });
 
   it("drops the date and keeps the mark, with the day still in the tooltip", () => {
-    renderCompact(card({ ready: false, notStartedUntil: "2026-08-01" }));
+    renderCompact(card({ ready: false, notStartedUntil: { kind: "day", day: "2026-08-01" } }));
     expect(chips()).toHaveLength(0);
     expect(markOf(glyphs()[0])).toBe("hourglass");
     expect(glyphs()[0].textContent).toBe("");

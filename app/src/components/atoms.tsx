@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import type { Actor, Priority, Status, TaskCard } from "../mock/types";
+import type { Actor, Priority, Schedule, Status, TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
-import { dueKind, todayStr } from "../core/calendar";
+import { dueKind, scheduleText, todayStr } from "../core/calendar";
 import {
   dueLabel, exactLabel, formatDayTime, formatNumber, priorityLabel, statusLabel, t, tf, whenLabel,
 } from "../core/i18n";
@@ -258,9 +258,10 @@ export function PriorityDot({ priority }: { priority: Priority | null }) {
  * The due date, coloured by how it stands against the device's own today (`todayStr()` at render, the same
  * source the calendar and timeline colour by). The label beside it is worded by the backend against the same
  * real day, so colour and wording have to be read off one clock — a colour judged against any other day says
- * "overdue" next to a label that says "tomorrow".
+ * "overdue" next to a label that says "tomorrow". A due at an instant carries its time in the label, and turns
+ * overdue once that instant has passed.
  */
-export function DueChip({ due }: { due: string | null }) {
+export function DueChip({ due }: { due: Schedule | null }) {
   if (!due) return null;
   const cls = `due--${dueKind(due, todayStr())}`;
   return <span className={`chip due ${cls}`}><Icon name="calendar" /> {dueLabel(due)}</span>;
@@ -411,11 +412,11 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
         <span
           className={heed}
           role="img"
-          title={tf("block.notStarted", { date: task.notStartedUntil })}
-          aria-label={tf("block.notStarted", { date: task.notStartedUntil })}
+          title={tf("block.notStarted", { date: scheduleText(task.notStartedUntil) })}
+          aria-label={tf("block.notStarted", { date: scheduleText(task.notStartedUntil) })}
         >
-          {/* The date, not a count: one start day is never plural, and the day itself is the fact. */}
-          <Icon name="hourglass" />{compact ? null : ` ${task.notStartedUntil}`}
+          {/* The date, not a count: one start is never plural, and the start itself is the fact. */}
+          <Icon name="hourglass" />{compact ? null : ` ${scheduleText(task.notStartedUntil)}`}
         </span>
       )}
       {task.draft && (

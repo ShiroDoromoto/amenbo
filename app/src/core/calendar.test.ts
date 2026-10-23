@@ -1,13 +1,18 @@
 import { describe, it, expect } from "vitest";
 import {
   parseYmd, fmtDate, todayStr, daysBetween, addDays, shiftMonth,
-  monthMatrix, dueKind, groupByDue, relativeDays, timelineModel,
+  monthMatrix, dueKind, groupByDue, timelineModel, scheduleDay, scheduleText, compareDue,
 } from "./calendar";
-import type { TaskCard } from "../mock/types";
+import type { Schedule, TaskCard } from "../mock/types";
 
-// A minimal TaskCard for the tests (only the fields we need are filled in).
-function task(id: number, due: string | null, title = `#${id}`): TaskCard {
-  return { id, title, due } as unknown as TaskCard;
+const day = (d: string): Schedule => ({ kind: "day", day: d });
+// An instant at a local time, so the day it falls on is the same whatever timezone the test runs in.
+const at = (y: number, mo: number, d: number, h: number, mi = 0): Schedule =>
+  ({ kind: "at", at: new Date(y, mo - 1, d, h, mi).toISOString() });
+
+// A minimal TaskCard for the tests (only the fields we need are filled in). A string due is a day.
+function task(id: number, due: string | Schedule | null, title = `#${id}`): TaskCard {
+  return { id, title, due: typeof due === "string" ? day(due) : due } as unknown as TaskCard;
 }
 
 describe("date helpers", () => {
@@ -16,9 +21,8 @@ describe("date helpers", () => {
     expect(todayStr(new Date(2026, 11, 31))).toBe("2026-12-31");
   });
 
-  it("parseYmd splits the first 10 chars into [y,m,d] (RFC3339 works too)", () => {
+  it("parseYmd splits YYYY-MM-DD into [y,m,d]", () => {
     expect(parseYmd("2026-06-21")).toEqual([2026, 6, 21]);
-    expect(parseYmd("2026-06-21T09:58:00Z")).toEqual([2026, 6, 21]);
   });
 
   it("daysBetween is the calendar-day difference (TZ-independent)", () => {
@@ -71,27 +75,47 @@ describe("monthMatrix", () => {
   });
 });
 
-describe("dueKind / relativeDays", () => {
+describe("schedules", () => {
+  it("scheduleDay is the day itself, or the reader's local day an instant falls on", () => {
+    expect(scheduleDay(day("2026-06-21"))).toBe("2026-06-21");
+    expect(scheduleDay(at(2026, 6, 21, 23, 30))).toBe("2026-06-21");
+    expect(scheduleDay(at(2026, 6, 22, 0, 30))).toBe("2026-06-22");
+  });
+
+  it("scheduleText adds an instant's local time to its day", () => {
+    expect(scheduleText(day("2026-08-01"))).toBe("2026-08-01");
+    expect(scheduleText(at(2026, 8, 1, 9, 5))).toBe("2026-08-01 09:05");
+  });
+
+  it("compareDue orders by day, and within a day the instants first in time order, the bare day last", () => {
+    const dues = [day("2026-06-21"), at(2026, 6, 21, 15), day("2026-06-20"), at(2026, 6, 21, 9), at(2026, 6, 22, 1)];
+    expect([...dues].sort(compareDue)).toEqual([
+      day("2026-06-20"), at(2026, 6, 21, 9), at(2026, 6, 21, 15), day("2026-06-21"), at(2026, 6, 22, 1),
+    ]);
+  });
+});
+
+describe("dueKind", () => {
   it("judges overdue/today/tomorrow/future relative to today", () => {
-    expect(dueKind("2026-06-20", "2026-06-21")).toBe("overdue");
-    expect(dueKind("2026-06-21", "2026-06-21")).toBe("today");
-    expect(dueKind("2026-06-22", "2026-06-21")).toBe("tomorrow");
-    expect(dueKind("2026-06-23", "2026-06-21")).toBe("future");
-    expect(dueKind("2026-06-21T23:00:00Z", "2026-06-21")).toBe("today"); // judged by the day even with a time attached
+    expect(dueKind(day("2026-06-20"), "2026-06-21")).toBe("overdue");
+    expect(dueKind(day("2026-06-21"), "2026-06-21")).toBe("today");
+    expect(dueKind(day("2026-06-22"), "2026-06-21")).toBe("tomorrow");
+    expect(dueKind(day("2026-06-23"), "2026-06-21")).toBe("future");
+  });
+
+  it("judges an instant by the reader's day it falls on, and as overdue once it has passed", () => {
+    const noon = new Date(2026, 5, 21, 12).getTime();
+    expect(dueKind(at(2026, 6, 21, 23), "2026-06-21", noon)).toBe("today");
+    expect(dueKind(at(2026, 6, 22, 1), "2026-06-21", noon)).toBe("tomorrow");
+    expect(dueKind(at(2026, 6, 21, 11), "2026-06-21", noon)).toBe("overdue");
   });
 
   // Tomorrow is the next calendar day, so it crosses the end of a month and the end of a year
   // rather than being the string one greater.
   it("takes tomorrow across a month and a year boundary", () => {
-    expect(dueKind("2026-07-01", "2026-06-30")).toBe("tomorrow");
-    expect(dueKind("2027-01-01", "2026-12-31")).toBe("tomorrow");
-    expect(dueKind("2026-07-02", "2026-06-30")).toBe("future");
-  });
-
-  it("relativeDays is due - today", () => {
-    expect(relativeDays("2026-06-21", "2026-06-21")).toBe(0);
-    expect(relativeDays("2026-06-25", "2026-06-21")).toBe(4);
-    expect(relativeDays("2026-06-18", "2026-06-21")).toBe(-3);
+    expect(dueKind(day("2026-07-01"), "2026-06-30")).toBe("tomorrow");
+    expect(dueKind(day("2027-01-01"), "2026-12-31")).toBe("tomorrow");
+    expect(dueKind(day("2026-07-02"), "2026-06-30")).toBe("future");
   });
 });
 
@@ -104,6 +128,12 @@ describe("groupByDue", () => {
     expect(m.has("4")).toBe(false);
     expect([...m.keys()]).toHaveLength(2);
   });
+
+  it("puts an instant on the reader's day it falls on", () => {
+    const m = groupByDue([task(1, at(2026, 6, 21, 23, 30)), task(2, at(2026, 6, 22, 0, 30))]);
+    expect(m.get("2026-06-21")?.map((t) => t.id)).toEqual([1]);
+    expect(m.get("2026-06-22")?.map((t) => t.id)).toEqual([2]);
+  });
 });
 
 describe("timelineModel", () => {
@@ -114,6 +144,13 @@ describe("timelineModel", () => {
     const m = timelineModel(tasks, today);
     expect(m.rows.map((r) => r.task.id)).toEqual([3, 1]);
     expect(m.noDue.map((t) => t.id)).toEqual([2]);
+  });
+
+  it("within one day puts the instants first, in time order, and the bare day last", () => {
+    const tasks = [task(1, "2026-06-25"), task(2, at(2026, 6, 25, 15)), task(3, at(2026, 6, 25, 9))];
+    const m = timelineModel(tasks, today);
+    expect(m.rows.map((r) => r.task.id)).toEqual([3, 2, 1]);
+    expect(m.rows.map((r) => r.due)).toEqual(["2026-06-25", "2026-06-25", "2026-06-25"]);
   });
 
   it("the axis window spans all dues and today, padded by one day on each side", () => {

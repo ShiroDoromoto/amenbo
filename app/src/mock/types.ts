@@ -9,6 +9,7 @@ import type {
   TaskCardDto,
   ProjectDto,
   ActivityItemDto,
+  ScheduleDto,
 } from "../bindings/bindings";
 
 // The enum vocabularies are projected off the generated DTO field types (the sole source of these literal unions is Rust's #[ts(type=...)]).
@@ -21,6 +22,9 @@ export type Actor = ActorDto;
 
 /** assignee = a person + facet. kind:"ai" means "that person's AI". null = unassigned. */
 export type Assignee = Actor | null;
+
+/** When a task starts or is due: a calendar day, or an instant (`AMB-D-1082`). */
+export type Schedule = ScheduleDto;
 
 /** Where a task sits. The real data behind the project field in the detail pane. */
 export type Placement = PlacementDto;

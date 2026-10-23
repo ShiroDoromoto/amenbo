@@ -1,5 +1,5 @@
 import type { TaskCard } from "../mock/types";
-import { timelineModel, todayStr, relativeDays } from "../core/calendar";
+import { daysBetween, timelineModel, todayStr } from "../core/calendar";
 import { t, tf } from "../core/i18n";
 import { BlockedChips, PriorityDot } from "../components/atoms";
 import { isClosed } from "../core/status";
@@ -34,7 +34,7 @@ export function TimelineView({ tasks, selectedTaskId, onSelectTask }: {
   }
 
   const relLabel = (due: string): string => {
-    const d = relativeDays(due, today);
+    const d = daysBetween(today, due);
     if (d === 0) return t("cal.today");
     return d < 0 ? tf("cal.overdueDays", { n: -d }) : tf("cal.inDays", { n: d });
   };

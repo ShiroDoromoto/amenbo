@@ -467,6 +467,27 @@ pub struct PremiseChangeDto {
     pub(crate) reopened_values: Vec<WaitingOnValueDto>,
 }
 
+/// When a task starts or is due, as one value (`AMB-D-1082`): a calendar day, or an instant — the wire
+/// form of [`amenbo_core::model::Schedule`]. A day (`YYYY-MM-DD`) is the reader's own calendar day; an
+/// instant (RFC3339 UTC) is shown in the reader's zone, and wherever the screen cuts by day it is read on
+/// the reader's day it falls on.
+#[derive(Serialize, TS, Debug, PartialEq)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ScheduleDto {
+    Day { day: String },
+    At { at: String },
+}
+
+impl From<amenbo_core::model::Schedule> for ScheduleDto {
+    fn from(s: amenbo_core::model::Schedule) -> Self {
+        match s {
+            amenbo_core::model::Schedule::Day(d) => ScheduleDto::Day { day: amenbo_core::time::date_to_string(d) },
+            amenbo_core::model::Schedule::At(t) => ScheduleDto::At { at: t.to_rfc3339_z() },
+        }
+    }
+}
+
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -484,11 +505,11 @@ pub struct TaskCardDto {
     pub(crate) assignee: Option<ActorDto>,
     #[ts(type = "\"high\" | \"medium\" | \"low\" | null")]
     pub(crate) priority: Option<&'static str>,
-    pub(crate) due: Option<String>,
-    /// The declared start day (`YYYY-MM-DD`), whether or not it has come. `not_started_until` below is
-    /// the premise this field can raise; this is the field itself, which is what the pane editing it has
-    /// to show — a day that has already come is still a value the person put there and may want back.
-    pub(crate) start_on: Option<String>,
+    pub(crate) due: Option<ScheduleDto>,
+    /// The declared start, whether or not it has come. `not_started_until` below is the premise this
+    /// field can raise; this is the field itself, which is what the pane editing it has to show — a start
+    /// that has already come is still a value the person put there and may want back.
+    pub(crate) start: Option<ScheduleDto>,
     /// Completion timestamp (RFC3339 UTC). Used to sort the Done column newest-first, among other
     /// things. None while the task is still open.
     pub(crate) completed_at: Option<String>,
@@ -512,10 +533,10 @@ pub struct TaskCardDto {
     /// (`not_ready`) only ever appears in a toast that vanishes in seconds, so we name the decisions
     /// that are holding it back, letting the detail pane hold the same fact permanently.
     pub(crate) blocked_by_decisions: Vec<DecisionRefDto>,
-    /// The declared start day, when it is still ahead (`YYYY-MM-DD`) — the third reason `ready` is
-    /// false, beside `blocked_by` and `blocked_by_decisions`. Always serialized, `null` when the start
-    /// day is no reason, so every `ready: false` the GUI draws carries a reason it can name on screen.
-    pub(crate) not_started_until: Option<String>,
+    /// The declared start, when it is still ahead — the third reason `ready` is false, beside
+    /// `blocked_by` and `blocked_by_decisions`. Always serialized, `null` when the start is no reason,
+    /// so every `ready: false` the GUI draws carries a reason it can name on screen.
+    pub(crate) not_started_until: Option<ScheduleDto>,
     /// Is the task still being put together — the fourth reason `ready` is false (`AMB-D-553`). A draft
     /// is drawn on the board like any other card (`AMB-D-555`), so the card has to carry the reason it
     /// cannot be picked up, the way `not_started_until` does for the third.

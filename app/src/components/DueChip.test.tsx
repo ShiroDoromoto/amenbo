@@ -3,6 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DueChip } from "./atoms";
+import type { Schedule } from "../mock/types";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -10,8 +11,10 @@ let container: HTMLDivElement;
 let root: Root;
 
 const chip = () => container.querySelector(".chip.due");
-const render = (due: string | null) =>
-  act(() => root.render(createElement(DueChip, { due })));
+const render = (due: string | Schedule | null) =>
+  act(() => root.render(createElement(DueChip, { due: typeof due === "string" ? { kind: "day", day: due } : due })));
+// An instant at a local time, so the day it falls on is the same whatever timezone the test runs in.
+const at = (d: number, h: number, m = 0): Schedule => ({ kind: "at", at: new Date(2026, 5, d, h, m).toISOString() });
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -54,9 +57,19 @@ describe("DueChip", () => {
     expect(chip()?.className).toContain("due--overdue");
   });
 
-  it("judges by the day even when a time is attached", () => {
-    render("2026-06-21T23:00:00Z");
+  it("judges an instant by the reader's day it falls on, until the instant has passed", () => {
+    render(at(21, 23));
     expect(chip()?.className).toContain("due--today");
+    render(at(22, 0, 30));
+    expect(chip()?.className).toContain("due--tomorrow");
+    // Noon has come and gone: the day is still today, but the deadline is behind.
+    render(at(21, 11));
+    expect(chip()?.className).toContain("due--overdue");
+  });
+
+  it("carries the instant's time beside the day", () => {
+    render(at(22, 9, 30));
+    expect(chip()?.textContent).toMatch(/tomorrow 09:30\sAM/);
   });
 
   // The wording is `Intl`'s, in the locale dates are written in — English here, nothing being set.

@@ -18,10 +18,10 @@ import { loadCommentTasks, loadTriggeredAt, loadReadReceipts } from "./readRecei
 import { loadInboxArchived } from "./inboxArchive";
 import { invoke } from "./ipc";
 import { decisionRef, parseRef, taskRef } from "./idref";
-import { addDays } from "./calendar";
+import { addDays, compareDue, scheduleDay } from "./calendar";
 import { DUE_OVERDUE, DUE_TODAY, DUE_TOMORROW, DUE_WINDOWS, type DueCounts } from "./due";
 import { isClosed } from "./status";
-import type { TaskCard } from "../mock/types";
+import type { Schedule, TaskCard } from "../mock/types";
 import type { ArchivedProjectDto, AttachmentDto, DecisionCommentDto, MadeInDto, SearchHitDto, SearchResultDto, TaskCommitDto, TaskPageDto, DecisionPageDto, RefTargetDto } from "../bindings/bindings";
 
 // "Today" for the browser mock only. On the Tauri path core's today() resolves due:today, so this is unused.
@@ -730,8 +730,8 @@ function assigneeIs(t: TaskCard, value: string): boolean {
 }
 
 /** The mock's reading of one `due:` value against a task's day (the fixtures' TODAY stands in for the store's). */
-function mockDueMatches(due: string | null, value: string): boolean {
-  const day = due?.slice(0, 10) ?? "";
+function mockDueMatches(due: Schedule | null, value: string): boolean {
+  const day = due ? scheduleDay(due) : "";
   switch (value) {
     case "none": return !day;
     case "today": return day === TODAY;
@@ -782,11 +782,10 @@ function mockSort(tasks: TaskCard[], sort: string): TaskCard[] {
         return av < bv ? -1 : 1;
       }
       case "due": {
-        const av = a.due ?? "", bv = b.due ?? "";
-        if (av === bv) return 0;
-        if (!av) return 1;     // No day sinks to the bottom (ascending), as the store's own `due` sort does
-        if (!bv) return -1;
-        return av < bv ? -1 : 1;
+        if (!a.due && !b.due) return 0;
+        if (!a.due) return 1;  // No day sinks to the bottom (ascending), as the store's own `due` sort does
+        if (!b.due) return -1;
+        return compareDue(a.due, b.due);
       }
       case "title": return a.title.localeCompare(b.title);
       default: return 0;       // order/created keep the fixture order (stable in the mock).

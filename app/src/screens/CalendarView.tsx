@@ -73,7 +73,7 @@ export function CalendarView({ tasks, selectedTaskId, onSelectTask }: {
                   key={tk.id}
                   className={[
                     "cal__chip",
-                    `cal__chip--${dueKind(day, today)}`,
+                    `cal__chip--${dueKind(tk.due!, today)}`,
                     tk.id === selectedTaskId ? "cal__chip--selected" : "",
                     isClosed(tk.status) ? "cal__chip--closed" : "",
                   ].join(" ").trim()}

@@ -1,14 +1,16 @@
 // The pure logic behind the calendar and timeline views. Everything that needs no DOM — bucketing by date,
 // building the month grid, laying out the gantt axis — lives here, so that the `.tsx` side (CalendarView,
-// TimelineView) does nothing but draw the result. A due date is a calendar day (`YYYY-MM-DD`), so day arithmetic
-// runs on the UTC epoch to keep it out of the timezone's reach (no off-by-one from a local DST shift or offset).
+// TimelineView) does nothing but draw the result. A start or a due is a calendar day or an instant (`Schedule`);
+// wherever it is cut by day it is read as the reader's own calendar day (`scheduleDay`), and day arithmetic on
+// those days runs on the UTC epoch to keep it out of the timezone's reach (no off-by-one from a local DST shift
+// or offset).
 // The headings drawn beside this grid — the month, the weekdays — are not here: they are formatting, and
 // `Intl` writes them (core/i18n/format).
-import type { TaskCard } from "../mock/types";
+import type { Schedule, TaskCard } from "../mock/types";
 
-// Split a "YYYY-MM-DD" (its first 10 characters) into [year, month(1-12), day].
+// Split a "YYYY-MM-DD" into [year, month(1-12), day].
 export function parseYmd(s: string): [number, number, number] {
-  const [y, m, d] = s.slice(0, 10).split("-").map(Number);
+  const [y, m, d] = s.split("-").map(Number);
   return [y, m, d];
 }
 
@@ -24,6 +26,30 @@ export function fmtDate(d: Date): string {
 // The device's local "today" (`YYYY-MM-DD`). `now` is injectable for tests.
 export function todayStr(now: Date = new Date()): string {
   return fmtDate(now);
+}
+
+// The reader's calendar day a start or a due falls on: the day itself, or the local day of the instant.
+export function scheduleDay(s: Schedule): string {
+  return s.kind === "day" ? s.day : fmtDate(new Date(s.at));
+}
+
+// A start or a due as plain text: the day, and for an instant the reader's local time after it.
+export function scheduleText(s: Schedule): string {
+  if (s.kind === "day") return s.day;
+  const at = new Date(s.at);
+  const hh = String(at.getHours()).padStart(2, "0");
+  const mm = String(at.getMinutes()).padStart(2, "0");
+  return `${fmtDate(at)} ${hh}:${mm}`;
+}
+
+// The order of two dues: by the reader's day, and within one day the instants first, in time order, with
+// the bare days last.
+export function compareDue(a: Schedule, b: Schedule): number {
+  const ad = scheduleDay(a), bd = scheduleDay(b);
+  if (ad !== bd) return ad < bd ? -1 : 1;
+  if (a.kind === "at" && b.kind === "at") return new Date(a.at).getTime() - new Date(b.at).getTime();
+  if (a.kind === b.kind) return 0;
+  return a.kind === "at" ? -1 : 1;
 }
 
 // The day difference b - a. The subtraction runs on the UTC epoch so that the timezone cannot skew it.
@@ -75,19 +101,21 @@ export function monthMatrix(year: number, month: number, weekStart = 0): string[
 // heeded is the one before — see `--c-due-*` in styles/tokens.css.
 export type DueKind = "overdue" | "today" | "tomorrow" | "future";
 
-export function dueKind(due: string, today: string): DueKind {
-  const d = due.slice(0, 10);
+// A due at an instant is overdue once that instant has passed (`now`), even on its own day.
+export function dueKind(due: Schedule, today: string, now: number = Date.now()): DueKind {
+  if (due.kind === "at" && new Date(due.at).getTime() < now) return "overdue";
+  const d = scheduleDay(due);
   if (d < today) return "overdue";
   if (d === today) return "today";
   return d === addDays(today, 1) ? "tomorrow" : "future";
 }
 
-// Due day (`YYYY-MM-DD`) → the tasks due on it. Tasks with no due date are left out.
+// The reader's due day (`YYYY-MM-DD`) → the tasks due on it. Tasks with no due date are left out.
 export function groupByDue(tasks: TaskCard[]): Map<string, TaskCard[]> {
   const m = new Map<string, TaskCard[]>();
   for (const t of tasks) {
     if (!t.due) continue;
-    const key = t.due.slice(0, 10);
+    const key = scheduleDay(t.due);
     const arr = m.get(key);
     if (arr) arr.push(t);
     else m.set(key, [t]);
@@ -95,23 +123,18 @@ export function groupByDue(tasks: TaskCard[]): Map<string, TaskCard[]> {
   return m;
 }
 
-// Days relative to today (due - today). Negative is past, 0 is today, positive is future.
-export function relativeDays(due: string, today: string): number {
-  return daysBetween(today, due.slice(0, 10));
-}
-
 // ───────────────────────── Timeline (gantt) ─────────────────────────
 
 export interface TimelineRow {
   task: TaskCard;
-  due: string; // YYYY-MM-DD
+  due: string; // the reader's due day, YYYY-MM-DD
   leftPct: number; // left edge of the bar (% of the axis window)
   widthPct: number; // width of the bar (%, clamped to a minimum)
   kind: DueKind;
 }
 
 export interface TimelineModel {
-  rows: TimelineRow[]; // ascending by due
+  rows: TimelineRow[]; // ascending by due (`compareDue`)
   noDue: TaskCard[]; // no due date, so nothing to place on the axis
   axisStart: string; // the day at the left edge of the axis
   axisEnd: string; // the day at the right edge
@@ -123,10 +146,10 @@ export interface TimelineModel {
 // due date runs right from today (the time left), a past one runs left from today back to the due date (the
 // overrun). The axis window covers every due date and today, padded by a day at each end. Tasks with no due date
 // go to noDue and are never placed on the axis.
-export function timelineModel(tasks: TaskCard[], today: string): TimelineModel {
-  const dued = tasks.filter((t) => t.due).map((t) => ({ task: t, due: t.due!.slice(0, 10) }));
+export function timelineModel(tasks: TaskCard[], today: string, now: number = Date.now()): TimelineModel {
+  const dued = tasks.flatMap((t) => (t.due ? [{ task: t, schedule: t.due, due: scheduleDay(t.due) }] : []));
   const noDue = tasks.filter((t) => !t.due);
-  dued.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
+  dued.sort((a, b) => compareDue(a.schedule, b.schedule));
 
   const dues = dued.map((x) => x.due);
   const lo = dues.reduce((m, d) => (d < m ? d : m), today);
@@ -136,12 +159,12 @@ export function timelineModel(tasks: TaskCard[], today: string): TimelineModel {
   const spanDays = Math.max(1, daysBetween(axisStart, axisEnd));
   const pctOf = (d: string) => (daysBetween(axisStart, d) / spanDays) * 100;
 
-  const rows: TimelineRow[] = dued.map(({ task, due }) => {
+  const rows: TimelineRow[] = dued.map(({ task, schedule, due }) => {
     const a = due < today ? due : today;
     const b = due < today ? today : due;
     const leftPct = pctOf(a);
     const widthPct = Math.max(1.5, pctOf(b) - leftPct); // a minimum width, so a same-day point is still visible
-    return { task, due, leftPct, widthPct, kind: dueKind(due, today) };
+    return { task, due, leftPct, widthPct, kind: dueKind(schedule, today, now) };
   });
 
   return { rows, noDue, axisStart, axisEnd, spanDays, todayPct: pctOf(today) };

@@ -270,15 +270,20 @@ pub struct TaskPage {
 
 /// Run a `task list` query against the read-model: filter → indexed `WHERE`, sort → `ORDER BY`,
 /// page → `LIMIT`/`OFFSET`. Returns the ordered page of task ids plus the total match count.
-/// How many tasks `q` matches, and the earliest start day among them — one row, no ids. Fed the caller's
+/// How many tasks `q` matches, and the earliest start among them — one row, no ids. Fed the caller's
 /// own query with `ready:` dropped and `start:future` put in its place, this answers "what is my empty
 /// mailbox not showing me, and when does the first of it arrive".
 ///
 /// It is a separate read rather than a page the caller counts because the answer is two numbers: paging
 /// would carry every waiting row back to compute a minimum, and the whole point is that this runs on the
 /// empty-result path where nothing was worth carrying. `None` when nothing is waiting — a store with no
-/// waiting task has no earliest day, and `Some(0)` would be a count with a date that does not exist.
-pub fn waiting_on_start(conn: &Connection, q: &TaskQuery) -> Result<Option<(usize, NaiveDate)>> {
+/// waiting task has no earliest start, and `Some(0)` would be a count with a start that does not exist.
+///
+/// A start is `start_on` or `start_at` (`AMB-D-1082`), and each column has its own minimum. The two are
+/// weighed here rather than in SQL: a day starts at the moment it begins for the reader
+/// ([`crate::time::local_day_start_utc`]), and an instant is its own moment.
+pub fn waiting_on_start(conn: &Connection, q: &TaskQuery) -> Result<Option<(usize, crate::model::Schedule)>> {
+    use crate::model::Schedule;
     let started = std::time::Instant::now();
     let scope = [q.reach.project(), q.project_id]
         .into_iter()
@@ -289,22 +294,28 @@ pub fn waiting_on_start(conn: &Connection, q: &TaskQuery) -> Result<Option<(usiz
     let mut sel = Select::new();
     let count = sel.count_all();
     // Aggregates over a filtered set: the registry cannot type them, and over no rows `MIN` answers NULL
-    // rather than nothing — which is exactly the "nothing is waiting" case.
-    let earliest = sel.expr::<Option<String>>(format!("MIN({})", T.start_on.name()));
+    // rather than nothing — which is exactly the "nothing is waiting" case. `NULLIF` keeps the
+    // not-yet-written `''` from being the smallest value of a column.
+    let min_on = sel.expr::<Option<String>>(format!("MIN(NULLIF({}, ''))", T.start_on.to_sql()));
+    let min_at = sel.expr::<Option<String>>(format!("MIN(NULLIF({}, ''))", T.start_at.to_sql()));
     let mut sql = Sql::from(&sel, T.table);
     sql.push_where(pred.as_ref());
 
-    let (count, earliest) = conn
+    let (count, min_on, min_at) = conn
         .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| {
-            Ok((count.get(r)?, earliest.get(r)?))
+            Ok((count.get(r)?, min_on.get(r)?, min_at.get(r)?))
         })
         .map_err(StoreEngineError::from)?;
-    // A count-only read: it hands back two aggregates and no rows, so the complexity ratio a page is
+    // A count-only read: it hands back three aggregates and no rows, so the complexity ratio a page is
     // judged by does not apply and the time budget is the whole judgement (as in `list_task_ids`).
     crate::perf::record_count_query("engine.waiting_on_start", count.max(0) as usize, started.elapsed());
-    let Some(earliest) = earliest.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
-    else {
-        return Ok(None);
+    let day = min_on.as_deref().and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+    let at = min_at.as_deref().and_then(crate::time::Timestamp::parse_rfc3339);
+    let earliest = match (day, at) {
+        (Some(d), Some(t)) if t < crate::time::local_day_start_utc(d) => Schedule::At(t),
+        (Some(d), _) => Schedule::Day(d),
+        (None, Some(t)) => Schedule::At(t),
+        (None, None) => return Ok(None),
     };
     Ok((count > 0).then_some((count as usize, earliest)))
 }
@@ -1113,6 +1124,22 @@ fn priority_rank(priority: Col<SqlText, Nullable>) -> String {
     )
 }
 
+/// `due_on` / `due_at` as one ascending `ORDER BY` key (`AMB-D-1082`): the reader's day first, and within
+/// a day the instants in time order ahead of the day-only deadline, which is the end of that day. The
+/// two columns are never compared with each other: each row's key starts with its reader's day, which an
+/// instant gets from SQLite's `'localtime'` — the zone this machine is set to, the one
+/// [`crate::time::today`] reads. After the day an instant carries its own UTC text, which keeps time order
+/// inside the day, and a day carries `~`, which sorts after it. A task with neither column is not given a
+/// key here; the caller groups it out first.
+fn due_order() -> String {
+    format!(
+        "CASE WHEN {at_blank} THEN {on} || '~' ELSE date({at}, 'localtime') || {at} END",
+        at_blank = Pred::is_blank(T.due_at).sql(),
+        on = T.due_on.to_sql(),
+        at = T.due_at.to_sql(),
+    )
+}
+
 /// **Whether `sort` is a key `task list --sort` takes** (`-` for descending included). The one list of
 /// keys is [`order_by`]'s, so a caller that stores an order to run later — a task filter's answer — is
 /// checked against the same keys the run will be sorted by.
@@ -1132,8 +1159,11 @@ fn order_by(sort: &str) -> Result<Vec<Sort>> {
     let comps: Vec<String> = match key {
         // Placement is task-held: sort by the task's own order_key.
         "order" => vec![format!("COALESCE({}, '')", T.order_key.to_sql())],
-        // NULL/empty due dates sort last (ascending); the grouping term flips with `-`.
-        "due" => vec![Pred::is_blank(T.due_on).sql().to_string(), T.due_on.to_sql()],
+        // A task with no deadline at all sorts last (ascending); the grouping term flips with `-`.
+        "due" => vec![
+            Pred::is_blank(T.due_on).and(Pred::is_blank(T.due_at)).sql().to_string(),
+            due_order(),
+        ],
         "priority" => vec![priority_rank(T.priority)],
         "created" => vec![T.created_at.to_sql()],
         // NULL/empty completed dates sort last (ascending); the grouping term flips with `-`.
@@ -5101,57 +5131,61 @@ pub fn hydrate_task_cards(
 /// not a bucket length (the other three counts equal `overdue`/`due_today`/`in_progress` lengths).
 /// Fed to [`hydrate_task_cards`] so `status` serves O(result) cards from SQL — the id-list counterpart
 /// of `query`'s `StatusBuckets`.
+///
+/// A deadline is `due_on` or `due_at` (`AMB-D-1082`), and the day buckets read both the way `due:` does
+/// ([`due_pred`]): an instant falls on the reader's day, and is overdue the moment `now` passes it.
 pub struct StatusBucketIds {
-    /// Most-overdue first (`due_on` asc), then priority, then id — matching `query::status`.
+    /// `due:overdue` — most-overdue first ([`due_order`]), then priority, then id — matching
+    /// `query::status`.
     pub overdue: Vec<i64>,
-    /// `due_on == today`, ordered by priority then id.
+    /// `due:today`, ordered by priority then id.
     pub due_today: Vec<i64>,
-    /// `today <= due_on <= today+7` (includes today), ordered by `due_on` then id.
+    /// `due:week` (includes today), ordered by [`due_order`] then id.
     pub due_week: Vec<i64>,
     /// Reserved — `status == in_progress` — in id order. The only bucket read off the status field
     /// rather than off a day: what someone has their hands on is what they declared, not what the
     /// calendar implies.
     pub in_progress: Vec<i64>,
-    /// Not done with `today < due_on <= today+7` (excludes today; distinct from `due_week`).
+    /// Not done and due within the seven days after today (excludes today; distinct from `due_week`).
     pub upcoming_7d: usize,
-    /// Not done with no due date.
+    /// Not done with no deadline, neither a day nor an instant.
     pub no_due: usize,
     /// Done with `completed_at` on `today` (UTC, matching `Timestamp`'s storage).
     pub completed_today: usize,
 }
 
-/// Compute the [`StatusBucketIds`] from the read-model. Every bucket tiebreaks on `id`. Dates compare
-/// lexicographically — the read-model stores `due_on`/`start_on` as `YYYY-MM-DD` and `completed_at` as a
-/// UTC RFC3339 whose first ten chars are its date, so string comparison against `today` is chronological.
+/// Compute the [`StatusBucketIds`] from the read-model. Every bucket tiebreaks on `id`. Each column
+/// compares lexicographically against its own shape — `due_on` as `YYYY-MM-DD`, `due_at` and
+/// `completed_at` as fixed-width UTC RFC3339 — so string comparison is chronological.
 /// `reach` scopes every bucket and every count (an AI reaches only the project its `.amenbo` names, so
 /// its `status` must not count every project); [`crate::reach::Reach::All`] counts everything, which is
 /// what a human gets.
 pub fn status_bucket_ids(
     conn: &Connection,
     today: NaiveDate,
+    now: crate::time::Timestamp,
     reach: crate::reach::Reach,
 ) -> Result<StatusBucketIds> {
-    const TA: col::task::Cols = col::task::ALL;
     let project_id = reach.project();
     let today_s = today.to_string();
-    let week_end_s = (today + Duration::days(7)).to_string();
+    let week_end = today + Duration::days(7);
 
     // Every bucket asks its question of the tasks in reach, so the scope is `AND`-ed onto the bucket's
     // own predicate — carrying its bind with it, rather than being appended as a fragment whose `?N` each
     // caller had to count off against its own params.
     let scoped = |p: Pred| match project_id {
-        Some(pid) => p.and(Pred::eq(TA.project_id, pid)),
+        Some(pid) => p.and(Pred::eq(T.project_id, pid)),
         None => p,
     };
-    let open = || still_open(TA.status);
-    // "Has a day on it" — the negation of the store's not-written reading, so the buckets and the
-    // `due:none` filter cannot come to disagree about what an unwritten day is.
-    let has_due = || !Pred::is_blank(TA.due_on);
+    let open = || still_open(T.status);
+    // The day buckets are the `due:` filter's own arms, so the two cannot come to disagree about which
+    // deadline is overdue, due today, or not written.
+    let due = |f: DueFilter| open().and(due_pred(&f, today, now));
 
     let collect = |pred: Pred, order: Vec<Sort>| -> Result<Vec<i64>> {
         let mut sel = Select::new();
-        let id = sel.col(TA.id);
-        let mut sql = Sql::from(&sel, TA.table);
+        let id = sel.col(T.id);
+        let mut sql = Sql::from(&sel, T.table);
         sql.push_where(Some(&scoped(pred))).order_by(order);
         let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
         let ids = stmt
@@ -5164,7 +5198,7 @@ pub fn status_bucket_ids(
     let count = |pred: Pred| -> Result<usize> {
         let mut sel = Select::new();
         let matched = sel.count_all();
-        let mut sql = Sql::from(&sel, TA.table);
+        let mut sql = Sql::from(&sel, T.table);
         sql.push_where(Some(&scoped(pred)));
         let n: i64 = conn
             .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| matched.get(r))
@@ -5174,44 +5208,39 @@ pub fn status_bucket_ids(
 
     // Every bucket tiebreaks on `id`; `priority` ranks high→none (`priority_rank`, mirroring
     // `view::priority_rank`) — a `CASE` over the enum's own words, which the registry cannot type.
-    let due = || Sort::by(TA.due_on);
-    let id = || Sort::by(TA.id);
-    let prank = || Sort::expr(priority_rank(TA.priority));
+    let by_due = || Sort::expr(due_order());
+    let id = || Sort::by(T.id);
+    let prank = || Sort::expr(priority_rank(T.priority));
 
-    let overdue = collect(
-        open().and(has_due()).and(Pred::cmp(TA.due_on, "<", today_s.as_str())),
-        vec![due(), prank(), id()],
-    )?;
-
-    let due_today =
-        collect(open().and(Pred::eq(TA.due_on, today_s.as_str())), vec![prank(), id()])?;
-
-    let due_week = collect(
-        open()
-            .and(has_due())
-            .and(Pred::cmp(TA.due_on, ">=", today_s.as_str()))
-            .and(Pred::cmp(TA.due_on, "<=", week_end_s.as_str())),
-        vec![due(), id()],
-    )?;
+    let overdue = collect(due(DueFilter::Overdue), vec![by_due(), prank(), id()])?;
+    let due_today = collect(due(DueFilter::Today), vec![prank(), id()])?;
+    let due_week = collect(due(DueFilter::Week), vec![by_due(), id()])?;
 
     // Under way is a thing a person declares by reserving the task (`AMB-D-118`), so this bucket asks the
     // status field and no day at all. A start day that has come says the work *may* begin, which is a
     // different fact — reading it as this one filled the section with work nobody had picked up.
-    let in_progress = collect(Pred::eq(TA.status, "in_progress"), vec![id()])?;
+    let in_progress = collect(Pred::eq(T.status, "in_progress"), vec![id()])?;
 
+    // The week after today: a day from tomorrow to `week_end`, or an instant from the moment tomorrow
+    // begins here to the end of `week_end` — the same cut `due:week` makes, less today.
+    let day_start = |d: NaiveDate| crate::time::local_day_start_utc(d).to_rfc3339_z();
     let upcoming_7d = count(
-        open()
-            .and(has_due())
-            .and(Pred::cmp(TA.due_on, ">", today_s.as_str()))
-            .and(Pred::cmp(TA.due_on, "<=", week_end_s.as_str())),
+        open().and(
+            (!Pred::is_blank(T.due_on))
+                .and(Pred::cmp(T.due_on, ">", today_s.as_str()))
+                .and(Pred::cmp(T.due_on, "<=", week_end.to_string()))
+                .or((!Pred::is_blank(T.due_at))
+                    .and(Pred::cmp(T.due_at, ">=", day_start(today + Duration::days(1))))
+                    .and(Pred::cmp(T.due_at, "<", day_start(week_end + Duration::days(1))))),
+        ),
     )?;
 
-    let no_due = count(open().and(Pred::is_blank(TA.due_on)))?;
+    let no_due = count(due(DueFilter::None))?;
 
     // The instant's day is its first ten characters (a fixed-width UTC RFC3339) — a derivation over the
     // column, which the layer names (`Col::day`), so the comparison is an ordinary typed one.
     let completed_today =
-        count(Pred::eq(TA.status, "done").and(Pred::eq(TA.completed_at.day(), today_s.as_str())))?;
+        count(Pred::eq(T.status, "done").and(Pred::eq(T.completed_at.day(), today_s.as_str())))?;
 
     Ok(StatusBucketIds {
         overdue,
@@ -6466,8 +6495,9 @@ pub struct ProjectTaskCountsRow {
 /// `completed` is what was **carried out** (`Done` alone), while every due bucket asks whether the task is
 /// still work ([`still_open`], which drops both terminals). Keeping the two apart is the whole of
 /// `AMB-D-397` on this surface: a task decided against is in neither. An empty
-/// `due_on` is no due date, not a date that sorts before every other — [`status_bucket_ids`] guards it
-/// the same way.
+/// `due_on` is no due date, not a date that sorts before every other — [`due_pred`] guards it the same
+/// way. These counts still read `due_on` alone: a deadline at an instant (`due_at`, `AMB-D-1082`) is not
+/// yet read here, so it counts as no due date.
 pub fn project_task_counts(
     conn: &Connection,
     project_id: i64,

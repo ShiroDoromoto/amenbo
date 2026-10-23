@@ -605,10 +605,26 @@ pub struct WaitingOnValues {
 /// — the task drops out of the mailbox, and an empty mailbox reads as "nothing to do" rather than "three
 /// tasks, the first in eleven months". The count is what makes the mistake noticeable; the date is what
 /// makes it obviously a mistake.
-#[derive(Clone, Debug, Serialize)]
+///
+/// The earliest start is a day or an instant (`AMB-D-1082`). It is written as `earliest`, the reader's
+/// day it falls on — the key this has always had — and `earliest_at` beside it, the instant when it is
+/// one and `null` otherwise, so a reader of the old key still reads a day.
+#[derive(Clone, Debug)]
 pub struct WaitingOnStart {
     pub count: usize,
-    pub earliest: NaiveDate,
+    pub earliest: crate::model::Schedule,
+}
+
+impl Serialize for WaitingOnStart {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct Wire {
+            count: usize,
+            earliest: NaiveDate,
+            earliest_at: Option<Timestamp>,
+        }
+        Wire { count: self.count, earliest: self.earliest.day(), earliest_at: self.earliest.at() }.serialize(s)
+    }
 }
 
 #[derive(Default)]
@@ -816,6 +832,8 @@ fn cmp_opt<T: Ord>(a: Option<T>, b: Option<T>) -> std::cmp::Ordering {
 pub struct OverdueTask {
     #[serde(flatten)]
     pub task: TaskCompact,
+    /// Reader's days from the deadline's day to today. A deadline at an instant counts from the day it
+    /// falls on for the reader (`AMB-D-1082`), so one that passed earlier today is overdue by `0`.
     pub days_overdue: i64,
 }
 
@@ -859,7 +877,7 @@ pub fn status(conn: &rusqlite::Connection, scope: &str, reach: crate::reach::Rea
     let (today, now) = (time::today(), Timestamp::now());
     // Buckets and counts alike only see inside the reach (an AI's `status` must not mirror the whole
     // store back at it).
-    let buckets = crate::store_engine::read::status_bucket_ids(conn, today, reach)
+    let buckets = crate::store_engine::read::status_bucket_ids(conn, today, now, reach)
         .map_err(crate::error::engine_on(conn))?;
 
     let hydrate = |ids: &[i64]| -> Result<Vec<TaskCompact>> {

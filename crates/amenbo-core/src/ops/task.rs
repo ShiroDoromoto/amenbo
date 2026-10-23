@@ -1574,6 +1574,98 @@ mod tests {
         });
     }
 
+    fn with_due(tx: &WriteTx<'_>, pid: i64, title: &str, due: Schedule) -> i64 {
+        add(
+            tx,
+            NewTask {
+                title: title.to_string(),
+                project_id: Some(pid),
+                due: Some(due),
+                start: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: None,
+                at_binding_id: None,
+                made_in: None,
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    #[test]
+    fn status_buckets_a_deadline_at_an_instant_by_the_readers_day() {
+        // `status` reads a deadline the way `due:` does (`AMB-D-1082`): an instant is overdue once now
+        // passes it and otherwise falls on the reader's day. Within a day, the instants come first in
+        // time order, and the day-only deadline — the end of that day — comes last.
+        with_numbered_task(|tx, pid, _undeclared| {
+            let today = crate::time::today();
+            let start_of = |n| crate::time::local_day_start_utc(today + chrono::Duration::days(n)).0;
+            let second = chrono::Duration::seconds(1);
+            let at = |t| Schedule::At(Timestamp(t));
+            let ids = |cards: &[crate::view::TaskCompact]| cards.iter().map(|t| t.id).collect::<Vec<_>>();
+
+            let yesterday = with_due(tx, pid, "due yesterday", Schedule::Day(today - chrono::Duration::days(1)));
+            let yesterday_at = with_due(tx, pid, "due as yesterday began", at(start_of(-1) + second));
+            let on_today = with_due(tx, pid, "due today", Schedule::Day(today));
+            let later_today_at = with_due(tx, pid, "due at the end of today", at(start_of(1) - second));
+            let tomorrow = with_due(tx, pid, "due tomorrow", Schedule::Day(today + chrono::Duration::days(1)));
+            let tomorrow_at = with_due(tx, pid, "due tomorrow at one", at(start_of(1) + chrono::Duration::hours(1)));
+
+            let s = crate::query::status(tx.conn(), "today", crate::reach::Reach::All).unwrap();
+            assert_eq!(
+                s.overdue.iter().map(|o| (o.task.id, o.days_overdue)).collect::<Vec<_>>(),
+                vec![(yesterday_at, 1), (yesterday, 1)],
+                "overdue: the instant first within its day, each one day late",
+            );
+            let due_today = ids(s.due_today.as_deref().unwrap());
+            assert_eq!(due_today.len(), 2, "today: the day and the instant still ahead today");
+            assert!(due_today.contains(&on_today) && due_today.contains(&later_today_at));
+            assert_eq!(
+                (s.counts.overdue, s.counts.due_today, s.counts.upcoming_7d, s.counts.no_due),
+                (2, 2, 2, 1),
+                "counts read the instant as well, and only the task made with no deadline has none",
+            );
+
+            let w = crate::query::status(tx.conn(), "week", crate::reach::Reach::All).unwrap();
+            assert_eq!(
+                ids(w.due_this_week.as_deref().unwrap()),
+                vec![later_today_at, on_today, tomorrow_at, tomorrow],
+                "the week: by the reader's day, the instant ahead of the day-only deadline",
+            );
+        });
+    }
+
+    #[test]
+    fn sorting_by_due_puts_an_instant_before_the_day_only_deadline_of_its_day() {
+        // `--sort due` orders the two columns as one deadline (`AMB-D-1082`): the reader's day first, the
+        // instants of a day in time order, then that day's day-only deadline. `-due` reverses all of it.
+        with_numbered_task(|tx, pid, undeclared| {
+            let d = |n| NaiveDate::from_ymd_opt(2030, 1, n).unwrap();
+            let at = |n, h| {
+                Schedule::At(Timestamp(crate::time::local_day_start_utc(d(n)).0 + chrono::Duration::hours(h)))
+            };
+            let day9 = with_due(tx, pid, "the 9th", Schedule::Day(d(9)));
+            let noon9 = with_due(tx, pid, "the 9th at noon", at(9, 12));
+            let day10 = with_due(tx, pid, "the 10th", Schedule::Day(d(10)));
+            let noon10 = with_due(tx, pid, "the 10th at noon", at(10, 12));
+            let eight10 = with_due(tx, pid, "the 10th at eight", at(10, 8));
+            let sorted = |sort: &str| {
+                let params = crate::query::ListParams { sort: sort.to_string(), ..list_params(None) };
+                crate::query::list(tx.conn(), crate::reach::Reach::All, params)
+                    .unwrap()
+                    .tasks
+                    .iter()
+                    .map(|t| t.id)
+                    .collect::<Vec<_>>()
+            };
+
+            let want = vec![noon9, day9, eight10, noon10, day10, undeclared];
+            assert_eq!(sorted("due"), want, "by day, the instants of a day ahead of its day-only deadline");
+            assert_eq!(sorted("-due"), want.into_iter().rev().collect::<Vec<_>>(), "`-due` reverses whole");
+        });
+    }
+
     #[test]
     fn an_empty_ready_query_says_what_a_start_day_is_holding_back() {
         // The forgetting this closes: a start day mistyped far into the future empties the mailbox, and an
@@ -1619,7 +1711,44 @@ mod tests {
             // Empty it, and the two waiting tasks are named — the earliest day being the sooner one, not
             // the mistyped one that would otherwise be the only sign anything is wrong.
             set_status(tx, ready, TaskStatus::Done, crate::model::ActorKind::Ai).unwrap();
-            assert_eq!(waiting(tx, mine), Some((2, soon)), "the empty mailbox says what it is not showing");
+            assert_eq!(
+                waiting(tx, mine),
+                Some((2, Schedule::Day(soon))),
+                "the empty mailbox says what it is not showing",
+            );
+
+            // A start at an instant is weighed against a start day by when each begins for the reader
+            // (`AMB-D-1082`): one nine hours into a day well before the sooner day is the earliest, and
+            // it is named as the instant, not as its day.
+            let at = crate::time::local_day_start_utc(today + chrono::Duration::days(10));
+            let at = crate::time::Timestamp(at.0 + chrono::Duration::hours(9));
+            let id = add(
+                tx,
+                NewTask {
+                    title: "waiting on an instant".to_string(),
+                    project_id: Some(pid),
+                    due: None,
+                    start: Some(Schedule::At(at)),
+                    priority: None,
+                    notes: String::new(),
+                    created_by_kind: None,
+                    at_binding_id: None,
+                    made_in: None,
+                },
+            )
+            .unwrap()
+            .id;
+            set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).unwrap();
+            assert_eq!(waiting(tx, mine), Some((3, Schedule::At(at))), "the instant comes first");
+            // `earliest` keeps saying a day, and the instant rides beside it.
+            let json = serde_json::to_value(
+                crate::query::list(tx.conn(), crate::reach::Reach::All, list_params(Some(mine)))
+                    .unwrap()
+                    .waiting_on_start,
+            )
+            .unwrap();
+            assert_eq!(json["earliest"], at.local_date().to_string(), "the day it falls on");
+            assert_eq!(json["earliest_at"], at.to_rfc3339_z(), "and the instant itself");
 
             // The waiting set is the same query's: a mailbox belonging to the human is empty with nothing
             // behind it, even though the AI's queue is full.

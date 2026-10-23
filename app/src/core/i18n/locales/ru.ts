@@ -281,6 +281,7 @@ export const ru: Translation = {
     "cal.more": "ещё {n}", "cal.overdueDays": "просрочено на {n} дн.", "cal.inDays": "через {n} дн.",
     "date.due": "Срок", "date.start": "Дата начала",
     "date.clear": "Убрать",
+    "date.timeOf": "Время: {field}",
     "card.assignee": "Ответственный",
     "detail.tab.detail": "Подробности", "detail.tab.activity": "Активность",
     "detail.notFound": "Задача не найдена",

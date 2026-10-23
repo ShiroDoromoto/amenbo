@@ -296,6 +296,7 @@ const ui = {
   // detail pane and the compose pane put the same two fields in front of the same person.
   "date.due": "Due date", "date.start": "Start date",
   "date.clear": "Clear",
+  "date.timeOf": "{field} (time)",
   "card.assignee": "Assignee",
   "detail.tab.detail": "Details", "detail.tab.activity": "Activity",
   "detail.notFound": "Task not found",

@@ -19,7 +19,7 @@ import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
 import { invoke } from "../core/ipc";
 import { useRefNav } from "../core/refNav";
-import { scheduleDay, scheduleText } from "../core/calendar";
+import { scheduleText } from "../core/calendar";
 import { axesFor } from "../core/appliesTo";
 import { DimensionField } from "../components/DimensionField";
 import type { DimensionDto } from "../bindings/bindings";
@@ -312,16 +312,16 @@ export function TaskDetailPane({
               })()}
             </span>
           </div>
-          {/* The two days, as the fields that write them — the chip above says how the due date stands, and
-              the premise row below says whether the start day is still holding the task back. Neither of
-              those is a way of changing one, which is what these are. */}
+          {/* The start and the due, as the fields that write them, each a day with an optional time — the
+              chip above says how the due date stands, and the premise row below says whether the start is
+              still holding the task back. Neither of those is a way of changing one, which is what these are. */}
           <div className="detail__field">
             <span className="detail__flabel">{t("date.due")}</span>
-            <DateField label={t("date.due")} value={task.due && scheduleDay(task.due)} onChange={(day) => store.setDue(taskId, day)} />
+            <DateField label={t("date.due")} value={task.due} onChange={(due) => store.setDue(taskId, due)} timed />
           </div>
           <div className="detail__field">
             <span className="detail__flabel">{t("date.start")}</span>
-            <DateField label={t("date.start")} value={task.start && scheduleDay(task.start)} onChange={(day) => store.setStart(taskId, day)} />
+            <DateField label={t("date.start")} value={task.start} onChange={(start) => store.setStart(taskId, start)} timed />
           </div>
           {taskAxes.map((dim) => (
             <div className="detail__field" key={dim.id}>

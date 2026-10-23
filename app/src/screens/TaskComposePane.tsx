@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/store";
 import { DateField } from "../components/atoms";
+import { parseSchedule } from "../core/calendar";
 import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
@@ -90,11 +91,11 @@ export function TaskComposePane({
 
         <div className="detail__field" style={{ marginTop: "var(--s-2)" }}>
           <span className="detail__flabel">{t("date.due")}</span>
-          <DateField label={t("date.due")} value={due} onChange={setDue} />
+          <DateField label={t("date.due")} value={due ? parseSchedule(due) : null} onChange={setDue} />
         </div>
         <div className="detail__field">
           <span className="detail__flabel">{t("date.start")}</span>
-          <DateField label={t("date.start")} value={start} onChange={setStart} />
+          <DateField label={t("date.start")} value={start ? parseSchedule(start) : null} onChange={setStart} />
         </div>
         {choosing && (
           <div className="detail__field">

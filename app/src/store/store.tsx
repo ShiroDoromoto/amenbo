@@ -40,9 +40,9 @@ interface Store {
    */
   finishCreating(id: number): void;
   setPriority(id: number, priority: Priority | null): void;
-  /** Set the due date (`YYYY-MM-DD`), or null to take it away. */
+  /** Set the due date (`YYYY-MM-DD`, or `YYYY-MM-DD HH:MM` on the reader's clock), or null to take it away. */
   setDue(id: number, due: string | null): void;
-  /** Set the start day (`YYYY-MM-DD`), or null to take it away. A day still ahead holds the task unready. */
+  /** Set the start (`YYYY-MM-DD`, or `YYYY-MM-DD HH:MM` on the reader's clock), or null to take it away. A start still ahead holds the task unready. */
   setStart(id: number, start: string | null): void;
   setAssignee(id: number, kind: Facet | null): void;
   addComment(taskId: number, text: string): void;

@@ -281,6 +281,7 @@ export const pl: Translation = {
     "cal.more": "+{n} więcej", "cal.overdueDays": "{n} dni po terminie", "cal.inDays": "za {n} dni",
     "date.due": "Termin", "date.start": "Data początkowa",
     "date.clear": "Usuń",
+    "date.timeOf": "Godzina: {field}",
     "card.assignee": "Odpowiedzialny",
     "detail.tab.detail": "Szczegóły", "detail.tab.activity": "Aktywność",
     "detail.notFound": "Nie znaleziono zadania",

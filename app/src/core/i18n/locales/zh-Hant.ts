@@ -276,6 +276,7 @@ export const zhHant: Translation = {
     "cal.more": "還有 {n} 項", "cal.overdueDays": "逾期 {n} 天", "cal.inDays": "{n} 天後",
     "date.due": "到期日", "date.start": "開始日期",
     "date.clear": "清除",
+    "date.timeOf": "{field}的時間",
     "card.assignee": "負責人",
     "detail.tab.detail": "詳細", "detail.tab.activity": "動態",
     "detail.notFound": "找不到該任務",

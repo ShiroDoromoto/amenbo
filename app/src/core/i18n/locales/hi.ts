@@ -276,6 +276,7 @@ export const hi: Translation = {
     "cal.more": "+{n} और", "cal.overdueDays": "{n} दिन देर", "cal.inDays": "{n} दिन में",
     "date.due": "समय-सीमा", "date.start": "आरंभ तिथि",
     "date.clear": "हटाएँ",
+    "date.timeOf": "{field} का समय",
     "card.assignee": "ज़िम्मेदार",
     "detail.tab.detail": "विवरण", "detail.tab.activity": "गतिविधि",
     "detail.notFound": "काम नहीं मिला",

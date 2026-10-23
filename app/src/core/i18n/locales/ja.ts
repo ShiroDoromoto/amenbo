@@ -277,6 +277,7 @@ export const ja: Translation = {
     "cal.more": "他 {n} 件", "cal.overdueDays": "{n}日超過", "cal.inDays": "あと{n}日",
     "date.due": "期日", "date.start": "着手日",
     "date.clear": "消す",
+    "date.timeOf": "{field}の時刻",
     "card.assignee": "担当",
     "detail.tab.detail": "詳細", "detail.tab.activity": "アクティビティ",
     "detail.notFound": "タスクが見つかりません",

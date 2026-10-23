@@ -278,6 +278,7 @@ export const th: Translation = {
     "cal.more": "+{n} รายการ", "cal.overdueDays": "เลย {n} วัน", "cal.inDays": "อีก {n} วัน",
     "date.due": "กำหนดส่ง", "date.start": "วันเริ่มต้น",
     "date.clear": "ล้าง",
+    "date.timeOf": "เวลาของ{field}",
     "card.assignee": "ผู้รับผิดชอบ",
     "detail.tab.detail": "รายละเอียด", "detail.tab.activity": "ความเคลื่อนไหว",
     "detail.notFound": "ไม่พบงาน",

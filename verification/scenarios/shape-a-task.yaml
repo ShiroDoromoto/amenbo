@@ -8,8 +8,9 @@
 #
 # The screen walks the two days rather than the whole form. They are the fields it could read and not
 # write until lately — a due date drawn on every card, with nowhere on the pane to put one there — so
-# what its road answers for is the writing, the premise the start day carries once it lands, and the
-# taking back — which on this face is a button of its own, and the only way off it.
+# what its road answers for is the writing, the premise the start day carries once it lands, the time
+# the pane's own time field puts on either day, and the taking back — which on this face is a button of
+# its own, and the only way off it.
 id: shape-a-task
 title: A task registered with nothing but a title starts todo, is filled in field by field, and can be emptied again
 description: >
@@ -313,6 +314,50 @@ steps_gui:
       field: ready
       equals: false
 
+  # The time field beside each day, which the pane draws once there is a day under it. A time written
+  # there makes the day the instant it names on the reader's clock, so the day field empties — and the
+  # instant is read back by the day it falls on, as the terminal's road reads it, rather than as a fixed
+  # string that would answer differently in another time zone.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: seed
+      due: "2099-12-31 17:00"
+      start: "2099-01-01 09:00"
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: due_on
+      equals: null
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: start_on
+      equals: null
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: not_started_until
+      equals: "2099-01-01"
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: false
+
   # And the taking back, which on this face is a move of its own rather than an empty value handed to
   # the form: both days come off by a button standing beside the picker, since the picker's own way of
   # emptying itself is not drawn on every platform. A build where that button does not write leaves the
@@ -332,6 +377,14 @@ steps_gui:
       field: due_on
       equals: null
 
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: due_at
+      equals: null
+
   - type: action
     domain: task
     op: clear
@@ -345,6 +398,14 @@ steps_gui:
     with:
       target: seed
       field: start_on
+      equals: null
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: start_at
       equals: null
 
   # The premise goes with the day. What the start day was holding back is the reserve, so the reading

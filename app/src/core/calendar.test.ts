@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   parseYmd, fmtDate, todayStr, daysBetween, addDays, shiftMonth,
-  monthMatrix, dueKind, groupByDue, timelineModel, scheduleDay, scheduleText, compareDue,
+  monthMatrix, dueKind, groupByDue, timelineModel, scheduleDay, scheduleText, scheduleTime, parseSchedule, compareDue,
 } from "./calendar";
 import type { Schedule, TaskCard } from "../mock/types";
 
@@ -85,6 +85,19 @@ describe("schedules", () => {
   it("scheduleText adds an instant's local time to its day", () => {
     expect(scheduleText(day("2026-08-01"))).toBe("2026-08-01");
     expect(scheduleText(at(2026, 8, 1, 9, 5))).toBe("2026-08-01 09:05");
+  });
+
+  it("scheduleTime is an instant's local HH:MM, and nothing for a bare day", () => {
+    expect(scheduleTime(day("2026-08-01"))).toBeNull();
+    expect(scheduleTime(at(2026, 8, 1, 9, 5))).toBe("09:05");
+  });
+
+  it("parseSchedule reads a day as a day, and a local time on it as the instant it names", () => {
+    expect(parseSchedule("2026-08-01")).toEqual(day("2026-08-01"));
+    const s = parseSchedule("2026-08-01 09:05");
+    expect(s.kind).toBe("at");
+    expect(scheduleText(s)).toBe("2026-08-01 09:05");
+    expect(s).toEqual({ kind: "at", at: new Date(2026, 7, 1, 9, 5).toISOString().replace(".000Z", "Z") });
   });
 
   it("compareDue orders by day, and within a day the instants first in time order, the bare day last", () => {

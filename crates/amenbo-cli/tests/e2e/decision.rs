@@ -196,6 +196,70 @@ fn a_decision_comment_promotes_into_a_record_that_stands_alone() {
     assert_eq!(from_task["linked_tasks"][0]["id"].to_string(), tid, "a task comment's decision is that task's premise");
 }
 
+/// The premise check (`AMB-D-1095`) is asked of the AI alone, at both doors that create a decision: under
+/// `--json` it is the `premise_check` field, in the human output the same text after the line that saved
+/// it. A person writing a decision is the one who said it, so `--actor human` gets neither. It asks and does
+/// not refuse — the draft is saved either way.
+#[test]
+fn only_the_ai_is_asked_to_check_the_premise_before_ending_the_writing() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.bound_project(); // the AI writes inside the project it is bound to
+    let tid = id_str(&cli.json(&["task", "add", "--title", "作業", "--project", &pid, "--json"])["task"]["id"]);
+    let comment = || {
+        let c = cli.json(&["comment", "add", &tid, "--text", "UTC で保存する", "--json"]);
+        format!("AMB-TC-{}", id_str(&c["comment"]["id"]))
+    };
+
+    let argv = |door: &str, actor: &str| -> Vec<String> {
+        // The AI may not name even its bound project (`out_of_reach`); the binding fills the place in.
+        let target = match (door, actor) {
+            ("add", "ai") => vec![],
+            ("add", _) => vec!["--project".to_string(), pid.clone()],
+            _ => vec![comment()],
+        };
+        let mut args = vec!["decision".to_string(), door.to_string()];
+        args.extend(target);
+        args.extend(["--title", "UTC で保存する", "--actor", actor].map(String::from));
+        args
+    };
+    for door in ["add", "promote"] {
+        let json_with = |actor: &str| {
+            let mut args = argv(door, actor);
+            args.push("--json".to_string());
+            cli.json(&args.iter().map(String::as_str).collect::<Vec<_>>())["decision"].clone()
+        };
+        let human_with = |actor: &str| {
+            let args = argv(door, actor);
+            let (out, code) = cli.run(&args.iter().map(String::as_str).collect::<Vec<_>>());
+            assert_eq!(code, 0, "decision {door} --actor {actor}: {out}");
+            out
+        };
+
+        // The AI, under --json: the check is a field of the response, and the draft is saved all the same.
+        let ai = json_with("ai");
+        let check = ai["premise_check"].as_str().unwrap_or_else(|| panic!("decision {door} --actor ai carries premise_check: {ai}"));
+        assert!(check.starts_with("Saved as a draft. It is not in force yet."), "decision {door}: {check}");
+        assert!(check.contains("Check three things:"), "decision {door}: {check}");
+        assert!(check.contains("`decision finish-writing`"), "all yes names the way to finish: {check}");
+        assert!(check.contains("`decision delete`"), "any no names the way to delete: {check}");
+        assert_eq!(ai["draft"], true, "decision {door}: asked, not refused — the draft stands: {ai}");
+
+        // A person, under --json: the field is absent rather than empty.
+        let human = json_with("human");
+        assert!(human["premise_check"].is_null(), "decision {door} --actor human is not asked: {human}");
+        assert_eq!(human["draft"], true);
+
+        // The human output: the same text after the saved line for the AI, nothing of it for a person.
+        let out = human_with("ai");
+        let saved = out.find("✓").unwrap_or_else(|| panic!("decision {door}: the saved line: {out}"));
+        let asked = out.find(check).unwrap_or_else(|| panic!("decision {door} --actor ai prints the check word for word: {out}"));
+        assert!(saved < asked, "decision {door}: the check follows the saved line: {out}");
+        let out = human_with("human");
+        assert!(!out.contains("Saved as a draft") && !out.contains("Check three things:"), "decision {door} --actor human: {out}");
+    }
+}
+
 /// A decision's page carries its timeline (`AMB-D-448`), in the shape `task show` gives its own: the count
 /// is marked even at zero, the newest three are previewed on one line each, and the way to the full text is
 /// named. What `finish-writing --reason` wrote is a comment, so a page without them would leave the ruling's own

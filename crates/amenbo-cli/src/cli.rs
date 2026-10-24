@@ -2094,7 +2094,8 @@ pub enum AutomationCmd {
         /// the name of the setting or the input the working folder is taken from
         #[arg(long, value_name = "NAME", conflicts_with = "clear_work_dir")]
         work_dir: Option<String>,
-        /// take the working folder from nothing
+        /// take the working folder from nothing: the step opens in the task's working folder, or else in
+        /// the first folder bound to the project
         #[arg(long)]
         clear_work_dir: bool,
         /// whether this step's report also lands as a comment on the task, unless the task is closed by then (`--report-to-task true|false`)

@@ -1079,7 +1079,7 @@ export const ja: Translation = {
     "auto.step.handoffErrExit": "exit が宣言した出口のどれでもない、または必須の出力が無い",
     "auto.step.sampleCopy": "コピー",
     "auto.step.sampleCopied": "コピーしました",
-    "auto.step.folderNone": "ペインと同じ場所",
+    "auto.step.folderNone": "タスクの作業フォルダ（無ければプロジェクトのフォルダ）",
     "auto.step.cfg": "設定",
     "auto.step.declaresNone": "まだありません",
     "auto.step.required": "必須",

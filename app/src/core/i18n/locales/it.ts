@@ -1085,7 +1085,7 @@ export const it: Translation = {
     "auto.step.handoffErrExit": "exit non nomina nessuna delle uscite dichiarate, o manca un'uscita obbligatoria",
     "auto.step.sampleCopy": "Copia",
     "auto.step.sampleCopied": "Copiato",
-    "auto.step.folderNone": "Dove si apre il riquadro",
+    "auto.step.folderNone": "Cartella di lavoro dell'attività, altrimenti quella del progetto",
     "auto.step.cfg": "Impostazioni",
     "auto.step.declaresNone": "Nulla di dichiarato",
     "auto.step.required": "obbligatorio",

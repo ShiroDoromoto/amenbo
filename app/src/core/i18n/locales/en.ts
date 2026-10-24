@@ -1318,7 +1318,7 @@ const ui = {
   "auto.step.handoffErrExit": "exit names none of the declared ways out, or a required output is missing",
   "auto.step.sampleCopy": "Copy",
   "auto.step.sampleCopied": "Copied",
-  "auto.step.folderNone": "Where the pane opens",
+  "auto.step.folderNone": "The task's working folder, or else the project's",
   "auto.step.cfg": "Settings",
   "auto.step.declaresNone": "None declared",
   "auto.step.required": "required",

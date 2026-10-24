@@ -1086,7 +1086,7 @@ export const ptBR: Translation = {
     "auto.step.handoffErrExit": "exit não nomeia nenhuma das saídas declaradas, ou falta uma saída obrigatória",
     "auto.step.sampleCopy": "Copiar",
     "auto.step.sampleCopied": "Copiado",
-    "auto.step.folderNone": "Onde o painel abre",
+    "auto.step.folderNone": "Pasta de trabalho da tarefa, ou então a do projeto",
     "auto.step.cfg": "Ajustes",
     "auto.step.declaresNone": "Nada declarado",
     "auto.step.required": "obrigatório",

@@ -1073,7 +1073,7 @@ export const tr: Translation = {
     "auto.step.handoffErrExit": "exit bildirilen çıkışlardan hiçbirini adlandırmıyor ya da zorunlu bir çıktı eksik",
     "auto.step.sampleCopy": "Kopyala",
     "auto.step.sampleCopied": "Kopyalandı",
-    "auto.step.folderNone": "Bölmenin açıldığı yer",
+    "auto.step.folderNone": "Görevin çalışma klasörü, yoksa projeninki",
     "auto.step.cfg": "Ayarlar",
     "auto.step.declaresNone": "Hiçbir şey bildirilmemiş",
     "auto.step.required": "zorunlu",

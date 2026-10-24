@@ -49,8 +49,9 @@ pub struct Opening {
     /// The whole text handed to the agent, preamble first and the step's own prompt after the material
     /// it is to read.
     pub text: String,
-    /// **The folder the terminal is opened in**, or `None` where the step names none and the pane
-    /// opens wherever a pane of that project opens.
+    /// **The folder the terminal is opened in**: the one the step names, or else the working folder of
+    /// the task the run is on. `None` where it has neither, and the pane opens wherever a pane of that
+    /// project opens.
     ///
     /// It is resolved here rather than carried from where the automation was built, because what
     /// `work_dir_ref` holds is a name and not a path ([`working_folder`]): the answer is given once,
@@ -321,7 +322,10 @@ fn open_as(
         return Ok(Opened::Carried { run_step_id: run_step.id, next });
     }
     let text = compose(tx, &def, &exits, &handed, stretch.as_ref())?;
-    let folder = working_folder(&def, &handed)?;
+    let folder = match working_folder(&def, &handed)? {
+        Some(named) => Some(named),
+        None => task_folder(conn, run.project_id, stretch.as_ref())?,
+    };
     Ok(Opened::Ready(Box::new(Opening { run_step, run_def: def, text, folder })))
 }
 
@@ -348,9 +352,9 @@ fn launched_ins(run: &AutomationRun, builtin: Option<&str>) -> Result<Vec<(Strin
 /// step, while an input is whatever the step before it handed over; where a name is both, what was
 /// written for the step is the more deliberate of the two.
 ///
-/// A name that matches neither is `None` rather than a refusal: the pane opens where a pane of that
-/// project opens, and a step that could not be run at all is the launch check's to have refused
-/// ([`crate::ops::automation_run::check`]).
+/// A name that matches neither is `None` rather than a refusal: the pane opens in the task's working
+/// folder ([`task_folder`]), or else where a pane of that project opens, and a step that could not be
+/// run at all is the launch check's to have refused ([`crate::ops::automation_run::check`]).
 fn working_folder(def: &AutomationRunDef, handed: &[Handed]) -> Result<Option<String>> {
     let Some(name) = def.work_dir_ref.as_deref() else {
         return Ok(None);
@@ -360,6 +364,31 @@ fn working_folder(def: &AutomationRunDef, handed: &[Handed]) -> Result<Option<St
         return Ok(answer.value.as_deref().map(unquoted));
     }
     Ok(handed.iter().find(|one| one.port.name == name).and_then(|one| one.from.value.clone()))
+}
+
+/// **Where a step that names no folder is opened**: the working folder (`at`) of the task the run is
+/// on, found among the folders bound to the run's project as the built-in that cuts a worktree finds
+/// it ([`super::automation_builtin_cut::repository`]), so every step of one run works in the same
+/// place.
+///
+/// `None` before the run has taken a task, for a task with no `at`, and for a folder that is not on
+/// disk: the pane then opens wherever a pane of that project opens.
+fn task_folder(
+    conn: &rusqlite::Connection,
+    project_id: i64,
+    stretch: Option<&AutomationRunTask>,
+) -> Result<Option<String>> {
+    let Some(task_id) = stretch.and_then(|s| s.task_id) else {
+        return Ok(None);
+    };
+    let Some(at) = read::task(conn, task_id)?.and_then(|task| task.at_binding_id) else {
+        return Ok(None);
+    };
+    Ok(crate::overview::bound_folders(conn)?
+        .into_iter()
+        .find(|f| f.id == at && f.project_id == project_id)
+        .filter(|f| std::path::Path::new(&f.dir).is_dir())
+        .map(|f| f.dir))
 }
 
 /// **What a script step is handed**, input by input. A value is its text and a task its `AMB-T-<n>`, as
@@ -1223,14 +1252,76 @@ mod tests {
         });
     }
 
-    /// A step that names no folder opens where a pane of its project opens — which is somebody else's
-    /// answer, and this one says nothing about it.
+    /// A step that names no folder, opened before the run has taken a task, opens where a pane of its
+    /// project opens — which is somebody else's answer, and this one says nothing about it.
     #[test]
     fn a_step_that_names_no_folder_answers_none() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
             let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            assert_eq!(opening.folder, None);
+        });
+    }
+
+    /// The project bound to two folders, a task filed in the second of them (or in neither), and the
+    /// step after the one that took it, which names no folder.
+    fn opened_on_a_task(tx: &WriteTx<'_>, at_second: bool) -> (Opening, String) {
+        let p = picture(tx, false, false);
+        let project = p.automation.project_id;
+        let one = amenbo_scratch::scratch("step-folder-one");
+        let two = amenbo_scratch::scratch("step-folder-two");
+        let mut reg = crate::binding::Registry::default();
+        for dir in [&one, &two] {
+            reg.project_dirs.entry(project).or_default().insert(dir.to_string_lossy().into_owned());
+        }
+        crate::overview::write_bindings(tx, &reg).expect("bind");
+        let second_dir = two.to_string_lossy().into_owned();
+        let at = crate::overview::bound_folders(tx.conn())
+            .expect("folders")
+            .into_iter()
+            .find(|f| f.dir == second_dir)
+            .map(|f| f.id);
+        let task = super::super::task::add(
+            tx,
+            super::super::task::NewTask {
+                title: "直すもの".to_string(),
+                project_id: Some(project),
+                due: None,
+                start: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: None,
+                at_binding_id: at.filter(|_| at_second),
+                made_in: None,
+            },
+        )
+        .expect("add task")
+        .id;
+        super::super::task::finish_creating(tx, task, ActorKind::Ai).expect("finish creating the task");
+
+        let run = a_run(tx, &p.automation);
+        let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+        crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
+        reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+        (ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open")), second_dir)
+    }
+
+    /// **A step that names no folder opens in the working folder of the task its run is on**, not in
+    /// whichever folder of the project comes first — the place the built-in that cuts a worktree reads.
+    #[test]
+    fn a_step_that_names_no_folder_opens_in_the_tasks_folder() {
+        with_tx(|tx| {
+            let (opening, second_dir) = opened_on_a_task(tx, true);
+            assert_eq!(opening.folder, Some(second_dir));
+        });
+    }
+
+    /// A task with no working folder leaves the step where a pane of its project opens.
+    #[test]
+    fn a_task_with_no_folder_answers_none() {
+        with_tx(|tx| {
+            let (opening, _) = opened_on_a_task(tx, false);
             assert_eq!(opening.folder, None);
         });
     }

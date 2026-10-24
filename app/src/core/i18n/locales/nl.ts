@@ -1073,7 +1073,7 @@ export const nl: Translation = {
     "auto.step.handoffErrExit": "exit geen van de gedeclareerde uitgangen noemt, of een verplichte uitvoer ontbreekt",
     "auto.step.sampleCopy": "Kopiëren",
     "auto.step.sampleCopied": "Gekopieerd",
-    "auto.step.folderNone": "Waar het paneel opent",
+    "auto.step.folderNone": "Werkmap van de taak, anders die van het project",
     "auto.step.cfg": "Instellingen",
     "auto.step.declaresNone": "Niets verklaard",
     "auto.step.required": "verplicht",

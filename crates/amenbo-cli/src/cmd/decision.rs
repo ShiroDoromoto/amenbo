@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use amenbo_core::config::Paths;
-use amenbo_core::model::{AttachmentTarget, ClassifiedSide, TaskStatus};
+use amenbo_core::model::{ActorKind, AttachmentTarget, ClassifiedSide, TaskStatus};
 use amenbo_core::{ops, query, Store};
 
 use crate::cli::*;
@@ -54,11 +54,15 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             warn_body(&detail.body); // non-blocking readability hint on write (stderr)
             let mut resource = serde_json::to_value(&detail).unwrap();
             let unmet = unmet_on_new_decision(store, d.id, &mut resource)?;
+            let premise_check = premise_check_on_new_decision(flags, &mut resource);
             write_envelope(flags, "decision.add", "decision", resource, None, false, format!("✓ Recorded decision: {} ({})", d.title, decision_label(d.id)));
             // The two ways in: the flag it was just typed with, and the command that fills an axis in
             // afterwards.
             if !unmet.is_empty() {
                 human(flags, still_to_classify(&unmet, d.id));
+            }
+            if let Some(check) = premise_check {
+                human(flags, check);
             }
         }
         DecisionCmd::List { project, filter, sort, limit, offset, with_body } => {
@@ -362,9 +366,13 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let detail = store.decision_detail(did).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             let unmet = unmet_on_new_decision(store, did, &mut resource)?;
+            let premise_check = premise_check_on_new_decision(flags, &mut resource);
             write_envelope(flags, "decision.promote", "decision", resource, None, false, format!("✓ Promoted {source} to decision: {} ({})", detail.title, decision_label(did)));
             if !unmet.is_empty() {
                 human(flags, still_to_classify(&unmet, did));
+            }
+            if let Some(check) = premise_check {
+                human(flags, check);
             }
         }
         // A decision's timeline — the mirror of `comment` on the task side.
@@ -450,6 +458,44 @@ fn still_to_classify(unmet: &[String], decision_id: i64) -> String {
         Paths::command_name(),
         decision_label(decision_id),
     )
+}
+
+/// What an AI that has just saved a decision is asked before it ends the writing (`AMB-D-1095`): the
+/// weight the record carries once it is in force, and the three checks against the conversation it was
+/// said in. The text is the decision's own, word for word.
+const PREMISE_CHECK: &str = "\
+Saved as a draft. It is not in force yet.
+
+Once its writing is finished, this decision is a premise in force across this project.
+Later sessions read it as one — when they start a task linked to it, and when they come across it while looking something up.
+Nothing sends them back to this conversation to check the conditions it was said under.
+When a person later asks for something that differs from it, those sessions will say it contradicts what was decided before.
+A premise recorded by mistake stays in force until a person notices and has it corrected.
+
+Check three things:
+- Did the person state this as a premise that holds beyond this conversation, rather than just answer a question you asked here?
+- Read on its own, without this conversation, does the body mean what the person said?
+- If a later request differs from it, would it be right to call that a contradiction?
+
+All yes: finish it with the `decision finish-writing` command.
+Any no: delete it with the `decision delete` command, and write it as a comment on the task instead.";
+
+/// The check above, folded into the response under `premise_check` the way [`unmet_on_new_decision`]
+/// folds its axes, and handed back for the human output. **Both doors that create a decision go through
+/// here**, at the draft they have just saved — no stage of its own between saving and
+/// `decision finish-writing`.
+///
+/// Only `--actor ai` is asked: a person writing a decision is the one who said it. Under any other facet
+/// the key is absent and nothing is printed. Like the axes, it asks and does not refuse — the draft is
+/// saved either way.
+fn premise_check_on_new_decision(flags: &Flags, resource: &mut serde_json::Value) -> Option<&'static str> {
+    if flags.actor != Some(ActorKind::Ai) {
+        return None;
+    }
+    if let Some(obj) = resource.as_object_mut() {
+        obj.insert("premise_check".to_string(), json!(PREMISE_CHECK));
+    }
+    Some(PREMISE_CHECK)
 }
 
 /// The task-comment side of `decision promote`: the comment's text becomes the body, its task's project

@@ -1075,7 +1075,7 @@ export const zhHans: Translation = {
     "auto.step.handoffErrExit": "exit 不是任何一个已声明的出口，或缺少必填的输出",
     "auto.step.sampleCopy": "复制",
     "auto.step.sampleCopied": "已复制",
-    "auto.step.folderNone": "窗格打开的地方",
+    "auto.step.folderNone": "任务的工作文件夹（没有则用项目的文件夹）",
     "auto.step.cfg": "设置",
     "auto.step.declaresNone": "没有声明",
     "auto.step.required": "必填",

@@ -1074,7 +1074,7 @@ export const th: Translation = {
     "auto.step.handoffErrExit": "exit ไม่ตรงกับทางออกที่ประกาศไว้ หรือขาดเอาต์พุตที่จำเป็น",
     "auto.step.sampleCopy": "คัดลอก",
     "auto.step.sampleCopied": "คัดลอกแล้ว",
-    "auto.step.folderNone": "ที่ที่หน้าต่างย่อยเปิด",
+    "auto.step.folderNone": "โฟลเดอร์ทำงานของงาน หรือของโปรเจกต์ถ้าไม่มี",
     "auto.step.cfg": "การตั้งค่า",
     "auto.step.declaresNone": "ไม่ได้ประกาศไว้",
     "auto.step.required": "จำเป็น",

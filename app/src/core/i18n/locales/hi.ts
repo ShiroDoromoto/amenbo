@@ -1073,7 +1073,7 @@ export const hi: Translation = {
     "auto.step.handoffErrExit": "exit घोषित निकासों में से कोई नहीं है, या कोई अनिवार्य आउटपुट नहीं है",
     "auto.step.sampleCopy": "कॉपी करें",
     "auto.step.sampleCopied": "कॉपी हो गया",
-    "auto.step.folderNone": "जहाँ पेन खुलता है",
+    "auto.step.folderNone": "टास्क का वर्किंग फ़ोल्डर, नहीं तो प्रोजेक्ट का",
     "auto.step.cfg": "सेटिंग",
     "auto.step.declaresNone": "कुछ घोषित नहीं",
     "auto.step.required": "अनिवार्य",

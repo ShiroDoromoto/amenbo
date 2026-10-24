@@ -1070,7 +1070,7 @@ export const ko: Translation = {
     "auto.step.handoffErrExit": "exit가 선언한 출구 중 어느 것도 아니거나 필수 출력이 없다",
     "auto.step.sampleCopy": "복사",
     "auto.step.sampleCopied": "복사했습니다",
-    "auto.step.folderNone": "창이 열리는 곳",
+    "auto.step.folderNone": "작업의 작업 폴더(없으면 프로젝트 폴더)",
     "auto.step.cfg": "설정",
     "auto.step.declaresNone": "선언된 것이 없습니다",
     "auto.step.required": "필수",

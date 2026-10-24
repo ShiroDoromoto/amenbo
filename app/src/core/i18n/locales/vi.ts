@@ -1074,7 +1074,7 @@ export const vi: Translation = {
     "auto.step.handoffErrExit": "exit không trùng lối ra nào đã khai báo, hoặc thiếu đầu ra bắt buộc",
     "auto.step.sampleCopy": "Sao chép",
     "auto.step.sampleCopied": "Đã sao chép",
-    "auto.step.folderNone": "Nơi ô mở ra",
+    "auto.step.folderNone": "Thư mục làm việc của tác vụ, nếu không có thì của dự án",
     "auto.step.cfg": "Thiết lập",
     "auto.step.declaresNone": "Không khai báo gì",
     "auto.step.required": "bắt buộc",

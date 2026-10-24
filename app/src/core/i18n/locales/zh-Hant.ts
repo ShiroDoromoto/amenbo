@@ -1075,7 +1075,7 @@ export const zhHant: Translation = {
     "auto.step.handoffErrExit": "exit 不是任何一個已宣告的出口，或缺少必填的輸出",
     "auto.step.sampleCopy": "複製",
     "auto.step.sampleCopied": "已複製",
-    "auto.step.folderNone": "窗格開啟的地方",
+    "auto.step.folderNone": "任務的工作資料夾（沒有則用專案的資料夾）",
     "auto.step.cfg": "設定",
     "auto.step.declaresNone": "沒有宣告",
     "auto.step.required": "必填",

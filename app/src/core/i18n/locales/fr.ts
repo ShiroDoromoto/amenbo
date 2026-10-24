@@ -1085,7 +1085,7 @@ export const fr: Translation = {
     "auto.step.handoffErrExit": "exit ne nomme aucune des sorties déclarées, ou une sortie obligatoire manque",
     "auto.step.sampleCopy": "Copier",
     "auto.step.sampleCopied": "Copié",
-    "auto.step.folderNone": "Là où s'ouvre le volet",
+    "auto.step.folderNone": "Dossier de travail de la tâche, sinon celui du projet",
     "auto.step.cfg": "Réglages",
     "auto.step.declaresNone": "Rien de déclaré",
     "auto.step.required": "obligatoire",

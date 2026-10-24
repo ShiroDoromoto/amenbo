@@ -1090,7 +1090,7 @@ export const uk: Translation = {
     "auto.step.handoffErrExit": "exit не називає жодного з оголошених виходів або бракує обов'язкового виходу",
     "auto.step.sampleCopy": "Копіювати",
     "auto.step.sampleCopied": "Скопійовано",
-    "auto.step.folderNone": "Там, де відкривається панель",
+    "auto.step.folderNone": "Робоча тека завдання, а якщо її немає — тека проєкту",
     "auto.step.cfg": "Налаштування",
     "auto.step.declaresNone": "Нічого не оголошено",
     "auto.step.required": "обов'язковий",

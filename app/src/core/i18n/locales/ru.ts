@@ -1090,7 +1090,7 @@ export const ru: Translation = {
     "auto.step.handoffErrExit": "exit не называет ни один из объявленных выходов или нет обязательного выхода",
     "auto.step.sampleCopy": "Копировать",
     "auto.step.sampleCopied": "Скопировано",
-    "auto.step.folderNone": "Там, где открывается панель",
+    "auto.step.folderNone": "Рабочая папка задачи, а если её нет — папка проекта",
     "auto.step.cfg": "Настройки",
     "auto.step.declaresNone": "Ничего не объявлено",
     "auto.step.required": "обязательный",

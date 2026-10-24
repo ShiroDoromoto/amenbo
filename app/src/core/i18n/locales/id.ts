@@ -1074,7 +1074,7 @@ export const id: Translation = {
     "auto.step.handoffErrExit": "exit tidak menyebut jalan keluar yang dideklarasikan, atau keluaran wajib tidak ada",
     "auto.step.sampleCopy": "Salin",
     "auto.step.sampleCopied": "Disalin",
-    "auto.step.folderNone": "Tempat panel dibuka",
+    "auto.step.folderNone": "Folder kerja tugas, atau folder proyek jika tidak ada",
     "auto.step.cfg": "Pengaturan",
     "auto.step.declaresNone": "Tidak ada yang dideklarasikan",
     "auto.step.required": "wajib",

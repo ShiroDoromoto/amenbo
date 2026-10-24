@@ -2679,7 +2679,9 @@ fn still_running(run_step_id: i64) -> bool {
     }
 }
 
-/// **Where a step that names no folder is carried out**: the folder its project is bound to.
+/// **Where a step that names no folder is carried out, when its run is on no task with a working folder
+/// on the disk**: the folder its project is bound to. The step's own folder and the task's are core's
+/// answer ([`amenbo_core::ops::automation_step::Opening::folder`]), and this is asked only after both.
 ///
 /// A pane opened by a person asks which one where the project has several (`app/src/talk/agent.ts`),
 /// but nobody is there to be asked when a run opens a step, so it is the first of them that is still

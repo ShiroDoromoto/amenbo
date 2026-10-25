@@ -171,7 +171,7 @@ describe("useQuery — invalidations reach queries that have subscribers", () =>
     await settle();
     const before = count("board");
 
-    __queryCache.get(JSON.stringify(["probe", "board"]))!.listeners.clear();
+    __queryCache.get(JSON.stringify(["probe", "board"]))!.subscribers.clear();
     invalidateAllQueries();
     await settle();
     expect(count("board")).toBe(before); // while it is detached nothing lands — the frozen board, reproduced
@@ -203,6 +203,27 @@ describe("useQuery — invalidations reach queries that have subscribers", () =>
     invalidateAllQueries();
     await settle();
     expect(count("board-1")).toBe(1); // the refetch runs the latest fetcher, not the stale closure
+  });
+
+  it("when one of two subscribers moves to another key, the key it left is refetched with the other's fetcher", async () => {
+    function Mover() {
+      const [k, setK] = useState("a");
+      const { data } = useQuery<string>(["probe", k], () => fetchFor(k));
+      return createElement("span", { "data-k": "mover", onClick: () => setK("b") }, data ?? "…");
+    }
+    // The one that stays subscribes first and the mover after it, so the mover's fetcher is the last one handed to "a".
+    render(createElement("div", null, createElement(Probe, { k: "a" }), createElement(Mover)));
+    await settle();
+    expect(shown("a")).toBe("a#2");
+
+    act(() => container.querySelector<HTMLElement>('[data-k="mover"]')!.click()); // the mover leaves "a" for "b"
+    await settle();
+    expect(shown("mover")).toBe("b#1");
+
+    invalidateAllQueries();
+    await settle();
+    expect(shown("a")).toBe("a#3"); // "a" still holds a's data, not b's
+    expect(count("b")).toBe(2); // and the invalidation fetched "b" once more, with its own key
   });
 });
 

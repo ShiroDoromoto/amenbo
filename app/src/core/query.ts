@@ -5,19 +5,23 @@
 // command — there is no URL and no HTTP cache, so such a library's assumptions do not hold.
 //
 // The cache is bounded (mounted entries plus a small LRU):
-//   - A subscribed key (listeners non-empty = on screen) stays resident, and every subscriber shares the
+//   - A subscribed key (subscribers non-empty = on screen) stays resident, and every subscriber shares the
 //     same state object.
-//   - When the last subscriber unmounts, listeners goes empty and the key falls back to a small
+//   - When the last subscriber unmounts, subscribers goes empty and the key falls back to a small
 //     LRU (QUERY_LRU_MAX). A remount paints the cached result immediately and revalidates behind it
 //     (no blank flash).
 //   - Past the LRU cap, the oldest entry is dropped (nothing stays resident without bound).
 //
-// **Liveness is listeners and nothing else** — never keep a second tally such as a refcount. Two tallies
+// **Liveness is subscribers and nothing else** — never keep a second tally such as a refcount. Two tallies
 // drift, and the moment they do you get an entry that is on screen yet outside every invalidation path
 // (that query is never refetched again). Making the subscriber set itself the sole liveness condition
 // means "has subscribers but is not live" cannot be expressed. Eviction likewise happens only when
-// listeners is empty, which closes the other path too: a subscribed entry being replaced by a different
-// object, leaving its listeners orphaned.
+// subscribers is empty, which closes the other path too: a subscribed entry being replaced by a different
+// object, leaving its subscribers orphaned.
+//
+// Each subscriber brings its own fetcher, and a refetch runs one that is still on the entry's key. A single
+// fetcher shared by the entry would be the last subscriber's: once that subscriber moved to another key, the
+// old key would be refetched with the new key's arguments and cache another item's data under it.
 //
 // Invalidation: a write refetches just the matching keys via `invalidateQueries`, from its ack (affected
 // ids + scope). An external write (store-changed) folds the rows the **change feed** names into scopes and
@@ -44,16 +48,21 @@ export interface QueryState<T> {
 // Stable reference before the first load (the initial state of every entry, and what useQuery returns pre-mount).
 const INITIAL: QueryState<unknown> = { data: undefined, loading: true, error: undefined };
 
+/**
+ * A subscriber's fetcher. It returns null once its subscriber renders a key other than the one it subscribed
+ * with (between that render and the effect cleanup that unsubscribes it), so the entry asks the next one.
+ */
+type Fetcher = () => Promise<unknown> | null;
+
 interface Entry {
-  state: QueryState<unknown>;       // Stable reference. Swapped for a new object only when the contents change.
-  listeners: Set<() => void>;       // Re-render triggers of the subscribed hooks. **Non-empty = live** (the sole liveness condition).
-  version: number;                  // Fetch generation. Discards stale (out-of-order) resolutions.
-  fetcher: () => Promise<unknown>;  // The latest fetcher (it closes over props, so it is refreshed on every mount).
+  state: QueryState<unknown>;               // Stable reference. Swapped for a new object only when the contents change.
+  subscribers: Map<() => void, Fetcher>;    // Re-render trigger → fetcher of each subscribed hook. **Non-empty = live** (the sole liveness condition).
+  version: number;                          // Fetch generation. Discards stale (out-of-order) resolutions.
 }
 
 /** live = it has subscribers. What gets invalidated, and what may be evicted, both follow from this one predicate. */
 function isLive(e: Entry): boolean {
-  return e.listeners.size > 0;
+  return e.subscribers.size > 0;
 }
 
 // How many entries we keep after unmount. Each entry is one page or one item of bounded data. Set it small
@@ -165,18 +174,17 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
 
 function setState(e: Entry, next: QueryState<unknown>): void {
   e.state = next;
-  for (const l of e.listeners) l();
+  for (const l of e.subscribers.keys()) l();
 }
 
-/** Subscribe, creating the entry if it is absent. The caller adds its listener to the entry we return — that is where it becomes live. */
-function subscribe(keyStr: string, listener: () => void, fetcher: () => Promise<unknown>): Entry {
+/** Subscribe, creating the entry if it is absent. The listener goes onto the entry we return — that is where it becomes live. */
+function subscribe(keyStr: string, listener: () => void, fetcher: Fetcher): Entry {
   let e = cache.get(keyStr);
   if (!e) {
-    e = { state: INITIAL, listeners: new Set(), version: 0, fetcher };
+    e = { state: INITIAL, subscribers: new Map(), version: 0 };
     cache.set(keyStr, e);
   }
-  e.fetcher = fetcher;
-  e.listeners.add(listener);
+  e.subscribers.set(listener, fetcher);
   const i = lru.indexOf(keyStr);
   if (i !== -1) lru.splice(i, 1); // A remount takes it off the eviction list (the cached result gets reused).
   return e;
@@ -188,7 +196,7 @@ function subscribe(keyStr: string, listener: () => void, fetcher: () => Promise<
  * can kill a live entry. Only a key whose last subscriber left falls back to the LRU.
  */
 function unsubscribe(keyStr: string, e: Entry, listener: () => void): void {
-  e.listeners.delete(listener);
+  e.subscribers.delete(listener);
   const cur = cache.get(keyStr);
   if (!cur || isLive(cur)) return; // Someone is still watching it (or it is already gone): do not evict.
   if (!lru.includes(keyStr)) lru.push(keyStr);
@@ -203,11 +211,26 @@ function unsubscribe(keyStr: string, e: Entry, listener: () => void): void {
 function revalidate(keyStr: string): void {
   const e = cache.get(keyStr);
   if (!e) return;
+  let fetching: Promise<unknown> | null = null;
+  for (const f of e.subscribers.values()) {
+    fetching = f();
+    if (fetching) break;
+  }
+  if (!fetching) return; // Every subscriber has moved off this key; their effect cleanups are about to release it.
   const v = ++e.version;
   if (!e.state.loading) setState(e, { ...e.state, loading: true }); // Keep the cached data, mark it as refetching.
-  e.fetcher()
+  fetching
     .then((data) => { if (e.version === v) setState(e, { data, loading: false, error: undefined }); })
     .catch((error) => { if (e.version === v) setState(e, { ...e.state, loading: false, error }); });
+}
+
+/** The fetcher a hook hands to the entry of `subscribedKey`: its latest one, but only while the hook still renders that key. */
+function fetcherFor(
+  subscribedKey: string,
+  keyRef: { readonly current: string },
+  fetcherRef: { readonly current: () => Promise<unknown> },
+): Fetcher {
+  return () => (keyRef.current === subscribedKey ? fetcherRef.current() : null);
 }
 
 /**
@@ -223,28 +246,30 @@ export function useQuery<T>(key: QueryKey, fetcher: () => Promise<T>): QueryStat
   const keyStr = serializeKey(key);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher; // Refresh on every render (the fetcher closes over its arguments = props).
+  const keyRef = useRef(keyStr);
+  keyRef.current = keyStr;
   const [, force] = useReducer((c: number) => c + 1, 0);
 
   useEffect(() => {
-    const e = subscribe(keyStr, force, () => fetcherRef.current());
+    const e = subscribe(keyStr, force, fetcherFor(keyStr, keyRef, fetcherRef));
     revalidate(keyStr); // Refetch on mount / key change (on an LRU hit, show the old value and update behind it).
     return () => unsubscribe(keyStr, e, force);
   }, [keyStr]);
 
   // Self-healing (no deps = every render). If our listener is not on the cached entry, invalidation will never
   // reach this query again = it stays on screen and permanently stale. Re-subscribe and refetch. In the healthy
-  // case this costs one Map lookup plus one Set membership check (a constant per render).
+  // case this costs one Map lookup plus one Map membership check (a constant per render).
   useEffect(() => {
     const cur = cache.get(keyStr);
-    if (cur && cur.listeners.has(force)) return;
+    if (cur && cur.subscribers.has(force)) return;
     // That this happened at all is the anomaly, so leave a trace (next time we hit it, we know which key came undone).
     console.warn(`[query] resubscribed a displayed query that had lost its subscription: ${keyStr}`);
-    subscribe(keyStr, force, () => fetcherRef.current());
+    subscribe(keyStr, force, fetcherFor(keyStr, keyRef, fetcherRef));
     revalidate(keyStr);
   });
 
   // Before mount (effects have not run) we paint an LRU-retained entry if there is one, else INITIAL. State
-  // changes land via setState→listeners→force, and an entry's state reference is swapped only when it actually
+  // changes land via setState→subscribers→force, and an entry's state reference is swapped only when it actually
   // changes (stable rendering).
   const e = cache.get(keyStr);
   return (e ? e.state : INITIAL) as QueryState<T>;
@@ -255,4 +280,4 @@ export function useQuery<T>(key: QueryKey, fetcher: () => Promise<T>): QueryStat
  * subscriber count) on the spot when a view freezes, and the way a test can manufacture the "on screen but
  * unsubscribed" state. Do not touch it from product code.
  */
-export const __queryCache: ReadonlyMap<string, { listeners: Set<() => void> }> = cache;
+export const __queryCache: ReadonlyMap<string, { subscribers: Map<() => void, unknown> }> = cache;

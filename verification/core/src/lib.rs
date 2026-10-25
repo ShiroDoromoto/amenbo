@@ -466,7 +466,11 @@ const REGISTRY: &[OpSpec] = &[
     // Promoting writes a decision, so it carries the same `dimension` / `value` a decision's own
     // create does: an axis the project requires is read here too, and a road that could not answer it
     // could only ever walk the refusal.
-    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "promote", required: &["target", "title"], refs: &["target"], strings: &["title", "dimension", "value"], binds: true },
+    //
+    // `actor` names the facet it is typed under, here and at `decision create` — a step that names none
+    // is a person's. The AI is the one a saved decision asks to check it before the writing is ended, so
+    // a road about that check has to be able to say who saved it.
+    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "promote", required: &["target", "title"], refs: &["target"], strings: &["title", "dimension", "value", "actor"], binds: true },
     // The progress states, each by the command a user reaches for: `status` is the explicit move
     // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], refs: &["target"], strings: &["status"], binds: false },
@@ -704,7 +708,7 @@ const REGISTRY: &[OpSpec] = &[
     // Classified as it is recorded, the same way a task is — and on this side it is also how a
     // required axis is answered before the step that ends the writing reads it: the record itself is
     // never turned away over one.
-    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &["project"], strings: &["title", "dimension", "value"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &["project"], strings: &["title", "dimension", "value", "actor"], binds: true },
     // The same record written from inside a pane, which is a different road and not the same one typed
     // somewhere else. What a record keeps of the session that made it is written only where the create
     // was run with the pane's own variables around it — the window sets them on every terminal it opens
@@ -1382,6 +1386,13 @@ const REGISTRY: &[OpSpec] = &[
     // already `status`'s `refused:`.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "offers", required: &["target", "control", "where", "present"], refs: &["target"], strings: &["control", "where"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
+    // What the answer that saved a decision said to check before its writing is ended. It is read off
+    // that answer and nowhere else — no read of the decision hands it back — so `target` has to be a
+    // decision a step of the same road saved. `present` says whether a check was due at all, and
+    // `contains` names words it has to say.
+    //
+    // A terminal road alone: the check is said to the one who typed the command.
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "asked-to-check", required: &["target", "present"], refs: &["target"], strings: &["contains"], binds: false },
     // The same reading on the other side of the store, for the same reason the task's own exists: a
     // decision's pane draws its doors off whether the writing is finished, and a build that drew them
     // all at both stages would let every road that only presses one of them read green. Pressing a

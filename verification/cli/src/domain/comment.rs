@@ -33,8 +33,11 @@ impl Driver<'_> {
                     args.push("--dim".into());
                     args.push(format!("{dim}={}", req_str(with, "value")?));
                 }
+                if let Some(actor) = with.get("actor").and_then(|v| v.as_str()) {
+                    args.extend(["--actor".into(), actor.into()]);
+                }
                 let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
-                let id = v["decision"]["id"].as_i64().ok_or("decision promote did not report an id")?;
+                let id = self.saved_decision(&v, "decision promote")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);
                 }

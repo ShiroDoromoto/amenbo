@@ -3,7 +3,7 @@
 
 use amenbo_scenario::{Args, Domain};
 
-use crate::{opt_bool, req_str, unmapped, Driver, Outcome};
+use crate::{opt_bool, req_bool, req_str, unmapped, Driver, Outcome};
 use crate::judge::{judge_field, judge_found, judge_timeline};
 
 /// Judge one entry on the shared activity stream: is there a row for this decision naming this event.
@@ -36,27 +36,69 @@ fn judge_activity(
     ))
 }
 
+/// Judge what the answer that saved a decision said to check before its writing is ended. `present`
+/// says whether it was to say anything at all, and `contains` names words it has to say — the check is
+/// one block of text, so a road names the lines it means rather than the whole of it.
+fn judge_premise_check(id: i64, check: Option<&str>, with: &Args) -> Result<Outcome, String> {
+    let present = req_bool(with, "present")?;
+    let Some(check) = check else {
+        return Ok(Outcome::assert(
+            !present,
+            format!(
+                "saving decision {id} asked nothing to be checked (expected {}, {})",
+                if present { "a check" } else { "none" },
+                if present { "MISMATCH" } else { "as expected" }
+            ),
+        ));
+    };
+    if !present {
+        return Ok(Outcome::assert(
+            false,
+            format!("saving decision {id} asked a check where it had to ask none (MISMATCH): {check}"),
+        ));
+    }
+    let Some(want) = with.get("contains").and_then(|v| v.as_str()) else {
+        return Ok(Outcome::assert(true, format!("saving decision {id} asked a check (as expected)")));
+    };
+    let pass = check.contains(want);
+    Ok(Outcome::assert(
+        pass,
+        format!(
+            "saving decision {id} asked a check that {} `{want}` ({})",
+            if pass { "says" } else { "does not say" },
+            if pass { "as expected" } else { "MISMATCH" }
+        ),
+    ))
+}
+
 impl Driver<'_> {
     pub(crate) fn decision_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
         match op {
             "create" => {
                 let title = req_str(with, "title")?;
-                // A step that names no project files it where everything else in the run goes.
-                let pid = match with.get("project") {
-                    Some(_) => self.resolve_key(with, "project")?.to_string(),
-                    None => self.standing_project()?.to_string(),
-                };
+                let actor = with.get("actor").and_then(|v| v.as_str());
+                let mut args: Vec<String> = vec!["decision".into(), "add".into(), "--title".into(), title.into()];
+                // A step that names no project files it where everything else in the run goes. The AI
+                // is the exception: its reach is the project the run's folder is bound to, and it may
+                // not name even that one, so the binding fills the place in.
+                match with.get("project") {
+                    Some(_) => args.extend(["--project".into(), self.resolve_key(with, "project")?.to_string()]),
+                    None if actor == Some("ai") => {}
+                    None => args.extend(["--project".into(), self.standing_project()?.to_string()]),
+                }
                 // The decision side of the same flag, and the side where it also answers a demand: an
                 // axis the project requires is read where the writing ends, so filling it here keeps
                 // the refusal off somebody else's press.
-                let mut args: Vec<String> =
-                    vec!["decision".into(), "add".into(), "--title".into(), title.into(), "--project".into(), pid.clone(), "--json".into()];
                 if let Some(dim) = with.get("dimension").and_then(|v| v.as_str()) {
                     args.push("--dim".into());
                     args.push(format!("{dim}={}", req_str(with, "value")?));
                 }
+                if let Some(actor) = actor {
+                    args.extend(["--actor".into(), actor.into()]);
+                }
+                args.push("--json".into());
                 let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
-                let id = v["decision"]["id"].as_i64().ok_or("decision add did not report an id")?;
+                let id = self.saved_decision(&v, "decision add")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);
                 }
@@ -79,7 +121,7 @@ impl Driver<'_> {
                 let v = self.typed_in(pane, |d| {
                     d.run_json(&["decision", "add", "--title", title, "--project", &pid, "--json"])
                 })?;
-                let id = v["decision"]["id"].as_i64().ok_or("decision add did not report an id")?;
+                let id = self.saved_decision(&v, "decision add")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);
                 }
@@ -143,7 +185,7 @@ impl Driver<'_> {
                 // id twice and a bare number is refused. This is the decision side; say so in the ref.
                 let target_ref = format!("AMB-DC-{target}");
                 let v = self.run_json(&["decision", "promote", &target_ref, "--title", title, "--json"])?;
-                let id = v["decision"]["id"].as_i64().ok_or("decision promote did not report an id")?;
+                let id = self.saved_decision(&v, "decision promote")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);
                 }
@@ -182,8 +224,25 @@ impl Driver<'_> {
             _ => Err(unmapped(Domain::Decision, op)),
         }
     }
+    /// The id a create's answer reports, with what that answer said to check kept beside it. Every step
+    /// that saves a decision comes through here, at either door (`decision add`, `decision promote`),
+    /// since the check is given at both and read off neither afterwards.
+    pub(crate) fn saved_decision(&mut self, v: &serde_json::Value, door: &str) -> Result<i64, String> {
+        let id = v["decision"]["id"].as_i64().ok_or_else(|| format!("{door} did not report an id"))?;
+        let check = v["decision"]["premise_check"].as_str().map(str::to_string);
+        self.premise_checks.insert(id, check);
+        Ok(id)
+    }
+
     pub(crate) fn decision_assert(&self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
+            "asked-to-check" => {
+                let target = self.resolve(with)?;
+                let check = self.premise_checks.get(&target).ok_or_else(|| {
+                    format!("decision {target} was not saved by a step of this road, so there is no answer to read a check off")
+                })?;
+                judge_premise_check(target, check.as_deref(), with)
+            }
             "commented" => {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["decision", "comment-list", &target.to_string(), "--json"])?;
@@ -338,6 +397,29 @@ mod tests {
         assert!(asked(7, "decision.proposed"), "the row for this decision, saying this");
         assert!(!asked(7, "decision.decided"), "the same word, on the task side and on another decision");
         assert!(!asked(9, "decision.rejected"), "a word nothing on the stream says");
+    }
+
+    fn premise_with(present: bool, contains: Option<&str>) -> Args {
+        let mut with = Args::new();
+        with.insert("present".to_string(), serde_yaml::Value::Bool(present));
+        if let Some(c) = contains {
+            with.insert("contains".to_string(), serde_yaml::Value::String(c.to_string()));
+        }
+        with
+    }
+
+    /// Both halves of the premise check are asked: a check given where none was due is as wrong as none
+    /// given where one was, and a check that is there has to say the words the road named.
+    #[test]
+    fn a_premise_check_is_judged_on_whether_it_was_given_and_on_what_it_says() {
+        let judge = |check, with: &Args| judge_premise_check(7, check, with).expect("the judge answers").pass;
+        let check = Some("Saved as a draft. It is not in force yet.\n\nAll yes: finish it.");
+        assert!(judge(check, &premise_with(true, None)));
+        assert!(judge(check, &premise_with(true, Some("Saved as a draft. It is not in force yet."))));
+        assert!(!judge(check, &premise_with(true, Some("`decision delete`"))), "words the check does not say");
+        assert!(!judge(check, &premise_with(false, None)), "a check where none was due");
+        assert!(!judge(None, &premise_with(true, Some("Saved as a draft."))), "none where one was due");
+        assert!(judge(None, &premise_with(false, None)));
     }
 
     /// `present: false` is the other half of the same question, and the one a road writes to say an

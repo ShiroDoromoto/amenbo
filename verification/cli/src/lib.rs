@@ -267,6 +267,11 @@ pub(crate) struct Driver<'a> {
     /// [`Driver::refusal`] is. It is read where the command is built, so an arm that runs something in
     /// a pane says so once rather than assembling an environment of its own.
     in_pane: Option<Pane>,
+    /// What the answer that saved each decision said to check before its writing is ended, keyed by
+    /// the decision's id — `None` where it said nothing. The answer of `decision add` and `decision
+    /// promote` is the only place the check is ever given, and no read hands it back afterwards, so it
+    /// is kept here as the create comes back or not at all.
+    premise_checks: HashMap<i64, Option<String>>,
 }
 
 /// A pane the run stood up for a road: what the window would have set on a terminal it opened.
@@ -364,6 +369,7 @@ impl<'a> Driver<'a> {
             own_pointer: String::new(),
             panes: HashMap::new(),
             in_pane: None,
+            premise_checks: HashMap::new(),
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
         d.project_id = v["identity"]["project_id"]

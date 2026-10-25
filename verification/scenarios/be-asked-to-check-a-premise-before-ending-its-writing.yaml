@@ -1,0 +1,151 @@
+# The path an AI takes from saving a decision to ending its writing. A decision whose writing is over
+# is a premise every later session reads, with nothing sending them back to the conversation it was
+# said in — so the AI that saved it is asked, at the moment it is saved, to check that it holds outside
+# that conversation. The check is said in the answer to the command that saved it and nowhere else,
+# which is why it is read off that answer here. A person is not asked: the one writing it is the one who
+# said it. What the shipped build has to get right is who is asked, at both doors a decision comes in by.
+id: be-asked-to-check-a-premise-before-ending-its-writing
+title: An AI that saves a decision is asked to check it before ending the writing — at both doors, and a person at neither
+description: >
+  Save a decision as the AI, and read in the answer that saved it the weight the record carries once
+  its writing is over and the two ways out — finish it, or delete it and say it on the task instead.
+  The draft is saved all the same: the AI is asked, not refused. Then save one as a person and find
+  nothing asked. Promote a comment into a decision both ways and find the same: the check is given at
+  the door a comment comes in by too, to the AI alone.
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the task the decisions are said on
+    as: seed
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+  # The AI saves one. The check opens by saying where the record stands — saved, not yet in force —
+  # and ends on the two commands it may take next, so those are the lines read back.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — a decision the AI saved
+      actor: ai
+    as: by_ai
+
+  - type: assert
+    domain: decision
+    op: asked-to-check
+    with:
+      target: by_ai
+      present: true
+      contains: Saved as a draft. It is not in force yet.
+
+  - type: assert
+    domain: decision
+    op: asked-to-check
+    with:
+      target: by_ai
+      present: true
+      contains: "All yes: finish it with the `decision finish-writing` command."
+
+  - type: assert
+    domain: decision
+    op: asked-to-check
+    with:
+      target: by_ai
+      present: true
+      contains: "Any no: delete it with the `decision delete` command, and write it as a comment on the task instead."
+
+  # Asked, not refused: the record is there, and its writing is still open.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: by_ai
+      field: draft
+      equals: true
+
+  # A person saves one, and is asked nothing.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — a decision a person saved
+    as: by_person
+
+  - type: assert
+    domain: decision
+    op: asked-to-check
+    with:
+      target: by_person
+      present: false
+
+  # The other door a decision comes in by. A comment raised into a record by the AI is the same
+  # premise once its writing is over, so the same check is given here.
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — said on the task, raised by the AI
+    as: said_to_ai
+
+  - type: action
+    domain: comment
+    op: promote
+    with:
+      target: said_to_ai
+      title: SCENARIO SEED — a decision the AI raised out of a comment
+      actor: ai
+    as: raised_by_ai
+
+  - type: assert
+    domain: decision
+    op: asked-to-check
+    with:
+      target: raised_by_ai
+      present: true
+      contains: Saved as a draft. It is not in force yet.
+
+  - type: assert
+    domain: decision
+    op: asked-to-check
+    with:
+      target: raised_by_ai
+      present: true
+      contains: "All yes: finish it with the `decision finish-writing` command."
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: raised_by_ai
+      field: draft
+      equals: true
+
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — said on the task, raised by a person
+    as: said_to_person
+
+  - type: action
+    domain: comment
+    op: promote
+    with:
+      target: said_to_person
+      title: SCENARIO SEED — a decision a person raised out of a comment
+    as: raised_by_person
+
+  - type: assert
+    domain: decision
+    op: asked-to-check
+    with:
+      target: raised_by_person
+      present: false

@@ -7,11 +7,12 @@ let initialized = false;
 let seq = 0;
 
 /** Turns mermaid source into an SVG string. Syntax errors and the like reject, and the caller
- *  falls back. securityLevel is pinned to "strict" (generated HTML is sanitized, scripts off). */
+ *  falls back. securityLevel is pinned to "strict" (generated HTML is sanitized, scripts off), and
+ *  suppressErrorRendering keeps mermaid from leaving its error diagram in the document body. */
 export async function renderMermaid(source: string): Promise<string> {
   const mermaid = (await import("mermaid")).default;
   if (!initialized) {
-    mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", suppressErrorRendering: true });
     initialized = true;
   }
   // render creates a temporary DOM node under this id, so it must be unique (monotonic is enough).

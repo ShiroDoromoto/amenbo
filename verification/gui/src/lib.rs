@@ -8479,11 +8479,12 @@ pub fn step_reads_the_store(step: &Step) -> bool {
 /// Whether an assert is read off the window's accessibility tree rather than off the shot.
 ///
 /// What is on this table is a name a screen **draws and elides**. A name is drawn in the space the
-/// element carrying it stands in, and a space narrower than the name is drawn cut, with the tail
-/// replaced by one glyph. Two of them are known:
+/// element carrying it stands in, and a space narrower than the name is drawn cut — stopped at the
+/// space's edge, or with the tail replaced by one glyph. Two of them are known:
 ///
 /// - `files listed` — the tree of a bound folder stands in a rail a person drags, and a row in a
-///   rail left narrow draws `grafting.md` as `grafting…`.
+///   rail left narrow draws `grafting.md` only as far as the rail's edge: the rest of the name is
+///   read by scrolling the rail sideways, so a shot shows `grafti` and no more.
 /// - `workspace label` — the row above a pane is only as wide as the pane, so a second pane beside
 ///   the first draws `SCENARIO named by hand` as `SCENARIO named by h.`.
 ///
@@ -14279,7 +14280,7 @@ steps_gui:
         assert!(!reads_the_tree(Domain::Task, "listed"), "a card is drawn with room for its title");
     }
 
-    /// The row whose name the rail drew cut: the reader returns `grafting…` and would go red on it,
+    /// The row whose name the rail drew cut: the reader returns `grafti` and would go red on it,
     /// the tree carries `grafting.md`, and the step is green off the tree. The shot is taken and the
     /// listing filed beside it all the same — the picture is what an eye reads the step back from.
     #[test]

@@ -344,12 +344,12 @@ against what a reader sees.
 ### The asserts a screen draws cut — read off the accessibility tree
 
 A name is drawn in the space the element carrying it stands in, and a name longer than that space is
-drawn cut, the tail replaced by one glyph. Two of them are known, and both went red against a build
+drawn cut — stopped at the space's edge, or with the tail replaced by one glyph. Two of them are known, and both went red against a build
 doing exactly what it should:
 
 | assert | the space | drawn | read |
 |---|---|---|---|
-| `files listed` | the rail a bound folder's tree stands in, whose width a person drags | `grafting…` | `grafting.md` |
+| `files listed` | the rail a bound folder's tree stands in, whose width a person drags | `grafti` (the rest is scrolled to) | `grafting.md` |
 | `workspace label` | the row above a pane, which is only as wide as the pane | `SCENARIO named by h.` | `SCENARIO named by hand` |
 
 Widening the rail, or closing the second pane, before every run is not a road anybody walks.

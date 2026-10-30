@@ -73,6 +73,7 @@ import { isDirty, useRestore } from "./restore";
 import { fileAt } from "./fileUnder";
 import { type Held, watchCarry } from "./handDrag";
 import { stemEnd } from "./stem";
+import { widest } from "./widest";
 import { gitMarks, type GitMark } from "./gitMark";
 import { rootShown, sectionsOf } from "./sections";
 import { Icon } from "../components/Icon";
@@ -1153,6 +1154,13 @@ function firstWindow(count: number): { from: number; to: number } {
   return { from: 0, to: Math.min(count, Math.ceil(window.innerHeight / ROW) + SPARE) };
 }
 
+/** The one canvas the tree's names are measured on, made the first time it is asked for. */
+let pen: CanvasRenderingContext2D | null | undefined;
+function measurer(): CanvasRenderingContext2D | null {
+  if (pen === undefined) pen = document.createElement("canvas").getContext("2d");
+  return pen;
+}
+
 /** One bound folder's tree: every open row of it, drawn as one list. */
 function Tree({
   projectId, root, landing, scroller, found, marks, moved, open, onOpen, naming, onRead, onMenu,
@@ -1393,6 +1401,45 @@ function Tree({
       sized.disconnect();
     };
   }, [scroller, lines.length]);
+
+  /**
+   * The row the tree is as wide as, or nothing before anything has been measured.
+   *
+   * **Off every row and not off the ones drawn** (`./widest`). Names are not cut short on this tree
+   * — a long one is read by scrolling the panel sideways — and how far it scrolls has to be the
+   * same wherever the reader is down the tree.
+   *
+   * Measured before the paint, in the face the names are drawn in, and only where the tree has been
+   * laid out: a list with no width to it is one nothing on the screen is being fitted to. A tree
+   * first drawn where it has no width is measured the first time it is given one, and every tree is
+   * measured again when a face is loaded (`../core/skin.ts`), since the names are then drawn wider
+   * or narrower than they were measured.
+   */
+  const [far, setFar] = useState<Row | null>(null);
+  useLayoutEffect(() => {
+    const ul = tree.current;
+    if (ul === null) { setFar(null); return; }
+    const measure = (): boolean => {
+      const ink = ul.clientWidth === 0 ? null : measurer();
+      if (ink === null) { setFar(null); return false; }
+      const look = getComputedStyle(ul);
+      ink.font = `${look.fontStyle} ${look.fontWeight} ${look.fontSize} ${look.fontFamily}`;
+      const indent = parseFloat(look.getPropertyValue("--s-3")) || 0;
+      setFar(widest(rows, (name) => ink.measureText(name).width, indent));
+      return true;
+    };
+    const fonts = typeof document.fonts === "undefined" ? null : document.fonts;
+    const again = () => { measure(); };
+    fonts?.addEventListener("loadingdone", again);
+    const sized = measure() || typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(() => { if (measure()) sized?.disconnect(); });
+    sized?.observe(ul);
+    return () => {
+      fonts?.removeEventListener("loadingdone", again);
+      sized?.disconnect();
+    };
+  }, [rows]);
 
   /**
    * The box a name is being typed into, as its place among the lines — or nothing.
@@ -1792,6 +1839,20 @@ function Tree({
       })}
       {to < lines.length && (
         <li role="none" aria-hidden="true" style={{ height: (lines.length - to) * ROW }} />
+      )}
+      {/* What the tree is as wide as: the widest row of all of them, laid out at no height. It is a
+          row in every part that takes width — the indent, the two marks and the name — so the list
+          is exactly as wide as that row would be drawn, and every row drawn takes that width for its
+          ground. The name is drawn from an attribute rather than written in, so that the row is in
+          the layout and nowhere in the text a reader or a search finds. */}
+      {far !== null && (
+        <li role="none" aria-hidden="true" className="files__sizer" style={step(far.depth)}>
+          <span className="files__file">
+            <span className="files__twisty" />
+            <span className="files__kind"><Icon name="document" /></span>
+            <span className="files__name" data-name={far.name} />
+          </span>
+        </li>
       )}
     </ul>
   );

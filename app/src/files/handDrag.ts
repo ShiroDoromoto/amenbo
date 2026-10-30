@@ -167,7 +167,7 @@ function copyHeld(e: PointerEvent): boolean {
   return hostOs() === "macos" ? e.altKey : e.ctrlKey;
 }
 
-/** What a row being carried looks like: the row's own node, following the pointer. */
+/** What a row being carried looks like: a copy of the row in a frame, following the pointer. */
 interface Ghost {
   node: HTMLElement;
   /** Where in the row the pointer took hold, so the row does not jump under it. */
@@ -175,13 +175,37 @@ interface Ghost {
   grabY: number;
 }
 
+/**
+ * The part of a row a reader can see: the row's box cut at the panel's two edges.
+ *
+ * A row is as wide as the widest name in the tree, which can be many panels across
+ * (`../styles/global.css`), and the panel scrolled sideways puts its left edge out past the panel's
+ * too. The row in hand is the part of it on the screen — a copy reaching past either edge would lie
+ * across the panes it is carried to, and across the column to the panel's left.
+ */
+export function seenOf(
+  row: { left: number; right: number },
+  panel: { left: number; right: number } | undefined,
+): { left: number; width: number } {
+  if (panel === undefined) return { left: row.left, width: row.right - row.left };
+  const left = Math.max(row.left, panel.left);
+  return { left, width: Math.max(0, Math.min(row.right, panel.right) - left) };
+}
+
 function raise(row: HTMLElement, at: { x: number; y: number }): Ghost {
   const box = row.getBoundingClientRect();
-  const node = row.cloneNode(true) as HTMLElement;
-  node.classList.add("files__ghost");
-  node.style.width = `${box.width}px`;
+  const seen = seenOf(box, row.closest(".files")?.getBoundingClientRect());
+  // The copy keeps the row's whole width and is slid left inside a frame as wide as the part that was
+  // seen, so what is carried is drawn where it was on the screen and no further.
+  const copy = row.cloneNode(true) as HTMLElement;
+  copy.style.width = `${box.width}px`;
+  copy.style.marginLeft = `${box.left - seen.left}px`;
+  const node = document.createElement("div");
+  node.className = "files__ghost";
+  node.style.width = `${seen.width}px`;
+  node.append(copy);
   document.body.append(node);
-  const ghost = { node, grabX: at.x - box.left, grabY: at.y - box.top };
+  const ghost = { node, grabX: at.x - seen.left, grabY: at.y - box.top };
   place(ghost, at);
   return ghost;
 }

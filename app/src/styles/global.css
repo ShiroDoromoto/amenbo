@@ -1753,7 +1753,7 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 
 .files {
   flex: 1 1 auto; min-width: 0;
-  min-height: 0; overflow-y: auto;
+  min-height: 0; overflow: auto;
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-3);
   border-left: var(--border-w) var(--border-style) var(--c-rule);
@@ -1775,7 +1775,16 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 .files__head--button { cursor: pointer; display: flex; align-items: center; gap: var(--s-2); }
 .files__none { margin: 0; color: var(--c-text-muted); }
 .files__list { list-style: none; margin: 0; padding: 0; }
-.files__list--tree { padding-left: var(--s-3); }
+/* **As wide as its widest row, and never narrower than the panel.** A name on the tree is drawn
+   whole, and one longer than the panel is read by scrolling the panel sideways (`.files`), so the
+   list reaches as far as the longest of them. That is the row the tree measured out of all of its
+   rows, drawn at no height (`.files__sizer`) — the rows in view are only some of them
+   (`AMB-D-817`), and a list as wide as those would change its reach as the reader scrolled down.
+   Every row takes the list's width for its ground, so the band under a picked row, the pointer's
+   and the tab stop's run on as far as the panel scrolls. */
+.files__list--tree { padding-left: var(--s-3); width: max-content; min-width: 100%; }
+.files__sizer { height: 0; overflow: hidden; visibility: hidden; }
+.files__sizer .files__name::after { content: attr(data-name); }
 /* One row of the tree, however far down it is: the rows of every open folder are lines of the one
    list, so how deep a row stands is a number on the row and the step is taken here rather than by a
    list inside a list (`app/src/files/FilesPanel.tsx`). The margin and not padding, so that the row's
@@ -1788,9 +1797,11 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 /* The row that follows the pointer while it is being carried to a pane. It is the row's own node,
    copied, for the reason a card's ghost is (`app/src/components/components.css`) — and it is taken
    out of the list it was indented in, so the copy carries the indent's margin with it and is placed
-   from its own left edge instead (`app/src/files/handDrag.ts`). */
+   from its own left edge instead (`app/src/files/handDrag.ts`). The copy keeps the row's whole width
+   inside a frame cut at the panel's edges: what is carried is the row as far as it was on the screen,
+   with the panel scrolled sideways or not. */
 .files__ghost {
-  position: fixed; top: 0; left: 0; z-index: 1000; margin: 0;
+  position: fixed; top: 0; left: 0; z-index: 1000; margin: 0; overflow: hidden;
   pointer-events: none; opacity: 0.9; cursor: grabbing;
   background: var(--c-surface-pic) var(--c-surface); border-radius: var(--r-sm);
   box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
@@ -1921,6 +1932,9 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
    so a row is scanned as a shape and then read as a word. */
 .files__kind { display: inline-flex; flex: none; color: var(--c-text-muted); }
 .files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Never cut short on the tree: the row is as wide as the list, and the list as wide as the widest
+   name (`.files__list--tree`). The heading over a file being read keeps its `…` (`.files__bar`). */
+.files__list--tree .files__name { flex: none; overflow: visible; }
 /* What git says about the row (`AMB-D-785`). The colour is the whole mark — no letter beside the
    name — because the row is one line and the name is what is read on it; a badge would take the
    width the name needs, on every row, to say what three hues already say. */

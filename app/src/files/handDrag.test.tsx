@@ -13,7 +13,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DRAG_SLOP } from "../core/pointerDrag";
-import { HAND_ATTR, type Held, INTO_ATTR, paneUnder, useHandDrag, watchCarry } from "./handDrag";
+import {
+  HAND_ATTR, type Held, INTO_ATTR, paneUnder, seenOf, useHandDrag, watchCarry,
+} from "./handDrag";
 
 /** jsdom lays nothing out, so what is under the pointer is stated rather than measured. */
 function under(el: Element | null): void {
@@ -136,6 +138,30 @@ describe("the pane a row is over", () => {
     expect(paneUnder(10, 10)).toBe("2");
     under(null);
     expect(paneUnder(10, 10)).toBeNull();
+  });
+});
+
+/**
+ * The row in hand is the part of it on the screen. A row is as wide as the widest name in the tree,
+ * and the panel scrolled sideways puts its left edge out past the panel's.
+ */
+describe("the part of a row a ghost draws", () => {
+  const panel = { left: 200, right: 500 };
+
+  it("is the whole row where the row fits in the panel", () => {
+    expect(seenOf({ left: 210, right: 400 }, panel)).toEqual({ left: 210, width: 190 });
+  });
+
+  it("stops at the panel's right edge where the row runs past it", () => {
+    expect(seenOf({ left: 210, right: 900 }, panel)).toEqual({ left: 210, width: 290 });
+  });
+
+  it("starts at the panel's left edge where the panel is scrolled sideways", () => {
+    expect(seenOf({ left: -100, right: 600 }, panel)).toEqual({ left: 200, width: 300 });
+  });
+
+  it("is the row as it is where there is no panel to cut it at", () => {
+    expect(seenOf({ left: -100, right: 600 }, undefined)).toEqual({ left: -100, width: 700 });
   });
 });
 

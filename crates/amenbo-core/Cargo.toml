@@ -61,7 +61,7 @@ minisign-verify = "0.2"
 # This is the sole DB library: the change feed rides `update_hook`, which is bound to the connection,
 # and reads are issued from inside the write transaction — both are lost the moment a second library
 # opens its own connection. The typed layer amenbo needs is built on top of this one.
-rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl", "hooks"] }
+rusqlite = { version = "0.41", features = ["bundled-sqlcipher-vendored-openssl", "hooks"] }
 # NFKC for the word index's normalised copy (`store_engine::search`): the width fold that brings `ＡＩ`
 # and `AI` — and half-width kana and its voicing mark — together is a Unicode table, not a rule that can
 # be written out. Case folding and the kana fold are `std` and arithmetic respectively; only this one
@@ -200,7 +200,7 @@ proptest = "1"
 # The tests that speak to SQLite directly — the engine and projection suites, the change feed, the
 # preservation checks — build `rusqlite` values and read rows themselves, rather than through the store.
 # Match the main dependency's version and features.
-rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
+rusqlite = { version = "0.41", features = ["bundled-sqlcipher-vendored-openssl"] }
 # Read-hotpath scaling bench. Stable-toolchain harness; `cargo bench` only, so it never
 # gates `cargo test`. The CI guard (`tests/read_scaling_guard.rs`) is a plain test, no criterion.
 criterion = "0.8"

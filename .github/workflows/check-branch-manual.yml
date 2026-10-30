@@ -117,7 +117,7 @@ jobs:
 
       - name: Install cargo-nextest
         if: ${{ inputs.test != '' }}
-        uses: taiki-e/install-action@v2.87.29
+        uses: taiki-e/install-action@v2.87.32
         with:
           tool: cargo-nextest
 

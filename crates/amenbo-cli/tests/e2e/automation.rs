@@ -1244,6 +1244,65 @@ fn run_show_says_when_a_run_is_waiting_for_a_task() {
     assert!(!text.contains("waiting:"), "{text}");
 }
 
+/// **A run waiting for room says so** on `run-show`: two runs come to an action that takes one run at a
+/// time, and the one that came second waits behind the first, naming the action. The first has nobody
+/// ahead of it, and a run that is no longer running waits for nothing.
+#[test]
+fn run_show_says_when_a_run_is_waiting_for_room() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, placement, _, _) = a_picture(&cli, true);
+    let action = id_str(
+        &cli.json(&["automation", "show", &a, "--json"])["placements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| id_str(&p["placement"]["id"]) == placement)
+            .unwrap()["action"]["id"],
+    );
+    cli.json(&["automation", "action-update", &action, "--one-at-a-time", "on", "--json"]);
+    saved_with_its_action(&cli, &a, &placement);
+    let first = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    let project = cli.json(&["automation", "run-show", &first, "--json"])["run"]["project_id"].to_string();
+    let t = id_str(&cli.json(&["task", "add", "--title", "two", "--project", &project, "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
+    let second = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    // No watch opens a step here, so each run's entry — the built-in that takes a task — is opened on
+    // the store, as the app's watch would. Both then stand before the action.
+    {
+        let paths = amenbo_core::config::Paths::at(cli.home.clone());
+        let mut store = amenbo_core::Store::open_at(paths).expect("the store");
+        for run in [&first, &second] {
+            let run: i64 = run.parse().unwrap();
+            let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| d.entry).expect("an entry");
+            match store.automation_step_open(run, entry.id, None).expect("open") {
+                amenbo_core::ops::automation_step::Opened::Carried { .. } => {}
+                _ => panic!("the entry takes a task and is carried out"),
+            }
+        }
+    }
+
+    let shown = cli.json(&["automation", "run-show", &second, "--json"]);
+    assert_eq!(shown["run"]["status"].as_str(), Some("running"), "{shown}");
+    assert_eq!(shown["waiting"].as_bool(), Some(false), "{shown}");
+    assert_eq!(id_str(&shown["waits_for_room"]["action_id"]), action, "{shown}");
+    assert_eq!(id_str(&shown["waits_for_room"]["behind"]), first, "{shown}");
+    let (text, _) = cli.run(&["automation", "run-show", &second]);
+    assert!(
+        text.contains(&format!("waiting: for room — action {action} takes one run at a time; behind run {first}")),
+        "{text}"
+    );
+    let shown = cli.json(&["automation", "run-show", &first, "--json"]);
+    assert!(shown["waits_for_room"].is_null(), "nobody is ahead of the first: {shown}");
+
+    cli.json(&["automation", "cancel", &second, "--force", "--json"]);
+    let shown = cli.json(&["automation", "run-show", &second, "--json"]);
+    assert!(shown["waits_for_room"].is_null(), "{shown}");
+    let (text, _) = cli.run(&["automation", "run-show", &second]);
+    assert!(!text.contains("waiting:"), "{text}");
+    cli.json(&["automation", "cancel", &first, "--force", "--json"]);
+}
+
 /// **A run picked up after a pause before its next task goes on from the newest saved version**
 /// (`AMB-D-1015`), and `run-show` says which versions it was copied from, in turn. A run waiting at its
 /// entry has run no step yet, so which version each step ran on is not held here.

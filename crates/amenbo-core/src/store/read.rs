@@ -980,6 +980,16 @@ impl Store {
         crate::ops::automation_run::is_waiting(self.engine.conn(), run_id)
     }
 
+    /// **Whether a run is waiting for room** before an action that takes one run at a time, and whom it
+    /// waits behind ([`crate::ops::automation_run::waits_for_room`]). `None` for a run waiting for a task,
+    /// which is that wait and not this one.
+    pub fn automation_run_waits_for_room(
+        &self,
+        run_id: i64,
+    ) -> Result<Option<crate::ops::automation_run::ForRoom>> {
+        crate::ops::automation_run::waits_for_room(self.engine.conn(), run_id)
+    }
+
     /// The stretches one run walked, in order — each one a task it worked.
     pub fn automation_run_tasks(&self, run_id: i64) -> Result<Vec<crate::model::AutomationRunTask>> {
         self.reachable(&format!("automation run #{run_id}"), |c| {

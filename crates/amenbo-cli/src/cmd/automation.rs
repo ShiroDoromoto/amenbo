@@ -28,7 +28,7 @@ use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::model::AutomationPictureOwner;
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewScript, NewStep};
 use amenbo_core::ops::automation_report::{Next, Produced};
-use amenbo_core::ops::automation_run::{HandedAtLaunch, HandedFile, Launcher};
+use amenbo_core::ops::automation_run::{ForRoom, HandedAtLaunch, HandedFile, Launcher};
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{
     ActionView, AutomationView, PlacementView, SavedVersion, Showing, StepView,
@@ -985,6 +985,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let stretches = store.automation_run_tasks(id).map_err(CliError::from)?;
             let moves = store.automation_run_steps(id).map_err(CliError::from)?;
             let waiting = store.automation_run_waiting(id).map_err(CliError::from)?;
+            let room = store.automation_run_waits_for_room(id).map_err(CliError::from)?;
             if flags.json {
                 let mut walked = Vec::with_capacity(moves.len());
                 for m in &moves {
@@ -1001,6 +1002,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 print_json(&json!({
                     "run": serde_json::to_value(&run).unwrap(),
                     "waiting": waiting,
+                    "waits_for_room": serde_json::to_value(room).unwrap(),
                     "versions": taken_up(&defs)
                         .iter()
                         .map(|(version, at)| json!({ "version": version, "taken_at": at.to_rfc3339_z() }))
@@ -1009,7 +1011,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     "steps": walked,
                 }));
             } else {
-                render_run(store, flags, &run, waiting, &defs, &stretches, &moves)?;
+                render_run(store, flags, &run, waiting, room, &defs, &stretches, &moves)?;
             }
         }
 
@@ -1757,11 +1759,16 @@ fn one_edge(
 ///
 /// **A run waiting for a task says so**, as its pane does. The stretch it last worked stays open until
 /// the next task is taken, but every step of it has ended — so it is written as over, not as still going.
+///
+/// **So does a run waiting for room** before an action that takes one run at a time, naming the action
+/// and the run it waits behind. Its stretch is still going: the task it took is not done with yet.
+#[allow(clippy::too_many_arguments)]
 fn render_run(
     store: &mut Store,
     flags: &Flags,
     run: &AutomationRun,
     waiting: bool,
+    room: Option<ForRoom>,
     defs: &[AutomationRunDef],
     stretches: &[AutomationRunTask],
     moves: &[AutomationRunStep],
@@ -1803,6 +1810,15 @@ fn render_run(
     }
     if waiting {
         human(flags, "waiting: for a task — the next step opens once one turns up");
+    }
+    if let Some(room) = room {
+        human(
+            flags,
+            format!(
+                "waiting: for room — action {} takes one run at a time; behind run {}",
+                room.action_id, room.behind
+            ),
+        );
     }
     let switched = switches(defs, moves);
     let last = stretches.last().map(|s| s.id);

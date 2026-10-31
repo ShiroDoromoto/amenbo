@@ -84,6 +84,14 @@ pub enum Opened {
     /// reports, so this is where the pause takes hold. So is a run asked to pause before its next task
     /// that has come to the step that takes one (`AMB-D-1009`), whether or not a task stands ready.
     Waiting { run: AutomationRun },
+    /// **The step is the first of an action that takes one run at a time, and the action is not free**
+    /// — another run is inside it, or came to it first and goes in before this one
+    /// ([`super::automation_run::room_for`]). Nothing was written, so the run still stands before this
+    /// step and the next look opens it again; the action is free once the run inside leaves it by a
+    /// line out of the action, pauses before its next task, or ends. `behind` is the run it waits
+    /// behind. Where a pause had been asked for, `run` has been paused here instead, as
+    /// [`Opened::Waiting`]'s is: nothing is under way, so there is no action to wait out.
+    WaitsForRoom { run: AutomationRun, behind: i64 },
     /// **The step is a built-in that holds it open** (`AMB-D-983`): its execution stands under way, as
     /// an agent's does while it works, and nothing was carried out. No terminal is opened for it — the
     /// thread that keeps runs going ends it once its time has come
@@ -283,6 +291,19 @@ fn open_as(
             false => run,
         };
         return Ok(Opened::Waiting { run });
+    }
+    // **An action that takes one run at a time is gone into in arrival order, one run at a time.**
+    // Asked here, after a built-in's own wait, so a run still waiting for a task to turn up does not
+    // hold a place in the line; and before anything is written, so a run kept out leaves nothing
+    // behind it on each look. A test run is not kept out: it walks a copy nobody else is in.
+    if !rehearsing {
+        if let Some(room) = super::automation_run::room_for(conn, &run, &def)? {
+            let run = match run.pause_requested {
+                true => super::automation_stop::settle(tx, run, AutomationPauseKind::EndOfAction)?.run,
+                false => run,
+            };
+            return Ok(Opened::WaitsForRoom { run, behind: room.behind });
+        }
     }
 
     let now = Timestamp::now();
@@ -1157,6 +1178,7 @@ mod tests {
             Opened::Carried { .. } | Opened::Waiting { .. } | Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
+            Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
         }
     }
 
@@ -1686,6 +1708,7 @@ mod tests {
                 Opened::Carried { .. } | Opened::Waiting { .. } | Opened::Holding { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 Opened::Script(_) => panic!("not a script"),
+                Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
             }
             assert_eq!(
                 read::automation_run_steps_of(tx.conn(), run.id).expect("read").len(),
@@ -1713,6 +1736,7 @@ mod tests {
                 Opened::Carried { .. } | Opened::Waiting { .. } | Opened::Holding { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 Opened::Script(_) => panic!("not a script"),
+                Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
                 Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
                 Opened::NoAgent { run: stopped, agent } => {
                     assert_eq!(agent, "claude");
@@ -1944,6 +1968,178 @@ mod tests {
             let text = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open")).text;
             assert!(text.contains(&format!("## The task this run is on\n\n**AMB-T-{task}** — 添付の無いもの")), "{text}");
             assert!(!text.contains("### Its attachments"), "{text}");
+        });
+    }
+
+    /// Mark every run's copy of one spot as taking one run at a time, as a version saved with it on
+    /// would have been copied.
+    fn one_at_a_time(tx: &WriteTx<'_>, placement: &AutomationPlacement) {
+        tx.conn()
+            .execute("UPDATE automation_run_def SET one_at_a_time = 1 WHERE placement_id = ?1", [placement.id])
+            .expect("one run at a time");
+    }
+
+    fn kept_out(opened: Opened) -> (AutomationRun, i64) {
+        match opened {
+            Opened::WaitsForRoom { run, behind } => (run, behind),
+            other => panic!("expected to be kept out, opened {other:?}"),
+        }
+    }
+
+    /// A run that has done the first spot and stands before the second.
+    fn at_the_second(tx: &WriteTx<'_>, p: &Picture) -> AutomationRun {
+        let run = a_run(tx, &p.automation);
+        let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open the first"));
+        reported(tx, &first.run_step, "found", "見つけた", "the note");
+        run
+    }
+
+    #[test]
+    fn a_run_waits_outside_an_action_another_run_is_in_and_writes_nothing() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let alice = at_the_second(tx, &p);
+            let bob = at_the_second(tx, &p);
+            one_at_a_time(tx, &p.second);
+
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
+            let steps_before = read::automation_run_steps_of(tx.conn(), bob.id).expect("steps").len();
+            let (run, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
+
+            assert_eq!(behind, alice.id);
+            assert_eq!(run.status, AutomationRunStatus::Running, "waiting is not a state of its own");
+            assert_eq!(
+                read::automation_run_steps_of(tx.conn(), bob.id).expect("steps").len(),
+                steps_before,
+                "nothing is written for a run kept out",
+            );
+            assert_eq!(
+                super::super::automation_run::waits_for_room(tx.conn(), bob.id).expect("read"),
+                Some(super::super::automation_run::ForRoom { action_id: p.second_action.id, behind: alice.id }),
+            );
+            assert_eq!(super::super::automation_run::waits_for_room(tx.conn(), alice.id).expect("read"), None);
+        });
+    }
+
+    #[test]
+    fn an_action_that_takes_any_number_of_runs_keeps_nobody_out() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let alice = at_the_second(tx, &p);
+            let bob = at_the_second(tx, &p);
+
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
+            ready(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("bob goes in beside her"));
+        });
+    }
+
+    #[test]
+    fn the_action_is_free_once_the_run_inside_leaves_it_by_its_way_out() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let alice = a_run(tx, &p.automation);
+            let bob = a_run(tx, &p.automation);
+            one_at_a_time(tx, &p.first);
+
+            let inside = ready(open(tx, alice.id, def_of(tx, &alice, &p.first).id, None).expect("alice goes in"));
+            let (_, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.first).id, None).expect("open"));
+            assert_eq!(behind, alice.id);
+
+            reported(tx, &inside.run_step, "found", "見つけた", "the note");
+            ready(open(tx, bob.id, def_of(tx, &bob, &p.first).id, None).expect("bob goes in now"));
+        });
+    }
+
+    #[test]
+    fn the_action_is_free_once_the_run_inside_ends() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let alice = at_the_second(tx, &p);
+            let bob = at_the_second(tx, &p);
+            one_at_a_time(tx, &p.second);
+
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
+            kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
+            super::super::automation_stop::stop(tx, alice.id, super::super::automation_stop::Ending::Canceled)
+                .expect("force-cancel alice");
+
+            ready(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("bob goes in now"));
+        });
+    }
+
+    #[test]
+    fn runs_kept_out_go_in_in_the_order_they_came() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let alice = at_the_second(tx, &p);
+            let bob = at_the_second(tx, &p);
+            let carol = at_the_second(tx, &p);
+            one_at_a_time(tx, &p.second);
+
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
+            kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
+            kept_out(open(tx, carol.id, def_of(tx, &carol, &p.second).id, None).expect("open"));
+            super::super::automation_stop::stop(tx, alice.id, super::super::automation_stop::Ending::Canceled)
+                .expect("force-cancel alice");
+
+            let (_, behind) = kept_out(open(tx, carol.id, def_of(tx, &carol, &p.second).id, None).expect("open"));
+            assert_eq!(behind, bob.id, "bob came first, so carol waits behind him with nobody inside");
+            ready(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("bob goes in"));
+            let (_, behind) = kept_out(open(tx, carol.id, def_of(tx, &carol, &p.second).id, None).expect("open"));
+            assert_eq!(behind, bob.id, "and then behind him inside");
+        });
+    }
+
+    #[test]
+    fn a_run_kept_out_pauses_at_once_and_comes_back_to_its_place() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let alice = at_the_second(tx, &p);
+            let bob = at_the_second(tx, &p);
+            let carol = at_the_second(tx, &p);
+            one_at_a_time(tx, &p.second);
+
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
+            let paused = match super::super::automation_stop::pause(tx, bob.id).expect("pause bob") {
+                super::super::automation_stop::Paused::Now(ended) => ended.run,
+                other => panic!("expected bob to pause at once, got {other:?}"),
+            };
+            assert_eq!(paused.status, AutomationRunStatus::Paused);
+            assert_eq!(paused.pause_kind, Some(AutomationPauseKind::EndOfAction));
+
+            super::super::automation_stop::stop(tx, alice.id, super::super::automation_stop::Ending::Canceled)
+                .expect("force-cancel alice");
+            ready(open(tx, carol.id, def_of(tx, &carol, &p.second).id, None).expect("a paused run is out of the line"));
+
+            // A latecomer comes to the action before bob is picked up again.
+            let latecomer = at_the_second(tx, &p);
+            one_at_a_time(tx, &p.second);
+            super::super::automation_stop::resume(tx, bob.id, None, super::super::automation_run::nothing_asked())
+                .expect("resume bob");
+            let (_, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
+            assert_eq!(behind, carol.id, "carol is inside now");
+            super::super::automation_stop::stop(tx, carol.id, super::super::automation_stop::Ending::Canceled)
+                .expect("force-cancel carol");
+            let (_, behind) = kept_out(open(tx, latecomer.id, def_of(tx, &latecomer, &p.second).id, None).expect("open"));
+            assert_eq!(behind, bob.id, "bob came to it before the latecomer, and keeps that place");
+        });
+    }
+
+    #[test]
+    fn a_run_asked_to_pause_while_kept_out_is_paused_on_its_next_look() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let alice = at_the_second(tx, &p);
+            let bob = at_the_second(tx, &p);
+            one_at_a_time(tx, &p.second);
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
+            tx.conn()
+                .execute("UPDATE automation_run SET pause_requested = 1 WHERE id = ?1", [bob.id])
+                .expect("asked before it was kept out");
+
+            let (run, _) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
+            assert_eq!(run.status, AutomationRunStatus::Paused);
+            assert_eq!(run.pause_kind, Some(AutomationPauseKind::EndOfAction));
         });
     }
 

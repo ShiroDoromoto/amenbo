@@ -1481,6 +1481,7 @@ export const it: Translation = {
     "auto.run.inAction": "{step} in {action}",
     "auto.run.reportWithheld": "Resoconto non lasciato sull’attività, che era chiusa: {steps}",
     "auto.run.taskWait": "In attesa di attività",
+    "auto.run.roomWait": "In attesa di posto",
     "auto.run.heldUntil": "In attesa fino a {at}",
     "auto.run.body.taskWait": "In attesa di un'attività da prendere",
     "auto.run.body.taskWaitNext": "Appena un'attività corrispondente può essere presa, la prende e prosegue da sola. Per smettere di attendere, premi metti in pausa o annulla subito in alto.",

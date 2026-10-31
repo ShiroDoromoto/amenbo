@@ -44,12 +44,12 @@
 // outlives the step it was opened for, so without it a run that had finished and one that had stopped
 // partway looked the same — the row went on naming the last step either way. **Running is the one
 // state with no chip**: the mark in front of the name glows while the run is under way instead, and
-// holds still and a little faded once it is paused or over. A pause asked for and not yet settled, and
-// a run waiting for its next task, are still under way and glow, but keep their chip: without the
-// word, a press on pause looked to have done nothing. The chip is last on the first line, so the
-// pane's controls for the run stand straight after it (`../shell/TerminalPane`). What a failure is
-// waiting for is not the row's to say: it is the band under the header, which has the press that
-// answers it (`../shell/TerminalPane`).
+// holds still and a little faded once it is paused or over. A pause asked for and not yet settled, a
+// run waiting for its next task, and one waiting for room, are still under way and glow, but keep
+// their chip: without the word, a press on pause looked to have done nothing. The chip is last on the
+// first line, so the pane's controls for the run stand straight after it (`../shell/TerminalPane`).
+// What a failure is waiting for is not the row's to say: it is the band under the header, which has
+// the press that answers it (`../shell/TerminalPane`).
 //
 // **A name too long for the row is elided, and given back in full by a panel of the row's own**
 // (`../styles/global.css`). A name is what the agent typed, so it is the one thing here worth a way
@@ -172,6 +172,9 @@ export type RunState = {
   /** The run is running and its built-in is waiting for a task, which the word says in place of
    *  running (`../core/runWords`'s `waitingState`). */
   readonly waiting?: true;
+  /** The run is running and waits for room before an action that takes one run at a time, which the
+   *  word says in place of running (`../core/runWords`'s `roomWaitState`). */
+  readonly forRoom?: true;
   /** A pause has been asked for and the step under way has not finished yet — the run is still
    *  `running`, and a second press on pause would be asking for what is already coming. */
   readonly pauseRequested: boolean;
@@ -354,7 +357,7 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
       : tf("face.elapsed", { time: clockOf((plate.now ?? Date.now()) - since) });
     const now = plate.run?.state ?? null;
     state.hidden = now === null
-      || (now.status === "running" && !now.pauseRequested && !now.pauseBeforeNextTask && !now.waiting);
+      || (now.status === "running" && !now.pauseRequested && !now.pauseBeforeNextTask && !now.waiting && !now.forRoom);
     row.classList.toggle("plate--run", plate.run !== null);
     if (plate.run !== null) {
       // The run's number is the same in every language, and written the way a reader would type it

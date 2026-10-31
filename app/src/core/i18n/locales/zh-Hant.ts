@@ -1471,6 +1471,7 @@ export const zhHant: Translation = {
     "auto.run.inAction": "{action} 的 {step}",
     "auto.run.reportWithheld": "任務已關閉，未留下報告：{steps}",
     "auto.run.taskWait": "等待任務",
+    "auto.run.roomWait": "等待空位",
     "auto.run.heldUntil": "等待至 {at}",
     "auto.run.body.taskWait": "正在等待可以著手的任務",
     "auto.run.body.taskWaitNext": "有符合條件且可以著手的任務時，會自動著手並繼續。要停止等待，請按上方的暫停或強制取消。",

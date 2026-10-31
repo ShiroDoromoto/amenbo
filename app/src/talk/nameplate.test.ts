@@ -314,6 +314,11 @@ describe("the row above a run's pane", () => {
     expect(state().textContent).toBe("タスク待ち");
     expect(auto().dataset.run).toBe("on");
 
+    draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status: "running", word: "空き待ち", forRoom: true } } });
+    expect(state().hidden).toBe(false);
+    expect(state().textContent).toBe("空き待ち");
+    expect(auto().dataset.run).toBe("on");
+
     for (const status of ["paused", "completed", "failed", "canceled"] as const) {
       draw({ name: "/work/a", dot: STILL, run: { ...RUN, state: { ...STATE, status, word: status } } });
       expect(state().hidden).toBe(false);

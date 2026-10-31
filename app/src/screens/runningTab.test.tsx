@@ -68,6 +68,7 @@ function run(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
     pauseBeforeNextTask: false,
     pausableBeforeNextTask: false,
     waiting: false,
+    waitsForRoom: false,
     stepsDone: 2,
     reportWithheld: [],
     acknowledged: false,
@@ -162,6 +163,19 @@ describe("the running tab", () => {
     await render([run({ waiting: true, task: closed })]);
     expect(container.querySelector(".autorun__task")?.textContent).toBe(`⏳${t("auto.run.taskWait")}`);
     expect(container.textContent).not.toContain("AMB-T-12");
+  });
+
+  it("says a run waiting for room is waiting for room, in front of the task it is still on", async () => {
+    const task = { id: 12, ref: "AMB-T-12", title: "the one it is on", seq: 1 };
+    await render([run({ waitsForRoom: true, task })]);
+    expect([...container.querySelectorAll(".autorun__task")].map((one) => one.textContent))
+      .toEqual([`⏳${t("auto.run.roomWait")}`, "AMB-T-12 the one it is on"]);
+  });
+
+  it("says a run waiting for room and asked to pause as waiting to pause alone", async () => {
+    await render([run({ waitsForRoom: true, pauseRequested: true })]);
+    expect(container.textContent).not.toContain(t("auto.run.roomWait"));
+    expect(container.querySelector(".autorun__chip")?.textContent).toContain(t("auto.run.pausing"));
   });
 
   /// A spot taken off the picture while its run walks on leaves the step with nothing to be inside

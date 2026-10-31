@@ -1486,6 +1486,7 @@ export const pl: Translation = {
     "auto.run.inAction": "{step} w {action}",
     "auto.run.reportWithheld": "Raport nie został zostawiony w zadaniu, bo było zamknięte: {steps}",
     "auto.run.taskWait": "Czeka na zadanie",
+    "auto.run.roomWait": "Czeka na miejsce",
     "auto.run.heldUntil": "Czeka do {at}",
     "auto.run.body.taskWait": "Czeka na zadanie, które można podjąć",
     "auto.run.body.taskWaitNext": "Gdy pasujące zadanie będzie można podjąć, przebieg je podejmie i pójdzie dalej sam. Aby przestać czekać, naciśnij u góry wstrzymaj lub wymuś anulowanie.",

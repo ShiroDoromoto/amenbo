@@ -1482,6 +1482,7 @@ export const ptBR: Translation = {
     "auto.run.inAction": "{step} em {action}",
     "auto.run.reportWithheld": "Relatório não deixado na tarefa, que estava fechada: {steps}",
     "auto.run.taskWait": "Aguardando tarefa",
+    "auto.run.roomWait": "Aguardando vaga",
     "auto.run.heldUntil": "Aguardando até {at}",
     "auto.run.body.taskWait": "Esperando uma tarefa que possa pegar",
     "auto.run.body.taskWaitNext": "Quando uma tarefa que corresponda puder ser pega, ela a pega e segue sozinha. Para parar de esperar, pressione pausar ou forçar cancelamento acima.",

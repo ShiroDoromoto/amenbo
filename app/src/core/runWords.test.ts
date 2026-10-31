@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AutomationRunCardDto } from "../bindings/bindings";
 import { t } from "./i18n";
-import { runSayOf } from "./runWords";
+import { roomWaitState, runSayOf } from "./runWords";
 
 /** A run as the "running" tab reads it, failed and nobody told yet. */
 function card(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
@@ -16,6 +16,7 @@ function card(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
     pauseBeforeNextTask: false,
     pausableBeforeNextTask: false,
     waiting: false,
+    waitsForRoom: false,
     stoppedReason: "crashed",
     stepName: "build",
     placement: 7,
@@ -61,6 +62,22 @@ describe("the row over a run's pane no step has arrived in", () => {
     const task = { id: 5, key: "AMB-T-5", title: "t" } as unknown as AutomationRunCardDto["task"];
     expect(runSayOf(card({ status: "running", waiting: true, task }))!.task).toBeNull();
     expect(runSayOf(card({ task }))!.task).toBe(task);
+  });
+
+  it("says a run waiting for room as waiting for room, still on its task", () => {
+    const task = { id: 5, key: "AMB-T-5", title: "t" } as unknown as AutomationRunCardDto["task"];
+    const say = runSayOf(card({ status: "running", waitsForRoom: true, task }))!;
+    expect(say.state?.word).toBe(t("auto.run.roomWait"));
+    expect(say.state?.forRoom).toBe(true);
+    expect(say.state?.status).toBe("running");
+    expect(say.task).toBe(task);
+  });
+
+  it("says a run waiting for room and asked to pause as waiting to pause", () => {
+    const asked = roomWaitState(card({ status: "running", waitsForRoom: true, pauseRequested: true }))!;
+    expect(asked.word).toBe(t("auto.run.pausing"));
+    expect(asked.forRoom).toBeUndefined();
+    expect(roomWaitState(card({ status: "running" }))!.word).toBe(t("auto.run.running"));
   });
 
   // A run asked to pause before its next task pauses on the spot if it is waiting for one; until the

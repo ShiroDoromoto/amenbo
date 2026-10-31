@@ -1469,6 +1469,7 @@ export const nl: Translation = {
     "auto.run.inAction": "{step} in {action}",
     "auto.run.reportWithheld": "Verslag niet bij de taak achtergelaten, want die was gesloten: {steps}",
     "auto.run.taskWait": "Wacht op taak",
+    "auto.run.roomWait": "Wacht op plek",
     "auto.run.heldUntil": "Wacht tot {at}",
     "auto.run.body.taskWait": "Wacht op een taak die opgepakt kan worden",
     "auto.run.body.taskWaitNext": "Zodra een passende taak opgepakt kan worden, pakt de run die op en gaat vanzelf verder. Druk bovenaan op pauzeren of geforceerd annuleren om te stoppen met wachten.",

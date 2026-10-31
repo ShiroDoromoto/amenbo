@@ -18,8 +18,9 @@
 // **A row is read by marks, not sentences**. The state is a dot in its colour and, where
 // the dot alone would not say it, a short chip beside the name; the step is the picture's own number
 // for its box and the step's name, the way the box itself reads (`./AutomationPicture`); a run waiting
-// for a task says so in the task's place, and one that simply has not taken one yet says nothing. A
-// failure nobody has acknowledged paints its whole row.
+// for a task says so in the task's place, and one that simply has not taken one yet says nothing. A run
+// waiting for room before an action that takes one run at a time says so in front of its task, which
+// it is still on. A failure nobody has acknowledged paints its whole row.
 //
 // **How far in it is names the action as well as the step, where the two differ** (`AMB-D-949`): a
 // launch opens one spot of the picture into a column of steps, so a step's name alone no longer says
@@ -99,6 +100,8 @@ export function RunLine({
   const at = run.endedAt ?? run.startedAt;
   const chip = stateChip(run, ended);
   const pausing = isPausing(run);
+  // A pause asked for lands at once on a run waiting for room, so until it does, the chip says that.
+  const forRoom = run.waitsForRoom && run.status === "running" && !pausing;
   // The step as its box reads, and the action it was opened from only where that says something
   // more — a spot whose action is one step of the same name would say the one name twice.
   const step = run.stepName === undefined
@@ -131,6 +134,12 @@ export function RunLine({
               <span className="autorun__step">
                 {no !== undefined && <span className="autopic__no">{no}</span>}
                 <span className="autorun__stepname">{step}</span>
+              </span>
+            )}
+            {forRoom && (
+              <span className="autorun__task autorun__task--wait">
+                <span aria-hidden="true">⏳</span>
+                {t("auto.run.roomWait")}
               </span>
             )}
             {/* Waiting comes first: the task a run waiting to take its next one still holds is the

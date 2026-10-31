@@ -1470,6 +1470,7 @@ export const id: Translation = {
     "auto.run.inAction": "{step} di {action}",
     "auto.run.reportWithheld": "Laporan tidak ditinggalkan di tugas karena tugas sudah ditutup: {steps}",
     "auto.run.taskWait": "Menunggu tugas",
+    "auto.run.roomWait": "Menunggu giliran",
     "auto.run.heldUntil": "Menunggu hingga {at}",
     "auto.run.body.taskWait": "Menunggu tugas yang bisa diambil",
     "auto.run.body.taskWaitNext": "Begitu ada tugas yang cocok dan bisa diambil, tugas itu diambil dan proses berlanjut sendiri. Untuk berhenti menunggu, tekan jeda atau paksa batalkan di atas.",

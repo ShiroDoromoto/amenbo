@@ -1481,6 +1481,7 @@ export const fr: Translation = {
     "auto.run.inAction": "{step} dans {action}",
     "auto.run.reportWithheld": "Rapport non laissé sur la tâche, qui était fermée : {steps}",
     "auto.run.taskWait": "En attente de tâche",
+    "auto.run.roomWait": "En attente de place",
     "auto.run.heldUntil": "En attente jusqu'à {at}",
     "auto.run.body.taskWait": "En attente d'une tâche à prendre",
     "auto.run.body.taskWaitNext": "Dès qu'une tâche correspondante peut être prise, elle la prend et continue d'elle-même. Pour arrêter d'attendre, appuyez sur mettre en pause ou forcer l’annulation en haut.",

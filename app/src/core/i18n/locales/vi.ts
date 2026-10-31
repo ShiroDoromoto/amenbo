@@ -1470,6 +1470,7 @@ export const vi: Translation = {
     "auto.run.inAction": "{step} trong {action}",
     "auto.run.reportWithheld": "Không để lại báo cáo trên việc vì việc đã đóng: {steps}",
     "auto.run.taskWait": "Chờ việc",
+    "auto.run.roomWait": "Chờ chỗ trống",
     "auto.run.heldUntil": "Đang chờ đến {at}",
     "auto.run.body.taskWait": "Đang chờ một tác vụ có thể nhận",
     "auto.run.body.taskWaitNext": "Khi có tác vụ khớp điều kiện và nhận được, lượt chạy sẽ nhận nó và tự đi tiếp. Để thôi chờ, hãy nhấn tạm dừng hoặc buộc hủy ở trên.",

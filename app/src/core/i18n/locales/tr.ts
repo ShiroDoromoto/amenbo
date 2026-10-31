@@ -1469,6 +1469,7 @@ export const tr: Translation = {
     "auto.run.inAction": "{action} içindeki {step}",
     "auto.run.reportWithheld": "Görev kapalı olduğu için rapor göreve bırakılmadı: {steps}",
     "auto.run.taskWait": "Görev bekleniyor",
+    "auto.run.roomWait": "Yer bekleniyor",
     "auto.run.heldUntil": "{at} saatine kadar bekliyor",
     "auto.run.body.taskWait": "Alınabilecek bir görev bekleniyor",
     "auto.run.body.taskWaitNext": "Uyan bir görev alınabilir olduğunda onu alır ve kendiliğinden devam eder. Beklemeyi bırakmak için yukarıdaki duraklat veya zorla iptal et düğmesine basın.",

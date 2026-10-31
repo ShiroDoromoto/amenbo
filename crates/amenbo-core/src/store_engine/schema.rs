@@ -71,8 +71,9 @@
 //! `ON UPDATE CASCADE` is uniform and harmless (an `INTEGER` key does not change in place).
 //! `attachment.target_id` is polymorphic — no `REFERENCES` can branch on a sibling `target_type`
 //! column — so no constraint holds it and the delete ops sweep it by hand. Nor does one hold
-//! `automation_run_def.placement_id` and `step_id`, which keep naming what a run's copy was taken from
-//! after it is gone, or `automation_placement_step.step_id`, which deleting a step sweeps by hand.
+//! `automation_run_def.placement_id`, `action_id` and `step_id`, which keep naming what a run's copy was
+//! taken from after it is gone, or `automation_placement_step.step_id`, which deleting a step sweeps by
+//! hand.
 //!
 //! Enforcement is per-connection (`PRAGMA foreign_keys = ON`, set by `super::engine::init`) and
 //! per-table: `CREATE TABLE IF NOT EXISTS` leaves an existing table exactly as it was, so an existing
@@ -166,8 +167,8 @@ const COUNT: &str = "BIGINT NOT NULL DEFAULT 0";
 /// on purpose — `automation_placement_step.step_id`, which deleting a step sweeps by hand.
 const KEY_REF: &str = "BIGINT NOT NULL DEFAULT 0";
 /// The nullable half of [`KEY_REF`]: a polymorphic reference that may be unset — `automation_edge.to_id`,
-/// where a line that closes or stops the picture goes nowhere. Also `automation_run_def.placement_id`
-/// and `step_id`, which keep naming the placement and the step after either is gone.
+/// where a line that closes or stops the picture goes nowhere. Also `automation_run_def.placement_id`,
+/// `action_id` and `step_id`, which keep naming the placement, its action and the step after any is gone.
 const KEY_REF_OPT: &str = "BIGINT";
 /// Fractional index: ordered by string comparison, never parsed as a number.
 const ORDER_KEY: &str = "TEXT NOT NULL DEFAULT ''";
@@ -1434,6 +1435,14 @@ datasets! {
     automation_run_def {
         run_id: fk("automation_run", "RESTRICT"),
         placement_id: col(KEY_REF_OPT),
+        // The action that placement stood on (`automation_placement.action_id`), a plain id for the
+        // reason `placement_id` is: a run still says which action it is inside once the placement is
+        // taken off. NULL on a row written before this was copied.
+        action_id: col(KEY_REF_OPT),
+        // `automation_action_version.one_at_a_time` of the version the placement stood on at launch:
+        // whether one run at a time may be inside that action. Off on a row written before this was
+        // copied.
+        one_at_a_time: bool_col,
         step_id: col(KEY_REF_OPT),
         name: col(REQ),
         prompt: col(OPT),

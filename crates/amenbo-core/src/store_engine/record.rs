@@ -814,6 +814,8 @@ pub fn automation_run_def(d: &AutomationRunDef) -> Record {
             vec![
                 ("run_id", kv(d.run_id)),
                 ("placement_id", kv_opt(&d.placement_id)),
+                ("action_id", kv_opt(&d.action_id)),
+                ("one_at_a_time", bv(d.one_at_a_time)),
                 ("step_id", kv_opt(&d.step_id)),
                 ("name", tv(&d.name)),
                 ("prompt", ov(&d.prompt)),

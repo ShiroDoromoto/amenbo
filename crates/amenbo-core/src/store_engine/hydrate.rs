@@ -750,6 +750,8 @@ pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunD
         id: get(r, C.id)?,
         run_id: get(r, C.run_id)?,
         placement_id: get(r, C.placement_id)?,
+        action_id: get(r, C.action_id)?,
+        one_at_a_time: get(r, C.one_at_a_time)?,
         step_id: get(r, C.step_id)?,
         name: get(r, C.name)?,
         prompt: get(r, C.prompt)?,

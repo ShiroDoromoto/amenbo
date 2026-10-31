@@ -2326,6 +2326,15 @@ pub struct AutomationRunDef {
     /// `None` only where an earlier build cleared it.
     #[serde(default)]
     pub placement_id: Option<i64>,
+    /// The action that placement stood on ([`AutomationPlacement::action_id`]), copied with it so a run
+    /// still says which action it is inside once the placement is taken off. `None` on a copy written
+    /// before this was copied.
+    #[serde(default)]
+    pub action_id: Option<i64>,
+    /// Whether one run at a time may be inside that action, as the version the placement stood on said
+    /// at launch ([`AutomationAction::one_at_a_time`]). Off on a copy written before this was copied.
+    #[serde(default)]
+    pub one_at_a_time: bool,
     /// Which step of the live definition this is a copy of. Kept after that step is deleted; `None`
     /// only where an earlier build cleared it.
     #[serde(default)]

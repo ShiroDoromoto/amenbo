@@ -7,7 +7,8 @@
 // while the picture is empty**, that being where there is no line to press and nowhere else to
 // start; **an action nothing opens says so**, that being what the launch check would refuse a
 // placement of it for; and **what the action is for is written when the caret leaves it**, the way the
-// automation's notes are (`AMB-D-952`); and **the head says what is saved, and saves or discards the
+// automation's notes are (`AMB-D-952`); **whether it takes one run at a time is written the moment it is
+// pressed**, with no save button of its own; and **the head says what is saved, and saves or discards the
 // draft from its presses** (`AMB-D-1005`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -104,6 +105,7 @@ function action(over: Partial<AutomationActionDetailDto> = {}): AutomationAction
     inputs: [],
     settings: [],
     heldBy: [],
+    oneAtATime: false,
     placedOn: [],
     unsaved: false,
     saveBlocks: [],
@@ -352,6 +354,25 @@ describe("the action build screen", () => {
       leave(noteBox());
     });
     expect(hoisted.editAction).toHaveBeenCalledWith(4, { note: "Takes one task" });
+  });
+
+  it("shows whether the action takes one run at a time, and writes the other answer on a press", async () => {
+    const toggle = () =>
+      buttons().find((one) => one.textContent === t("auto.actions.oneAtATimeWait"))!;
+
+    hoisted.action = action({ oneAtATime: false });
+    await render();
+    await openDeclaration();
+    expect(toggle().getAttribute("aria-pressed")).toBe("false");
+    await act(async () => toggle().click());
+    expect(hoisted.editAction).toHaveBeenCalledWith(4, { oneAtATime: true });
+
+    hoisted.editAction.mockClear();
+    hoisted.action = action({ oneAtATime: true });
+    await render();
+    expect(toggle().getAttribute("aria-pressed")).toBe("true");
+    await act(async () => toggle().click());
+    expect(hoisted.editAction).toHaveBeenCalledWith(4, { oneAtATime: false });
   });
 
   it("writes nothing when the caret leaves a note it did not change", async () => {

@@ -1130,6 +1130,8 @@ export const de: Translation = {
     "auto.actions.reachProject": "Dieses Projekt",
     "auto.actions.reachAnyProject": "Projekt",
     "auto.actions.reachBuiltin": "Integriert",
+    "auto.actions.oneAtATime": "Einzeln",
+    "auto.actions.oneAtATimeWait": "Warten, solange ein anderer Lauf drin ist",
     "auto.bi.takeTask.name": "Aufgabe übernehmen",
     "auto.bi.takeTask.does": "Sucht nicht begonnene Aufgaben, die zum Filter passen und übernommen werden können, in dessen Reihenfolge, reserviert die erste mögliche und setzt sie auf „In Arbeit“",
     "auto.bi.takeTask.filter": "Filter",

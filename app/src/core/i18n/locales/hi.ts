@@ -1126,6 +1126,8 @@ export const hi: Translation = {
     "auto.actions.reachProject": "यह प्रोजेक्ट",
     "auto.actions.reachAnyProject": "प्रोजेक्ट",
     "auto.actions.reachBuiltin": "अंतर्निहित",
+    "auto.actions.oneAtATime": "एक बार में एक",
+    "auto.actions.oneAtATimeWait": "जब तक कोई दूसरा रन अंदर है, रुकें",
     "auto.bi.takeTask.name": "कार्य लें",
     "auto.bi.takeTask.does": "फ़िल्टर से मेल खाने वाले, शुरू न हुए और लिए जा सकने वाले कार्य उसके क्रम में ढूँढता है, पहला संभव कार्य आरक्षित करके उसे चल रहा है में बदलता है",
     "auto.bi.takeTask.filter": "फ़िल्टर",

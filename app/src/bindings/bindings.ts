@@ -306,6 +306,11 @@ builtin?: string,
  */
 draft?: boolean, 
 /**
+ * **One run at a time**: a run reaching this action while another is inside it waits until that
+ * one leaves. The value drawn is the one being written — the draft's, or the saved version's.
+ */
+oneAtATime: boolean, 
+/**
  * How many automations place it: what a rewrite here reaches.
  */
 usedBy: number, 

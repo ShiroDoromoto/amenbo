@@ -1128,6 +1128,8 @@ export const zhHant: Translation = {
     "auto.actions.reachProject": "本專案",
     "auto.actions.reachAnyProject": "專案",
     "auto.actions.reachBuiltin": "內建",
+    "auto.actions.oneAtATime": "一次一個",
+    "auto.actions.oneAtATimeWait": "有其他執行在內時等待",
     "auto.bi.takeTask.name": "領取任務",
     "auto.bi.takeTask.does": "尋找符合篩選條件、未開始且可領取的任務，依設定的順序保留第一個能領取的並設為進行中",
     "auto.bi.takeTask.filter": "篩選",

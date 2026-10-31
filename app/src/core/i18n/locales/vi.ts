@@ -1127,6 +1127,8 @@ export const vi: Translation = {
     "auto.actions.reachProject": "Dự án này",
     "auto.actions.reachAnyProject": "Dự án",
     "auto.actions.reachBuiltin": "Tích hợp sẵn",
+    "auto.actions.oneAtATime": "Mỗi lần một",
+    "auto.actions.oneAtATimeWait": "Chờ khi có lần chạy khác đang ở bên trong",
     "auto.bi.takeTask.name": "Nhận việc",
     "auto.bi.takeTask.does": "Tìm các việc chưa bắt đầu và có thể nhận khớp bộ lọc theo thứ tự nó đặt, giữ chỗ việc đầu tiên có thể và chuyển sang đang làm",
     "auto.bi.takeTask.filter": "Bộ lọc",

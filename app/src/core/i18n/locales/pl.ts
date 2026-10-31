@@ -1143,6 +1143,8 @@ export const pl: Translation = {
     "auto.actions.reachProject": "Ten projekt",
     "auto.actions.reachAnyProject": "Projektu",
     "auto.actions.reachBuiltin": "Wbudowana",
+    "auto.actions.oneAtATime": "Jedno naraz",
+    "auto.actions.oneAtATimeWait": "Czekaj, gdy inne uruchomienie jest w środku",
     "auto.bi.takeTask.name": "Pobierz zadanie",
     "auto.bi.takeTask.does": "Szuka niezaczętych zadań pasujących do filtra, które można pobrać, w jego kolejności, rezerwuje pierwsze możliwe i przestawia je na W toku",
     "auto.bi.takeTask.filter": "Filtr",

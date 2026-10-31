@@ -3643,6 +3643,9 @@ pub struct AutomationActionDetailDto {
     /// finished nor given up yet. Absent on every other action.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) draft: bool,
+    /// **One run at a time**: a run reaching this action while another is inside it waits until that
+    /// one leaves. The value drawn is the one being written — the draft's, or the saved version's.
+    pub(crate) one_at_a_time: bool,
     /// How many automations place it: what a rewrite here reaches.
     #[ts(type = "number")]
     pub(crate) used_by: usize,

@@ -362,22 +362,25 @@ export async function discardAutomationAction(id: number): Promise<void> {
 }
 
 /**
- * Rename a library action, or rewrite what it is for. The name and the note are all that is the
- * action's own: the prompt and the flags belong to its steps (`editAutomationStep`), and who carries
- * each step out to where the action is placed (`chooseAutomationAgent`).
+ * Rename a library action, rewrite what it is for, or say whether it takes one run at a time. These
+ * are all that is the action's own: the prompt and the flags belong to its steps
+ * (`editAutomationStep`), and who carries each step out to where the action is placed
+ * (`chooseAutomationAgent`).
  *
  * **Every picture standing on this action reads the new name at once**, a placement pointing at it
- * by key — which is what a library is for. The note reaches no launch (`AMB-D-952`).
+ * by key — which is what a library is for. The note reaches no launch (`AMB-D-952`). One run at a
+ * time goes into the draft, and reaches a placement once the action is saved.
  */
 export async function editAutomationAction(
   id: number,
-  patch: { name?: string; note?: string },
+  patch: { name?: string; note?: string; oneAtATime?: boolean },
 ): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_action_edit", {
     id,
     name: patch.name ?? null,
     note: patch.note ?? null,
+    oneAtATime: patch.oneAtATime ?? null,
   });
 }
 

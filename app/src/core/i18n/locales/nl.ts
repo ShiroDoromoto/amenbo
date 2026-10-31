@@ -1126,6 +1126,8 @@ export const nl: Translation = {
     "auto.actions.reachProject": "Dit project",
     "auto.actions.reachAnyProject": "Van een project",
     "auto.actions.reachBuiltin": "Ingebouwd",
+    "auto.actions.oneAtATime": "Eén tegelijk",
+    "auto.actions.oneAtATimeWait": "Wachten zolang een andere run erin zit",
     "auto.bi.takeTask.name": "Taak oppakken",
     "auto.bi.takeTask.does": "Zoekt taken die niet begonnen zijn, bij het filter passen en opgepakt kunnen worden, in de volgorde die het aangeeft, reserveert de eerste die kan en zet die op bezig",
     "auto.bi.takeTask.filter": "Filter",

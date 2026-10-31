@@ -1123,6 +1123,8 @@ export const ko: Translation = {
     "auto.actions.reachProject": "이 프로젝트",
     "auto.actions.reachAnyProject": "프로젝트",
     "auto.actions.reachBuiltin": "기본 제공",
+    "auto.actions.oneAtATime": "한 번에 하나",
+    "auto.actions.oneAtATimeWait": "다른 실행이 안에 있는 동안 기다림",
     "auto.bi.takeTask.name": "작업 가져오기",
     "auto.bi.takeTask.does": "필터에 맞는 시작 전 작업 중 가져올 수 있는 것을 정렬 순서대로 찾아, 가장 앞의 가능한 작업을 예약하고 진행 중으로 바꾼다",
     "auto.bi.takeTask.filter": "필터",

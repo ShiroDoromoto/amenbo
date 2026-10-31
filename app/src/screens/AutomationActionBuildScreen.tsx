@@ -499,6 +499,21 @@ export function AutomationActionBuildScreen({
                   <ReachChip global={action.global} />
                 </span>
               </div>
+              <div className="autostep__pair">
+                <span className="autostep__label">{t("auto.actions.oneAtATime")}</span>
+                <span>
+                  <button
+                    type="button"
+                    className={action.oneAtATime ? "autogive__tog autogive__tog--on" : "autogive__tog"}
+                    aria-pressed={action.oneAtATime}
+                    onClick={() =>
+                      void run(editAutomationAction(action.id, { oneAtATime: !action.oneAtATime }))
+                    }
+                  >
+                    {t("auto.actions.oneAtATimeWait")}
+                  </button>
+                </span>
+              </div>
               <Sec title={t("auto.act.placedOn")}>
                 <PlacedOn placedOn={action.placedOn} latest={action.saved?.version} onGoTo={onGoToAutomation} />
               </Sec>

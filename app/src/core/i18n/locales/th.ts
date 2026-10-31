@@ -1127,6 +1127,8 @@ export const th: Translation = {
     "auto.actions.reachProject": "โปรเจกต์นี้",
     "auto.actions.reachAnyProject": "โปรเจกต์",
     "auto.actions.reachBuiltin": "ในตัว",
+    "auto.actions.oneAtATime": "ทีละหนึ่ง",
+    "auto.actions.oneAtATimeWait": "รอขณะที่มีการรันอื่นอยู่ข้างใน",
     "auto.bi.takeTask.name": "รับงาน",
     "auto.bi.takeTask.does": "หางานที่ยังไม่เริ่มและรับได้ซึ่งตรงกับตัวกรองตามลำดับที่กำหนด จองงานแรกที่ทำได้และเปลี่ยนเป็นกำลังทำ",
     "auto.bi.takeTask.filter": "ตัวกรอง",

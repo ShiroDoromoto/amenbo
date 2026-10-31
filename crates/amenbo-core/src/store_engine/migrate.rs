@@ -1251,7 +1251,34 @@ pub const STEPS: &[Step] = &[
         // already saved is never rewritten, so it keeps what it meant: runs side by side.
         apply: Apply::Custom(let_an_action_take_one_run_at_a_time),
     },
+    Step {
+        to: 101,
+        name: "add automation_run_def.action_id and automation_run_def.one_at_a_time, the action a run's copy stood on and whether it takes one run at a time",
+        // **Left NULL and off.** A copy written before this held is not filled in from the placement it
+        // names: that placement may be gone, or stand on another action by now, and a copy says only
+        // what it was taken with. Off is what every action meant before v100.
+        apply: Apply::Custom(copy_the_action_into_a_run),
+    },
 ];
+
+/// v101: `automation_run_def.action_id` and `automation_run_def.one_at_a_time`, copied from the
+/// placement's action at launch.
+///
+/// **Added, not rebuilt**, with v99's guard: each is appended only where it is missing.
+fn copy_the_action_into_a_run(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let columns = column_names(tx, "automation_run_def")?;
+    if !columns.iter().any(|c| c == "action_id") {
+        tx.execute_batch("ALTER TABLE automation_run_def ADD COLUMN action_id BIGINT;")?;
+    }
+    if !columns.iter().any(|c| c == "one_at_a_time") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run_def ADD COLUMN one_at_a_time BOOLEAN NOT NULL DEFAULT 0 \
+             CHECK(one_at_a_time IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
 
 /// v100: `automation_action.one_at_a_time`, and the same column on `automation_action_version`, which
 /// copies it when the action is saved.
@@ -10858,6 +10885,40 @@ mod tests {
         assert_eq!((action, version), (false, false), "both start off");
         engine.conn().execute("UPDATE automation_action SET one_at_a_time = 1 WHERE id = 1", []).unwrap();
         let refused = engine.conn().execute("UPDATE automation_action_version SET one_at_a_time = 2", []);
+        assert!(refused.is_err(), "only 0 and 1");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v101: a run's copy written before the step names no action and is off, and both can be written.
+    #[test]
+    fn a_run_copy_written_before_v101_names_no_action() {
+        let dir = scratch("run-def-action");
+        let engine = store_at(&dir, 100);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, placement_id, name) VALUES (1, 1, 7, 'one');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let (action, one): (Option<i64>, bool) = engine
+            .conn()
+            .query_row("SELECT action_id, one_at_a_time FROM automation_run_def WHERE id = 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!((action, one), (None, false), "not filled in from the placement");
+        engine
+            .conn()
+            .execute("UPDATE automation_run_def SET action_id = 9, one_at_a_time = 1 WHERE id = 1", [])
+            .unwrap();
+        let refused = engine.conn().execute("UPDATE automation_run_def SET one_at_a_time = 2", []);
         assert!(refused.is_err(), "only 0 and 1");
         std::fs::remove_dir_all(&dir).ok();
     }

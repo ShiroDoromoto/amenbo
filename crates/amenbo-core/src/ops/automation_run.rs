@@ -24,8 +24,9 @@
 //!
 //! **A run stops reading the definition the moment it starts.** Every step inside every placed action,
 //! as the version the placement stands on holds it, is copied into `automation_run_def` at launch — one
-//! column of them, each saying which placement it was opened from, with the wires joined to each input
-//! resolved into it — so editing the automation afterwards cannot change what a run already under way is
+//! column of them, each saying which placement it was opened from, which action that placement stood on
+//! and whether that action takes one run at a time, with the wires joined to each input resolved into
+//! it — so editing the automation afterwards cannot change what a run already under way is
 //! doing, and a run stays readable months later when the automation it came from has moved on. The
 //! exceptions are a run with no task in hand: one paused before its next task, which picking up copies
 //! the automation down onto again ([`copy_down_again`]), and one standing at its entry, copied down again
@@ -2048,6 +2049,8 @@ fn snapshot(
         id: read::next_id(conn, "automation_run_def")?,
         run_id,
         placement_id: Some(placement.id),
+        action_id: Some(def.action_id),
+        one_at_a_time: def.one_at_a_time,
         step_id: Some(step.id),
         name: step.name.clone(),
         prompt: step.builtin.is_none().then(|| step.prompt.clone()),
@@ -3665,6 +3668,43 @@ mod tests {
 
             stand_on(None);
             assert!(!checked(tx, &automation).is_empty(), "the action as it is written now has both");
+        });
+    }
+
+    /// **A copy names the action its placement stood on, and whether one run at a time may be inside
+    /// it, as the version stood on says** — and keeps both once the placement is taken off.
+    #[test]
+    fn a_copy_keeps_the_action_and_its_one_run_at_a_time_after_the_placement_goes() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            automation::action_set_one_at_a_time(tx, action.id, true).expect("turn it on");
+            automation::action_save(tx, action.id).expect("save the action");
+            tx.conn()
+                .execute("UPDATE automation_placement SET version = 1 WHERE id = ?1", [placement.id])
+                .expect("stand the placement on version 1");
+            automation::action_set_one_at_a_time(tx, action.id, false).expect("turned off since");
+
+            let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+            let copy_of_it = |tx: &WriteTx<'_>| {
+                read::automation_run_defs_of(tx.conn(), run.id)
+                    .expect("defs")
+                    .into_iter()
+                    .find(|d| d.placement_id == Some(placement.id))
+                    .expect("the placement's copy")
+            };
+            let copy = copy_of_it(tx);
+            assert_eq!(copy.action_id, Some(action.id));
+            assert!(copy.one_at_a_time, "as version 1 holds it, not as the action is written now");
+            let others = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            assert!(
+                others.iter().filter(|d| d.placement_id != Some(placement.id)).all(|d| !d.one_at_a_time),
+                "the take's and the close's are off",
+            );
+
+            automation::placement_delete(tx, placement.id).expect("take the placement off");
+            let copy = copy_of_it(tx);
+            assert_eq!(copy.action_id, Some(action.id), "kept after the placement goes");
+            assert!(copy.one_at_a_time, "kept after the placement goes");
         });
     }
 

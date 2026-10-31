@@ -1469,6 +1469,7 @@ export const hi: Translation = {
     "auto.run.inAction": "{action} का {step}",
     "auto.run.reportWithheld": "कार्य बंद था, इसलिए रिपोर्ट उस पर नहीं छोड़ी गई: {steps}",
     "auto.run.taskWait": "कार्य की प्रतीक्षा",
+    "auto.run.roomWait": "जगह की प्रतीक्षा",
     "auto.run.heldUntil": "{at} तक प्रतीक्षा",
     "auto.run.body.taskWait": "लेने योग्य कार्य की प्रतीक्षा",
     "auto.run.body.taskWaitNext": "जब कोई मेल खाता कार्य लिया जा सकेगा, यह उसे लेकर अपने आप आगे बढ़ेगा। प्रतीक्षा रोकने के लिए ऊपर रोकें या तुरंत रद्द करें दबाएँ।",

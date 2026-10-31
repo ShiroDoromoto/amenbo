@@ -857,7 +857,13 @@ pausableBeforeNextTask: boolean,
  * **Whether it stands before a built-in that is waiting** for something to turn up — still
  * `running`, with nothing under way (`AMB-D-969`).
  */
-waiting: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | "failed_check" | null, 
+waiting: boolean, 
+/**
+ * **Whether it stands before an action that takes one run at a time, waiting for room** — still
+ * `running`, with nothing under way, while another run is inside that action or came to it first
+ * ([`amenbo_core::ops::automation_run::waits_for_room`]). Never at once with [`Self::waiting`].
+ */
+waitsForRoom: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | "failed_check" | null, 
 /**
  * **The saved version of the automation its copy was taken from** (`AMB-D-1015`) — the newest
  * copy, which is what it goes on from and what it last took up at its entry. Absent where that

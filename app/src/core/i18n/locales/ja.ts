@@ -1475,6 +1475,7 @@ export const ja: Translation = {
     "auto.run.inAction": "{action} の {step}",
     "auto.run.reportWithheld": "タスクが閉じていたので、報告を残さなかった：{steps}",
     "auto.run.taskWait": "タスク待ち",
+    "auto.run.roomWait": "空き待ち",
     "auto.run.heldUntil": "{at} まで待つ",
     "auto.run.body.taskWait": "着手できるタスクを待っています",
     "auto.run.body.taskWaitNext": "条件に合うタスクが着手できるようになると、自動で着手して進みます。待つのをやめるときは、上の一時停止か強制キャンセルを押します。",

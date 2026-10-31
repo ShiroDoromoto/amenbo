@@ -1473,6 +1473,7 @@ export const de: Translation = {
     "auto.run.inAction": "{step} in {action}",
     "auto.run.reportWithheld": "Bericht nicht an der Aufgabe hinterlassen, da sie geschlossen war: {steps}",
     "auto.run.taskWait": "Wartet auf Aufgabe",
+    "auto.run.roomWait": "Wartet auf Platz",
     "auto.run.heldUntil": "Wartet bis {at}",
     "auto.run.body.taskWait": "Wartet auf eine Aufgabe, die übernommen werden kann",
     "auto.run.body.taskWaitNext": "Sobald eine passende Aufgabe übernommen werden kann, übernimmt der Lauf sie und geht von selbst weiter. Zum Beenden des Wartens oben Pausieren oder Sofort abbrechen drücken.",

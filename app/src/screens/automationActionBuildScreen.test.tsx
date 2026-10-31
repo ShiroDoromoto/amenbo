@@ -422,6 +422,7 @@ function heldRun(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     pauseBeforeNextTask: false,
     pausableBeforeNextTask: false,
     waiting: false,
+    waitsForRoom: false,
     stepsDone: 1,
     reportWithheld: [],
     acknowledged: false,

@@ -105,6 +105,19 @@ export function waitingState(run: AutomationRunCardDto | undefined): RunState | 
 }
 
 /**
+ * **Where a run stands, as its pane says it, where it may be waiting for room** — a run kept out of an
+ * action that takes one run at a time says so in place of running, in the word the running tab says
+ * it with (`auto.run.roomWait`). Every other run, and one asked to pause, is said as `runStateOf` says it.
+ */
+export function roomWaitState(run: AutomationRunCardDto | undefined): RunState | null {
+  const state = runStateOf(run);
+  if (run === undefined || state === null || !run.waitsForRoom || state.status !== "running" || isPausing(run)) {
+    return state;
+  }
+  return { ...state, word: t("auto.run.roomWait"), forRoom: true };
+}
+
+/**
  * **The row over a run's pane, said off the run alone** — for a pane no step has arrived in
  * (`AMB-T-5635`). A pane kept by the store comes back when the app does, and a run that is held or
  * failed opens no terminal to be told by: what the row says is the step the run is on, or the last one
@@ -134,6 +147,6 @@ export function runSayOf(run: AutomationRunCardDto | undefined): Say | null {
     action: run.actionName === undefined ? null : builtinWord(run.builtin, run.actionName),
     // A run waiting for the next task still carries the one it closed before (`../shell/WorkspaceFace`).
     task: run.waiting ? null : run.task ?? null,
-    state: run.waiting ? waitingState(run) : runStateOf(run),
+    state: run.waiting ? waitingState(run) : roomWaitState(run),
   };
 }

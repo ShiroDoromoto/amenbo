@@ -55,6 +55,7 @@ function run(id: number): AutomationRunCardDto {
     pauseBeforeNextTask: false,
     pausableBeforeNextTask: false,
     waiting: false,
+    waitsForRoom: false,
     stepsDone: 3,
     reportWithheld: id === 1000 ? hoisted.withheld : [],
     acknowledged: false,

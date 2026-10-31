@@ -1716,6 +1716,7 @@ const ui = {
   "auto.run.inAction": "{step} in {action}",
   "auto.run.reportWithheld": "Report kept off the task, which was closed: {steps}",
   "auto.run.taskWait": "Waiting for a task",
+  "auto.run.roomWait": "Waiting for room",
   "auto.run.heldUntil": "Waiting until {at}",
   "auto.run.body.taskWait": "Waiting for a task it can take",
   "auto.run.body.taskWaitNext": "When a task that matches can be taken, it takes it and goes on by itself. To stop waiting, press pause or force cancel above.",

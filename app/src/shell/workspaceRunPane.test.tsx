@@ -185,6 +185,7 @@ function runCard(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     pauseBeforeNextTask: false,
     pausableBeforeNextTask: false,
     waiting: false,
+    waitsForRoom: false,
     stepName: "取る",
     stepsDone: 1,
     reportWithheld: [],
@@ -341,6 +342,19 @@ describe("what the row above a run's pane says, and what closing it does", () =>
     expect(panes()).toHaveLength(1);
     expect(hoisted.opened).toHaveLength(openings);
     expect(hoisted.ended).toEqual([]);
+  });
+
+  it("says a run waiting for room before an action that takes one run at a time is waiting for room", async () => {
+    // The run is still running, so the mark glows, and the chip says what it is doing (`AMB-D-1010`).
+    // It is still on its task, which the row goes on naming.
+    hoisted.cards = [runCard({ waitsForRoom: true })];
+    await mount();
+    await arrive();
+
+    expect(q(".plate__state")[0]?.hidden).toBe(false);
+    expect(q(".plate__state")[0]?.textContent).toBe(t("auto.run.roomWait"));
+    expect(q(".plate__auto")[0]?.dataset.run).toBe("on");
+    expect(q(".plate-run__task")[0]?.textContent).toBe("AMB-T-5252");
   });
 
   it("says nothing of the run's state before the run has been read", async () => {

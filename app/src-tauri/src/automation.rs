@@ -1860,6 +1860,8 @@ fn run_card(
         )?,
         waiting: run.status == amenbo_core::model::AutomationRunStatus::Running
             && amenbo_core::ops::automation_run::is_waiting(conn, run.id)?,
+        waits_for_room: run.status == amenbo_core::model::AutomationRunStatus::Running
+            && amenbo_core::ops::automation_run::waits_for_room(conn, run.id)?.is_some(),
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
         version,
         step_name,

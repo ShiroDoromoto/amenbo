@@ -898,6 +898,7 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     pauseBeforeNextTask: false,
     pausableBeforeNextTask: false,
     waiting: false,
+    waitsForRoom: false,
     stepsDone: 2,
     reportWithheld: [],
     acknowledged: false,

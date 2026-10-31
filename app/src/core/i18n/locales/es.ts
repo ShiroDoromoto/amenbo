@@ -1481,6 +1481,7 @@ export const es: Translation = {
     "auto.run.inAction": "{step} en {action}",
     "auto.run.reportWithheld": "Informe no dejado en la tarea porque estaba cerrada: {steps}",
     "auto.run.taskWait": "Esperando tarea",
+    "auto.run.roomWait": "Esperando sitio",
     "auto.run.heldUntil": "Esperando hasta {at}",
     "auto.run.body.taskWait": "Esperando una tarea que pueda tomar",
     "auto.run.body.taskWaitNext": "Cuando una tarea que coincida pueda tomarse, la toma y sigue por sí sola. Para dejar de esperar, pulsa pausar o forzar cancelación arriba.",

@@ -1486,6 +1486,7 @@ export const ru: Translation = {
     "auto.run.inAction": "{step} в {action}",
     "auto.run.reportWithheld": "Отчёт не оставлен в задаче, так как она была закрыта: {steps}",
     "auto.run.taskWait": "Ждёт задачу",
+    "auto.run.roomWait": "Ждёт места",
     "auto.run.heldUntil": "Ожидание до {at}",
     "auto.run.body.taskWait": "Ждёт задачу, которую можно взять",
     "auto.run.body.taskWaitNext": "Когда подходящую задачу можно будет взять, запуск возьмёт её и пойдёт дальше сам. Чтобы перестать ждать, нажмите наверху «Приостановить» или «Отменить сразу».",

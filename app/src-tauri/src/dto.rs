@@ -4387,6 +4387,10 @@ pub struct AutomationRunCardDto {
     /// **Whether it stands before a built-in that is waiting** for something to turn up — still
     /// `running`, with nothing under way (`AMB-D-969`).
     pub(crate) waiting: bool,
+    /// **Whether it stands before an action that takes one run at a time, waiting for room** — still
+    /// `running`, with nothing under way, while another run is inside that action or came to it first
+    /// ([`amenbo_core::ops::automation_run::waits_for_room`]). Never at once with [`Self::waiting`].
+    pub(crate) waits_for_room: bool,
     #[ts(type = "\"crashed\" | \"max_times\" | \"no_agent\" | \"no_input\" | \"no_way_on\" | \"halted\" | \"left_task_open\" | \"failed_check\" | null")]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

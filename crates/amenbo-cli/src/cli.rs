@@ -1974,7 +1974,8 @@ pub enum AutomationCmd {
     /// Amenbo's built-ins: steps it carries out itself, with what each does, the settings it reads, what
     /// it takes in and the ways out it leaves by. They are read, placed and put in, never edited
     BuiltinList,
-    /// Rename a library action, or rewrite what it is for (only the given fields change)
+    /// Rename a library action, rewrite what it is for, or say whether it takes one run at a time (only
+    /// the given fields change)
     ActionUpdate {
         /// action id
         id: i64,
@@ -1983,6 +1984,10 @@ pub enum AutomationCmd {
         /// what it is for, in Markdown — shown where it is built, never carried into a launch
         #[arg(long)]
         note: Option<String>,
+        /// `on`: a run reaching it waits while another run is inside it; `off`: runs go in side by side.
+        /// Kept in a version, so it lands in the draft
+        #[arg(long, value_name = "on|off", value_parser = ["on", "off"])]
+        one_at_a_time: Option<String>,
     },
     /// Name the step a placement of this action opens first, or clear it
     ActionEntrySet {

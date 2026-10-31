@@ -611,11 +611,27 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
             }
         }
-        AutomationCmd::ActionUpdate { id, name, note } => {
+        AutomationCmd::ActionUpdate { id, name, note, one_at_a_time } => {
             let note = body_arg_opt(note)?;
-            let a =
-                store.automation_action_update(id, name.as_deref(), note.as_deref()).map_err(CliError::from)?;
-            write_envelope(flags, "automation.action-update", "automation_action", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated action: {} ({})", a.name, a.id));
+            let one_at_a_time = one_at_a_time.map(|v| v == "on");
+            // A name and a note hold at once; whether it takes one run at a time is kept in a version,
+            // so that one goes into the draft and the answer says so. Two writes, the flag's last.
+            if one_at_a_time.is_none() || name.is_some() || note.is_some() {
+                let a = store
+                    .automation_action_update(id, name.as_deref(), note.as_deref())
+                    .map_err(CliError::from)?;
+                if one_at_a_time.is_none() {
+                    write_envelope(flags, "automation.action-update", "automation_action", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated action: {} ({})", a.name, a.id));
+                }
+            }
+            if let Some(on) = one_at_a_time {
+                let a = store.automation_action_set_one_at_a_time(id, on).map_err(CliError::from)?;
+                let line = match a.one_at_a_time {
+                    true => format!("✓ Action {} takes one run at a time", a.id),
+                    false => format!("✓ Action {} lets runs in side by side", a.id),
+                };
+                write_draft(flags, "automation.action-update", "automation_action", serde_json::to_value(&a).unwrap(), Some(vec!["one_at_a_time".to_string()]), line, Some(Draft::Action(a.id)));
+            }
         }
         AutomationCmd::ActionEntrySet { id, step, clear } => {
             if step.is_none() && !clear {

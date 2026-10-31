@@ -937,6 +937,50 @@ fn a_rewrite_names_the_draft_it_went_into_and_how_to_save_it() {
     assert!(shelved.get("draft").is_none(), "{shelved}");
 }
 
+/// **`action-update --one-at-a-time` says whether an action takes one run at a time.** It is kept in
+/// a version, so the answer names the action's draft and `action-save` puts it in the next version;
+/// `off` turns it back. A built-in's action is Amenbo's, so it is refused there.
+#[test]
+fn an_action_is_set_to_take_one_run_at_a_time_in_its_draft() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let (action, step) = an_action(&cli, &p, "one", "do it");
+    cli.json(&["automation", "edge-add", "--in-action", "--from", &format!("{step}:"), "--exit-to", "--json"]);
+
+    let (told, _) = cli.run(&["automation", "action-update", &action, "--one-at-a-time", "on"]);
+    assert!(told.contains(&format!("Action {action} takes one run at a time")), "{told}");
+    assert!(told.contains(&format!("`amenbo automation action-save {action}`")), "{told}");
+    let (inside, _) = cli.run(&["automation", "action-show", &action]);
+    assert!(inside.contains("one run at a time — "), "{inside}");
+
+    let first = cli.json(&["automation", "action-save", &action, "--json"]);
+    assert_eq!(first["automation_action_version"]["version"].as_i64(), Some(1), "{first}");
+    let saved = cli.json(&["automation", "action-show", &action, "--saved", "--json"]);
+    assert_eq!(saved["action"]["one_at_a_time"], serde_json::json!(true), "the version holds it: {saved}");
+
+    let off = cli.json(&["automation", "action-update", &action, "--one-at-a-time", "off", "--json"]);
+    assert_eq!(off["automation_action"]["one_at_a_time"], serde_json::json!(false), "{off}");
+    assert_eq!(off["draft"]["kind"].as_str(), Some("action"), "{off}");
+    assert_eq!(off["draft"]["save"].as_str(), Some(format!("amenbo automation action-save {action}").as_str()));
+    let saved = cli.json(&["automation", "action-show", &action, "--saved", "--json"]);
+    assert_eq!(saved["action"]["one_at_a_time"], serde_json::json!(true), "the saved version is untouched: {saved}");
+    let second = cli.json(&["automation", "action-save", &action, "--json"]);
+    assert_eq!(second["automation_action_version"]["version"].as_i64(), Some(2), "{second}");
+    let saved = cli.json(&["automation", "action-show", &action, "--saved", "--json"]);
+    assert_eq!(saved["action"]["one_at_a_time"], serde_json::json!(false), "{saved}");
+
+    let both = cli.json(&["automation", "action-update", &action, "--name", "uno", "--one-at-a-time", "on", "--json"]);
+    assert_eq!(both["automation_action"]["name"].as_str(), Some("uno"), "{both}");
+    assert_eq!(both["automation_action"]["one_at_a_time"], serde_json::json!(true), "{both}");
+
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    an_entry(&cli, &a, "take_task");
+    let builtin = id_str(&cli.json(&["automation", "show", &a, "--json"])["placements"][0]["placement"]["action_id"]);
+    let (err, code) = cli.run_err(&["automation", "action-update", &builtin, "--one-at-a-time", "on", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("built into Amenbo"), "{err}");
+}
+
 /// A built-in's action is Amenbo's, one version already, so its placement is not moved and the
 /// action is neither saved nor thrown back by hand.
 #[test]

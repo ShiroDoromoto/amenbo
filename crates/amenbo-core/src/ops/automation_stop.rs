@@ -25,6 +25,15 @@
 //! the run at once and cuts nothing off. A run still going is refused: pause it first, or force-cancel
 //! it ([`stop`]), which ends it where it stands.
 //!
+//! **A run waiting for room in an action that takes one run at a time** is `running` with nothing
+//! under way ([`crate::ops::automation_run::waits_for_room`]). Pausing it takes hold at once, since it
+//! is not inside the action, and canceling it is then what canceling any paused run is. The action it
+//! waits on is freed by the run inside: by leaving it, by pausing before its next task, or by ending,
+//! whichever road that takes. A run paused at the end of an action has left it; one paused on a
+//! built-in that waits inside one still holds it, since picking it up goes on from there. Nothing is
+//! written for the line, so nothing here has a line to keep: each look reads it off the runs as they
+//! stand.
+//!
 //! **Paused holds its task.** The work is half done and nobody else should take it. Stopping does the
 //! opposite — hands the task back to `todo` — because a run that was cut off left no one carrying it.
 //! A run that stopped to call a person also gives the task to the human, with the report of the step
@@ -357,12 +366,20 @@ fn why(ending: Ending) -> &'static str {
 
 /// **Ask a run to pause.** It stops at the end of the action under way, not in the middle of one —
 /// nor between two steps of one (`AMB-D-1002`).
+///
+/// **A run waiting for room in an action that takes one run at a time is paused at once**
+/// ([`Paused::Now`]): it has not gone into the action, so there is nothing under way to wait out, and
+/// it leaves the line. Picked up again, it comes back to the place it had
+/// ([`crate::ops::automation_run::room_for`]).
 pub fn pause(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
     let before = live_run(tx, run_id)?;
     match before.status {
         AutomationRunStatus::Running => {
             if before.pause_requested {
                 return Ok(Paused::Asked(before));
+            }
+            if crate::ops::automation_run::waits_for_room(tx.conn(), run_id)?.is_some() {
+                return Ok(Paused::Now(settle(tx, before, AutomationPauseKind::EndOfAction)?));
             }
             let now = Timestamp::now();
             let mut after = before.clone();
@@ -386,8 +403,9 @@ pub fn pause(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
 /// **Ask a run to pause before it takes its next task** (`AMB-D-1019`). It finishes the task it is on
 /// and pauses where it next comes to the built-in that takes one, without taking it.
 ///
-/// A run waiting there for a task to turn up is paused at once ([`Paused::Now`]): it holds no task, and
-/// its next look would only pause it. A run already asked for either pause is answered as it stands,
+/// A run waiting there for a task to turn up, or for room in the action that step is the first of, is
+/// paused at once ([`Paused::Now`]): it holds no task, and its next look would only pause it. A run
+/// already asked for either pause is answered as it stands,
 /// still asked: the request is not taken back, and one asked to pause at the end of its action stops
 /// sooner. A run that takes no tasks is refused, having no task boundary to stop at.
 pub fn pause_run_before_next_task(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
@@ -419,11 +437,12 @@ pub fn pause_run_before_next_task(tx: &WriteTx<'_>, run_id: i64) -> Result<Pause
     }
 }
 
-/// Whether this run stands waiting at the built-in that takes a task, for one to turn up.
+/// Whether this run stands waiting at the built-in that takes a task — for one to turn up, or for room
+/// in the action it is the first step of.
 fn waits_to_take_a_task(conn: &Connection, run_id: i64) -> Result<bool> {
-    use crate::ops::automation_run::{is_waiting, next_def, Waiting};
+    use crate::ops::automation_run::{is_waiting, next_def, waits_for_room, Waiting};
     let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(false) };
-    Ok(takes_a_task(&def) && is_waiting(conn, run_id)?)
+    Ok(takes_a_task(&def) && (is_waiting(conn, run_id)? || waits_for_room(conn, run_id)?.is_some()))
 }
 
 /// **Whether asking a run to pause before its next task would do anything** (`AMB-D-1019`): it is
@@ -650,6 +669,11 @@ pub fn step_ended(tx: &WriteTx<'_>, run_step_id: i64) -> Result<Option<Ended>> {
 ///
 /// It answers what it stopped, in id order, so a face can say how many runs did not survive the
 /// restart rather than leaving somebody to notice on their own.
+///
+/// **A run waiting for room in an action fails with the rest**: it is `running` too, and its line is
+/// read off the runs, not kept, so there is no line to clear. A paused run is left as it is — one
+/// paused inside an action still holds it after the restart, and one paused while waiting comes back
+/// to its place when it is picked up.
 pub fn sweep(tx: &WriteTx<'_>) -> Result<Vec<AutomationRun>> {
     let caught = read::automation_run_ids_running(tx.conn())?;
     let mut stopped = Vec::with_capacity(caught.len());
@@ -755,6 +779,7 @@ mod tests {
             Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
+            Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
         }
     }
 
@@ -1652,6 +1677,7 @@ mod tests {
             Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
+            Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
         }
     }
 

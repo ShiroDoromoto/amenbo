@@ -2444,14 +2444,15 @@ pub enum AutomationCmd {
         dim: Vec<String>,
     },
     /// Ask a run to pause. The action under way finishes first and the run pauses at the end of it,
-    /// keeping the task it is working. With `--before-next-task`, it pauses instead when it next comes to
-    /// take a task, before it takes one
+    /// keeping the task it is working. A run waiting for room in an action that takes one run at a time
+    /// has not gone in, and pauses there and then. With `--before-next-task`, it pauses instead when it
+    /// next comes to take a task, before it takes one
     Pause {
         /// run id
         run: i64,
         /// pause before the run takes its next task rather than at the end of the action; one waiting
-        /// for a task pauses there and then. Refused for a run that takes no tasks. It cannot be taken
-        /// back
+        /// for a task, or for room in the action that takes it, pauses there and then. Refused for a run
+        /// that takes no tasks. It cannot be taken back
         #[arg(long)]
         before_next_task: bool,
     },

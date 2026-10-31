@@ -2170,10 +2170,18 @@ fn open_one(
     //
     // **Not while it waits** (`AMB-D-969`): the watch opens a waiting built-in on every look, and the
     // pane already stands on the card that says it is waiting.
-    if let Some(def) = read::automation_run_def(store.read_model().conn(), def_id)?
+    //
+    // **Nor while it waits for room** in an action that takes one run at a time: nothing is carried
+    // out until the action is free, and the watch opens it again on every look.
+    let mut about_to = read::automation_run_def(store.read_model().conn(), def_id)?
         .filter(|def| def.builtin.is_some())
-        .filter(|_| standing_wait(app, run_id).is_none())
+        .filter(|_| standing_wait(app, run_id).is_none());
+    if about_to.is_some()
+        && amenbo_core::ops::automation_run::waits_for_room(store.read_model().conn(), run_id)?.is_some()
     {
+        about_to = None;
+    }
+    if let Some(def) = about_to {
         let (project, builtin) = builtin_about_to(store, run_id, &def)?;
         // The card takes the pane over from the step before, whose program would otherwise go on with
         // no pane left to draw it.
@@ -2268,6 +2276,23 @@ fn open_one(
                 _ => (run.project_id, None, None, Vec::new()),
             }
         }
+        // The action this step goes into takes one run at a time, and another run is in it or came to
+        // it first. Nothing was written and nothing moved, so the pane is left as it stands and the
+        // watch is not woken: it opens the step again on its next look. A pause asked for while it
+        // waited took hold here instead, and the paused run has no pane to stand on.
+        Opened::WaitsForRoom { run, .. } => match run.status {
+            amenbo_core::model::AutomationRunStatus::Running => {
+                return Ok(AutomationStepOpenDto {
+                    run: run_id,
+                    project: run.project_id,
+                    step: None,
+                    builtin: None,
+                    session: None,
+                    missing: Vec::new(),
+                });
+            }
+            _ => (run.project_id, None, None, Vec::new()),
+        },
         // A built-in that holds its step open — the one that waits (`AMB-D-983`). Nothing was carried
         // out and no terminal is opened: the step stands under way until its time has come, and the
         // pane stands on its card, saying when that is.

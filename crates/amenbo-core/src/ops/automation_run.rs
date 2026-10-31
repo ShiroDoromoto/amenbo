@@ -2390,6 +2390,123 @@ pub fn held_back(conn: &Connection, run_id: i64) -> Result<Option<crate::ops::au
     crate::ops::automation_builtin::held_back(conn, &run, &def)
 }
 
+/// **A run kept out of an action that takes one run at a time** ([`waits_for_room`]): the action, and
+/// the run it waits behind — the one inside it, or, where none is, the one that came to it first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct ForRoom {
+    pub action_id: i64,
+    pub behind: i64,
+}
+
+/// **Whether this run stands before an action that takes one run at a time, waiting for room** — and
+/// whom it waits behind. `None` for a run that is not `running`, that has a step under way, or that
+/// stands before anything else; and for one waiting on a built-in first ([`is_waiting`]), which is
+/// that wait and not this one. Asked by a face that says so beside the run.
+pub fn waits_for_room(conn: &Connection, run_id: i64) -> Result<Option<ForRoom>> {
+    let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(None) };
+    let Some(run) = read::automation_run(conn, run_id)? else { return Ok(None) };
+    if crate::ops::automation_builtin::waiting(conn, &run, &def)? {
+        return Ok(None);
+    }
+    room_for(conn, &run, &def)
+}
+
+/// **Whether opening `def` would put `run` inside an action somebody else is in, or ahead of a run
+/// that came to it first** — answered as the run whom it waits behind, or `None` where it goes in now.
+///
+/// Read off the run's own copy (`AMB-D-961`): only a copy that says its action takes one run at a
+/// time waits, and only on its way into that action — a step after another step of the same spot is
+/// already inside. Nothing is remembered for it. **Who is inside** is read off each other run's last
+/// step: one under way in the action, or one that left by a line that stays inside it. A run paused
+/// there still holds the action, since picking it up goes on inside; one paused before its next task
+/// does not, since picking it up starts afresh at its entry. Whether that other run's copy takes one
+/// run at a time does not matter: it is in the same action.
+///
+/// **Arrival order** is when each run came to stand before the action ([`arrived`]). A run waiting on
+/// a built-in first ([`crate::ops::automation_builtin::waiting`]) is not in the line: it is not ready
+/// to go in, and holding the others back for it would leave the action empty. Ties go to the lower
+/// run id.
+pub(crate) fn room_for(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -> Result<Option<ForRoom>> {
+    let (true, Some(action_id)) = (def.one_at_a_time, def.action_id) else { return Ok(None) };
+    if action_held_by(conn, run.id)?.is_some() {
+        return Ok(None);
+    }
+    let mine = (arrived(conn, run)?, run.id);
+    let mut ahead: Option<(Timestamp, i64)> = None;
+    for other in read::automation_runs_live(conn)? {
+        if other.id == run.id {
+            continue;
+        }
+        let holds = match other.status {
+            AutomationRunStatus::Running => true,
+            AutomationRunStatus::Paused => {
+                other.pause_kind != Some(crate::model::AutomationPauseKind::BeforeNextTask)
+            }
+            _ => false,
+        };
+        if !holds {
+            continue;
+        }
+        if let Some(at) = action_held_by(conn, other.id)? {
+            if at.action_id == Some(action_id) {
+                return Ok(Some(ForRoom { action_id, behind: other.id }));
+            }
+            continue;
+        }
+        if other.status != AutomationRunStatus::Running {
+            continue;
+        }
+        let Waiting::Step(theirs) = next_def(conn, other.id)? else { continue };
+        if !theirs.one_at_a_time || theirs.action_id != Some(action_id) {
+            continue;
+        }
+        if crate::ops::automation_builtin::waiting(conn, &other, &theirs)? {
+            continue;
+        }
+        let place = (arrived(conn, &other)?, other.id);
+        if place < mine && ahead.is_none_or(|first| place < first) {
+            ahead = Some(place);
+        }
+    }
+    Ok(ahead.map(|(_, behind)| ForRoom { action_id, behind }))
+}
+
+/// **The copy of the step whose action this run is inside**, or `None` where it stands between two
+/// actions. Inside is its last step still under way, or left by a line that stays inside the action
+/// — the run is going on to another of the action's steps. A step from before the run was copied down
+/// again is behind it: the run starts afresh at its entry.
+fn action_held_by(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
+    let Some(last) = read::automation_run_steps_of(conn, run_id)?.pop() else { return Ok(None) };
+    if current_defs(conn, run_id)?.first().is_some_and(|first| last.run_def_id < first.id) {
+        return Ok(None);
+    }
+    let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { return Ok(None) };
+    let stays = match last.status {
+        AutomationRunStepStatus::Running => true,
+        _ => matches!(
+            onward(conn, &def, last.exit_id)?,
+            Onward::Go { line, .. } if line.picture == AutomationPictureOwner::Action
+        ),
+    };
+    Ok(stays.then_some(def))
+}
+
+/// **When a run came to stand where it stands now**: when its last step ended, or, with none since
+/// it was last copied down, when that copy was taken — the launch, or the pick-up after a pause before
+/// its next task. A pause at the end of an action moves nothing, so a run picked up from one keeps the
+/// place it had.
+fn arrived(conn: &Connection, run: &AutomationRun) -> Result<Timestamp> {
+    let defs = current_defs(conn, run.id)?;
+    let last = read::automation_run_steps_of(conn, run.id)?.pop();
+    Ok(match (last, defs.first()) {
+        (Some(last), first) if first.is_none_or(|first| last.run_def_id >= first.id) => {
+            last.ended_at.unwrap_or(last.updated_at)
+        }
+        (_, Some(first)) => first.created_at,
+        (_, None) => run.started_at.unwrap_or(run.created_at),
+    })
+}
+
 /// **The way a run has come on the task it is working** — the spots of the automation's picture it
 /// passed, in the order it passed them, the spot it stands at now, and the steps it passed inside
 /// that spot and the one it stands at ([`trail`]).
@@ -3805,6 +3922,7 @@ mod tests {
                 crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
                 crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
+                crate::ops::automation_step::Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
             };
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
 
@@ -3910,6 +4028,7 @@ mod tests {
             crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
+            crate::ops::automation_step::Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
         };
         let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
         crate::ops::automation_report::take(tx, opening.run_step.id, task).expect("take");

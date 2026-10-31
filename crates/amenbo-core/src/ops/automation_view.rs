@@ -503,6 +503,7 @@ pub fn action_saved_detail(conn: &Connection, id: i64) -> Result<Option<ActionVi
         })
         .collect();
     action.entry_step_id = version.entry_step_id;
+    action.one_at_a_time = version.one_at_a_time;
     Ok(Some(ActionView {
         placed_at: placed_at(conn, &action)?,
         action,

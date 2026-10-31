@@ -552,6 +552,7 @@ fn write_action(
         builtin_dimension_id: None,
         builtin_version: None,
         draft,
+        one_at_a_time: false,
         order_key,
         created_at: now,
         updated_at: now,
@@ -581,6 +582,19 @@ pub fn action_update(
     if let Some(note) = note {
         after.note = note.to_string();
     }
+    after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation_action(&before), record::automation_action(&after))?;
+    Ok(after)
+}
+
+/// **Say whether one run at a time may be inside this action** ([`AutomationAction::one_at_a_time`]).
+/// It is written on the action as it is being written, and is part of what [`action_save`] copies into
+/// the next version, so it leaves the action unsaved until then — unlike its name and note.
+pub fn action_set_one_at_a_time(tx: &WriteTx<'_>, id: i64, on: bool) -> Result<AutomationAction> {
+    let before = live_action(tx, id)?;
+    not_built_in(tx, Def::Action(id))?;
+    let mut after = before.clone();
+    after.one_at_a_time = on;
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation_action(&before), record::automation_action(&after))?;
     Ok(after)
@@ -782,8 +796,9 @@ fn automations_placing_outside(
 
 /// **Save what is inside an action as its next version, once the action's own check passes.** Every op
 /// that writes inside the action — its steps, the ways out, inputs and outputs, the settings it declares,
-/// the edges and wires drawn inside it, the step it opens first — writes on its tables, and those are the
-/// draft. A change to a step is saved here too: a step has no version of its own.
+/// the edges and wires drawn inside it, the step it opens first, whether one run at a time may be inside
+/// it — writes on its tables, and those are the draft. A change to a step is saved here too: a step has
+/// no version of its own.
 ///
 /// Refused as `not_ready` with [`automation_run::check_action`]'s reasons: only what the action answers
 /// for on its own, since what is answered where it is placed belongs to each automation placing it.
@@ -871,10 +886,12 @@ pub fn action_discard(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActi
         return Ok(saved);
     }
     // `entry_step_id` is `RESTRICT`, which bites at the statement, so the entry is moved off a step that
-    // is about to go before the steps are put back.
-    if action.entry_step_id != saved.entry_step_id {
+    // is about to go before the steps are put back. Whether one run at a time may be inside it is
+    // written on the same row, so it goes back in the same write.
+    if action.entry_step_id != saved.entry_step_id || action.one_at_a_time != saved.one_at_a_time {
         let mut after = action.clone();
         after.entry_step_id = saved.entry_step_id;
+        after.one_at_a_time = saved.one_at_a_time;
         after.updated_at = Timestamp::now();
         emit_update(tx, record::automation_action(&action), record::automation_action(&after))?;
     }
@@ -889,12 +906,14 @@ pub fn action_discard(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActi
 
 /// **What is inside one action** — the steps, the ways out of the action and of each step, the inputs
 /// and the outputs on those ways out, the settings the action declares, the edges and wires drawn inside
-/// it, and the step it opens first. Read either off the action's rows as they stand now ([`Self::live`])
-/// or off one saved version of it, and asked the same way either way.
+/// it, the step it opens first, and whether one run at a time may be inside it. Read either off the
+/// action's rows as they stand now ([`Self::live`]) or off one saved version of it, and asked the same
+/// way either way.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ActionDef {
     pub action_id: i64,
     pub entry_step_id: Option<i64>,
+    pub one_at_a_time: bool,
     pub steps: Vec<AutomationStep>,
     pub exits: Vec<AutomationExit>,
     pub ports: Vec<AutomationPort>,
@@ -917,9 +936,11 @@ impl ActionDef {
         for exit in &exits {
             ports.extend(read::automation_ports_of(conn, AutomationPortOwner::Exit, exit.id, out_of)?);
         }
+        let action = read::automation_action(conn, action_id)?;
         Ok(Self {
             action_id,
-            entry_step_id: read::automation_action(conn, action_id)?.and_then(|a| a.entry_step_id),
+            entry_step_id: action.as_ref().and_then(|a| a.entry_step_id),
+            one_at_a_time: action.is_some_and(|a| a.one_at_a_time),
             steps,
             exits,
             ports,
@@ -942,6 +963,7 @@ impl ActionDef {
         Ok(Self {
             action_id: saved.action_id,
             entry_step_id: saved.entry_step_id,
+            one_at_a_time: saved.one_at_a_time,
             steps: serde_json::from_str(&saved.steps)?,
             exits: serde_json::from_str(&saved.exits)?,
             ports: serde_json::from_str(&saved.ports)?,
@@ -1026,6 +1048,7 @@ impl ActionDef {
     /// compares an automation's.
     fn is(&self, saved: &AutomationActionVersion) -> Result<bool> {
         Ok(self.entry_step_id == saved.entry_step_id
+            && self.one_at_a_time == saved.one_at_a_time
             && same_rows(&self.steps, &saved.steps)?
             && same_rows(&self.exits, &saved.exits)?
             && same_rows(&self.ports, &saved.ports)?
@@ -1104,6 +1127,7 @@ pub fn action_version_add(tx: &WriteTx<'_>, action_id: i64) -> Result<Automation
         cfgs: serde_json::to_string(&def.cfgs).map_err(Error::from)?,
         edges: serde_json::to_string(&def.edges).map_err(Error::from)?,
         wires: serde_json::to_string(&def.wires).map_err(Error::from)?,
+        one_at_a_time: def.one_at_a_time,
         created_at: now,
         updated_at: now,
     };
@@ -6161,6 +6185,41 @@ mod tests {
 
             let take = automation_builtin::action(tx, "take_task").expect("built-in");
             assert!(matches!(action_discard(tx, take.id), Err(Error::Invalid(_))));
+        });
+    }
+
+    /// **One run at a time is part of a version**: turning it on leaves the action unsaved, saving copies
+    /// it into the version a show of the saved side reads, and discarding puts it back.
+    #[test]
+    fn one_run_at_a_time_is_saved_with_the_action() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let action = action_from_prompt(tx, Some(project), NewStep::new("点検する", "見る"), &[], &[])
+                .expect("write the action");
+            let first = action_save(tx, action.id).expect("save");
+            assert!(!first.one_at_a_time, "off unless asked");
+
+            assert!(action_set_one_at_a_time(tx, action.id, true).expect("turn it on").one_at_a_time);
+            assert!(action_unsaved(tx.conn(), action.id).expect("unsaved"), "a change to the version");
+            let shown = crate::ops::automation_view::action_saved_detail(tx.conn(), action.id)
+                .expect("show")
+                .expect("the action");
+            assert!(!shown.action.one_at_a_time, "the saved side reads version 1");
+
+            let second = action_save(tx, action.id).expect("save again");
+            assert_eq!((second.version, second.one_at_a_time), (2, true));
+            let shown = crate::ops::automation_view::action_saved_detail(tx.conn(), action.id)
+                .expect("show")
+                .expect("the action");
+            assert!(shown.action.one_at_a_time, "the saved side reads version 2");
+
+            action_set_one_at_a_time(tx, action.id, false).expect("turn it off");
+            action_discard(tx, action.id).expect("discard");
+            assert!(live_action(tx, action.id).expect("read").one_at_a_time, "back as version 2 holds it");
+            assert!(!action_unsaved(tx.conn(), action.id).expect("unsaved"));
+
+            let take = automation_builtin::action(tx, "take_task").expect("built-in");
+            assert!(action_set_one_at_a_time(tx, take.id, true).is_err(), "a built-in is not written on");
         });
     }
 

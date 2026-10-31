@@ -1793,6 +1793,11 @@ pub struct AutomationAction {
     /// The flag, and the word, are [`Task::draft`]'s (`AMB-D-552`, `AMB-D-558`).
     #[serde(default)]
     pub draft: bool,
+    /// **One run at a time**: a run reaching this action while another run is inside it waits until
+    /// that one leaves. It belongs to the action as it is being written, and saving copies it into the
+    /// version ([`AutomationActionVersion::one_at_a_time`]), which is the answer a placement goes by.
+    #[serde(default)]
+    pub one_at_a_time: bool,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -2068,6 +2073,9 @@ pub struct AutomationActionVersion {
     pub edges: String,
     /// The wires drawn inside the action — JSON, [`AutomationWire`]s.
     pub wires: String,
+    /// [`AutomationAction::one_at_a_time`] as it stood when this version was saved.
+    #[serde(default)]
+    pub one_at_a_time: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

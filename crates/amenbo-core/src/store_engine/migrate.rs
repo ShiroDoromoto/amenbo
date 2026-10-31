@@ -1244,7 +1244,31 @@ pub const STEPS: &[Step] = &[
         // the day before or after for a reader in another zone.
         apply: Apply::Custom(give_the_task_dates_a_time),
     },
+    Step {
+        to: 100,
+        name: "add automation_action.one_at_a_time and automation_action_version.one_at_a_time, whether one run at a time may be inside an action",
+        // **Seeded with off.** No action asked for it before the column was declared, and a version
+        // already saved is never rewritten, so it keeps what it meant: runs side by side.
+        apply: Apply::Custom(let_an_action_take_one_run_at_a_time),
+    },
 ];
+
+/// v100: `automation_action.one_at_a_time`, and the same column on `automation_action_version`, which
+/// copies it when the action is saved.
+///
+/// **Added, not rebuilt**, with v99's guard: each is appended only where it is missing.
+fn let_an_action_take_one_run_at_a_time(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for table in ["automation_action", "automation_action_version"] {
+        if !column_names(tx, table)?.iter().any(|c| c == "one_at_a_time") {
+            tx.execute_batch(&format!(
+                "ALTER TABLE {table} ADD COLUMN one_at_a_time BOOLEAN NOT NULL DEFAULT 0 \
+                 CHECK(one_at_a_time IN (0, 1));"
+            ))?;
+        }
+    }
+    Ok(())
+}
 
 /// v99: `task.start_at` and `task.due_at`, the instant halves of the start and the due date
 /// (`AMB-D-1082`).
@@ -10802,6 +10826,39 @@ mod tests {
         let refused =
             engine.conn().execute("UPDATE task SET start_at = '2026-10-23T08:00:00Z' WHERE id = 1", []);
         assert!(refused.is_err(), "the start pair is held the same way");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v100: an action and a version saved before the step are off, and either can be turned on.
+    #[test]
+    fn an_action_written_before_v100_runs_side_by_side() {
+        let dir = scratch("action-one-at-a-time");
+        let engine = store_at(&dir, 99);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO automation_action (id, name) VALUES (1, 'a');
+                 INSERT INTO automation_action_version (action_id, version, steps, exits, ports, cfgs, edges, wires)
+                 VALUES (1, 1, '[]', '[]', '[]', '[]', '[]', '[]');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let (action, version): (bool, bool) = engine
+            .conn()
+            .query_row(
+                "SELECT a.one_at_a_time, v.one_at_a_time FROM automation_action a \
+                 JOIN automation_action_version v ON v.action_id = a.id WHERE a.id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((action, version), (false, false), "both start off");
+        engine.conn().execute("UPDATE automation_action SET one_at_a_time = 1 WHERE id = 1", []).unwrap();
+        let refused = engine.conn().execute("UPDATE automation_action_version SET one_at_a_time = 2", []);
+        assert!(refused.is_err(), "only 0 and 1");
         std::fs::remove_dir_all(&dir).ok();
     }
 

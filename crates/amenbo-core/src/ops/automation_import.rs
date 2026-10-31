@@ -189,6 +189,9 @@ fn action_in(tx: &WriteTx<'_>, project_id: i64, file: &ActionFile) -> Result<Wri
     }
     let entry = file.entry_step.map(|at| steps.get(at).copied().ok_or_else(|| no_such("step", at))).transpose()?;
     automation::action_set_entry(tx, action.id, entry)?;
+    if file.one_at_a_time {
+        automation::action_set_one_at_a_time(tx, action.id, true)?;
+    }
 
     let step_at = |place: usize| steps.get(place).copied().ok_or_else(|| no_such("step", place));
     let on = AutomationPictureOwner::Action;
@@ -330,6 +333,7 @@ mod tests {
         automation::port_add(tx, AutomationPortOwner::Exit, done, out_of, "結果", value, false).expect("output");
         automation::port_add(tx, AutomationPortOwner::Action, action.id, into, "前から", value, false).expect("input");
         automation::cfg_add(tx, action.id, "深さ", AutomationCfgKind::Number, false, None).expect("setting");
+        automation::action_set_one_at_a_time(tx, action.id, true).expect("one run at a time");
         automation::action_version_add(tx, action.id).expect("save the action");
 
         let first = automation::placement_add(tx, automation.id, action.id).expect("place it");
@@ -401,6 +405,8 @@ mod tests {
             let written = read::automation_placement(tx.conn(), placements[1]).expect("read").expect("row");
             let action = read::automation_action(tx.conn(), written.action_id).expect("read").expect("action");
             assert_eq!((action.project_id, action.draft, written.version), (Some(into), false, Some(1)));
+            let saved = read::automation_action_version(tx.conn(), action.id, 1).expect("read").expect("version 1");
+            assert!(action.one_at_a_time && saved.one_at_a_time, "one run at a time comes in, saved");
             assert_eq!(count(tx, "automation_action"), actions_before + 2, "one written, one split on the new axis");
 
             automation::version_add(tx, imported.id).expect("save it");
@@ -421,6 +427,11 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let file = written_out(tx, project);
             assert!(matches!(parse("{"), Err(Error::Invalid(_))), "not JSON");
+
+            let mut older = serde_json::to_value(&file).expect("json");
+            older["actions"][0].as_object_mut().expect("an action").remove("one_at_a_time");
+            let older = parse(&older.to_string()).expect("a file from before one_at_a_time");
+            assert!(!older.actions[0].one_at_a_time, "an older file reads as off");
 
             let other = AutomationFile { format: "amenbo-automation/v0".into(), ..file.clone() };
             assert!(matches!(import(tx, project, &other), Err(Error::Invalid(_))), "another format");

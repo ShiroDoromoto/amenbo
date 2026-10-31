@@ -1802,6 +1802,7 @@ fn an_import_leaves_nothing_when_refused_and_the_device_library_is_a_humans() {
             note: String::new(),
             global: true,
             entry_step: Some(0),
+            one_at_a_time: false,
             settings: vec![],
             inputs: vec![],
             exits: vec![],

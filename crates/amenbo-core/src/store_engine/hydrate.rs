@@ -516,6 +516,7 @@ pub(super) fn automation_action_row(r: &Row) -> rusqlite::Result<AutomationActio
         builtin_dimension_id: get(r, C.builtin_dimension_id)?,
         builtin_version: get(r, C.builtin_version)?,
         draft: get(r, C.draft)?,
+        one_at_a_time: get(r, C.one_at_a_time)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
@@ -718,6 +719,7 @@ pub(super) fn automation_action_version_row(r: &Row) -> rusqlite::Result<Automat
         cfgs: get(r, C.cfgs)?,
         edges: get(r, C.edges)?,
         wires: get(r, C.wires)?,
+        one_at_a_time: get(r, C.one_at_a_time)?,
         created_at,
         updated_at,
     })

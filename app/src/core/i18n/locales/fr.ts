@@ -1138,6 +1138,8 @@ export const fr: Translation = {
     "auto.actions.reachProject": "Ce projet",
     "auto.actions.reachAnyProject": "D’un projet",
     "auto.actions.reachBuiltin": "Intégrée",
+    "auto.actions.oneAtATime": "Un à la fois",
+    "auto.actions.oneAtATimeWait": "Attendre tant qu'une autre exécution est dedans",
     "auto.bi.takeTask.name": "Prendre une tâche",
     "auto.bi.takeTask.does": "Cherche les tâches à faire qui correspondent au filtre et peuvent être prises, dans l’ordre qu’il fixe, réserve la première possible et la passe en cours",
     "auto.bi.takeTask.filter": "Filtre",

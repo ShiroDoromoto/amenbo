@@ -1139,6 +1139,8 @@ export const ptBR: Translation = {
     "auto.actions.reachProject": "Este projeto",
     "auto.actions.reachAnyProject": "De um projeto",
     "auto.actions.reachBuiltin": "Integrada",
+    "auto.actions.oneAtATime": "Um por vez",
+    "auto.actions.oneAtATimeWait": "Esperar enquanto outra execução estiver dentro",
     "auto.bi.takeTask.name": "Pegar uma tarefa",
     "auto.bi.takeTask.does": "Procura as tarefas a fazer que batem com o filtro e podem ser pegas, na ordem que ele define, reserva a primeira possível e a coloca em andamento",
     "auto.bi.takeTask.filter": "Filtro",

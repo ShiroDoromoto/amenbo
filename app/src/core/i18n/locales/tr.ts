@@ -1126,6 +1126,8 @@ export const tr: Translation = {
     "auto.actions.reachProject": "Bu proje",
     "auto.actions.reachAnyProject": "Proje",
     "auto.actions.reachBuiltin": "Yerleşik",
+    "auto.actions.oneAtATime": "Tek seferde bir",
+    "auto.actions.oneAtATimeWait": "Başka bir çalıştırma içerideyken bekle",
     "auto.bi.takeTask.name": "Görev al",
     "auto.bi.takeTask.does": "Filtreye uyan, başlanmamış ve alınabilecek görevleri belirlediği sırayla arar, alabildiği ilkini ayırıp Sürüyor durumuna getirir",
     "auto.bi.takeTask.filter": "Filtre",

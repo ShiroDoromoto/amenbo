@@ -1127,6 +1127,8 @@ export const id: Translation = {
     "auto.actions.reachProject": "Proyek ini",
     "auto.actions.reachAnyProject": "Proyek",
     "auto.actions.reachBuiltin": "Bawaan",
+    "auto.actions.oneAtATime": "Satu per satu",
+    "auto.actions.oneAtATimeWait": "Tunggu selama eksekusi lain ada di dalam",
     "auto.bi.takeTask.name": "Ambil tugas",
     "auto.bi.takeTask.does": "Mencari tugas yang belum dimulai dan bisa diambil yang cocok dengan filter, sesuai urutannya, lalu memesan yang pertama bisa dan menjadikannya sedang dikerjakan",
     "auto.bi.takeTask.filter": "Filter",

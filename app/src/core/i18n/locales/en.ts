@@ -1373,6 +1373,8 @@ const ui = {
   "auto.actions.reachProject": "This project",
   "auto.actions.reachAnyProject": "A project's",
   "auto.actions.reachBuiltin": "Built-in",
+  "auto.actions.oneAtATime": "One at a time",
+  "auto.actions.oneAtATimeWait": "Wait while another run is inside",
   "auto.bi.takeTask.name": "Take a task",
   "auto.bi.takeTask.does": "Looks for the tasks the filter matches that are not started and can be taken, in the order it sets, and reserves the first it can, moving it to in progress",
   "auto.bi.takeTask.filter": "Filter",

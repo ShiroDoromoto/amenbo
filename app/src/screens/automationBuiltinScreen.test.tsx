@@ -135,6 +135,7 @@ describe("a built-in, opened", () => {
       inputs: [],
       settings: [],
       heldBy: [],
+      oneAtATime: false,
       placedOn: [],
       unsaved: false,
       saveBlocks: [],

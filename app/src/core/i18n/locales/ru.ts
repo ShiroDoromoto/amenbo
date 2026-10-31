@@ -1143,6 +1143,8 @@ export const ru: Translation = {
     "auto.actions.reachProject": "Этот проект",
     "auto.actions.reachAnyProject": "Проекта",
     "auto.actions.reachBuiltin": "Встроенное",
+    "auto.actions.oneAtATime": "По одному",
+    "auto.actions.oneAtATimeWait": "Ждать, пока внутри другой запуск",
     "auto.bi.takeTask.name": "Взять задачу",
     "auto.bi.takeTask.does": "Ищет подходящие под фильтр не начатые задачи, которые можно взять, в заданном порядке, резервирует первую возможную и переводит её в работу",
     "auto.bi.takeTask.filter": "Фильтр",

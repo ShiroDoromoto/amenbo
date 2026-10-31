@@ -1132,6 +1132,8 @@ export const ja: Translation = {
     "auto.actions.reachProject": "このプロジェクト",
     "auto.actions.reachAnyProject": "プロジェクト",
     "auto.actions.reachBuiltin": "組み込み",
+    "auto.actions.oneAtATime": "同時に1本",
+    "auto.actions.oneAtATimeWait": "別の実行が中にいる間は待つ",
     "auto.bi.takeTask.name": "タスクに着手する",
     "auto.bi.takeTask.does": "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする",
     "auto.bi.takeTask.filter": "絞り込み",

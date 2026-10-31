@@ -1128,6 +1128,8 @@ export const zhHans: Translation = {
     "auto.actions.reachProject": "本项目",
     "auto.actions.reachAnyProject": "项目",
     "auto.actions.reachBuiltin": "内置",
+    "auto.actions.oneAtATime": "一次一个",
+    "auto.actions.oneAtATimeWait": "有其他运行在内时等待",
     "auto.bi.takeTask.name": "领取任务",
     "auto.bi.takeTask.does": "查找符合筛选条件、未开始且可领取的任务，按设定的顺序预留第一个能领取的并设为进行中",
     "auto.bi.takeTask.filter": "筛选",

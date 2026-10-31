@@ -80,6 +80,7 @@ const action: AutomationActionDetailDto = {
   inputs: [],
   settings: [],
   heldBy: [],
+  oneAtATime: false,
   placedOn: [],
   unsaved: false,
   saveBlocks: [],

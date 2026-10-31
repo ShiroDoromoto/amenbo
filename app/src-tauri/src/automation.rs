@@ -413,22 +413,36 @@ pub fn automation_action_add(project: Option<i64>, name: String) -> Result<Write
     Ok(WriteAck::new(&["automationActions"]))
 }
 
-/// **Rename a library action, or rewrite what it is for.** Only what is `Some` is written. The name
-/// and the note are all that is the action's own to write: the prompt and the flags belong to its
-/// steps ([`automation_step_edit`]), who carries each step out to where the action is placed
-/// ([`automation_placement_step_set`]), and what it declares has its own doors.
+/// **Rename a library action, rewrite what it is for, or say whether it takes one run at a time.**
+/// Only what is `Some` is written. These are all that is the action's own to write: the prompt and the
+/// flags belong to its steps ([`automation_step_edit`]), who carries each step out to where the action
+/// is placed ([`automation_placement_step_set`]), and what it declares has its own doors.
 ///
 /// The note is the automation's notes one layer down: drawn where it is built and on the library's
 /// row, never carried into a launch (`AMB-D-952`).
+///
+/// **One run at a time is kept in a version**, so writing it goes into the draft and reaches a
+/// placement only once the action is saved ([`amenbo_core::ops::automation::action_set_one_at_a_time`]).
+/// It is written after the name and the note, as two writes.
 ///
 /// **Renaming parts nothing.** A placement points at the action by key, so every picture standing on
 /// it reads the new name at once. So does renaming one of its ways out, which edges and wires key by
 /// its id (`AMB-D-961`); renaming a port parts every wire that named the old one
 /// ([`amenbo_core::ops::automation::action_update`]).
 #[tauri::command]
-pub fn automation_action_edit(id: i64, name: Option<String>, note: Option<String>) -> Result<WriteAck, CmdError> {
+pub fn automation_action_edit(
+    id: i64,
+    name: Option<String>,
+    note: Option<String>,
+    one_at_a_time: Option<bool>,
+) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_action_update(id, name.as_deref(), note.as_deref())?;
+        if name.is_some() || note.is_some() {
+            store.automation_action_update(id, name.as_deref(), note.as_deref())?;
+        }
+        if let Some(on) = one_at_a_time {
+            store.automation_action_set_one_at_a_time(id, on)?;
+        }
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -2870,6 +2884,7 @@ fn action_detail_dto(
         global: action.project_id.is_none(),
         builtin: action.builtin,
         draft: action.draft,
+        one_at_a_time: action.one_at_a_time,
         used_by: view.used_by,
         entry_step_id: action.entry_step_id,
         steps: view.steps.into_iter().map(step_dto).collect(),

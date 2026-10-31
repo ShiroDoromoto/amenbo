@@ -126,6 +126,9 @@ pub struct ActionFile {
     pub global: bool,
     /// The step it opens first, by its place in `steps`.
     pub entry_step: Option<usize>,
+    /// One run at a time may be inside it. A file written before this was carried reads as off.
+    #[serde(default)]
+    pub one_at_a_time: bool,
     pub settings: Vec<SettingFile>,
     pub inputs: Vec<PortFile>,
     pub exits: Vec<ExitFile>,
@@ -354,6 +357,7 @@ fn action_file(name: &str, note: &str, global: bool, def: &ActionDef) -> Result<
         note: note.to_string(),
         global,
         entry_step: def.entry_step_id.and_then(at),
+        one_at_a_time: def.one_at_a_time,
         settings,
         inputs: ports(&def.action_inputs()),
         exits: exits_of(AutomationOwner::Action, def.action_id),

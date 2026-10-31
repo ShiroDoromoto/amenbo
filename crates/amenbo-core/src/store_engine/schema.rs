@@ -1100,6 +1100,11 @@ datasets! {
         // nor given up yet. The launch check refuses an automation standing on one. An action written
         // before this column was declared was never one.
         draft: bool_col,
+        // Whether one run at a time may be inside this action: a run reaching it while another run is
+        // inside it waits. It is part of a saved version (`automation_action_version.one_at_a_time`),
+        // so a placement goes by the answer of the version it stands on. Off for an action written
+        // before this column was declared.
+        one_at_a_time: bool_col,
         order_key: col(ORDER_KEY),
     }
 
@@ -1335,6 +1340,8 @@ datasets! {
         cfgs: col(REQ),
         edges: col(REQ),
         wires: col(REQ),
+        // `automation_action.one_at_a_time` as it stood when this version was saved.
+        one_at_a_time: bool_col,
     } => "UNIQUE (action_id, version)"
 
     // **One saved version of an automation** — its picture at the moment it was saved, copied whole and

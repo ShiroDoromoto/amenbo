@@ -1495,6 +1495,9 @@ fn render_action(flags: &Flags, view: &ActionView) {
         flags,
         format!("{shelf}  {entry}  used by {} automation(s)", view.used_by),
     );
+    if a.one_at_a_time {
+        human(flags, "one run at a time — a run reaching it waits while another run is inside it");
+    }
     match &a.builtin {
         Some(key) => {
             let latest = amenbo_core::ops::automation_builtin::find(key).map(|b| b.version);

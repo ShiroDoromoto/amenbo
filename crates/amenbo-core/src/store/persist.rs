@@ -1242,6 +1242,17 @@ impl Store {
         })
     }
 
+    /// Say whether one run at a time may be inside this action (one operation = one transaction).
+    pub fn automation_action_set_one_at_a_time(
+        &mut self,
+        id: i64,
+        on: bool,
+    ) -> Result<crate::model::AutomationAction> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, id)], |tx| {
+            crate::ops::automation::action_set_one_at_a_time(tx, id, on)
+        })
+    }
+
     /// Name the step a placement of this action opens first, or clear it (one operation = one
     /// transaction).
     pub fn automation_action_set_entry(

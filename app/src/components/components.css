@@ -2349,22 +2349,29 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__line--leaves { stroke: var(--c-accent); }
 /* **A run's pane, as its picture** (`AMB-T-5775`, `../shell/RunPicture`). It is drawn over the pane's
    body on the frame's ground and scrolls both ways, and the room around the sheet is half the pane each
-   side, so a box on the edge of the picture can still be brought to the middle. Its bottom is clear
-   over the pane's band, the box when it is open and the terminal's last eight rows, and the 3rem above
-   that fades into the picture, so the terminal under it can be followed while the picture is up
-   (`.slot__body--away`). The pane measures that length (`--runpic-clear`, `../shell/TerminalPane`);
-   until it has, the clear band is 5rem. With no terminal under it — a built-in's step, or none up —
-   there is nothing to follow, and the picture is drawn whole (`.slot__body--bare`). */
+   side, so a box on the edge of the picture can still be brought to the middle. Its bottom is cut off
+   over the pane's band, the box when it is open and the terminal's last eight rows, and a band 3rem
+   high above the cut fades into the frame's ground, so the terminal under it can be followed while
+   the picture is up (`.slot__body--away`). The cut is a plain rectangle (`clip-path: inset`) and the
+   fade a gradient laid over the picture, not a mask: a mask is composited again each time the picture
+   is drawn, and that makes typing in the pane slow. The pane measures that length (`--runpic-clear`,
+   `../shell/TerminalPane`); until it has, the clear band is 5rem. With no terminal under it — a
+   built-in's step, or none up — there is nothing to follow, and the picture is drawn whole
+   (`.slot__body--bare`). */
 .runpic {
   position: absolute; inset: 0; z-index: 1;
   display: flex; container-type: size;
   background: var(--c-pane-frame);
-  --runpic-mask: linear-gradient(to bottom,
-    #000 calc(100% - var(--runpic-clear, 5rem) - 3rem), transparent calc(100% - var(--runpic-clear, 5rem)));
-  -webkit-mask-image: var(--runpic-mask);
-  mask-image: var(--runpic-mask);
+  clip-path: inset(0 0 var(--runpic-clear, 5rem) 0);
 }
-.slot__body--bare > .runpic { -webkit-mask-image: none; mask-image: none; }
+.runpic::after {
+  content: ""; position: absolute; left: 0; right: 0; z-index: 1;
+  bottom: var(--runpic-clear, 5rem); height: 3rem;
+  background: linear-gradient(to bottom, transparent, var(--c-pane-frame));
+  pointer-events: none;
+}
+.slot__body--bare > .runpic { clip-path: none; }
+.slot__body--bare > .runpic::after { content: none; }
 .runpic .autopic {
   flex: 1; max-height: none;
   overflow: scroll;

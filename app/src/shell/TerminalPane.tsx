@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import {
@@ -127,140 +127,14 @@ const CLEAR_ROWS = 8;
  * the app deciding they were done with it. So this is asked before it happens, and it ends whatever is
  * running on the way out — a session whose place has gone is one nobody can reach.
  */
-export function TerminalPane({
+function Pane({
   frame, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
   inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, tail = null, onGrab, onStretch,
   size, onSize,
-  onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold,
-}: {
-  /** Which of the arrangement's places this is (`../talk/layout`). */
-  frame: string;
-  /** Where on the page's grid this pane sits. It is worked out afresh from the order and this pane's
-   *  size, and never held against the pane itself (`AMB-D-939`). Left out where this is drawn
-   *  outside a page, which is a pane with no place to be given. */
-  at?: CSSProperties;
-  /** The hue the lamp above this pane is drawn in. It follows the slot rather than the frame, so it
-   *  comes from the page that laid this one out (`../talk/moving`). */
-  hue: number;
-  /** Which project this place belongs to — whose answer the agent it opens with is kept against
-   *  (`../talk/agent`). */
-  project: number;
-  /** What every frame is called, so a naming from anywhere reaches this row. */
-  names: FrameNames;
-  /** Which terminal to draw here, and where to start one. */
-  start: PaneStart;
-  /**
-   * Where the automation run this pane is drawing has got to, or null on an ordinary pane
-   * (`../talk/nameplate`).
-   *
-   * It is what the row says under the name, and it is also what the way out means here: **closing a
-   * run's pane is stopping the run** (`drop`).
-   */
-  run?: Say | null;
-  /**
-   * The built-in Amenbo is carrying out on this run's pane, or null (`./BuiltinCard`). While there is
-   * one, it stands where the terminal would, and nothing is started here.
-   *
-   * **A script step comes this way too, and is drawn as a terminal** (`AMB-D-1016`): its program runs
-   * on one, which the pane takes up the way it takes up an agent's step's (`PaneStart.readOnly`). Nobody
-   * writes into it, so the box, the band under it and the ways to hand it a path are not drawn.
-   */
-  builtin?: BuiltinRun | null;
-  /**
-   * **What the run's last step wrote, where it was a script** (`AMB-D-1016`) — kept on the run, and
-   * drawn where its terminal would be on a pane come back with the app: that terminal went down with
-   * it. Null everywhere else.
-   */
-  tail?: string | null;
-  /** True for the slot that puts a terminal up without being asked — the one the face comes up with,
-   *  and the one a person has just pressed the way in on. */
-  autoStart: boolean;
-  focused: boolean;
-  /**
-   * Whether a path has just been handed to this pane from somewhere else on the face, for as long as
-   * the pane is saying so (`./WorkspaceFace`).
-   *
-   * **Told rather than kept here**, because what it is about is the act and not the pane: the face
-   * knows a hand-over happened and the pane only draws it. What is drawn takes no room — the box
-   * xterm measures is what the program inside is told its number of columns from, so a mark that
-   * changed that box would be resizing somebody's editor to say a file had arrived.
-   */
-  landed?: boolean;
-  /**
-   * Whether something being carried inside the window is hanging over this pane
-   * (`../files/handDrag`).
-   *
-   * **Told rather than watched for**, which is the difference between the two drags. A drop from the
-   * desktop is the host's news and reaches each pane on its own; a row carried across the page is
-   * one gesture the face is holding, and the pane it is over is the face's answer. Both light the
-   * same surface, because to a reader they are the same act.
-   */
-  offered?: boolean;
-  /** Whether this is the pane being carried, so it can stand back while it is out of its place
-   *  (`./WorkspaceFace`). */
-  held?: boolean;
-  /**
-   * Where a pane let go of over this one would land — before it in the order, after it, or nowhere.
-   *
-   * It is the one thing drawn while a pane is carried, because the panes themselves do not move
-   * until the press ends: a page that rearranged under the hand would be moving terminals somebody
-   * is reading, to show them an arrangement they have not asked for yet (`AMB-D-939`).
-   */
-  goes?: { readonly side: "before" | "after"; readonly axis: "across" | "down" } | null;
-  /** Take hold of this pane by its row, to carry it somewhere else in the order. Left out where
-   *  there is nothing to reorder — one pane is already in order (`./WorkspaceFace`). */
-  onGrab?: (e: ReactPointerEvent<HTMLElement>) => void;
-  /** Pull this pane's corner, to leave it at one of the sizes there are (`./paneDrag`). */
-  onStretch?: (e: ReactPointerEvent<HTMLElement>) => void;
-  /** The size this pane takes now, which the row's mark draws (`./PaneSize`). */
-  size?: Size;
-  /** Put this pane at one of the sizes, picked from the row — the way to every size the corner
-   *  cannot pull to (`./PaneSize`). Left out where the pane has no page to be sized on. */
-  onSize?: (to: Size) => void;
-  onOpened: (frame: string, session: string, folder: string | null, agent: string | null) => void;
-  onSaid: (statement: SessionSaidDto) => void;
-  /** A file path drawn in this pane was clicked, as it was drawn. */
-  onPath: (frame: string, target: string) => void;
-  onClosed: (session: string) => void;
-  /** Take this place away — the frame and not the program in it (`../talk/layout`). */
-  onDrop: (frame: string) => void;
-  /** `carried` says the name came over with the session rather than as it was said — the pane took
-   *  up a terminal that had already named itself. It is written down the same way, and the provider
-   *  is not told: it is the one that said it (`../talk/terminal`). */
-  onName: (frame: string, name: string, by: NamedBy, carried?: boolean) => void;
-  onFocus: (frame: string) => void;
-  /** A way to read this pane's row, handed over while the pane is drawn and taken back when it is
-   *  not. It is what lets a face draw this pane somewhere other than above it (`./PaneOrder`), and it
-   *  is a way to ask rather than the answer: the row changes with every chunk that crosses, and a
-   *  value pushed up on each of them would redraw the face for a mark that has not moved. */
-  onRow?: (frame: string, read: (() => Row | null) | null) => void;
-  /**
-   * What has been written in the box under this pane and not sent yet (`AMB-D-864`).
-   *
-   * **Held by the window rather than here** (`../talk/layout`). A pane is taken down whenever it
-   * stops being on the face — carried onto another page, the count changed, the tasks face came up —
-   * and a half-written sentence kept in the drawing would go down with it. The terminal is the same
-   * shape of thing from the other side: what is running belongs to the host, and this pane only draws
-   * it.
-   */
-  written: string;
-  /** What is in the box now, on its way to the window that holds it. Said as it is written and again
-   *  with nothing in it once a line has gone. */
-  onWrite: (frame: string, written: string, put?: readonly string[]) => void;
-  /** The paths Amenbo put into this box, still standing in what is written (`../talk/layout`). They
-   *  are what the send waits the pane's agent out for (`../talk/terminal`, `AMB-D-879`). */
-  inserted?: readonly string[];
-  /**
-   * Whether the box under this pane is open (`AMB-D-890`).
-   *
-   * **Held by the window for the reason the draft is** (`../talk/layout`): a pane is taken down
-   * whenever it stops being on the screen, and a reader who opened the box did not ask for it to
-   * shut at any of those moments. It outlives the run as well, which the draft does not.
-   */
-  composeOpen: boolean;
-  /** The press on this pane's band, said as the box opens or folds away. What the *next* pane will
-   *  start as is a separate answer and is written down here (`../core/composeStartsOpen`). */
-  onFold: (frame: string, open: boolean) => void;
+  on,
+}: PaneProps & {
+  /** The handlers {@link TerminalPane} was handed on its newest render ({@link Handlers}). */
+  on: { readonly current: Handlers };
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
   /** Whether a press of the close button is still being answered. */
@@ -329,12 +203,6 @@ export function TerminalPane({
   // The height of one line in the box, taken while nothing is written in it. It is read rather than
   // computed from the line-height, so a font that rounds its lines differently is still one line.
   const oneLine = useRef(0);
-
-  // What the face wants done with what happens here, read at the moment it happens. The pane is put up
-  // once and lives longer than any one render, so the effect below must not be re-run to see a newer
-  // callback — that would take the terminal down to learn something it could have been told.
-  const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onFocus, onRow, onWrite });
-  on.current = { onOpened, onSaid, onPath, onClosed, onName, onFocus, onRow, onWrite };
 
   /** One of the run's moves at a time (`AMB-T-5507`), as on the "running" tab: a second press landing
    *  while the first is still opening a terminal would be answered off a run that has already moved.
@@ -413,7 +281,7 @@ export function TerminalPane({
       // every step opens one of its own — and the run it drew is over.
       if (run === null && !await confirmDialog(t("face.dropConfirm"))) return;
       if (live !== null) await endTerminal(live).catch(() => {});
-      onDrop(frame);
+      on.current.onDrop(frame);
     } finally {
       dropping.current = false;
     }
@@ -522,7 +390,7 @@ export function TerminalPane({
     }
     // Emptied only once the line has actually gone. What follows it is a sentence of its own, and a
     // box that kept what was sent would make the next one the tail of the last.
-    onWrite(frame, "");
+    on.current.onWrite(frame, "");
   };
 
   /**
@@ -616,7 +484,7 @@ export function TerminalPane({
    */
   const pressedOn = () => {
     const moving = !focused;
-    onFocus(frame);
+    on.current.onFocus(frame);
     if (!moving || onPicture) return;
     if (folded) focusTerminal(paneRef.current);
     else boxRef.current?.focus({ preventScroll: true });
@@ -971,7 +839,7 @@ export function TerminalPane({
             // on the box a name is typed in is that control's, and carrying the pane off under it
             // would take the press away from what it was aimed at.
             if (e.target instanceof Element && e.target.closest("button, input") !== null) return;
-            onGrab?.(e);
+            on.current.onGrab?.(e);
           }}
         >
           {/* The line above the pane, which is empty until there is a session to say something about
@@ -997,7 +865,7 @@ export function TerminalPane({
                   const text = e.currentTarget.value.trim();
                   // A person's word is the last one on a frame, and an empty box is not a word: it
                   // would otherwise take the name off a pane the agent had named (`../talk/frames`).
-                  if (text) onName(frame, text, "person");
+                  if (text) on.current.onName(frame, text, "person");
                   setNaming(false);
                 }
                 if (e.key === "Escape") setNaming(false);
@@ -1073,7 +941,7 @@ export function TerminalPane({
               </span>
             </button>
           )}
-          {size !== undefined && onSize !== undefined && <PaneSize size={size} onSize={onSize} />}
+          {size !== undefined && onSize !== undefined && <PaneSize size={size} onSize={(to) => on.current.onSize?.(to)} />}
           {live !== null && !script && (
             <button
               className="slot__more"
@@ -1207,7 +1075,7 @@ export function TerminalPane({
             role="separator"
             title={t("face.paneSize")}
             aria-label={t("face.paneSize")}
-            onPointerDown={onStretch}
+            onPointerDown={(e) => on.current.onStretch?.(e)}
           />
         )}
         {/* Everything the terminal face is, kept mounted and in the layout while the picture is up:
@@ -1285,7 +1153,7 @@ export function TerminalPane({
               placeholder={t("face.compose")}
               aria-label={t("face.compose")}
               {...asTyped}
-              onChange={(e) => onWrite(frame, e.currentTarget.value)}
+              onChange={(e) => on.current.onWrite(frame, e.currentTarget.value)}
               onKeyDown={pressed}
             />
             <button
@@ -1333,7 +1201,7 @@ export function TerminalPane({
               title={t(folded ? "face.composeOpen" : "face.composeFold")}
               aria-label={t(folded ? "face.composeOpen" : "face.composeFold")}
               onClick={() => {
-                onFold(frame, folded);
+                on.current.onFold(frame, folded);
                 setComposeStartsOpen(folded);
               }}
             >
@@ -1347,6 +1215,218 @@ export function TerminalPane({
       </div>
     </div>
   );
+}
+
+/** What {@link TerminalPane} is handed. */
+type PaneProps = {
+  /** Which of the arrangement's places this is (`../talk/layout`). */
+  frame: string;
+  /** Where on the page's grid this pane sits. It is worked out afresh from the order and this pane's
+   *  size, and never held against the pane itself (`AMB-D-939`). Left out where this is drawn
+   *  outside a page, which is a pane with no place to be given. */
+  at?: CSSProperties;
+  /** The hue the lamp above this pane is drawn in. It follows the slot rather than the frame, so it
+   *  comes from the page that laid this one out (`../talk/moving`). */
+  hue: number;
+  /** Which project this place belongs to — whose answer the agent it opens with is kept against
+   *  (`../talk/agent`). */
+  project: number;
+  /** What every frame is called, so a naming from anywhere reaches this row. */
+  names: FrameNames;
+  /** Which terminal to draw here, and where to start one. */
+  start: PaneStart;
+  /**
+   * Where the automation run this pane is drawing has got to, or null on an ordinary pane
+   * (`../talk/nameplate`).
+   *
+   * It is what the row says under the name, and it is also what the way out means here: **closing a
+   * run's pane is stopping the run** (`drop`).
+   */
+  run?: Say | null;
+  /**
+   * The built-in Amenbo is carrying out on this run's pane, or null (`./BuiltinCard`). While there is
+   * one, it stands where the terminal would, and nothing is started here.
+   *
+   * **A script step comes this way too, and is drawn as a terminal** (`AMB-D-1016`): its program runs
+   * on one, which the pane takes up the way it takes up an agent's step's (`PaneStart.readOnly`). Nobody
+   * writes into it, so the box, the band under it and the ways to hand it a path are not drawn.
+   */
+  builtin?: BuiltinRun | null;
+  /**
+   * **What the run's last step wrote, where it was a script** (`AMB-D-1016`) — kept on the run, and
+   * drawn where its terminal would be on a pane come back with the app: that terminal went down with
+   * it. Null everywhere else.
+   */
+  tail?: string | null;
+  /** True for the slot that puts a terminal up without being asked — the one the face comes up with,
+   *  and the one a person has just pressed the way in on. */
+  autoStart: boolean;
+  focused: boolean;
+  /**
+   * Whether a path has just been handed to this pane from somewhere else on the face, for as long as
+   * the pane is saying so (`./WorkspaceFace`).
+   *
+   * **Told rather than kept here**, because what it is about is the act and not the pane: the face
+   * knows a hand-over happened and the pane only draws it. What is drawn takes no room — the box
+   * xterm measures is what the program inside is told its number of columns from, so a mark that
+   * changed that box would be resizing somebody's editor to say a file had arrived.
+   */
+  landed?: boolean;
+  /**
+   * Whether something being carried inside the window is hanging over this pane
+   * (`../files/handDrag`).
+   *
+   * **Told rather than watched for**, which is the difference between the two drags. A drop from the
+   * desktop is the host's news and reaches each pane on its own; a row carried across the page is
+   * one gesture the face is holding, and the pane it is over is the face's answer. Both light the
+   * same surface, because to a reader they are the same act.
+   */
+  offered?: boolean;
+  /** Whether this is the pane being carried, so it can stand back while it is out of its place
+   *  (`./WorkspaceFace`). */
+  held?: boolean;
+  /**
+   * Where a pane let go of over this one would land — before it in the order, after it, or nowhere.
+   *
+   * It is the one thing drawn while a pane is carried, because the panes themselves do not move
+   * until the press ends: a page that rearranged under the hand would be moving terminals somebody
+   * is reading, to show them an arrangement they have not asked for yet (`AMB-D-939`).
+   */
+  goes?: { readonly side: "before" | "after"; readonly axis: "across" | "down" } | null;
+  /** Take hold of this pane by its row, to carry it somewhere else in the order. Left out where
+   *  there is nothing to reorder — one pane is already in order (`./WorkspaceFace`). */
+  onGrab?: (e: ReactPointerEvent<HTMLElement>) => void;
+  /** Pull this pane's corner, to leave it at one of the sizes there are (`./paneDrag`). */
+  onStretch?: (e: ReactPointerEvent<HTMLElement>) => void;
+  /** The size this pane takes now, which the row's mark draws (`./PaneSize`). */
+  size?: Size;
+  /** Put this pane at one of the sizes, picked from the row — the way to every size the corner
+   *  cannot pull to (`./PaneSize`). Left out where the pane has no page to be sized on. */
+  onSize?: (to: Size) => void;
+  onOpened: (frame: string, session: string, folder: string | null, agent: string | null) => void;
+  onSaid: (statement: SessionSaidDto) => void;
+  /** A file path drawn in this pane was clicked, as it was drawn. */
+  onPath: (frame: string, target: string) => void;
+  onClosed: (session: string) => void;
+  /** Take this place away — the frame and not the program in it (`../talk/layout`). */
+  onDrop: (frame: string) => void;
+  /** `carried` says the name came over with the session rather than as it was said — the pane took
+   *  up a terminal that had already named itself. It is written down the same way, and the provider
+   *  is not told: it is the one that said it (`../talk/terminal`). */
+  onName: (frame: string, name: string, by: NamedBy, carried?: boolean) => void;
+  onFocus: (frame: string) => void;
+  /** A way to read this pane's row, handed over while the pane is drawn and taken back when it is
+   *  not. It is what lets a face draw this pane somewhere other than above it (`./PaneOrder`), and it
+   *  is a way to ask rather than the answer: the row changes with every chunk that crosses, and a
+   *  value pushed up on each of them would redraw the face for a mark that has not moved. */
+  onRow?: (frame: string, read: (() => Row | null) | null) => void;
+  /**
+   * What has been written in the box under this pane and not sent yet (`AMB-D-864`).
+   *
+   * **Held by the window rather than here** (`../talk/layout`). A pane is taken down whenever it
+   * stops being on the face — carried onto another page, the count changed, the tasks face came up —
+   * and a half-written sentence kept in the drawing would go down with it. The terminal is the same
+   * shape of thing from the other side: what is running belongs to the host, and this pane only draws
+   * it.
+   */
+  written: string;
+  /** What is in the box now, on its way to the window that holds it. Said as it is written and again
+   *  with nothing in it once a line has gone. */
+  onWrite: (frame: string, written: string, put?: readonly string[]) => void;
+  /** The paths Amenbo put into this box, still standing in what is written (`../talk/layout`). They
+   *  are what the send waits the pane's agent out for (`../talk/terminal`, `AMB-D-879`). */
+  inserted?: readonly string[];
+  /**
+   * Whether the box under this pane is open (`AMB-D-890`).
+   *
+   * **Held by the window for the reason the draft is** (`../talk/layout`): a pane is taken down
+   * whenever it stops being on the screen, and a reader who opened the box did not ask for it to
+   * shut at any of those moments. It outlives the run as well, which the draft does not.
+   */
+  composeOpen: boolean;
+  /** The press on this pane's band, said as the box opens or folds away. What the *next* pane will
+   *  start as is a separate answer and is written down here (`../core/composeStartsOpen`). */
+  onFold: (frame: string, open: boolean) => void;
+};
+
+/** The functions among {@link PaneProps}: what the face wants done with what happens in the pane. */
+type Handlers = Pick<
+  PaneProps,
+  | "onOpened" | "onSaid" | "onPath" | "onClosed" | "onDrop" | "onName" | "onFocus" | "onRow" | "onWrite" | "onFold"
+  | "onGrab" | "onStretch" | "onSize"
+>;
+
+/** {@link Pane}, drawn again only when something it draws has changed ({@link samePane}). */
+const DrawnPane = memo(Pane, samePane);
+
+/**
+ * A pane on the face, drawn again only when something it draws has changed.
+ *
+ * **What is written in one pane's box is not a reason to draw the others.** The face draws itself
+ * again on every key pressed in a box — what is written is the window's (`../talk/layout`) — and
+ * every pane on the page went with it, which is what made typing heavy with several panes up.
+ *
+ * **The handlers go round the drawing, not through it.** The face hands a new function on each of
+ * its renders. This holds the newest ones where {@link Pane} reads them at the moment they are used,
+ * and the pane is not drawn again for being handed them: a pane left alone by {@link samePane} would
+ * otherwise keep calling the ones from the last render it was drawn on. The pane is put up once and
+ * lives longer than any one render, so its effects must not be re-run to see a newer callback either
+ * — that would take the terminal down to learn something it could have been told.
+ */
+export function TerminalPane(props: PaneProps) {
+  const {
+    onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold, onGrab, onStretch, onSize,
+  } = props;
+  const on = useRef<Handlers>({
+    onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold, onGrab, onStretch, onSize,
+  });
+  on.current = {
+    onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold, onGrab, onStretch, onSize,
+  };
+  return <DrawnPane {...props} on={on} />;
+}
+
+/**
+ * Whether two sets of props draw the same pane.
+ *
+ * **A function is compared by whether there is one, not by which.** The face makes its handlers
+ * afresh on each render, and the pane reads them at the moment they are used rather than off the
+ * props ({@link TerminalPane}), so a newer one changes nothing on the screen. Whether there is one
+ * does: the row is a handle only where there is something to carry it past.
+ *
+ * **Everything else is compared by what it holds.** `start`, `at`, `goes` and `run` are made afresh
+ * on each of the face's renders too, with the same values in them. What is not a plain object or an
+ * array — `names` is a map — is compared as it is: the face hands a new one only when it has changed.
+ */
+export function samePane(was: PaneProps, now: PaneProps): boolean {
+  const keys = new Set([...Object.keys(was), ...Object.keys(now)]) as Set<keyof PaneProps>;
+  for (const key of keys) {
+    const a = was[key];
+    const b = now[key];
+    if (typeof a === "function" || typeof b === "function") {
+      if ((a === undefined) !== (b === undefined)) return false;
+    } else if (!sameValue(a, b)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Two values holding the same thing, looked into where they are plain objects or arrays. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((one, i) => sameValue(one, b[i]));
+  }
+  if (Object.getPrototypeOf(a) !== Object.prototype || Object.getPrototypeOf(b) !== Object.prototype) return false;
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  return ka.every((k) => Object.prototype.hasOwnProperty.call(y, k) && sameValue(x[k], y[k]));
 }
 
 /** A script step's tail, drawn read-only on a terminal of its own that runs nothing (`../talk/terminal`). */

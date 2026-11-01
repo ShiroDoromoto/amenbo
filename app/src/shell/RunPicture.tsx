@@ -21,6 +21,7 @@
 // meanwhile is left where they went: that is the picture's own rule (`../screens/AutomationPicture`).
 // Nothing opens beside it — picking is only the border. The picture inside is the action as it is now,
 // which may not be the version the spot stands on: a step it has no longer is left unlit, not dropped.
+import { memo, useMemo } from "react";
 import { AutomationPicture, type PicTrail } from "../screens/AutomationPicture";
 import { actionGraph, automationGraph } from "../screens/automationLayout";
 import { useAutomation, useAutomationAction, useRunTrail } from "../core/automations";
@@ -82,20 +83,36 @@ function lapStart(passed: readonly Pass[]): number {
   return start;
 }
 
-export function RunPicture({ run }: { run: Say }) {
-  const automation = useAutomation(run.automationId);
-  const walked = useRunTrail(run.run);
-  const waiting = run.state?.waiting === true;
-  const trail = { ...picTrail(walked), waiting };
-  const actionId = automation?.placements.find((placement) => placement.id === trail.at)?.actionId ?? null;
-  const action = actionGraph(useAutomationAction(actionId));
-  const inside =
-    trail.at === undefined || action === null
-      ? undefined
-      : { boxId: trail.at, graph: action, trail: { ...stepTrail(walked), waiting } };
-  return (
-    <div className="runpic">
-      <AutomationPicture graph={automationGraph(automation)} selectedBoxId={trail.at} trail={trail} inside={inside} />
-    </div>
-  );
-}
+/**
+ * Drawn again only when what it reads of the run changes (`automationId`, `run`, whether it waits):
+ * the run's words are built afresh on each draw of the workspace, and building the pictures and
+ * laying them out again on each of those would slow the typing in the panes around it.
+ */
+export const RunPicture = memo(
+  function RunPicture({ run }: { run: Say }) {
+    const automation = useAutomation(run.automationId);
+    const walked = useRunTrail(run.run);
+    const waiting = run.state?.waiting === true;
+    const trail = useMemo(() => ({ ...picTrail(walked), waiting }), [walked, waiting]);
+    const actionId = automation?.placements.find((placement) => placement.id === trail.at)?.actionId ?? null;
+    const actionDef = useAutomationAction(actionId);
+    const action = useMemo(() => actionGraph(actionDef), [actionDef]);
+    const inside = useMemo(
+      () =>
+        trail.at === undefined || action === null
+          ? undefined
+          : { boxId: trail.at, graph: action, trail: { ...stepTrail(walked), waiting } },
+      [trail.at, action, walked, waiting],
+    );
+    const graph = useMemo(() => automationGraph(automation), [automation]);
+    return (
+      <div className="runpic">
+        <AutomationPicture graph={graph} selectedBoxId={trail.at} trail={trail} inside={inside} />
+      </div>
+    );
+  },
+  (before, after) =>
+    before.run.automationId === after.run.automationId &&
+    before.run.run === after.run.run &&
+    (before.run.state?.waiting === true) === (after.run.state?.waiting === true),
+);

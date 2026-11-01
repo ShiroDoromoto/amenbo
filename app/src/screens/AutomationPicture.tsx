@@ -62,7 +62,7 @@
 // input over them and its ways out under them — lit by the same rule as the picture outside it. Its
 // border is lit and still; the step under way inside it is what blinks, and what is picked and brought
 // to the middle. Once the run moves on to another box, it is drawn as it was.
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   edgeWord,
   grownTo,
@@ -253,10 +253,16 @@ export function AutomationPicture({
   // Arrowheads are looked up by id, and two pictures on one page must not answer for each other's.
   const ids = useId();
   const head = (kind: Head) => `url(#${ids}-${kind})`;
+  // Laid out again only when the graphs or the grown box change: a draw that changes neither, as a run
+  // that has not moved, keeps the layout it had (`../shell/RunPicture`).
+  const innerGraph = inside?.graph;
+  const inner = useMemo(() => (innerGraph === undefined ? null : layOut(innerGraph)), [innerGraph]);
   // An action with no step has no picture to grow its box for.
-  const inner = inside === undefined ? null : layOut(inside.graph);
   const grown = inner === null || inner.nodes.length === 0 ? undefined : inside!.boxId;
-  const picture = layOut(graph, undefined, grown === undefined ? undefined : grownTo(grown, inner!));
+  const picture = useMemo(
+    () => layOut(graph, undefined, grown === undefined ? undefined : grownTo(grown, inner!)),
+    [graph, grown, inner],
+  );
   // The step under way inside the grown box is picked there, and the box itself is not.
   const pickedId = selectedBoxId === grown ? undefined : selectedBoxId;
   // What a step's card says it takes in and hands on, on an action's picture — each input with the

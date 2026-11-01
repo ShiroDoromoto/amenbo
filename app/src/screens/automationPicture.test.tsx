@@ -153,15 +153,24 @@ describe("the picture of the steps", () => {
         this.gone = true;
       }
     } as never;
-    // The box taking a size is stood in the same way: the test says when it happens.
-    const sizes: (() => void)[] = [];
+    // Something taking a size is stood in the same way: the test says when it happens, and to what.
+    const sizes: { what: Element; tell: () => void }[] = [];
+    const sizeOf = (what: Element) => sizes.filter((one) => one.what === what).pop()!.tell;
     const wasSize = globalThis.ResizeObserver;
     globalThis.ResizeObserver = class {
+      private gone = false;
       constructor(private readonly call: ResizeObserverCallback) {}
-      observe() {
-        sizes.push(() => this.call([], this as never));
+      observe(what: Element) {
+        sizes.push({
+          what,
+          tell: () => {
+            if (!this.gone) this.call([], this as never);
+          },
+        });
       }
-      disconnect() {}
+      disconnect() {
+        this.gone = true;
+      }
     } as never;
     const moved: [Element, ScrollIntoViewOptions | undefined][] = [];
     const wasScroll = Element.prototype.scrollIntoView;
@@ -197,18 +206,35 @@ describe("the picture of the steps", () => {
       await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
       watched[2]!.answer(0, 0);
       expect(moved).toHaveLength(3);
-      sizes[sizes.length - 1]!();
+      sizeOf(nodes()[0]!)();
       expect(watched).toHaveLength(4);
       watched[3]!.answer(0);
       expect(moved).toHaveLength(4);
-      // A band landing over the board changes the document without touching the box: asked again.
-      const band = document.body.appendChild(document.createElement("div"));
-      await act(async () => {});
-      band.remove();
+      // A band landing over the board changes the page beside the picture without touching the box:
+      // asked again.
+      const band = document.body.insertBefore(document.createElement("div"), container);
       await act(async () => {});
       expect(watched.length).toBeGreaterThan(4);
       watched[watched.length - 1]!.answer(0.3);
       expect(moved).toHaveLength(5);
+      // The band growing after it landed is its size changing, and asks again as well.
+      const landed = watched.length;
+      sizeOf(band)();
+      expect(watched).toHaveLength(landed + 1);
+      watched[watched.length - 1]!.answer(0.3);
+      expect(moved).toHaveLength(6);
+      band.remove();
+      // A terminal writing its output into a pane beside the picture asks nothing: none of it moves
+      // the box, and asking at each write made typing in the terminal slow.
+      const pane = document.body.appendChild(document.createElement("div"));
+      const rows = pane.appendChild(document.createElement("div"));
+      await act(async () => {});
+      const written = watched.length;
+      rows.appendChild(document.createElement("span")).textContent = "$ ls";
+      rows.firstChild!.textContent = "$ ls -la";
+      await act(async () => {});
+      expect(watched).toHaveLength(written);
+      pane.remove();
       // The reader's own wheel ends the watch: where the screen stands is theirs from then on.
       await render({ graph: detail(), onPickBox: vi.fn() });
       await render({ graph: detail(), selectedBoxId: 1, onPickBox: vi.fn() });
@@ -216,7 +242,7 @@ describe("the picture of the steps", () => {
       watched[last - 1]!.answer(1);
       window.dispatchEvent(new Event("wheel"));
       watched[last - 1]!.answer(0.3);
-      expect(moved).toHaveLength(5);
+      expect(moved).toHaveLength(6);
     } finally {
       globalThis.IntersectionObserver = wasObserver;
       globalThis.ResizeObserver = wasSize;

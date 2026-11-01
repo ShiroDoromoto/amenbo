@@ -22,7 +22,10 @@ that is **macOS-only** (it links WKWebView) — see
 
 Use the pinned Node (24 — see `.nvmrc` at the repo root; `mise install` or `nvm use`
 picks it up). Other scripts: `npm run lint`, `npm run build`, `npm run typecheck`,
-`npm test` (Vitest unit suite).
+`npm test` (Vitest unit suite), and `npm run bench:input`, which times a key pressed in a
+pane's box until it is on screen, in WebKit, on the terminal and on a run's picture (needs
+`npx playwright install webkit` once; `-- --rev <commit>` measures `app/src` at that commit — see
+`scripts/bench-input-latency.mjs`).
 
 ## The wiring seams
 

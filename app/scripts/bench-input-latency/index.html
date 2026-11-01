@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Input latency bench</title>
+    <style>
+      html,
+      body,
+      #root {
+        margin: 0;
+        height: 100%;
+      }
+    </style>
+    <!-- The clocks sit before the app, in the capture phase, so they start before anything the page
+         itself does with a key: a press is timed from its keydown to two frames after it (the frame
+         that draws it has then been put on screen), and its input from the event to the next task
+         (the synchronous work React does for it). Frame gaps are read from a loop of its own. -->
+    <script>
+      window.__bench = { ready: false, lat: [], js: [], gaps: [], timing: false };
+      addEventListener(
+        "keydown",
+        () => {
+          if (!window.__bench.timing) return;
+          const t0 = performance.now();
+          requestAnimationFrame(() => requestAnimationFrame(() => window.__bench.lat.push(performance.now() - t0)));
+        },
+        true,
+      );
+      addEventListener(
+        "input",
+        () => {
+          if (!window.__bench.timing) return;
+          const t0 = performance.now();
+          setTimeout(() => window.__bench.js.push(performance.now() - t0), 0);
+        },
+        true,
+      );
+      window.__bench.start = () => {
+        const b = window.__bench;
+        b.timing = true;
+        let last = performance.now();
+        const tick = (now) => {
+          if (!b.timing) return;
+          b.gaps.push(now - last);
+          last = now;
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      };
+      window.__bench.stop = () => {
+        window.__bench.timing = false;
+      };
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

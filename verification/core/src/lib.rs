@@ -4624,10 +4624,10 @@ const REGISTRY: &[OpSpec] = &[
     // **Which face that pane's body is turned to** (`face`): the automation's picture, or the
     // terminal. A run's pane opens on its picture, and is turned to its terminal while a step that may
     // wait for a person runs. On the picture, the box the run is on — named the way `pick-box` names
-    // one, by `box` or, for a built-in, by its key (`builtin`) — blinks, stands picked and is brought
+    // one, by `box` or, for a built-in, by its key (`builtin`) — wears a heavier border, stands picked and is brought
     // to the middle. Where its action has steps, the box is drawn grown with the action's picture
-    // inside, and it is the step under way there (`step`, by name) that does so, the box's border lit
-    // and still. What it has passed on the task it is working is lit: the boxes listed under `passed`
+    // inside, and it is the step under way there (`step`, by name) that does so, the box's border lit.
+    // What it has passed on the task it is working is lit: the boxes listed under `passed`
     // (by name) and `passed_builtins` (by key), with the lines between them. A box is read
     // off the picture as drawn, so a road names what it is sure of and leaves the rest out.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-picture", required: &["face"], refs: &["target"], strings: &["face", "box", "builtin", "step"], binds: false },

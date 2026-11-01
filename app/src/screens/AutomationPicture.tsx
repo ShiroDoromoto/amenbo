@@ -50,9 +50,9 @@
 // so a reader scrolling away from the box that stays picked is not pulled back.
 //
 // **Drawn in a run's pane, it is the run's trail** (`AMB-T-5775`, `../shell/RunPicture`). The boxes and
-// lines the run passed on the lap it is walking are lit, the box under way blinks — or wears only its
-// border where the reader asked for less motion. A box waiting for a task it can take does not blink:
-// its border is dashed, and a spinner and the words for the wait stand over it. Each box the run moves
+// lines the run passed on the lap it is walking are lit, and the box under way wears a heavier border
+// and stays still: it does not blink, since an animation in the picture makes typing in the run's pane
+// slow. A box waiting for a task it can take wears a dashed border instead, and a spinner and the words for the wait stand over it. Each box the run moves
 // on to is picked and brought to the middle. Nothing is put in there, so no `+` is drawn, and the
 // legend is left to the build screen: what a line means is read where the picture is made.
 //
@@ -60,7 +60,7 @@
 // rows and boxes around it stand further off to make the room (`PicGrow`), and inside it the action's
 // picture is drawn as its build screen draws it — the step cards, the lines between them, the action's
 // input over them and its ways out under them — lit by the same rule as the picture outside it. Its
-// border is lit and still; the step under way inside it is what blinks, and what is picked and brought
+// border is lit; the step under way inside it is what wears the heavier border, and what is picked and brought
 // to the middle. Once the run moves on to another box, it is drawn as it was.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {

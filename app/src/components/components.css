@@ -2374,21 +2374,15 @@ button.feed__target:hover { color: var(--c-accent); }
    with the accent's border. */
 .autopic__line--lit { stroke: var(--c-accent); stroke-width: 2.5; }
 .autopic__node--lit { border-color: var(--c-accent); }
-/* The box under way blinks — and where the reader asked for less motion, it wears a heavier border and
-   stays still. */
-.autopic__node--at { animation: autopic-at 1.2s ease-in-out infinite; }
-@keyframes autopic-at {
-  50% { background: var(--c-accent-faint); box-shadow: 0 0 0 3px var(--c-accent); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .autopic__node--at { animation: none; box-shadow: 0 0 0 2px var(--c-accent); }
-}
+/* The box under way wears a heavier border and stays still: it does not blink, since an animation
+   in the picture makes typing in the run's pane slow. */
+.autopic__node--at { box-shadow: 0 0 0 2px var(--c-accent); }
 /* The box under way waiting for a task it can take: still, with a dashed border, and a spinner and the
    words for the wait over it in place of the word that it takes the task. */
 .autopic__node--wait { border-color: var(--c-accent); border-style: dashed; }
 /* The box the run is under way in, grown with its action's picture inside (`AMB-T-6505`): its border
-   lit and still — the step under way inside is what blinks. Its head is the action's name and which
-   step the run is at; the action's picture stands under it. */
+   lit — the step under way inside is what wears the heavier border. Its head is the action's name and
+   which step the run is at; the action's picture stands under it. */
 .autopic__node--grown {
   justify-content: flex-start; gap: 0; padding: 0; overflow: visible; cursor: default;
   border: 1.5px solid var(--c-accent);

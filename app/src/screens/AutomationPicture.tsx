@@ -307,9 +307,13 @@ export function AutomationPicture({
   // was brought into sight and the band over the board grew in the same frame, pushing it back
   // below the fold: out of sight at both looks, it crossed nothing, and nothing moved it again
   // (`AMB-T-5595`). The band is not around the box, and the boxes that are keep their size while
-  // their content overflows, so no size of theirs says it grew. What does is the page changing: each
-  // change to the document, and each change of the box's own size (a face coming up), asks the
-  // observer again from the start.
+  // their content overflows, so no size of theirs says it grew. What does is the page changing around
+  // the box, and each such change asks the observer again from the start: a change inside the
+  // picture's frame; something coming or going beside the frame or beside any box it stands in, out
+  // to the page; one of those changing size, as a band does when it grows; and the box's own size
+  // changing (a face coming up). The rest of the document is not watched. The workspace's terminal
+  // writes its output into the document as it comes, and asking again at each of those writes made
+  // typing in it slow, though none of them moves the box.
   const drawn = picture.nodes.some((node) => node.boxId === pickedId);
   const centred = trail !== undefined;
   const waitingAt = (boxId: number) => trail?.waiting === true && trail.at === boxId && boxId !== grown;
@@ -330,6 +334,7 @@ export function AutomationPicture({
       watch.disconnect();
       sized?.disconnect();
       changed.disconnect();
+      beside.disconnect();
       for (const kind of reader) window.removeEventListener(kind, stop, true);
     };
     const watch = new IntersectionObserver(([seen]) => {
@@ -343,9 +348,24 @@ export function AutomationPicture({
     };
     const sized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(askAgain);
     const changed = new MutationObserver(askAgain);
+    // A band that lands beside the frame, or beside any box the frame stands in, is watched for its
+    // size from then on, so its growing later asks again too.
+    const beside = new MutationObserver((records) => {
+      for (const record of records) {
+        record.addedNodes.forEach((added) => {
+          if (added instanceof Element) sized?.observe(added);
+        });
+      }
+      askAgain();
+    });
+    const sheet = box.closest<HTMLElement>(".autopic") ?? box;
     watch.observe(box);
     sized?.observe(box);
-    changed.observe(document.body, { childList: true, subtree: true, characterData: true });
+    changed.observe(sheet, { childList: true, subtree: true, characterData: true });
+    for (let at: Element = sheet; at !== document.body && at.parentElement !== null; at = at.parentElement) {
+      beside.observe(at.parentElement, { childList: true });
+      for (const one of Array.from(at.parentElement.children)) sized?.observe(one);
+    }
     for (const kind of reader) window.addEventListener(kind, stop, true);
     return stop;
   }, [pickedId, drawn, centred]);

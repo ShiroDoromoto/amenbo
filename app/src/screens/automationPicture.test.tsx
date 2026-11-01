@@ -737,7 +737,7 @@ describe("the box a run is under way in", () => {
   const grown = () => container.querySelector<HTMLElement>(".autopic__node--grown");
   const steps = () => [...(grown()?.querySelectorAll<HTMLButtonElement>("button.autopic__node") ?? [])];
 
-  it("grows the box with the action's picture inside, and blinks the step under way, not the box", async () => {
+  it("grows the box with the action's picture inside, and marks the step under way with the heavier border, not the box", async () => {
     await render({ graph: two(), selectedBoxId: 2, trail, inside });
     expect(grown()).not.toBeNull();
     expect(grown()!.className).not.toContain("autopic__node--at");

@@ -6781,21 +6781,21 @@ impl Instructor {
                 },
             },
             // Which face the pane's body is turned to, and on the picture where the run is and where it
-            // has been. The blink is an eye's: a shot catches it at either end, so the line asks for the
-            // box to be watched rather than read.
+            // has been. The heavier border is an eye's: no word on the screen says it, so the line asks
+            // for the box to be looked at rather than read.
             (Domain::Automation, "run-picture") => match req(with, "face")? {
                 "picture" => {
                     let mut line = "In the workspace, confirm the pane this run is drawn in has \"Picture\" pressed on the line over it, and that its body is the automation's picture rather than a terminal".to_string();
                     // A box whose action has steps is drawn grown, with that action's picture inside,
-                    // and the step under way there is what blinks; a box with none blinks itself.
+                    // and the step under way there is what wears the heavier border; a box with none wears it itself.
                     if with.contains_key("box") || with.contains_key("builtin") {
                         line.push_str(&match with.get("step").and_then(|v| v.as_str()) {
                             Some(step) => format!(
-                                ". Confirm {} is drawn larger than the boxes around it, with its border lit and still and the picture of its action inside it, and that the step \"{step}\" in that picture blinks, stands picked, and has been brought to the middle of the pane",
+                                ". Confirm {} is drawn larger than the boxes around it, with its border lit and the picture of its action inside it, and that the step \"{step}\" in that picture wears a heavier border than the steps around it, stands picked, and has been brought to the middle of the pane",
                                 box_named(with, "box", "builtin")?
                             ),
                             None => format!(
-                                ". Confirm {} blinks, stands picked, and has been brought to the middle of the pane",
+                                ". Confirm {} wears a heavier border than the boxes around it, stands picked, and has been brought to the middle of the pane",
                                 box_named(with, "box", "builtin")?
                             ),
                         });
@@ -9553,10 +9553,10 @@ steps_gui:
         let lines: Vec<String> =
             s.steps(Driver::Gui).iter().map(|st| ins.render(st).expect("every step renders")).collect();
         assert!(lines[0].contains("\"Picture\" pressed") && lines[0].contains("the box \"after\" is drawn larger"), "{}", lines[0]);
-        assert!(lines[0].contains("the step \"wait\" in that picture blinks") && !lines[0].contains("\"after\" blinks"), "{}", lines[0]);
+        assert!(lines[0].contains("the step \"wait\" in that picture wears a heavier border") && !lines[0].contains("\"after\" wears"), "{}", lines[0]);
         assert!(lines[0].contains("the box \"take\"") && lines[0].contains("the box of"), "{}", lines[0]);
-        assert!(lines[1].contains("\"Terminal\" pressed") && !lines[1].contains("blinks"), "{}", lines[1]);
-        assert!(lines[2].contains("blinks, stands picked") && !lines[2].contains("drawn larger"), "{}", lines[2]);
+        assert!(lines[1].contains("\"Terminal\" pressed") && !lines[1].contains("heavier border"), "{}", lines[1]);
+        assert!(lines[2].contains("wears a heavier border than the boxes around it, stands picked") && !lines[2].contains("drawn larger"), "{}", lines[2]);
         assert!(lines[3].contains("line over the pane") && lines[3].contains("press \"Terminal\""), "{}", lines[3]);
 
         let row = load(r#"

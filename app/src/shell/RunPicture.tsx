@@ -3,7 +3,7 @@
 // What a reader watching a run wants to know is where it is and where it has been, and a terminal's
 // output says neither. So the pane's body can be the automation's picture instead, drawn the way the
 // build screen draws it (`../screens/AutomationPicture`), with the lap the run is walking on the task
-// it is working lit, and the step under way blinking in the box it is in — or, while the run waits for
+// it is working lit, and the step under way wearing a heavier border in the box it is in — or, while the run waits for
 // a task it can take, dashed with a spinner over it.
 //
 // **The trail is core's to read** (`amenbo_core::ops::automation_run::trail`): which spots it passed, by
@@ -11,9 +11,9 @@
 // run that takes its next task starts a fresh one — what was lit for the task before goes out.
 //
 // **The box under way is grown, with its action's own picture inside** (`AMB-T-6505`). A box that only
-// blinks says which action the run is in and not which of its steps, so the action's picture is drawn
+// wears the heavier border says which action the run is in and not which of its steps, so the action's picture is drawn
 // in it as its build screen draws it, lit by the same rule as the boxes outside, and the step under way
-// blinks there instead. The steps are core's to read too: the ones it passed inside the spot it is in,
+// wears it there instead. The steps are core's to read too: the ones it passed inside the spot it is in,
 // and the step it stands at. Once it leaves that spot, the box is drawn as it was.
 //
 // **The step under way is the one picked** — or, where the action has no picture to draw, the box.

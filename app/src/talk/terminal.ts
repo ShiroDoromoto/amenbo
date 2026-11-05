@@ -42,6 +42,7 @@ import { openExternalUrl } from "../core/mutations";
 import { hostOs, type HostOs } from "../core/platform";
 import { tidiedCopy } from "./copied";
 import type { NamedBy } from "./frames";
+import { fitter, type Fitter } from "./growing";
 import { holdSelectionOffscreen } from "./offscreenSelection";
 import { httpUrl, pathsOnRow, refFromUrl, refsOnRow, urlsOnRow, type Cell, type Rows } from "./refLinks";
 
@@ -578,11 +579,21 @@ function screenIn(host: HTMLElement): HTMLElement {
  * nothing while nobody was looking. Switching to the other face hides this one and leaves the
  * terminal running (`AMB-D-753`), so "no size" here means "not being shown", and the size it had is
  * the size to keep until it is shown again.
+ *
+ * `null` for a pane that is not on screen; otherwise what settles once the terminal is at its new
+ * size, which for one made taller or shorter is a moment later (`./growing`).
  */
-function refit(fit: FitAddon, screen: HTMLElement): boolean {
-  if (screen.clientWidth === 0 || screen.clientHeight === 0) return false;
-  fit.fit();
-  return true;
+function refit(fitting: Fitter, screen: HTMLElement): Promise<void> | null {
+  if (screen.clientWidth === 0 || screen.clientHeight === 0) return null;
+  return fitting.fit();
+}
+
+/**
+ * The fitting for a terminal fitted by `fit`, keeping its scrollback whole as rows come and go
+ * (`./growing`).
+ */
+function fitterFor(term: Terminal, fit: FitAddon): Fitter {
+  return fitter(term, { rows: () => fit.proposeDimensions()?.rows, fit: () => fit.fit() });
 }
 
 /** As much of a terminal as one size can be read at — what `replayTail` takes a list of. */
@@ -640,7 +651,7 @@ type Drawn = { running: PtySessionDto; named: string | null; made: SessionMadeDt
 /** Put a terminal in front of this pane: the one it is meant to have, else a new one. */
 async function draw(
   term: Terminal,
-  fit: FitAddon,
+  fitting: Fitter,
   host: HTMLElement,
   start: PaneStart,
 ): Promise<Drawn> {
@@ -661,7 +672,7 @@ async function draw(
       // carried out of here for the pane to read onto itself (`PaneEvents.carried`).
       const adopted = await invoke<PtyAdoptDto>("pty_attach", { session: want.session });
       await replayTail(term, adopted.replay);
-      refit(fit, host);
+      await refit(fitting, host);
       // The program is told last, because until now it was writing to the old width and its next
       // line has to arrive at the new one.
       void invoke("pty_resize", { session: want.session, cols: term.cols, rows: term.rows })
@@ -1131,10 +1142,13 @@ export async function mountTerminal(
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  const fitting = fitterFor(term, fit);
   const screen = screenIn(host);
   term.open(screen);
   holdSelectionOffscreen(term);
-  refit(fit, screen);
+  // Waited for, because a terminal given other rows settles a moment later (`./growing`) and `draw`
+  // opens the program at whatever size the terminal has by then.
+  await refit(fitting, screen);
 
   // The first way, and the one that works on any program's output: read the refs back out of what was
   // drawn. It covers what the escape cannot — an agent's own words, a git log, a grep — and the escape
@@ -1207,7 +1221,7 @@ export async function mountTerminal(
   const unlistenOutput = await listen<PtyChunkDto>(OUTPUT_EVENT, ({ payload }) => {
     if (session === null) held.push(payload);
     else if (payload.session === session) {
-      term.write(decode(payload.base64));
+      fitting.write(decode(payload.base64));
       on.output();
     }
   });
@@ -1238,7 +1252,7 @@ export async function mountTerminal(
     else if (payload.session === session) take(payload);
   });
 
-  const { running, named, made } = await draw(term, fit, screen, start);
+  const { running, named, made } = await draw(term, fitting, screen, start);
   session = running.session;
   // Which agent is in the pane, for the copy rules above. It comes off the session and not off
   // `start` for the reason the folder below does: a pane that took up a running terminal is running
@@ -1253,7 +1267,7 @@ export async function mountTerminal(
   if (named !== null || made.length > 0) on.carried?.(named, made);
   for (const chunk of held.splice(0)) {
     if (chunk.session !== session) continue;
-    term.write(decode(chunk.base64));
+    fitting.write(decode(chunk.base64));
     // Held rather than replayed: these arrived while the pane was still being told what it was
     // drawing, moments ago, so they are output arriving like any other.
     on.output();
@@ -1381,13 +1395,14 @@ export async function mountTerminal(
   // for — what the program is told is where the pane ended up, never a size it passed through.
   let settling: ReturnType<typeof setTimeout> | null = null;
   const resize = new ResizeObserver(() => {
-    if (!refit(fit, screen)) return;
+    const fitted = refit(fitting, screen);
+    if (!fitted) return;
     if (settling !== null) clearTimeout(settling);
     settling = setTimeout(() => {
       settling = null;
       void invoke("pty_resize", { session, cols: term.cols, rows: term.rows }).catch(() => {});
     }, SETTLED_MS);
-    on.sized?.(term.cols, term.rows);
+    void fitted.then(() => on.sized?.(term.cols, term.rows));
   });
   resize.observe(screen);
   // Said once for the size the pane came up at. The observer above fires on changes, and a pane that
@@ -1429,12 +1444,13 @@ export function mountTail(host: HTMLElement, tail: string): () => void {
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
+  const fitting = fitterFor(term, fit);
   const screen = screenIn(host);
   term.open(screen);
   holdSelectionOffscreen(term);
-  refit(fit, screen);
-  term.write(`\x1b[?25l${tail.replace(/\r?\n/g, "\r\n")}`);
-  const resize = new ResizeObserver(() => refit(fit, screen));
+  void refit(fitting, screen);
+  fitting.write(`\x1b[?25l${tail.replace(/\r?\n/g, "\r\n")}`);
+  const resize = new ResizeObserver(() => void refit(fitting, screen));
   resize.observe(screen);
   return () => {
     resize.disconnect();

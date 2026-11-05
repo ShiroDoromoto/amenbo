@@ -712,6 +712,14 @@ export function WorkspaceFace({
   // with the cards as they were when the listener was made, as `standing` says of the arrangement.
   const builtinsNow = useRef(builtins);
   builtinsNow.current = builtins;
+  /**
+   * **Which pane each run's card is drawn as**, by the pane's id — the part of the key that tells one
+   * step from the next. A step already written is its execution row's id; one told before it is
+   * written (`builtin_about_to` in `crate::automation`) has no row yet, and is given one of its own
+   * here, which the same step keeps once it is told again written.
+   */
+  const builtinPanes = useRef(new Map<string, string>());
+  const aboutTo = useRef(0);
 
   /**
    * **A built-in is being carried out on a run, or has been** (`AMB-D-964`): stand the run's pane if
@@ -719,9 +727,11 @@ export function WorkspaceFace({
    * a terminal.
    *
    * It is told twice — as it starts and as it is done — and the second is the same card written over,
-   * not a new arrival: the ring goes up once, as the card first takes the place. The host has already
-   * ended the terminal of the step before (`crate::pty::end_steps_of`); what comes off here is the
-   * frame's hold on it.
+   * not a new arrival: the ring goes up once, as the card first takes the place. **The next step is a
+   * new pane**, on the same spot or not: what tells two steps apart is the execution row, and a step
+   * told before its row was written keeps the pane it was drawn as once it is told again with it.
+   * The host has already ended the terminal of the step before (`crate::pty::end_steps_of`); what
+   * comes off here is the frame's hold on it.
    *
    * **A script step comes with the terminal its program runs on** (`AMB-D-1016`), and that goes on the
    * frame the way an agent's step's does, for the pane to take up read-only (`./TerminalPane`). It is
@@ -735,7 +745,22 @@ export function WorkspaceFace({
     session: string | null,
   ) => {
     const id = runFrameId(run);
-    const fresh = !builtinsNow.current.has(id);
+    const was = builtinsNow.current.get(id);
+    const fresh = was === undefined;
+    // The same step told again: once more with the same row (the built-in that waits, held and then
+    // done), or told before its row was written — the one about to be carried out, or waiting for
+    // something to turn up — and told now with it.
+    const told = was !== undefined && (
+      was.runStep !== undefined
+        ? was.runStep === builtin.runStep
+        : was.placement === builtin.placement && was.key === builtin.key && was.name === builtin.name
+    );
+    const pane = told
+      ? builtinPanes.current.get(id) ?? `about:${++aboutTo.current}`
+      : builtin.runStep !== undefined ? `${builtin.runStep}` : `about:${++aboutTo.current}`;
+    builtinPanes.current.set(id, pane);
+    // Read by the next one told before this render, as the same step told written may be.
+    builtinsNow.current = new Map(builtinsNow.current).set(id, builtin);
     setSteps((had) => droppedFrom(had, id));
     setBuiltins((had) => new Map(had).set(id, builtin));
     setLayout((was) => {
@@ -776,6 +801,8 @@ export function WorkspaceFace({
     }
     if (one.step === undefined) return;
     const step = one.step;
+    // The card is gone before this render too, for a built-in told next not to be taken for it.
+    builtinsNow.current = droppedFrom(builtinsNow.current, id);
     setBuiltins((had) => droppedFrom(had, id));
     setSteps((had) => new Map(had).set(id, step));
     // **The step standing already, told again** because it took its task (`AMB-T-5427`,
@@ -1715,14 +1742,14 @@ export function WorkspaceFace({
                   // and built again. Keyed by the place alone, the emulator would be handed a
                   // second session to draw while still holding the first one's screen.
                   //
-                  // A built-in's card is keyed by the spot it was opened from, for the same reason
-                  // (`AMB-T-5550`): two built-ins in a row are two steps on two spots, and the row
-                  // above the card is put up once per pane. Its start and its end are the same spot,
-                  // so the card is written over, not built again, between them. Where the run's copy
-                  // names no spot, the built-in's key stands in for it.
+                  // A built-in's card and a script's terminal are keyed by their step as well, for
+                  // the same reason (`AMB-T-5550`): the row above the card is put up once per pane,
+                  // and the steps of one spot follow one another there. Its start and its end are the
+                  // same step, so the card is written over, not built again, between them
+                  // (`builtinPanes`).
                   key={step !== undefined
                     ? `${frame.id}:${step.runStep}`
-                    : builtin !== undefined ? `${frame.id}:builtin:${builtin.placement ?? builtin.key}` : frame.id}
+                    : builtin !== undefined ? `${frame.id}:builtin:${builtinPanes.current.get(frame.id)}` : frame.id}
                   frame={frame.id}
                   // Where this pane sits on the page's grid, worked out from the order rather than
                   // held against the pane (`../talk/layout`).
@@ -1807,6 +1834,7 @@ export function WorkspaceFace({
                     // moment a pane of that id stood again.
                     setSteps((had) => droppedFrom(had, id));
                     setBuiltins((had) => droppedFrom(had, id));
+                    builtinPanes.current.delete(id);
                   }}
                   onName={named}
                   onFocus={(id) => setLayout((was) => focusOn(was, id))}

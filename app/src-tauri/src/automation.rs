@@ -2466,6 +2466,7 @@ fn builtin_about_to(
     };
     Ok((run.project_id, AutomationBuiltinRunDto {
         automation: run.automation_id,
+        run_step: None,
         placement: def.placement_id,
         automation_name: automation_name(store, run.automation_id)?,
         name: def.name.clone(),
@@ -2514,6 +2515,7 @@ fn builtin_of_step(
     };
     Ok((run.project_id, AutomationBuiltinRunDto {
         automation: run.automation_id,
+        run_step: Some(run_step_id),
         placement: def.placement_id,
         automation_name: automation_name(store, run.automation_id)?,
         name: def.name.clone(),

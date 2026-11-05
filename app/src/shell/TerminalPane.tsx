@@ -608,8 +608,8 @@ function Pane({
 
   // **The row above a built-in's card** (`./BuiltinCard`). There is no terminal for the effect above
   // to put it up with, and the row is still what says which run this is and how far in it has got.
-  // The card is a pane of its own key, one per spot (`./WorkspaceFace`), so this is put up once and
-  // taken down with it — the next built-in in a row is the next pane.
+  // The card is a pane of its own key, one per step (`./WorkspaceFace`), so this is put up once and
+  // taken down with it — the next built-in in a row is the next pane, on the same spot or not.
   //
   // **And above a run's pane with no terminal in it** (`AMB-T-5635`): one the store kept, come back
   // with the app for a run held or failed. What its terminal printed died with the process, and the

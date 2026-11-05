@@ -837,6 +837,86 @@ describe("a built-in on a run's pane", () => {
     expect(q(".plate__step b")[0]?.textContent).toBe(builtinWord("close_task", "タスクを閉じる"));
   });
 
+  it("names the next built-in when two come one after the other from the same spot", async () => {
+    // The steps of one placed action all carry that action's spot, so the spot cannot tell them apart:
+    // the execution row does.
+    await mount();
+    const merge = { placement: 276, name: "main をマージする", key: "merge_main" };
+    const close = { placement: 276, name: "タスクを閉じる", key: "close_task" };
+    await arrive({ step: undefined, builtin: builtin(merge) });
+    await arrive({ step: undefined, builtin: builtin({ ...merge, runStep: 41, finished: true }) });
+    await arrive({ step: undefined, builtin: builtin(close) });
+    expect(q(".plate__step b")[0]?.textContent).toBe(builtinWord("close_task", "タスクを閉じる"));
+
+    await arrive({ step: undefined, builtin: builtin({ ...close, runStep: 42, finished: true }) });
+
+    expect(panes()).toHaveLength(1);
+    expect(card()).toHaveLength(1);
+    expect(q(".plate__step b")).toHaveLength(1);
+    expect(q(".plate__step b")[0]?.textContent).toBe(builtinWord("close_task", "タスクを閉じる"));
+  });
+
+  it("takes up the next script's terminal when two come one after the other from the same spot", async () => {
+    await mount();
+    const first = builtin({ placement: 276, runStep: 41, name: "テストを回す", key: "", program: "/opt/tools/test.sh" });
+    await arrive({ step: undefined, builtin: first, session: "script-1" });
+    await arrive({ step: undefined, builtin: { ...first, finished: true, exitName: "完了" }, session: "script-1" });
+
+    const second = builtin({ placement: 276, runStep: 42, name: "ビルドする", key: "", program: "/opt/tools/build.sh" });
+    await arrive({ step: undefined, builtin: second, session: "script-2" });
+
+    expect(panes()).toHaveLength(1);
+    expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("script-2");
+    expect(q(".plate__step b")).toHaveLength(1);
+    expect(q(".plate__step b")[0]?.textContent).toBe("ビルドする");
+  });
+
+  it("draws the same step as a new card when a loop comes round to it again", async () => {
+    await mount();
+    const cut = { placement: 276, name: "worktree を切る", key: "worktree_cut" };
+    await arrive({ step: undefined, builtin: builtin(cut) });
+    await arrive({ step: undefined, builtin: builtin({ ...cut, runStep: 41, finished: true }) });
+    const once = card()[0];
+
+    await arrive({ step: undefined, builtin: builtin(cut) });
+
+    // The tick of the first round is gone: the card standing is the second round, still at it.
+    expect(card()).toHaveLength(1);
+    expect(card()[0]).not.toBe(once);
+    expect(q(".slot__builtin-spin")).toHaveLength(1);
+    const again = card()[0];
+
+    await arrive({ step: undefined, builtin: builtin({ ...cut, runStep: 52, finished: true }) });
+    expect(card()[0]).toBe(again);
+  });
+
+  it("builds nothing again between a built-in told before it is carried out and once it has been", async () => {
+    await mount();
+    await arrive({ step: undefined, builtin: builtin() });
+    const before = card()[0];
+    const row = q(".plate__step b")[0];
+
+    await arrive({ step: undefined, builtin: builtin({ runStep: 41, finished: true }) });
+
+    expect(card()[0]).toBe(before);
+    expect(q(".plate__step b")[0]).toBe(row);
+    expect(q(".slot__builtin-done")).toHaveLength(1);
+  });
+
+  it("builds nothing again while the built-in that waits is told before, held and done (AMB-D-983)", async () => {
+    await mount();
+    const wait = { name: "待つ", key: "wait" };
+    await arrive({ step: undefined, builtin: builtin(wait) });
+    const before = card()[0];
+
+    await arrive({ step: undefined, builtin: builtin({ ...wait, runStep: 41, heldUntil: "2026-09-26T12:34:56Z" }) });
+    expect(card()[0]).toBe(before);
+
+    await arrive({ step: undefined, builtin: builtin({ ...wait, runStep: 41, finished: true, exitName: "完了" }) });
+    expect(card()[0]).toBe(before);
+    expect(q(".slot__builtin-done")).toHaveLength(1);
+  });
+
   it("gives the pane back to a terminal when the next step arrives", async () => {
     await mount();
     await arrive({ step: undefined, builtin: builtin() });

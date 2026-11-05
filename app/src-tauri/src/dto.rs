@@ -4128,6 +4128,12 @@ pub struct AutomationBuiltinRunDto {
     /// stands on is read from, to number the step as that picture numbers it.
     #[ts(type = "number")]
     pub(crate) automation: i64,
+    /// **The execution row this step is carried out under**, by its id — what the pane is keyed by,
+    /// so the next step on the same spot is drawn as the next pane. Absent while it is about to be
+    /// carried out, or waits for something to turn up, and nothing is written for it yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) run_step: Option<i64>,
     /// **The spot on the picture this step was opened from**, by the placement's id — the row numbers
     /// the step with the number the picture's box carries (`AMB-T-5538`). Absent where the run's copy
     /// names no spot.

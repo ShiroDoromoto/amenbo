@@ -431,8 +431,6 @@ pub enum ErrorCode {
     NotReadyAutomationTaskLeftOpenAtEnd,
     // A person's own action handing on the task a run works, which only a built-in takes (`AMB-D-964`).
     NotReadyAutomationHandsOnTaskTaken,
-    // The built-in that splits by an axis, placed on an axis deleted since (`AMB-D-987`).
-    NotReadyAutomationSplitAxisGone,
     // A save of an action refused by the action's own check — a save, not a launch, and with no
     // placement to name when it has no step to start at.
     NotReadyActionSave,
@@ -572,7 +570,6 @@ impl ErrorCode {
             ErrorCode::NotReadyAutomationTaskLeftOpen => "not_ready_automation_task_left_open",
             ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd => "not_ready_automation_task_left_open_at_end",
             ErrorCode::NotReadyAutomationHandsOnTaskTaken => "not_ready_automation_hands_on_task_taken",
-            ErrorCode::NotReadyAutomationSplitAxisGone => "not_ready_automation_split_axis_gone",
             ErrorCode::NotReadyActionSave => "not_ready_action_save",
             ErrorCode::NotReadyActionSaveEmpty => "not_ready_action_save_empty",
             ErrorCode::InvalidMakeTaskNoRunsTask => "invalid_make_task_no_runs_task",
@@ -700,7 +697,6 @@ impl ErrorCode {
         ErrorCode::NotReadyAutomationTaskLeftOpen,
         ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
         ErrorCode::NotReadyAutomationHandsOnTaskTaken,
-        ErrorCode::NotReadyAutomationSplitAxisGone,
         ErrorCode::NotReadyActionSave,
         ErrorCode::NotReadyActionSaveEmpty,
         ErrorCode::InvalidMakeTaskNoRunsTask,
@@ -959,7 +955,6 @@ mod tests {
             "not_ready_automation_task_left_open",
             "not_ready_automation_task_left_open_at_end",
             "not_ready_automation_hands_on_task_taken",
-            "not_ready_automation_split_axis_gone",
             "not_ready_action_save",
             "not_ready_action_save_empty",
             "invalid_make_task_no_runs_task",

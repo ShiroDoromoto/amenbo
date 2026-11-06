@@ -13,16 +13,14 @@
 // And the built-ins (`AMB-D-964`): **they come third under their own head, and not at all while the
 // build carries none**; **a picked one shows what it does, and declares it the way an action of one's
 // own does**; and **placing one names it by
-// its key** through the built-in's own doors, on a line or on an empty picture; **the one that splits by
-// an axis asks which first**, offering only an axis a task holds one value of, opens with that axis's
-// values as its ways out, and is not placed until one is picked.
+// its key** through the built-in's own doors, on a line or on an empty picture.
 //
 // And the empty picture (`AMB-D-977`): **it offers the built-ins a run starts at and nothing else**, in
 // the order core offers them — no action of one's own, no search box, no row that makes one.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationActionCardDto, AutomationBuiltinDto, DimensionDto } from "../bindings/bindings";
+import type { AutomationActionCardDto, AutomationBuiltinDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   actions: [] as AutomationActionCardDto[],
@@ -33,7 +31,6 @@ const hoisted = vi.hoisted(() => ({
   insertAtExit: vi.fn((..._args: unknown[]) => Promise.resolve([] as number[])),
   insertBuiltinAtExit: vi.fn((..._args: unknown[]) => Promise.resolve()),
   placeBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
-  dimensions: [] as DimensionDto[],
 }));
 
 vi.mock("../core/automations", () => ({
@@ -47,10 +44,6 @@ vi.mock("../core/automations", () => ({
   insertAutomationActionAtExit: hoisted.insertAtExit,
   insertAutomationBuiltinAtExit: hoisted.insertBuiltinAtExit,
   placeAutomationBuiltin: hoisted.placeBuiltin,
-}));
-// The project's axes are what the built-in that splits by one offers; nothing else here reads the snapshot.
-vi.mock("../core/snapshot", () => ({
-  getSnapshot: () => ({ projects: [{ id: 1, dimensions: hoisted.dimensions }] }),
 }));
 
 import { t, tf } from "../core/i18n";
@@ -297,7 +290,7 @@ describe("the built-ins in the panel", () => {
     await render({ edgeId: 9 });
     await act(async () => { button("Take a task").click(); });
     await act(async () => { button(t("auto.pic.placeDo")).click(); });
-    expect(hoisted.insertBuiltin).toHaveBeenCalledWith(9, "task_take", null);
+    expect(hoisted.insertBuiltin).toHaveBeenCalledWith(9, "task_take");
     expect(hoisted.insert).not.toHaveBeenCalled();
     expect(placed).toHaveBeenCalledTimes(1);
   });
@@ -306,7 +299,7 @@ describe("the built-ins in the panel", () => {
     await render({ fromId: 3, exitName: "taken" });
     await act(async () => { button("Take a task").click(); });
     await act(async () => { button(t("auto.pic.placeDo")).click(); });
-    expect(hoisted.insertBuiltinAtExit).toHaveBeenCalledWith({ boxId: 3, exitName: "taken" }, "task_take", null);
+    expect(hoisted.insertBuiltinAtExit).toHaveBeenCalledWith({ boxId: 3, exitName: "taken" }, "task_take");
     expect(hoisted.insertBuiltin).not.toHaveBeenCalled();
   });
 
@@ -315,7 +308,7 @@ describe("the built-ins in the panel", () => {
     await render({ automationId: 7 });
     await act(async () => { button("Take a task").click(); });
     await act(async () => { button(t("auto.pic.placeDo")).click(); });
-    expect(hoisted.placeBuiltin).toHaveBeenCalledWith(7, "take_task", null);
+    expect(hoisted.placeBuiltin).toHaveBeenCalledWith(7, "take_task");
     expect(hoisted.insert).not.toHaveBeenCalled();
   });
 });
@@ -374,76 +367,3 @@ describe("the empty picture", () => {
   });
 });
 
-describe("the built-in that splits by an axis", () => {
-  const split: AutomationBuiltinDto = {
-    key: "split_by_dim",
-    name: "Split by a classification",
-    does: "sends the task down the way out named by its value",
-    steps: [],
-    halts: [],
-    settings: [],
-    inputs: [],
-    exits: [{ name: "分類なし", outputs: [] }],
-    usedBy: 0,
-  };
-  const axis = (over: Partial<DimensionDto> & { id: number; name: string }): DimensionDto => ({
-    notes: "",
-    cardinality: "single",
-    role: "none",
-    ordered: false,
-    showOnCard: false,
-    required: false,
-    sequential: false, appliesTo: "task",
-    values: [],
-    ...over,
-  });
-  const value = (id: number, name: string) =>
-    ({ id, name }) as unknown as DimensionDto["values"][number];
-
-  beforeEach(() => {
-    hoisted.builtins = [split];
-    hoisted.dimensions = [
-      axis({ id: 3, name: "Role", values: [value(1, "Engineer"), value(2, "Designer")] }),
-      axis({ id: 4, name: "Labels", cardinality: "multi" }),
-      axis({ id: 5, name: "Kind of decision", appliesTo: "decision" }),
-    ];
-    hoisted.insertBuiltin.mockClear();
-  });
-  afterEach(() => {
-    hoisted.builtins = [];
-    hoisted.dimensions = [];
-  });
-
-  const axisPicker = () =>
-    [...container.querySelectorAll<HTMLSelectElement>("select")].find(
-      (one) => one.getAttribute("aria-label") === t("auto.lib.splitAxis"),
-    )!;
-
-  it("offers only an axis a task holds one value of, and is not placed until one is picked", async () => {
-    await render();
-    await act(async () => { button("Split by a classification").click(); });
-    expect([...axisPicker().options].map((o) => o.textContent)).toEqual(["—", "Role"]);
-    expect(button(t("auto.pic.placeDo")).disabled).toBe(true);
-  });
-
-  it("opens with the axis's values as its ways out, and places the one for that axis", async () => {
-    await render();
-    await act(async () => { button("Split by a classification").click(); });
-    await act(async () => {
-      axisPicker().value = "3";
-      axisPicker().dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    const picked = container.querySelector(".autolib__picked")!;
-    const exits = [...picked.querySelectorAll(".actport--exit, .actport--error")].map((one) => one.textContent);
-    expect(exits).toEqual(["Engineer", "Designer", t("auto.bi.splitByDim.unsorted"), t("auto.pic.errorExit")]);
-    await act(async () => { button(t("auto.pic.placeDo")).click(); });
-    expect(hoisted.insertBuiltin).toHaveBeenCalledWith(9, "split_by_dim", 3);
-  });
-
-  it("says so where there is no axis to split by", async () => {
-    hoisted.dimensions = [];
-    await render();
-    await act(async () => { button("Split by a classification").click(); });
-    expect(container.querySelector(".autolib__picked")!.textContent).toContain(t("auto.lib.splitNoAxis"));
-  });
-});

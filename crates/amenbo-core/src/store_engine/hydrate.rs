@@ -833,6 +833,7 @@ pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunD
         ins: get(r, C.ins)?,
         cfg: get(r, C.cfg)?,
         entry: get(r, C.entry)?,
+        roles: get(r, C.roles)?,
         created_at,
         updated_at,
     })
@@ -848,6 +849,7 @@ pub(super) fn automation_run_task_row(r: &Row) -> rusqlite::Result<AutomationRun
         task_id: get(r, C.task_id)?,
         started_at: ts_opt(r, C.started_at)?,
         ended_at: ts_opt(r, C.ended_at)?,
+        role_id: get(r, C.role_id)?,
         created_at,
         updated_at,
     })

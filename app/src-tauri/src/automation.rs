@@ -45,13 +45,13 @@
 use amenbo_core::model::{
     ActorKind, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
     AutomationOwner, AutomationPictureOwner, AutomationPort, AutomationPortDirection,
-    AutomationPortKind, AutomationPortOwner, AutomationRunStatus,
+    AutomationPortKind, AutomationPortOwner, AutomationRole, AutomationRunStatus,
     AutomationWire,
 };
 use amenbo_core::ops::automation::{ActionShelf, EdgeTarget, NewAutomation, NewScript, NewStep};
 use amenbo_core::ops::automation_builtin;
 use amenbo_core::ops::automation_rehearse::Cut;
-use amenbo_core::ops::automation_run::{self, Unmet};
+use amenbo_core::ops::automation_run::{self, Carrier, ReadsFrom, Unmet};
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::ops::automation_stop::Ended;
 use amenbo_core::ops::automation_step::Opened;
@@ -64,9 +64,9 @@ use crate::dto::{
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
-    AutomationLaunchAxisDto, AutomationLaunchBlockDto,
+    AutomationCarrierDto, AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
-    AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
+    AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRunCardDto, AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunPassedStepDto, AutomationRunStartedDto,
     AutomationRunTaskDto,
     AutomationRunTrailDto, AutomationSavedDto, AutomationStepDto, AutomationStepScriptDto,
@@ -75,7 +75,7 @@ use crate::dto::{
     WriteAck,
 };
 use crate::error::CmdError;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
@@ -1476,14 +1476,15 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
     // models of this machine, which are the launch's to judge and not the definition's, and with
     // Amenbo's own default agent, which a step nobody chose for falls back to.
     let default_agent = store.automation_default_agent(id)?;
-    let save_blocks = automation_run::check(
-        store.read_model().conn(),
-        id,
-        None,
-        automation_run::nothing_asked(),
-        default_agent.as_deref(),
-    )?;
-    Ok(Some(detail_dto(view, held_by, &save_blocks)))
+    let conn = store.read_model().conn();
+    let save_blocks =
+        automation_run::check(conn, id, None, automation_run::nothing_asked(), default_agent.as_deref())?;
+    // Read off the draft, as `view` is.
+    let who = Who {
+        carriers: automation_run::carriers(conn, id, ReadsFrom::Draft, default_agent.as_deref())?,
+        rounds: automation_run::rounds_by_placement(conn, id, ReadsFrom::Draft)?,
+    };
+    Ok(Some(detail_dto(view, held_by, &save_blocks, who)))
 }
 
 /// Whether this automation could be started, and what is in the way — core's launch check, named for
@@ -2842,11 +2843,21 @@ fn stop_if_going(
 // Core resolves (amenbo_core::ops::automation_view); what is left here is naming. Nothing below
 // reads the store — a DTO is the same rows under the names a screen draws them by.
 
+/// **Who works each placement and carries out each step** — core's answers, read beside the view and
+/// handed to [`detail_dto`] so the shaping below reads no store.
+struct Who {
+    /// Keyed by (placement, step) ([`automation_run::carriers`]).
+    carriers: BTreeMap<(i64, i64), Carrier>,
+    /// Placement id → the role whose round reaches it ([`automation_run::rounds_by_placement`]).
+    rounds: BTreeMap<i64, i64>,
+}
+
 /// One automation's whole definition, under the names the build screen draws it by.
 fn detail_dto(
     view: automation_view::AutomationView,
     held_by: Vec<AutomationRunCardDto>,
     save_blocks: &[Unmet],
+    mut who: Who,
 ) -> AutomationDetailDto {
     let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
@@ -2861,7 +2872,8 @@ fn detail_dto(
         max_concurrent_runs: a.max_concurrent_runs,
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires,
-        placements: view.placements.into_iter().map(placement_dto).collect(),
+        roles: view.roles.into_iter().map(role_dto).collect(),
+        placements: view.placements.into_iter().map(|p| placement_dto(p, &mut who)).collect(),
         held_by,
         saved: view.saved.map(saved_dto),
         unsaved: view.unsaved,
@@ -2985,7 +2997,7 @@ fn wire_dto<'a>(
 /// **Flattened because an action opens one step today.** Drawing the whole column inside an action is
 /// its own screen's (`AMB-T-5315`); until there is one, a spot reads exactly as the step it was folded
 /// out of did.
-fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto {
+fn placement_dto(view: automation_view::PlacementView, who: &mut Who) -> AutomationPlacementDto {
     let placement = view.placement;
     let action = view.action;
     let opens = view.entry_step;
@@ -2998,6 +3010,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         id: placement.id,
         name: action.as_ref().map(|one| one.name.clone()).unwrap_or_default(),
         action_id: placement.action_id,
+        role_id: who.rounds.get(&placement.id).copied(),
         global: action.as_ref().is_some_and(|one| one.project_id.is_none()),
         builtin: action.as_ref().and_then(|one| one.builtin.clone()),
         draft: action.as_ref().is_some_and(|one| one.draft),
@@ -3020,6 +3033,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
             .steps
             .into_iter()
             .map(|one| AutomationPlacementStepDto {
+                carrier: who.carriers.remove(&(placement.id, one.step.id)).map(carrier_dto),
                 step_id: one.step.id,
                 name: one.step.name,
                 agent: one.chosen.as_ref().map(|c| c.agent.clone()),
@@ -3027,6 +3041,21 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
             })
             .collect(),
     }
+}
+
+fn role_dto(role: AutomationRole) -> AutomationRoleDto {
+    AutomationRoleDto {
+        id: role.id,
+        name: role.name,
+        icon: role.icon,
+        entry_placement_id: role.entry_placement_id,
+        agent: role.agent,
+        model: role.model,
+    }
+}
+
+fn carrier_dto(carrier: Carrier) -> AutomationCarrierDto {
+    AutomationCarrierDto { agent: carrier.agent, model: carrier.model, chosen_at: carrier.at.into() }
 }
 
 fn exit_dto(view: automation_view::ExitView) -> AutomationExitDto {
@@ -3092,5 +3121,21 @@ mod tests {
         let live = runs_still_standing(1..=6, |run| Ok(statuses.get(&run).copied()))
             .expect("nothing to fail");
         assert_eq!(live, HashSet::from([1, 2]));
+    }
+
+    /// **Where a step's agent was chosen goes out as a bare value** (`AMB-D-396`): its kind, and the
+    /// role's id where a role was fallen back to — the words are the GUI's to put on it.
+    #[test]
+    fn where_a_carrier_was_chosen_goes_out_as_its_kind_and_role() {
+        use amenbo_core::ops::automation_run::ChosenAt;
+        let json = |at: ChosenAt| {
+            serde_json::to_value(carrier_dto(Carrier { agent: "claude".into(), model: None, at })).expect("json")
+        };
+        assert_eq!(json(ChosenAt::Step), serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "step" } }));
+        assert_eq!(
+            json(ChosenAt::Role { role_id: 7 }),
+            serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "role", "roleId": 7 } }),
+        );
+        assert_eq!(json(ChosenAt::Amenbo)["chosenAt"], serde_json::json!({ "kind": "amenbo" }));
     }
 }

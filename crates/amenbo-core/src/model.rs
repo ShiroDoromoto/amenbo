@@ -1795,10 +1795,10 @@ pub struct AutomationAction {
     /// ([`crate::ops::automation_builtin`]).
     #[serde(default)]
     pub builtin: Option<String>,
-    /// **The axis it splits by**, for the built-in whose ways out are an axis's values (`AMB-D-972`),
-    /// and `None` on every other action. There is one such action per axis: the ways out are the
-    /// action's rows, and they follow the axis's values ([`crate::ops::automation_builtin_split`]).
-    /// `None` on one of them is an axis deleted from under it.
+    /// **The axis it split by**, on an action of the built-in `split_by_dim` an automation written before
+    /// automations had roles still places, and `None` on every other action. That built-in is gone —
+    /// where a round goes is its task's role — and an automation placing it is only exported, which
+    /// writes the axis out by name. `None` on one of them is an axis deleted from under it.
     #[serde(default)]
     pub builtin_dimension_id: Option<i64>,
     /// **Which version of the built-in's definition these rows were written from**, or `None` for an
@@ -2577,11 +2577,23 @@ pub struct AutomationRunDef {
     /// the picture stood at launch.
     #[serde(default)]
     pub entry: bool,
+    /// **The roles whose round starts at this step** — JSON, an array of [`AutomationRole`] ids. A role
+    /// names the placement its round starts at (`entry_placement_id`), and this is the copy of that
+    /// placement's first step, as the roles stood at launch. `[]` on every other copy, and on one written
+    /// before roles were copied.
+    #[serde(default)]
+    pub roles: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
 
 impl AutomationRunDef {
+    /// **The roles whose round starts at this copy** ([`AutomationRunDef::roles`]) — none where its JSON
+    /// is empty or does not read.
+    pub fn role_ids(&self) -> Vec<i64> {
+        serde_json::from_str(&self.roles).unwrap_or_default()
+    }
+
     /// **The name one port of this copy was declared under**, by the id the run's values key it by
     /// ([`RunDefPort::id`]) — an output on any of its ways out, or one of its inputs. `None` where the
     /// copy declares no port of that id, or its JSON does not read.
@@ -2750,6 +2762,12 @@ pub struct AutomationRunTask {
     pub started_at: Option<Timestamp>,
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
+    /// **The role the round is worked under** — the role the task named when it was taken, among the
+    /// roles the run's copies start ([`AutomationRunDef::roles`]). `None` for a round of a run whose
+    /// automation defines no role, for one that has not taken its task yet, and where the role has since
+    /// been taken out.
+    #[serde(default)]
+    pub role_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

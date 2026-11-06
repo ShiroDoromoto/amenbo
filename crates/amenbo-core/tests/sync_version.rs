@@ -258,9 +258,9 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     let automation = store
         .automation_add(mine, NewAutomation { name: "1件やりきる".into(), failures_to: Some(amenbo_core::model::FailuresTo::Human), ..Default::default() })
         .unwrap();
-    let take = store.automation_builtin_place(automation.id, "take_task", None).unwrap();
+    let take = store.automation_builtin_place(automation.id, "take_task").unwrap();
     let on = AutomationPictureOwner::Automation;
-    let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
+    let close = store.automation_builtin_place(automation.id, "close_task").unwrap();
     store.automation_edge_add(on, take.id, Some(TAKEN), EdgeTarget::Go(close.id), None).unwrap();
     store.automation_edge_add(on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).unwrap();
     store.automation_edge_add(on, close.id, None, EdgeTarget::Done, None).unwrap();
@@ -305,9 +305,9 @@ fn a_test_run_moves_no_version_and_takes_no_task() {
     let automation = store
         .automation_add(mine, NewAutomation { name: "1件やりきる".into(), failures_to: Some(amenbo_core::model::FailuresTo::Human), ..Default::default() })
         .unwrap();
-    let take = store.automation_builtin_place(automation.id, "take_task", None).unwrap();
+    let take = store.automation_builtin_place(automation.id, "take_task").unwrap();
     let on = AutomationPictureOwner::Automation;
-    let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
+    let close = store.automation_builtin_place(automation.id, "close_task").unwrap();
     store.automation_edge_add(on, take.id, Some(TAKEN), EdgeTarget::Go(close.id), None).unwrap();
     store.automation_edge_add(on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).unwrap();
     store.automation_edge_add(on, close.id, None, EdgeTarget::Done, None).unwrap();

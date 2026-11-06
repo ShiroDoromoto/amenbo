@@ -296,7 +296,7 @@ fn start_waiting(resting: &mut HashMap<i64, Instant>) -> Result<Option<Instant>,
         resting.retain(|automation, _| waiting.contains(automation));
         let now = Instant::now();
         let ask: Vec<i64> =
-            waiting.iter().copied().filter(|a| resting.get(a).is_none_or(|due| now >= *due)).collect();
+            waiting.iter().copied().filter(|a| resting.get(a).map_or(true, |due| now >= *due)).collect();
         for automation in &ask {
             resting.insert(*automation, now + WHILE_WAITING);
         }

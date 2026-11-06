@@ -9,6 +9,11 @@
 //! reserved, so the filter's own `status:` and `ready:` are dropped and those two put in their place:
 //! a setting that asked for anything else would be asking for a task the reservation refuses.
 //!
+//! **Only a task of one of the run's roles is taken**, where the automation's roles say where each
+//! starts ([`roles_started`]): a task is worked under the role it names, so one naming none, or a role
+//! the run starts no round of, is left for a person. An automation defining no such role takes any task
+//! the filter finds.
+//!
 //! **Left unanswered, the filter is the tasks given to the AI** (`assignee:me-ai`). A run that stops to
 //! call a person hands its task to that person (`AMB-D-966`); a filter that did not ask for the AI's
 //! would take it straight back.
@@ -35,6 +40,7 @@ use crate::ops::automation_builtin::{
     HeldByValue, Waits, Work,
 };
 use crate::ops::automation_report;
+use crate::ops::automation_run::roles_started;
 use crate::run_wording::builtin as say;
 use crate::ops::automation_step::{taskfilter_expr, taskfilter_sort, TASKFILTER_SORT_DEFAULT};
 use crate::query::{self, ListParams};
@@ -142,20 +148,20 @@ fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
 
 /// **Whether there is a task to take now** — the one question asked while it waits. One row is read,
 /// however many the filter matches, and none is counted or sorted.
-fn turned_up(conn: &Connection, project_id: i64, cfg: &[RunDefCfg]) -> Result<bool> {
-    query::any(conn, Reach::binding(project_id), &expression(answer(cfg, FILTER)))
+fn turned_up(conn: &Connection, project_id: i64, roles: &[i64], cfg: &[RunDefCfg]) -> Result<bool> {
+    query::any_in_roles(conn, Reach::binding(project_id), &expression(answer(cfg, FILTER)), roles)
 }
 
 /// **What is keeping it waiting** (`AMB-D-999`): every task the filter matches that is not started and
 /// not ready, counted by what stops it. The reasons are the five the list already carries on each row
 /// (`view::is_ready`), so a reason counted here is one the reservation would refuse by.
-fn held_back(conn: &Connection, project_id: i64, cfg: &[RunDefCfg]) -> Result<HeldBack> {
+fn held_back(conn: &Connection, project_id: i64, roles: &[i64], cfg: &[RunDefCfg]) -> Result<HeldBack> {
     let expr = with_asked(narrowing(answer(cfg, FILTER)), HELD);
     let mut held = HeldBack::default();
     let (mut blockers, mut decisions): (Counts, Counts) = (Vec::new(), Vec::new());
     let mut offset = 0;
     loop {
-        let page = query::list(
+        let page = query::list_in_roles(
             conn,
             Reach::binding(project_id),
             ListParams {
@@ -165,6 +171,7 @@ fn held_back(conn: &Connection, project_id: i64, cfg: &[RunDefCfg]) -> Result<He
                 offset: Some(offset),
                 ..Default::default()
             },
+            roles,
         )?;
         for task in &page.tasks {
             held.tasks += 1;
@@ -224,7 +231,8 @@ fn titled(
         .collect()
 }
 
-/// One page of the tasks the filter answered with lists, in the order it asks for.
+/// One page of the tasks the filter answered with lists, in the order it asks for — of those worked under a
+/// role the run starts a round of, where it starts any ([`roles_started`]).
 fn search(
     conn: &Connection,
     run: &AutomationRun,
@@ -233,7 +241,7 @@ fn search(
     offset: usize,
 ) -> Result<query::TaskListResult> {
     let sort = answer.map(taskfilter_sort).unwrap_or_else(|| TASKFILTER_SORT_DEFAULT.to_string());
-    query::list(
+    query::list_in_roles(
         conn,
         Reach::binding(run.project_id),
         ListParams {
@@ -243,6 +251,7 @@ fn search(
             offset: Some(offset),
             ..Default::default()
         },
+        &roles_started(conn, run.id)?,
     )
 }
 
@@ -286,7 +295,7 @@ mod tests {
         ActorKind, Automation, AutomationPictureOwner, AutomationPlacement, AutomationPortKind,
         AutomationRun, AutomationRunStatus, AutomationStoppedReason, Priority, TaskStatus,
     };
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
@@ -1220,5 +1229,91 @@ mod tests {
             "assignee:me-ai status:todo ready:yes",
             "an answer that is not its parts narrows as no answer does, never to every task",
         );
+    }
+
+    /// An automation with two roles, each starting its round at an agent's step that goes on to closing
+    /// the task. Nothing is drawn from the way out that takes a task: where it goes is the task's role.
+    fn by_role(tx: &WriteTx<'_>, project: i64) -> (Automation, [(i64, AutomationPlacement); 2]) {
+        let automation =
+            automation::add(tx, project, NewAutomation { name: "roles".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
+                .expect("automation");
+        let written = action(tx, "take_task").expect("the built-in's action");
+        let spot = automation::placement_add(tx, automation.id, written.id).expect("place it");
+        let on = AutomationPictureOwner::Automation;
+        automation::edge_add(tx, on, spot.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
+        let mut roles = Vec::new();
+        for name in ["実装", "レビュー"] {
+            let (_, work) = mk_placed(tx, &automation, name, "work on it", "claude");
+            crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
+            let new = NewRole { name: name.into(), entry_placement_id: Some(work.id), ..NewRole::default() };
+            let role = automation::role_add(tx, automation.id, new).expect("a role");
+            roles.push((role.id, work));
+        }
+        let automation = automation::set_entry(tx, automation.id, Some(spot.id)).expect("entry");
+        let reviewer = roles.pop().expect("the reviewer");
+        let builder = roles.pop().expect("the builder");
+        (automation, [builder, reviewer])
+    }
+
+    fn under(tx: &WriteTx<'_>, task: i64, role: i64) {
+        task::update(tx, task, TaskPatch { role_id: Some(role), ..Default::default() }).expect("the role");
+    }
+
+    /// **A round goes on to where its task's role starts**, with no line drawn from the way out that took
+    /// it, and is worked under that role. A task with no role is not taken, however high it stands.
+    #[test]
+    fn a_round_goes_on_to_where_its_tasks_role_starts() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [_, (reviewer, review)]) = by_role(tx, project);
+            let claude = ["claude".to_string()];
+            let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked()).expect("check");
+            assert!(unmet.is_empty(), "the way out that takes a task needs no line: {unmet:?}");
+
+            let roleless = for_ai(tx, "no role", project, Some(Priority::High));
+            let reviewed = for_ai(tx, "to review", project, None);
+            under(tx, reviewed, reviewer);
+
+            let (run, _, next) = carried(tx, &automation);
+            assert_eq!(status(tx, reviewed), TaskStatus::InProgress, "the task of a role is taken");
+            assert_eq!(status(tx, roleless), TaskStatus::Todo, "one with no role is left for a person");
+            let stretch = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("stretch");
+            assert_eq!((stretch.task_id, stretch.role_id), (Some(reviewed), Some(reviewer)));
+            let Next::Step(def) = next else { panic!("the round goes on, not {next:?}") };
+            assert_eq!(def.placement_id, Some(review.id), "where the reviewer's round starts");
+        });
+    }
+
+    /// **Where every task left has no role, there is none to take.**
+    #[test]
+    fn a_task_with_no_role_is_not_taken_where_roles_say_where_rounds_start() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, _) = by_role(tx, project);
+            let roleless = for_ai(tx, "no role", project, None);
+            let (_, run_step_id, _) = carried(tx, &automation);
+            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+            assert_eq!(ran.exit_id, way_out(tx, run_step_id, NONE_TO_TAKE));
+            assert_eq!(status(tx, roleless), TaskStatus::Todo);
+        });
+    }
+
+    /// **Where a role starts is checked before a launch**, as a placement a line reaches is: nothing
+    /// draws a line to it, and the way out that takes a task leads there all the same.
+    #[test]
+    fn where_a_role_starts_is_checked_as_a_placement_a_run_reaches() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, _) = by_role(tx, project);
+            let (_, bare) = mk_placed(tx, &automation, "bare", "nothing after it", "claude");
+            let new = NewRole { name: "設計".into(), entry_placement_id: Some(bare.id), ..NewRole::default() };
+            automation::role_add(tx, automation.id, new).expect("a role");
+            let claude = ["claude".to_string()];
+            let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked()).expect("check");
+            assert!(
+                unmet.iter().any(|u| matches!(u, Unmet::OpenExit { placement, .. } if *placement == Some(bare.id))),
+                "its way out has nothing after it: {unmet:?}",
+            );
+        });
     }
 }

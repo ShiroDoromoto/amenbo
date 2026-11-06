@@ -254,10 +254,6 @@ impl Driver<'_> {
                     flag.into(),
                     placed.clone(),
                 ];
-                // The axis the built-in that splits by one splits by, as the project names it.
-                if let Some(axis) = with.get("axis").and_then(|v| v.as_str()) {
-                    args.extend(["--axis".into(), axis.to_string()]);
-                }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_placement", bind)?;
                 Ok(Outcome::action(format!(

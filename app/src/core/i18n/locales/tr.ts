@@ -282,6 +282,8 @@ export const tr: Translation = {
     "detail.notFound": "İş bulunamadı",
     "detail.unassign": "Sorumluyu kaldır", "detail.assignAi": "Yapay zekâya devret",
     "detail.assignee": "Sorumlu", "detail.unassigned": "Sorumlusuz",
+    "detail.role": "Rol", "detail.roleNone": "Rol yok (bir oturumda ele alınır)", "detail.rolePick": "Birini seçin…",
+    "detail.roleRequired": "Bir rol seçin. Hiçbir otomasyon turu üstlenmeyecekse “Rol yok” seçeneğini seçin.",
     "detail.project": "Proje", "detail.none": "Yok",
     "detail.blockedBy": "Şunu bekliyor", "detail.blockedByHint": "engelli (bağımlılık)",
     "detail.notStarted": "Başlangıç günü",

@@ -287,6 +287,8 @@ export const ptBR: Translation = {
     "detail.notFound": "Tarefa não encontrada",
     "detail.unassign": "Tirar o responsável", "detail.assignAi": "Delegar à IA",
     "detail.assignee": "Responsável", "detail.unassigned": "Sem responsável",
+    "detail.role": "Papel", "detail.roleNone": "Sem papel (tratada em uma sessão)", "detail.rolePick": "Escolha um…",
+    "detail.roleRequired": "Escolha um papel. Se nenhuma rodada de automação deve cuidar dela, escolha “Sem papel”.",
     "detail.project": "Projeto", "detail.none": "Nenhum",
     "detail.blockedBy": "Esperando", "detail.blockedByHint": "bloqueada (dependência)",
     "detail.notStarted": "Começa em",

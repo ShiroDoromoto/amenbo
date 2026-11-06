@@ -503,6 +503,9 @@ pub struct TaskCardDto {
     #[ts(type = "\"todo\" | \"in_progress\" | \"done\" | \"blocked\" | \"rejected\"")]
     pub(crate) status: &'static str,
     pub(crate) assignee: Option<ActorDto>,
+    /// The role the task is worked under, by its id — one of [`TaskRoleDto`]'s — or `null` for none.
+    #[ts(type = "number | null")]
+    pub(crate) role_id: Option<i64>,
     #[ts(type = "\"high\" | \"medium\" | \"low\" | null")]
     pub(crate) priority: Option<&'static str>,
     pub(crate) due: Option<ScheduleDto>,
@@ -560,6 +563,24 @@ pub struct TaskCardDto {
     /// a title fix — so it dates the record, not the status: what a status last moved is
     /// `status_changed_at`'s to say, and neither is a judgement input (`AMB-D-372`).
     pub(crate) updated_at: String,
+}
+
+/// One role a task of a project can be worked under: a role defined in one of the project's
+/// automations. The task editor lists these, automation by automation and each in the order it is
+/// defined in, as the choices of its role field.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRoleDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) name: String,
+    /// The icon it is drawn with, by the name the GUI knows it under, or `null` for none chosen.
+    pub(crate) icon: Option<String>,
+    #[ts(type = "number")]
+    pub(crate) automation_id: i64,
+    /// The name of the automation it is defined in, to tell apart two roles of the same name.
+    pub(crate) automation_name: String,
 }
 
 #[derive(Serialize, TS)]

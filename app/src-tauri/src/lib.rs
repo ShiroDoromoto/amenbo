@@ -646,6 +646,8 @@ pub fn run() {
       commands::project_dimension_assignments,
       commands::project_decision_dimension_assignments,
       commands::task_assign,
+      commands::task_set_role,
+      commands::project_roles,
       commands::config_set_language,
       commands::config_set_perf_log,
       commands::config_set_update_check,

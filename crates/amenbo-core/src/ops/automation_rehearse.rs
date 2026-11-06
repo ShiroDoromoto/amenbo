@@ -279,6 +279,7 @@ fn made_up(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, def: &Automation
             notes,
             created_by_kind: Some(ActorKind::Ai),
             at_binding_id: None,
+            role_id: None,
             made_in: None,
         },
     )?;

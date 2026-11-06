@@ -1496,7 +1496,12 @@ pub fn discard(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion
     restore_rows(tx, &draft.placement_steps, &saved.placement_steps, record::automation_placement_step)?;
     restore_rows(tx, &draft.cfgs, &saved.cfgs, record::automation_cfg)?;
     // A role names the placement its round starts at, `RESTRICT`, so the roles are put back before a
-    // placement the version does not hold is taken off.
+    // placement the version does not hold is taken off. A role the version does not hold goes, so the
+    // tasks worked under it let go of it first.
+    let kept: Vec<i64> = Picture::saved(&saved)?.roles.iter().map(|r| r.id).collect();
+    for role in draft.roles.iter().filter(|r| !kept.contains(&r.id)) {
+        take_role_off_tasks(tx, role.id)?;
+    }
     restore_rows(tx, &draft.roles, saved_roles(&saved), record::automation_role)?;
     restore_rows(tx, &draft.placements, &saved.placements, record::automation_placement)?;
     Ok(saved)
@@ -1692,6 +1697,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     // The roles and the entry are references into the placements that are about to go, so they are
     // dropped before them.
     for role in read::automation_roles_of(tx.conn(), id)? {
+        take_role_off_tasks(tx, role.id)?;
         tx.delete_record("automation_role", role.id)?;
     }
     if automation.entry_placement_id.is_some() {
@@ -2419,10 +2425,26 @@ pub fn role_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationR
     Ok(after)
 }
 
-/// Take a role out of its automation. The placement its round started at stays on the picture.
+/// Take a role out of its automation. The placement its round started at stays on the picture, and the
+/// tasks worked under it are left with no role.
 pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     live_role(tx, id)?;
+    take_role_off_tasks(tx, id)?;
     tx.delete_record("automation_role", id)?;
+    Ok(())
+}
+
+/// Take a role that is about to go off every task worked under it. `task.role_id` is `RESTRICT`, so
+/// this goes before the role's row does. One task at a time, through the ordinary update, so each is a
+/// write anything watching the store learns about.
+fn take_role_off_tasks(tx: &WriteTx<'_>, role_id: i64) -> Result<()> {
+    for task_id in read::task_ids_with_role(tx.conn(), role_id)? {
+        crate::ops::task::update(
+            tx,
+            task_id,
+            crate::ops::task::TaskPatch { clear_role: true, ..Default::default() },
+        )?;
+    }
     Ok(())
 }
 
@@ -4096,6 +4118,111 @@ mod tests {
             assert_eq!((back.name.as_str(), back.entry_placement_id), ("実装", Some(placement.id)));
             assert!(read::automation_role(tx.conn(), added.id).expect("read").is_none(), "the new one goes");
             assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"));
+        });
+    }
+
+    /// The role a task stands under, as the task row holds it.
+    fn role_of(tx: &WriteTx<'_>, task: i64) -> Option<i64> {
+        read::task(tx.conn(), task).expect("read").expect("the task").role_id
+    }
+
+    /// **A task takes a role of its own project's automations**, set on create or on update and taken
+    /// off again. Handing the task to a person and back leaves it, and so does nothing else but taking
+    /// it off: a task in another project, or in none, cannot name it, and the task does not move to
+    /// another project while it has one.
+    #[test]
+    fn a_task_holds_a_role_of_its_own_project_apart_from_its_assignee() {
+        use crate::model::ActorKind;
+        use crate::ops::task::{self, NewTask, TaskPatch};
+        use crate::ops::test_support::mk_task_in;
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let project = automation.project_id;
+            let role =
+                role_add(tx, automation.id, NewRole { name: "実装".into(), ..NewRole::default() }).expect("a role");
+
+            let filed = task::add(
+                tx,
+                NewTask {
+                    title: "名前を直す".into(),
+                    project_id: Some(project),
+                    due: None,
+                    start: None,
+                    priority: None,
+                    notes: String::new(),
+                    created_by_kind: None,
+                    at_binding_id: None,
+                    made_in: None,
+                    role_id: Some(role.id),
+                },
+            )
+            .expect("file it under the role");
+            assert_eq!(role_of(tx, filed.id), Some(role.id), "the column is written and read back");
+            let shown = crate::query::task_detail(tx.conn(), filed.id).expect("detail").role.expect("a role");
+            assert_eq!((shown.role_id, shown.name.as_str(), shown.automation_id), (role.id, "実装", automation.id));
+
+            let id = mk_task_in(tx, "画面を足す", Some(project));
+            assert_eq!(role_of(tx, id), None, "no role unless one is named");
+            task::update(tx, id, TaskPatch { role_id: Some(role.id), ..TaskPatch::default() }).expect("set it");
+            assert_eq!(role_of(tx, id), Some(role.id));
+            task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Human).expect("to the AI");
+            task::set_assignee(tx, id, Some(ActorKind::Human), ActorKind::Ai).expect("back to a person");
+            assert_eq!(role_of(tx, id), Some(role.id), "the assignee moves, the role stays");
+            task::update(tx, id, TaskPatch { title: Some("画面を2つ足す".into()), ..TaskPatch::default() })
+                .expect("another field");
+            assert_eq!(role_of(tx, id), Some(role.id), "left out, it is kept");
+
+            let elsewhere = mk_project(tx, "よそ");
+            let theirs = mk_task_in(tx, "よその仕事", Some(elsewhere));
+            let named = task::update(tx, theirs, TaskPatch { role_id: Some(role.id), ..TaskPatch::default() });
+            assert!(matches!(named, Err(Error::Invalid(_))), "another project's role");
+            let inbox = mk_task_in(tx, "受け箱", None);
+            let named = task::update(tx, inbox, TaskPatch { role_id: Some(role.id), ..TaskPatch::default() });
+            assert!(matches!(named, Err(Error::Invalid(_))), "a task in no project has no automation");
+            let named = task::update(tx, id, TaskPatch { role_id: Some(role.id + 1000), ..TaskPatch::default() });
+            assert!(matches!(named, Err(Error::NotFound(_))), "no such role");
+
+            let moved = task::move_to(tx, id, Some(elsewhere), crate::ops::Position::Bottom, ActorKind::Human);
+            assert!(matches!(moved, Err(Error::Invalid(_))), "the role would be another project's");
+            task::update(tx, id, TaskPatch { clear_role: true, ..TaskPatch::default() }).expect("take it off");
+            assert_eq!(role_of(tx, id), None);
+            task::move_to(tx, id, Some(elsewhere), crate::ops::Position::Bottom, ActorKind::Human)
+                .expect("with no role it moves");
+        });
+    }
+
+    /// **A role that goes is taken off its tasks first** — taken out by hand, gone with its automation,
+    /// or thrown away with the draft — and the tasks are left with no role.
+    #[test]
+    fn a_role_that_goes_is_taken_off_its_tasks() {
+        use crate::ops::task::{self, TaskPatch};
+        use crate::ops::test_support::mk_task_in;
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let project = automation.project_id;
+            let under = |tx: &WriteTx<'_>, role: i64| {
+                let id = mk_task_in(tx, "仕事", Some(project));
+                task::update(tx, id, TaskPatch { role_id: Some(role), ..TaskPatch::default() }).expect("set it");
+                id
+            };
+
+            let role = role_add(tx, automation.id, NewRole { name: "実装".into(), ..NewRole::default() }).expect("a role");
+            let id = under(tx, role.id);
+            role_delete(tx, role.id).expect("take the role out");
+            assert_eq!(role_of(tx, id), None);
+
+            version_add(tx, automation.id).expect("save with no role");
+            let added = role_add(tx, automation.id, NewRole { name: "見る".into(), ..NewRole::default() }).expect("a role");
+            let id = under(tx, added.id);
+            discard(tx, automation.id).expect("throw the draft away");
+            assert!(read::automation_role(tx.conn(), added.id).expect("read").is_none());
+            assert_eq!(role_of(tx, id), None);
+
+            let last = role_add(tx, automation.id, NewRole { name: "直す".into(), ..NewRole::default() }).expect("a role");
+            let id = under(tx, last.id);
+            delete(tx, automation.id).expect("delete the automation");
+            assert_eq!(role_of(tx, id), None);
+            assert!(read::task(tx.conn(), id).expect("read").is_some(), "the task itself stays");
         });
     }
 

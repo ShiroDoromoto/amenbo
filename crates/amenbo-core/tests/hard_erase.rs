@@ -54,6 +54,7 @@ fn build() -> (Store, i64, i64, i64) {
         notes: String::new(),
         created_by_kind: Some(ActorKind::Ai),
         at_binding_id: None,
+        role_id: None,
         made_in: None,
     })
     .unwrap()

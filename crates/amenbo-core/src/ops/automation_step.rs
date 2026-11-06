@@ -1316,6 +1316,7 @@ mod tests {
                 created_by_kind: None,
                 at_binding_id: at.filter(|_| at_second),
                 made_in: None,
+                role_id: None,
             },
         )
         .expect("add task")

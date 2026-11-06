@@ -2132,6 +2132,26 @@ pub fn task_detail(
         },
     );
 
+    // The role, with the automation it is defined in. The key is `RESTRICT`, so a role named here exists.
+    let role = match row.role_id {
+        Some(role_id) => read::automation_role(conn, role_id)
+            .map_err(crate::error::engine_on(conn))?
+            .map(|role| -> Result<crate::view::RoleView> {
+                let automation = read::automation(conn, role.automation_id)
+                    .map_err(crate::error::engine_on(conn))?
+                    .map(|a| a.name)
+                    .unwrap_or_default();
+                Ok(crate::view::RoleView {
+                    role_id: role.id,
+                    name: role.name,
+                    automation_id: role.automation_id,
+                    automation,
+                })
+            })
+            .transpose()?,
+        None => None,
+    };
+
     let blocked_by: Vec<crate::view::TaskRef> =
         row.blocked_by.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
     let blocked_by_decisions: Vec<DecisionRef> =
@@ -2177,6 +2197,7 @@ pub fn task_detail(
         priority: row.priority.as_deref().and_then(Priority::parse),
         placement,
         at,
+        role,
         dimensions,
         blocked_by,
         blocked_by_decisions,
@@ -3577,6 +3598,7 @@ mod filter_tests {
                 priority: None,
                 created_by_kind: None,
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             },
         )
@@ -3660,6 +3682,7 @@ mod filter_tests {
                 priority: Some(crate::model::Priority::High),
                 created_by_kind: None,
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             },
         )

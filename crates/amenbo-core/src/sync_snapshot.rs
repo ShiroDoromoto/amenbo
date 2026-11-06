@@ -566,6 +566,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             })
             .unwrap();

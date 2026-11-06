@@ -2060,6 +2060,7 @@ pub fn task_add(
             // (`AMB-D-897`). A GUI opened from inside a pane inherits that pane's variables, which
             // is exactly why the create is handed this rather than reading it.
             made_in: None,
+            role_id: None,
         })?;
         Ok(t.id)
     })?;
@@ -5658,6 +5659,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 })
                 .unwrap();
@@ -5725,6 +5727,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 })
                 .unwrap();
@@ -5749,6 +5752,7 @@ pub(crate) mod tests {
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Human),
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             })
             .expect("a write still lands after the sidecars were cleared");
@@ -5867,6 +5871,7 @@ pub(crate) mod tests {
                     notes: notes.into(),
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 })
                 .unwrap()
@@ -5923,6 +5928,7 @@ pub(crate) mod tests {
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Ai),
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             })
             .unwrap()
@@ -5975,6 +5981,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 })
                 .unwrap()
@@ -7662,6 +7669,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 })
                 .unwrap();
@@ -7733,6 +7741,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 })
                 .unwrap();
@@ -7775,6 +7784,7 @@ pub(crate) mod tests {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 })
                 .unwrap()
@@ -7974,6 +7984,7 @@ pub(crate) mod tests {
                         notes: "本文".into(),
                         created_by_kind: Some(ActorKind::Human),
                         at_binding_id: None,
+                        role_id: None,
                         made_in: None,
                     })
                     .unwrap()

@@ -3847,6 +3847,9 @@ pub struct TaskDetailRow {
     /// row. It is an id and nothing more here — which folder it answers to is the query layer's to resolve
     /// (`crate::query::task_detail`), against the folders the task's own project offers.
     pub at_binding_id: Option<i64>,
+    /// The role this task is worked under, read straight off the row. Its name is the query layer's to
+    /// read (`crate::query::task_detail`).
+    pub role_id: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
     pub placement: Option<PlacementRow>,
@@ -3872,7 +3875,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
     let (created_by_kind, assignee_kind) = (sel.col(T.created_by_kind), sel.col(T.assignee_kind));
     let (start_on, due_on, priority) = (sel.col(T.start_on), sel.col(T.due_on), sel.col(T.priority));
     let (start_at, due_at) = (sel.col(T.start_at), sel.col(T.due_at));
-    let (draft, at_binding_id) = (sel.col(T.draft), sel.col(T.at_binding_id));
+    let (draft, at_binding_id, role_id) = (sel.col(T.draft), sel.col(T.at_binding_id), sel.col(T.role_id));
     let (created_at, updated_at) = (sel.col(T.created_at), sel.col(T.updated_at));
     let mut sql = Sql::from(&sel, T.table);
     sql.push_where(Some(&Pred::eq(T.id, task_id)));
@@ -3892,6 +3895,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
                 priority: priority.get(r)?,
                 draft: draft.get(r)?,
                 at_binding_id: at_binding_id.get(r)?,
+                role_id: role_id.get(r)?,
                 created_at: created_at.get(r)?,
                 updated_at: updated_at.get(r)?,
                 placement: None,
@@ -7092,6 +7096,23 @@ pub fn automation_roles_of(conn: &Connection, automation_id: i64) -> Result<Vec<
         &[Sort::by(R.order_key), Sort::by(R.id)],
         super::hydrate::automation_role_row,
     )
+}
+
+/// The tasks worked under this role, ascending — what has to let go of it before the role goes, the key
+/// being `RESTRICT`.
+pub fn task_ids_with_role(conn: &Connection, role_id: i64) -> Result<Vec<i64>> {
+    const T: col::task::Cols = col::task::ALL;
+    let mut sel = Select::new();
+    let id = sel.col(T.id);
+    let mut sql = Sql::from(&sel, T.table);
+    sql.push_where(Some(&Pred::eq(T.role_id, role_id))).order_by([Sort::by(T.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| id.get(r))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<i64>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
 }
 
 /// Live role siblings within one automation.

@@ -240,6 +240,15 @@ pub struct FolderView {
     pub dir: String,
 }
 
+/// The role a task is worked under: the role's id and name, and the automation it is defined in.
+#[derive(Clone, Debug, Serialize)]
+pub struct RoleView {
+    pub role_id: i64,
+    pub name: String,
+    pub automation_id: i64,
+    pub automation: String,
+}
+
 /// One axis a task is classified on, and one value it holds there (`AMB-D-101`) — both by name, because
 /// this is what a reader is shown. There is nothing else to carry: the pair *is* the classification. An
 /// axis that admits several values contributes one of these per value (`AMB-D-826`), so what changes
@@ -319,6 +328,9 @@ pub struct TaskDetail {
     /// project** offers, so a task carrying an id that project no longer has (its folder unbound, or the
     /// task moved to another project) reads as naming no folder rather than pointing outside.
     pub at: Option<FolderView>,
+    /// The role this task is worked under, or `null` for a task with none. It is a field of its own
+    /// beside `assignee_kind`, and handing the task back to a person leaves it as it was.
+    pub role: Option<RoleView>,
     /// What the task is classified as, axis by axis (`AMB-D-101`) — the words, not the ids, since this is
     /// the shape a face shows. An axis the task holds no value on is not in the list, so an empty one
     /// means unclassified rather than "no axes exist".

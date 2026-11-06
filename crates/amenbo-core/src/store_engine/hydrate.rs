@@ -204,6 +204,7 @@ pub(super) fn task_row(r: &Row) -> rusqlite::Result<Task> {
         project_id: get(r, C.project_id)?,
         order_key: get(r, C.order_key)?,
         at_binding_id: get(r, C.at_binding_id)?,
+        role_id: get(r, C.role_id)?,
         created_at,
         updated_at,
     })
@@ -985,6 +986,9 @@ mod tests {
                 // Set for the same reason `draft` is: `None` is the default, so a column that failed to
                 // round-trip would read as the value this field is meant to be testing.
                 at_binding_id: Some(7),
+                // Left `None`: a `Database` carries no automation, so there is no role here for the key to
+                // name. The column is round-tripped by the ops tests, against a role that exists.
+                role_id: None,
                 created_at: now,
                 updated_at: now,
             }],

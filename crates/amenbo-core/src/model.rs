@@ -419,6 +419,13 @@ pub struct Task {
     /// is stopped for it here; it is expressiveness the surfaces around Amenbo may act on.
     #[serde(default)]
     pub at_binding_id: Option<i64>,
+    /// The role this task is worked under — one of the roles an automation of the task's own project
+    /// defines ([`AutomationRole`]), by its id. It is a field of its own beside the assignee, not a kind
+    /// of it: `assignee_kind` says whether a person or an AI holds the task, and handing the task back
+    /// to a person writes that and leaves this as it was. Nor is it a classification — no axis carries
+    /// it. `None` is a task with no role, which is every task unless someone named one.
+    #[serde(default)]
+    pub role_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

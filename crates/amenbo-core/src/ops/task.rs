@@ -81,6 +81,9 @@ pub struct NewTask {
     /// talk window. Stated by the caller for the same reason `at_binding_id` is — the create reads
     /// nothing of where it was typed.
     pub made_in: Option<MadeIn>,
+    /// The role this task is worked under, by its id — one of the roles an automation of the task's own
+    /// project defines. Left unset, the task has no role.
+    pub role_id: Option<i64>,
 }
 
 /// Create a task. **There are two read-then-writes here** — the conversational sequence number
@@ -111,6 +114,8 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
         None => (None, None),
     };
 
+    checked_role(tx, project_id, input.role_id)?;
+
     let task = Task {
         id,
         title: input.title,
@@ -133,6 +138,7 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
         project_id,
         order_key,
         at_binding_id: input.at_binding_id,
+        role_id: input.role_id,
         created_at: now,
         updated_at: now,
     };
@@ -269,6 +275,32 @@ pub struct TaskPatch {
     /// The bound folder to work this task in, already resolved to a binding id (`AMB-D-648`).
     pub at_binding_id: Option<i64>,
     pub clear_at: bool,
+    /// The role to work this task under, by its id — one of its own project's.
+    pub role_id: Option<i64>,
+    /// Take the role off, so the task has none.
+    pub clear_role: bool,
+}
+
+/// A task's role has to be one an automation of the task's own project defines. A task in no project
+/// has no automation to take a role from, so it can name none.
+fn checked_role(tx: &WriteTx<'_>, project_id: Option<i64>, role_id: Option<i64>) -> Result<()> {
+    let Some(role_id) = role_id else { return Ok(()) };
+    let role = read::automation_role(tx.conn(), role_id)?
+        .ok_or_else(|| Error::not_found(format!("role '{role_id}' not found")))?;
+    let owner = read::automation(tx.conn(), role.automation_id)?.map(|a| a.project_id);
+    if project_id.is_none() {
+        return Err(Error::invalid(
+            "this task is in no project, so there is no automation for it to take a role from",
+        ));
+    }
+    if owner != project_id {
+        return Err(Error::invalid(format!(
+            "role '{}' is defined in an automation of another project — a task takes a role from its own \
+             project's automations",
+            role.name
+        )));
+    }
+    Ok(())
 }
 
 /// Read a task's `before` snapshot **from this transaction**. not_found if it does not exist (every mutation
@@ -330,6 +362,12 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: TaskPatch) -> Result<Task> {
         t.at_binding_id = None;
     } else if let Some(binding_id) = patch.at_binding_id {
         t.at_binding_id = Some(binding_id);
+    }
+    if patch.clear_role {
+        t.role_id = None;
+    } else if let Some(role_id) = patch.role_id {
+        checked_role(tx, t.project_id, Some(role_id))?;
+        t.role_id = Some(role_id);
     }
     t.updated_at = Timestamp::now();
     emit_update(tx, record::task(&before), record::task(&t))?;
@@ -648,6 +686,15 @@ pub fn move_to(
         ));
     }
 
+    // A role is defined in an automation of the task's project, so in another project it would name a
+    // role that is not that project's. Taking it off is the caller's call, as cutting an edge is.
+    if before.role_id.is_some() && before.project_id != Some(proj) {
+        return Err(Error::invalid(
+            "this task has a role defined in its own project's automation — take its role off before moving \
+             it to another project",
+        ));
+    }
+
     let sibs = read::placement_siblings(tx.conn(), proj, Some(id))?;
     let key = place(&sibs, &pos)?;
 
@@ -696,6 +743,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             },
         )
@@ -740,6 +788,7 @@ mod tests {
                     notes: String::new(),
                     created_by_kind: None,
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 },
             )
@@ -1460,6 +1509,7 @@ mod tests {
                         notes: String::new(),
                         created_by_kind: None,
                         at_binding_id: None,
+                        role_id: None,
                         made_in: None,
                     },
                 )
@@ -1538,6 +1588,7 @@ mod tests {
                         notes: String::new(),
                         created_by_kind: None,
                         at_binding_id: None,
+                        role_id: None,
                         made_in: None,
                     },
                 )
@@ -1586,6 +1637,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             },
         )
@@ -1696,6 +1748,7 @@ mod tests {
                         notes: String::new(),
                         created_by_kind: None,
                         at_binding_id: None,
+                        role_id: None,
                         made_in: None,
                     },
                 )
@@ -1733,6 +1786,7 @@ mod tests {
                     notes: String::new(),
                     created_by_kind: None,
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 },
             )
@@ -1879,6 +1933,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                role_id: None,
                 made_in: Some(MadeIn {
                     pane: pane.to_string(),
                     pane_name: Some("移行を書いている窓".into()),

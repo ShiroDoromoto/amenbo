@@ -37,8 +37,8 @@ which an agent writes through the CLI and you read in the desktop app.
   It ships with the build, so there is no command reference to drift out of date.
 - **Automations** — a picture drawn once and walked by agents: each step is a prompt and
   an agent to carry it out, and the way out a step leaves through decides what runs next.
-  Taking a task, filing one, closing it, fetching what a run starts from, splitting by a
-  classification and cutting a worktree are Amenbo's own built-ins, so a prompt is left with what
+  Taking a task, filing one, closing it, fetching what a run starts from and cutting a worktree
+  are Amenbo's own built-ins, so a prompt is left with what
   needs an agent's judgement. A run starts from a task it takes, from what a person hands it, or
   from what it goes and fetches.
   A run opens one terminal per step and reads back what the step reports, so what has been
@@ -368,7 +368,7 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # Who carries a step out is chosen where its action is placed. An edge says what happens after each
 # way out is taken, and a wire hands one spot's result to the next. A run opens a terminal per step and
 # waits for that step to report, so the loop belongs to the store.
-# Taking a task, filing one, closing it, fetching, splitting by a classification, cutting and
+# Taking a task, filing one, closing it, fetching, cutting and
 # folding a worktree, and waiting a set time are Amenbo's built-ins: actions it carries out itself,
 # with no terminal and no prompt. One is placed on a picture as an action of its
 # own, never put inside an action you wrote. A prompt is left with what needs an agent's judgement:
@@ -380,7 +380,7 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # a URL, a file path or a command set beforehand. What is fetched is filed through make_task, which can
 # take the task as it files it — the example below takes the first entrance.
 amenbo automation add --name "Work the queue"          # the picture itself; what every step is told first is Amenbo's own
-amenbo automation builtin-list                         # take_task, make_task, fetch, split_by_dim, cut_worktree, fold_worktree, close_task, hand_back_task, defer_task, wait — with the names of what each reads, hands on and leaves by
+amenbo automation builtin-list                         # take_task, make_task, fetch, cut_worktree, fold_worktree, close_task, hand_back_task, defer_task, wait — with the names of what each reads, hands on and leaves by
 amenbo automation place-add 3 --builtin take_task      # 31: where a run starts, first placed; reserves the first task its filter finds
 amenbo automation cfg-set 31 --name "<filter>" --assignee me-ai --dim "Area=Core" # which tasks it takes (unanswered: the ones handed to the AI)
 amenbo automation cfg-set 31 --name "<when none>" --choice "<wait>" # or wait for one to turn up, until a person pauses or stops the run
@@ -396,12 +396,11 @@ amenbo automation edge-add --in-action --from "11:gave up" --exit-to "gave up"
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
 amenbo automation place-add 3 --action 7               # 33: put that action on the picture; its steps start with the default agent
 amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, if not the default (--model too)
-amenbo automation role-add 3 --name Implement --entry 33 --agent claude-code # a role: where its round starts, and the agent its steps fall back to
+amenbo automation role-add 3 --name Implement --entry 32 --agent claude-code # a role: where its round starts, and the agent its steps fall back to — 31 then takes only a task of one of its roles, and goes on to where that task's role starts
 amenbo automation update 3 --failures-to 8           # where a failed round is filed: a role of it (8, from role-add) or `human`; a start is refused until one is named
 amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in
 amenbo automation place-add 3 --builtin close_task     # 35: done, with the commit handed to it recorded
-amenbo automation edge-add --from "31:<taken>" --to 32 # what happens after each way out (--max-times caps a way back)
-amenbo automation edge-add --from 32: --to 33
+amenbo automation edge-add --from 32: --to 33         # what happens after each way out (--max-times caps a way back)
 amenbo automation wire-add --from 32: --from-port worktree --to 33 --to-port worktree
 amenbo automation edge-add --from 33: --to 34
 amenbo automation edge-add --from "33:gave up" --halt  # stop the run and call a person

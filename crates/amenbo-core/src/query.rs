@@ -132,6 +132,11 @@ pub struct Filter {
     /// matches nothing is an empty result, not an error — and a short/non-full SHA (never stored, since
     /// the door admits full hex only) simply matches nothing rather than being rejected here.
     pub commit: Option<String>,
+    /// **The roles a task is to be worked under** — tasks whose `role_id` is one of these. Set
+    /// structurally, as [`Filter::text`] is, never from the grammar: the built-in that takes a task
+    /// narrows by the roles its run starts rounds of
+    /// ([`crate::ops::automation_run::roles_started`]), which a task with no role is never among.
+    pub roles: Option<Vec<i64>>,
 }
 
 /// One `dim:<axis>=<value>` / `time_axis:<value>` token. The time axis is not a first-class
@@ -669,10 +674,22 @@ pub(crate) fn paginate<T>(mut items: Vec<T>, offset: Option<usize>, limit: Optio
 /// and over, where [`list`] would count every match and sort them to answer. The filter is read, and
 /// the reach folded in, exactly as [`list`] does it.
 pub fn any(conn: &rusqlite::Connection, reach: crate::reach::Reach, filter_expr: &str) -> Result<bool> {
+    any_in_roles(conn, reach, filter_expr, &[])
+}
+
+/// [`any`], asked only of the tasks worked under one of `roles` ([`Filter::roles`]) — of every task where
+/// `roles` is empty.
+pub(crate) fn any_in_roles(
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    filter_expr: &str,
+    roles: &[i64],
+) -> Result<bool> {
     use crate::store_engine::{self, TaskQuery};
 
     let today = time::today();
     let mut filter = Filter::parse(filter_expr, today)?;
+    filter.roles = (!roles.is_empty()).then(|| roles.to_vec());
     filter.resolve(conn)?;
     if filter.project_id.is_some() {
         reach.refuse_project_choice("the `project:` filter")?;
@@ -707,6 +724,17 @@ pub fn list(
     reach: crate::reach::Reach,
     params: ListParams,
 ) -> Result<TaskListResult> {
+    list_in_roles(conn, reach, params, &[])
+}
+
+/// [`list`], of only the tasks worked under one of `roles` ([`Filter::roles`]) — of every task where
+/// `roles` is empty.
+pub(crate) fn list_in_roles(
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    params: ListParams,
+    roles: &[i64],
+) -> Result<TaskListResult> {
     use crate::store_engine::{self, TaskQuery};
 
     let (today, now) = (time::today(), Timestamp::now());
@@ -717,6 +745,7 @@ pub fn list(
     if let Some(text) = &params.text {
         filter.text = Some(text.clone());
     }
+    filter.roles = (!roles.is_empty()).then(|| roles.to_vec());
     // `project:` may be written as a name or an id. This is the entry point of the read — the layer
     // that holds the `conn` — so resolve it exactly once, before building any SQL. A name that does
     // not resolve errors here instead of degenerating into an empty result.

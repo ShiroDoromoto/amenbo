@@ -1577,17 +1577,17 @@ pub struct TriggersDue {
 }
 
 /// **Which triggers are due at `now`** — the first part of each, asked of every automation that may be
-/// started by one ([`read::automations_triggered`]), which leaves out a stopped one. One whose
-/// automation already has its most runs under way is not due: it would decide not to file a task, so a
-/// look need not open a write to hear it say so. It writes nothing: [`fire`] asks all of it again, in
-/// the transaction it writes in.
+/// started by one ([`read::automations_triggered`]), which leaves out a stopped one. One whose runs
+/// under way say no ([`has_room`]) is not due: it would decide not to file a task, so a look need not
+/// open a write to hear it say so. It writes nothing: [`fire`] asks all of it again, in the transaction
+/// it writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
         let Some(trigger) = automation.trigger else { continue };
         if trigger.next_at <= now {
             let under_way = read::automation_run_ids_under_way(conn, automation.id)?;
-            if under_way.len() < automation.max_concurrent_runs as usize {
+            if has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs) {
                 found.due.push(automation.id);
             }
         } else if found.next_at.is_none_or(|soonest| trigger.next_at < soonest) {
@@ -1600,10 +1600,11 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// **Fire an automation's trigger** at `now`: decide whether to file a task, write what it says, and
 /// start a run of the automation on it — `Some(run)` when it did, `None` when it decided not to.
 ///
-/// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while the automation already
-///    has its most runs under way (`max_concurrent_runs`): a task filed then would have no run to go to.
-///    An archived automation, a stopped one, one kept for export only and one with no trigger file none
-///    either.
+/// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while its runs under way say
+///    no ([`has_room`]): an `every` waits while the automation has its most runs under way
+///    (`max_concurrent_runs`), where a task filed would have no run to go to, and an `idle` waits until
+///    it has none at all. An archived automation, a stopped one, one kept for export only and one with
+///    no trigger file none either.
 /// 2. **What it says.** The title and notes written on the trigger.
 /// 3. **The run.** A launch like any other ([`launch_handing`]), of the newest saved version, the task
 ///    handed to its entry as a person's would be — so it is the entry, the built-in that files a task,
@@ -1621,7 +1622,7 @@ pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timest
         return Ok(None);
     }
     let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
-    if under_way.len() >= before.max_concurrent_runs as usize {
+    if !has_room(&trigger.when, under_way.len(), before.max_concurrent_runs) {
         return Ok(None);
     }
     let handed = match &trigger.task {
@@ -1636,6 +1637,16 @@ pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timest
     after.trigger = Some(crate::model::AutomationTrigger { next_at: trigger.when.after(now), ..trigger });
     crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
     Ok(Some(run))
+}
+
+/// **Whether the runs under way leave a trigger room to file a task** — `under_way` being the
+/// automation's runs `running` or `paused`, and `max` its `max_concurrent_runs`. An `every` files one
+/// while there is room for one more run; an `idle` only once there is none under way.
+fn has_room(when: &crate::model::TriggerWhen, under_way: usize, max: u32) -> bool {
+    match when {
+        crate::model::TriggerWhen::Every { .. } => under_way < max as usize,
+        crate::model::TriggerWhen::Idle => under_way == 0,
+    }
 }
 
 /// [`launch_handing`], counting the runs under way only where `limited`.

@@ -610,9 +610,10 @@ fn an_automation_is_stopped_and_started_again() {
     assert!(!text.contains("  stopped"), "{text}");
 }
 
-/// `automation trigger` writes a trigger, `show` says what it files and when it is next asked, and
-/// `--off` takes it away. A wait under a minute, a trigger with no title, and `--off` beside a part of
-/// one are refused.
+/// `automation trigger` writes a trigger — every so many minutes, or whenever no run is under way —
+/// `show` says what it files and when it is next asked, and `--off` takes it away. A wait under a
+/// minute, a trigger with no title or no when, `--every` beside `--when-idle`, and `--off` beside a
+/// part of one are refused.
 #[test]
 fn a_trigger_is_written_shown_and_taken_away() {
     let cli = Cli::new();
@@ -630,11 +631,18 @@ fn a_trigger_is_written_shown_and_taken_away() {
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(text.contains("every 60 minute(s), filing \"Look over the inbox\""), "{text}");
 
+    let idle = cli.json(&["automation", "trigger", &a, "--when-idle", "--title", "Look over the inbox", "--json"]);
+    assert_eq!(idle["automation"]["trigger"]["when"], serde_json::json!({ "kind": "idle" }), "{idle}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("whenever none of its runs is under way, filing \"Look over the inbox\" — not before"), "{text}");
+
     for wrong in [
         vec!["automation", "trigger", a.as_str(), "--every", "0", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--every", "5"],
         vec!["automation", "trigger", a.as_str(), "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--off", "--every", "5"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--when-idle", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--off", "--when-idle"],
     ] {
         let (_, code) = cli.run_err(&wrong);
         assert_ne!(code, 0, "{wrong:?} is refused");

@@ -480,14 +480,19 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
-        AutomationCmd::Trigger { id, every, title, notes, off } => {
+        AutomationCmd::Trigger { id, every, when_idle, title, notes, off } => {
             use amenbo_core::model::{TriggerTask, TriggerWhen};
-            let trigger = match (off, every, title) {
-                (false, Some(minutes), Some(title)) => Some(amenbo_core::ops::automation::NewTrigger {
-                    when: TriggerWhen::Every { minutes },
+            let when = match (every, when_idle) {
+                (Some(minutes), _) => Some(TriggerWhen::Every { minutes }),
+                (None, true) => Some(TriggerWhen::Idle),
+                (None, false) => None,
+            };
+            let trigger = match (off, when, title) {
+                (false, Some(when), Some(title)) => Some(amenbo_core::ops::automation::NewTrigger {
+                    when,
                     task: TriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() },
                 }),
-                // clap asks for both unless --off is given, and refuses them beside it.
+                // clap asks for a when and a title unless --off is given, and refuses them beside it.
                 _ => None,
             };
             let a = store.automation_trigger_set(id, trigger).map_err(CliError::from)?;
@@ -1513,16 +1518,17 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
     }
 }
 
-/// What an automation's trigger does, and when it is next asked.
+/// What an automation's trigger does, and when it is next asked (for an `idle`, the soonest it may be).
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
-    let when = match trigger.when {
-        TriggerWhen::Every { minutes } => format!("every {minutes} minute(s)"),
+    let (when, next) = match trigger.when {
+        TriggerWhen::Every { minutes } => (format!("every {minutes} minute(s)"), "next at"),
+        TriggerWhen::Idle => ("whenever none of its runs is under way".to_string(), "not before"),
     };
     let task = match &trigger.task {
         TriggerTask::Fixed { title, .. } => format!("\"{title}\""),
     };
-    format!("starts a run on its own {when}, filing {task} — next at {}", trigger.next_at.to_rfc3339_z())
+    format!("starts a run on its own {when}, filing {task} — {next} {}", trigger.next_at.to_rfc3339_z())
 }
 
 /// An automation from before automations had roles, which is kept only to be written out, and what to

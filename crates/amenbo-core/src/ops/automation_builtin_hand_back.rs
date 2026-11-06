@@ -314,8 +314,9 @@ mod tests {
         });
     }
 
-    /// **A run waiting for its next task does not fail when the one it handed back is reserved** — the
-    /// take that waits is not asked about a task this run has let go of.
+    /// **A run set to wait for its next task does not fail when the one it handed back is reserved** —
+    /// the take that would wait is not asked about a task this run has let go of. It completes there,
+    /// and its automation waits for a task in its place.
     #[test]
     fn a_run_waiting_to_take_is_not_failed_by_a_reservation_of_what_it_handed_back() {
         with_tx(|tx| {
@@ -327,8 +328,8 @@ mod tests {
             crate::ops::task::set_status(tx, task, TaskStatus::InProgress, ActorKind::Human)
                 .expect("a session reserves it");
             match open(tx, run.id, take, Some(&[])).expect("take again") {
-                Opened::Waiting { run } => assert_eq!(run.status, AutomationRunStatus::Running),
-                other => panic!("with nothing to take it waits, not {other:?}"),
+                Opened::LeftToWait { run } => assert_eq!(run.status, AutomationRunStatus::Completed),
+                other => panic!("with nothing to take its automation waits, not {other:?}"),
             }
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::InProgress));
         });

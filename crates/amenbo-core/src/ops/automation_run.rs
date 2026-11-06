@@ -687,16 +687,45 @@ fn roles_by_placement<'p>(
     by_id: &BTreeMap<i64, &AutomationPlacement>,
     defs: &Defs,
 ) -> BTreeMap<i64, &'p AutomationRole> {
+    first_round_reaching(pic, by_id, defs, pic.roles().iter().filter(|role| role.agent.is_some()))
+}
+
+/// **The first of `roles` whose round reaches each placement** — `roles` walked in the order given, a
+/// placement more than one round reaches kept with the first ([`round_of`]). Every role's start still
+/// stops a round, whether or not it is among `roles`.
+fn first_round_reaching<'p>(
+    pic: &'p Picture,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
+    roles: impl Iterator<Item = &'p AutomationRole>,
+) -> BTreeMap<i64, &'p AutomationRole> {
     let starts: BTreeSet<i64> =
         pic.roles().iter().filter_map(|role| role.entry_placement_id).chain(pic.entry_placement_id).collect();
     let mut found = BTreeMap::new();
-    for role in pic.roles().iter().filter(|role| role.agent.is_some()) {
+    for role in roles {
         let Some(entry) = role.entry_placement_id else { continue };
         for id in round_of(entry, pic, by_id, defs, &starts) {
             found.entry(id).or_insert(role);
         }
     }
     found
+}
+
+/// **The role whose round reaches each placement**, as placement id → role id, for the definition
+/// `reads` names. Every role is walked in the order they are defined in, a role naming no agent
+/// included: this is where a round goes, which a picture draws whether or not the role has an agent for
+/// its steps to fall back to ([`roles_by_placement`] is that narrower one). A placement more than one
+/// round reaches is the first role's; a placement no round reaches is left out.
+pub fn rounds_by_placement(conn: &Connection, automation_id: i64, reads: ReadsFrom) -> Result<BTreeMap<i64, i64>> {
+    let automation = read::automation(conn, automation_id)?
+        .ok_or_else(|| not_found("automation", automation_id))?;
+    let (pic, _) = definition(conn, &automation, reads)?;
+    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
+    let defs = defs_of(conn, &pic.placements)?;
+    Ok(first_round_reaching(&pic, &by_id, &defs, pic.roles().iter())
+        .into_iter()
+        .map(|(placement_id, role)| (placement_id, role.id))
+        .collect())
 }
 
 /// **The placements one round reaches** — walked from where it starts, as [`reachable`] walks, but not
@@ -1652,6 +1681,11 @@ pub(crate) fn answered(
     Ok(out)
 }
 
+/// One setting as a run's copy keeps it.
+fn run_def_cfg(c: AutomationCfg) -> RunDefCfg {
+    RunDefCfg { name: c.name, kind: c.kind, required: c.required, options: c.options, value: c.value }
+}
+
 /// [`answered`], with the answers read off `pic` — the draft or a saved version — rather than the store.
 fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> Vec<AutomationCfg> {
     def.cfgs
@@ -1684,9 +1718,50 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 /// The run is born `running`, so a launch never waits (`AMB-D-947`): it is either refused or under
 /// way. `started_at` is the moment of the launch itself.
 ///
-/// It reads the saved definition ([`ReadsFrom::Saved`]).
+/// It reads the saved definition ([`ReadsFrom::Saved`]). It makes the run even where the entry would
+/// wait for a task, which the run's entry then finds ([`wait_for_a_task`]); a person's start asks
+/// that first and makes no run ([`start`]).
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
     launch_handing(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved)
+}
+
+/// **What a start of an automation came to** ([`start`]).
+#[derive(Clone, Debug)]
+pub enum Started {
+    /// A run was launched.
+    Run(AutomationRun),
+    /// **Its entry would wait for a task with none to take**, so no run was made and the automation
+    /// waits for one instead ([`Automation::waits_for_task_since`]).
+    Waits(Automation),
+}
+
+impl Started {
+    /// The run, for a launch that was never let wait.
+    fn run(self) -> Result<AutomationRun> {
+        match self {
+            Started::Run(run) => Ok(run),
+            Started::Waits(automation) => Err(Error::invalid(format!(
+                "automation '{}' was launched to wait for a task, and only a start waits",
+                automation.name
+            ))),
+        }
+    }
+}
+
+/// **Start an automation as a person does** — [`launch_handing`] of the newest saved version, refused
+/// over everything a launch is refused over, and in that order.
+///
+/// **Where the entry would wait for a task and none can be taken now, no run is made**
+/// (`AMB-D-969`): the automation is marked as waiting for one instead ([`Started::Waits`]), and the
+/// app's watch starts a run once one turns up ([`start_waiting`]). A run made then would only stand
+/// at its entry, counted among the runs under way and doing nothing.
+pub fn start(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+    handed: &HandedAtLaunch,
+) -> Result<Started> {
+    hand(tx, automation_id, by, handed, ReadsFrom::Saved, true, true)
 }
 
 /// **Which definition of an automation a launch reads** — what is checked and copied down onto the run.
@@ -1726,7 +1801,7 @@ pub fn launch_handing(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
 ) -> Result<AutomationRun> {
-    hand(tx, automation_id, by, handed, reads, true)
+    hand(tx, automation_id, by, handed, reads, true, false)?.run()
 }
 
 /// [`launch_handing`], not refused over the automation's most runs under way. For a test run, whose run
@@ -1738,7 +1813,7 @@ pub fn launch_handing_past_the_limit(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
 ) -> Result<AutomationRun> {
-    hand(tx, automation_id, by, handed, reads, false)
+    hand(tx, automation_id, by, handed, reads, false, false)?.run()
 }
 
 /// **What the triggers say on one look** ([`triggers_due`]): the automations whose trigger is due now,
@@ -1821,6 +1896,188 @@ pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timest
     Ok(Some(run))
 }
 
+/// **The entry of `pic`**: the key of the built-in it stands on (`None` for an agent's step or a
+/// script), with the answers written for it there as a run's copy would keep them — or `None` where
+/// `pic` names no entry.
+fn entry_builtin(conn: &Connection, pic: &Picture) -> Result<Option<EntryBuiltin>> {
+    let Some(entry) = pic.entry_placement_id.and_then(|id| pic.placement(id)) else { return Ok(None) };
+    let cfg = answers(pic, entry, &ActionDef::placed(conn, entry)?).into_iter().map(run_def_cfg).collect();
+    Ok(Some(EntryBuiltin { builtin: action_builtin(conn, entry.action_id)?, cfg, roles: roles_on(pic) }))
+}
+
+/// **The entry of a picture as a waiting built-in reads it** ([`entry_builtin`]): the built-in placed
+/// there, the answers written for it, and the roles a run of the picture would start rounds of.
+struct EntryBuiltin {
+    builtin: Option<String>,
+    cfg: Vec<RunDefCfg>,
+    roles: Vec<i64>,
+}
+
+/// **The roles a run launched from `pic` would start rounds of** — [`roles_started`] read before any
+/// run is: the picture's roles that name a placement on it as where their round starts, each once.
+fn roles_on(pic: &Picture) -> Vec<i64> {
+    pic.roles()
+        .iter()
+        .filter(|r| r.entry_placement_id.is_some_and(|id| pic.placement(id).is_some()))
+        .map(|r| r.id)
+        .collect()
+}
+
+/// **Mark an automation as waiting for a task** ([`Automation::waits_for_task_since`]) — from now, or
+/// from when it already was.
+fn mark_waiting(tx: &WriteTx<'_>, before: Automation) -> Result<Automation> {
+    if before.waits_for_task_since.is_some() {
+        return Ok(before);
+    }
+    let after = Automation { waits_for_task_since: Some(Timestamp::now()), ..before.clone() };
+    crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
+    Ok(after)
+}
+
+/// **End a run whose built-in would wait for a task, and have its automation wait instead**
+/// (`AMB-D-969`) — where the run came back to its entry with no task to take.
+///
+/// **The run completes** there, its step never opened: it found nothing to do, as one leaving by the
+/// way out for nothing to take does. It holds no task, so there is none to hand back. **The automation
+/// is marked as waiting**, and the app's watch starts a run of it once a task turns up
+/// ([`start_waiting`]). So waiting leaves no run standing, counted among those under way, and no step or
+/// stretch.
+pub(crate) fn wait_for_a_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<AutomationRun> {
+    let automation_id = run.automation_id;
+    let ended = crate::ops::automation_stop::ended(tx, run, crate::ops::automation_stop::Ending::Completed)?;
+    let automation =
+        read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    mark_waiting(tx, automation)?;
+    Ok(ended.run)
+}
+
+/// **Which of these waiting automations a run may be started of now** ([`start_waiting`]) — those a
+/// task has turned up for, with room under `max_concurrent_runs`, and those whose newest saved entry no
+/// longer waits for one, whose wait [`start_waiting`] ends.
+///
+/// Only whether a task has turned up is asked, one row of the tasks each, never a count
+/// (`AMB-D-969`). It writes nothing: [`start_waiting`] asks all of it again, in the transaction it
+/// writes in. The caller says which to ask, so it can leave each one alone for a while after asking
+/// (`AMB-D-983`).
+pub fn tasks_turned_up(conn: &Connection, automations: &[i64]) -> Result<Vec<i64>> {
+    let mut due = Vec::new();
+    for &automation_id in automations {
+        let Some(automation) = read::automation(conn, automation_id)? else { continue };
+        if automation.waits_for_task_since.is_none() || automation.archived || automation.stopped || automation.export_only {
+            continue;
+        }
+        if read::automation_run_ids_under_way(conn, automation_id)?.len() >= automation.max_concurrent_runs as usize {
+            continue;
+        }
+        let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+        let turned_up = match entry_builtin(conn, &pic)? {
+            Some(e) => crate::ops::automation_builtin::turned_up(
+                conn,
+                automation.project_id,
+                &e.roles,
+                e.builtin.as_deref(),
+                &e.cfg,
+            )?,
+            None => None,
+        };
+        if turned_up != Some(false) {
+            due.push(automation_id);
+        }
+    }
+    Ok(due)
+}
+
+/// **Start a run of an automation waiting for a task, now that one has turned up** — `Some(run)` where
+/// it did, `None` where there was nothing to start.
+///
+/// It starts none where the automation is not waiting, is archived, stopped or kept for export only,
+/// has its most runs under way, or no task has turned up after all: the wait goes on, and nothing is
+/// written.
+/// Where its newest saved entry no longer waits for a task, the wait ends and no run is made — a run
+/// started then would start for no task.
+///
+/// The run is a launch like any other ([`launch_handing`]) of the newest saved version, with nothing
+/// handed to it, and the wait ends in the same transaction. A launch its checks refuse is an error, and
+/// the transaction takes nothing with it: the automation goes on waiting.
+pub fn start_waiting(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<Option<AutomationRun>> {
+    let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    if before.waits_for_task_since.is_none() || before.archived || before.stopped || before.export_only {
+        return Ok(None);
+    }
+    if read::automation_run_ids_under_way(tx.conn(), automation_id)?.len() >= before.max_concurrent_runs as usize {
+        return Ok(None);
+    }
+    let (pic, _) = definition(tx.conn(), &before, ReadsFrom::Saved)?;
+    let turned_up = match entry_builtin(tx.conn(), &pic)? {
+        Some(e) => crate::ops::automation_builtin::turned_up(
+            tx.conn(),
+            before.project_id,
+            &e.roles,
+            e.builtin.as_deref(),
+            &e.cfg,
+        )?,
+        None => None,
+    };
+    match turned_up {
+        Some(false) => return Ok(None),
+        None => {
+            stop_waiting(tx, automation_id)?;
+            return Ok(None);
+        }
+        Some(true) => {}
+    }
+    let run = launch_handing(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved)?;
+    stop_waiting(tx, automation_id)?;
+    Ok(Some(run))
+}
+
+/// **Stop an automation waiting for a task** — a person saying not to start a run once one turns up, or
+/// [`start_waiting`] having started one. One that is not waiting is answered as it stands, with nothing
+/// written.
+pub fn stop_waiting(tx: &WriteTx<'_>, automation_id: i64) -> Result<Automation> {
+    let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    if before.waits_for_task_since.is_none() {
+        return Ok(before);
+    }
+    let after = Automation { waits_for_task_since: None, ..before.clone() };
+    crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
+    Ok(after)
+}
+
+/// **An automation waiting for a task**, as a person reads it: since when, and what its newest saved
+/// entry looks for (`None` where that entry no longer waits for anything).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct TaskWait {
+    pub since: Timestamp,
+    pub looks_for: Option<String>,
+}
+
+/// **Whether this automation is waiting for a task** ([`TaskWait`]), or `None` where it is not.
+pub fn task_wait(conn: &Connection, automation_id: i64) -> Result<Option<TaskWait>> {
+    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    let Some(since) = automation.waits_for_task_since else { return Ok(None) };
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let looks_for = entry_builtin(conn, &pic)?
+        .and_then(|e| crate::ops::automation_builtin::looks_for(e.builtin.as_deref(), &e.cfg));
+    Ok(Some(TaskWait { since, looks_for }))
+}
+
+/// **What is keeping this automation waiting** (`AMB-D-999`) — the tasks its newest saved entry looks
+/// for that cannot be taken, by what stops them. `None` for an automation that is not waiting. Read
+/// when a person is about to look, never by the watch's look.
+pub fn task_wait_held_back(
+    conn: &Connection,
+    automation_id: i64,
+) -> Result<Option<crate::ops::automation_builtin::HeldBack>> {
+    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    if automation.waits_for_task_since.is_none() {
+        return Ok(None);
+    }
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let Some(e) = entry_builtin(conn, &pic)? else { return Ok(None) };
+    crate::ops::automation_builtin::held_back(conn, automation.project_id, &e.roles, e.builtin.as_deref(), &e.cfg)
+}
+
 /// **Whether the runs under way leave a trigger room to file a task** — `under_way` being the
 /// automation's runs `running` or `paused`, and `max` its `max_concurrent_runs`. An `every` or a
 /// `tasks` files one while there is room for one more run; an `idle` only once there is none under way.
@@ -1839,7 +2096,8 @@ fn condition_holds(conn: &Connection, project_id: i64, trigger: &crate::model::A
     Ok(matched < condition.below as usize)
 }
 
-/// [`launch_handing`], counting the runs under way only where `limited`.
+/// [`launch_handing`], counting the runs under way only where `limited`, and making no run where the
+/// entry would wait for a task only where `may_wait` ([`start`]).
 fn hand(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -1847,7 +2105,8 @@ fn hand(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
     limited: bool,
-) -> Result<AutomationRun> {
+    may_wait: bool,
+) -> Result<Started> {
     let who = match (handed.files.is_empty(), by.by) {
         (true, _) => None,
         (false, Some(who)) => Some(who),
@@ -1857,7 +2116,10 @@ fn hand(
             ))
         }
     };
-    let run = launch_asking(tx, automation_id, by, handed, reads, limited, |_| true)?;
+    let run = match launch_asking(tx, automation_id, by, handed, reads, limited, may_wait, |_| true)? {
+        Started::Run(run) => run,
+        waits @ Started::Waits(_) => return Ok(waits),
+    };
     if let Some(who) = who {
         for file in &handed.files {
             crate::ops::attachment::add_blob(
@@ -1872,7 +2134,7 @@ fn hand(
             )?;
         }
     }
-    Ok(run)
+    Ok(Started::Run(run))
 }
 
 /// [`launch`], with the check's two reasons about how a task is held let through — the lines that
@@ -1888,9 +2150,10 @@ pub(crate) fn launch_past_the_task_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, false, |unmet| {
         !matches!(unmet, Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. })
-    })
+    })?
+    .run()
 }
 
 /// [`launch_past_the_task_checks`], with a setting that names what the project does not have let through
@@ -1903,7 +2166,7 @@ pub(crate) fn launch_past_the_setting_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, false, |unmet| {
         !matches!(
             unmet,
             Unmet::LeavesTaskOpen { .. }
@@ -1912,12 +2175,18 @@ pub(crate) fn launch_past_the_setting_checks(
                 | Unmet::CfgValueClosed { .. }
                 | Unmet::FolderUnchosen { .. }
         )
-    })
+    })?
+    .run()
 }
 
 /// [`launch`] of the definition `reads` names, refusing only over what `counts` says counts — and over
 /// the runs under way only where `limited` — and keeping what was `handed` on the run. The files are the
 /// caller's to attach once the run exists.
+///
+/// Where `may_wait`, an entry that would wait for a task with none to take makes no run, and the
+/// automation waits instead ([`start`]). Asked last, once nothing refuses the launch: an automation
+/// that could not be launched is not one to wait on.
+#[allow(clippy::too_many_arguments)]
 fn launch_asking(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -1925,8 +2194,9 @@ fn launch_asking(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
     limited: bool,
+    may_wait: bool,
     counts: impl Fn(&Unmet) -> bool,
-) -> Result<AutomationRun> {
+) -> Result<Started> {
     let automation: Automation = read::automation(tx.conn(), automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
     if automation.archived {
@@ -1985,6 +2255,20 @@ fn launch_asking(
     let handed_task = entry_reads(tx.conn(), &automation, &pic, handed)?
         .map(|task| serde_json::to_string(&task).map_err(Error::from))
         .transpose()?;
+    if may_wait {
+        if let Some(e) = entry_builtin(tx.conn(), &pic)? {
+            let waits = crate::ops::automation_builtin::waits_now(
+                tx.conn(),
+                automation.project_id,
+                &e.roles,
+                e.builtin.as_deref(),
+                &e.cfg,
+            )?;
+            if waits {
+                return Ok(Started::Waits(mark_waiting(tx, automation)?));
+            }
+        }
+    }
     let now = Timestamp::now();
     let run = AutomationRun {
         id: read::next_id(tx.conn(), "automation_run")?,
@@ -2007,7 +2291,7 @@ fn launch_asking(
     };
     emit_create(tx, record::automation_run(&run))?;
     copy_down(tx, run.id, &pic, version, by.default_agent, now)?;
-    Ok(run)
+    Ok(Started::Run(run))
 }
 
 /// **Copy every step of `automation` down onto the run** — [`snapshot`] for each step of each
@@ -2382,16 +2666,7 @@ fn snapshot(
         Some(_) => read::automation_action(conn, placement.action_id)?.and_then(|a| a.builtin_version),
         None => None,
     };
-    let cfg: Vec<RunDefCfg> = answers(pic, placement, def)
-        .into_iter()
-        .map(|c| RunDefCfg {
-            name: c.name,
-            kind: c.kind,
-            required: c.required,
-            options: c.options,
-            value: c.value,
-        })
-        .collect();
+    let cfg: Vec<RunDefCfg> = answers(pic, placement, def).into_iter().map(run_def_cfg).collect();
     // The roles whose round starts here: those naming this placement, on the copy of its first step.
     let roles: Vec<i64> = match def.entry_step_id == Some(step.id) {
         true => pic.roles().iter().filter(|r| r.entry_placement_id == Some(placement.id)).map(|r| r.id).collect(),
@@ -2818,24 +3093,27 @@ pub(crate) fn goes_round(
     Ok(entry_def(conn, run_id)?.is_some_and(|entry| crate::ops::automation_stop::takes_a_task(&entry)))
 }
 
-/// **Whether this run stands before a built-in that is waiting** for something to turn up
-/// (`AMB-D-969`) — `running`, with nothing under way, and the step it would open next set to wait
-/// with nothing yet for it. Asked by a face that says so beside the run.
+/// **Whether this run stands before a built-in that would wait** for something to turn up
+/// (`AMB-D-969`) — `running`, with nothing under way, and the step it would open next set to wait with
+/// nothing yet for it. Such a run is ended the next time that step is opened, and its automation waits
+/// instead ([`wait_for_a_task`]); until then a pause before its next task takes hold at once.
 pub fn is_waiting(conn: &Connection, run_id: i64) -> Result<bool> {
     let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(false) };
     let Some(run) = read::automation_run(conn, run_id)? else { return Ok(false) };
     crate::ops::automation_builtin::waiting(conn, &run, &def)
 }
 
-/// **What is keeping a run waiting** (`AMB-D-999`) — `None` for a run that is not waiting on a
-/// built-in. Read when a person is about to look, never by the watch's once-a-second look.
+/// **What is keeping a run waiting** (`AMB-D-999`) — `None` for a run that is not standing before a
+/// built-in that would wait ([`is_waiting`]).
 pub fn held_back(conn: &Connection, run_id: i64) -> Result<Option<crate::ops::automation_builtin::HeldBack>> {
     let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(None) };
     let Some(run) = read::automation_run(conn, run_id)? else { return Ok(None) };
     if !crate::ops::automation_builtin::waiting(conn, &run, &def)? {
         return Ok(None);
     }
-    crate::ops::automation_builtin::held_back(conn, &run, &def)
+    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    let roles = roles_started(conn, run.id)?;
+    crate::ops::automation_builtin::held_back(conn, run.project_id, &roles, def.builtin.as_deref(), &cfg)
 }
 
 /// **A run kept out of an action that takes one run at a time** ([`waits_for_room`]): the action, and
@@ -2968,7 +3246,7 @@ pub struct Trail {
     /// has left that spot, and before it opens one there. A step passed twice is two of these.
     pub steps: Vec<PassedStep>,
     /// The step under way, or the one the run is about to open or waiting on — the first step of the
-    /// spot for a run waiting for a task. `None` where [`Trail::at`] is `None`, and where the copy
+    /// spot for a run that has not opened one there yet. `None` where [`Trail::at`] is `None`, and where the copy
     /// names no step.
     pub step: Option<i64>,
 }
@@ -3956,6 +4234,26 @@ mod tests {
         });
     }
 
+    /// **The round reaching a placement is the first role defined whose round does**, a role naming no
+    /// agent included — unlike the role a step falls back to, which passes such a role by.
+    #[test]
+    fn a_placement_is_in_the_round_of_the_first_role_reaching_it_with_or_without_an_agent() {
+        with_tx(|tx| {
+            let (automation, _, placement) = launchable(tx);
+            let entry = automation.entry_placement_id.expect("an entry");
+            let rounds = || rounds_by_placement(tx.conn(), automation.id, ReadsFrom::Draft).expect("rounds");
+            assert_eq!(rounds(), BTreeMap::new(), "no role, no round");
+
+            let reception = role_at(tx, &automation, "受付", entry, Some("codex"), None);
+            let unnamed = role_at(tx, &automation, "名無し", placement.id, None, None);
+            role_at(tx, &automation, "実装", placement.id, Some("claude"), None);
+
+            let rounds = rounds();
+            assert_eq!(rounds.get(&entry), Some(&reception.id));
+            assert_eq!(rounds.get(&placement.id), Some(&unnamed.id), "the role defined first, though it names no agent");
+        });
+    }
+
     /// **A launch copies the agent a step falls back to** into the run, so the pane opens on it.
     #[test]
     fn a_launch_copies_the_agent_a_step_falls_back_to() {
@@ -4555,7 +4853,7 @@ mod tests {
                 crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                     panic!("cannot start {agent}")
                 }
-                crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+                crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
                 crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
                 crate::ops::automation_step::Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -4669,7 +4967,7 @@ mod tests {
             crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                 panic!("cannot start {agent}")
             }
-            crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+            crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
             crate::ops::automation_step::Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -4803,10 +5101,10 @@ mod tests {
         });
     }
 
-    /// **A run waiting for a task to take stands at the step it opens first** — the built-in that takes
-    /// one, though nothing is open there yet.
+    /// **A run just launched stands at the step it opens first** — the built-in that takes a task,
+    /// though nothing is open there yet.
     #[test]
-    fn a_run_waiting_for_a_task_stands_at_the_step_it_opens_first() {
+    fn a_run_just_launched_stands_at_the_step_it_opens_first() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let run = crate::ops::automation_run::launch_past_the_task_checks(tx, automation.id, &here(&claude()))

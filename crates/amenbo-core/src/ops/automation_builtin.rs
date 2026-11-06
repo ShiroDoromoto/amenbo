@@ -222,12 +222,15 @@ pub struct BuiltinExit {
 /// **How a built-in waits** where it is set to, rather than leave by the way out that says there was
 /// nothing to do.
 ///
-/// **Waiting writes nothing.** The step is not opened until what it waits for has turned up, so the
-/// run stands before it — `running`, with no execution under way — and every look of the watch asks
-/// again ([`waiting`]). A pause or a stop acts on that run as on any other.
+/// **Amenbo waits, not the run.** A run that comes to it with nothing for it to act on ends there, its
+/// step never opened, and its automation is marked as waiting
+/// ([`crate::ops::automation_run::wait_for_a_task`]); a launch that would come to it so makes no run at
+/// all. The app's watch asks again every so often and starts a run once something has turned up
+/// ([`crate::ops::automation_run::start_waiting`]). So the time spent waiting leaves no run, no step and
+/// no stretch behind it.
 ///
-/// **What is asked is only whether one has turned up** ([`Waits::turned_up`]): it is asked once a
-/// second, and a count or a list of every candidate would be asked of every task there is.
+/// **What is asked is only whether one has turned up** ([`Waits::turned_up`]): it is asked on every
+/// look, and a count or a list of every candidate would be asked of every task there is.
 pub struct Waits {
     /// The setting that says whether it waits, and the choice on it that means it does.
     pub setting: &'static str,
@@ -235,15 +238,16 @@ pub struct Waits {
     /// The way out it would otherwise leave by. Set to wait, it never does, so the launch check asks
     /// no line of it.
     pub instead_of: &'static str,
-    /// Whether what it waits for is there now, read from the answers where it was placed.
-    pub turned_up: fn(&Connection, &AutomationRun, &[RunDefCfg]) -> Result<bool>,
-    /// What it looks for, as a person reads it beside the run while it waits — read from the same
-    /// answers. What it would find is not listed or counted: that is asked of every task there is.
+    /// Whether what it waits for is there now in the project, read from the answers where it was
+    /// placed — of the roles the run starts a round of, where it starts any (`roles_started`).
+    pub turned_up: fn(&Connection, i64, &[i64], &[RunDefCfg]) -> Result<bool>,
+    /// What it looks for, as a person reads it beside the automation while it waits — read from the
+    /// same answers. What it would find is not listed or counted: that is asked of every task there is.
     pub looks_for: fn(&[RunDefCfg]) -> String,
     /// **What is keeping it waiting** ([`HeldBack`], `AMB-D-999`) — read from the same answers, and
-    /// only when a person is about to look: as the wait begins and when the store changes. Never by
-    /// the once-a-second look, which is the reason [`Waits::looks_for`] counts nothing.
-    pub held_back: fn(&Connection, &AutomationRun, &[RunDefCfg]) -> Result<HeldBack>,
+    /// only when a person is about to look. Never by the watch's look, which is the reason
+    /// [`Waits::looks_for`] counts nothing.
+    pub held_back: fn(&Connection, i64, &[i64], &[RunDefCfg]) -> Result<HeldBack>,
 }
 
 /// **What keeps the tasks a waiting built-in looks for from being taken** (`AMB-D-999`): the tasks its
@@ -319,34 +323,68 @@ pub fn answer<'c>(cfg: &'c [RunDefCfg], name: &str) -> Option<&'c str> {
 /// nothing yet for it to act on ([`Waits`]). Anything else — an agent's step, a built-in that never
 /// waits, a key this build does not know — is opened as it always is.
 pub fn waiting(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -> Result<bool> {
-    let Some(waits) = def.builtin.as_deref().and_then(find).and_then(|b| b.waits.as_ref()) else {
-        return Ok(false);
-    };
     let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
-    if !waits.chosen(answer(&cfg, waits.setting)) {
+    let roles = crate::ops::automation_run::roles_started(conn, run.id)?;
+    waits_now(conn, run.project_id, &roles, def.builtin.as_deref(), &cfg)
+}
+
+/// [`waiting`], for the built-in `key` with the answers `cfg` in `project_id`, for a run starting rounds
+/// of `roles` — where nothing has been copied onto a run yet, as at a launch.
+pub fn waits_now(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    key: Option<&str>,
+    cfg: &[RunDefCfg],
+) -> Result<bool> {
+    let Some(waits) = waits_of(key) else { return Ok(false) };
+    if !waits.chosen(answer(cfg, waits.setting)) {
         return Ok(false);
     }
-    Ok(!(waits.turned_up)(conn, run, &cfg)?)
+    Ok(!(waits.turned_up)(conn, project_id, roles, cfg)?)
 }
 
-/// **What this copy of a step looks for while it waits** ([`Waits::looks_for`]), or `None` for a step
-/// that does not wait.
-pub fn looks_for(def: &AutomationRunDef) -> Result<Option<String>> {
-    let Some(waits) = def.builtin.as_deref().and_then(find).and_then(|b| b.waits.as_ref()) else {
-        return Ok(None);
-    };
-    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
-    Ok(Some((waits.looks_for)(&cfg)))
+/// **Whether what the built-in `key` waits for has turned up** in `project_id`, for a run starting
+/// rounds of `roles` ([`Waits::turned_up`]) — `None` for a built-in that never waits, or is not set to
+/// wait by the answers `cfg`.
+pub fn turned_up(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    key: Option<&str>,
+    cfg: &[RunDefCfg],
+) -> Result<Option<bool>> {
+    match waits_of(key) {
+        Some(waits) if waits.chosen(answer(cfg, waits.setting)) => {
+            Ok(Some((waits.turned_up)(conn, project_id, roles, cfg)?))
+        }
+        _ => Ok(None),
+    }
 }
 
-/// **What is keeping this copy of a step waiting** ([`Waits::held_back`]), or `None` for a step that
-/// does not wait.
-pub fn held_back(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -> Result<Option<HeldBack>> {
-    let Some(waits) = def.builtin.as_deref().and_then(find).and_then(|b| b.waits.as_ref()) else {
-        return Ok(None);
-    };
-    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
-    Ok(Some((waits.held_back)(conn, run, &cfg)?))
+/// **What the built-in `key` looks for while it waits** ([`Waits::looks_for`]), or `None` for one that
+/// never waits.
+pub fn looks_for(key: Option<&str>, cfg: &[RunDefCfg]) -> Option<String> {
+    waits_of(key).map(|waits| (waits.looks_for)(cfg))
+}
+
+/// **What is keeping the built-in `key` waiting** in `project_id`, for a run starting rounds of `roles`
+/// ([`Waits::held_back`]), or `None` for one that never waits.
+pub fn held_back(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    key: Option<&str>,
+    cfg: &[RunDefCfg],
+) -> Result<Option<HeldBack>> {
+    match waits_of(key) {
+        Some(waits) => Ok(Some((waits.held_back)(conn, project_id, roles, cfg)?)),
+        None => Ok(None),
+    }
+}
+
+fn waits_of(key: Option<&str>) -> Option<&'static Waits> {
+    key.and_then(find).and_then(|b| b.waits.as_ref())
 }
 
 /// **The way out a placed built-in never leaves by**, as it is set there — the launch check asks no

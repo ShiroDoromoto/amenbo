@@ -383,7 +383,7 @@ amenbo automation add --name "Work the queue"          # the picture itself; wha
 amenbo automation builtin-list                         # take_task, make_task, fetch, cut_worktree, fold_worktree, close_task, hand_back_task, defer_task, wait — with the names of what each reads, hands on and leaves by
 amenbo automation place-add 3 --builtin take_task      # 31: where a run starts, first placed; reserves the first task its filter finds
 amenbo automation cfg-set 31 --name "<filter>" --assignee me-ai --dim "Area=Core" # which tasks it takes (unanswered: the ones handed to the AI)
-amenbo automation cfg-set 31 --name "<when none>" --choice "<wait>" # or wait for one to turn up, until a person pauses or stops the run
+amenbo automation cfg-set 31 --name "<when none>" --choice "<wait>" # or have Amenbo wait for one to turn up: the run ends there, and the app starts the next run once one does
 amenbo automation place-add 3 --builtin cut_worktree   # 32: the task's worktree, from the newest of the remote's default branch
 amenbo automation action-add --name "Implement"        # 7: a unit worth using twice, in the library
 amenbo automation step-add 7 --name "Implement" --prompt - --work-dir worktree # 11: one step of it = one terminal, run in the folder it is handed
@@ -428,9 +428,10 @@ amenbo automation start 4 --title "Login loses the password field" --dim Categor
 amenbo automation trigger 4 --every 60 --title "Look over the inbox"   # ...or let it file that task and start itself every hour while the app is up (none while it already has its most runs going); --off takes it away
 amenbo automation trigger 4 --when-idle --title "Look over the inbox"  # ...or whenever none of its runs is going, a minute after the last one it filed at the soonest
 amenbo automation trigger 4 --when-idle --if-tasks "status:todo" --fewer-than 3 --title "Look over the inbox"  # ...only while fewer than 3 of the project's tasks are todo; --if-tasks alone files one whenever that holds
-amenbo automation stop 4                               # stop it starting new rounds: start and its trigger are refused, and each run pauses once its round is over (one waiting for a task, at once); --off lets it start them again
+amenbo automation stop 4                               # stop it starting new rounds: start and its trigger are refused, and each run pauses once its round is over (one waiting for room to take a task, at once) and a wait for a task ends; --off lets it start them again
+amenbo automation stop-waiting 3                       # an automation set to wait for a task makes no run until one turns up; this stops it waiting
 amenbo automation pause 7                              # ...at the end of the action under way (a wait under way included: the run pauses once its time is up)
-amenbo automation pause 7 --before-next-task           # ...or where it would take its next task (one waiting for a task pauses now)
+amenbo automation pause 7 --before-next-task           # ...or where it would take its next task (one waiting for room pauses now)
 amenbo automation cancel 7                             # a paused run ends canceled, handing the task back to todo and to the person
 amenbo automation cancel 7 --force                     # ...or one still going, now: the step under way is cut off where it stands
 amenbo automation acknowledge 7                        # a failed run has been seen: off the running tab, onto the history (whoever says it is kept)
@@ -443,7 +444,7 @@ amenbo automation acknowledge 7                        # a failed run has been s
 # tasks and changes their edges and fields (`task depend`, `decision link`, `dimension set`, `task
 # update`); a task's status and who it is assigned to stay the run's, and no decision is written there.
 amenbo automation run-list --task AMB-T-<n> --json     # the runs that worked one task
-amenbo automation run-show 7                           # one run in full, step by step, and whether it is waiting for a task or for room
+amenbo automation run-show 7                           # one run in full, step by step, and whether it is waiting for room
 
 # Status and data ownership
 amenbo status                               # overdue / today / in-progress summary

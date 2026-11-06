@@ -78,12 +78,15 @@ pub enum Opened {
     /// **This step takes a fresh task while the one before is still in progress**, so no terminal was
     /// opened and the run was failed with [`AutomationStoppedReason::LeftTaskOpen`] (`AMB-D-967`).
     LeftTaskOpen { run: AutomationRun },
-    /// **The step is a built-in set to wait, and nothing has turned up for it yet** (`AMB-D-969`).
-    /// Nothing was written, so the run still stands before this step and the next look opens it again.
-    /// Where a pause had been asked for, `run` has been paused here instead: a waiting step never
-    /// reports, so this is where the pause takes hold. So is a run asked to pause before its next task
-    /// that has come to the step that takes one (`AMB-D-1009`), whether or not a task stands ready.
+    /// **The run was paused before this step, which was not opened.** A run asked to pause before its
+    /// next task that has come to the step that takes one (`AMB-D-1009`), whether or not a task stands
+    /// ready; or one asked to pause that came to a built-in set to wait with nothing for it yet — a step
+    /// never opened never reports, so this is where the pause takes hold.
     Waiting { run: AutomationRun },
+    /// **The step is a built-in set to wait, and nothing has turned up for it** (`AMB-D-969`). The run
+    /// ended here, completed with the step never opened, and its automation waits for a task in its
+    /// place ([`super::automation_run::wait_for_a_task`]).
+    LeftToWait { run: AutomationRun },
     /// **The step is the first of an action that takes one run at a time, and the action is not free**
     /// — another run is inside it, or came to it first and goes in before this one
     /// ([`super::automation_run::room_for`]). Nothing was written, so the run still stands before this
@@ -286,18 +289,21 @@ fn open_as(
         let stopped = stop(tx, run)?;
         return Ok(Opened::Stopped { run: stopped.run, missing });
     }
-    // Asked before anything is written, so a built-in that is waiting leaves no execution behind it
-    // on each look (`super::automation_builtin::Waits`).
+    // Asked before anything is written, so a built-in that would wait leaves no execution behind it
+    // (`super::automation_builtin::Waits`). The run ends here and its automation waits for a task in
+    // its place — unless a pause was asked for, which takes hold here instead, since a step that is
+    // never opened never reports.
     if !rehearsing && super::automation_builtin::waiting(conn, &run, &def)? {
-        let run = match run.pause_requested {
-            true => super::automation_stop::settle(tx, run, AutomationPauseKind::EndOfAction)?.run,
-            false => run,
-        };
-        return Ok(Opened::Waiting { run });
+        return Ok(match run.pause_requested {
+            true => Opened::Waiting {
+                run: super::automation_stop::settle(tx, run, AutomationPauseKind::EndOfAction)?.run,
+            },
+            false => Opened::LeftToWait { run: super::automation_run::wait_for_a_task(tx, run)? },
+        });
     }
     // **An action that takes one run at a time is gone into in arrival order, one run at a time.**
-    // Asked here, after a built-in's own wait, so a run still waiting for a task to turn up does not
-    // hold a place in the line; and before anything is written, so a run kept out leaves nothing
+    // Asked here, after a built-in's own wait, so a run that ends there for want of a task never holds
+    // a place in the line; and before anything is written, so a run kept out leaves nothing
     // behind it on each look. A test run is not kept out: it walks a copy nobody else is in.
     if !rehearsing {
         if let Some(room) = super::automation_run::room_for(conn, &run, &def)? {
@@ -1181,7 +1187,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } | Opened::Waiting { .. } | Opened::Holding { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
             Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -1712,7 +1718,7 @@ mod tests {
                     );
                 }
                 Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-                Opened::Carried { .. } | Opened::Waiting { .. } | Opened::Holding { .. } => panic!("not a built-in"),
+                Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::Holding { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 Opened::Script(_) => panic!("not a script"),
                 Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -1740,7 +1746,7 @@ mod tests {
             let here = ["codex".to_string()];
             match open(tx, run.id, def_of(tx, &run, &p.first).id, Some(&here)).expect("open") {
                 Opened::Ready(_) => panic!("nothing here can start claude"),
-                Opened::Carried { .. } | Opened::Waiting { .. } | Opened::Holding { .. } => panic!("not a built-in"),
+                Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::Holding { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 Opened::Script(_) => panic!("not a script"),
                 Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),

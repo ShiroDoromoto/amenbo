@@ -1343,6 +1343,14 @@ pub const STEPS: &[Step] = &[
         // one, so there is nothing to point at.
         apply: Apply::Custom(let_a_round_name_its_incident),
     },
+    Step {
+        to: 113,
+        name: "add automation.waits_for_task_since, since when Amenbo has been waiting for a task to start a run on",
+        // **Unseeded.** Before this a run waited for a task at its entry, still running. Such a run is
+        // left as it is: the next time the app opens its entry, it ends there and its automation is
+        // marked as waiting in its place.
+        apply: Apply::Custom(let_amenbo_wait_for_a_task),
+    },
 ];
 
 /// v111: `automation.trigger_condition_filter` and `trigger_condition_below`, and
@@ -1409,6 +1417,22 @@ fn let_a_person_stop_an_automation(ctx: &Ctx<'_>) -> Result<()> {
     if !column_names(tx, "automation")?.iter().any(|c| c == "stopped") {
         tx.execute_batch(
             "ALTER TABLE automation ADD COLUMN stopped BOOLEAN NOT NULL DEFAULT 0 CHECK(stopped IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
+
+/// v113: `automation.waits_for_task_since` — since when Amenbo has been waiting for a task to start a
+/// run of the automation on.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. It is nullable with no default but
+/// NULL, so `ALTER TABLE` adds it as it stands.
+fn let_amenbo_wait_for_a_task(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation")?.iter().any(|c| c == "waits_for_task_since") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN waits_for_task_since TEXT CHECK(waits_for_task_since GLOB \
+             '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
         )?;
     }
     Ok(())
@@ -11561,6 +11585,38 @@ mod tests {
         let role: Option<i64> =
             engine.conn().query_row("SELECT role_id FROM automation_run_task WHERE id = 1", [], |r| r.get(0)).unwrap();
         assert_eq!(role, None, "no round was worked under a role");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v113: an automation written before the step is not waiting for a task, and the column admits only
+    /// an instant.
+    #[test]
+    fn an_automation_written_before_v113_is_not_waiting_for_a_task() {
+        let dir = scratch("automation-waits-for-task");
+        let engine = store_at(&dir, 112);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let since: Option<String> = engine
+            .conn()
+            .query_row("SELECT waits_for_task_since FROM automation WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(since, None, "no automation was waiting before");
+        let refused =
+            engine.conn().execute("UPDATE automation SET waits_for_task_since = 'tomorrow' WHERE id = 1", []);
+        assert!(refused.is_err(), "only an instant is admitted");
+        engine
+            .conn()
+            .execute("UPDATE automation SET waits_for_task_since = '2026-11-07T00:00:00Z' WHERE id = 1", [])
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

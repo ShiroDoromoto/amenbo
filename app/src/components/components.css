@@ -2363,7 +2363,7 @@ button.feed__target:hover { color: var(--c-accent); }
   display: flex; flex-direction: column; gap: 2px;
   padding: var(--s-2);
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
-  background: var(--c-surface);
+  background: var(--c-surface-pic) var(--c-surface);
 }
 .runroles__card[data-state="asks"] { border-color: var(--c-human); }
 .runroles__card[data-state="failed"] { border-color: var(--c-stop); }

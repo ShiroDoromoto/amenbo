@@ -505,6 +505,16 @@ saved?: AutomationSavedDto,
 unsaved: boolean, };
 
 /**
+ * **Who carries one step out at one spot, and where that was chosen** — the step at the spot, the
+ * role whose round reaches it, or Amenbo as a whole ([`amenbo_core::ops::automation_run::Carrier`]).
+ */
+export type AutomationCarrierDto = { agent: string, 
+/**
+ * Absent leaves the agent's own default model.
+ */
+model?: string, chosenAt: AutomationChosenAtDto, };
+
+/**
  * **A setting, and the answer written for it while building.** An action declares and the placement
  * answers, so both are folded into one row here.
  */
@@ -517,6 +527,14 @@ options?: string,
  * The answer written while building, as JSON. Absent where nobody has answered.
  */
 value?: string, };
+
+/**
+ * **Where a step's agent was chosen** — the wire form of
+ * [`amenbo_core::ops::automation_run::ChosenAt`]: `step` for the step at this spot, `role` for the
+ * default of the role whose round reaches it, `amenbo` for Amenbo's own default. The words for each
+ * are the GUI's (`AMB-D-396`).
+ */
+export type AutomationChosenAtDto = { "kind": "step" } | { "kind": "role", roleId: number, } | { "kind": "amenbo" };
 
 /**
  * **One automation's whole definition** — every placement, every way out of each, and what joins
@@ -533,7 +551,13 @@ entryPlacementId?: number, archived: boolean,
 /**
  * How many runs of it may be going at once, from 1 up to the cap; a launch past it is refused.
  */
-maxConcurrentRuns: number, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
+maxConcurrentRuns: number, 
+/**
+ * **The automation's roles, in the order they are defined in.** A placement names the one whose
+ * round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
+ * (`AutomationCarrierDto::chosen_at`).
+ */
+roles: Array<AutomationRoleDto>, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
 /**
  * **The runs going on this definition** — its own that are running or paused. The definition is
  * written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen
@@ -733,6 +757,11 @@ export type AutomationPlacementDto = { id: number,
  */
 name: string, actionId: number, 
 /**
+ * **The role whose round reaches this spot** — the first defined, where two rounds reach it, and a
+ * role naming no agent included. Absent where no round reaches it.
+ */
+roleId?: number, 
+/**
  * The action standing here is held by the device rather than by this project — the reach the
  * box says under its name, as the library list does. False where the action is gone.
  */
@@ -789,8 +818,8 @@ steps: Array<AutomationPlacementStepDto>, };
 
 /**
  * **One step of the action standing on a spot**, and who is chosen to carry it out there
- * (`AMB-D-960`). `agent` absent is nobody chosen yet, which the launch check names for a step a run
- * could open.
+ * (`AMB-D-960`). `agent` and `model` are what the step itself chose here — absent is nobody chosen for
+ * it; `carrier` is who carries it out once the role and Amenbo are fallen back to.
  */
 export type AutomationPlacementStepDto = { stepId: number, 
 /**
@@ -800,12 +829,40 @@ name: string, agent?: string,
 /**
  * Absent leaves the agent's own default model.
  */
-model?: string, };
+model?: string, 
+/**
+ * **Who carries the step out, and where that was chosen.** Absent for a built-in or a script step,
+ * which no agent carries out, and where none of the step, the role and Amenbo names an agent —
+ * which the launch check names for a step a run could open.
+ */
+carrier?: AutomationCarrierDto, };
 
 /**
  * **What a spot takes, or what a way out of it hands on.**
  */
 export type AutomationPortDto = { name: string, kind: "value" | "file" | "task_take" | "task_make", required: boolean, };
+
+/**
+ * **One role of an automation**: who works the placements its round reaches, and the agent their
+ * steps fall back to where no step chose one (`AMB-D-960`).
+ */
+export type AutomationRoleDto = { id: number, name: string, 
+/**
+ * The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
+ */
+icon?: string, 
+/**
+ * The placement its round starts at. Absent while it starts nowhere.
+ */
+entryPlacementId?: number, 
+/**
+ * The agent its steps fall back to. Absent for none.
+ */
+agent?: string, 
+/**
+ * The model beside `agent`. Absent leaves the agent's own default.
+ */
+model?: string, };
 
 /**
  * **One run in the "running" tab** — what is going on right now, on one line.
@@ -1009,9 +1066,10 @@ person: boolean, };
  *
  * A run says nothing beyond its id: it starts on the spot, nothing being in line ahead of it
  * (`AMB-D-947`), and the pane arriving is what it looks like — that comes as an event
- * ([`AutomationStepOpenDto`]).
+ * ([`AutomationStepOpenDto`]). No run (`null`) where the entry would have waited for a task with none
+ * to take: the automation waits for one instead, and a run is started once it turns up (`AMB-D-969`).
  */
-export type AutomationRunStartedDto = { run: number, };
+export type AutomationRunStartedDto = { run: number | null, };
 
 /**
  * **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).

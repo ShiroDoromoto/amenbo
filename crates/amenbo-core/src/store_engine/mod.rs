@@ -7,8 +7,9 @@
 //! SQL and writes through [`write::WriteTx`] — **one logical operation = one transaction**, issued
 //! straight against the read-model tables.
 //!
-//! [`hydrate`] raises a whole `Database` out of the read-model on demand: [`crate::archive`]
-//! proves a snapshot is complete that way, and the parity tests take their in-memory oracle from it.
+//! [`hydrate`] raises a whole `Database` out of the read-model on demand, for a store already
+//! migrated to this build's format: the parity tests take their in-memory oracle from it, and the
+//! `seed` binary reads a seeded store back through it. Nothing in production calls it.
 
 mod engine;
 pub mod hydrate;

@@ -73,6 +73,12 @@ pub enum StoreEngineError {
     /// the lines would otherwise be lost without a word.
     #[error("{0} activity line(s) queued on a store engine with no activity ledger")]
     ActivityWithoutLedger(usize),
+    /// A whole-store read ([`super::hydrate_database`]) was handed a store whose `format_version` is
+    /// below this build's: the migration chain has not carried it here, so its tables may lack columns
+    /// this build reads. Named rather than left to surface as SQLite's `no such column`, which points
+    /// at the column and not at the missing migration.
+    #[error("store is at format v{found} but this build reads v{latest}: run the migration before hydrating")]
+    NotMigrated { found: i64, latest: i64 },
 }
 
 impl StoreEngineError {

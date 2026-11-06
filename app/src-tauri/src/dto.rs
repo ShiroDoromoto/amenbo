@@ -4304,7 +4304,7 @@ pub struct AutomationLaunchBlockDto {
     /// them in the screen's language from the key (`app/src/core/i18n`'s `errSentence`).
     ///
     /// `placement` is the id of the placement the reason is about, where it is about one — every reason
-    /// but the two about the automation as a whole. A name cannot say which box a reason belongs to when
+    /// but the ones about the automation as a whole. A name cannot say which box a reason belongs to when
     /// the same action is placed twice; the id can, so a screen can open that box.
     pub(crate) fields: std::collections::BTreeMap<String, String>,
 }

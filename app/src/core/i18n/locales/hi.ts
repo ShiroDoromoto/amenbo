@@ -1693,6 +1693,7 @@ export const hi: Translation = {
     not_ready_automation: "“{automation}” अभी शुरू नहीं किया जा सकता: {reasons}",
     not_ready_automation_no_steps: "इस पर कोई क्रिया नहीं रखी गई है।",
     not_ready_automation_no_entry: "कोई प्लेसमेंट शुरुआत नहीं है।",
+    not_ready_automation_no_failures_to: "असफल राउंड किसे दर्ज किया जाए, यह तय नहीं है।",
     not_ready_automation_action_draft: "रखी गई क्रिया “{action}” अभी बन रही है।",
     not_ready_automation_action_empty: "रखी गई क्रिया “{action}” में शुरुआत का कोई चरण नहीं है।",
     not_ready_automation_entry_takes_no_task: "{step}: शुरुआत का चरण कोई कार्य नहीं लेता, इसलिए उसके बाद के चरण किसी चीज़ पर नहीं होंगे।",

@@ -193,7 +193,7 @@ pub fn automation_edit(
     let max_concurrent_runs =
         if no_max_concurrent_runs == Some(true) { Some(None) } else { max_concurrent_runs.map(Some) };
     with_store_mut(|store| {
-        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs)?;
+        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))

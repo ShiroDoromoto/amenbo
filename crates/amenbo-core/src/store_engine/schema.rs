@@ -1131,6 +1131,13 @@ datasets! {
         // How many runs of this automation may be going at once; `NULL` for no limit. Like
         // `archived`, it is not part of a saved version.
         max_concurrent_runs: limit_opt,
+        // Where a round that fails is filed: `human` for a person, `role` for the role
+        // `failures_to_role_id` names. NULL while nobody has said, which the launch check refuses. Like
+        // `max_concurrent_runs`, not part of a saved version.
+        failures_to_kind: enum_opt("human", "role"),
+        // The role a failed round is filed to, one of this automation's own — set only beside `role`.
+        // `RESTRICT`, so a role that goes lets go of it first (`ops::automation`).
+        failures_to_role_id: fk_opt("automation_role", "RESTRICT"),
         order_key: col(ORDER_KEY),
     }
 

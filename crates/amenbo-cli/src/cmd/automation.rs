@@ -26,7 +26,7 @@ use amenbo_core::model::{
 use amenbo_core::model::AttachmentTarget;
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::model::AutomationPictureOwner;
-use amenbo_core::model::AutomationRole;
+use amenbo_core::model::{AutomationRole, FailuresTo};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{ForRoom, HandedAtLaunch, HandedFile, Launcher};
@@ -366,9 +366,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
     // verb typed where there is no step is refused by `speaking_for`, in the arms that read the step
     // off it.
     match sub {
-        AutomationCmd::Add { project, name, notes } => {
+        AutomationCmd::Add { project, name, notes, failures_to } => {
             let pid = project_or_bound(store, project)?;
-            let new = NewAutomation { name, notes: body_arg(notes)? };
+            let failures_to = failures_to.as_deref().map(failures_to_arg).transpose()?;
+            let new = NewAutomation { name, notes: body_arg(notes)?, failures_to };
             let a = store.automation_add(pid, new).map_err(CliError::from)?;
             write_envelope(flags, "automation.add", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Created automation: {} ({})", a.name, a.id));
         }
@@ -457,11 +458,25 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 format!("✓ Imported automation: {} ({}) from {}", a.name, a.id, src.display()),
             );
         }
-        AutomationCmd::Update { id, name, notes, archived, max_concurrent_runs, no_max_concurrent_runs } => {
+        AutomationCmd::Update {
+            id,
+            name,
+            notes,
+            archived,
+            max_concurrent_runs,
+            no_max_concurrent_runs,
+            failures_to,
+            no_failures_to,
+        } => {
             let notes = body_arg_opt(notes)?;
             let max_concurrent_runs = if no_max_concurrent_runs { Some(None) } else { max_concurrent_runs.map(Some) };
+            let failures_to = match (no_failures_to, failures_to.as_deref()) {
+                (true, _) => Some(None),
+                (false, Some(to)) => Some(Some(failures_to_arg(to)?)),
+                (false, None) => None,
+            };
             let a = store
-                .automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs)
+                .automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs, failures_to)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
@@ -1444,6 +1459,7 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
             view.placements.len()
         ),
     );
+    human(flags, failures_to_line(a.failures_to, &view.roles));
     human(flags, saved_line(view.saved.as_ref(), view.unsaved));
     if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
         human(flags, line);
@@ -1455,6 +1471,32 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
     for placement in &view.placements {
         render_placement(flags, view, placement);
     }
+}
+
+/// Where a failed round is filed, on a line of its own: a person, a role by its id and name, or nobody
+/// yet — which a start is refused over.
+fn failures_to_line(to: Option<FailuresTo>, roles: &[AutomationRole]) -> String {
+    match to {
+        None => "failed rounds go to nobody yet — choose with `automation update --failures-to`".to_string(),
+        Some(FailuresTo::Human) => "failed rounds go to a person".to_string(),
+        Some(FailuresTo::Role { role_id }) => match roles.iter().find(|r| r.id == role_id) {
+            Some(role) => format!("failed rounds go to role {role_id}  {}", role.name),
+            None => format!("failed rounds go to role {role_id}"),
+        },
+    }
+}
+
+/// `--failures-to` as typed: `human` for a person, or a role's id.
+fn failures_to_arg(to: &str) -> Result<FailuresTo, CliError> {
+    let to = to.trim();
+    if to == "human" {
+        return Ok(FailuresTo::Human);
+    }
+    to.parse::<i64>().map(|role_id| FailuresTo::Role { role_id }).map_err(|_| {
+        CliError::from(amenbo_core::Error::invalid(format!(
+            "--failures-to takes `human` or the id of one of the automation's roles, not '{to}'"
+        )))
+    })
 }
 
 /// One role on one line: its id and name, its icon, where its round starts, and the agent and model its

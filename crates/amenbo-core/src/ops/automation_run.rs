@@ -68,7 +68,8 @@ use crate::time::Timestamp;
 /// where the gap is, or holding the action whose picture has it. A name alone cannot say which: the same
 /// action placed twice is two boxes with one name, and a screen that opens the box a reason is about has
 /// to know which of the two. So the same gap in an action placed twice is two reasons, one per placement.
-/// The two reasons about the automation as a whole ([`Unmet::NoSteps`], [`Unmet::NoEntry`]) name none,
+/// The reasons about the automation as a whole ([`Unmet::NoSteps`], [`Unmet::NoEntry`],
+/// [`Unmet::NoFailuresTo`]) name none,
 /// and nor do the ones the action's own check finds ([`check_action`]): it is asked with the action on
 /// no picture.
 ///
@@ -84,6 +85,9 @@ pub enum Unmet {
     /// reachable. The first placement is the entry (`AMB-D-977`), so only a store written before that
     /// holds one of these, and replacing the entry gives it one.
     NoEntry,
+    /// Nobody is chosen to file a failed round to — neither a person nor one of the automation's roles
+    /// ([`crate::model::Automation::failures_to`]). A round that fails would have nobody to go to.
+    NoFailuresTo,
     /// An action standing on the picture has no step to open — none written yet, or none named as its
     /// entry. A run reaching that spot would have no terminal to put up. Asked of the action alone
     /// ([`check_action`]), it names no placement.
@@ -213,6 +217,11 @@ impl Unmet {
                 "no placement is named as the entry — choose what a run starts at with `automation entry-replace`"
                     .to_string()
             }
+            Unmet::NoFailuresTo => {
+                "nobody is chosen to file a failed round to — choose a person or one of its roles with \
+                 `automation update --failures-to`"
+                    .to_string()
+            }
             Unmet::ActionEmpty { action, placement: Some(_) } => {
                 format!("the action '{action}' placed on it has no step to start at")
             }
@@ -319,6 +328,7 @@ impl Unmet {
         match self {
             Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
             Unmet::NoEntry => ErrorCode::NotReadyAutomationNoEntry,
+            Unmet::NoFailuresTo => ErrorCode::NotReadyAutomationNoFailuresTo,
             Unmet::ActionEmpty { placement: Some(_), .. } => ErrorCode::NotReadyAutomationActionEmpty,
             Unmet::ActionEmpty { placement: None, .. } => ErrorCode::NotReadyActionSaveEmpty,
             Unmet::ActionDraft { .. } => ErrorCode::NotReadyAutomationActionDraft,
@@ -364,7 +374,7 @@ impl Unmet {
             None => msg,
         };
         match self {
-            Unmet::NoSteps | Unmet::NoEntry => msg,
+            Unmet::NoSteps | Unmet::NoEntry | Unmet::NoFailuresTo => msg,
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
             Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
             Unmet::BackToEntry { step, exit, to, to_builtin, .. } => {
@@ -411,7 +421,7 @@ impl Unmet {
     /// the action's own check.
     pub fn placement(&self) -> Option<i64> {
         match self {
-            Unmet::NoSteps | Unmet::NoEntry => None,
+            Unmet::NoSteps | Unmet::NoEntry | Unmet::NoFailuresTo => None,
             Unmet::ActionEmpty { placement, .. }
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. } => *placement,
@@ -597,10 +607,12 @@ fn not_found(what: &str, id: i64) -> Error {
 
 /// **Is this automation ready to be launched?** An empty answer is yes.
 ///
-/// The list is walked in display order, so a person reading it walks their own picture. Two of them
-/// answer alone: an automation with nothing placed on it has nothing else to say about it, and one with
-/// no entry has nothing reachable to say it about — every other check is asked of the placements a run
-/// would actually walk, and with no entry that is none of them.
+/// The list is walked in display order, so a person reading it walks their own picture. It opens with
+/// the one reason that is about the automation's own settings rather than its picture: nobody chosen to
+/// file a failed round to ([`Unmet::NoFailuresTo`]). Two of the rest answer alone, beside that one: an
+/// automation with nothing placed on it has nothing else to say about it, and one with no entry has
+/// nothing reachable to say it about — every other check is asked of the placements a run would
+/// actually walk, and with no entry that is none of them.
 ///
 /// **What is asked of a placement is asked of the action standing on it**, and then of every step the
 /// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
@@ -633,18 +645,25 @@ fn check_picture(
     startable: Option<&[String]>,
     models: &ModelsHere,
 ) -> Result<Vec<Unmet>> {
+    // Read off the automation, not off `pic`: where a failed round goes is not part of a saved version,
+    // so a launch of one asks the automation as it stands now.
+    let mut unmet = Vec::new();
+    if automation.failures_to.is_none() {
+        unmet.push(Unmet::NoFailuresTo);
+    }
     let placements = &pic.placements;
     if placements.is_empty() {
-        return Ok(vec![Unmet::NoSteps]);
+        unmet.push(Unmet::NoSteps);
+        return Ok(unmet);
     }
     let Some(entry_id) = pic.entry_placement_id else {
-        return Ok(vec![Unmet::NoEntry]);
+        unmet.push(Unmet::NoEntry);
+        return Ok(unmet);
     };
     let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
     let defs = defs_of(conn, placements)?;
     let live = reachable(entry_id, pic, &by_id, &defs);
 
-    let mut unmet = Vec::new();
     for placement in placements {
         if let Some(action) = read::automation_action(conn, placement.action_id)?.filter(|a| a.draft) {
             unmet.push(Unmet::ActionDraft { action: action.name, placement: placement.id });
@@ -2682,7 +2701,7 @@ mod tests {
 
     fn mk_automation(tx: &WriteTx<'_>, name: &str) -> Automation {
         let project = mk_project(tx, "amenbo");
-        automation::add(tx, project, NewAutomation { name: name.into(), ..Default::default() })
+        automation::add(tx, project, NewAutomation { name: name.into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
             .expect("add automation")
     }
 
@@ -2805,6 +2824,49 @@ mod tests {
                 vec![Unmet::NoEntry],
                 "with no entry nothing is reachable, so every other check is asked of nothing",
             );
+        });
+    }
+
+    /// **Nobody chosen to file a failed round to is refused** — by the check, by a launch and by a save —
+    /// and said beside the two reasons that otherwise answer alone. Choosing a person, or one of the
+    /// automation's own roles, is what lets it go.
+    #[test]
+    fn an_automation_with_nobody_to_file_a_failed_round_to_is_refused() {
+        use crate::model::FailuresTo;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let empty = automation::add(tx, project, NewAutomation { name: "空".into(), ..Default::default() })
+                .expect("add automation");
+            assert_eq!(empty.failures_to, None, "born with nobody unless somebody is named");
+            assert_eq!(
+                check(tx.conn(), empty.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::NoFailuresTo, Unmet::NoSteps],
+            );
+
+            let (automation, _, _) = launchable(tx);
+            automation::update(tx, automation.id, None, None, None, None, Some(None)).expect("leave it unsaid");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::NoFailuresTo],
+            );
+            let refused = launch(tx, automation.id, &here(&claude())).expect_err("nobody to file to");
+            assert_eq!(refused.error_code(), ErrorCode::NotReadyAutomation, "{refused}");
+            assert!(refused.to_string().contains("failed round"), "{refused}");
+            let refused = automation::save(tx, automation.id).expect_err("a save asks the same");
+            assert!(matches!(refused, Error::NotReady(_)), "{refused}");
+            assert_eq!(Unmet::NoFailuresTo.placement(), None);
+            assert_eq!(Unmet::NoFailuresTo.code(), ErrorCode::NotReadyAutomationNoFailuresTo);
+
+            let role = automation::role_add(
+                tx,
+                automation.id,
+                automation::NewRole { name: "見る".into(), ..Default::default() },
+            )
+            .expect("a role");
+            let to_role = Some(Some(FailuresTo::Role { role_id: role.id }));
+            automation::update(tx, automation.id, None, None, None, None, to_role).expect("to the role");
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            launch(tx, automation.id, &here(&claude())).expect("launch");
         });
     }
 
@@ -3605,7 +3667,7 @@ mod tests {
             let startable = claude();
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             assert!(launch(tx, automation.id, &closed).is_err());
-            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archive");
             assert!(launch(tx, automation.id, &here(&claude())).is_err());
         });
     }
@@ -3675,7 +3737,7 @@ mod tests {
             let again = automation::save(tx, automation.id).expect("save with nothing written");
             assert_eq!(again.id, first.id, "nothing written since, so no new version");
 
-            automation::update(tx, automation.id, Some("2件やりきる"), None, None, None).expect("rename");
+            automation::update(tx, automation.id, Some("2件やりきる"), None, None, None, None).expect("rename");
             assert!(
                 !automation::unsaved(tx.conn(), automation.id).expect("unsaved"),
                 "the name is not part of a version",
@@ -3694,7 +3756,7 @@ mod tests {
         with_tx(|tx| {
             let startable = claude();
             let (automation, _, _) = launchable(tx);
-            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archive");
             let err = launch(tx, automation.id, &here(&startable)).expect_err("archived");
             let Error::Invalid(msg) = err else { panic!("an archived automation is invalid") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationArchived));
@@ -3703,7 +3765,7 @@ mod tests {
                 vec!["automation"],
             );
 
-            automation::update(tx, automation.id, None, None, Some(false), None).expect("bring back");
+            automation::update(tx, automation.id, None, None, Some(false), None, None).expect("bring back");
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             let err = launch(tx, automation.id, &closed).expect_err("closed");
             let Error::Invalid(msg) = err else { panic!("a closed workspace is invalid") };
@@ -3916,7 +3978,7 @@ mod tests {
             let Error::Invalid(msg) = err else { panic!("an automation with runs is invalid to delete") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationHasRuns));
             assert_eq!(msg.fields().iter().collect::<Vec<_>>(), vec![("count", "1")]);
-            automation::update(tx, automation.id, None, None, Some(true), None).expect("archiving is the way instead");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archiving is the way instead");
         });
     }
 
@@ -4327,7 +4389,7 @@ mod tests {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let automation =
-                automation::update(tx, automation.id, None, None, None, Some(Some(2))).expect("set a most");
+                automation::update(tx, automation.id, None, None, None, Some(Some(2)), None).expect("set a most");
             let startable = claude();
             let first = launch(tx, automation.id, &here(&startable)).expect("the first is under the most");
             let second = launch(tx, automation.id, &here(&startable)).expect("the second reaches it");

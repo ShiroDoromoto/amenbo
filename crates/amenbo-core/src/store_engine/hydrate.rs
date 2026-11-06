@@ -39,7 +39,7 @@ use crate::model::{
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
-    DimensionRole, DimensionValue, NotifyKind, NotifyTarget, Priority, Schedule,
+    DimensionRole, DimensionValue, FailuresTo, NotifyKind, NotifyTarget, Priority, Schedule,
     ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret, SecretArea,
     Project, StepScript, Subtype, Task, TaskComment, TaskCommit, TaskDependency, TaskMadeIn,
     TaskDimensionValue, TaskStatus, View,
@@ -524,6 +524,17 @@ pub(super) fn automation_action_row(r: &Row) -> rusqlite::Result<AutomationActio
     })
 }
 
+/// Where a failed round is filed, read back from its two columns. A role with no id, or an id beside a
+/// person, is a row nothing writes, and reads as an error rather than as one of the two.
+fn failures_to(kind: Option<String>, role_id: Option<i64>) -> rusqlite::Result<Option<FailuresTo>> {
+    match (kind.as_deref(), role_id) {
+        (None, None) => Ok(None),
+        (Some("human"), None) => Ok(Some(FailuresTo::Human)),
+        (Some("role"), Some(role_id)) => Ok(Some(FailuresTo::Role { role_id })),
+        (kind, role_id) => Err(bad(format!("bad failures_to {kind:?} with role {role_id:?}"))),
+    }
+}
+
 pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
     const C: col::automation::Cols = col::automation::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -537,6 +548,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         max_concurrent_runs: get(r, C.max_concurrent_runs)?
             .map(|n| u32::try_from(n).map_err(|_| bad(format!("bad max_concurrent_runs {n}"))))
             .transpose()?,
+        failures_to: failures_to(get(r, C.failures_to_kind)?, get(r, C.failures_to_role_id)?)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

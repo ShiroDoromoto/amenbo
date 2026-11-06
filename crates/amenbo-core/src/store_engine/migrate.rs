@@ -1274,7 +1274,38 @@ pub const STEPS: &[Step] = &[
         // every task written before this means.
         apply: Apply::Custom(let_a_task_name_its_role),
     },
+    Step {
+        to: 104,
+        name: "add automation.failures_to_kind and failures_to_role_id, where a failed round is filed",
+        // **Unseeded.** Nothing in an existing store says who a failed round of an automation goes to,
+        // so every automation written before this has nobody, and the launch check refuses it until
+        // somebody says.
+        apply: Apply::Custom(let_an_automation_name_where_failures_go),
+    },
 ];
+
+/// v104: `automation.failures_to_kind` and `automation.failures_to_role_id`, where a failed round of the
+/// automation is filed.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. The key may be added by
+/// `ALTER TABLE` because the column has no default but NULL.
+fn let_an_automation_name_where_failures_go(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let cols = column_names(tx, "automation")?;
+    if !cols.iter().any(|c| c == "failures_to_kind") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN failures_to_kind TEXT \
+                 CHECK(failures_to_kind IN ('human', 'role'));",
+        )?;
+    }
+    if !cols.iter().any(|c| c == "failures_to_role_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN failures_to_role_id BIGINT REFERENCES automation_role(id) \
+                 ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    Ok(())
+}
 
 /// v103: `task.role_id`, the role a task is worked under.
 ///
@@ -11042,6 +11073,40 @@ mod tests {
             engine.conn().query_row("SELECT role_id FROM task WHERE id = 1", [], |r| r.get(0)).unwrap();
         assert_eq!(role, None, "no task is given a role it was not given");
         engine.conn().execute("UPDATE task SET role_id = 1 WHERE id = 1", []).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v104: an automation written before the step has nobody to file a failed round to, and can be
+    /// given a person or one of its roles.
+    #[test]
+    fn an_automation_written_before_v104_files_failures_nowhere() {
+        let dir = scratch("automation-failures-to");
+        let engine = store_at(&dir, 103);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_role (id, automation_id, name) VALUES (1, 1, 'さくら');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let (kind, role): (Option<String>, Option<i64>) = engine
+            .conn()
+            .query_row("SELECT failures_to_kind, failures_to_role_id FROM automation WHERE id = 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!((kind, role), (None, None), "nobody is named for an automation that named nobody");
+        let refused = engine.conn().execute("UPDATE automation SET failures_to_kind = 'team' WHERE id = 1", []);
+        assert!(refused.is_err(), "only a person or a role");
+        engine
+            .conn()
+            .execute("UPDATE automation SET failures_to_kind = 'role', failures_to_role_id = 1 WHERE id = 1", [])
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

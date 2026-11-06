@@ -1830,6 +1830,10 @@ pub enum AutomationCmd {
         /// what it is for, in Markdown (`-` reads it from stdin)
         #[arg(long, default_value = "")]
         notes: String,
+        /// file a failed round to a person (`human`); a role is chosen once it is defined, with
+        /// `automation update --failures-to`. Left out, it is unsaid and a start is refused
+        #[arg(long, value_name = "human")]
+        failures_to: Option<String>,
     },
     /// The automations of one project — what each is called, how many actions are placed on it, and
     /// whether it is archived
@@ -1870,8 +1874,8 @@ pub enum AutomationCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// Change an automation's name, notes, whether it is archived, or the most runs it may have going
-    /// at once (only the given fields change)
+    /// Change an automation's name, notes, whether it is archived, the most runs it may have going at
+    /// once, or where a failed round is filed (only the given fields change)
     Update {
         /// automation id
         id: i64,
@@ -1889,6 +1893,13 @@ pub enum AutomationCmd {
         /// lift the most runs it may have going at once
         #[arg(long, conflicts_with = "max_concurrent_runs")]
         no_max_concurrent_runs: bool,
+        /// where a failed round is filed: `human` for a person, or the id of one of this automation's
+        /// roles
+        #[arg(long, value_name = "human|ROLE_ID")]
+        failures_to: Option<String>,
+        /// leave where a failed round is filed unsaid again; a start is then refused
+        #[arg(long, conflicts_with = "failures_to")]
+        no_failures_to: bool,
     },
     /// Delete an automation with every placement, edge and wire built onto it — confirms unless -y.
     /// One that runs were launched from cannot be deleted: archive it (`update --archived true`)

@@ -397,6 +397,7 @@ amenbo automation action-scope-set 7 --global          # move it to the device's
 amenbo automation place-add 3 --action 7               # 33: put that action on the picture; its steps start with the default agent
 amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, if not the default (--model too)
 amenbo automation role-add 3 --name Implement --entry 33 --agent claude-code # a role: where its round starts, and the agent its steps fall back to
+amenbo automation update 3 --failures-to 8           # where a failed round is filed: a role of it (8, from role-add) or `human`; a start is refused until one is named
 amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in
 amenbo automation place-add 3 --builtin close_task     # 35: done, with the commit handed to it recorded
 amenbo automation edge-add --from "31:<taken>" --to 32 # what happens after each way out (--max-times caps a way back)

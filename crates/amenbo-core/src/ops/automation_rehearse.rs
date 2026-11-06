@@ -307,6 +307,7 @@ mod tests {
     fn walk(tx: &WriteTx<'_>, automation: &Automation, handed: &HandedAtLaunch) -> Rehearsal {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(false),
@@ -489,7 +490,7 @@ mod tests {
             let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
 
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
             let Err(Error::NotReady(msg)) = rehearse(tx, automation.id, &by, &HandedAtLaunch::default()) else {
                 panic!("a test run is refused where a launch would be")
             };

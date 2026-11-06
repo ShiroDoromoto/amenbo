@@ -2022,7 +2022,7 @@ pub struct AutomationPlacement {
 
 /// **One step of one action**, and one terminal when it is opened. Its `prompt` is its own — an action
 /// holds the prompts rather than being one. Who carries it out is not: that is chosen where the action
-/// is placed ([`AutomationPlacementStep`], `AMB-D-960`).
+/// is placed ([`AutomationPlacementStep`]), else falls back to its role's default and then Amenbo's.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationStep {
     pub id: i64,
@@ -2083,9 +2083,11 @@ pub struct StepScript {
     pub timeout_minutes: i64,
 }
 
-/// **Who carries one step out at one placement** — chosen where the action is placed, step by step
-/// (`AMB-D-960`). A step with no row here has nobody chosen, and the launch check refuses a run that
-/// would open it.
+/// **Who carries one step out at one placement** — chosen where the action is placed, step by step.
+/// It is the first of the three a step's agent is chosen from: a step with no row here falls back to the
+/// default of the role whose round reaches the placement ([`AutomationRole`]), and then to Amenbo's own
+/// ([`crate::ops::automation_run::Launcher::default_agent`]). Where none of the three names an agent,
+/// the launch check refuses a run that would open the step.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationPlacementStep {
     pub id: i64,
@@ -2108,9 +2110,13 @@ pub struct AutomationPlacementStep {
 /// **The way it works is where its round starts** (`entry_placement_id`), a placement of the same
 /// automation. `None` while it is still being built, as the automation's own entry is.
 ///
-/// **`agent` and `model` are defaults, nothing more** (`AMB-D-960`). The choice made for a step where its
-/// action is placed ([`AutomationPlacementStep`]) stays where it is; which of the two is asked first is
-/// not decided here. `model` is named only beside an agent, and `None` leaves the agent's own default.
+/// **`agent` and `model` are defaults, nothing more.** A step's agent is chosen from three, in order: the
+/// choice made for the step where its action is placed ([`AutomationPlacementStep`]), then this default
+/// for every placement the role's round reaches from `entry_placement_id` — up to where the
+/// automation's entry or another role's round begins — then Amenbo's own
+/// ([`crate::ops::automation_run::Launcher::default_agent`]). A placement more than one round reaches
+/// takes the first of those roles in the order they are defined in. `model` is named only beside an
+/// agent and comes with it, and `None` leaves the agent's own default.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationRole {
     pub id: i64,

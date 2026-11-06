@@ -365,7 +365,7 @@ mod tests {
 
     fn entry_refused(tx: &WriteTx<'_>, automation: &Automation) -> bool {
         let claude = ["claude".to_string()];
-        crate::ops::automation_run::check(tx.conn(), automation.id, Some(&claude), nothing_asked())
+        crate::ops::automation_run::check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None)
             .expect("check")
             .iter()
             .any(|u| matches!(u, crate::ops::automation_run::Unmet::EntryTakesNoTask { .. }))
@@ -385,6 +385,7 @@ mod tests {
 
             let claude = ["claude".to_string()];
             let by = Launcher {
+                default_agent: None,
                 startable: Some(&claude),
                 models: nothing_asked(),
                 workspace_open: Some(true),
@@ -419,6 +420,7 @@ mod tests {
     fn walk(tx: &WriteTx<'_>, automation: &Automation) -> (i64, Next) {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),

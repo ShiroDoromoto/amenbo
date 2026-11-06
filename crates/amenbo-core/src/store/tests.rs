@@ -1588,94 +1588,43 @@ fn a_tasks_folder_is_read_from_what_its_own_project_offers() {
     fs::remove_dir_all(&dir).ok();
 }
 
-/// **Placing an action writes the default agent onto its steps** — the one a pane would open with in
-/// the automation's project — both when it is put on its own and when it is put in on a line, and the
-/// value stays with the placement after the default moves on. With no default, nobody is chosen.
+/// **Amenbo's own default agent is read when it is asked for, and never written onto a placement** — the
+/// one a pane would open with in the automation's project, else the person's. Placing an action, or
+/// adding a step to one already placed, leaves the step with nobody chosen there, so it falls back to
+/// its role's default before Amenbo's rather than to a row placing wrote.
 #[test]
-fn placing_an_action_writes_the_default_agent_onto_its_steps() {
-    use crate::model::AutomationPictureOwner;
-    use crate::ops::automation::{EdgeTarget, NewAutomation, NewStep};
+fn amenbos_default_agent_is_read_and_not_written_at_placing() {
+    use crate::ops::automation::{NewAutomation, NewStep};
 
-    let (mut s, dir) = fresh_store("placement-default-agent");
+    let (mut s, dir) = fresh_store("amenbo-default-agent");
     let p = s.project_add(project("PJ")).unwrap();
     let automation =
         s.automation_add(p.id, NewAutomation { name: "回す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
     let action =
         s.automation_action_from_prompt(Some(p.id), NewStep::new("調べる", "do it"), &[], &[]).unwrap();
     let step = action.entry_step_id.unwrap();
-    let chosen = |s: &Store, placement: i64| {
-        crate::store_engine::read::automation_placement_step_for(s.engine.conn(), placement, step)
-            .unwrap()
-            .map(|c| c.agent)
-    };
-
-    // The first thing placed is the entry, a built-in (`AMB-D-977`); the action goes on after it.
-    s.automation_builtin_place(automation.id, "take_task").unwrap();
-    let bare = s.automation_placement_add(automation.id, action.id).unwrap();
-    assert_eq!(chosen(&s, bare.id), None, "nobody has answered, so nobody is chosen");
-
-    s.config.last_agent = Some("codex-cli".to_string());
-    s.config.remember_agent(p.id, "claude-code");
-    let placed = s.automation_placement_add(automation.id, action.id).unwrap();
-    assert_eq!(chosen(&s, placed.id).as_deref(), Some("claude-code"), "the project's answer");
-
-    s.config.forget_agent(p.id);
-    let edge = s
-        .automation_edge_add(AutomationPictureOwner::Automation, placed.id, None, EdgeTarget::Done, None)
-        .unwrap();
-    let inserted = s.automation_placement_insert(edge.id, action.id).unwrap().placement;
-    assert_eq!(chosen(&s, inserted.id).as_deref(), Some("codex-cli"), "else the person's");
-    assert_eq!(
-        chosen(&s, placed.id).as_deref(),
-        Some("claude-code"),
-        "what was written is the placement's, and the default moving on does not reach it",
-    );
-    fs::remove_dir_all(&dir).ok();
-}
-
-/// **A step added to an action already placed is given the default agent at every placement** — each
-/// the one for its own automation's project — whether it is added at the end or put in on a line, and
-/// a step somebody took the choice back from is not written again (`AMB-T-5531`).
-#[test]
-fn a_step_added_after_placing_is_given_the_default_agent_at_every_placement() {
-    use crate::model::AutomationPictureOwner;
-    use crate::ops::automation::{EdgeTarget, NewAutomation, NewStep};
-
-    let (mut s, dir) = fresh_store("added-step-default-agent");
-    let mine = s.project_add(project("PJ")).unwrap();
-    let theirs = s.project_add(project("よそ")).unwrap();
-    let here =
-        s.automation_add(mine.id, NewAutomation { name: "回す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
-    let there =
-        s.automation_add(theirs.id, NewAutomation { name: "よそで回す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
-            .unwrap();
-    let action =
-        s.automation_action_from_prompt(None, NewStep::new("調べる", "do it"), &[], &[]).unwrap();
-    let first = action.entry_step_id.unwrap();
-    // The first thing placed is the entry, a built-in (`AMB-D-977`); the action goes on after it.
-    s.automation_builtin_place(here.id, "take_task").unwrap();
-    s.automation_builtin_place(there.id, "take_task").unwrap();
-    let at_here = s.automation_placement_add(here.id, action.id).unwrap();
-    let at_there = s.automation_placement_add(there.id, action.id).unwrap();
     let chosen = |s: &Store, placement: i64, step: i64| {
         crate::store_engine::read::automation_placement_step_for(s.engine.conn(), placement, step)
             .unwrap()
             .map(|c| c.agent)
     };
 
+    assert_eq!(s.automation_default_agent(automation.id).unwrap(), None, "nobody has answered");
     s.config.last_agent = Some("codex-cli".to_string());
-    s.config.remember_agent(mine.id, "claude-code");
-    let second = s.automation_step_add(action.id, NewStep::new("直す", "fix it")).unwrap();
-    assert_eq!(chosen(&s, at_here.id, second.id).as_deref(), Some("claude-code"), "this project's");
-    assert_eq!(chosen(&s, at_there.id, second.id).as_deref(), Some("codex-cli"), "else the person's");
-    assert_eq!(chosen(&s, at_here.id, first).as_deref(), None, "the step placed with nobody stays so");
+    assert_eq!(s.automation_default_agent(automation.id).unwrap().as_deref(), Some("codex-cli"), "the person's");
+    s.config.remember_agent(p.id, "claude-code");
+    assert_eq!(
+        s.automation_default_agent(automation.id).unwrap().as_deref(),
+        Some("claude-code"),
+        "the project's comes first",
+    );
 
-    let edge = s
-        .automation_edge_add(AutomationPictureOwner::Action, second.id, None, EdgeTarget::Done, None)
-        .unwrap();
-    let third = s.automation_step_insert(edge.id, NewStep::new("見直す", "look"), &[], &[]).unwrap();
-    assert_eq!(chosen(&s, at_here.id, third.id).as_deref(), Some("claude-code"), "put in on a line");
-    assert_eq!(chosen(&s, at_there.id, third.id).as_deref(), Some("codex-cli"));
+    // The first thing placed is the entry, a built-in (`AMB-D-977`); the action goes on after it.
+    s.automation_builtin_place(automation.id, "take_task").unwrap();
+    let placed = s.automation_placement_add(automation.id, action.id).unwrap();
+    assert_eq!(chosen(&s, placed.id, step), None, "placing writes nobody onto the step");
+    let added = s.automation_step_add(action.id, NewStep::new("直す", "fix it")).unwrap();
+    assert_eq!(chosen(&s, placed.id, added.id), None, "nor does adding a step to a placed action");
     fs::remove_dir_all(&dir).ok();
 }
 

@@ -1491,15 +1491,18 @@ fn not_an_entry(what: &str) -> Error {
 ///
 /// Refused as `not_ready` with the launch check's reasons ([`automation_run::check`]), asked without the
 /// agents and models this machine has: those belong to the machine the run is launched on, not to the
-/// definition. Not refused while a run of it goes on (`AMB-D-1015`), nor while it is archived — archiving
+/// definition. `default_agent` is Amenbo's own default ([`automation_run::Launcher::default_agent`]):
+/// a step nobody chose for and no role covers is carried out by it, and is not refused while it names
+/// one. Not refused while a run of it goes on (`AMB-D-1015`), nor while it is archived — archiving
 /// keeps it out of the lists and says nothing about its picture.
 ///
 /// A draft with nothing changed since the newest version saves nothing, and that version is what comes
 /// back.
-pub fn save(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion> {
+pub fn save(tx: &WriteTx<'_>, automation_id: i64, default_agent: Option<&str>) -> Result<AutomationVersion> {
     rewritable(tx, Def::Automation(automation_id))?;
     let automation = live_automation(tx, automation_id)?;
-    let unmet = automation_run::check(tx.conn(), automation_id, None, automation_run::nothing_asked())?;
+    let unmet =
+        automation_run::check(tx.conn(), automation_id, None, automation_run::nothing_asked(), default_agent)?;
     if !unmet.is_empty() {
         return Err(automation_run::not_ready("save", &automation.name, &unmet));
     }
@@ -2256,7 +2259,8 @@ fn delete_placement_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 }
 
 /// **Choose who carries one step out at one placement** — the agent, and the model where one is
-/// named (`AMB-D-960`). `model` `None` leaves the agent's own default.
+/// named. `model` `None` leaves the agent's own default. It is the first of the three a step's agent is
+/// chosen from, ahead of its role's default and Amenbo's ([`automation_run::check`]).
 ///
 /// The step has to be one of the action standing on the placement: a choice for any other step would
 /// be written and never read. The row is written the first time somebody chooses and rewritten after
@@ -2308,55 +2312,10 @@ pub fn placement_step_set(
     Ok(chosen)
 }
 
-/// **Write the default agent onto every step of a placement that nobody has chosen for yet** — what
-/// placing an action leaves behind, so the steps do not each have to be chosen again before a launch
-/// will take them. `agent` is the answer a pane would open with ([`crate::wake::step_agent`]); `None`
-/// leaves the steps as they are, with nobody chosen.
-///
-/// **What is written belongs to the placement from then on.** It is an ordinary choice, the one
-/// [`placement_step_set`] writes, and a later change to the default does not reach it. The model is
-/// left out, which is the agent's own default. A built-in step is skipped: Amenbo carries it out
-/// itself (`AMB-D-964`).
-pub fn placement_steps_default(
-    tx: &WriteTx<'_>,
-    placement_id: i64,
-    agent: Option<&str>,
-) -> Result<()> {
-    if agent.is_none() {
-        return Ok(());
-    }
-    let placement = live_placement(tx, placement_id)?;
-    for step in read::automation_action_steps_of(tx.conn(), placement.action_id)? {
-        placement_step_default(tx, placement_id, &step, agent)?;
-    }
-    Ok(())
-}
-
-/// **Write the default agent onto one step at one placement, where nobody has chosen for it yet** —
-/// [`placement_steps_default`] for a single step. It is also what a step added to an action already
-/// placed is given at each of its placements (`AMB-T-5531`), so the new step does not stand there
-/// with nobody chosen while the steps placed with the action have somebody.
-///
-/// A choice already made stays, a built-in is passed by, and `None` writes nothing.
-pub fn placement_step_default(
-    tx: &WriteTx<'_>,
-    placement_id: i64,
-    step: &AutomationStep,
-    agent: Option<&str>,
-) -> Result<()> {
-    let Some(agent) = agent else { return Ok(()) };
-    if step.builtin.is_some()
-        || read::automation_placement_step_for(tx.conn(), placement_id, step.id)?.is_some()
-    {
-        return Ok(());
-    }
-    placement_step_set(tx, placement_id, step.id, agent, None)?;
-    Ok(())
-}
-
 /// **Take back the choice of who carries one step out at one placement**, leaving nobody chosen there.
-/// A launch that would open the step is then refused until somebody chooses again. Nothing chosen is
-/// nothing to take back, and that is not an error.
+/// The step then falls back to its role's default, else Amenbo's; where neither names an agent, a
+/// launch that would open it is refused. Nothing chosen is nothing to take back, and that is not an
+/// error.
 pub fn placement_step_clear(tx: &WriteTx<'_>, placement_id: i64, step_id: i64) -> Result<()> {
     let placement = live_placement(tx, placement_id)?;
     rewritable(tx, Def::Automation(placement.automation_id))?;
@@ -7206,41 +7165,6 @@ mod tests {
         });
     }
 
-    /// **Placing writes the default onto the steps nobody has chosen for**, leaves a choice already
-    /// made alone, writes nothing where there is no default, and passes a built-in by.
-    #[test]
-    fn the_default_agent_is_written_only_where_nobody_has_chosen() {
-        with_tx(|tx| {
-            let automation = mk_automation(tx);
-            let (action, here) = mk_placed(tx, &automation, "調べる");
-            let step = only_step(tx, &action);
-            let chosen = |p: i64| {
-                read::automation_placement_step_for(tx.conn(), p, step.id)
-                    .unwrap()
-                    .map(|c| (c.agent, c.model))
-            };
-
-            placement_steps_default(tx, here.id, None).expect("no default");
-            assert_eq!(chosen(here.id), None, "no default leaves nobody chosen");
-
-            placement_steps_default(tx, here.id, Some("claude-code")).expect("default");
-            assert_eq!(chosen(here.id), Some(("claude-code".to_string(), None)));
-
-            placement_step_set(tx, here.id, step.id, "codex-cli", Some("o3")).expect("choose");
-            placement_steps_default(tx, here.id, Some("claude-code")).expect("default again");
-            assert_eq!(
-                chosen(here.id),
-                Some(("codex-cli".to_string(), Some("o3".to_string()))),
-                "a choice already made stays",
-            );
-
-            let builtin = crate::ops::automation_builtin::action(tx, "take_task").expect("built-in");
-            let spot = placement_add(tx, automation.id, builtin.id).expect("place it");
-            placement_steps_default(tx, spot.id, Some("claude-code")).expect("a built-in is passed by");
-            assert!(read::automation_placement_step_ids(tx.conn(), spot.id).unwrap().is_empty());
-        });
-    }
-
     /// A choice for a step of some other action would be written and never read, so it is refused.
     #[test]
     fn a_choice_for_a_step_outside_the_placed_action_is_refused() {
@@ -7327,6 +7251,7 @@ mod rewritten_under_a_run {
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let startable = vec!["claude".to_string()];
         let launcher = Launcher {
+            default_agent: None,
             startable: Some(&startable),
             models: nothing_asked(),
             workspace_open: Some(true),

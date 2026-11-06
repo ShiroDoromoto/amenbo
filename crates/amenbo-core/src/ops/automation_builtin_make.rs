@@ -919,6 +919,7 @@ mod tests {
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -1195,7 +1196,7 @@ mod tests {
     fn the_launch_check_names_a_folder_left_empty_among_several() {
         let startable = ["claude".to_string()];
         let unchosen = |tx: &WriteTx<'_>, p: &Picture| -> Vec<(String, String, usize, Option<String>, i64)> {
-            check(tx.conn(), p.automation.id, Some(&startable), nothing_asked())
+            check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None)
                 .expect("check")
                 .into_iter()
                 .filter_map(|unmet| match unmet {
@@ -1236,7 +1237,7 @@ mod tests {
             answer(tx, &p, CLASSIFY, "職能=実装\n職能=営業\nnosuch=x");
             answer(tx, &p, AI_AXES, "職能\n種別");
             let startable = ["claude".to_string()];
-            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None).expect("check");
             let found: Vec<(String, String)> = unmet
                 .into_iter()
                 .filter_map(|unmet| match unmet {
@@ -1287,7 +1288,7 @@ mod tests {
             crate::ops::dimension::value_set_closed(tx, build.id, true).expect("close it");
             answer(tx, &p, CLASSIFY, "職能=実装\n職能=設計\n職能=営業");
             let startable = ["claude".to_string()];
-            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None).expect("check");
             let closed: Vec<(String, String)> = unmet
                 .iter()
                 .filter_map(|unmet| match unmet {
@@ -1454,7 +1455,7 @@ mod tests {
             crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
             let automation = automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
             let startable = ["claude".to_string()];
-            let unmet = |tx: &WriteTx<'_>| check(tx.conn(), automation.id, Some(&startable), nothing_asked()).expect("check");
+            let unmet = |tx: &WriteTx<'_>| check(tx.conn(), automation.id, Some(&startable), nothing_asked(), None).expect("check");
 
             let left = unmet(tx);
             assert!(left.iter().any(|u| matches!(u, Unmet::EntryTakesNoTask { .. })), "{left:?}");
@@ -1491,6 +1492,7 @@ mod tests {
     fn launch_with(tx: &WriteTx<'_>, automation: &Automation, handed: &HandedAtLaunch) -> Result<AutomationRun> {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -1577,7 +1579,7 @@ mod tests {
             };
             let due = next_at(tx);
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
             let under_way = |tx: &WriteTx<'_>| read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read");
 
             let early = Timestamp(due.0 - chrono::Duration::seconds(1));
@@ -1628,7 +1630,13 @@ mod tests {
             let due = next_at(tx);
             assert!(due > written, "not on the spot, but counted from the write");
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                default_agent: None,
+                workspace_open: None,
+                by: None,
+            };
             let early = Timestamp(due.0 - chrono::Duration::seconds(1));
             assert!(fire(tx, automation.id, &by, early).expect("fire").is_none(), "not before it is due");
 
@@ -1723,7 +1731,13 @@ mod tests {
             let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             let due = before.trigger.as_ref().expect("kept").next_at;
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                default_agent: None,
+                workspace_open: None,
+                by: None,
+            };
 
             assert_eq!(triggers_due(tx.conn(), due).expect("ask"), TriggersDue::default(), "not asked at all");
             assert!(fire(tx, automation.id, &by, due).expect("fire").is_none(), "it decides no");
@@ -1756,7 +1770,7 @@ mod tests {
             let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             let due = before.trigger.as_ref().expect("kept").next_at;
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
 
             assert!(fire(tx, automation.id, &by, due).is_err(), "the launch check refuses it");
             let after = read::automation(tx.conn(), automation.id).expect("read").expect("there");
@@ -1783,7 +1797,7 @@ mod tests {
             // A file has to say who handed it over, so a launcher that says nothing about itself cannot.
             let claude = ["claude".to_string()];
             let nobody =
-                Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: Some(true), by: None };
+                Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: Some(true), by: None };
             assert!(launch_handing(tx, automation.id, &nobody, &handed, ReadsFrom::Saved).is_err());
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
 

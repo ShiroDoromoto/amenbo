@@ -129,8 +129,8 @@ mod tests {
         }
     }
 
-    /// Take a task, wait, and close it — the run ends on the done way out of the close, or where there
-    /// was nothing to take.
+    /// Take a task, wait, and close it — the round ends on the done way out of the close, and the run
+    /// where there was nothing to take.
     fn picture(tx: &WriteTx<'_>, project: i64) -> (Automation, i64) {
         let automation =
             automation::add(tx, project, NewAutomation { name: "wait".into(), ..Default::default() })
@@ -201,7 +201,12 @@ mod tests {
             let step = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
             assert_eq!(step.report, "waited 0h 1m 30s");
             assert_eq!(step.exit_id, crate::ops::test_support::way_out(tx, run_step_id, DONE_EXIT));
-            assert!(matches!(open(tx, run.id, close.id, None).expect("close"), Opened::Carried { next: Next::Closed(_), .. }));
+            // The close ends the round, and the run goes round to its entry, which finds nothing left.
+            let Opened::Carried { next: Next::Step(again), .. } = open(tx, run.id, close.id, None).expect("close")
+            else {
+                panic!("the round is over, and the run goes round to its entry");
+            };
+            assert!(matches!(open(tx, run.id, again.id, None).expect("take again"), Opened::Carried { next: Next::Closed(_), .. }));
             let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(run.status, AutomationRunStatus::Completed);
         });

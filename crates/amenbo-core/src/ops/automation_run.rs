@@ -31,6 +31,12 @@
 //! exceptions are a run with no task in hand: one paused before its next task, which picking up copies
 //! the automation down onto again ([`copy_down_again`]), and one standing at its entry, copied down again
 //! where a newer version has been saved ([`take_up_newer`]) (`AMB-D-1015`).
+//!
+//! **A launched run goes round once per task.** Each round takes one task at the entry and walks the
+//! picture to its end, and the run then goes round again at its entry ([`goes_round`]), until the entry
+//! finds no task to take. A round is one stretch of the run ([`crate::model::AutomationRunTask`]), and
+//! a definition saved while one is under way is taken up as the next round starts — never in the middle
+//! of one.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1777,8 +1783,9 @@ pub enum TakenUp {
 }
 
 /// **Copy a run standing at its entry down afresh, where the automation has been saved since its copy
-/// was taken** (`AMB-D-1015`) — asked before the entry is opened, so a run that comes back to its entry,
-/// or waits there for a task to turn up, starts from the newest saved definition.
+/// was taken** (`AMB-D-1015`) — asked before the entry is opened, so a run starting its next round
+/// ([`goes_round`]), one a line brings back to its entry, or one waiting there for a task to turn up,
+/// starts from the newest saved definition.
 ///
 /// - **Standing at its entry** is a `running` run with nothing under way whose next step is the copy of
 ///   the entry ([`next_def`]). Anywhere else the run may be partway through a task, and is left alone.
@@ -2327,7 +2334,8 @@ pub enum Waiting {
 /// second is anybody's to act on. So this answers a step in exactly two cases — a run that has just
 /// been launched and has no execution yet, or was copied down again as it was picked up and has none
 /// from the new copy, where the answer is the entry ([`entry_def`]); and a run whose last execution has
-/// reported, where the answer is read off the way out it took.
+/// reported, where the answer is read off the way out it took — the entry again where that way out
+/// ended one round ([`goes_round`]).
 ///
 /// **It derives rather than remembers**, because the report already wrote down everything it takes:
 /// the execution carries the way out, and the step's copy says what follows one
@@ -2366,8 +2374,43 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     };
     Ok(match onward(conn, &from, last.exit_id)? {
         Onward::Go { def, .. } => Waiting::Step(def),
+        // A round that came to the end of the picture is over, and the run goes round again at its
+        // entry (`goes_round`) — the report that took the way out left it `running` for that.
+        Onward::Done if goes_round(conn, run_id, &last)? => {
+            entry_def(conn, run_id)?.map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def)))
+        }
         Onward::Done | Onward::Halt | Onward::Nowhere => Waiting::NoWayOn,
     })
+}
+
+/// **Whether the end of the picture is the end of one round rather than of the run** — one task a
+/// round, each round walking the picture from its entry to its end.
+///
+/// It is, where the run's entry, as its newest copy marks it, is the built-in that takes a task, and
+/// the step that came to the end belongs to a stretch that held one ([`AutomationRunTask`]): the entry
+/// then takes the next task, and the round after starts there. **A round never goes without a task.**
+/// A step that went looking for one and found none keeps no stretch, so a run whose entry finds nothing
+/// to take comes to its end; and a run whose entry files a task, or is anything else, walks the picture
+/// once — what it was handed at launch is one task's (`AMB-D-971`).
+///
+/// **Only a round whose task was closed goes round.** A task put off or handed back is `todo` again,
+/// and the entry could take the very same one straight back, round after round; so a round that let
+/// its task go without closing it ends the run at the end of the picture, as before.
+///
+/// [`AutomationRunTask`]: crate::model::AutomationRunTask
+pub(crate) fn goes_round(
+    conn: &Connection,
+    run_id: i64,
+    ended: &crate::model::AutomationRunStep,
+) -> Result<bool> {
+    let Some(stretch) = ended.run_task_id else { return Ok(false) };
+    let Some(task_id) = read::automation_run_task(conn, stretch)?.and_then(|s| s.task_id) else {
+        return Ok(false);
+    };
+    if !read::task_status(conn, task_id)?.is_some_and(|s| s.is_closed()) {
+        return Ok(false);
+    }
+    Ok(entry_def(conn, run_id)?.is_some_and(|entry| crate::ops::automation_stop::takes_a_task(&entry)))
 }
 
 /// **Whether this run stands before a built-in that is waiting** for something to turn up
@@ -3935,9 +3978,17 @@ mod tests {
             };
             assert_eq!(close.builtin.as_deref(), Some("close_task"));
 
-            // Carried out on the spot, it closes the task and the run with it: nothing is waiting, and
-            // the run is no longer running.
+            // Carried out on the spot, it closes the task and the round with it: the run goes round,
+            // and what it waits for is its entry again.
             crate::ops::test_support::open(tx, run.id, close.id, None).expect("close");
+            let Waiting::Step(again) = next_def(tx.conn(), run.id).expect("next") else {
+                panic!("the next round starts at the entry")
+            };
+            assert_eq!(again.id, first.id, "the entry of the copy it has");
+
+            // With nothing left to take, the run comes to its end: nothing is waiting, and the run is no
+            // longer running.
+            crate::ops::test_support::open(tx, run.id, again.id, None).expect("take again");
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
             assert_eq!(
                 read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,

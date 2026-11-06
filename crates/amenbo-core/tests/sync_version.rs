@@ -320,7 +320,8 @@ fn a_test_run_moves_no_version_and_takes_no_task() {
     let walked = store.automation_rehearse(automation.id, &by, &Default::default()).unwrap();
 
     let exits: Vec<&str> = walked.steps.iter().map(|s| s.exit.as_str()).collect();
-    assert_eq!(exits, vec![TAKEN, "完了"], "{walked:?}");
+    // The round closes its task and goes back to the entry, which finds nothing left to take.
+    assert_eq!(exits, vec![TAKEN, "完了", NONE_TO_TAKE], "{walked:?}");
     assert_eq!(walked.status, AutomationRunStatus::Completed);
     assert_eq!(version_of(&store, mine), before, "nothing it wrote was kept");
     let task = store.task(waiting).unwrap().expect("the task");

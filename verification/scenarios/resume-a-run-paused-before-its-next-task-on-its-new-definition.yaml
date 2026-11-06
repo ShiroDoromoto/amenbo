@@ -68,17 +68,23 @@ steps_gui:
       setting: 着手できるタスクが無いとき
       value: 待たずに出口「着手できるタスクが無い」へ進む
 
-  # The new picture, walked before the run is let go on it.
+  # The new picture, walked before the run is let go on it. The close ends one round, and the run
+  # goes round to the take, which finds none the second time and ends it.
   - { type: action, domain: automation, op: test-run, with: { target: auto } }
   - type: assert
     domain: automation
     op: test-pane
-    with: { step: 1, total: 2, builtin: take_task, exit: 着手した }
+    with: { step: 1, total: 3, builtin: take_task, exit: 着手した }
   - { type: action, domain: automation, op: test-move, with: { press: next } }
   - type: assert
     domain: automation
     op: test-pane
-    with: { step: 2, total: 2, builtin: close_task }
+    with: { step: 2, total: 3, builtin: close_task }
+  - { type: action, domain: automation, op: test-move, with: { press: next } }
+  - type: assert
+    domain: automation
+    op: test-pane
+    with: { step: 3, total: 3, builtin: take_task, exit: 着手できるタスクが無い }
   - { type: action, domain: automation, op: test-move, with: { press: next } }
   - { type: assert, domain: automation, op: test-pane-ended, with: { ended: completed } }
 

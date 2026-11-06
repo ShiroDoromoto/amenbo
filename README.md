@@ -427,6 +427,7 @@ amenbo automation test-run 3                           # walk the draft through 
 amenbo automation start 3                              # away it goes, from the newest saved version (refused if never saved, and with no app up: the app opens the steps)
 amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand a make_task entry the task it files: title, notes, classification and attachments
 amenbo automation trigger 4 --every 60 --title "Look over the inbox"   # ...or let it file that task and start itself every hour while the app is up (none while it already has its most runs going); --off takes it away
+amenbo automation trigger 4 --when-idle --title "Look over the inbox"  # ...or whenever none of its runs is going, a minute after the last one it filed at the soonest
 amenbo automation pause 7                              # ...at the end of the action under way (a wait under way included: the run pauses once its time is up)
 amenbo automation pause 7 --before-next-task           # ...or where it would take its next task (one waiting for a task pauses now)
 amenbo automation cancel 7                             # a paused run ends canceled, handing the task back to todo and to the person

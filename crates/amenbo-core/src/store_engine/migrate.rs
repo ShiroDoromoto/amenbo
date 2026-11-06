@@ -1309,7 +1309,38 @@ pub const STEPS: &[Step] = &[
         // and is started only by a person, as it always was.
         apply: Apply::Custom(let_an_automation_carry_a_trigger),
     },
+    Step {
+        to: 108,
+        name: "widen automation.trigger_when_kind to admit idle, a trigger that fires when no run is under way",
+        // **Unseeded.** Every trigger written before this is an `every`, and stays one.
+        apply: Apply::Custom(let_a_trigger_wait_for_idle),
+    },
 ];
+
+/// v108: `automation.trigger_when_kind` admits `idle` beside `every`.
+///
+/// **Rewritten only where the column does not admit it yet.** A store whose automation table was
+/// created in the live shape already has it right. SQLite cannot change a column's constraint in place,
+/// and the table is not rebuilt (v106's reason), so the kinds are kept in a column of their own while
+/// the column is dropped and added again.
+fn let_a_trigger_wait_for_idle(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let table: String =
+        tx.query_row("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation'", [], |r| r.get(0))?;
+    if table.contains("trigger_when_kind IN ('every', 'idle')") {
+        return Ok(());
+    }
+    tx.execute_batch(
+        "ALTER TABLE automation ADD COLUMN trigger_when_kind_kept TEXT;
+         UPDATE automation SET trigger_when_kind_kept = trigger_when_kind;
+         ALTER TABLE automation DROP COLUMN trigger_when_kind;
+         ALTER TABLE automation ADD COLUMN trigger_when_kind TEXT \
+             CHECK(trigger_when_kind IN ('every', 'idle'));
+         UPDATE automation SET trigger_when_kind = trigger_when_kind_kept;
+         ALTER TABLE automation DROP COLUMN trigger_when_kind_kept;",
+    )?;
+    Ok(())
+}
 
 /// v107: `automation.trigger_when_kind`, `trigger_every_minutes`, `trigger_task_kind`,
 /// `trigger_task_title`, `trigger_task_notes` and `trigger_next_at` — the trigger of an automation.
@@ -11325,6 +11356,47 @@ mod tests {
                 "UPDATE automation SET trigger_when_kind = 'every', trigger_every_minutes = 60, \
                  trigger_task_kind = 'fixed', trigger_task_title = 'look', trigger_task_notes = '', \
                  trigger_next_at = '2026-11-07T00:00:00Z' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v108: a trigger written before the step keeps its kind, and the column admits `idle` beside
+    /// `every` and nothing else.
+    #[test]
+    fn a_trigger_written_before_v108_keeps_its_kind_and_idle_is_admitted() {
+        let dir = scratch("automation-trigger-idle");
+        let engine = store_at(&dir, 107);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, trigger_when_kind, trigger_every_minutes, \
+                     trigger_task_kind, trigger_task_title, trigger_task_notes, trigger_next_at) \
+                     VALUES (1, 1, 'work', 'every', 60, 'fixed', 'look', '', '2026-11-07T00:00:00Z');
+                 INSERT INTO automation (id, project_id, name) VALUES (2, 1, 'rest');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let kinds: Vec<(Option<String>, Option<i64>)> = engine
+            .conn()
+            .prepare("SELECT trigger_when_kind, trigger_every_minutes FROM automation ORDER BY id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(kinds, vec![(Some("every".into()), Some(60)), (None, None)], "every row keeps what it had");
+        let refused = engine.conn().execute("UPDATE automation SET trigger_when_kind = 'hourly' WHERE id = 1", []);
+        assert!(refused.is_err(), "a kind not declared is refused");
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation SET trigger_when_kind = 'idle', trigger_every_minutes = NULL WHERE id = 1",
                 [],
             )
             .unwrap();

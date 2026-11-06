@@ -50,7 +50,7 @@ use crate::model::{
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
     DEFAULT_MAX_CONCURRENT_RUNS, DEFAULT_MAX_TIMES, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, FailuresTo, MAX_CONCURRENT_RUNS_LIMIT, MAX_SCRIPT_TIMEOUT_MINUTES,
-    AutomationTrigger, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
+    AutomationTrigger, TriggerCondition, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -1252,11 +1252,13 @@ pub fn update(
     Ok(after)
 }
 
-/// **What a trigger is written as** ([`trigger_set`]): when it files a task and what the task says.
-/// When it is next asked is not the writer's to say — it is counted from the write.
+/// **What a trigger is written as** ([`trigger_set`]): when it files a task, the tasks it looks at
+/// first, and what the task says. When it is next asked is not the writer's to say — it is counted
+/// from the write.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewTrigger {
     pub when: TriggerWhen,
+    pub condition: Option<TriggerCondition>,
     pub task: TriggerTask,
 }
 
@@ -1268,8 +1270,10 @@ pub struct NewTrigger {
 /// at launch as any other is, and one refused there files nothing ([`automation_run::fire`]).
 ///
 /// Refused on an automation kept for export only, which is never launched. A task with no title is
-/// refused, as is an `every` of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. Taking a trigger away
-/// that is not there writes nothing.
+/// refused, as is an `every` of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. A condition is
+/// refused where its filter names a `project:` — it counts inside the automation's project — or does
+/// not read, which counting it once here finds out, and where it asks for fewer than none; a `tasks`
+/// with no condition is refused. Taking a trigger away that is not there writes nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     if before.trigger.is_none() && trigger.is_none() {
@@ -1285,15 +1289,36 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     let mut after = before.clone();
     after.trigger = match trigger {
         None => None,
-        Some(NewTrigger { when, task }) => {
+        Some(NewTrigger { when, condition, task }) => {
             match when {
                 TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
                     return Err(Error::invalid(format!(
                         "a trigger waits at least {MIN_TRIGGER_EVERY_MINUTES} minute(s) between tasks, not {minutes}"
                     )));
                 }
-                TriggerWhen::Every { .. } | TriggerWhen::Idle => {}
+                TriggerWhen::Tasks if condition.is_none() => {
+                    return Err(Error::invalid("a trigger that files on its condition alone needs a condition"));
+                }
+                TriggerWhen::Every { .. } | TriggerWhen::Idle | TriggerWhen::Tasks => {}
             }
+            let condition = match condition {
+                None => None,
+                Some(TriggerCondition { filter, below }) => {
+                    if below == 0 {
+                        return Err(Error::invalid(
+                            "a trigger's condition files a task while fewer than N tasks match, N being 1 or more, not 0",
+                        ));
+                    }
+                    let filter = filter.trim().to_string();
+                    if crate::query::Filter::parse(&filter, crate::time::today())?.project_ref.is_some() {
+                        return Err(Error::invalid(
+                            "a trigger's condition counts the tasks of its own automation's project, so it names no `project:`",
+                        ));
+                    }
+                    crate::query::count(tx.conn(), crate::reach::Reach::binding(before.project_id), &filter)?;
+                    Some(TriggerCondition { filter, below })
+                }
+            };
             let task = match task {
                 TriggerTask::Fixed { title, notes } => {
                     let title = title.trim();
@@ -1303,7 +1328,7 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
                     TriggerTask::Fixed { title: title.to_string(), notes }
                 }
             };
-            Some(AutomationTrigger { when, task, next_at: when.after(now) })
+            Some(AutomationTrigger { when, condition, task, next_at: when.after(now) })
         }
     };
     after.updated_at = now;
@@ -4136,13 +4161,15 @@ mod tests {
         });
     }
 
-    /// **A trigger is written, counted from the write, and taken away** — an `every` or an `idle`. A wait
-    /// under a minute, a task with no title and an automation kept for export only are refused; taking
-    /// away one that is not there writes nothing.
+    /// **A trigger is written, counted from the write, and taken away** — an `every`, an `idle` or a
+    /// `tasks`, with or without a condition. A wait under a minute, a task with no title, a condition
+    /// whose filter does not read or names a project, one below 0, a `tasks` with no condition and an
+    /// automation kept for export only are refused; taking away one that is not there writes nothing.
     #[test]
     fn a_trigger_is_written_and_taken_away() {
         let hourly = |title: &str| NewTrigger {
             when: TriggerWhen::Every { minutes: 60 },
+            condition: None,
             task: TriggerTask::Fixed { title: title.into(), notes: "メモ".into() },
         };
         with_tx(|tx| {
@@ -4171,6 +4198,27 @@ mod tests {
             let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
             assert_eq!(read_back.when, TriggerWhen::Idle, "kept with no minutes");
             assert_eq!(set.trigger, Some(read_back));
+
+            let below = |filter: &str, below: u32| Some(TriggerCondition { filter: filter.into(), below });
+            let counted = NewTrigger { condition: below(" status:todo,in_progress ", 3), ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(counted)).expect("an every with a condition");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(read_back.condition, below("status:todo,in_progress", 3), "kept trimmed");
+            assert_eq!(set.trigger, Some(read_back));
+            let alone = NewTrigger { when: TriggerWhen::Tasks, condition: below("", 1), ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(alone)).expect("a condition alone, over every task");
+            assert_eq!(set.trigger.map(|t| (t.when, t.condition)), Some((TriggerWhen::Tasks, below("", 1))));
+
+            for wrong in [
+                NewTrigger { condition: below("status:nope", 3), ..hourly("見る") },
+                NewTrigger { condition: below("project:1", 3), ..hourly("見る") },
+                NewTrigger { condition: below("status:todo", 0), ..hourly("見る") },
+                NewTrigger { when: TriggerWhen::Tasks, ..hourly("見る") },
+            ] {
+                let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
+                assert!(refused.is_err(), "{wrong:?} is refused");
+            }
+            assert_eq!(live_automation(tx, automation.id).expect("read").trigger.map(|t| t.when), Some(TriggerWhen::Tasks));
 
             let off = trigger_set(tx, automation.id, None).expect("take it away");
             assert_eq!(off.trigger, None);

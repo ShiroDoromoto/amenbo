@@ -1329,7 +1329,45 @@ pub const STEPS: &[Step] = &[
         // so no copy of it starts a role's round and none of its rounds was worked under one.
         apply: Apply::Custom(let_a_run_go_round_by_role),
     },
+    Step {
+        to: 111,
+        name: "add automation.trigger_condition_filter and _below, the tasks a trigger looks at first, and admit tasks in trigger_when_kind",
+        // **Unseeded.** No trigger had a condition before, so every one written before this has none,
+        // and keeps its kind.
+        apply: Apply::Custom(let_a_trigger_look_at_the_tasks),
+    },
 ];
+
+/// v111: `automation.trigger_condition_filter` and `trigger_condition_below`, and
+/// `automation.trigger_when_kind` admits `tasks` beside `every` and `idle`.
+///
+/// **Each part only where it is not there yet.** A store whose automation table was created in the live
+/// shape already has them. The kind is widened as v108 widened it: kept in a column of its own while
+/// the column is dropped and added again.
+fn let_a_trigger_look_at_the_tasks(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let cols = column_names(tx, "automation")?;
+    for (name, decl) in [("trigger_condition_filter", "TEXT"), ("trigger_condition_below", "BIGINT")] {
+        if !cols.iter().any(|c| c == name) {
+            tx.execute_batch(&format!("ALTER TABLE automation ADD COLUMN {name} {decl};"))?;
+        }
+    }
+    let table: String =
+        tx.query_row("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation'", [], |r| r.get(0))?;
+    if table.contains("trigger_when_kind IN ('every', 'idle', 'tasks')") {
+        return Ok(());
+    }
+    tx.execute_batch(
+        "ALTER TABLE automation ADD COLUMN trigger_when_kind_kept TEXT;
+         UPDATE automation SET trigger_when_kind_kept = trigger_when_kind;
+         ALTER TABLE automation DROP COLUMN trigger_when_kind;
+         ALTER TABLE automation ADD COLUMN trigger_when_kind TEXT \
+             CHECK(trigger_when_kind IN ('every', 'idle', 'tasks'));
+         UPDATE automation SET trigger_when_kind = trigger_when_kind_kept;
+         ALTER TABLE automation DROP COLUMN trigger_when_kind_kept;",
+    )?;
+    Ok(())
+}
 
 /// v108: `automation.trigger_when_kind` admits `idle` beside `every`.
 ///
@@ -11501,6 +11539,47 @@ mod tests {
         let role: Option<i64> =
             engine.conn().query_row("SELECT role_id FROM automation_run_task WHERE id = 1", [], |r| r.get(0)).unwrap();
         assert_eq!(role, None, "no round was worked under a role");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v111: a trigger written before the step keeps its kind and has no condition, the column admits
+    /// `tasks` beside `every` and `idle`, and a condition is written in the two new columns.
+    #[test]
+    fn a_trigger_written_before_v111_keeps_its_kind_and_tasks_is_admitted() {
+        let dir = scratch("automation-trigger-tasks");
+        let engine = store_at(&dir, 110);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, trigger_when_kind, trigger_every_minutes, \
+                     trigger_task_kind, trigger_task_title, trigger_task_notes, trigger_next_at) \
+                     VALUES (1, 1, 'work', 'idle', NULL, 'fixed', 'look', '', '2026-11-07T00:00:00Z');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let kept: (Option<String>, Option<String>, Option<i64>) = engine
+            .conn()
+            .query_row(
+                "SELECT trigger_when_kind, trigger_condition_filter, trigger_condition_below FROM automation WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(kept, (Some("idle".into()), None, None), "kept its kind, with no condition");
+        let refused = engine.conn().execute("UPDATE automation SET trigger_when_kind = 'hourly' WHERE id = 1", []);
+        assert!(refused.is_err(), "a kind not declared is refused");
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation SET trigger_when_kind = 'tasks', trigger_condition_filter = 'status:todo', \
+                     trigger_condition_below = 3 WHERE id = 1",
+                [],
+            )
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

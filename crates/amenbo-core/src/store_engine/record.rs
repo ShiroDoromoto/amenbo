@@ -568,8 +568,20 @@ pub fn automation(a: &Automation) -> Record {
                     "trigger_every_minutes",
                     match a.trigger.as_ref().map(|t| t.when) {
                         Some(TriggerWhen::Every { minutes }) => iv(minutes.into()),
-                        Some(TriggerWhen::Idle) | None => Value::Null,
+                        Some(TriggerWhen::Idle | TriggerWhen::Tasks) | None => Value::Null,
                     },
+                ),
+                (
+                    "trigger_condition_filter",
+                    a.trigger.as_ref().and_then(|t| t.condition.as_ref()).map(|c| tv(&c.filter)).unwrap_or(Value::Null),
+                ),
+                (
+                    "trigger_condition_below",
+                    a.trigger
+                        .as_ref()
+                        .and_then(|t| t.condition.as_ref())
+                        .map(|c| iv(c.below.into()))
+                        .unwrap_or(Value::Null),
                 ),
                 ("trigger_task_kind", a.trigger.as_ref().map(|t| tv(t.task.kind_str())).unwrap_or(Value::Null)),
                 (

@@ -37,6 +37,7 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::{Read, Write};
+use std::num::NonZeroU16;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -442,7 +443,7 @@ const SCROLLBACK: usize = 0;
 /// (`AMB-T-5076`).
 ///
 /// **The emulator can panic on what a program writes, and a panic here is caught and the screen
-/// started again.** vt100 0.16.2 unwraps its way off the grid when a wide character folds on a
+/// started again.** vt100 0.16.2 unwrapped its way off the grid when a wide character folded on a
 /// screen one row high, and on some cursor moves at other sizes. Left to run, that panic ends the
 /// thread draining the terminal — the pane hears nothing more and never hears it close — and
 /// poisons the lock, so the next resize takes the app down with it. A screen started again at the
@@ -488,12 +489,13 @@ fn parser(at: Size) -> vt100::Parser {
     vt100::Parser::new(rows, cols, SCROLLBACK)
 }
 
-/// A size with no zero in it. A terminal of no width has no cells to draw in, and the emulator
-/// subtracts its way off the end of one rather than refusing it — so a pane measured before the
-/// window has laid out would take the process down. The size the pane is really at arrives on the
-/// next [`Pane::resized`], so one cell is enough to stand in until then.
-fn held(at: Size) -> Size {
-    (at.0.max(1), at.1.max(1))
+/// A size with no zero in it, width then height, as the emulator takes one. A terminal of no width
+/// has no cells to draw in, but a pane measured before the window has laid out still says zero. The
+/// size the pane is really at arrives on the next [`Pane::resized`], so one cell is enough to stand
+/// in until then.
+fn held(at: Size) -> (NonZeroU16, NonZeroU16) {
+    let one = |n| NonZeroU16::new(n).unwrap_or(NonZeroU16::MIN);
+    (one(at.0), one(at.1))
 }
 
 /// Where a session's output is going, and what it has said lately.
@@ -2810,8 +2812,7 @@ mod tests {
     }
 
     /// A pane measured before the window has laid out. The emulator has no cell to draw in and
-    /// subtracts its way off the end of the grid, so the size is held at one until the pane says
-    /// what it really is.
+    /// takes no zero, so the size is held at one until the pane says what it really is.
     #[test]
     fn a_pane_opened_or_resized_at_no_size_still_draws() {
         let pane = Pane::new("main", (0, 0));
@@ -2824,7 +2825,7 @@ mod tests {
         assert!(pane.look().drawn.contains("drawn"));
     }
 
-    /// A wide character folding on a screen one row high panics vt100 0.16.2. The screen is started
+    /// A wide character folding on a screen one row high panicked vt100 0.16.2. The screen is started
     /// again and the pane goes on taking output, resizing and being looked at, rather than leaving
     /// its lock poisoned for the next resize to fall over.
     #[test]

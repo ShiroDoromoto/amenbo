@@ -1254,12 +1254,13 @@ pub fn update(
 }
 
 /// **What a trigger is written as** ([`trigger_set`]): when it files a task, the tasks it looks at
-/// first, and what the task says. When it is next asked is not the writer's to say — it is counted
-/// from the write.
+/// and the program it asks first, and what the task says. When it is next asked is not the writer's
+/// to say — it is counted from the write.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewTrigger {
     pub when: TriggerWhen,
     pub condition: Option<TriggerCondition>,
+    pub script: Option<NewScript>,
     pub task: TriggerTask,
 }
 
@@ -1274,7 +1275,9 @@ pub struct NewTrigger {
 /// refused, as is an `every` of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. A condition is
 /// refused where its filter names a `project:` — it counts inside the automation's project — or does
 /// not read, which counting it once here finds out, and where it asks for fewer than none; a `tasks`
-/// with no condition is refused. Taking a trigger away that is not there writes nothing.
+/// with no condition is refused. A script is refused as a script step's is ([`checked_script`]), and a
+/// `script` with none is refused; it is not run here. Taking a trigger away that is not there writes
+/// nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     if before.trigger.is_none() && trigger.is_none() {
@@ -1290,7 +1293,7 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     let mut after = before.clone();
     after.trigger = match trigger {
         None => None,
-        Some(NewTrigger { when, condition, task }) => {
+        Some(NewTrigger { when, condition, script, task }) => {
             match when {
                 TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
                     return Err(Error::invalid(format!(
@@ -1300,8 +1303,12 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
                 TriggerWhen::Tasks if condition.is_none() => {
                     return Err(Error::invalid("a trigger that files on its condition alone needs a condition"));
                 }
-                TriggerWhen::Every { .. } | TriggerWhen::Idle | TriggerWhen::Tasks => {}
+                TriggerWhen::Script if script.is_none() => {
+                    return Err(Error::invalid("a trigger that files on its script's say alone needs a script"));
+                }
+                TriggerWhen::Every { .. } | TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script => {}
             }
+            let script = script.map(checked_script).transpose()?;
             let condition = match condition {
                 None => None,
                 Some(TriggerCondition { filter, below }) => {
@@ -1329,7 +1336,7 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
                     TriggerTask::Fixed { title: title.to_string(), notes }
                 }
             };
-            Some(AutomationTrigger { when, condition, task, next_at: when.after(now) })
+            Some(AutomationTrigger { when, condition, script, task, next_at: when.after(now) })
         }
     };
     after.updated_at = now;
@@ -2552,7 +2559,7 @@ pub struct NewStep {
 
 /// A script as it is written: the timeout may be left out, and then it is
 /// [`DEFAULT_SCRIPT_TIMEOUT_MINUTES`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewScript {
     pub program: String,
     pub args: Vec<String>,
@@ -4126,15 +4133,18 @@ mod tests {
         });
     }
 
-    /// **A trigger is written, counted from the write, and taken away** — an `every`, an `idle` or a
-    /// `tasks`, with or without a condition. A wait under a minute, a task with no title, a condition
-    /// whose filter does not read or names a project, one below 0, a `tasks` with no condition and an
-    /// automation kept for export only are refused; taking away one that is not there writes nothing.
+    /// **A trigger is written, counted from the write, and taken away** — an `every`, an `idle`, a
+    /// `tasks` or a `script`, with or without a condition or a script. A wait under a minute, a task with
+    /// no title, a condition whose filter does not read or names a project, one below 0, a `tasks` with
+    /// no condition, a `script` with no script, a program not named by its full path, a timeout out of
+    /// range and an automation kept for export only are refused; taking away one that is not there
+    /// writes nothing.
     #[test]
     fn a_trigger_is_written_and_taken_away() {
         let hourly = |title: &str| NewTrigger {
             when: TriggerWhen::Every { minutes: 60 },
             condition: None,
+            script: None,
             task: TriggerTask::Fixed { title: title.into(), notes: "メモ".into() },
         };
         with_tx(|tx| {
@@ -4184,6 +4194,38 @@ mod tests {
                 assert!(refused.is_err(), "{wrong:?} is refused");
             }
             assert_eq!(live_automation(tx, automation.id).expect("read").trigger.map(|t| t.when), Some(TriggerWhen::Tasks));
+
+            let program = |program: &str, timeout_minutes: Option<i64>| {
+                Some(NewScript { program: program.into(), args: vec!["--quiet".into()], timeout_minutes })
+            };
+            let judge = a_program();
+            let asked = NewTrigger { when: TriggerWhen::Script, script: program(&judge, None), ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(asked)).expect("a script alone");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(read_back.when, TriggerWhen::Script);
+            assert_eq!(
+                read_back.script,
+                Some(StepScript {
+                    program: judge.clone(),
+                    args: vec!["--quiet".into()],
+                    timeout_minutes: DEFAULT_SCRIPT_TIMEOUT_MINUTES,
+                }),
+                "kept with the timeout it is given unless written"
+            );
+            assert_eq!(set.trigger, Some(read_back));
+            let laid = NewTrigger { script: program(&judge, Some(5)), ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(laid)).expect("an every with a script");
+            assert_eq!(set.trigger.and_then(|t| t.script).map(|s| s.timeout_minutes), Some(5));
+
+            for wrong in [
+                NewTrigger { when: TriggerWhen::Script, ..hourly("見る") },
+                NewTrigger { script: program("judge", None), ..hourly("見る") },
+                NewTrigger { script: program(&judge, Some(0)), ..hourly("見る") },
+                NewTrigger { script: program(&judge, Some(MAX_SCRIPT_TIMEOUT_MINUTES + 1)), ..hourly("見る") },
+            ] {
+                let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
+                assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
+            }
 
             let off = trigger_set(tx, automation.id, None).expect("take it away");
             assert_eq!(off.trigger, None);

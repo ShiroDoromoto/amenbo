@@ -1916,14 +1916,15 @@ impl FailuresTo {
 }
 
 /// The fewest minutes a trigger waits between two tasks it files: the least a [`TriggerWhen::Every`]
-/// may be written with, and the rest a [`TriggerWhen::Idle`] or a [`TriggerWhen::Tasks`] always takes
-/// after each one.
+/// may be written with, and the rest a [`TriggerWhen::Idle`], a [`TriggerWhen::Tasks`] or a
+/// [`TriggerWhen::Script`] always takes after each one.
 pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 
 /// **An automation's trigger** ([`Automation::trigger`]) — what starts a run with nobody pressing
-/// start, in three parts: [`TriggerWhen`], with its [`TriggerCondition`] if it has one, answers whether
-/// to file a task now, [`TriggerTask`] writes what the task says, and the run is the automation's own,
-/// started on the task filed. No agent works on the first two; the third is a run like any other.
+/// start, in three parts: [`TriggerWhen`], with its [`TriggerCondition`] and its script if it has them,
+/// answers whether to file a task now, [`TriggerTask`] writes what the task says, and the run is the
+/// automation's own, started on the task filed. No agent works on the first two; the third is a run
+/// like any other.
 ///
 /// A time it answers no leaves nothing behind — no task, no run, no record — so the only thing it
 /// keeps is `next_at`, which moves on only when a task is filed.
@@ -1934,9 +1935,15 @@ pub struct AutomationTrigger {
     /// [`TriggerWhen::Tasks`] always has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub condition: Option<TriggerCondition>,
+    /// The program it asks before filing one, on top of `when` and `condition` — `None` where it asks
+    /// none. It files one only where the program says so in its `output.json`
+    /// (`{"version":1,"file":true}`, [`crate::ops::automation_run::ask_script`]). A
+    /// [`TriggerWhen::Script`] always has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script: Option<StepScript>,
     pub task: TriggerTask,
-    /// When it is next asked whether to file a task (for an `idle` or a `tasks`, the soonest it may file
-    /// one): set when the trigger is written, and moved on each time it files one.
+    /// When it is next asked whether to file a task (for an `idle`, a `tasks` or a `script`, the soonest
+    /// it may file one): set when the trigger is written, and moved on each time it files one.
     pub next_at: Timestamp,
 }
 
@@ -1956,6 +1963,10 @@ pub enum TriggerWhen {
     /// not while the automation has its most runs under way. It waits [`MIN_TRIGGER_EVERY_MINUTES`]
     /// after it is written and after each task it files, as an `idle` does.
     Tasks,
+    /// Whenever its script says to, with nothing else to wait for — held back, like a `tasks`, only by
+    /// the automation having its most runs under way, and waiting [`MIN_TRIGGER_EVERY_MINUTES`] after it
+    /// is written and after each task it files.
+    Script,
 }
 
 impl TriggerWhen {
@@ -1965,6 +1976,7 @@ impl TriggerWhen {
             TriggerWhen::Every { .. } => "every",
             TriggerWhen::Idle => "idle",
             TriggerWhen::Tasks => "tasks",
+            TriggerWhen::Script => "script",
         }
     }
 
@@ -1972,7 +1984,7 @@ impl TriggerWhen {
     pub fn after(&self, from: Timestamp) -> Timestamp {
         let minutes = match self {
             TriggerWhen::Every { minutes } => *minutes,
-            TriggerWhen::Idle | TriggerWhen::Tasks => MIN_TRIGGER_EVERY_MINUTES,
+            TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script => MIN_TRIGGER_EVERY_MINUTES,
         };
         Timestamp(from.0 + chrono::Duration::minutes(i64::from(minutes)))
     }

@@ -610,11 +610,13 @@ fn an_automation_is_stopped_and_started_again() {
     assert!(!text.contains("  stopped"), "{text}");
 }
 
-/// `automation trigger` writes a trigger — every so many minutes, whenever no run is under way, or
-/// whenever few enough tasks match a filter, the last laid on either of the others too — `show` says
-/// what it files and when it is next asked, and `--off` takes it away. A wait under a minute, a
-/// trigger with no title or no when, `--every` beside `--when-idle`, a filter with no count or a count
-/// of 0, a filter that does not read or names a project, and `--off` beside a part of one are refused.
+/// `automation trigger` writes a trigger — every so many minutes, whenever no run is under way,
+/// whenever few enough tasks match a filter, or whenever a program says so, the last two laid on the
+/// others too — `show` says what it files and when it is next asked, and `--off` takes it away. A wait
+/// under a minute, a trigger with no title or no when, `--every` beside `--when-idle`, a filter with no
+/// count or a count of 0, a filter that does not read or names a project, a program not named by its
+/// full path, a script's argument or timeout with no program, a timeout out of range, and `--off`
+/// beside a part of one are refused.
 #[test]
 fn a_trigger_is_written_shown_and_taken_away() {
     let cli = Cli::new();
@@ -651,6 +653,33 @@ fn a_trigger_is_written_shown_and_taken_away() {
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(text.contains("whenever fewer than 1 task(s) match \"status:todo\", filing \"x\" — not before"), "{text}");
 
+    // A program is registered by its full path, and Windows only counts a path with its drive as one.
+    let program = if cfg!(windows) { r"C:\Windows\System32\cmd.exe" } else { "/bin/echo" };
+    let asked = cli.json(&[
+        "automation", "trigger", &a, "--if-script", program, "--script-arg", "--quiet", "--script-timeout-minutes", "5",
+        "--title", "x", "--json",
+    ]);
+    let trigger = &asked["automation"]["trigger"];
+    assert_eq!(trigger["when"], serde_json::json!({ "kind": "script" }), "{asked}");
+    assert_eq!(
+        trigger["script"],
+        serde_json::json!({ "program": program, "args": ["--quiet"], "timeout_minutes": 5 }),
+        "{asked}"
+    );
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains(&format!("whenever \"{program}\" says so, filing \"x\" — not before")), "{text}");
+
+    let both = cli.json(&[
+        "automation", "trigger", &a, "--every", "60", "--if-tasks", "status:todo", "--fewer-than", "3", "--if-script", program,
+        "--title", "x", "--json",
+    ]);
+    assert_eq!(both["automation"]["trigger"]["script"]["timeout_minutes"], serde_json::json!(30), "{both}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(
+        text.contains(&format!("every 60 minute(s) while fewer than 3 task(s) match \"status:todo\" and \"{program}\" says so")),
+        "{text}"
+    );
+
     for wrong in [
         vec!["automation", "trigger", a.as_str(), "--every", "0", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--every", "5"],
@@ -664,6 +693,12 @@ fn a_trigger_is_written_shown_and_taken_away() {
         vec!["automation", "trigger", a.as_str(), "--if-tasks", "status:nope", "--fewer-than", "3", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--if-tasks", "project:1", "--fewer-than", "3", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--off", "--if-tasks", "status:todo", "--fewer-than", "3"],
+        vec!["automation", "trigger", a.as_str(), "--if-script", "judge", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--script-arg", "a", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--script-timeout-minutes", "5", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-script", program, "--script-timeout-minutes", "0", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-script", program, "--script-timeout-minutes", "361", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--off", "--if-script", program],
     ] {
         let (_, code) = cli.run_err(&wrong);
         assert_ne!(code, 0, "{wrong:?} is refused");

@@ -549,6 +549,8 @@ pub fn automation_action(a: &AutomationAction) -> Record {
 }
 
 pub fn automation(a: &Automation) -> Record {
+    let [trigger_script_program, trigger_script_args, trigger_script_timeout_minutes] =
+        script_values(&a.trigger.as_ref().and_then(|t| t.script.clone()));
     Record::new(
         "automation",
         a.id,
@@ -568,7 +570,7 @@ pub fn automation(a: &Automation) -> Record {
                     "trigger_every_minutes",
                     match a.trigger.as_ref().map(|t| t.when) {
                         Some(TriggerWhen::Every { minutes }) => iv(minutes.into()),
-                        Some(TriggerWhen::Idle | TriggerWhen::Tasks) | None => Value::Null,
+                        Some(TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script) | None => Value::Null,
                     },
                 ),
                 (
@@ -583,6 +585,9 @@ pub fn automation(a: &Automation) -> Record {
                         .map(|c| iv(c.below.into()))
                         .unwrap_or(Value::Null),
                 ),
+                ("trigger_script_program", trigger_script_program),
+                ("trigger_script_args", trigger_script_args),
+                ("trigger_script_timeout_minutes", trigger_script_timeout_minutes),
                 ("trigger_task_kind", a.trigger.as_ref().map(|t| tv(t.task.kind_str())).unwrap_or(Value::Null)),
                 (
                     "trigger_task_title",

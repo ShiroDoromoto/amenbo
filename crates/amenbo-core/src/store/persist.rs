@@ -1769,17 +1769,22 @@ impl Store {
 
     /// **Fire an automation's trigger** — file its task and start a run on it, or decide not to (one
     /// operation = one transaction) — [`crate::ops::automation_run::fire`]. A launch its checks refuse
-    /// takes the whole transaction with it, so nothing of that time is left.
+    /// takes the whole transaction with it, so nothing of that time is left. `script_said_yes` is the
+    /// script of the trigger that said to file one, asked before this write
+    /// ([`crate::ops::automation_run::ask_script`]); `None` for a trigger with no script.
     pub fn automation_trigger_fire(
         &mut self,
         automation_id: i64,
         by: &crate::ops::automation_run::Launcher<'_>,
+        script_said_yes: Option<&crate::model::StepScript>,
     ) -> Result<Option<crate::model::AutomationRun>> {
         let agent = self.automation_default_agent(automation_id)?;
         let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::fire(tx, automation_id, &by, crate::time::Timestamp::now()),
+            |tx| {
+                crate::ops::automation_run::fire(tx, automation_id, &by, crate::time::Timestamp::now(), script_said_yes)
+            },
         )
     }
 

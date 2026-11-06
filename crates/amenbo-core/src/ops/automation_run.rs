@@ -57,9 +57,11 @@ use crate::model::{
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
-    RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
+    RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, StepScript, ACTION_BOUNDARY,
+    ERROR_EXIT,
 };
 use crate::ops::automation::{ActionDef, Picture};
+use crate::ops::automation_script;
 use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -1817,11 +1819,15 @@ pub fn launch_handing_past_the_limit(
 }
 
 /// **What the triggers say on one look** ([`triggers_due`]): the automations whose trigger is due now,
-/// and when the soonest of the rest is.
+/// the ones due but for what their script says, and when the soonest of the rest is.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TriggersDue {
     /// The automations to [`fire`], oldest first.
     pub due: Vec<i64>,
+    /// The automations whose trigger is due but for its script, oldest first, each with that script:
+    /// run it outside any write ([`ask_script`]), and [`fire`] the automation only where it said yes,
+    /// handing it the script that did.
+    pub ask: Vec<(i64, StepScript)>,
     /// When the next trigger not yet due is, or `None` where there is none — so a look can sleep no
     /// longer than that.
     pub next_at: Option<Timestamp>,
@@ -1830,8 +1836,9 @@ pub struct TriggersDue {
 /// **Which triggers are due at `now`** — the first part of each, asked of every automation that may be
 /// started by one ([`read::automations_triggered`]), which leaves out a stopped one. One whose runs
 /// under way say no ([`has_room`]), or whose condition does not hold ([`condition_holds`]), is not
-/// due: it would decide not to file a task, so a look need not open a write to hear it say so. It
-/// writes nothing: [`fire`] asks all of it again, in the transaction it writes in.
+/// due: it would decide not to file a task, so a look need not open a write to hear it say so. One
+/// with a script is put in `ask` rather than `due`: its program may run for hours, so it is not run
+/// here. It writes nothing: [`fire`] asks all of it again, in the transaction it writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
@@ -1843,7 +1850,10 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
             if has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs)
                 && condition_holds(conn, automation.project_id, trigger).unwrap_or(true)
             {
-                found.due.push(automation.id);
+                match &trigger.script {
+                    Some(script) => found.ask.push((automation.id, script.clone())),
+                    None => found.due.push(automation.id),
+                }
             }
         } else if found.next_at.is_none_or(|soonest| trigger.next_at < soonest) {
             found.next_at = Some(trigger.next_at);
@@ -1858,8 +1868,11 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while its runs under way say
 ///    no ([`has_room`]): an `every` or a `tasks` waits while the automation has its most runs under way
 ///    (`max_concurrent_runs`), where a task filed would have no run to go to, and an `idle` waits until
-///    it has none at all. Nor while its condition does not hold ([`condition_holds`]). An archived
-///    automation, a stopped one, one kept for export only and one with no trigger file none either.
+///    it has none at all. Nor while its condition does not hold ([`condition_holds`]). One with a
+///    script files one only where `script_said_yes` is that very script — the one [`ask_script`] ran
+///    and heard yes from, outside this write — so a script rewritten since it was asked files nothing.
+///    An archived automation, a stopped one, one kept for export only and one with no trigger file none
+///    either.
 /// 2. **What it says.** The title and notes written on the trigger.
 /// 3. **The run.** A launch like any other ([`launch_handing`]), of the newest saved version, the task
 ///    handed to its entry as a person's would be — so it is the entry, the built-in that files a task,
@@ -1870,7 +1883,13 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// takes nothing with it either. Only a task filed moves `next_at` on, counted from `now` rather than
 /// from when it was due, so an app that was closed for a day files one task when it comes back rather
 /// than a day's worth.
-pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timestamp) -> Result<Option<AutomationRun>> {
+pub fn fire(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+    now: Timestamp,
+    script_said_yes: Option<&StepScript>,
+) -> Result<Option<AutomationRun>> {
     let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     let Some(trigger) = before.trigger.clone() else { return Ok(None) };
     if before.archived || before.stopped || before.export_only || now < trigger.next_at {
@@ -1879,6 +1898,7 @@ pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timest
     let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
     if !has_room(&trigger.when, under_way.len(), before.max_concurrent_runs)
         || !condition_holds(tx.conn(), before.project_id, &trigger)?
+        || trigger.script.as_ref().is_some_and(|script| script_said_yes != Some(script))
     {
         return Ok(None);
     }
@@ -2079,11 +2099,14 @@ pub fn task_wait_held_back(
 }
 
 /// **Whether the runs under way leave a trigger room to file a task** — `under_way` being the
-/// automation's runs `running` or `paused`, and `max` its `max_concurrent_runs`. An `every` or a
-/// `tasks` files one while there is room for one more run; an `idle` only once there is none under way.
+/// automation's runs `running` or `paused`, and `max` its `max_concurrent_runs`. An `every`, a `tasks`
+/// or a `script` files one while there is room for one more run; an `idle` only once there is none
+/// under way.
 fn has_room(when: &crate::model::TriggerWhen, under_way: usize, max: u32) -> bool {
     match when {
-        crate::model::TriggerWhen::Every { .. } | crate::model::TriggerWhen::Tasks => under_way < max as usize,
+        crate::model::TriggerWhen::Every { .. }
+        | crate::model::TriggerWhen::Tasks
+        | crate::model::TriggerWhen::Script => under_way < max as usize,
         crate::model::TriggerWhen::Idle => under_way == 0,
     }
 }
@@ -2094,6 +2117,52 @@ fn condition_holds(conn: &Connection, project_id: i64, trigger: &crate::model::A
     let Some(condition) = &trigger.condition else { return Ok(true) };
     let matched = crate::query::count(conn, crate::reach::Reach::binding(project_id), &condition.filter)?;
     Ok(matched < condition.below as usize)
+}
+
+/// The version of the `output.json` a trigger's script writes.
+pub const TRIGGER_OUTPUT_VERSION: u64 = 1;
+
+/// **Ask a trigger's script whether to file a task** — run it once ([`automation_script::run`]), with
+/// no inputs, stopping it at its timeout or once `stop` answers `true`, and read its answer. It writes
+/// nothing to the store and may run for hours, so it is run outside any write, and what it said is
+/// handed to [`fire`].
+///
+/// It answers in `output.json`, `{"version":1,"file":true}` to file one and `"file":false` not to —
+/// never in its exit code, which says only whether it ran to the end (`AMB-D-1016`): a script that
+/// fell over is not taken for one that said no. `Err` is why it said neither, in a sentence: it could
+/// not be started, ran out of time, was stopped, ended other than with 0, or left no `output.json` or
+/// one not in that shape. The trigger files nothing then either.
+pub fn ask_script(script: &StepScript, stop: impl FnMut() -> bool) -> std::result::Result<bool, String> {
+    script_said(script, &automation_script::run(script, &[], stop).ended)
+}
+
+/// What a trigger's script said, from how its run `ended` ([`ask_script`]).
+fn script_said(script: &StepScript, ended: &automation_script::Ended) -> std::result::Result<bool, String> {
+    use automation_script::Ended;
+    let output = match ended {
+        Ended::NotStarted(why) => return Err(format!("the program could not be started: {why}")),
+        Ended::TimedOut => {
+            return Err(format!(
+                "the program was still running after {} minutes, and was stopped",
+                script.timeout_minutes
+            ))
+        }
+        Ended::Stopped => return Err("the program was stopped before it ended".to_string()),
+        Ended::Failed(status) => {
+            return Err(match status.code() {
+                Some(code) => format!("the program ended with exit code {code}"),
+                None => format!("the program ended without an exit code ({status})"),
+            })
+        }
+        Ended::NoOutput => return Err("the program ended with exit code 0 and wrote no output.json".to_string()),
+        Ended::NotJson(why) => return Err(format!("output.json is not JSON: {why}")),
+        Ended::Wrote { output, .. } => output,
+    };
+    let unshaped = |what: &str| format!("output.json is not in the shape {{\"version\":1,\"file\":true|false}}: {what}");
+    if output.get("version").and_then(|v| v.as_u64()) != Some(TRIGGER_OUTPUT_VERSION) {
+        return Err(unshaped("\"version\" is not 1"));
+    }
+    output.get("file").and_then(|v| v.as_bool()).ok_or_else(|| unshaped("\"file\" is not true or false"))
 }
 
 /// [`launch_handing`], counting the runs under way only where `limited`, and making no run where the
@@ -5504,5 +5573,51 @@ mod tests {
             assert!(fields.contains(&("inside_step", second.id.to_string())), "{fields:?}");
             assert_eq!(Unmet::NoEntry.placement(), None);
         });
+    }
+
+    /// **What a trigger's script said is read from its `output.json` alone** — `"file"` true or false
+    /// under version 1. Every other way it ended, an exit code of 0 with no answer included, is not an
+    /// answer.
+    #[test]
+    fn a_trigger_script_answers_in_its_output_not_its_exit_code() {
+        use automation_script::Ended;
+        let script = StepScript { program: "/usr/local/bin/judge".into(), args: Vec::new(), timeout_minutes: 5 };
+        let wrote = |output: serde_json::Value| Ended::Wrote { output, files: Vec::new() };
+        assert_eq!(script_said(&script, &wrote(serde_json::json!({ "version": 1, "file": true }))), Ok(true));
+        assert_eq!(script_said(&script, &wrote(serde_json::json!({ "version": 1, "file": false }))), Ok(false));
+        for unshaped in [
+            serde_json::json!({ "file": true }),
+            serde_json::json!({ "version": 2, "file": true }),
+            serde_json::json!({ "version": 1 }),
+            serde_json::json!({ "version": 1, "file": "yes" }),
+        ] {
+            let said = script_said(&script, &wrote(unshaped.clone()));
+            assert!(said.as_ref().is_err_and(|why| why.contains("not in the shape")), "{unshaped}: {said:?}");
+        }
+        for ended in [Ended::NotStarted("no such file".into()), Ended::TimedOut, Ended::Stopped, Ended::NoOutput] {
+            assert!(script_said(&script, &ended).is_err(), "{ended:?} is no answer");
+        }
+        assert_eq!(
+            script_said(&script, &Ended::TimedOut),
+            Err("the program was still running after 5 minutes, and was stopped".to_string())
+        );
+    }
+
+    /// **A trigger's script is run and heard**: what it writes to `AMENBO_OUTPUT` is its answer, and one
+    /// that ends other than with 0 has none, whatever it wrote.
+    #[cfg(unix)]
+    #[test]
+    fn a_trigger_script_is_run_and_its_answer_read() {
+        let sh = |body: &str| StepScript {
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), body.into()],
+            timeout_minutes: crate::model::DEFAULT_SCRIPT_TIMEOUT_MINUTES,
+        };
+        let yes = sh(r#"echo '{"version":1,"file":true}' > "$AMENBO_OUTPUT""#);
+        assert_eq!(ask_script(&yes, || false), Ok(true));
+        let no = sh(r#"echo '{"version":1,"file":false}' > "$AMENBO_OUTPUT""#);
+        assert_eq!(ask_script(&no, || false), Ok(false));
+        let fell = sh(r#"echo '{"version":1,"file":true}' > "$AMENBO_OUTPUT"; exit 3"#);
+        assert_eq!(ask_script(&fell, || false), Err("the program ended with exit code 3".to_string()));
     }
 }

@@ -35,12 +35,15 @@
 //! the runs, so a run a trigger started is opened in the same look. A trigger keeps the time it is next
 //! due in the store and nothing runs beside this thread for it (`AMB-D-983`'s shape): a look sleeps no
 //! longer than until the soonest one. The app being closed is what stops them — a terminal starts no
-//! run on its own (`AMB-D-995`).
+//! run on its own (`AMB-D-995`). A trigger with a script has its program run on a thread of its own,
+//! outside any write, because it may run for hours; the look that finds its answer fires it.
 
 use std::collections::HashMap;
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
+use amenbo_core::model::StepScript;
 use amenbo_core::ops::automation_run::Waiting;
 
 /// How long between looks while something is running. A step takes minutes, so a second is under
@@ -58,6 +61,20 @@ const WHILE_IDLE: Duration = Duration::from_secs(5);
 /// the store to ask — which, over a night of waiting, is tens of thousands of times for nothing. A run
 /// is not held to this: it is still looked at every `WHILE_GOING`.
 const WHILE_WAITING: Duration = Duration::from_secs(30);
+
+/// How long a trigger's script that has answered is left before it is asked again — the least a
+/// trigger waits between two tasks it files. One that said no keeps its `next_at` (`AMB-D-1119`), so
+/// without this its program would be started again on every look.
+const SCRIPT_ASKED_AGAIN: Duration = Duration::from_secs(60 * amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES as u64);
+
+/// **Where a trigger's script stands**, by automation: running on a thread of its own, or answered and
+/// left until it may be asked again.
+enum Asking {
+    /// Its program is running; the script and what it said come down here when it ends.
+    Running(Receiver<(StepScript, Result<bool, String>)>),
+    /// It answered, and is not asked again until then.
+    Answered(Instant),
+}
 
 /// What the sleeping thread is woken through. It carries no message: the answer to "is there anything
 /// to do" is in the store, and a flag here could only ever be a second, staler copy of it.
@@ -93,10 +110,13 @@ pub fn watch(app: tauri::AppHandle) {
     // The automations whose trigger was refused at launch, and when each is asked again. A pace, like
     // `resting`: a restart that loses it asks them once more, which is all.
     let mut held = HashMap::new();
+    // The triggers whose script is running or has answered. Not cleared by a nudge, so a press in the
+    // app does not start a program again; a restart that loses it asks them once more, which is all.
+    let mut asking = HashMap::new();
     loop {
         // A failure is not fatal and not a reason to stop looking: the store may be mid-swap, or a
         // run may have been deleted between the two reads. The next look is a second away.
-        let pause = match advance(&app, &mut resting, &mut held) {
+        let pause = match advance(&app, &mut resting, &mut held, &mut asking) {
             Ok(pause) => pause,
             Err(e) => {
                 log::warn!("the automation watch could not look: {e}");
@@ -168,8 +188,9 @@ fn advance(
     app: &tauri::AppHandle,
     resting: &mut HashMap<i64, Instant>,
     held: &mut HashMap<i64, Instant>,
+    asking: &mut HashMap<i64, Asking>,
 ) -> Result<Duration, crate::error::CmdError> {
-    let next_trigger = fire_triggers(held)?;
+    let next_trigger = fire_triggers(held, asking)?;
     let next_waiting = start_waiting(resting)?;
     let running = {
         let store = crate::commands::open_store_read()?;
@@ -249,13 +270,51 @@ fn advance(
 /// A trigger whose launch was refused — its automation not saved, its entry not the built-in that files
 /// a task — goes into `held` and is not asked again until `WHILE_WAITING` has passed, rather than every
 /// second with a warning each time. Nothing of that time is left in the store.
-fn fire_triggers(held: &mut HashMap<i64, Instant>) -> Result<Option<Instant>, crate::error::CmdError> {
+///
+/// A trigger due but for its script (`ask`) has its program started on a thread of its own
+/// ([`amenbo_core::ops::automation_run::ask_script`]), which wakes the look when it ends; the look that
+/// finds the answer fires it, handing it the script that said yes. Whatever it said, it is not asked
+/// again for `SCRIPT_ASKED_AGAIN`. One that said neither yes nor no is warned about, and files nothing.
+fn fire_triggers(
+    held: &mut HashMap<i64, Instant>,
+    asking: &mut HashMap<i64, Asking>,
+) -> Result<Option<Instant>, crate::error::CmdError> {
     let found = {
         let store = crate::commands::open_store_read()?;
         amenbo_core::ops::automation_run::triggers_due(store.read_model().conn(), amenbo_core::time::Timestamp::now())?
     };
-    held.retain(|automation, due| found.due.contains(automation) && Instant::now() < *due);
-    let due: Vec<i64> = found.due.into_iter().filter(|automation| !held.contains_key(automation)).collect();
+    let to_ask = |automation: &i64| found.ask.iter().any(|(asked, _)| asked == automation);
+    held.retain(|automation, due| (found.due.contains(automation) || to_ask(automation)) && Instant::now() < *due);
+    asking.retain(|automation, standing| match standing {
+        Asking::Running(_) => true,
+        Asking::Answered(until) => to_ask(automation) && Instant::now() < *until,
+    });
+    let mut due: Vec<(i64, Option<StepScript>)> = found
+        .due
+        .into_iter()
+        .filter(|automation| !held.contains_key(automation))
+        .map(|automation| (automation, None))
+        .collect();
+    for (automation, script) in &found.ask {
+        if !held.contains_key(automation) && !asking.contains_key(automation) {
+            asking.insert(*automation, ask(*automation, script.clone()));
+        }
+    }
+    for (automation, standing) in asking.iter_mut() {
+        let Asking::Running(answer) = standing else { continue };
+        let said = match answer.try_recv() {
+            Ok(said) => Some(said),
+            Err(TryRecvError::Empty) => continue,
+            Err(TryRecvError::Disconnected) => None,
+        };
+        *standing = Asking::Answered(Instant::now() + SCRIPT_ASKED_AGAIN);
+        match said {
+            Some((script, Ok(true))) => due.push((*automation, Some(script))),
+            Some((_, Ok(false))) => {}
+            Some((_, Err(why))) => log::warn!("the trigger of automation {automation} had no answer from its script: {why}"),
+            None => log::warn!("the trigger of automation {automation} lost its script before it answered"),
+        }
+    }
     if !due.is_empty() {
         let offered = crate::agent_models::offered_here();
         let by = amenbo_core::ops::automation_run::Launcher {
@@ -265,8 +324,11 @@ fn fire_triggers(held: &mut HashMap<i64, Instant>) -> Result<Option<Instant>, cr
             workspace_open: None,
             by: None,
         };
-        for automation in due {
-            match crate::commands::with_store_mut(|store| Ok(store.automation_trigger_fire(automation, &by)?)) {
+        for (automation, script_said_yes) in due {
+            let fired = crate::commands::with_store_mut(|store| {
+                Ok(store.automation_trigger_fire(automation, &by, script_said_yes.as_ref())?)
+            });
+            match fired {
                 Ok(Some(run)) => log::info!("the trigger of automation {automation} started run {}", run.id),
                 Ok(None) => {}
                 Err(e) => {
@@ -277,7 +339,27 @@ fn fire_triggers(held: &mut HashMap<i64, Instant>) -> Result<Option<Instant>, cr
         }
     }
     let now = amenbo_core::time::Timestamp::now();
-    Ok(found.next_at.map(|at| Instant::now() + (at.0 - now.0).to_std().unwrap_or(Duration::ZERO)))
+    let next_at = found.next_at.map(|at| Instant::now() + (at.0 - now.0).to_std().unwrap_or(Duration::ZERO));
+    let answered = asking.values().filter_map(|standing| match standing {
+        Asking::Answered(until) => Some(*until),
+        Asking::Running(_) => None,
+    });
+    Ok(next_at.into_iter().chain(answered).min())
+}
+
+/// **Start a trigger's script** on a thread of its own, and wake the look once it has answered. It is
+/// stopped only at its timeout: nothing in the app waits on it.
+fn ask(automation: i64, script: StepScript) -> Asking {
+    let (tell, answer) = std::sync::mpsc::channel();
+    let started = std::thread::Builder::new().name(format!("trigger-script-{automation}")).spawn(move || {
+        let said = amenbo_core::ops::automation_run::ask_script(&script, || false);
+        let _ = tell.send((script, said));
+        wake();
+    });
+    if let Err(e) = started {
+        log::warn!("the trigger of automation {automation} could not start a thread for its script: {e}");
+    }
+    Asking::Running(answer)
 }
 
 /// **Start a run of each automation waiting for a task that one has turned up for**

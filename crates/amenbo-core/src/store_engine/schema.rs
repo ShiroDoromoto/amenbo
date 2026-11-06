@@ -1147,19 +1147,26 @@ datasets! {
         export_only: bool_col,
         // **The trigger**: what files a task on its own and starts a run with it, in three parts — when
         // to file one, what the task says, and the run, which is this automation's. NULL in
-        // `trigger_when_kind` is no trigger, and then every other `trigger_` column is NULL too. Like
-        // `archived`, none of it is part of a saved version.
+        // `trigger_when_kind` is no trigger, and then every other `trigger_` column is NULL too, but
+        // `trigger_script_args`, which is ''. Like `archived`, none of it is part of a saved version.
         //
         // When to file one: `every` is every `trigger_every_minutes` minutes; `idle` is whenever the
-        // automation has no run under way; `tasks` is whenever the condition below holds. The last two
-        // leave `trigger_every_minutes` NULL.
-        trigger_when_kind: enum_opt("every", "idle", "tasks"),
+        // automation has no run under way; `tasks` is whenever the condition below holds; `script` is
+        // whenever the script below says to. The last three leave `trigger_every_minutes` NULL.
+        trigger_when_kind: enum_opt("every", "idle", "tasks", "script"),
         trigger_every_minutes: col(INT_OPT),
         // The tasks it looks at first, on top of the when: it files one only while fewer than
         // `trigger_condition_below` tasks of the automation's project match `trigger_condition_filter`
         // (what `task list --filter` takes). Both NULL is no condition; a `tasks` always has one.
         trigger_condition_filter: col(OPT),
         trigger_condition_below: col(INT_OPT),
+        // The program it asks first, on top of the when and the condition, as a script step's is written
+        // (`AMB-D-1016`): it files one only where the program says so in its output.json. NULL in
+        // `trigger_script_program` is no script, and then the arguments are '' and the timeout NULL; a
+        // `script` always has one.
+        trigger_script_program: col(OPT),
+        trigger_script_args: col(REQ),
+        trigger_script_timeout_minutes: col(INT_OPT),
         // What the task says: `fixed` is the title and notes written here.
         trigger_task_kind: enum_opt("fixed"),
         trigger_task_title: col(OPT),

@@ -496,23 +496,42 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
-        AutomationCmd::Trigger { id, every, when_idle, if_tasks, fewer_than, title, notes, off } => {
+        AutomationCmd::Trigger {
+            id,
+            every,
+            when_idle,
+            if_tasks,
+            fewer_than,
+            if_script,
+            script_args,
+            script_timeout_minutes,
+            title,
+            notes,
+            off,
+        } => {
             use amenbo_core::model::{TriggerCondition, TriggerTask, TriggerWhen};
             let condition = match (if_tasks, fewer_than) {
                 (Some(filter), Some(below)) => Some(TriggerCondition { filter, below }),
                 // clap asks for both or neither.
                 _ => None,
             };
-            let when = match (every, when_idle, &condition) {
-                (Some(minutes), _, _) => Some(TriggerWhen::Every { minutes }),
-                (None, true, _) => Some(TriggerWhen::Idle),
-                (None, false, Some(_)) => Some(TriggerWhen::Tasks),
-                (None, false, None) => None,
+            let script = if_script.map(|program| NewScript {
+                program,
+                args: script_args,
+                timeout_minutes: script_timeout_minutes,
+            });
+            let when = match (every, when_idle, &condition, &script) {
+                (Some(minutes), _, _, _) => Some(TriggerWhen::Every { minutes }),
+                (None, true, _, _) => Some(TriggerWhen::Idle),
+                (None, false, Some(_), _) => Some(TriggerWhen::Tasks),
+                (None, false, None, Some(_)) => Some(TriggerWhen::Script),
+                (None, false, None, None) => None,
             };
             let trigger = match (off, when, title) {
                 (false, Some(when), Some(title)) => Some(amenbo_core::ops::automation::NewTrigger {
                     when,
                     condition,
+                    script,
                     task: TriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() },
                 }),
                 // clap asks for a when and a title unless --off is given, and refuses them beside it.
@@ -1555,23 +1574,25 @@ fn render_automation(
     }
 }
 
-/// What an automation's trigger does, the tasks it looks at first, and when it is next asked (for an
-/// `idle` or a `tasks`, the soonest it may be).
+/// What an automation's trigger does, the tasks it looks at and the program it asks first, and when it
+/// is next asked (for an `idle`, a `tasks` or a `script`, the soonest it may be).
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
     let fewer = trigger.condition.as_ref().map(|c| match c.filter.as_str() {
         "" => format!("fewer than {} task(s) are in its project", c.below),
         filter => format!("fewer than {} task(s) match \"{filter}\"", c.below),
     });
+    let says = trigger.script.as_ref().map(|s| format!("\"{}\" says so", s.program));
     let (when, next) = match trigger.when {
         TriggerWhen::Every { minutes } => (format!("every {minutes} minute(s)"), "next at"),
         TriggerWhen::Idle => ("whenever none of its runs is under way".to_string(), "not before"),
-        TriggerWhen::Tasks => ("whenever".to_string(), "not before"),
+        TriggerWhen::Tasks | TriggerWhen::Script => ("whenever".to_string(), "not before"),
     };
-    let when = match (trigger.when, fewer) {
-        (TriggerWhen::Tasks, Some(fewer)) => format!("{when} {fewer}"),
-        (_, Some(fewer)) => format!("{when} while {fewer}"),
-        (_, None) => when,
+    let first: Vec<String> = fewer.into_iter().chain(says).collect();
+    let when = match (trigger.when, first.join(" and ")) {
+        (_, first) if first.is_empty() => when,
+        (TriggerWhen::Tasks | TriggerWhen::Script, first) => format!("{when} {first}"),
+        (_, first) => format!("{when} while {first}"),
     };
     let task = match &trigger.task {
         TriggerTask::Fixed { title, .. } => format!("\"{title}\""),

@@ -1138,6 +1138,10 @@ datasets! {
         // The role a failed round is filed to, one of this automation's own — set only beside `role`.
         // `RESTRICT`, so a role that goes lets go of it first (`ops::automation`).
         failures_to_role_id: fk_opt("automation_role", "RESTRICT"),
+        // A definition from before automations had roles, kept only to be written out: never launched,
+        // its definition never edited. Set by the upgrade on every automation already there, never by a
+        // write. Like `archived`, not part of a saved version.
+        export_only: bool_col,
         order_key: col(ORDER_KEY),
     }
 

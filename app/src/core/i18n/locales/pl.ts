@@ -1719,6 +1719,7 @@ export const pl: Translation = {
     not_ready_automation: "„{automation}” jeszcze nie można uruchomić: {reasons}",
     not_ready_automation_no_steps: "Nie ma na niej żadnej akcji",
     not_ready_automation_no_entry: "żadne umieszczenie nie jest startem",
+    not_ready_automation_export_only: "to stara definicja, którą można już tylko wyeksportować",
     not_ready_automation_no_failures_to: "nie wybrano, komu zgłaszać nieudany przebieg",
     not_ready_automation_action_draft: "umieszczona akcja „{action}” jest wciąż w tworzeniu",
     not_ready_automation_action_empty: "umieszczona akcja „{action}” nie ma kroku startowego",

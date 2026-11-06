@@ -1719,6 +1719,7 @@ export const uk: Translation = {
     not_ready_automation: "«{automation}» поки запустити не можна: {reasons}",
     not_ready_automation_no_steps: "На ній не розміщено жодної дії",
     not_ready_automation_no_entry: "жодне розміщення не призначено стартом",
+    not_ready_automation_export_only: "це старе визначення, його можна лише експортувати",
     not_ready_automation_no_failures_to: "не вибрано, кому передавати невдалий прохід",
     not_ready_automation_action_draft: "розміщена дія «{action}» ще створюється",
     not_ready_automation_action_empty: "розміщена дія «{action}» не має стартового кроку",

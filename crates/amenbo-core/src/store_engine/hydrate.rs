@@ -549,6 +549,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
             .map(|n| u32::try_from(n).map_err(|_| bad(format!("bad max_concurrent_runs {n}"))))
             .transpose()?,
         failures_to: failures_to(get(r, C.failures_to_kind)?, get(r, C.failures_to_role_id)?)?,
+        export_only: get(r, C.export_only)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

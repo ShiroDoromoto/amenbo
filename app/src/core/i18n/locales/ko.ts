@@ -1689,6 +1689,7 @@ export const ko: Translation = {
     not_ready_automation: "“{automation}”은(는) 아직 시작할 수 없습니다: {reasons}",
     not_ready_automation_no_steps: "액션이 하나도 놓여 있지 않습니다",
     not_ready_automation_no_entry: "시작점인 배치가 정해지지 않았다",
+    not_ready_automation_export_only: "예전 정의라서 내보내기만 할 수 있다",
     not_ready_automation_no_failures_to: "실패한 회차를 등록할 곳이 정해지지 않았다",
     not_ready_automation_action_draft: "배치한 액션 「{action}」이 아직 작성 중이다",
     not_ready_automation_action_empty: "배치한 액션 「{action}」에 시작점인 스텝이 없다",

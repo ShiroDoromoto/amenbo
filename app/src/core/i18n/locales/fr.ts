@@ -1711,6 +1711,7 @@ export const fr: Translation = {
     not_ready_automation: "« {automation} » n’est pas encore prête à être lancée : {reasons}",
     not_ready_automation_no_steps: "Aucune action n’y est placée",
     not_ready_automation_no_entry: "aucun placement n'est le départ",
+    not_ready_automation_export_only: "c'est une ancienne définition, qui ne peut plus qu'être exportée",
     not_ready_automation_no_failures_to: "personne n'est choisi pour recevoir un tour en échec",
     not_ready_automation_action_draft: "l'action « {action} » placée est encore en cours de création",
     not_ready_automation_action_empty: "l'action « {action} » placée n'a pas d'étape de départ",

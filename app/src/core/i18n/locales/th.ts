@@ -1693,6 +1693,7 @@ export const th: Translation = {
     not_ready_automation: "“{automation}” ยังเริ่มไม่ได้: {reasons}",
     not_ready_automation_no_steps: "ยังไม่ได้วางแอ็กชันใดเลย",
     not_ready_automation_no_entry: "ยังไม่มีการวางที่เป็นจุดเริ่ม",
+    not_ready_automation_export_only: "เป็นคำนิยามแบบเก่า จึงทำได้เพียงส่งออก",
     not_ready_automation_no_failures_to: "ยังไม่ได้กำหนดว่าจะแจ้งรอบที่ล้มเหลวไปที่ใคร",
     not_ready_automation_action_draft: "แอ็กชัน “{action}” ที่วางไว้ยังกำลังสร้างอยู่",
     not_ready_automation_action_empty: "แอ็กชัน “{action}” ที่วางไว้ไม่มีขั้นตอนที่เป็นจุดเริ่ม",

@@ -16,7 +16,7 @@
 //! (`AMB-D-961`), and a run copies those ids at launch. So a built-in placed on a picture is written out
 //! as the rows any step has — from the definition, the first time its action is asked for ([`action`])
 //! — and carries its key so that nothing edits them afterwards
-//! ([`super::automation`]'s `not_built_in`). The library's built-in action is written once per store
+//! ([`super::automation`]'s `rewritable`). The library's built-in action is written once per store
 //! and found again by its key.
 //!
 //! **Nobody is chosen to carry one out.** A built-in step names no agent, so the launch check asks no

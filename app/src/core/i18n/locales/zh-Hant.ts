@@ -1694,6 +1694,7 @@ export const zhHant: Translation = {
     not_ready_automation: "「{automation}」還不能啟動：{reasons}",
     not_ready_automation_no_steps: "上面沒有放置任何動作",
     not_ready_automation_no_entry: "尚未決定起點的放置",
+    not_ready_automation_export_only: "這是舊的定義，只能匯出",
     not_ready_automation_no_failures_to: "尚未決定失敗的一輪提交給誰",
     not_ready_automation_action_draft: "所放置的動作「{action}」仍在建立中",
     not_ready_automation_action_empty: "所放置的動作「{action}」沒有起點步驟",

@@ -1693,6 +1693,7 @@ export const tr: Translation = {
     not_ready_automation: "“{automation}” henüz başlatılamaz: {reasons}",
     not_ready_automation_no_steps: "Üzerine hiçbir eylem yerleştirilmemiş",
     not_ready_automation_no_entry: "hiçbir yerleşim başlangıç değil",
+    not_ready_automation_export_only: "eski bir tanım olduğu için yalnızca dışa aktarılabilir",
     not_ready_automation_no_failures_to: "başarısız bir turun kime bildirileceği seçilmedi",
     not_ready_automation_action_draft: "yerleştirilen “{action}” eylemi hâlâ oluşturuluyor",
     not_ready_automation_action_empty: "yerleştirilen “{action}” eyleminin başlangıç adımı yok",

@@ -1364,7 +1364,7 @@ pub struct NewTrigger {
 /// at launch as any other is, and one refused there files nothing ([`automation_run::fire`]).
 ///
 /// Refused on an automation kept for export only, which is never launched. A task with no title is
-/// refused, as is a wait of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. Taking a trigger away
+/// refused, as is an `every` of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. Taking a trigger away
 /// that is not there writes nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
@@ -1382,11 +1382,13 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     after.trigger = match trigger {
         None => None,
         Some(NewTrigger { when, task }) => {
-            let TriggerWhen::Every { minutes } = when;
-            if minutes < MIN_TRIGGER_EVERY_MINUTES {
-                return Err(Error::invalid(format!(
-                    "a trigger waits at least {MIN_TRIGGER_EVERY_MINUTES} minute(s) between tasks, not {minutes}"
-                )));
+            match when {
+                TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
+                    return Err(Error::invalid(format!(
+                        "a trigger waits at least {MIN_TRIGGER_EVERY_MINUTES} minute(s) between tasks, not {minutes}"
+                    )));
+                }
+                TriggerWhen::Every { .. } | TriggerWhen::Idle => {}
             }
             let task = match task {
                 TriggerTask::Fixed { title, notes } => {
@@ -4192,9 +4194,9 @@ mod tests {
         });
     }
 
-    /// **A trigger is written, counted from the write, and taken away.** A wait under a minute, a task
-    /// with no title and an automation kept for export only are refused; taking away one that is not
-    /// there writes nothing.
+    /// **A trigger is written, counted from the write, and taken away** — an `every` or an `idle`. A wait
+    /// under a minute, a task with no title and an automation kept for export only are refused; taking
+    /// away one that is not there writes nothing.
     #[test]
     fn a_trigger_is_written_and_taken_away() {
         let hourly = |title: &str| NewTrigger {
@@ -4221,6 +4223,12 @@ mod tests {
                 assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
             }
             assert_eq!(live_automation(tx, automation.id).expect("read").trigger.map(|t| t.task), Some(trigger.task));
+
+            let idle = NewTrigger { when: TriggerWhen::Idle, ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(idle)).expect("an idle one");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(read_back.when, TriggerWhen::Idle, "kept with no minutes");
+            assert_eq!(set.trigger, Some(read_back));
 
             let off = trigger_set(tx, automation.id, None).expect("take it away");
             assert_eq!(off.trigger, None);

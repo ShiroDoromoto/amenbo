@@ -1602,6 +1602,52 @@ mod tests {
         });
     }
 
+    /// **An idle trigger files only once none of the automation's runs is under way** — even with room
+    /// for more beside it — and a minute after the task it last filed at the soonest. A time it says no
+    /// leaves `next_at` where it was.
+    #[test]
+    fn an_idle_trigger_files_once_no_run_is_under_way() {
+        use crate::model::{TriggerTask, TriggerWhen};
+        use crate::ops::automation_run::{fire, triggers_due};
+        use crate::ops::automation_stop::{stop, Ending};
+        use crate::time::Timestamp;
+        with_tx(|tx| {
+            let (automation, make, _) = entry(tx);
+            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
+            let trigger = automation::NewTrigger {
+                when: TriggerWhen::Idle,
+                task: TriggerTask::Fixed { title: "手が空いたら見る".into(), notes: String::new() },
+            };
+            let written = Timestamp::now();
+            automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
+            let next_at = |tx: &WriteTx<'_>| {
+                read::automation(tx.conn(), automation.id).expect("read").expect("there").trigger.expect("kept").next_at
+            };
+            let due = next_at(tx);
+            assert!(due > written, "not on the spot, but counted from the write");
+            let claude = ["claude".to_string()];
+            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let early = Timestamp(due.0 - chrono::Duration::seconds(1));
+            assert!(fire(tx, automation.id, &by, early).expect("fire").is_none(), "not before it is due");
+
+            assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![automation.id], "idle and due");
+            let run = fire(tx, automation.id, &by, due).expect("fire").expect("a run");
+            assert_eq!(filed_first(tx, &run, &make).title, "手が空いたら見る");
+            let then = TriggerWhen::Idle.after(due);
+            assert_eq!(next_at(tx), then, "a minute on from when it filed");
+
+            // One run under way, with room for another: an idle trigger still waits.
+            let found = triggers_due(tx.conn(), then).expect("ask");
+            assert!(found.due.is_empty() && found.next_at.is_none(), "not due while a run is going: {found:?}");
+            assert!(fire(tx, automation.id, &by, then).expect("fire").is_none(), "nothing filed beside it");
+            assert_eq!(next_at(tx), then, "a time it decides no leaves nothing");
+
+            stop(tx, run.id, Ending::Canceled).expect("end it");
+            assert_eq!(triggers_due(tx.conn(), then).expect("ask").due, vec![automation.id], "idle again");
+            assert!(fire(tx, automation.id, &by, then).expect("fire").is_some(), "so it files the next one");
+        });
+    }
+
     /// **A trigger whose run the launch refuses files nothing**: the refusal comes back, and the time it
     /// is next asked stays where it was.
     #[test]

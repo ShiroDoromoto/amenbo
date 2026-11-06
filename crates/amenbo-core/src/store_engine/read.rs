@@ -4008,6 +4008,8 @@ pub struct TaskCardRow {
     pub completed_at: Option<String>,
     pub assignee: Option<CardActor>,
     pub created_by: Option<CardActor>,
+    /// The role this task is worked under, by its id, or `None` for none.
+    pub role_id: Option<i64>,
     /// Where the task sits; absent when it is unplaced (inbox).
     pub placement: Option<PlacementRow>,
     /// `(id, title)` of live blockers that have not ended, in dependency-`id` order.
@@ -4041,6 +4043,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
     let (due_at, start_at) = (sel.col(T.due_at), sel.col(T.start_at));
     let (assignee, creator) = (sel.col(T.assignee_kind), sel.col(T.created_by_kind));
     let (created_at, updated_at) = (sel.col(T.created_at), sel.col(T.updated_at));
+    let role_id = sel.col(T.role_id);
     let mut sql = Sql::from(&sel, T.table);
     sql.push_where(Some(&Pred::eq(T.id, task_id)));
     let row = conn
@@ -4061,6 +4064,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),
                 created_by: created_by_kind
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),
+                role_id: role_id.get(r)?,
                 created_at: created_at.get(r)?,
                 updated_at: updated_at.get(r)?,
                 placement: None,

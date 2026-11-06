@@ -282,6 +282,8 @@ export const zhHans: Translation = {
     "detail.notFound": "找不到该任务",
     "detail.unassign": "取消分配", "detail.assignAi": "委派给 AI",
     "detail.assignee": "负责人", "detail.unassigned": "未分配",
+    "detail.role": "角色", "detail.roleNone": "无角色（在会话中处理）", "detail.rolePick": "请选择…",
+    "detail.roleRequired": "请选择角色。若不交给自动化的轮次处理，请选择“无角色”。",
     "detail.project": "项目", "detail.none": "无",
     "detail.blockedBy": "等待", "detail.blockedByHint": "受阻（依赖）",
     "detail.notStarted": "开始于",

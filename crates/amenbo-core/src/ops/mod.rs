@@ -215,6 +215,15 @@ pub(crate) mod test_support {
         crate::ops::automation_step::open(tx, run_id, run_def_id, startable, outside)
     }
 
+    /// **Let an automation have as many runs going at once as it may**, for a test that stands several
+    /// side by side. An automation is born with room for one
+    /// ([`crate::model::DEFAULT_MAX_CONCURRENT_RUNS`]).
+    pub(crate) fn room_for_runs(tx: &WriteTx<'_>, automation_id: i64) {
+        let cap = crate::model::MAX_CONCURRENT_RUNS_LIMIT;
+        crate::ops::automation::update(tx, automation_id, None, None, None, Some(cap), None)
+            .expect("room for runs side by side");
+    }
+
     /// An empty in-memory engine (`let tx = &e.write().unwrap();` opens a write transaction).
     pub(crate) fn new_engine() -> StoreEngine {
         StoreEngine::open_in_memory().expect("in-memory engine")

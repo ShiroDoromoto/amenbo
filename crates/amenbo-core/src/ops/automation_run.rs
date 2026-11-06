@@ -1496,10 +1496,10 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 /// - **The workspace being closed**, last on purpose. What the check found is wrong with the automation
 ///   and stays wrong after a window is opened, so saying "open a window" first would send somebody to do
 ///   that and then tell them the automation was never going to run.
-/// - **Its most runs under way.** Where the automation sets `max_concurrent_runs`, a launch is refused
-///   once that many of its runs are `running` or `paused` — a paused one can be picked up again, so it
-///   holds a place as much as a running one. It is counted in the same transaction the run is written in.
-///   Last, since it is the only one that goes away by waiting.
+/// - **Its most runs under way.** A launch is refused once `max_concurrent_runs` of the automation's
+///   runs are `running` or `paused` — one, unless somebody raised it. A paused one can be picked up
+///   again, so it holds a place as much as a running one. It is counted in the same transaction the run
+///   is written in. Last, since it is the only one that goes away by waiting.
 ///
 /// The run is born `running`, so a launch never waits (`AMB-D-947`): it is either refused or under
 /// way. `started_at` is the moment of the launch itself.
@@ -1679,7 +1679,8 @@ fn launch_asking(
             .coded(ErrorCode::InvalidAutomationWorkspaceClosed),
         ));
     }
-    if let (true, Some(max)) = (limited, automation.max_concurrent_runs) {
+    if limited {
+        let max = automation.max_concurrent_runs;
         let mut runs = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
         if runs.len() >= max as usize {
             runs.sort_unstable();
@@ -3977,6 +3978,7 @@ mod tests {
     fn a_launch_reads_the_saved_definition_and_a_test_run_the_draft() {
         with_tx(|tx| {
             let (automation, action, placement) = launchable(tx);
+            crate::ops::test_support::room_for_runs(tx, automation.id);
             let step = only_step(tx, &action);
             let startable = vec!["claude".to_string(), "codex".to_string()];
             let copied = |tx: &WriteTx<'_>, run: &AutomationRun| {
@@ -4399,14 +4401,13 @@ mod tests {
         });
     }
 
-    /// **A second launch does not wait for the first** (`AMB-D-947`). The automation sets no
-    /// `max_concurrent_runs`, so both are `running` from the moment they are made and both carry a
-    /// `started_at`.
+    /// **A second launch does not wait for the first** (`AMB-D-947`). With room for two, both are
+    /// `running` from the moment they are made and both carry a `started_at`.
     #[test]
     fn a_second_launch_starts_beside_the_first_rather_than_behind_it() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
-            assert_eq!(automation.max_concurrent_runs, None, "an automation is born without a most");
+            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
             let startable = claude();
             let first = launch(tx, automation.id, &here(&startable)).expect("launch");
             let second = launch(tx, automation.id, &here(&startable)).expect("launch");
@@ -4430,7 +4431,7 @@ mod tests {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let automation =
-                automation::update(tx, automation.id, None, None, None, Some(Some(2)), None).expect("set a most");
+                automation::update(tx, automation.id, None, None, None, Some(2), None).expect("set a most");
             let startable = claude();
             let first = launch(tx, automation.id, &here(&startable)).expect("the first is under the most");
             let second = launch(tx, automation.id, &here(&startable)).expect("the second reaches it");

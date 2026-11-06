@@ -465,12 +465,10 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             notes,
             archived,
             max_concurrent_runs,
-            no_max_concurrent_runs,
             failures_to,
             no_failures_to,
         } => {
             let notes = body_arg_opt(notes)?;
-            let max_concurrent_runs = if no_max_concurrent_runs { Some(None) } else { max_concurrent_runs.map(Some) };
             let failures_to = match (no_failures_to, failures_to.as_deref()) {
                 (true, _) => Some(None),
                 (false, Some(to)) => Some(Some(failures_to_arg(to)?)),
@@ -1447,10 +1445,7 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
         None => "starts nowhere".to_string(),
     };
     let archived = if a.archived { "  archived" } else { "" };
-    let at_most = match a.max_concurrent_runs {
-        Some(n) => format!("  at most {n} run(s) at once"),
-        None => String::new(),
-    };
+    let at_most = format!("  at most {} run(s) at once", a.max_concurrent_runs);
     human(
         flags,
         format!(

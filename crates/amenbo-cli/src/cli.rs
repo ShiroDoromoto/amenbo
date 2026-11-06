@@ -1889,12 +1889,10 @@ pub enum AutomationCmd {
         /// whether it is archived (`--archived true|false`)
         #[arg(long)]
         archived: Option<bool>,
-        /// the most runs it may have going at once (1 or more); a launch past it is refused
-        #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
+        /// the most runs it may have going at once (1 to 4; 1 until changed); a launch past it is
+        /// refused
+        #[arg(long, value_parser = clap::value_parser!(u32).range(1..=i64::from(amenbo_core::model::MAX_CONCURRENT_RUNS_LIMIT)))]
         max_concurrent_runs: Option<u32>,
-        /// lift the most runs it may have going at once
-        #[arg(long, conflicts_with = "max_concurrent_runs")]
-        no_max_concurrent_runs: bool,
         /// where a failed round is filed: `human` for a person, or the id of one of this automation's
         /// roles
         #[arg(long, value_name = "human|ROLE_ID")]

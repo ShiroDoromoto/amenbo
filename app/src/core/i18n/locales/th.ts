@@ -1349,7 +1349,6 @@ export const th: Translation = {
     "auto.about.copy": "คัดลอก",
     "auto.about.copied": "คัดลอกแล้ว",
     "auto.about.notesHint": "ข้อความหนึ่งบรรทัดที่แสดงในรายการ",
-    "auto.about.limitRuns": "จำกัดจำนวนการรันพร้อมกัน",
     "auto.about.mostRuns": "สูงสุดพร้อมกัน",
     "auto.about.archive": "เก็บเข้าคลัง",
     "auto.about.remove": "ลบออโตเมชันนี้",

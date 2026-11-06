@@ -1345,7 +1345,6 @@ export const ko: Translation = {
     "auto.about.copy": "복사",
     "auto.about.copied": "복사했습니다",
     "auto.about.notesHint": "목록에 표시되는 한 줄",
-    "auto.about.limitRuns": "동시 실행 수 제한",
     "auto.about.mostRuns": "동시 실행 최대 수",
     "auto.about.archive": "보관함",
     "auto.about.remove": "이 오토메이션 삭제",

@@ -286,6 +286,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project, false);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let task = for_ai(tx, project, "外のもの");
             let (a, take) = handed_back(tx, &p);
 

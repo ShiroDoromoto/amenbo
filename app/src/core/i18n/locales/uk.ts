@@ -1365,7 +1365,6 @@ export const uk: Translation = {
     "auto.about.copy": "Копіювати",
     "auto.about.copied": "Скопійовано",
     "auto.about.notesHint": "Один рядок, видимий у списку",
-    "auto.about.limitRuns": "Обмежити одночасні запуски",
     "auto.about.mostRuns": "Не більше одночасно",
     "auto.about.archive": "В архіві",
     "auto.about.remove": "Вилучити цю автоматизацію",

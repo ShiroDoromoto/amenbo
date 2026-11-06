@@ -557,16 +557,18 @@ fn the_listing_counts_the_placements_and_keeps_an_archived_one() {
     assert_eq!(after["automations"][0]["automation"]["archived"], serde_json::json!(true));
 }
 
-/// The most runs an automation may have going at once is set and lifted on `update`, and an update
-/// that names neither leaves it as it was. Zero is no most at all, so it is refused rather than read as
-/// "none may run"; setting and lifting it in one call is refused for saying two things.
+/// The most runs an automation may have going at once is 1 until `update` sets it, and an update that
+/// leaves it out keeps it. It runs from 1 to the cap: zero and anything past the cap are refused, and
+/// there is no lifting it.
 #[test]
-fn an_update_sets_and_lifts_the_most_runs_at_once() {
+fn an_update_sets_the_most_runs_at_once_between_one_and_the_cap() {
     let cli = Cli::new();
     let (_, a, _, _) = an_automation(&cli);
 
     let shown = cli.json(&["automation", "show", &a, "--json"]);
-    assert_eq!(shown["automation"]["max_concurrent_runs"], serde_json::Value::Null, "none by default: {shown}");
+    assert_eq!(shown["automation"]["max_concurrent_runs"], serde_json::json!(1), "one by default: {shown}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("at most 1 run(s) at once"), "{text}");
 
     let set = cli.json(&["automation", "update", &a, "--max-concurrent-runs", "2", "--json"]);
     assert_eq!(set["automation"]["max_concurrent_runs"], serde_json::json!(2), "{set}");
@@ -576,17 +578,18 @@ fn an_update_sets_and_lifts_the_most_runs_at_once() {
     let kept = cli.json(&["automation", "update", &a, "--name", "Renamed", "--json"]);
     assert_eq!(kept["automation"]["max_concurrent_runs"], serde_json::json!(2), "{kept}");
 
-    let lifted = cli.json(&["automation", "update", &a, "--no-max-concurrent-runs", "--json"]);
-    assert_eq!(lifted["automation"]["max_concurrent_runs"], serde_json::Value::Null, "{lifted}");
-    let (text, _) = cli.run(&["automation", "show", &a]);
-    assert!(!text.contains("at once"), "{text}");
+    let cap = amenbo_core::model::MAX_CONCURRENT_RUNS_LIMIT;
+    let capped = cli.json(&["automation", "update", &a, "--max-concurrent-runs", &cap.to_string(), "--json"]);
+    assert_eq!(capped["automation"]["max_concurrent_runs"], serde_json::json!(cap), "{capped}");
 
     let (_, code) = cli.run_err(&["automation", "update", &a, "--max-concurrent-runs", "0"]);
     assert_ne!(code, 0, "zero is refused");
-    let (_, code) = cli.run_err(&["automation", "update", &a, "--max-concurrent-runs", "2", "--no-max-concurrent-runs"]);
-    assert_ne!(code, 0, "setting and lifting at once is refused");
+    let (_, code) = cli.run_err(&["automation", "update", &a, "--max-concurrent-runs", &(cap + 1).to_string()]);
+    assert_ne!(code, 0, "past the cap is refused");
+    let (_, code) = cli.run_err(&["automation", "update", &a, "--no-max-concurrent-runs"]);
+    assert_ne!(code, 0, "there is no lifting it");
     let after = cli.json(&["automation", "show", &a, "--json"]);
-    assert_eq!(after["automation"]["max_concurrent_runs"], serde_json::Value::Null, "a refused update changes nothing: {after}");
+    assert_eq!(after["automation"]["max_concurrent_runs"], serde_json::json!(cap), "a refused update changes nothing: {after}");
 }
 
 /// The library answers as the one list an automation could place, and `--global` narrows it to the
@@ -1126,6 +1129,7 @@ fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _) = a_saved_launchable(&cli);
+    cli.json(&["automation", "update", &a, "--max-concurrent-runs", "2", "--json"]);
     let own = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     let other = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     // No watch opens a step here, so the run's first one — the built-in that takes a task — is opened
@@ -1262,6 +1266,7 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
     );
     cli.json(&["automation", "action-update", &action, "--one-at-a-time", "on", "--json"]);
     saved_with_its_action(&cli, &a, &placement);
+    cli.json(&["automation", "update", &a, "--max-concurrent-runs", "2", "--json"]);
     let first = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     let project = cli.json(&["automation", "run-show", &first, "--json"])["run"]["project_id"].to_string();
     let t = id_str(&cli.json(&["task", "add", "--title", "two", "--project", &project, "--json"])["task"]["id"]);

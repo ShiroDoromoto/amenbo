@@ -1744,6 +1744,20 @@ pub const DEFAULT_SCRIPT_TIMEOUT_MINUTES: i64 = 30;
 /// The longest a script step's timeout may be written as, in minutes: six hours.
 pub const MAX_SCRIPT_TIMEOUT_MINUTES: i64 = 360;
 
+/// How many runs of an automation may be going at once when nobody has said otherwise: one.
+pub const DEFAULT_MAX_CONCURRENT_RUNS: u32 = 1;
+
+/// **The most an automation's `max_concurrent_runs` may be written as.** Every run going at once holds
+/// an agent's terminal open in the app, and with no cap the terminals pile up until the app stops
+/// answering. The number is a placeholder, not a measurement: nobody has yet measured how many
+/// terminals the app keeps answering with. The store's `CHECK` on `automation.max_concurrent_runs`
+/// spells the same number (`store_engine::schema`).
+pub const MAX_CONCURRENT_RUNS_LIMIT: u32 = 4;
+
+fn default_max_concurrent_runs() -> u32 {
+    DEFAULT_MAX_CONCURRENT_RUNS
+}
+
 /// **The action itself, standing on its own picture** — what an [`AutomationWire`] names at the end
 /// that crosses the action's edge. A wire out of it hands an input the action declares to a step
 /// inside; a wire into it fills an output declared on the way out the run is leaving by.
@@ -1819,7 +1833,7 @@ pub struct AutomationAction {
 /// `entry_placement_id` is where a run starts; from it the edges are walked, and the place a
 /// placement sits in the picture and the number it is drawn with both fall out of that walk rather
 /// than out of `order_key`, which records only the order things were added in.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Automation {
     pub id: i64,
     pub project_id: i64,
@@ -1831,10 +1845,11 @@ pub struct Automation {
     pub entry_placement_id: Option<i64>,
     #[serde(default)]
     pub archived: bool,
-    /// How many runs of this automation may be going at once, at least 1; `None` for no limit. Like
-    /// `archived`, it is the automation's, not part of a saved version.
-    #[serde(default)]
-    pub max_concurrent_runs: Option<u32>,
+    /// How many runs of this automation may be going at once: from 1 up to
+    /// [`MAX_CONCURRENT_RUNS_LIMIT`], [`DEFAULT_MAX_CONCURRENT_RUNS`] until somebody changes it. There
+    /// is no "no limit". Like `archived`, it is the automation's, not part of a saved version.
+    #[serde(default = "default_max_concurrent_runs")]
+    pub max_concurrent_runs: u32,
     /// **Where a round that fails is filed** — a person, or one of this automation's own roles. `None`
     /// while nobody has said; launching without one is refused at the launch check, as launching with
     /// no entry is. Like `max_concurrent_runs`, it is the automation's, not part of a saved version.

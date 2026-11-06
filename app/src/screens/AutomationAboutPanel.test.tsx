@@ -2,7 +2,7 @@
 // The line the "Edit" panel hands over to the terminal is one a reader can type as it stands: the CLI
 // this build installs, and the facet the CLI refuses to go without. The seam to core (the CLI's name)
 // and the writes are stubbed, so what runs for real is the line the panel draws and copies — and the
-// patch the most-runs-at-once switch and its number hand to the write.
+// patch the most-runs-at-once number hands to the write.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,6 +24,7 @@ vi.mock("../core/automations", () => ({
     return Promise.resolve();
   },
   deleteAutomation: () => Promise.resolve(),
+  MAX_CONCURRENT_RUNS: 4,
 }));
 
 import { AutomationAboutPanel } from "./AutomationAboutPanel";
@@ -42,6 +43,7 @@ const automation: AutomationDetailDto = {
   name: "one at a time",
   notes: "",
   archived: false,
+  maxConcurrentRuns: 1,
   placements: [],
   edges: [],
   wires: [],
@@ -98,12 +100,7 @@ describe("the line the panel hands to the terminal", () => {
 });
 
 describe("the most runs at once", () => {
-  const row = () =>
-    Array.from(container.querySelectorAll(".switchrow")).find(
-      (r) => (r.textContent ?? "") === t("auto.about.limitRuns"),
-    )!;
-  const toggle = () => row().querySelector<HTMLInputElement>('input[role="switch"]')!;
-  const field = () => container.querySelector<HTMLInputElement>('input[type="number"]');
+  const field = () => container.querySelector<HTMLInputElement>('input[type="number"]')!;
 
   const type = (input: HTMLInputElement, value: string) => {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
@@ -112,34 +109,26 @@ describe("the most runs at once", () => {
   };
   const leave = (input: HTMLInputElement) => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
 
-  it("draws no number while nothing limits them, and turning it on writes 1", async () => {
+  it("is always drawn, with the stored number and the cap", async () => {
     await render();
-    expect(toggle().checked).toBe(false);
-    expect(field()).toBeNull();
-    await act(async () => { toggle().click(); });
-    expect(hoisted.edits).toEqual([{ maxConcurrentRuns: 1 }]);
-  });
-
-  it("turning it off lifts the limit", async () => {
-    await render({ ...automation, maxConcurrentRuns: 2 });
-    expect(toggle().checked).toBe(true);
-    expect(field()!.value).toBe("2");
-    await act(async () => { toggle().click(); });
-    expect(hoisted.edits).toEqual([{ maxConcurrentRuns: null }]);
+    expect(field().value).toBe("1");
+    expect(field().max).toBe("4");
   });
 
   it("writes the number when the caret leaves it", async () => {
     await render({ ...automation, maxConcurrentRuns: 2 });
-    await act(async () => { type(field()!, "3"); });
-    await act(async () => { leave(field()!); });
+    await act(async () => { type(field(), "3"); });
+    await act(async () => { leave(field()); });
     expect(hoisted.edits).toEqual([{ maxConcurrentRuns: 3 }]);
   });
 
-  it("does not write a number under 1, and puts the stored one back", async () => {
+  it("does not write a number under 1 or past the cap, and puts the stored one back", async () => {
     await render({ ...automation, maxConcurrentRuns: 2 });
-    await act(async () => { type(field()!, "0"); });
-    await act(async () => { leave(field()!); });
-    expect(hoisted.edits).toEqual([]);
-    expect(field()!.value).toBe("2");
+    for (const wrong of ["0", "5"]) {
+      await act(async () => { type(field(), wrong); });
+      await act(async () => { leave(field()); });
+      expect(hoisted.edits).toEqual([]);
+      expect(field().value).toBe("2");
+    }
   });
 });

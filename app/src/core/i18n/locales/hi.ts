@@ -1348,7 +1348,6 @@ export const hi: Translation = {
     "auto.about.copy": "कॉपी करें",
     "auto.about.copied": "कॉपी हो गया",
     "auto.about.notesHint": "सूची में दिखने वाली एक पंक्ति",
-    "auto.about.limitRuns": "एक साथ चलने वाले रन सीमित करें",
     "auto.about.mostRuns": "एक साथ अधिकतम",
     "auto.about.archive": "संग्रहित",
     "auto.about.remove": "यह ऑटोमेशन हटाएँ",

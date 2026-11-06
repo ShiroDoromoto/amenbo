@@ -1350,7 +1350,6 @@ export const zhHant: Translation = {
     "auto.about.copy": "複製",
     "auto.about.copied": "已複製",
     "auto.about.notesHint": "顯示在清單中的一句話",
-    "auto.about.limitRuns": "限制同時執行的數量",
     "auto.about.mostRuns": "同時執行上限",
     "auto.about.archive": "已封存",
     "auto.about.remove": "刪除此自動化",

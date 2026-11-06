@@ -1999,6 +1999,7 @@ mod tests {
     fn a_run_waits_outside_an_action_another_run_is_in_and_writes_nothing() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let alice = at_the_second(tx, &p);
             let bob = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);
@@ -2026,6 +2027,7 @@ mod tests {
     fn an_action_that_takes_any_number_of_runs_keeps_nobody_out() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let alice = at_the_second(tx, &p);
             let bob = at_the_second(tx, &p);
 
@@ -2038,6 +2040,7 @@ mod tests {
     fn the_action_is_free_once_the_run_inside_leaves_it_by_its_way_out() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let alice = a_run(tx, &p.automation);
             let bob = a_run(tx, &p.automation);
             one_at_a_time(tx, &p.first);
@@ -2055,6 +2058,7 @@ mod tests {
     fn the_action_is_free_once_the_run_inside_ends() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let alice = at_the_second(tx, &p);
             let bob = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);
@@ -2072,6 +2076,7 @@ mod tests {
     fn runs_kept_out_go_in_in_the_order_they_came() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let alice = at_the_second(tx, &p);
             let bob = at_the_second(tx, &p);
             let carol = at_the_second(tx, &p);
@@ -2095,6 +2100,7 @@ mod tests {
     fn a_run_kept_out_pauses_at_once_and_comes_back_to_its_place() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let alice = at_the_second(tx, &p);
             let bob = at_the_second(tx, &p);
             let carol = at_the_second(tx, &p);
@@ -2130,6 +2136,7 @@ mod tests {
     fn a_run_asked_to_pause_while_kept_out_is_paused_on_its_next_look() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let alice = at_the_second(tx, &p);
             let bob = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);

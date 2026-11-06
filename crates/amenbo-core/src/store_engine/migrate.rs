@@ -1291,7 +1291,47 @@ pub const STEPS: &[Step] = &[
         // kept to be written out and rebuilt by hand, and is never launched or edited.
         apply: Apply::Custom(keep_the_old_automations_for_export),
     },
+    Step {
+        to: 106,
+        name: "make automation.max_concurrent_runs required, 1 by default and at most 4",
+        // Every run going at once holds an agent's terminal open in the app, and with no cap they pile
+        // up until the app stops answering.
+        //
+        // **Seeded.** An automation with no limit is given the default of one, and one set past the cap
+        // is brought down to it. One set within it keeps its number. The cap of 4 is a placeholder, not
+        // a measurement (`model::MAX_CONCURRENT_RUNS_LIMIT`).
+        apply: Apply::Custom(cap_the_runs_side_by_side),
+    },
 ];
+
+/// v106: `automation.max_concurrent_runs` becomes `NOT NULL DEFAULT 1`, from 1 up to 4 — `NULL` (no
+/// limit) becomes `1`, and a number past 4 becomes 4.
+///
+/// **Rewritten only where the column still admits `NULL`.** A store whose automation table was created
+/// in the live shape already has it right. SQLite cannot change a column's constraint in place, and the
+/// table is not rebuilt (`automation_run` and `automation_placement` reference it with `RESTRICT`), so
+/// the numbers are kept in a column of their own while the column is dropped and added again.
+fn cap_the_runs_side_by_side(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let required: bool = tx.query_row(
+        "SELECT \"notnull\" FROM pragma_table_info('automation') WHERE name = 'max_concurrent_runs'",
+        [],
+        |r| r.get(0),
+    )?;
+    if required {
+        return Ok(());
+    }
+    tx.execute_batch(
+        "ALTER TABLE automation ADD COLUMN max_concurrent_runs_kept BIGINT;
+         UPDATE automation SET max_concurrent_runs_kept = MIN(COALESCE(max_concurrent_runs, 1), 4);
+         ALTER TABLE automation DROP COLUMN max_concurrent_runs;
+         ALTER TABLE automation ADD COLUMN max_concurrent_runs BIGINT NOT NULL DEFAULT 1 \
+             CHECK(max_concurrent_runs >= 1 AND max_concurrent_runs <= 4);
+         UPDATE automation SET max_concurrent_runs = max_concurrent_runs_kept;
+         ALTER TABLE automation DROP COLUMN max_concurrent_runs_kept;",
+    )?;
+    Ok(())
+}
 
 /// v105: `automation.export_only`, set on every automation the store already holds.
 ///
@@ -10917,9 +10957,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v98: v106 gives every automation with no limit the default.
+        run(&engine, &dir, steps_through(98), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         let mut stmt =
             engine.conn().prepare("SELECT max_concurrent_runs FROM automation ORDER BY id").unwrap();
         let limits: Vec<Option<i64>> =
@@ -11164,6 +11204,51 @@ mod tests {
         assert!(!marked(2), "one added after is not");
         let refused = engine.conn().execute("UPDATE automation SET export_only = 2 WHERE id = 1", []);
         assert!(refused.is_err(), "only 0 or 1");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v106: an automation with no limit is given one, one set past the cap is brought down to it, and
+    /// one within it keeps its number. The column then admits only 1 to 4, and a row added after is 1.
+    #[test]
+    fn the_runs_side_by_side_are_capped() {
+        let dir = scratch("max-concurrent-runs-capped");
+        let engine = store_at(&dir, 105);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, max_concurrent_runs) VALUES
+                     (1, 1, 'none', NULL), (2, 1, 'two', 2), (3, 1, 'many', 9);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let limit = |id: i64| -> i64 {
+            engine
+                .conn()
+                .query_row("SELECT max_concurrent_runs FROM automation WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!((limit(1), limit(2), limit(3)), (1, 2, 4));
+        let kept: i64 = engine
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('automation') WHERE name = 'max_concurrent_runs_kept'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(kept, 0, "the column the numbers were kept in is gone");
+        engine.conn().execute("INSERT INTO automation (id, project_id, name) VALUES (4, 1, 'new')", []).unwrap();
+        assert_eq!(limit(4), 1, "one added after is 1");
+        for wrong in ["NULL", "0", "5"] {
+            let refused =
+                engine.conn().execute(&format!("UPDATE automation SET max_concurrent_runs = {wrong} WHERE id = 1"), []);
+            assert!(refused.is_err(), "{wrong} is refused");
+        }
+        engine.conn().execute("UPDATE automation SET max_concurrent_runs = 4 WHERE id = 1", []).unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -1348,7 +1348,6 @@ export const tr: Translation = {
     "auto.about.copy": "Kopyala",
     "auto.about.copied": "Kopyalandı",
     "auto.about.notesHint": "Listede görünen tek satır",
-    "auto.about.limitRuns": "Aynı anda çalışmaları sınırla",
     "auto.about.mostRuns": "Aynı anda en fazla",
     "auto.about.archive": "Arşivlenmiş",
     "auto.about.remove": "Bu otomasyonu sil",

@@ -251,6 +251,7 @@ mod tests {
     fn walk(tx: &WriteTx<'_>, automation: &Automation) -> (AutomationRun, i64, Next) {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -404,6 +405,7 @@ mod tests {
             let task = for_ai(tx, project);
             let claude = ["claude".to_string()];
             let by = Launcher {
+                default_agent: None,
                 startable: Some(&claude),
                 models: nothing_asked(),
                 workspace_open: Some(true),

@@ -267,6 +267,7 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
 
     let startable = ["claude".to_string()];
     let by = Launcher {
+        default_agent: None,
         startable: Some(&startable),
         // Nobody was asked which models are here, which is what every caller outside the app answers
         // — and it leaves the model check unmade rather than made and failed (`AMB-D-792`).
@@ -314,6 +315,7 @@ fn a_test_run_moves_no_version_and_takes_no_task() {
 
     let startable = ["claude".to_string()];
     let by = Launcher {
+        default_agent: None,
         startable: Some(&startable),
         models: amenbo_core::ops::automation_run::nothing_asked(),
         workspace_open: None,

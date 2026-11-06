@@ -1151,9 +1151,15 @@ datasets! {
         // `archived`, none of it is part of a saved version.
         //
         // When to file one: `every` is every `trigger_every_minutes` minutes; `idle` is whenever the
-        // automation has no run under way, and leaves `trigger_every_minutes` NULL.
-        trigger_when_kind: enum_opt("every", "idle"),
+        // automation has no run under way; `tasks` is whenever the condition below holds. The last two
+        // leave `trigger_every_minutes` NULL.
+        trigger_when_kind: enum_opt("every", "idle", "tasks"),
         trigger_every_minutes: col(INT_OPT),
+        // The tasks it looks at first, on top of the when: it files one only while fewer than
+        // `trigger_condition_below` tasks of the automation's project match `trigger_condition_filter`
+        // (what `task list --filter` takes). Both NULL is no condition; a `tasks` always has one.
+        trigger_condition_filter: col(OPT),
+        trigger_condition_below: col(INT_OPT),
         // What the task says: `fixed` is the title and notes written here.
         trigger_task_kind: enum_opt("fixed"),
         trigger_task_title: col(OPT),
@@ -1258,10 +1264,11 @@ datasets! {
     // automation. It is `RESTRICT`, as the automation's own entry is, so taking a placement off drops
     // the reference first. NULL while it is still being built.
     //
-    // `agent` and `model` are defaults only (`AMB-D-960`): the choice made for a step where its action
-    // is placed (`automation_placement_step`) stays. `model` is named only beside an agent. `icon` is
-    // the name the GUI draws it by, NULL for none chosen. `order_key` is the order the roles are defined
-    // in. No name is held unique: a role is pointed at by its id.
+    // `agent` and `model` are defaults only: the choice made for a step where its action is placed
+    // (`automation_placement_step`) comes first, then this, then Amenbo's own default agent. `model` is
+    // named only beside an agent. `icon` is the name the GUI draws it by, NULL for none chosen.
+    // `order_key` is the order the roles are defined in. No name is held unique: a role is pointed at
+    // by its id.
     automation_role {
         automation_id: fk("automation", "RESTRICT"),
         name: col(REQ),
@@ -1566,6 +1573,9 @@ datasets! {
         // round of a run whose automation defines no role, for one that has not taken its task yet, and
         // where the role has since been taken out (`SET NULL`, for the reason `task_id` is).
         role_id: fk_opt("automation_role", "SET NULL"),
+        // The task filed to whoever the automation sends a failed round to, where this round failed —
+        // the round's task waits on it. `SET NULL` for the reason `task_id` is.
+        incident_task_id: fk_opt("task", "SET NULL"),
     }
 
     // **One step, run once.** `seq` is the move number within the run, so a step the run comes back

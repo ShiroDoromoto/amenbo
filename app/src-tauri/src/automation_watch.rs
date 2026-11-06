@@ -259,6 +259,7 @@ fn fire_triggers(held: &mut HashMap<i64, Instant>) -> Result<Option<Instant>, cr
     if !due.is_empty() {
         let offered = crate::agent_models::offered_here();
         let by = amenbo_core::ops::automation_run::Launcher {
+            default_agent: None,
             startable: None,
             models: &offered,
             workspace_open: None,
@@ -306,6 +307,7 @@ fn start_waiting(resting: &mut HashMap<i64, Instant>) -> Result<Option<Instant>,
     if !due.is_empty() {
         let offered = crate::agent_models::offered_here();
         let by = amenbo_core::ops::automation_run::Launcher {
+            default_agent: None,
             startable: None,
             models: &offered,
             workspace_open: None,

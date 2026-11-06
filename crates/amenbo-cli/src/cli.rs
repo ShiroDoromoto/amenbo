@@ -1901,19 +1901,28 @@ pub enum AutomationCmd {
         #[arg(long, conflicts_with = "failures_to")]
         no_failures_to: bool,
     },
-    /// Give an automation a trigger: every so many minutes, or whenever none of its runs is under way,
-    /// it files a task and starts a run of the automation on it, with nobody pressing start (the entry
-    /// has to be make_task) — or take it away with --off. Only the app runs triggers
+    /// Give an automation a trigger: every so many minutes, whenever none of its runs is under way, or
+    /// whenever few enough tasks match a filter, it files a task and starts a run of the automation on
+    /// it, with nobody pressing start (the entry has to be make_task) — or take it away with --off. Only
+    /// the app runs triggers
     Trigger {
         /// automation id
         id: i64,
         /// file a task every this many minutes, counted from now and then from each task filed
-        #[arg(long, value_name = "MINUTES", required_unless_present_any = ["off", "when_idle"], conflicts_with = "when_idle", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
+        #[arg(long, value_name = "MINUTES", required_unless_present_any = ["off", "when_idle", "if_tasks"], conflicts_with = "when_idle", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
         every: Option<u32>,
         /// file a task whenever none of the automation's runs is running or paused, a minute after it
         /// last filed one at the soonest
         #[arg(long)]
         when_idle: bool,
+        /// file a task only while fewer than --fewer-than tasks of the automation's project match this
+        /// filter (what `task list --filter` takes; no `project:`). On its own, with no --every or
+        /// --when-idle, it files one whenever that holds, a minute after it last filed one at the soonest
+        #[arg(long, value_name = "FILTER", requires = "fewer_than")]
+        if_tasks: Option<String>,
+        /// how few tasks matching --if-tasks let it file one (1 or more)
+        #[arg(long, value_name = "N", requires = "if_tasks", value_parser = clap::value_parser!(u32).range(1..))]
+        fewer_than: Option<u32>,
         /// the title of the task it files
         #[arg(long, required_unless_present = "off")]
         title: Option<String>,
@@ -1921,7 +1930,7 @@ pub enum AutomationCmd {
         #[arg(long)]
         notes: Option<String>,
         /// take the trigger away
-        #[arg(long, conflicts_with_all = ["every", "when_idle", "title", "notes"])]
+        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "title", "notes"])]
         off: bool,
     },
     /// Stop an automation from starting new rounds, or let it start them again with --off. While it is
@@ -1969,8 +1978,9 @@ pub enum AutomationCmd {
     PlaceAdd {
         /// automation id
         automation: i64,
-        /// the library action to place. Each of its steps starts out carried by the default agent —
-        /// the project's, else the one a pane was last opened with — and `agent-set` changes it
+        /// the library action to place. A step nobody chooses for with `agent-set` is carried out by
+        /// its role's default agent, else by Amenbo's — the project's, else the one a pane was last
+        /// opened with
         #[arg(long, value_name = "ID", required_unless_present = "builtin", conflicts_with = "builtin")]
         action: Option<i64>,
         /// place one of Amenbo's built-ins instead (`automation builtin-list` names them). Placed first,
@@ -2091,9 +2101,9 @@ pub enum AutomationCmd {
         id: i64,
     },
     /// Add a step to a library action. One step is one terminal, and it carries its own prompt; who
-    /// carries it out is chosen where the action is placed (`agent-set`). Where the action is placed
-    /// already, the new step starts out there with the default agent, as a placed step does. With
-    /// `--program` the step is a script instead, and runs that program rather than a prompt
+    /// carries it out is chosen where the action is placed (`agent-set`), else falls back to its
+    /// role's default agent and then Amenbo's. With `--program` the step is a script instead, and runs
+    /// that program rather than a prompt
     StepAdd {
         /// action id
         action: i64,
@@ -2328,7 +2338,8 @@ pub enum AutomationCmd {
         filter: Box<TaskFilterArgs>,
     },
     /// Choose who carries one step out at one placement — the agent, and the model where one is named.
-    /// A step nobody is chosen for is refused at launch
+    /// A step nobody is chosen for falls back to its role's default, then Amenbo's; with neither, it
+    /// is refused at launch
     AgentSet {
         /// placement id
         placement: i64,
@@ -2341,7 +2352,7 @@ pub enum AutomationCmd {
         /// which model; left out, the agent's own default stands
         #[arg(long, conflicts_with = "clear")]
         model: Option<String>,
-        /// leave nobody chosen for it
+        /// leave nobody chosen for it here, so it falls back to its role's default, then Amenbo's
         #[arg(long)]
         clear: bool,
     },
@@ -2433,7 +2444,7 @@ pub enum AutomationCmd {
         /// goes round to the entry
         #[arg(long, conflicts_with = "halt")]
         done: bool,
-        /// end the run failed (halted) and call a person: its task goes back to todo, assigned to the human, with the step's report on it
+        /// end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), carrying why it failed and the step's report
         #[arg(long)]
         halt: bool,
         /// how often this edge may be taken for one task (left out: 10, the standing limit) — counted only
@@ -2459,7 +2470,7 @@ pub enum AutomationCmd {
         /// goes round to the entry
         #[arg(long, conflicts_with = "halt")]
         done: bool,
-        /// end the run failed (halted) and call a person: its task goes back to todo, assigned to the human, with the step's report on it
+        /// end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), carrying why it failed and the step's report
         #[arg(long)]
         halt: bool,
         /// how often this edge may be taken for one task

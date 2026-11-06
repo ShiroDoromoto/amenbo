@@ -1473,9 +1473,16 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
     let held_by =
         run_cards(&store, automation_view::run_ids_holding_automation(store.read_model().conn(), id)?)?;
     // Asked the way the save asks it (`amenbo_core::ops::automation::save`): without the agents and
-    // models of this machine, which are the launch's to judge and not the definition's.
-    let save_blocks =
-        automation_run::check(store.read_model().conn(), id, None, automation_run::nothing_asked())?;
+    // models of this machine, which are the launch's to judge and not the definition's, and with
+    // Amenbo's own default agent, which a step nobody chose for falls back to.
+    let default_agent = store.automation_default_agent(id)?;
+    let save_blocks = automation_run::check(
+        store.read_model().conn(),
+        id,
+        None,
+        automation_run::nothing_asked(),
+        default_agent.as_deref(),
+    )?;
     Ok(Some(detail_dto(view, held_by, &save_blocks)))
 }
 
@@ -1502,11 +1509,13 @@ pub fn automation_launch_check(
 ) -> Result<AutomationLaunchCheckDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_launch_check");
     let store = open_store_read()?;
+    let default_agent = store.automation_default_agent(id)?;
     let unmet = automation_run::check(
         store.read_model().conn(),
         id,
         agents.as_deref(),
         &crate::agent_models::offered_here(),
+        default_agent.as_deref(),
     )?;
     Ok(AutomationLaunchCheckDto {
         ready: unmet.is_empty(),
@@ -1593,6 +1602,7 @@ pub fn automation_launch(
     // refused at the press rather than met inside the pane the run just opened.
     let offered = crate::agent_models::offered_here();
     let by = automation_run::Launcher {
+        default_agent: None,
         startable: agents.as_deref(),
         models: &offered,
         workspace_open: Some(workspace_open),
@@ -1639,6 +1649,7 @@ pub fn automation_test_run(
     let _perf = amenbo_core::perf::Timer::start("automation_test_run");
     let offered = crate::agent_models::offered_here();
     let by = automation_run::Launcher {
+        default_agent: None,
         startable: agents.as_deref(),
         models: &offered,
         workspace_open: None,

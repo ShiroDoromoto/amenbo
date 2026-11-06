@@ -394,8 +394,8 @@ amenbo automation exit-add --action 7 --name "gave up" # a way out a placement m
 amenbo automation edge-add --in-action --from 11: --exit-to # inside an action: leave it by a way out it declares
 amenbo automation edge-add --in-action --from "11:gave up" --exit-to "gave up"
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
-amenbo automation place-add 3 --action 7               # 33: put that action on the picture; its steps start with the default agent
-amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, if not the default (--model too)
+amenbo automation place-add 3 --action 7               # 33: put that action on the picture; a step nobody chooses for falls back to its role's agent, then Amenbo's
+amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, ahead of its role's default (--model too)
 amenbo automation role-add 3 --name Implement --entry 32 --agent claude-code # a role: where its round starts, and the agent its steps fall back to — 31 then takes only a task of one of its roles, and goes on to where that task's role starts
 amenbo automation update 3 --failures-to 8           # where a failed round is filed: a role of it (8, from role-add) or `human`; a start is refused until one is named
 amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in
@@ -403,7 +403,7 @@ amenbo automation place-add 3 --builtin close_task     # 35: done, with the comm
 amenbo automation edge-add --from 32: --to 33         # what happens after each way out (--max-times caps a way back)
 amenbo automation wire-add --from 32: --from-port worktree --to 33 --to-port worktree
 amenbo automation edge-add --from 33: --to 34
-amenbo automation edge-add --from "33:gave up" --halt  # stop the run and call a person
+amenbo automation edge-add --from "33:gave up" --halt  # stop the run; the round is filed to --failures-to
 amenbo automation edge-add --from 34: --to 35
 amenbo automation edge-add --from "34:<unmerged>" --to 33 --max-times 3
 amenbo automation edge-add --from 35: --to 31          # and on to the next task
@@ -427,6 +427,7 @@ amenbo automation start 3                              # away it goes, from the 
 amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand a make_task entry the task it files: title, notes, classification and attachments
 amenbo automation trigger 4 --every 60 --title "Look over the inbox"   # ...or let it file that task and start itself every hour while the app is up (none while it already has its most runs going); --off takes it away
 amenbo automation trigger 4 --when-idle --title "Look over the inbox"  # ...or whenever none of its runs is going, a minute after the last one it filed at the soonest
+amenbo automation trigger 4 --when-idle --if-tasks "status:todo" --fewer-than 3 --title "Look over the inbox"  # ...only while fewer than 3 of the project's tasks are todo; --if-tasks alone files one whenever that holds
 amenbo automation stop 4                               # stop it starting new rounds: start and its trigger are refused, and each run pauses once its round is over (one waiting for room to take a task, at once) and a wait for a task ends; --off lets it start them again
 amenbo automation stop-waiting 3                       # an automation set to wait for a task makes no run until one turns up; this stops it waiting
 amenbo automation pause 7                              # ...at the end of the action under way (a wait under way included: the run pauses once its time is up)

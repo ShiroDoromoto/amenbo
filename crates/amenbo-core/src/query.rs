@@ -685,8 +685,28 @@ pub(crate) fn any_in_roles(
     filter_expr: &str,
     roles: &[i64],
 ) -> Result<bool> {
-    use crate::store_engine::{self, TaskQuery};
+    let (filter, project_id, today) = filtered(conn, reach, filter_expr, roles)?;
+    crate::store_engine::any_task(conn, &bare_query(reach, project_id, &filter, today))
+        .map_err(crate::error::engine_on(conn))
+}
 
+/// **How many tasks match this `task list` filter** — one count, with no ids and no order: what a
+/// trigger's condition asks ([`crate::model::TriggerCondition`]). The filter is read, and the reach
+/// folded in, exactly as [`list`] does it.
+pub fn count(conn: &rusqlite::Connection, reach: crate::reach::Reach, filter_expr: &str) -> Result<usize> {
+    let (filter, project_id, today) = filtered(conn, reach, filter_expr, &[])?;
+    crate::store_engine::task_count(conn, &bare_query(reach, project_id, &filter, today))
+        .map_err(crate::error::engine_on(conn))
+}
+
+/// The filter of [`any_in_roles`] and [`count`], read and resolved, held to `roles` where it names any,
+/// with the reach folded into it — and the project the read is held to and the day it was read on.
+fn filtered(
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    filter_expr: &str,
+    roles: &[i64],
+) -> Result<(Filter, Option<i64>, NaiveDate)> {
     let today = time::today();
     let mut filter = Filter::parse(filter_expr, today)?;
     filter.roles = (!roles.is_empty()).then(|| roles.to_vec());
@@ -696,20 +716,26 @@ pub(crate) fn any_in_roles(
     }
     let project_id = reach.narrow(None)?;
     filter.project_id = reach.narrow(filter.project_id)?;
-    store_engine::any_task(
-        conn,
-        &TaskQuery {
-            reach,
-            project_id,
-            filter: &filter,
-            sort: "",
-            today,
-            now: Timestamp::now(),
-            limit: None,
-            offset: None,
-        },
-    )
-    .map_err(crate::error::engine_on(conn))
+    Ok((filter, project_id, today))
+}
+
+/// A query with no order and no page, for a read that asks only whether or how many.
+fn bare_query<'a>(
+    reach: crate::reach::Reach,
+    project_id: Option<i64>,
+    filter: &'a Filter,
+    today: NaiveDate,
+) -> crate::store_engine::TaskQuery<'a> {
+    crate::store_engine::TaskQuery {
+        reach,
+        project_id,
+        filter,
+        sort: "",
+        today,
+        now: Timestamp::now(),
+        limit: None,
+        offset: None,
+    }
 }
 
 /// The `task list` read. Selection (filter / project / sort / total) is computed by **indexed SQL**

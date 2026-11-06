@@ -14,6 +14,8 @@
 //! sits in, not by a number anybody types back, so every `add` here prints the id the next command
 //! takes.
 
+use std::collections::BTreeMap;
+
 use serde_json::{json, Value};
 
 use amenbo_core::model::{
@@ -29,7 +31,9 @@ use amenbo_core::model::AutomationPictureOwner;
 use amenbo_core::model::{AutomationRole, FailuresTo};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
-use amenbo_core::ops::automation_run::{ForRoom, HandedAtLaunch, HandedFile, Launcher, Started, TaskWait};
+use amenbo_core::ops::automation_run::{
+    Carrier, ChosenAt, ForRoom, HandedAtLaunch, HandedFile, Launcher, ReadsFrom, Started, TaskWait,
+};
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{
     ActionView, AutomationView, PlacementView, SavedVersion, Showing, StepView,
@@ -408,8 +412,19 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             if flags.json {
                 print_json(&serde_json::to_value(&view).unwrap());
             } else {
+                // Who carries each step out, as a launch would choose it: the step's own choice, else
+                // its role's default, else Amenbo's.
+                let reads = if saved { ReadsFrom::Saved } else { ReadsFrom::Draft };
+                let default_agent = store.automation_default_agent(id).map_err(CliError::from)?;
+                let carriers = amenbo_core::ops::automation_run::carriers(
+                    store.read_model().conn(),
+                    id,
+                    reads,
+                    default_agent.as_deref(),
+                )
+                .map_err(CliError::from)?;
                 let waits = store.automation_task_wait(id).map_err(CliError::from)?;
-                render_automation(flags, &view, waits.as_ref());
+                render_automation(flags, &view, &carriers, waits.as_ref());
             }
         }
         AutomationCmd::Export { id, out, force } => {
@@ -481,16 +496,23 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
-        AutomationCmd::Trigger { id, every, when_idle, title, notes, off } => {
-            use amenbo_core::model::{TriggerTask, TriggerWhen};
-            let when = match (every, when_idle) {
-                (Some(minutes), _) => Some(TriggerWhen::Every { minutes }),
-                (None, true) => Some(TriggerWhen::Idle),
-                (None, false) => None,
+        AutomationCmd::Trigger { id, every, when_idle, if_tasks, fewer_than, title, notes, off } => {
+            use amenbo_core::model::{TriggerCondition, TriggerTask, TriggerWhen};
+            let condition = match (if_tasks, fewer_than) {
+                (Some(filter), Some(below)) => Some(TriggerCondition { filter, below }),
+                // clap asks for both or neither.
+                _ => None,
+            };
+            let when = match (every, when_idle, &condition) {
+                (Some(minutes), _, _) => Some(TriggerWhen::Every { minutes }),
+                (None, true, _) => Some(TriggerWhen::Idle),
+                (None, false, Some(_)) => Some(TriggerWhen::Tasks),
+                (None, false, None) => None,
             };
             let trigger = match (off, when, title) {
                 (false, Some(when), Some(title)) => Some(amenbo_core::ops::automation::NewTrigger {
                     when,
+                    condition,
                     task: TriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() },
                 }),
                 // clap asks for a when and a title unless --off is given, and refuses them beside it.
@@ -1152,6 +1174,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             let known = startable(store);
             let by = Launcher {
+                default_agent: None,
                 startable: known.as_deref(),
                 // Nothing is claimed about the models either: asking a provider what it offers is a
                 // login shell and that provider starting up, and the answers the app keeps are in the
@@ -1192,6 +1215,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let handed = HandedAtLaunch { title, notes, classification: classification_of(&dim)?, ..Default::default() };
             let known = startable(store);
             let by = Launcher {
+                default_agent: None,
                 startable: known.as_deref(),
                 models: amenbo_core::ops::automation_run::nothing_asked(),
                 workspace_open: None,
@@ -1483,7 +1507,12 @@ fn next_line(next: &Next) -> String {
 // ───────────────────────── what was built ─────────────────────────
 
 /// One automation in full: the placements on it, and what each runs under.
-fn render_automation(flags: &Flags, view: &AutomationView, waits: Option<&TaskWait>) {
+fn render_automation(
+    flags: &Flags,
+    view: &AutomationView,
+    carriers: &BTreeMap<(i64, i64), Carrier>,
+    waits: Option<&TaskWait>,
+) {
     let a = &view.automation;
     human(flags, format!("Automation {}  {}", a.id, a.name));
     let entry = match a.entry_placement_id {
@@ -1522,16 +1551,27 @@ fn render_automation(flags: &Flags, view: &AutomationView, waits: Option<&TaskWa
         human(flags, format!("role {}", one_role(role)));
     }
     for placement in &view.placements {
-        render_placement(flags, view, placement);
+        render_placement(flags, view, placement, carriers);
     }
 }
 
-/// What an automation's trigger does, and when it is next asked (for an `idle`, the soonest it may be).
+/// What an automation's trigger does, the tasks it looks at first, and when it is next asked (for an
+/// `idle` or a `tasks`, the soonest it may be).
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
+    let fewer = trigger.condition.as_ref().map(|c| match c.filter.as_str() {
+        "" => format!("fewer than {} task(s) are in its project", c.below),
+        filter => format!("fewer than {} task(s) match \"{filter}\"", c.below),
+    });
     let (when, next) = match trigger.when {
         TriggerWhen::Every { minutes } => (format!("every {minutes} minute(s)"), "next at"),
         TriggerWhen::Idle => ("whenever none of its runs is under way".to_string(), "not before"),
+        TriggerWhen::Tasks => ("whenever".to_string(), "not before"),
+    };
+    let when = match (trigger.when, fewer) {
+        (TriggerWhen::Tasks, Some(fewer)) => format!("{when} {fewer}"),
+        (_, Some(fewer)) => format!("{when} while {fewer}"),
+        (_, None) => when,
     };
     let task = match &trigger.task {
         TriggerTask::Fixed { title, .. } => format!("\"{title}\""),
@@ -1605,7 +1645,12 @@ fn one_role(role: &AutomationRole) -> String {
 
 /// One placement: which action stands there, what it takes, what it is set to, and what happens after
 /// each way out.
-fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementView) {
+fn render_placement(
+    flags: &Flags,
+    view: &AutomationView,
+    placement: &PlacementView,
+    carriers: &BTreeMap<(i64, i64), Carrier>,
+) {
     let row = &placement.placement;
     let boxes: Vec<i64> = view.placements.iter().map(|p| p.placement.id).collect();
     let back = lines_back(view.automation.entry_placement_id, &boxes, &view.edges);
@@ -1629,7 +1674,7 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
         // Nobody is chosen for a built-in or a script, and nobody ever will be: Amenbo carries a
         // built-in out itself (`AMB-D-964`) and a script runs its own program (`AMB-D-1016`), so
         // naming an agent or "nobody chosen" there misreads what runs it.
-        let who = match (&one.step.builtin, &one.step.script, &one.chosen) {
+        let who = match (&one.step.builtin, &one.step.script, carriers.get(&(row.id, one.step.id))) {
             (Some(key), _, _) => format!("carried out by Amenbo (built-in {key})"),
             (None, Some(script), _) => {
                 let mut line = format!("carried out by a script: {}", script.program);
@@ -1639,10 +1684,20 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
                 }
                 line
             }
-            (None, None, Some(c)) => match &c.model {
-                Some(model) => format!("carried out by {} ({model})", c.agent),
-                None => format!("carried out by {}", c.agent),
-            },
+            (None, None, Some(c)) => {
+                let by = match &c.model {
+                    Some(model) => format!("carried out by {} ({model})", c.agent),
+                    None => format!("carried out by {}", c.agent),
+                };
+                match &c.at {
+                    ChosenAt::Step => by,
+                    ChosenAt::Role { role_id } => {
+                        let role = view.roles.iter().find(|r| r.id == *role_id).map_or("?", |r| r.name.as_str());
+                        format!("{by}  — role {role_id} {role}'s default")
+                    }
+                    ChosenAt::Amenbo => format!("{by}  — Amenbo's default"),
+                }
+            }
             (None, None, None) => "nobody chosen to carry it out".to_string(),
         };
         human(flags, format!("    step {} {}  {who}", one.step.id, one.step.name));
@@ -2021,6 +2076,10 @@ fn render_run(
         };
         let stood = span(stretch.started_at, stretch.ended_at);
         human(flags, format!("\ntask {} — {about}  {stood}", stretch.seq));
+        // A round that failed was filed as a task, and the round's task waits on it.
+        if let Some(filed) = stretch.incident_task_id {
+            human(flags, format!("  failure filed as {}", task_label(filed)));
+        }
         for m in moves.iter().filter(|m| m.run_task_id == Some(stretch.id)) {
             render_move(store, flags, defs, &switched, m)?;
         }

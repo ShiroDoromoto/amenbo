@@ -3202,7 +3202,14 @@ frame?: string,
  * (`crate::pty::open_step`). A step's terminal belongs to the run's own pane and to nothing
  * else, so a face putting its panes back never hands it to an ordinary one.
  */
-run?: number, };
+run?: number, 
+/**
+ * **When the terminal last wrote something a pane draws**, in milliseconds since the epoch, or
+ * absent for one that has written nothing yet (`crate::pty::Pane`). It moves on the bytes the
+ * terminal wrote, never on what the agent in it says, and not on a chunk that was only a
+ * cursor-position query.
+ */
+lastOutput?: number, };
 
 /**
  * What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches

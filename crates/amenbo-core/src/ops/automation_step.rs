@@ -637,6 +637,7 @@ fn new_stretch(
         started_at: Some(now),
         ended_at: None,
         role_id: None,
+        incident_task_id: None,
         created_at: now,
         updated_at: now,
     };
@@ -1159,6 +1160,7 @@ mod tests {
     fn a_run(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let startable = vec!["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&startable),
             models: crate::ops::automation_run::nothing_asked(),
             workspace_open: Some(true),
@@ -2131,7 +2133,7 @@ mod tests {
             // A latecomer comes to the action before bob is picked up again.
             let latecomer = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);
-            super::super::automation_stop::resume(tx, bob.id, None, super::super::automation_run::nothing_asked())
+            super::super::automation_stop::resume(tx, bob.id, None, super::super::automation_run::nothing_asked(), None)
                 .expect("resume bob");
             let (_, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
             assert_eq!(behind, carol.id, "carol is inside now");

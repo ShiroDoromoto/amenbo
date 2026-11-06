@@ -610,10 +610,11 @@ fn an_automation_is_stopped_and_started_again() {
     assert!(!text.contains("  stopped"), "{text}");
 }
 
-/// `automation trigger` writes a trigger — every so many minutes, or whenever no run is under way —
-/// `show` says what it files and when it is next asked, and `--off` takes it away. A wait under a
-/// minute, a trigger with no title or no when, `--every` beside `--when-idle`, and `--off` beside a
-/// part of one are refused.
+/// `automation trigger` writes a trigger — every so many minutes, whenever no run is under way, or
+/// whenever few enough tasks match a filter, the last laid on either of the others too — `show` says
+/// what it files and when it is next asked, and `--off` takes it away. A wait under a minute, a
+/// trigger with no title or no when, `--every` beside `--when-idle`, a filter with no count or a count
+/// of 0, a filter that does not read or names a project, and `--off` beside a part of one are refused.
 #[test]
 fn a_trigger_is_written_shown_and_taken_away() {
     let cli = Cli::new();
@@ -636,6 +637,20 @@ fn a_trigger_is_written_shown_and_taken_away() {
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(text.contains("whenever none of its runs is under way, filing \"Look over the inbox\" — not before"), "{text}");
 
+    let counted = cli.json(&[
+        "automation", "trigger", &a, "--when-idle", "--if-tasks", "status:todo", "--fewer-than", "3", "--title", "Look over the inbox", "--json",
+    ]);
+    let trigger = &counted["automation"]["trigger"];
+    assert_eq!(trigger["when"], serde_json::json!({ "kind": "idle" }), "{counted}");
+    assert_eq!(trigger["condition"], serde_json::json!({ "filter": "status:todo", "below": 3 }), "{counted}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("whenever none of its runs is under way while fewer than 3 task(s) match \"status:todo\""), "{text}");
+
+    let alone = cli.json(&["automation", "trigger", &a, "--if-tasks", "status:todo", "--fewer-than", "1", "--title", "x", "--json"]);
+    assert_eq!(alone["automation"]["trigger"]["when"], serde_json::json!({ "kind": "tasks" }), "{alone}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("whenever fewer than 1 task(s) match \"status:todo\", filing \"x\" — not before"), "{text}");
+
     for wrong in [
         vec!["automation", "trigger", a.as_str(), "--every", "0", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--every", "5"],
@@ -643,6 +658,12 @@ fn a_trigger_is_written_shown_and_taken_away() {
         vec!["automation", "trigger", a.as_str(), "--off", "--every", "5"],
         vec!["automation", "trigger", a.as_str(), "--every", "5", "--when-idle", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--off", "--when-idle"],
+        vec!["automation", "trigger", a.as_str(), "--if-tasks", "status:todo", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--fewer-than", "3", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-tasks", "status:todo", "--fewer-than", "0", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-tasks", "status:nope", "--fewer-than", "3", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-tasks", "project:1", "--fewer-than", "3", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--off", "--if-tasks", "status:todo", "--fewer-than", "3"],
     ] {
         let (_, code) = cli.run_err(&wrong);
         assert_ne!(code, 0, "{wrong:?} is refused");
@@ -1529,8 +1550,9 @@ fn a_launch_is_refused_until_the_automation_is_saved_and_a_test_run_tries_the_dr
     assert!(out.contains("started from version 1"), "{out}");
 }
 
-/// Who carries a step out is chosen where its action is placed (`AMB-D-960`): with nobody chosen the
-/// launch is refused and says so, `show` lists the choice at each spot, and `--clear` takes it back.
+/// Who carries a step out is chosen where its action is placed, ahead of its role's default and
+/// Amenbo's: with none of the three naming one the launch is refused and says so, `show` lists the
+/// choice at each spot, and `--clear` takes it back.
 #[test]
 fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
     let cli = Cli::new();
@@ -1560,6 +1582,26 @@ fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
 
     let (err, code) = cli.run_err(&["automation", "agent-set", &placement, "--step", &step, "--json"]);
     assert_eq!(code, 2, "an agent or --clear has to be said: {err}");
+}
+
+/// A step nobody chose for where it is placed falls back to the default of the role whose round reaches
+/// it: `show` says whose default carries it, and the save passes on it.
+#[test]
+fn a_step_nobody_chose_for_is_carried_out_by_its_roles_default() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, placement, step) = a_launchable(&cli);
+    cli.json(&["automation", "agent-set", &placement, "--step", &step, "--clear", "--json"]);
+
+    let added = cli.json(&[
+        "automation", "role-add", &a, "--name", "実装", "--entry", &placement, "--agent", "codex", "--model",
+        "gpt-5", "--json",
+    ]);
+    let role = id_of(&added, "automation_role");
+    let (shown, _) = cli.run(&["automation", "show", &a]);
+    assert!(shown.contains(&format!("carried out by codex (gpt-5)  — role {role} 実装's default")), "{shown}");
+    assert!(!shown.contains("nobody chosen to carry it out"), "{shown}");
+    cli.json(&["automation", "save", &a, "--json"]);
 }
 
 /// **A role is defined in an automation by the ids the other commands hand back**: its round starts at

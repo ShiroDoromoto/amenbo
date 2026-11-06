@@ -1331,6 +1331,20 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 111,
+        name: "add automation.trigger_condition_filter and _below, the tasks a trigger looks at first, and admit tasks in trigger_when_kind",
+        // **Unseeded.** No trigger had a condition before, so every one written before this has none,
+        // and keeps its kind.
+        apply: Apply::Custom(let_a_trigger_look_at_the_tasks),
+    },
+    Step {
+        to: 112,
+        name: "add automation_run_task.incident_task_id, the task a failed round was filed as",
+        // **Unseeded.** A round that failed before this handed its task to a person rather than filing
+        // one, so there is nothing to point at.
+        apply: Apply::Custom(let_a_round_name_its_incident),
+    },
+    Step {
+        to: 113,
         name: "add automation.waits_for_task_since, since when Amenbo has been waiting for a task to start a run on",
         // **Unseeded.** Before this a run waited for a task at its entry, still running. Such a run is
         // left as it is: the next time the app opens its entry, it ends there and its automation is
@@ -1338,6 +1352,37 @@ pub const STEPS: &[Step] = &[
         apply: Apply::Custom(let_amenbo_wait_for_a_task),
     },
 ];
+
+/// v111: `automation.trigger_condition_filter` and `trigger_condition_below`, and
+/// `automation.trigger_when_kind` admits `tasks` beside `every` and `idle`.
+///
+/// **Each part only where it is not there yet.** A store whose automation table was created in the live
+/// shape already has them. The kind is widened as v108 widened it: kept in a column of its own while
+/// the column is dropped and added again.
+fn let_a_trigger_look_at_the_tasks(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let cols = column_names(tx, "automation")?;
+    for (name, decl) in [("trigger_condition_filter", "TEXT"), ("trigger_condition_below", "BIGINT")] {
+        if !cols.iter().any(|c| c == name) {
+            tx.execute_batch(&format!("ALTER TABLE automation ADD COLUMN {name} {decl};"))?;
+        }
+    }
+    let table: String =
+        tx.query_row("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation'", [], |r| r.get(0))?;
+    if table.contains("trigger_when_kind IN ('every', 'idle', 'tasks')") {
+        return Ok(());
+    }
+    tx.execute_batch(
+        "ALTER TABLE automation ADD COLUMN trigger_when_kind_kept TEXT;
+         UPDATE automation SET trigger_when_kind_kept = trigger_when_kind;
+         ALTER TABLE automation DROP COLUMN trigger_when_kind;
+         ALTER TABLE automation ADD COLUMN trigger_when_kind TEXT \
+             CHECK(trigger_when_kind IN ('every', 'idle', 'tasks'));
+         UPDATE automation SET trigger_when_kind = trigger_when_kind_kept;
+         ALTER TABLE automation DROP COLUMN trigger_when_kind_kept;",
+    )?;
+    Ok(())
+}
 
 /// v108: `automation.trigger_when_kind` admits `idle` beside `every`.
 ///
@@ -1377,6 +1422,37 @@ fn let_a_person_stop_an_automation(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
+/// v113: `automation.waits_for_task_since` — since when Amenbo has been waiting for a task to start a
+/// run of the automation on.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. It is nullable with no default but
+/// NULL, so `ALTER TABLE` adds it as it stands.
+fn let_amenbo_wait_for_a_task(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation")?.iter().any(|c| c == "waits_for_task_since") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN waits_for_task_since TEXT CHECK(waits_for_task_since GLOB \
+             '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
+        )?;
+    }
+    Ok(())
+}
+
+/// v112: `automation_run_task.incident_task_id`, the task a failed round was filed as.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. The key may be added by
+/// `ALTER TABLE` because the column has no default but NULL.
+fn let_a_round_name_its_incident(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run_task")?.iter().any(|c| c == "incident_task_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run_task ADD COLUMN incident_task_id BIGINT REFERENCES task(id) \
+                 ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    Ok(())
+}
+
 /// v110: `automation_run_def.roles`, the roles whose round starts at a run's copy of a step, and
 /// `automation_run_task.role_id`, the role a round is worked under.
 ///
@@ -1392,22 +1468,6 @@ fn let_a_run_go_round_by_role(ctx: &Ctx<'_>) -> Result<()> {
         tx.execute_batch(
             "ALTER TABLE automation_run_task ADD COLUMN role_id BIGINT REFERENCES automation_role(id) \
              ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
-        )?;
-    }
-    Ok(())
-}
-
-/// v111: `automation.waits_for_task_since` — since when Amenbo has been waiting for a task to start a
-/// run of the automation on.
-///
-/// **Appended only where missing**, v68's guard and for v53's reason. It is nullable with no default but
-/// NULL, so `ALTER TABLE` adds it as it stands.
-fn let_amenbo_wait_for_a_task(ctx: &Ctx<'_>) -> Result<()> {
-    let tx = ctx.tx;
-    if !column_names(tx, "automation")?.iter().any(|c| c == "waits_for_task_since") {
-        tx.execute_batch(
-            "ALTER TABLE automation ADD COLUMN waits_for_task_since TEXT CHECK(waits_for_task_since GLOB \
-             '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
         )?;
     }
     Ok(())
@@ -11528,12 +11588,12 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v111: an automation written before the step is not waiting for a task, and the column admits only
+    /// v113: an automation written before the step is not waiting for a task, and the column admits only
     /// an instant.
     #[test]
-    fn an_automation_written_before_v111_is_not_waiting_for_a_task() {
+    fn an_automation_written_before_v113_is_not_waiting_for_a_task() {
         let dir = scratch("automation-waits-for-task");
-        let engine = store_at(&dir, 110);
+        let engine = store_at(&dir, 112);
         engine
             .conn()
             .execute_batch(
@@ -11556,6 +11616,78 @@ mod tests {
         engine
             .conn()
             .execute("UPDATE automation SET waits_for_task_since = '2026-11-07T00:00:00Z' WHERE id = 1", [])
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v112: a round written before the step was filed as nothing, and the column points at a task.
+    #[test]
+    fn a_round_written_before_v112_names_no_incident() {
+        let dir = scratch("run-task-incident");
+        let engine = store_at(&dir, 111);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'work', 'todo', 1), (2, 'incident', 'todo', 1);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'failed');
+                 INSERT INTO automation_run_task (id, run_id, seq, task_id) VALUES (1, 1, 1, 1);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let incident: Option<i64> = engine
+            .conn()
+            .query_row("SELECT incident_task_id FROM automation_run_task WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(incident, None, "no round was filed as a task before");
+        engine
+            .conn()
+            .execute("UPDATE automation_run_task SET incident_task_id = 2 WHERE id = 1", [])
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v111: a trigger written before the step keeps its kind and has no condition, the column admits
+    /// `tasks` beside `every` and `idle`, and a condition is written in the two new columns.
+    #[test]
+    fn a_trigger_written_before_v111_keeps_its_kind_and_tasks_is_admitted() {
+        let dir = scratch("automation-trigger-tasks");
+        let engine = store_at(&dir, 110);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, trigger_when_kind, trigger_every_minutes, \
+                     trigger_task_kind, trigger_task_title, trigger_task_notes, trigger_next_at) \
+                     VALUES (1, 1, 'work', 'idle', NULL, 'fixed', 'look', '', '2026-11-07T00:00:00Z');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let kept: (Option<String>, Option<String>, Option<i64>) = engine
+            .conn()
+            .query_row(
+                "SELECT trigger_when_kind, trigger_condition_filter, trigger_condition_below FROM automation WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(kept, (Some("idle".into()), None, None), "kept its kind, with no condition");
+        let refused = engine.conn().execute("UPDATE automation SET trigger_when_kind = 'hourly' WHERE id = 1", []);
+        assert!(refused.is_err(), "a kind not declared is refused");
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation SET trigger_when_kind = 'tasks', trigger_condition_filter = 'status:todo', \
+                     trigger_condition_below = 3 WHERE id = 1",
+                [],
+            )
             .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }

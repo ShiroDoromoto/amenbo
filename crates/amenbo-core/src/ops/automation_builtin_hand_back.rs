@@ -165,6 +165,7 @@ mod tests {
             let first = for_ai(tx, project, "外のもの");
             let claude = ["claude".to_string()];
             let by = Launcher {
+                default_agent: None,
                 startable: Some(&claude),
                 models: nothing_asked(),
                 workspace_open: Some(true),
@@ -236,6 +237,7 @@ mod tests {
     fn launched(tx: &WriteTx<'_>, p: &Picture) -> crate::model::AutomationRun {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),

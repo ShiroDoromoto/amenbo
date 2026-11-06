@@ -20,9 +20,10 @@
 # closed without merging, a watch that broke or stalled — ends it with exit code 1, which the step
 # leaves through its error way out, the reason being the last line on stderr.
 #
-# watch-ci.sh is called as it is: its exit codes are read by hand and by other steps. It does not
-# end on DIRTY — it says `needs a hand: DIRTY` once and waits on — so its events are read as they
-# come, and the watch is stopped here on that line.
+# watch-ci.sh is called as it is: its exit codes are read by hand and by other steps. On DIRTY read
+# twice in a row it says `needs a hand: DIRTY` and ends with exit code 6. Its events are read as
+# they come, and the watch is stopped here on that line; exit code 6 is read as the same conflict,
+# should the watch end before the line is read.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in,
 # which is where `gh` reads the repository from (AMENBO_CI_REPO overrides it, as in watch-ci.sh).
@@ -70,14 +71,20 @@ while IFS= read -r line; do
     [ "$line" = "needs a hand: DIRTY" ] && { dirty=yes; break; }
 done < "$work/events"
 
-if [ -n "$dirty" ]; then
-    kill "$watch" 2>/dev/null || :
-    wait "$watch" 2>/dev/null || :
-    watch=""
+# Leave through the conflict way out, once the pull request itself reads as conflicting.
+leave_conflict() {
+    local v
     v=$(gh pr view "$pr" -R "$repo" --json state,mergeStateStatus --jq '"\(.state) \(.mergeStateStatus)"') ||
         die "could not read the merge state of $url"
     [ "$v" = "OPEN DIRTY" ] || die "watch-ci.sh said DIRTY, and the pull request reads \"$v\": $url"
     leave 衝突 '{}' "pull request $pr conflicts with main: $url"
+}
+
+if [ -n "$dirty" ]; then
+    kill "$watch" 2>/dev/null || :
+    wait "$watch" 2>/dev/null || :
+    watch=""
+    leave_conflict
 fi
 
 set +e
@@ -118,5 +125,6 @@ case "$watched" in
     4)
         die "every check of $url is green and it is not merging: $(grep '^settled but not merging:' "$work/events.log" | tail -n 1)"
         ;;
+    6) leave_conflict ;;
     *) die "watch-ci.sh pr $pr ended with exit code $watched: $url" ;;
 esac

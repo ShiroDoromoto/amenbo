@@ -131,8 +131,9 @@ pub struct PlacementView {
     pub steps: Vec<PlacementStepView>,
 }
 
-/// **One step of the action standing on a placement**, and who carries it out there — `None` where
-/// nobody is chosen yet, which the launch check refuses for a step a run could open.
+/// **One step of the action standing on a placement**, and who is chosen for it there — `None` where
+/// nobody is, and the step falls back to its role's default, then Amenbo's
+/// ([`crate::ops::automation_run::carriers`]).
 #[derive(Clone, Debug, Serialize)]
 pub struct PlacementStepView {
     pub step: AutomationStep,

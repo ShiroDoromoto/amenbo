@@ -34,39 +34,29 @@ fn exit_name_of(
     Ok(crate::store_engine::read::automation_exit(tx.conn(), edge.exit_id)?.map(|exit| exit.name))
 }
 
-/// Write the default agent onto a placement just made, reading the default for the project its
-/// automation belongs to ([`crate::wake::step_agent`]). Both the GUI's placing and `automation
-/// place-add` come through the wrappers that call this, so this is where the default takes effect.
-fn steps_default(
-    tx: &WriteTx<'_>,
+/// **Amenbo's own default agent for an automation** — the answer a pane would open with in the
+/// project it belongs to ([`crate::wake::step_agent`]), the last of the three a step's agent is chosen
+/// from ([`crate::ops::automation_run::Launcher::default_agent`]). `None` where nobody has answered, or
+/// where the automation is not there to say which project.
+fn default_agent(
+    conn: &rusqlite::Connection,
     config: &crate::config::Config,
-    placement: &crate::model::AutomationPlacement,
-) -> Result<()> {
-    let Some(automation) = crate::store_engine::read::automation(tx.conn(), placement.automation_id)?
-    else {
-        return Ok(());
-    };
-    let agent = crate::wake::step_agent(config, automation.project_id);
-    crate::ops::automation::placement_steps_default(tx, placement.id, agent.as_deref())
+    automation_id: i64,
+) -> Result<Option<String>> {
+    Ok(crate::store_engine::read::automation(conn, automation_id)?
+        .and_then(|automation| crate::wake::step_agent(config, automation.project_id)))
 }
 
-/// Write the default agent onto a step just added to an action, at every placement of that action —
-/// what [`steps_default`] writes for the steps an action is placed with, for a step that came after
-/// (`AMB-T-5531`). Each placement reads the default for the project its own automation belongs to.
-fn new_step_default(
-    tx: &WriteTx<'_>,
+/// [`default_agent`] for the automation a run was launched from.
+fn default_agent_of_run(
+    conn: &rusqlite::Connection,
     config: &crate::config::Config,
-    step: &crate::model::AutomationStep,
-) -> Result<()> {
-    use crate::store_engine::read;
-    let conn = tx.conn();
-    for placement_id in read::automation_placement_ids_using_action(conn, step.action_id)? {
-        let Some(placement) = read::automation_placement(conn, placement_id)? else { continue };
-        let Some(automation) = read::automation(conn, placement.automation_id)? else { continue };
-        let agent = crate::wake::step_agent(config, automation.project_id);
-        crate::ops::automation::placement_step_default(tx, placement.id, step, agent.as_deref())?;
+    run_id: i64,
+) -> Result<Option<String>> {
+    match crate::store_engine::read::automation_run(conn, run_id)? {
+        Some(run) => default_agent(conn, config, run.automation_id),
+        None => Ok(None),
     }
-    Ok(())
 }
 
 impl Store {
@@ -1409,11 +1399,21 @@ impl Store {
     }
 
     /// Save an automation as its next version, once the launch check passes (one operation = one
-    /// transaction) — [`crate::ops::automation::save`].
+    /// transaction) — [`crate::ops::automation::save`], asked with Amenbo's own default agent for the
+    /// automation's project ([`Self::automation_default_agent`]).
     pub fn automation_save(&mut self, id: i64) -> Result<crate::model::AutomationVersion> {
+        let agent = self.automation_default_agent(id)?;
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
-            crate::ops::automation::save(tx, id)
+            crate::ops::automation::save(tx, id, agent.as_deref())
         })
+    }
+
+    /// **Amenbo's own default agent for an automation** — the last of the three a step's agent is chosen
+    /// from, after the step at its placement and the role whose round reaches it
+    /// ([`crate::ops::automation_run::Launcher::default_agent`]). Read off this store's configuration
+    /// for the automation's project ([`crate::wake::step_agent`]); `None` where nobody has answered.
+    pub fn automation_default_agent(&self, automation_id: i64) -> Result<Option<String>> {
+        default_agent(self.engine.conn(), &self.config, automation_id)
     }
 
     /// Throw away what is written on an automation since its newest version (one operation = one
@@ -1436,38 +1436,29 @@ impl Store {
         })
     }
 
-    /// Put an action on an automation (one operation = one transaction), with the default agent
-    /// written onto each of its steps ([`crate::ops::automation::placement_steps_default`]).
+    /// Put an action on an automation (one operation = one transaction).
     pub fn automation_placement_add(
         &mut self,
         automation_id: i64,
         action_id: i64,
     ) -> Result<crate::model::AutomationPlacement> {
-        let config = self.config.clone();
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| {
-                let placement = crate::ops::automation::placement_add(tx, automation_id, action_id)?;
-                steps_default(tx, &config, &placement)?;
-                Ok(placement)
-            },
+            |tx| crate::ops::automation::placement_add(tx, automation_id, action_id),
         )
     }
 
     /// Put an action in on a line (one operation = one transaction): the placement and the two edges
-    /// that leave nothing pointing at nothing, with the default agent written onto each of its steps
-    /// as [`Self::automation_placement_add`] writes it — and, straight after an entry that files a
-    /// task, the built-in that closes it ([`crate::ops::automation::close_after_filed`]).
+    /// that leave nothing pointing at nothing — and, straight after an entry that files a task, the
+    /// built-in that closes it ([`crate::ops::automation::close_after_filed`]).
     pub fn automation_placement_insert(
         &mut self,
         edge_id: i64,
         action_id: i64,
     ) -> Result<crate::ops::automation::Placed> {
-        let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
             let from = crate::store_engine::read::automation_edge(tx.conn(), edge_id)?;
             let placement = crate::ops::automation::placement_insert(tx, edge_id, action_id)?;
-            steps_default(tx, &config, &placement)?;
             let closer = match from {
                 Some(edge) => crate::ops::automation::close_after_filed(
                     tx,
@@ -1511,21 +1502,18 @@ impl Store {
     }
 
     /// Put an action on after a way out that says nothing yet (one operation = one transaction): the
-    /// placement and the one line from that way out to it, with the default agent written onto each
-    /// of its steps as [`Self::automation_placement_add`] writes it — and, straight after an entry
-    /// that files a task, the built-in that closes it ([`crate::ops::automation::close_after_filed`]).
+    /// placement and the one line from that way out to it — and, straight after an entry that files
+    /// a task, the built-in that closes it ([`crate::ops::automation::close_after_filed`]).
     pub fn automation_placement_insert_at_exit(
         &mut self,
         from_id: i64,
         exit_name: Option<&str>,
         action_id: i64,
     ) -> Result<crate::ops::automation::Placed> {
-        let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Placement, from_id)], |tx| {
             let placement = crate::ops::automation::placement_insert_at_exit(
                 tx, from_id, exit_name, action_id,
             )?;
-            steps_default(tx, &config, &placement)?;
             let closer = crate::ops::automation::close_after_filed(tx, from_id, exit_name, &placement)?;
             Ok(crate::ops::automation::Placed { placement, closer })
         })
@@ -1735,18 +1723,21 @@ impl Store {
     /// The reach is the automation's, the run being made under it.
     ///
     /// `by` carries what the store cannot answer — which agents this machine can start, whether the
-    /// workspace is open, and who pressed ([`crate::ops::automation_run::Launcher`]). `handed` is what
-    /// the person handed over along with it — text, and files already ingested into the blob store
-    /// ([`crate::ops::automation_run::HandedAtLaunch`]).
+    /// workspace is open, and who pressed ([`crate::ops::automation_run::Launcher`]). What it says of
+    /// Amenbo's own default agent is replaced by this store's ([`Self::automation_default_agent`]).
+    /// `handed` is what the person handed over along with it — text, and files already ingested into
+    /// the blob store ([`crate::ops::automation_run::HandedAtLaunch`]).
     pub fn automation_launch(
         &mut self,
         automation_id: i64,
         by: &crate::ops::automation_run::Launcher<'_>,
         handed: &crate::ops::automation_run::HandedAtLaunch,
     ) -> Result<crate::ops::automation_run::Started> {
+        let agent = self.automation_default_agent(automation_id)?;
+        let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::start(tx, automation_id, by, handed),
+            |tx| crate::ops::automation_run::start(tx, automation_id, &by, handed),
         )
     }
 
@@ -1759,9 +1750,11 @@ impl Store {
         automation_id: i64,
         by: &crate::ops::automation_run::Launcher<'_>,
     ) -> Result<Option<crate::model::AutomationRun>> {
+        let agent = self.automation_default_agent(automation_id)?;
+        let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::start_waiting(tx, automation_id, by),
+            |tx| crate::ops::automation_run::start_waiting(tx, automation_id, &by),
         )
     }
 
@@ -1782,9 +1775,11 @@ impl Store {
         automation_id: i64,
         by: &crate::ops::automation_run::Launcher<'_>,
     ) -> Result<Option<crate::model::AutomationRun>> {
+        let agent = self.automation_default_agent(automation_id)?;
+        let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::fire(tx, automation_id, by, crate::time::Timestamp::now()),
+            |tx| crate::ops::automation_run::fire(tx, automation_id, &by, crate::time::Timestamp::now()),
         )
     }
 
@@ -1802,6 +1797,8 @@ impl Store {
         by: &crate::ops::automation_run::Launcher<'_>,
         handed: &crate::ops::automation_run::HandedAtLaunch,
     ) -> Result<crate::ops::automation_rehearse::Rehearsal> {
+        let agent = self.automation_default_agent(automation_id)?;
+        let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
         let mut tx = self.engine.write()?;
         tx.write_in(self.config.language.as_deref().unwrap_or("en"));
         write_reach::guard(
@@ -1809,7 +1806,7 @@ impl Store {
             self.reach,
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
         )?;
-        crate::ops::automation_rehearse::rehearse(&tx, automation_id, by, handed)
+        crate::ops::automation_rehearse::rehearse(&tx, automation_id, &by, handed)
     }
 
     /// **Put down one thing a step produced**, on the output its id names.
@@ -1897,15 +1894,17 @@ impl Store {
 
     /// **Pick a paused run up again** ([`crate::ops::automation_stop::resume`]). `startable` and
     /// `models` are a launch's ([`crate::ops::automation_run::Launcher`]): a run paused before its next
-    /// task is copied down afresh and checked as a launch is.
+    /// task is copied down afresh and checked as a launch is, with this store's default agent
+    /// ([`Self::automation_default_agent`]).
     pub fn automation_resume(
         &mut self,
         run_id: i64,
         startable: Option<&[String]>,
         models: &crate::ops::automation_run::ModelsHere,
     ) -> Result<crate::ops::automation_stop::Resumed> {
+        let agent = default_agent_of_run(self.engine.conn(), &self.config, run_id)?;
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_stop::resume(tx, run_id, startable, models)
+            crate::ops::automation_stop::resume(tx, run_id, startable, models, agent.as_deref())
         })
     }
 
@@ -1918,8 +1917,9 @@ impl Store {
         startable: Option<&[String]>,
         models: &crate::ops::automation_run::ModelsHere,
     ) -> Result<crate::ops::automation_run::TakenUp> {
+        let agent = default_agent_of_run(self.engine.conn(), &self.config, run_id)?;
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_run::take_up_newer(tx, run_id, startable, models)
+            crate::ops::automation_run::take_up_newer(tx, run_id, startable, models, agent.as_deref())
         })
     }
 
@@ -2006,18 +2006,14 @@ impl Store {
         })
     }
 
-    /// Add a step to a library action (one operation = one transaction), with the default agent
-    /// written onto it at every placement of the action ([`new_step_default`]).
+    /// Add a step to a library action (one operation = one transaction).
     pub fn automation_step_add(
         &mut self,
         action_id: i64,
         new: crate::ops::automation::NewStep,
     ) -> Result<crate::model::AutomationStep> {
-        let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Action, action_id)], |tx| {
-            let step = crate::ops::automation::step_add(tx, action_id, new)?;
-            new_step_default(tx, &config, &step)?;
-            Ok(step)
+            crate::ops::automation::step_add(tx, action_id, new)
         })
     }
 
@@ -2056,8 +2052,7 @@ impl Store {
     }
 
     /// Put a step in on a line (one operation = one transaction): the step, the ways out and inputs it
-    /// was written with, and the two edges that leave nothing pointing at nothing — with the default
-    /// agent written onto it as [`Self::automation_step_add`] writes it.
+    /// was written with, and the two edges that leave nothing pointing at nothing.
     pub fn automation_step_insert(
         &mut self,
         edge_id: i64,
@@ -2065,17 +2060,13 @@ impl Store {
         exits: &[String],
         inputs: &[(String, crate::model::AutomationPortKind, bool)],
     ) -> Result<crate::model::AutomationStep> {
-        let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Edge, edge_id)], |tx| {
-            let step = crate::ops::automation::step_insert(tx, edge_id, new, exits, inputs)?;
-            new_step_default(tx, &config, &step)?;
-            Ok(step)
+            crate::ops::automation::step_insert(tx, edge_id, new, exits, inputs)
         })
     }
 
     /// Put a step on after a way out that says nothing yet (one operation = one transaction): the
-    /// step, the ways out and inputs it was written with, and the one line from that way out to it —
-    /// with the default agent written onto it as [`Self::automation_step_add`] writes it.
+    /// step, the ways out and inputs it was written with, and the one line from that way out to it.
     pub fn automation_step_insert_at_exit(
         &mut self,
         from_id: i64,
@@ -2084,13 +2075,8 @@ impl Store {
         exits: &[String],
         inputs: &[(String, crate::model::AutomationPortKind, bool)],
     ) -> Result<crate::model::AutomationStep> {
-        let config = self.config.clone();
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Step, from_id)], |tx| {
-            let step = crate::ops::automation::step_insert_at_exit(
-                tx, from_id, exit_name, new, exits, inputs,
-            )?;
-            new_step_default(tx, &config, &step)?;
-            Ok(step)
+            crate::ops::automation::step_insert_at_exit(tx, from_id, exit_name, new, exits, inputs)
         })
     }
 

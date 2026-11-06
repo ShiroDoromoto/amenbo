@@ -1916,22 +1916,27 @@ impl FailuresTo {
 }
 
 /// The fewest minutes a trigger waits between two tasks it files: the least a [`TriggerWhen::Every`]
-/// may be written with, and the rest a [`TriggerWhen::Idle`] always takes after each one.
+/// may be written with, and the rest a [`TriggerWhen::Idle`] or a [`TriggerWhen::Tasks`] always takes
+/// after each one.
 pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 
 /// **An automation's trigger** ([`Automation::trigger`]) — what starts a run with nobody pressing
-/// start, in three parts: [`TriggerWhen`] answers whether to file a task now, [`TriggerTask`] writes
-/// what the task says, and the run is the automation's own, started on the task filed. No agent works
-/// on the first two; the third is a run like any other.
+/// start, in three parts: [`TriggerWhen`], with its [`TriggerCondition`] if it has one, answers whether
+/// to file a task now, [`TriggerTask`] writes what the task says, and the run is the automation's own,
+/// started on the task filed. No agent works on the first two; the third is a run like any other.
 ///
 /// A time it answers no leaves nothing behind — no task, no run, no record — so the only thing it
 /// keeps is `next_at`, which moves on only when a task is filed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutomationTrigger {
     pub when: TriggerWhen,
+    /// The tasks it looks at before filing one, on top of `when` — `None` where it looks at none. A
+    /// [`TriggerWhen::Tasks`] always has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<TriggerCondition>,
     pub task: TriggerTask,
-    /// When it is next asked whether to file a task (for an `idle`, the soonest it may file one): set
-    /// when the trigger is written, and moved on each time it files one.
+    /// When it is next asked whether to file a task (for an `idle` or a `tasks`, the soonest it may file
+    /// one): set when the trigger is written, and moved on each time it files one.
     pub next_at: Timestamp,
 }
 
@@ -1947,6 +1952,10 @@ pub enum TriggerWhen {
     /// [`MIN_TRIGGER_EVERY_MINUTES`] after it is written and after each task it files, so a run that
     /// ends at once is not followed by another on every look.
     Idle,
+    /// Whenever its [`TriggerCondition`] holds, with nothing else to wait for — but, like an `every`,
+    /// not while the automation has its most runs under way. It waits [`MIN_TRIGGER_EVERY_MINUTES`]
+    /// after it is written and after each task it files, as an `idle` does.
+    Tasks,
 }
 
 impl TriggerWhen {
@@ -1955,6 +1964,7 @@ impl TriggerWhen {
         match self {
             TriggerWhen::Every { .. } => "every",
             TriggerWhen::Idle => "idle",
+            TriggerWhen::Tasks => "tasks",
         }
     }
 
@@ -1962,10 +1972,22 @@ impl TriggerWhen {
     pub fn after(&self, from: Timestamp) -> Timestamp {
         let minutes = match self {
             TriggerWhen::Every { minutes } => *minutes,
-            TriggerWhen::Idle => MIN_TRIGGER_EVERY_MINUTES,
+            TriggerWhen::Idle | TriggerWhen::Tasks => MIN_TRIGGER_EVERY_MINUTES,
         };
         Timestamp(from.0 + chrono::Duration::minutes(i64::from(minutes)))
     }
+}
+
+/// **The tasks a trigger looks at before it files one** ([`AutomationTrigger::condition`]): it files
+/// one only while fewer than `below` tasks of the automation's project match `filter`. So a trigger
+/// keeps a queue topped up rather than piling tasks onto one nobody is working through.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TriggerCondition {
+    /// What `task list --filter` takes, read inside the automation's project — so it may not name a
+    /// `project:` of its own. Empty counts every task of the project.
+    pub filter: String,
+    /// It files a task only while fewer than this many match: 1 or more.
+    pub below: u32,
 }
 
 /// **What the task a trigger files says** — the second part of [`AutomationTrigger`].
@@ -2007,7 +2029,7 @@ pub struct AutomationPlacement {
 
 /// **One step of one action**, and one terminal when it is opened. Its `prompt` is its own — an action
 /// holds the prompts rather than being one. Who carries it out is not: that is chosen where the action
-/// is placed ([`AutomationPlacementStep`], `AMB-D-960`).
+/// is placed ([`AutomationPlacementStep`]), else falls back to its role's default and then Amenbo's.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationStep {
     pub id: i64,
@@ -2068,9 +2090,11 @@ pub struct StepScript {
     pub timeout_minutes: i64,
 }
 
-/// **Who carries one step out at one placement** — chosen where the action is placed, step by step
-/// (`AMB-D-960`). A step with no row here has nobody chosen, and the launch check refuses a run that
-/// would open it.
+/// **Who carries one step out at one placement** — chosen where the action is placed, step by step.
+/// It is the first of the three a step's agent is chosen from: a step with no row here falls back to the
+/// default of the role whose round reaches the placement ([`AutomationRole`]), and then to Amenbo's own
+/// ([`crate::ops::automation_run::Launcher::default_agent`]). Where none of the three names an agent,
+/// the launch check refuses a run that would open the step.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationPlacementStep {
     pub id: i64,
@@ -2093,9 +2117,13 @@ pub struct AutomationPlacementStep {
 /// **The way it works is where its round starts** (`entry_placement_id`), a placement of the same
 /// automation. `None` while it is still being built, as the automation's own entry is.
 ///
-/// **`agent` and `model` are defaults, nothing more** (`AMB-D-960`). The choice made for a step where its
-/// action is placed ([`AutomationPlacementStep`]) stays where it is; which of the two is asked first is
-/// not decided here. `model` is named only beside an agent, and `None` leaves the agent's own default.
+/// **`agent` and `model` are defaults, nothing more.** A step's agent is chosen from three, in order: the
+/// choice made for the step where its action is placed ([`AutomationPlacementStep`]), then this default
+/// for every placement the role's round reaches from `entry_placement_id` — up to where the
+/// automation's entry or another role's round begins — then Amenbo's own
+/// ([`crate::ops::automation_run::Launcher::default_agent`]). A placement more than one round reaches
+/// takes the first of those roles in the order they are defined in. `model` is named only beside an
+/// agent and comes with it, and `None` leaves the agent's own default.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationRole {
     pub id: i64,
@@ -2366,8 +2394,8 @@ pub enum AutomationStoppedReason {
     /// it was out ([`crate::ops::automation_run::Waiting::NoWayOn`]), or a way out leads to a spot the
     /// run never copied down.
     NoWayOn,
-    /// A step left through a way out the picture wires to "stop and call a person" — an ending the
-    /// author of the automation chose, rather than one the machinery ran into.
+    /// A step left through a way out the picture wires to halt the run — an ending the author of the
+    /// automation chose, rather than one the machinery ran into. Its round is filed as any failure's is.
     Halted,
     /// The run went on — to the next task, or to its end — with the task it had taken still in progress
     /// (`AMB-D-967`). The launch check refuses a picture that can do this, so reaching it means the
@@ -2768,6 +2796,11 @@ pub struct AutomationRunTask {
     /// been taken out.
     #[serde(default)]
     pub role_id: Option<i64>,
+    /// **The task this round was filed as when it failed** — filed to whoever the automation sends a
+    /// failed round to ([`Automation::failures_to`]), with `task_id` waiting on it. `None` for a round
+    /// that did not fail, and where that task has since been deleted.
+    #[serde(default)]
+    pub incident_task_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

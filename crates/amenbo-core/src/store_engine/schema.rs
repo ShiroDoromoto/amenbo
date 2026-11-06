@@ -1168,6 +1168,10 @@ datasets! {
         // When the trigger is next asked whether to file one. Moved on only when it does, so a time it
         // says no leaves nothing behind.
         trigger_next_at: ts_opt,
+        // A person stopped this automation: no run of it starts, its trigger files nothing, and a run of
+        // it that finishes a round pauses rather than starting the next. Like `archived`, not part of a
+        // saved version.
+        stopped: bool_col,
         order_key: col(ORDER_KEY),
     }
 

@@ -1869,6 +1869,12 @@ pub struct Automation {
     /// version.
     #[serde(default)]
     pub trigger: Option<AutomationTrigger>,
+    /// **A person stopped this automation**, so it starts no new round: it is not launched, its trigger
+    /// files nothing, and a run of it pauses where it finishes a round, or at once where it is waiting
+    /// at its entry for a task to take. A round under way is not cut short. Like `archived`, it is the
+    /// automation's, not part of a saved version.
+    #[serde(default)]
+    pub stopped: bool,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,

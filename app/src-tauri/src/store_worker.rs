@@ -85,6 +85,7 @@ pub const ON_WORKER: &[&str] = &[
     "task_set_dimension_value", "task_unset_dimension_value", "task_dimensions",
     "decision_set_dimension_value", "decision_unset_dimension_value", "decision_dimensions",
     "project_dimension_assignments", "project_decision_dimension_assignments", "task_assign",
+    "task_set_role", "project_roles",
     "config_set_language", "set_facet_avatars", "set_facet_names", "read_receipts", "mark_task_seen",
     "mark_mailbox_seen", "mailbox_comment_tasks", "mailbox_triggered_at", "inbox_archived",
     "inbox_archive", "inbox_unarchive", "mailbox_notified_ids", "mailbox_notified_add",

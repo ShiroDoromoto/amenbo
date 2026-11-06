@@ -5,11 +5,13 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { t } from "../core/i18n";
-import type { BoundFolderDto } from "../bindings/bindings";
+import type { BoundFolderDto, TaskRoleDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   folders: [] as string[],
+  roles: [] as TaskRoleDto[],
   filed: [] as { title: string; at: string | null | undefined }[],
+  handed: [] as { assignee: string | null | undefined; roleId: number | null | undefined }[],
 }));
 
 vi.mock("../core/mutations", async (importOriginal) => {
@@ -18,10 +20,13 @@ vi.mock("../core/mutations", async (importOriginal) => {
     ...orig,
     addTask: async (
       _projectId: number, title: string, _notes?: string, _due?: string | null, _start?: string | null, at?: string | null,
+      assignee?: string | null, roleId?: number | null,
     ) => {
       hoisted.filed.push({ title, at });
+      hoisted.handed.push({ assignee, roleId });
       return 1;
     },
+    fetchProjectRoles: async (): Promise<TaskRoleDto[]> => hoisted.roles,
     fetchBoundFolders: async (): Promise<BoundFolderDto[]> =>
       hoisted.folders.map((path) => ({
         path, exists: true, mismatch: null, legacy: false, pointerMissing: false, foreign: null,
@@ -44,6 +49,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   hoisted.filed = [];
+  hoisted.handed = [];
+  hoisted.folders = [];
+  hoisted.roles = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -68,6 +76,7 @@ function choose(select: HTMLSelectElement, value: string) {
 
 const create = () =>
   [...container.querySelectorAll<HTMLButtonElement>("button")].find((x) => x.textContent === t("compose.create"))!;
+const byLabel = (label: string) => container.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
 const folderPicker = () =>
   container.querySelector<HTMLSelectElement>(`select[aria-label="${t("compose.folder")}"]`);
 
@@ -99,5 +108,58 @@ describe("the folder a new task is worked in", () => {
     expect(folderPicker()).toBeNull();
     await act(async () => { create().click(); });
     expect(hoisted.filed).toEqual([{ title: "one task", at: null }]);
+  });
+});
+
+describe("the role a new task is worked under", () => {
+  const role = (id: number, name: string): TaskRoleDto =>
+    ({ id, name, icon: null, automationId: 1, automationName: "開発" });
+
+  it("is asked for once the task is handed to the AI, and a create without it says why under the field", async () => {
+    hoisted.roles = [role(11, "実装係"), role(12, "レビュー係")];
+    await open();
+    expect(byLabel(t("detail.role"))).toBeNull();
+
+    await act(async () => choose(byLabel(t("detail.assignee"))!, "ai"));
+    const picker = byLabel(t("detail.role"))!;
+    expect(picker).not.toBeNull();
+    expect(picker.value).toBe("");
+    expect([...picker.options].map((o) => o.textContent)).toEqual(
+      [t("detail.rolePick"), "実装係", "レビュー係", t("detail.roleNone")],
+    );
+
+    await act(async () => { create().click(); });
+    expect(hoisted.filed).toEqual([]);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(t("detail.roleRequired"));
+
+    act(() => choose(picker, "12"));
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    await act(async () => { create().click(); });
+    expect(hoisted.handed).toEqual([{ assignee: "ai", roleId: 12 }]);
+  });
+
+  it("takes no role as a choice of its own", async () => {
+    hoisted.roles = [role(11, "実装係")];
+    await open();
+    await act(async () => choose(byLabel(t("detail.assignee"))!, "ai"));
+    act(() => choose(byLabel(t("detail.role"))!, "none"));
+    await act(async () => { create().click(); });
+    expect(hoisted.handed).toEqual([{ assignee: "ai", roleId: null }]);
+  });
+
+  it("is not asked for a task a person holds, nor in a project with no role", async () => {
+    hoisted.roles = [role(11, "実装係")];
+    await open();
+    await act(async () => choose(byLabel(t("detail.assignee"))!, "human"));
+    expect(byLabel(t("detail.role"))).toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    hoisted.roles = [];
+    await open();
+    await act(async () => choose(byLabel(t("detail.assignee"))!, "ai"));
+    expect(byLabel(t("detail.role"))).toBeNull();
+    await act(async () => { create().click(); });
+    expect(hoisted.handed).toEqual([{ assignee: "ai", roleId: null }]);
   });
 });

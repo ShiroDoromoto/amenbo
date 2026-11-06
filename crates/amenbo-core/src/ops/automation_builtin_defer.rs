@@ -198,4 +198,53 @@ mod tests {
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::InProgress));
         });
     }
+
+    /// **A round that puts its task off does not go round** — the task is `todo` on the AI again, and
+    /// the entry would take the same one straight back; so where the put-off leads to the end of the
+    /// picture, the run ends there as completed.
+    #[test]
+    fn a_task_put_off_at_the_end_of_the_picture_ends_the_run() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                automation::add(tx, project, NewAutomation { name: "defer".into(), ..Default::default() })
+                    .expect("automation");
+            let on = AutomationPictureOwner::Automation;
+            let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
+                .expect("place take");
+            let later = automation::placement_add(tx, automation.id, action(tx, "defer_task").expect("defer").id)
+                .expect("place defer");
+            automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(later.id), None).expect("take → defer");
+            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
+            automation::edge_add(tx, on, later.id, None, EdgeTarget::Done, None).expect("defer → done");
+            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+            let task = mk_task_in(tx, "main の赤で落ちたもの", Some(project));
+            crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("to the AI");
+            let claude = ["claude".to_string()];
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                workspace_open: Some(true),
+                by: Some(ActorKind::Ai),
+            };
+            let run = launch(tx, automation.id, &by).expect("launch");
+            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| d.entry)
+                .expect("the entry");
+            let Opened::Carried { next: Next::Step(later), .. } =
+                open(tx, run.id, entry.id, Some(&claude)).expect("take")
+            else {
+                panic!("the take goes on to the defer");
+            };
+            let Opened::Carried { next: Next::Closed(ended), .. } =
+                open(tx, run.id, later.id, Some(&claude)).expect("defer")
+            else {
+                panic!("the task put off is not taken straight back: the run ends");
+            };
+            assert_eq!(ended.run.status, AutomationRunStatus::Completed, "{:?}", ended.run.stopped_reason);
+            assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Todo));
+        });
+    }
 }

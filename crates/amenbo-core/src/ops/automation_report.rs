@@ -466,6 +466,9 @@ fn no_task_after_all(
 /// ([`leaves_the_action`], `AMB-D-1002`), so a run pauses between actions and never inside one. It is
 /// read last of all: a picture that has run out is over, and pausing a run that has ended would leave
 /// one nobody could pick up again.
+///
+/// **The end of the picture is the end of one round, where the run goes round** — one task a round, its
+/// entry taking the next ([`round_over`]). Anywhere else it is the end of the run.
 fn whats_next(
     tx: &WriteTx<'_>,
     def: &AutomationRunDef,
@@ -475,9 +478,10 @@ fn whats_next(
     let conn = tx.conn();
     let run = read::automation_run(conn, def.run_id)?.ok_or_else(|| not_found("run", def.run_id))?;
     match automation_run::onward(conn, def, Some(taken))? {
-        Onward::Done => {
-            Ok(Next::Closed(automation_stop::ended(tx, run, Ending::Completed)?))
-        }
+        Onward::Done => match automation_run::goes_round(conn, run.id, ended)? {
+            true => round_over(tx, run),
+            false => Ok(Next::Closed(automation_stop::ended(tx, run, Ending::Completed)?)),
+        },
         // The way out calls a person: an ending the author of the picture chose, or an error way out
         // nobody drew a line from (`AMB-D-966`).
         Onward::Halt => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::Halted)?)),
@@ -494,6 +498,31 @@ fn whats_next(
             }
             Ok(Next::Step(next))
         }
+    }
+}
+
+/// **One round is over, and the run goes round again at its entry** — the end of the picture reached by
+/// a run whose entry takes a task, with the task it took closed ([`automation_run::goes_round`]). A
+/// round that reaches the end with its task still in progress does not come here: it ends the run, and
+/// [`automation_stop::ended`] fails it with [`AutomationStoppedReason::LeftTaskOpen`] (`AMB-D-967`).
+///
+/// - **The round's stretch ends here**, so the run holds no task between two rounds.
+/// - **A pause asked for takes hold here** as the pause before the next task: the run holds no task, so
+///   picking it up copies the automation down afresh ([`automation_stop::resume`]).
+/// - **Otherwise the next step is the entry, as the run's newest copy marks it.** Nothing is copied
+///   down here: what has been saved since is taken up as the entry is about to be opened
+///   ([`automation_run::take_up_newer`]), so a newer definition starts with the next round and never
+///   in the middle of one (`AMB-D-1015`).
+fn round_over(tx: &WriteTx<'_>, run: AutomationRun) -> Result<Next> {
+    let conn = tx.conn();
+    let stretch = read::automation_run_task_last(conn, run.id)?;
+    automation_stop::close_stretch(tx, stretch.as_ref(), Timestamp::now())?;
+    if run.pause_requested || run.pause_before_next_task {
+        return Ok(Next::Paused(automation_stop::settle(tx, run, AutomationPauseKind::BeforeNextTask)?));
+    }
+    match automation_run::entry_def(conn, run.id)? {
+        Some(entry) => Ok(Next::Step(Box::new(entry))),
+        None => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::NoWayOn)?)),
     }
 }
 

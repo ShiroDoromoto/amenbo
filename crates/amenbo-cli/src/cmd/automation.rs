@@ -1757,8 +1757,9 @@ fn one_edge(
 /// spent on that task under it. The order is the order it happened in, which is the only order a run
 /// reads in.
 ///
-/// **A run waiting for a task says so**, as its pane does. The stretch it last worked stays open until
-/// the next task is taken, but every step of it has ended — so it is written as over, not as still going.
+/// **A run waiting for a task says so**, as its pane does. A round that came to the end of the picture
+/// closed its stretch; one a line brought back to the entry leaves it open until the next task is taken,
+/// but every step of it has ended — so it is written as over, not as still going.
 ///
 /// **So does a run waiting for room** before an action that takes one run at a time, naming the action
 /// and the run it waits behind. Its stretch is still going: the task it took is not done with yet.

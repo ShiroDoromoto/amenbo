@@ -220,9 +220,10 @@ fn close_step(tx: &WriteTx<'_>, run_id: i64, ending: Ending, now: Timestamp) -> 
     )
 }
 
-/// Close the stretch the run was in. A stretch already closed is left alone: a run that handed its task
-/// back has nothing open.
-fn close_stretch(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>, now: Timestamp) -> Result<()> {
+/// Close the stretch the run was in — at the run's end, and at the end of a round
+/// ([`crate::ops::automation_report`]). A stretch already closed is left alone: a run that handed its
+/// task back has nothing open.
+pub(crate) fn close_stretch(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>, now: Timestamp) -> Result<()> {
     let Some(before) = stretch.filter(|s| s.ended_at.is_none()) else { return Ok(()) };
     let mut ended = before.clone();
     ended.ended_at = Some(now);

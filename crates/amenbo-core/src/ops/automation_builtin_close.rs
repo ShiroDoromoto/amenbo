@@ -135,7 +135,7 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::automation_report::{self, Next, Produced};
-    use crate::ops::automation_run::{launch, nothing_asked, Launcher};
+    use crate::ops::automation_run::{launch, next_def, nothing_asked, Launcher, Waiting};
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
     use crate::lifecycle::name::{COMMENT_ADDED, TASK_DONE, TASK_STATUS_CHANGED};
@@ -229,7 +229,8 @@ mod tests {
     const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
     /// **It closes the task, records the commit handed to it, and leaves the agent's report on it** —
-    /// and the run, with its task closed, ends as completed.
+    /// and with its task closed the round is over: the run goes round to its entry, which finds nothing
+    /// left to take, and the run ends as completed.
     #[test]
     fn it_closes_the_task_with_the_commit_and_the_agent_s_report() {
         with_tx(|tx| {
@@ -238,14 +239,130 @@ mod tests {
             let task = for_ai(tx, project);
 
             let (run, next) = walk(tx, &p, Some(SHA), "Fixed it.\n\nThe test covers it.");
-            assert!(matches!(next, Next::Closed(_)), "{next:?}");
+            let Next::Step(again) = next else { panic!("the run goes round to its entry: {next:?}") };
+            assert!(again.entry, "{again:?}");
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Done));
             let shas: Vec<String> =
                 read::task_commits(tx.conn(), task).expect("commits").into_iter().map(|c| c.sha).collect();
             assert_eq!(shas, vec![SHA.to_string()]);
             assert_eq!(comments(tx, task), vec!["Fixed it.\n\nThe test covers it.".to_string()]);
+
+            let Opened::Carried { next: Next::Closed(_), .. } =
+                open(tx, run.id, again.id, Some(&["claude".to_string()])).expect("take again")
+            else {
+                panic!("with nothing left to take, the run comes to its end");
+            };
             let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(run.status, AutomationRunStatus::Completed);
+        });
+    }
+
+    /// **A run goes round once per task** — each round takes one task at the entry, closes it at the end
+    /// of the picture and is a stretch of its own; the run comes to its end only once the entry finds
+    /// nothing left to take.
+    #[test]
+    fn a_run_goes_round_once_per_task_until_there_is_none_to_take() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let p = picture(tx, project);
+            let first = for_ai(tx, project);
+            let second = for_ai(tx, project);
+            let claude = ["claude".to_string()];
+
+            let (run, next) = walk(tx, &p, None, "The first.");
+            let Next::Step(entry) = next else { panic!("the run goes round to its entry: {next:?}") };
+            let after_one = read::automation_run_tasks_of(tx.conn(), run.id).expect("stretches");
+            assert_eq!(after_one.len(), 1);
+            assert!(after_one[0].ended_at.is_some(), "the round that is over has ended its stretch");
+            match next_def(tx.conn(), run.id).expect("next") {
+                Waiting::Step(def) => assert_eq!(def.id, entry.id, "the watch reads the same entry"),
+                other => panic!("between two rounds the run stands at its entry: {other:?}"),
+            }
+
+            let Opened::Carried { next: Next::Step(work), .. } =
+                open(tx, run.id, entry.id, Some(&claude)).expect("take the next")
+            else {
+                panic!("the take goes on to the work");
+            };
+            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("work") else {
+                panic!("the work opens a terminal");
+            };
+            let Next::Step(close) =
+                automation_report::done(tx, opening.run_step.id, None, "The second.").expect("report")
+            else {
+                panic!("the work goes on to the close");
+            };
+            let Opened::Carried { next: Next::Step(entry), .. } =
+                open(tx, run.id, close.id, Some(&claude)).expect("close")
+            else {
+                panic!("the round is over, and the run goes round again");
+            };
+            for task in [first, second] {
+                assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Done));
+            }
+            let rounds = read::automation_run_tasks_of(tx.conn(), run.id).expect("stretches");
+            assert_eq!(rounds.iter().map(|r| r.seq).collect::<Vec<_>>(), vec![1, 2], "a stretch per round");
+            let held: Vec<Option<i64>> = rounds.iter().map(|r| r.task_id).collect();
+            assert!(held.contains(&Some(first)) && held.contains(&Some(second)), "{held:?}");
+
+            let Opened::Carried { next: Next::Closed(_), .. } =
+                open(tx, run.id, entry.id, Some(&claude)).expect("take again")
+            else {
+                panic!("with nothing left to take, the run comes to its end");
+            };
+            let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            assert_eq!(run.status, AutomationRunStatus::Completed);
+            assert_eq!(read::automation_run_tasks_of(tx.conn(), run.id).expect("stretches").len(), 2);
+        });
+    }
+
+    /// **A pause asked for while a round is under way takes hold where the round ends**, as the pause
+    /// before the next task: the run holds no task then, so picking it up starts the next round at its
+    /// entry.
+    #[test]
+    fn a_pause_asked_for_in_a_round_takes_hold_where_the_round_ends() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let p = picture(tx, project);
+            for_ai(tx, project);
+            let claude = ["claude".to_string()];
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                workspace_open: Some(true),
+                by: Some(ActorKind::Ai),
+            };
+            let run = launch(tx, p.automation.id, &by).expect("launch");
+            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| d.entry)
+                .expect("the entry");
+            let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
+            else {
+                panic!("the take goes on to the work");
+            };
+            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("work") else {
+                panic!("the work opens a terminal");
+            };
+            let Next::Step(close) = automation_report::done(tx, opening.run_step.id, None, "Done.").expect("report")
+            else {
+                panic!("the work goes on to the close");
+            };
+            let asked = crate::ops::automation_stop::pause_run_before_next_task(tx, run.id).expect("pause");
+            assert!(matches!(asked, crate::ops::automation_stop::Paused::Asked(_)), "{asked:?}");
+
+            let Opened::Carried { next: Next::Paused(paused), .. } =
+                open(tx, run.id, close.id, Some(&claude)).expect("close")
+            else {
+                panic!("the round is over, and the pause takes hold");
+            };
+            assert_eq!(paused.run.status, AutomationRunStatus::Paused);
+            assert_eq!(paused.run.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
+            let resumed = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked())
+                .expect("resume");
+            assert!(resumed.next.entry, "picked up at the entry: {:?}", resumed.next);
+            assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"));
         });
     }
 
@@ -258,7 +375,7 @@ mod tests {
             let task = for_ai(tx, project);
 
             let (_, next) = walk(tx, &p, None, "Nothing to merge.");
-            assert!(matches!(next, Next::Closed(_)), "{next:?}");
+            assert!(matches!(&next, Next::Step(again) if again.entry), "the run goes round: {next:?}");
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Done));
             assert!(read::task_commits(tx.conn(), task).expect("commits").is_empty());
         });

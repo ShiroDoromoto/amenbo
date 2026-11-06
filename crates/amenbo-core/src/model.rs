@@ -1659,13 +1659,14 @@ impl AutomationPortKind {
 }
 
 /// What happens once a way out is taken: go on to another box, leave the action through one of the ways
-/// out it declares, close the run, or stop it and call a person.
+/// out it declares, close the run — or the round, where the run goes round once per task
+/// ([`crate::ops::automation_run::goes_round`]) — or stop it and call a person.
 ///
 /// `Exit` is an action's picture's alone. It is the line that joins what an action declares to what is
 /// inside it: the inner step ends, and the run leaves the action by the way out
 /// [`AutomationEdge::exit_to_id`] keys, which is the way out the picture the placement stands on then
-/// reads. On an automation's picture there is nothing outside to leave to, so `Done` is where a run
-/// ends there.
+/// reads. On an automation's picture there is nothing outside to leave to, so `Done` is where a run,
+/// or one round of it, ends there.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationEnds {
@@ -2115,8 +2116,9 @@ pub struct AutomationVersion {
 ///
 /// `Running` is where every launch begins, so a launch never waits (`AMB-D-947`): one past the
 /// automation's `max_concurrent_runs` is refused rather than queued. `Paused` keeps the place. The
-/// three ends say what happened rather than how it was reached: `Completed` is the picture run out,
-/// `Failed` is a run that could not get there, and `Canceled` is a person who said stop.
+/// three ends say what happened rather than how it was reached: `Completed` is the picture run out —
+/// for a run that goes round once per task, the entry finding no task left to take — `Failed` is a run
+/// that could not get there, and `Canceled` is a person who said stop.
 ///
 /// **`Completed` is not success.** Reaching the end of the picture says nothing about whether the work
 /// went well — an automation can wire a "could not fix it" way out to the end — and nothing here judges
@@ -2536,9 +2538,10 @@ impl AutomationRunStepStatus {
 }
 
 /// **One task a run worked on**, in the order it took them — a stretch of the run rather than a moment
-/// of it.
+/// of it, and one round of it: a run goes round once per task, from the entry that takes it to the end
+/// of the picture ([`crate::ops::automation_run::goes_round`]).
 ///
-/// `seq` is 1 for a run that never goes back, and the row is what the per-task edge counts are kept
+/// `seq` is 1 for a run that never goes round, and the row is what the per-task edge counts are kept
 /// against. `task_id` is empty until a `task_take` output hands one over, so the row exists before it
 /// has a subject.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

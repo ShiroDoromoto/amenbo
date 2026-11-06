@@ -2314,7 +2314,8 @@ pub enum AutomationCmd {
         /// --in-action only: an automation's picture has nothing outside it
         #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
         exit_to: Option<String>,
-        /// close the run
+        /// close the run — or, in a run whose entry is take_task, the round whose task it closed, which
+        /// goes round to the entry
         #[arg(long, conflicts_with = "halt")]
         done: bool,
         /// end the run failed (halted) and call a person: its task goes back to todo, assigned to the human, with the step's report on it
@@ -2339,7 +2340,8 @@ pub enum AutomationCmd {
         /// --in-action only: an automation's picture has nothing outside it
         #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
         exit_to: Option<String>,
-        /// close the run
+        /// close the run — or, in a run whose entry is take_task, the round whose task it closed, which
+        /// goes round to the entry
         #[arg(long, conflicts_with = "halt")]
         done: bool,
         /// end the run failed (halted) and call a person: its task goes back to todo, assigned to the human, with the step's report on it

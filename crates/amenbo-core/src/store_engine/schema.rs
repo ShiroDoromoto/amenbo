@@ -1474,8 +1474,9 @@ datasets! {
         entry: bool_col,
     }
 
-    // **One task a run worked on**, in the order it took them: `seq` is 1 for a run that never goes
-    // back, and the row is what the per-task edge counts are kept against.
+    // **One task a run worked on**, in the order it took them — one round of the run, from the entry
+    // that takes the task to the end of the picture: `seq` is 1 for a run that never goes round, and
+    // the row is what the per-task edge counts are kept against.
     //
     // `task_id` is empty until a `task_take` port hands one over, so the row exists before it has a
     // subject. It is `SET NULL` for the reason the comment's provenance is: deleting a task is the

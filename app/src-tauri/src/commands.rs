@@ -232,6 +232,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         project_id,
         status: status.as_str(),
         assignee,
+        role_id: row.role_id,
         priority: row.priority.as_deref().and_then(Priority::parse).map(|p| p.as_str()),
         due: row.due.map(ScheduleDto::from),
         start: row.start.map(ScheduleDto::from),
@@ -2036,6 +2037,11 @@ pub fn watch_store(app: tauri::AppHandle) {
 ///
 /// `at` is the folder the task is worked in, as [`project_bound_folders`] lists it; see
 /// [`folder_to_file_in`] for what is filled in when it is left out.
+///
+/// `assignee` is the facet it is handed to (`"human"` / `"ai"`), left out for nobody, and `role_id`
+/// the role it is worked under, one of [`project_roles`]'s. A create does not take an assignee, so the
+/// task is handed over by a write of its own straight after, the way [`task_assign`] does it.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn task_add(
     project_id: Option<i64>,
@@ -2044,8 +2050,11 @@ pub fn task_add(
     due: Option<String>,
     start: Option<String>,
     at: Option<String>,
+    assignee: Option<String>,
+    role_id: Option<i64>,
 ) -> Result<WriteAck, CmdError> {
     let id = with_store_mut(|store| {
+        let assignee = facet_arg(assignee.as_deref())?;
         let at_binding_id = folder_to_file_in(store, project_id, at.as_deref())?;
         let t = store.add_task(amenbo_core::ops::task::NewTask {
             title,
@@ -2060,8 +2069,11 @@ pub fn task_add(
             // (`AMB-D-897`). A GUI opened from inside a pane inherits that pane's variables, which
             // is exactly why the create is handed this rather than reading it.
             made_in: None,
-            role_id: None,
+            role_id,
         })?;
+        if assignee.is_some() {
+            store.set_task_assignee(t.id, assignee, ActorKind::Human)?;
+        }
         Ok(t.id)
     })?;
     Ok(WriteAck::new(&["tasks"]).task(id))
@@ -3804,12 +3816,7 @@ pub fn project_decision_dimension_assignments(project_id: i64, dimension_id: i64
 #[tauri::command]
 pub fn task_assign(id: i64, kind: Option<String>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        let kind_arg = match kind.as_deref() {
-            Some("ai") => Some(ActorKind::Ai),
-            Some("human") => Some(ActorKind::Human),
-            Some(other) => return Err(format!("facet '{other}' is not one of human / ai").into()),
-            None => None,
-        };
+        let kind_arg = facet_arg(kind.as_deref())?;
         let noop = store.task(id)?.is_some_and(|t| t.assignee_kind == kind_arg);
         if !noop {
             store.set_task_assignee(id, kind_arg, ActorKind::Human)?;
@@ -3817,6 +3824,56 @@ pub fn task_assign(id: i64, kind: Option<String>) -> Result<WriteAck, CmdError> 
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]).task(id))
+}
+
+/// A facet as the GUI names it (`"human"` / `"ai"`), or `None` for nobody.
+fn facet_arg(kind: Option<&str>) -> Result<Option<ActorKind>, CmdError> {
+    match kind {
+        Some("ai") => Ok(Some(ActorKind::Ai)),
+        Some("human") => Ok(Some(ActorKind::Human)),
+        Some(other) => Err(format!("facet '{other}' is not one of human / ai").into()),
+        None => Ok(None),
+    }
+}
+
+/// Set the role the task is worked under; `role_id=None` takes it off. Same shape as the CLI's
+/// `task update --role/--clear-role`, and refused the same way for a role of another project's
+/// automation.
+#[tauri::command]
+pub fn task_set_role(id: i64, role_id: Option<i64>) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let patch = match role_id {
+            None => amenbo_core::ops::task::TaskPatch { clear_role: true, ..Default::default() },
+            Some(role_id) => amenbo_core::ops::task::TaskPatch { role_id: Some(role_id), ..Default::default() },
+        };
+        store.update_task(id, patch)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]).task(id))
+}
+
+/// **The roles a task of this project can be worked under**: every role defined in the project's
+/// automations, automation by automation in the order they were placed in, each in the order it is
+/// defined in. An archived automation's roles come too, as they are still ones a task can name. Empty
+/// for a project with no role, which is what keeps the task editor's role field off.
+#[tauri::command]
+pub fn project_roles(project_id: i64) -> Result<Vec<TaskRoleDto>, CmdError> {
+    let store = open_store_read()?;
+    let conn = store.read_model().conn();
+    let mut out = Vec::new();
+    for (automation_id, _) in amenbo_core::store_engine::read::automation_siblings(conn, project_id, None)? {
+        let Some(automation) = amenbo_core::store_engine::read::automation(conn, automation_id)? else { continue };
+        for role in amenbo_core::store_engine::read::automation_roles_of(conn, automation_id)? {
+            out.push(TaskRoleDto {
+                id: role.id,
+                name: role.name,
+                icon: role.icon,
+                automation_id,
+                automation_name: automation.name.clone(),
+            });
+        }
+    }
+    Ok(out)
 }
 
 /// Rewrite this person's facet display names (the roster — `config.human_name` / `ai_name`). `human`
@@ -6048,8 +6105,8 @@ pub(crate) mod tests {
                 .id
         };
 
-        let blocker = task_add(Some(project_id), "先行".into(), None, None, None, None).unwrap().tasks[0];
-        let dependent = task_add(Some(project_id), "後続".into(), None, None, None, None).unwrap().tasks[0];
+        let blocker = task_add(Some(project_id), "先行".into(), None, None, None, None, None, None).unwrap().tasks[0];
+        let dependent = task_add(Some(project_id), "後続".into(), None, None, None, None, None, None).unwrap().tasks[0];
         finish_creating(blocker);
         finish_creating(dependent);
         {
@@ -6109,7 +6166,7 @@ pub(crate) mod tests {
             let v2 = store.dimension_value_add(axis, "v2", None, None).unwrap().id;
             (p, axis, v1, v2)
         };
-        let task = task_add(Some(project_id), "後の段".into(), None, None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "後の段".into(), None, None, None, None, None, None).unwrap().tasks[0];
         finish_creating(task);
         task_set_dimension_value(task, v2).unwrap();
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
@@ -6154,7 +6211,7 @@ pub(crate) mod tests {
                 .id
         };
 
-        let task = task_add(Some(project_id), "実装".into(), None, None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "実装".into(), None, None, None, None, None, None).unwrap().tasks[0];
         finish_creating(task);
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
@@ -6226,7 +6283,7 @@ pub(crate) mod tests {
                 .id
         };
 
-        let task = task_add(Some(project_id), "実装".into(), None, None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "実装".into(), None, None, None, None, None, None).unwrap().tasks[0];
         finish_creating(task);
         let did = decision_add(project_id, "決めごと".into(), Some("結論".into()), None).unwrap().decisions[0];
         decision_set_link(did, task, true).unwrap();
@@ -6272,7 +6329,7 @@ pub(crate) mod tests {
                 .unwrap()
                 .id
         };
-        let task = task_add(Some(project_id), "やり終えた作業".into(), None, None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "やり終えた作業".into(), None, None, None, None, None, None).unwrap().tasks[0];
         finish_creating(task);
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
@@ -6320,7 +6377,7 @@ pub(crate) mod tests {
                 .unwrap()
                 .id
         };
-        let task = task_add(Some(project_id), "やらないと決めた作業".into(), None, None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "やらないと決めた作業".into(), None, None, None, None, None, None).unwrap().tasks[0];
         // A creation still open has no status to close (`AMB-D-846`), and the reason is what is under test.
         finish_creating(task);
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
@@ -6371,7 +6428,7 @@ pub(crate) mod tests {
             p.id
         };
 
-        let ack = task_add(Some(project_id), "結線テスト".into(), None, None, None, None).unwrap();
+        let ack = task_add(Some(project_id), "結線テスト".into(), None, None, None, None, None, None).unwrap();
         assert_eq!(ack.tasks.len(), 1, "task_add returns the new task id");
         assert!(ack.scopes.contains(&"tasks"), "task_add invalidates the task lists");
         let id = ack.tasks[0];
@@ -6426,7 +6483,7 @@ pub(crate) mod tests {
         let proj = proj_snap.projects.iter().find(|p| p.id == project_id).unwrap();
         assert!(proj.dimensions.iter().any(|d| d.name == "軸2"), "dimension added");
 
-        let del_id = task_add(Some(project_id), "消す対象".into(), None, None, None, None).unwrap().tasks[0];
+        let del_id = task_add(Some(project_id), "消す対象".into(), None, None, None, None, None, None).unwrap().tasks[0];
         let ack = task_delete(del_id).unwrap();
         assert_eq!(ack.tasks, vec![del_id], "delete acks the removed task");
         assert!(card(del_id).is_none(), "deleted task drops from the list");
@@ -6453,7 +6510,7 @@ pub(crate) mod tests {
         assert!(snap.activity.iter().any(|a| a.kind == "system" && a.event.as_ref().map(|e| e.kind == "task.assigned").unwrap_or(false)), "assigned event emitted");
 
         let sig_before = store_signature();
-        let _ = task_add(Some(project_id), "シグネチャ確認".into(), None, None, None, None).unwrap();
+        let _ = task_add(Some(project_id), "シグネチャ確認".into(), None, None, None, None, None, None).unwrap();
         assert!(!sig_before.version.is_empty(), "store signature is answered when a store exists");
         assert_ne!(store_signature(), sig_before, "a write advances the store signature");
 
@@ -6492,6 +6549,8 @@ pub(crate) mod tests {
             None,
             Some("2099-12-31".into()),
             Some("2099-01-01".into()),
+            None,
+            None,
             None,
         )
         .unwrap()
@@ -6576,7 +6635,7 @@ pub(crate) mod tests {
         };
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
-        let id = task_add(Some(project_id), "作りかけ".into(), None, None, None, None).unwrap().tasks[0];
+        let id = task_add(Some(project_id), "作りかけ".into(), None, None, None, None, None, None).unwrap().tasks[0];
         let t = card(id);
         assert!(t.draft, "a creation lands unfinished");
         assert!(!t.ready, "which is the fourth premise holding the reservation back");
@@ -6693,8 +6752,8 @@ pub(crate) mod tests {
         decision_supersede(head, old).unwrap();
         decision_amend(head, partial).unwrap();
         decision_builds_on(head, premise).unwrap();
-        let shipped = task_add(Some(project_id), "整数キーへ移行".into(), None, None, None, None).unwrap().tasks[0];
-        let pending = task_add(Some(project_id), "GUI を追従させる".into(), None, None, None, None).unwrap().tasks[0];
+        let shipped = task_add(Some(project_id), "整数キーへ移行".into(), None, None, None, None, None, None).unwrap().tasks[0];
+        let pending = task_add(Some(project_id), "GUI を追従させる".into(), None, None, None, None, None, None).unwrap().tasks[0];
         decision_set_link(head, shipped, true).unwrap();
         decision_set_link(head, pending, true).unwrap();
         // A creation still open has no status to close (`AMB-D-846`); what the card reads is the link.
@@ -6758,7 +6817,7 @@ pub(crate) mod tests {
 
         provision_project("PJ").unwrap();
         let project_id = snapshot().unwrap().projects[0].id;
-        let tid = task_add(Some(project_id), "コメントを消す".into(), None, None, None, None).unwrap().tasks[0];
+        let tid = task_add(Some(project_id), "コメントを消す".into(), None, None, None, None, None, None).unwrap().tasks[0];
 
         let _ = comment_add(tid, "誤投稿".into()).unwrap();
         let _ = comment_add(tid, "残すコメント".into()).unwrap();
@@ -6792,7 +6851,7 @@ pub(crate) mod tests {
 
         provision_project("PJ").unwrap();
         let project_id = snapshot().unwrap().projects[0].id;
-        let tid = task_add(Some(project_id), "コメントを直す".into(), None, None, None, None).unwrap().tasks[0];
+        let tid = task_add(Some(project_id), "コメントを直す".into(), None, None, None, None, None, None).unwrap().tasks[0];
         let _ = comment_add(tid, "誤字のある投稿".into()).unwrap();
 
         let posted: Vec<ActivityItemDto> =
@@ -6995,7 +7054,7 @@ pub(crate) mod tests {
             .unwrap();
             p.id
         };
-        let task_id = task_add(Some(project_id), "添付親タスク".into(), None, None, None, None).unwrap().tasks[0];
+        let task_id = task_add(Some(project_id), "添付親タスク".into(), None, None, None, None, None, None).unwrap().tasks[0];
         comment_add(task_id, "添付を付けるコメント".into()).unwrap();
         let comment_id = {
             let store = Store::open().unwrap();
@@ -7521,7 +7580,7 @@ pub(crate) mod tests {
         };
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next();
 
-        let id = task_add(Some(project_id), "軸テスト".into(), None, None, None, None).unwrap().tasks[0];
+        let id = task_add(Some(project_id), "軸テスト".into(), None, None, None, None, None, None).unwrap().tasks[0];
         assert_eq!(card(id).unwrap().project_id, Some(project_id));
 
         let ack = task_set_dimension_value(id, v1).unwrap();
@@ -7566,7 +7625,7 @@ pub(crate) mod tests {
             p.id
         };
 
-        let ack = task_add(Some(project_id), "空PJタスク".into(), None, None, None, None).unwrap();
+        let ack = task_add(Some(project_id), "空PJタスク".into(), None, None, None, None, None, None).unwrap();
         assert!(ack.scopes.contains(&"tasks"), "task_add invalidates the board lists");
         let task_id = ack.tasks[0];
 
@@ -7614,23 +7673,92 @@ pub(crate) mod tests {
         };
         let at = |id: i64| Store::open().unwrap().task_detail(id).unwrap().at.map(|f| f.dir);
 
-        let id = task_add(Some(one), "一つの方".into(), None, None, None, None).unwrap().tasks[0];
+        let id = task_add(Some(one), "一つの方".into(), None, None, None, None, None, None).unwrap().tasks[0];
         assert_eq!(at(id).as_deref(), Some("/work/one"), "the one folder is filled in unasked");
 
         assert!(
-            task_add(Some(two), "選ばずに".into(), None, None, None, None).is_err(),
+            task_add(Some(two), "選ばずに".into(), None, None, None, None, None, None).is_err(),
             "with two folders, which one is not ours to pick"
         );
-        let id = task_add(Some(two), "選んで".into(), None, None, None, Some("/work/mobile".into())).unwrap().tasks[0];
+        let id = task_add(Some(two), "選んで".into(), None, None, None, Some("/work/mobile".into()), None, None).unwrap().tasks[0];
         assert_eq!(at(id).as_deref(), Some("/work/mobile"), "the folder named is the one the task gets");
 
         assert!(
-            task_add(Some(two), "よその".into(), None, None, None, Some("/work/other".into())).is_err(),
+            task_add(Some(two), "よその".into(), None, None, None, Some("/work/other".into()), None, None).is_err(),
             "another project's folder is no place of this task's"
         );
         assert!(
-            task_add(None, "受信箱".into(), None, None, None, Some("/work/one".into())).is_err(),
+            task_add(None, "受信箱".into(), None, None, None, Some("/work/one".into()), None, None).is_err(),
             "a task in the inbox has no folder"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The role field of the task editor: the project's roles are listed automation by automation, a
+    /// task filed with a role and an assignee carries both on its card, and the role can be changed
+    /// and taken off again.
+    #[test]
+    fn a_task_takes_a_role_of_its_projects_automations() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-task-role");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let (project_id, bare, first, second) = {
+            let mut store = Store::open().unwrap();
+            let mut add = |name: &str| {
+                store
+                    .project_add(amenbo_core::ops::project::NewProject {
+                        name: name.into(),
+                        view: View::Board,
+                        notes: String::new(),
+                        color: None,
+                    })
+                    .unwrap()
+                    .id
+            };
+            let (project_id, bare) = (add("役割あり"), add("役割なし"));
+            let automation = store
+                .automation_add(
+                    project_id,
+                    amenbo_core::ops::automation::NewAutomation { name: "開発".into(), ..Default::default() },
+                )
+                .unwrap();
+            let role = |store: &mut Store, name: &str| {
+                store
+                    .automation_role_add(
+                        automation.id,
+                        amenbo_core::ops::automation::NewRole { name: name.into(), ..Default::default() },
+                    )
+                    .unwrap()
+                    .id
+            };
+            let first = role(&mut store, "実装係");
+            let second = role(&mut store, "レビュー係");
+            (project_id, bare, first, second)
+        };
+
+        let roles = project_roles(project_id).unwrap();
+        let names: Vec<(&str, &str)> =
+            roles.iter().map(|r| (r.name.as_str(), r.automation_name.as_str())).collect();
+        assert_eq!(names, [("実装係", "開発"), ("レビュー係", "開発")], "in the order they are defined in");
+        assert!(project_roles(bare).unwrap().is_empty(), "a project with no automation has no role");
+
+        let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().expect("task");
+        let id = task_add(Some(project_id), "役割つき".into(), None, None, None, None, Some("ai".into()), Some(first))
+            .unwrap()
+            .tasks[0];
+        assert_eq!(card(id).role_id, Some(first), "the role is filed with the task");
+        assert_eq!(card(id).assignee.map(|a| a.kind), Some("ai"), "and so is the assignee");
+
+        task_set_role(id, Some(second)).unwrap();
+        assert_eq!(card(id).role_id, Some(second));
+        task_set_role(id, None).unwrap();
+        assert_eq!(card(id).role_id, None, "no role is the task worked in a session");
+
+        assert!(
+            task_add(Some(bare), "よその役割".into(), None, None, None, None, None, Some(first)).is_err(),
+            "a role of another project's automation is refused"
         );
 
         let _ = std::fs::remove_dir_all(&tmp);
@@ -7879,7 +8007,7 @@ pub(crate) mod tests {
         let tmp = amenbo_scratch::scratch("app-m5");
         std::env::set_var("AMENBO_HOME", &tmp);
 
-        let id = task_add(None, "受信箱D".into(), None, None, None, None).unwrap().tasks[0];
+        let id = task_add(None, "受信箱D".into(), None, None, None, None, None, None).unwrap().tasks[0];
         task_assign(id, Some("human".into())).unwrap();
         assert!(mailbox_comment_tasks().unwrap().is_empty(), "no comments = no membership");
 
@@ -7930,7 +8058,7 @@ pub(crate) mod tests {
 
         assert!(mailbox_triggered_at(vec![]).unwrap().is_empty(), "empty input is empty");
 
-        let id = task_add(None, "triggeredAt".into(), None, None, None, None).unwrap().tasks[0];
+        let id = task_add(None, "triggeredAt".into(), None, None, None, None, None, None).unwrap().tasks[0];
 
         let get = |ids: Vec<i64>| -> Option<String> {
             mailbox_triggered_at(ids).unwrap().into_iter().find(|(i, _)| *i == id).map(|(_, at)| at)
@@ -8082,7 +8210,7 @@ pub(crate) mod tests {
         assert!(empty.rows.is_empty() && !empty.expired, "empty when unchanged (not expired)");
         assert_eq!(empty.cursor, start, "when empty, the cursor stays as passed");
 
-        let task = task_add(Some(project_id), "実装".into(), None, None, None, None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "実装".into(), None, None, None, None, None, None).unwrap().tasks[0];
         let after_add = changes_since(start, None).unwrap();
         assert!(
             after_add.rows.iter().any(|r| r.dataset == "task" && r.row_id == task && r.op == "insert"),

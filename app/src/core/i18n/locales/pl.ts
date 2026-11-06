@@ -287,6 +287,8 @@ export const pl: Translation = {
     "detail.notFound": "Nie znaleziono zadania",
     "detail.unassign": "Zdejmij przypisanie", "detail.assignAi": "Przekaż SI",
     "detail.assignee": "Odpowiedzialny", "detail.unassigned": "Bez przypisania",
+    "detail.role": "Rola", "detail.roleNone": "Bez roli (obsługiwane w sesji)", "detail.rolePick": "Wybierz…",
+    "detail.roleRequired": "Wybierz rolę. Jeśli żaden obieg automatyzacji nie ma się tym zająć, wybierz „Bez roli”.",
     "detail.project": "Projekt", "detail.none": "Brak",
     "detail.blockedBy": "Czeka na", "detail.blockedByHint": "zablokowane (zależność)",
     "detail.notStarted": "Start",

@@ -566,12 +566,10 @@ pub fn automation(a: &Automation) -> Record {
                 ("trigger_when_kind", a.trigger.as_ref().map(|t| tv(t.when.kind_str())).unwrap_or(Value::Null)),
                 (
                     "trigger_every_minutes",
-                    a.trigger
-                        .as_ref()
-                        .map(|t| match t.when {
-                            TriggerWhen::Every { minutes } => iv(minutes.into()),
-                        })
-                        .unwrap_or(Value::Null),
+                    match a.trigger.as_ref().map(|t| t.when) {
+                        Some(TriggerWhen::Every { minutes }) => iv(minutes.into()),
+                        Some(TriggerWhen::Idle) | None => Value::Null,
+                    },
                 ),
                 ("trigger_task_kind", a.trigger.as_ref().map(|t| tv(t.task.kind_str())).unwrap_or(Value::Null)),
                 (
@@ -593,6 +591,7 @@ pub fn automation(a: &Automation) -> Record {
                         .unwrap_or(Value::Null),
                 ),
                 ("trigger_next_at", tsov(&a.trigger.as_ref().map(|t| t.next_at))),
+                ("stopped", bv(a.stopped)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,

@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart, type ViewKind } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Schedule, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DimensionDecisionValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HandoverDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DimensionDecisionValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HandoverDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, TaskRoleDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 import { parseSchedule, scheduleText, todayStr } from "./calendar";
 
@@ -296,7 +296,8 @@ function sysItem(taskId: number, title: string, event: EventDto): ActivityItem {
 /**
  * Returns the id of the task just created, so the caller can open its detail pane. Null if it cannot be resolved.
  * `at` is the folder the task is worked in, as `fetchBoundFolders` lists it; left out, core fills in a
- * project's one folder and refuses a project with several.
+ * project's one folder and refuses a project with several. `assignee` is the facet it is handed to, and
+ * `roleId` the role it is worked under, as `fetchProjectRoles` lists them; left out, it has neither.
  */
 export async function addTask(
   projectId: number | null,
@@ -305,6 +306,8 @@ export async function addTask(
   due?: string | null,
   start?: string | null,
   at?: string | null,
+  assignee?: Facet | null,
+  roleId?: number | null,
 ): Promise<number | null> {
   if (inTauri()) {
     // Pass a project and core places the task there so it lands on that board; its
@@ -313,6 +316,7 @@ export async function addTask(
     // so we apply the ack and lift the id out of it.
     const ack = await invoke<WriteAck>("task_add", {
       projectId, title, notes: notes ?? null, due: due ?? null, start: start ?? null, at: at ?? null,
+      assignee: assignee ?? null, roleId: roleId ?? null,
     });
     applyAck(ack);
     return ack.tasks[0] ?? null;
@@ -325,7 +329,9 @@ export async function addTask(
     // (see `placementOf`).
 
     const task: TaskCard = {
-      id, title, notes: notes ?? "", status: "todo", assignee: null, priority: null,
+      id, title, notes: notes ?? "", status: "todo", priority: null,
+      assignee: assignee ? { name: getSnapshot().roster.find((a) => a.kind === assignee)?.name ?? assignee, kind: assignee } : null,
+      roleId: roleId ?? null,
       due: onSchedule(due ?? null), comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -1178,6 +1184,27 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
       ...s.activity,
     ],
   }));
+}
+
+/**
+ * Set the role the task is worked under, one of `fetchProjectRoles`'s; null takes it off, which leaves
+ * the task to be worked in a session. Corresponds to the CLI's `task update --role / --clear-role`.
+ */
+export async function setTaskRole(id: number, roleId: number | null): Promise<void> {
+  if (inTauri()) return invokeAck("task_set_role", { id, roleId });
+  return mockMutate((s) => ({
+    ...s,
+    tasks: s.tasks.map((x) => (x.id === id ? { ...x, roleId } : x)),
+  }));
+}
+
+/**
+ * The roles a task of this project can be worked under: those defined in its automations, in the order
+ * they are defined in. Empty for a project with none, and outside Tauri, where there are no automations.
+ */
+export async function fetchProjectRoles(projectId: number): Promise<TaskRoleDto[]> {
+  if (!inTauri()) return [];
+  return await invoke<TaskRoleDto[]>("project_roles", { projectId });
 }
 
 /**

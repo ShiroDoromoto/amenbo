@@ -16,7 +16,7 @@ let root: Root;
 function card(over: Partial<TaskCard>): TaskCard {
   return {
     id: 1, title: "t", ref: "#1", notes: "", projectId: null, status: "todo",
-    assignee: null, priority: null, due: null, completedAt: null,
+    assignee: null, roleId: null, priority: null, due: null, completedAt: null,
     comments: 0, ready: true, blockedBy: [], placement: null, createdBy: null,
     linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [], start: null, notStartedUntil: null, draft: false,
     createdAt: "2026-06-01T09:00:00Z", updatedAt: "2026-06-01T09:00:00Z",

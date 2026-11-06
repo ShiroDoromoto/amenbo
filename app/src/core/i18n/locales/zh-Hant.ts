@@ -282,6 +282,8 @@ export const zhHant: Translation = {
     "detail.notFound": "找不到該任務",
     "detail.unassign": "取消指派", "detail.assignAi": "委派給 AI",
     "detail.assignee": "負責人", "detail.unassigned": "未指派",
+    "detail.role": "角色", "detail.roleNone": "無角色（在工作階段中處理）", "detail.rolePick": "請選擇…",
+    "detail.roleRequired": "請選擇角色。若不交給自動化的輪次處理，請選擇「無角色」。",
     "detail.project": "專案", "detail.none": "無",
     "detail.blockedBy": "等待", "detail.blockedByHint": "受阻（相依）",
     "detail.notStarted": "開始於",

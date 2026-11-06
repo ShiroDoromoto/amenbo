@@ -1311,6 +1311,19 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 108,
+        name: "widen automation.trigger_when_kind to admit idle, a trigger that fires when no run is under way",
+        // **Unseeded.** Every trigger written before this is an `every`, and stays one.
+        apply: Apply::Custom(let_a_trigger_wait_for_idle),
+    },
+    Step {
+        to: 109,
+        name: "add automation.stopped, an automation a person stopped from starting new rounds",
+        // **Unseeded.** Nobody could stop an automation before, so every one written before this goes on
+        // as it did.
+        apply: Apply::Custom(let_a_person_stop_an_automation),
+    },
+    Step {
+        to: 110,
         name: "add automation_run_def.roles and automation_run_task.role_id, the roles a run's copy starts and the role a round is worked under",
         // **Unseeded.** A run launched before this went round as its picture was drawn, never by a role,
         // so no copy of it starts a role's round and none of its rounds was worked under one.
@@ -1318,7 +1331,45 @@ pub const STEPS: &[Step] = &[
     },
 ];
 
-/// v108: `automation_run_def.roles`, the roles whose round starts at a run's copy of a step, and
+/// v108: `automation.trigger_when_kind` admits `idle` beside `every`.
+///
+/// **Rewritten only where the column does not admit it yet.** A store whose automation table was
+/// created in the live shape already has it right. SQLite cannot change a column's constraint in place,
+/// and the table is not rebuilt (v106's reason), so the kinds are kept in a column of their own while
+/// the column is dropped and added again.
+fn let_a_trigger_wait_for_idle(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let table: String =
+        tx.query_row("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation'", [], |r| r.get(0))?;
+    if table.contains("trigger_when_kind IN ('every', 'idle')") {
+        return Ok(());
+    }
+    tx.execute_batch(
+        "ALTER TABLE automation ADD COLUMN trigger_when_kind_kept TEXT;
+         UPDATE automation SET trigger_when_kind_kept = trigger_when_kind;
+         ALTER TABLE automation DROP COLUMN trigger_when_kind;
+         ALTER TABLE automation ADD COLUMN trigger_when_kind TEXT \
+             CHECK(trigger_when_kind IN ('every', 'idle'));
+         UPDATE automation SET trigger_when_kind = trigger_when_kind_kept;
+         ALTER TABLE automation DROP COLUMN trigger_when_kind_kept;",
+    )?;
+    Ok(())
+}
+
+/// v109: `automation.stopped` — a person stopped the automation, so it starts no new round.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason.
+fn let_a_person_stop_an_automation(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation")?.iter().any(|c| c == "stopped") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN stopped BOOLEAN NOT NULL DEFAULT 0 CHECK(stopped IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
+
+/// v110: `automation_run_def.roles`, the roles whose round starts at a run's copy of a step, and
 /// `automation_run_task.role_id`, the role a round is worked under.
 ///
 /// **Appended only where missing**, v68's guard and for v53's reason. `roles` is added as v102 added
@@ -11358,12 +11409,78 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v108: a run launched before the step starts no role's round from any copy, and none of its
+    /// v108: a trigger written before the step keeps its kind, and the column admits `idle` beside
+    /// `every` and nothing else.
+    #[test]
+    fn a_trigger_written_before_v108_keeps_its_kind_and_idle_is_admitted() {
+        let dir = scratch("automation-trigger-idle");
+        let engine = store_at(&dir, 107);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, trigger_when_kind, trigger_every_minutes, \
+                     trigger_task_kind, trigger_task_title, trigger_task_notes, trigger_next_at) \
+                     VALUES (1, 1, 'work', 'every', 60, 'fixed', 'look', '', '2026-11-07T00:00:00Z');
+                 INSERT INTO automation (id, project_id, name) VALUES (2, 1, 'rest');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let kinds: Vec<(Option<String>, Option<i64>)> = engine
+            .conn()
+            .prepare("SELECT trigger_when_kind, trigger_every_minutes FROM automation ORDER BY id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(kinds, vec![(Some("every".into()), Some(60)), (None, None)], "every row keeps what it had");
+        let refused = engine.conn().execute("UPDATE automation SET trigger_when_kind = 'hourly' WHERE id = 1", []);
+        assert!(refused.is_err(), "a kind not declared is refused");
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation SET trigger_when_kind = 'idle', trigger_every_minutes = NULL WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v109: an automation written before the step is not stopped, and the column admits only 0 or 1.
+    #[test]
+    fn an_automation_written_before_v109_is_not_stopped() {
+        let dir = scratch("automation-stopped");
+        let engine = store_at(&dir, 108);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let stopped: bool =
+            engine.conn().query_row("SELECT stopped FROM automation WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert!(!stopped, "nobody could stop an automation before");
+        let refused = engine.conn().execute("UPDATE automation SET stopped = 2 WHERE id = 1", []);
+        assert!(refused.is_err(), "only 0 or 1");
+        engine.conn().execute("UPDATE automation SET stopped = 1 WHERE id = 1", []).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v110: a run launched before the step starts no role's round from any copy, and none of its
     /// rounds was worked under a role.
     #[test]
-    fn a_run_launched_before_v108_goes_round_by_no_role() {
+    fn a_run_launched_before_v110_goes_round_by_no_role() {
         let dir = scratch("run-roles");
-        let engine = store_at(&dir, 107);
+        let engine = store_at(&dir, 109);
         engine
             .conn()
             .execute_batch(

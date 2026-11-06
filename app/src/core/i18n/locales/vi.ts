@@ -284,6 +284,8 @@ export const vi: Translation = {
     "detail.notFound": "Không thấy việc",
     "detail.unassign": "Bỏ người phụ trách", "detail.assignAi": "Giao cho AI",
     "detail.assignee": "Người phụ trách", "detail.unassigned": "Chưa giao",
+    "detail.role": "Vai trò", "detail.roleNone": "Không có vai trò (xử lý trong phiên)", "detail.rolePick": "Chọn một…",
+    "detail.roleRequired": "Hãy chọn vai trò. Nếu không để vòng tự động hóa nào xử lý, hãy chọn “Không có vai trò”.",
     "detail.project": "Dự án", "detail.none": "Không có",
     "detail.blockedBy": "Đang chờ", "detail.blockedByHint": "bị chặn (phụ thuộc)",
     "detail.notStarted": "Bắt đầu từ",

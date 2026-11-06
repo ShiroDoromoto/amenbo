@@ -1869,6 +1869,12 @@ pub struct Automation {
     /// version.
     #[serde(default)]
     pub trigger: Option<AutomationTrigger>,
+    /// **A person stopped this automation**, so it starts no new round: it is not launched, its trigger
+    /// files nothing, and a run of it pauses where it finishes a round, or at once where it is waiting
+    /// at its entry for a task to take. A round under way is not cut short. Like `archived`, it is the
+    /// automation's, not part of a saved version.
+    #[serde(default)]
+    pub stopped: bool,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -1902,7 +1908,8 @@ impl FailuresTo {
     }
 }
 
-/// The fewest minutes a trigger may be written to wait between two tasks ([`TriggerWhen::Every`]).
+/// The fewest minutes a trigger waits between two tasks it files: the least a [`TriggerWhen::Every`]
+/// may be written with, and the rest a [`TriggerWhen::Idle`] always takes after each one.
 pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 
 /// **An automation's trigger** ([`Automation::trigger`]) — what starts a run with nobody pressing
@@ -1916,8 +1923,8 @@ pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 pub struct AutomationTrigger {
     pub when: TriggerWhen,
     pub task: TriggerTask,
-    /// When it is next asked whether to file a task: set when the trigger is written, and moved on each
-    /// time it files one.
+    /// When it is next asked whether to file a task (for an `idle`, the soonest it may file one): set
+    /// when the trigger is written, and moved on each time it files one.
     pub next_at: Timestamp,
 }
 
@@ -1928,6 +1935,11 @@ pub enum TriggerWhen {
     /// Every `minutes` minutes, counted from when the trigger was written and then from each task it
     /// filed.
     Every { minutes: u32 },
+    /// Whenever the automation has no run under way (`running` or `paused`) — counted, like
+    /// `max_concurrent_runs`, over every run of it, whoever started it. It still waits
+    /// [`MIN_TRIGGER_EVERY_MINUTES`] after it is written and after each task it files, so a run that
+    /// ends at once is not followed by another on every look.
+    Idle,
 }
 
 impl TriggerWhen {
@@ -1935,14 +1947,17 @@ impl TriggerWhen {
     pub fn kind_str(&self) -> &'static str {
         match self {
             TriggerWhen::Every { .. } => "every",
+            TriggerWhen::Idle => "idle",
         }
     }
 
     /// How long after `from` it is next asked.
     pub fn after(&self, from: Timestamp) -> Timestamp {
-        match self {
-            TriggerWhen::Every { minutes } => Timestamp(from.0 + chrono::Duration::minutes(i64::from(*minutes))),
-        }
+        let minutes = match self {
+            TriggerWhen::Every { minutes } => *minutes,
+            TriggerWhen::Idle => MIN_TRIGGER_EVERY_MINUTES,
+        };
+        Timestamp(from.0 + chrono::Duration::minutes(i64::from(minutes)))
     }
 }
 

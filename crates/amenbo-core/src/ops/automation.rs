@@ -1186,6 +1186,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         failures_to: new.failures_to,
         export_only: false,
         trigger: None,
+        stopped: false,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1267,7 +1268,7 @@ pub struct NewTrigger {
 /// at launch as any other is, and one refused there files nothing ([`automation_run::fire`]).
 ///
 /// Refused on an automation kept for export only, which is never launched. A task with no title is
-/// refused, as is a wait of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. Taking a trigger away
+/// refused, as is an `every` of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. Taking a trigger away
 /// that is not there writes nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
@@ -1285,11 +1286,13 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     after.trigger = match trigger {
         None => None,
         Some(NewTrigger { when, task }) => {
-            let TriggerWhen::Every { minutes } = when;
-            if minutes < MIN_TRIGGER_EVERY_MINUTES {
-                return Err(Error::invalid(format!(
-                    "a trigger waits at least {MIN_TRIGGER_EVERY_MINUTES} minute(s) between tasks, not {minutes}"
-                )));
+            match when {
+                TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
+                    return Err(Error::invalid(format!(
+                        "a trigger waits at least {MIN_TRIGGER_EVERY_MINUTES} minute(s) between tasks, not {minutes}"
+                    )));
+                }
+                TriggerWhen::Every { .. } | TriggerWhen::Idle => {}
             }
             let task = match task {
                 TriggerTask::Fixed { title, notes } => {
@@ -1306,6 +1309,44 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     after.updated_at = now;
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     Ok(after)
+}
+
+/// **What stopping an automation did** ([`stop`]): the automation as it now stands, and the runs of it
+/// that were waiting at their entry to take a task and so were paused there and then.
+#[derive(Clone, Debug)]
+pub struct Stopped {
+    pub automation: Automation,
+    pub paused: Vec<crate::model::AutomationRun>,
+}
+
+/// **Stop an automation** (`stopped` true), so it starts no new round, **or let it start them again**
+/// (false). Stopping is a person's way to have an automation stop working without cutting short what
+/// it is in the middle of:
+///
+/// - **No run of it starts.** A launch is refused, and so is picking up a run paused before its next
+///   task, which would start a round from the entry ([`automation_run`]).
+/// - **Its trigger files nothing** while it is stopped, and `next_at` stays where it was.
+/// - **A run of it finishes the round it is on**, and pauses where the round is over, before it takes
+///   its next task. One standing at its entry waiting for a task to take, or for room in the action that
+///   takes one, is paused here at once ([`Stopped::paused`]). A run that takes no tasks has no round to
+///   finish and goes on to its end.
+///
+/// Letting it start again picks up no run: those paused stay paused until somebody resumes them. Writing
+/// what already stands writes nothing.
+pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
+    let before = live_automation(tx, id)?;
+    if before.stopped == stopped {
+        return Ok(Stopped { automation: before, paused: Vec::new() });
+    }
+    let mut after = before.clone();
+    after.stopped = stopped;
+    after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation(&before), record::automation(&after))?;
+    let paused = match stopped {
+        true => crate::ops::automation_stop::pause_the_waiting(tx, id)?,
+        false => Vec::new(),
+    };
+    Ok(Stopped { automation: after, paused })
 }
 
 /// Reorder an automation within its project.
@@ -4095,9 +4136,9 @@ mod tests {
         });
     }
 
-    /// **A trigger is written, counted from the write, and taken away.** A wait under a minute, a task
-    /// with no title and an automation kept for export only are refused; taking away one that is not
-    /// there writes nothing.
+    /// **A trigger is written, counted from the write, and taken away** — an `every` or an `idle`. A wait
+    /// under a minute, a task with no title and an automation kept for export only are refused; taking
+    /// away one that is not there writes nothing.
     #[test]
     fn a_trigger_is_written_and_taken_away() {
         let hourly = |title: &str| NewTrigger {
@@ -4124,6 +4165,12 @@ mod tests {
                 assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
             }
             assert_eq!(live_automation(tx, automation.id).expect("read").trigger.map(|t| t.task), Some(trigger.task));
+
+            let idle = NewTrigger { when: TriggerWhen::Idle, ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(idle)).expect("an idle one");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(read_back.when, TriggerWhen::Idle, "kept with no minutes");
+            assert_eq!(set.trigger, Some(read_back));
 
             let off = trigger_set(tx, automation.id, None).expect("take it away");
             assert_eq!(off.trigger, None);

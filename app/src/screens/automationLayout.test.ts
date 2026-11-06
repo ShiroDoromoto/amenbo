@@ -88,6 +88,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     notes: "",
     archived: false,
     maxConcurrentRuns: 1,
+    roles: [],
     placements: [],
     edges: [],
     wires: [],

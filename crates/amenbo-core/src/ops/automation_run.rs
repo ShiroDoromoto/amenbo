@@ -687,16 +687,45 @@ fn roles_by_placement<'p>(
     by_id: &BTreeMap<i64, &AutomationPlacement>,
     defs: &Defs,
 ) -> BTreeMap<i64, &'p AutomationRole> {
+    first_round_reaching(pic, by_id, defs, pic.roles().iter().filter(|role| role.agent.is_some()))
+}
+
+/// **The first of `roles` whose round reaches each placement** — `roles` walked in the order given, a
+/// placement more than one round reaches kept with the first ([`round_of`]). Every role's start still
+/// stops a round, whether or not it is among `roles`.
+fn first_round_reaching<'p>(
+    pic: &'p Picture,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
+    roles: impl Iterator<Item = &'p AutomationRole>,
+) -> BTreeMap<i64, &'p AutomationRole> {
     let starts: BTreeSet<i64> =
         pic.roles().iter().filter_map(|role| role.entry_placement_id).chain(pic.entry_placement_id).collect();
     let mut found = BTreeMap::new();
-    for role in pic.roles().iter().filter(|role| role.agent.is_some()) {
+    for role in roles {
         let Some(entry) = role.entry_placement_id else { continue };
         for id in round_of(entry, pic, by_id, defs, &starts) {
             found.entry(id).or_insert(role);
         }
     }
     found
+}
+
+/// **The role whose round reaches each placement**, as placement id → role id, for the definition
+/// `reads` names. Every role is walked in the order they are defined in, a role naming no agent
+/// included: this is where a round goes, which a picture draws whether or not the role has an agent for
+/// its steps to fall back to ([`roles_by_placement`] is that narrower one). A placement more than one
+/// round reaches is the first role's; a placement no round reaches is left out.
+pub fn rounds_by_placement(conn: &Connection, automation_id: i64, reads: ReadsFrom) -> Result<BTreeMap<i64, i64>> {
+    let automation = read::automation(conn, automation_id)?
+        .ok_or_else(|| not_found("automation", automation_id))?;
+    let (pic, _) = definition(conn, &automation, reads)?;
+    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
+    let defs = defs_of(conn, &pic.placements)?;
+    Ok(first_round_reaching(&pic, &by_id, &defs, pic.roles().iter())
+        .into_iter()
+        .map(|(placement_id, role)| (placement_id, role.id))
+        .collect())
 }
 
 /// **The placements one round reaches** — walked from where it starts, as [`reachable`] walks, but not
@@ -3953,6 +3982,26 @@ mod tests {
                 carried(tx, &automation, &placement, &step, None),
                 Some(Carrier { agent: "claude".into(), model: None, at: ChosenAt::Role { role_id: first.id } }),
             );
+        });
+    }
+
+    /// **The round reaching a placement is the first role defined whose round does**, a role naming no
+    /// agent included — unlike the role a step falls back to, which passes such a role by.
+    #[test]
+    fn a_placement_is_in_the_round_of_the_first_role_reaching_it_with_or_without_an_agent() {
+        with_tx(|tx| {
+            let (automation, _, placement) = launchable(tx);
+            let entry = automation.entry_placement_id.expect("an entry");
+            let rounds = || rounds_by_placement(tx.conn(), automation.id, ReadsFrom::Draft).expect("rounds");
+            assert_eq!(rounds(), BTreeMap::new(), "no role, no round");
+
+            let reception = role_at(tx, &automation, "受付", entry, Some("codex"), None);
+            let unnamed = role_at(tx, &automation, "名無し", placement.id, None, None);
+            role_at(tx, &automation, "実装", placement.id, Some("claude"), None);
+
+            let rounds = rounds();
+            assert_eq!(rounds.get(&entry), Some(&reception.id));
+            assert_eq!(rounds.get(&placement.id), Some(&unnamed.id), "the role defined first, though it names no agent");
         });
     }
 

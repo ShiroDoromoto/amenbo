@@ -2037,6 +2037,13 @@ pub struct PtySessionDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) run: Option<i64>,
+    /// **When the terminal last wrote something a pane draws**, in milliseconds since the epoch, or
+    /// absent for one that has written nothing yet (`crate::pty::Pane`). It moves on the bytes the
+    /// terminal wrote, never on what the agent in it says, and not on a chunk that was only a
+    /// cursor-position query.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) last_output: Option<i64>,
 }
 
 /// What a pane is handed when it adopts a session already running (`crate::pty::pty_attach`).

@@ -39,7 +39,7 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{mpsc, Arc, Mutex, PoisonError};
 
 use base64::Engine as _;
@@ -559,6 +559,15 @@ struct Pane {
     /// record is one entry however many times it arrives, which is the footing a count of commands
     /// that ran stands on (`AMB-D-897`).
     made: Mutex<Vec<SessionMadeDto>>,
+    /// When the terminal last wrote something the pane draws, in milliseconds since the epoch — `0`
+    /// until it has written anything.
+    ///
+    /// **Measured, not said.** It moves on the bytes [`drain`] actually read, so whether a step has
+    /// gone quiet stands on what the terminal did rather than on what the agent in it reports
+    /// (`AMB-D-862`). A chunk that was nothing but a cursor-position query is not output — conhost
+    /// asking, not the program writing — and does not move it. It is held here rather than written
+    /// anywhere per chunk: a reader asks for it ([`pty_sessions`]) when it wants it.
+    last_output: AtomicI64,
 }
 
 /// A pane's rename, as the thread carrying it and the name it is to carry next.
@@ -590,7 +599,14 @@ impl Pane {
             renaming: Mutex::new(Renaming::default()),
             named: Mutex::new(None),
             made: Mutex::new(Vec::new()),
+            last_output: AtomicI64::new(0),
         }
+    }
+
+    /// When the terminal last wrote something the pane draws ([`Pane::last_output`]), or `None` when
+    /// it has written nothing yet.
+    fn last_output(&self) -> Option<i64> {
+        Some(self.last_output.load(Ordering::Relaxed)).filter(|&at| at != 0)
     }
 
     /// Take in one statement on its way to the window.
@@ -709,7 +725,10 @@ impl Pane {
     /// arriving between the two would be handed the chunk in what it is given to draw *and* sent it
     /// as an event, and would draw it twice; taking the same two locks in the same order in both
     /// places is what leaves the chunk on exactly one side of the handover.
+    ///
+    /// It is also the moment the terminal is taken to have written something ([`Pane::last_output`]).
     fn keep(&self, bytes: &[u8]) -> String {
+        self.last_output.store(since_epoch_ms(), Ordering::Relaxed);
         self.drawn.lock().unwrap_or_else(PoisonError::into_inner).push(bytes);
         self.recent.lock().unwrap_or_else(PoisonError::into_inner).push(bytes);
         self.target()
@@ -1548,6 +1567,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
         agent: agent_id,
         frame: placed,
         run: step.map(|(run, _)| run),
+        last_output: pane.last_output(),
     })
 }
 
@@ -1694,12 +1714,11 @@ fn drain(app: &tauri::AppHandle, session: &str, pane: &Pane, mut reader: Box<dyn
             Ok(0) | Err(_) => return,
             Ok(n) => n,
         };
-        let (bytes, asked) = cursor.take(&buf[..n]);
+        let (bytes, asked, target) = keep_read(pane, &mut cursor, &buf[..n]);
         answer_cursor(app, session, asked);
-        if bytes.is_empty() {
+        let Some(target) = target else {
             continue;
-        }
-        let target = pane.keep(&bytes);
+        };
         let chunk = PtyChunkDto {
             session: session.to_string(),
             base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
@@ -1708,6 +1727,21 @@ fn drain(app: &tauri::AppHandle, session: &str, pane: &Pane, mut reader: Box<dyn
             return;
         }
     }
+}
+
+/// Take one read off the terminal: what is to be drawn, how many cursor queries were taken out of it,
+/// and the window to send it to — `None` where nothing was left to draw.
+///
+/// A read that was only cursor queries is not kept, so it is not output either: it leaves
+/// [`Pane::last_output`] where it was.
+fn keep_read<'a>(
+    pane: &Pane,
+    cursor: &mut CursorQuery,
+    read: &'a [u8],
+) -> (Cow<'a, [u8]>, usize, Option<String>) {
+    let (bytes, asked) = cursor.take(read);
+    let target = (!bytes.is_empty()).then(|| pane.keep(&bytes));
+    (bytes, asked, target)
 }
 
 /// Tell the terminal where its cursor is, as many times as it asked.
@@ -2073,6 +2107,7 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
                         agent: terminal.agent.clone(),
                         frame: terminal.frame.clone(),
                         run: terminal.run,
+                        last_output: terminal.pane.last_output(),
                     },
                 )
             })
@@ -3014,6 +3049,7 @@ mod tests {
                     agent: None,
                     frame: None,
                     run: None,
+                    last_output: None,
                 },
             )
         };
@@ -3064,6 +3100,31 @@ mod tests {
         let (bytes, asked) = asking().take(b"hi\x1b[6nthere");
         assert_eq!(asked, 1);
         assert_eq!(&*bytes, b"hithere");
+    }
+
+    /// The last-output time moves on what the pane draws and on nothing else. A read that was only
+    /// conhost asking where the cursor is leaves it where it was, so a step whose terminal is asked
+    /// but writes nothing still reads as quiet.
+    #[test]
+    fn only_drawn_output_moves_the_last_output_time() {
+        let pane = Pane::new("main", OPENED_AT);
+        let mut cursor = asking();
+        assert_eq!(pane.last_output(), None);
+
+        let (bytes, asked, target) = keep_read(&pane, &mut cursor, b"\x1b[6n");
+        assert!(bytes.is_empty());
+        assert_eq!(asked, 1);
+        assert_eq!(target, None);
+        assert_eq!(pane.last_output(), None);
+
+        let before = since_epoch_ms();
+        let (_, _, target) = keep_read(&pane, &mut cursor, b"hi");
+        assert_eq!(target.as_deref(), Some("main"));
+        let heard = pane.last_output().expect("drawn output moves it");
+        assert!(heard >= before);
+
+        keep_read(&pane, &mut cursor, b"\x1b[6n");
+        assert_eq!(pane.last_output(), Some(heard));
     }
 
     /// A read ends wherever the kernel filled the buffer, and four bytes are as splittable as any

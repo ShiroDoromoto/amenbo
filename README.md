@@ -394,8 +394,8 @@ amenbo automation exit-add --action 7 --name "gave up" # a way out a placement m
 amenbo automation edge-add --in-action --from 11: --exit-to # inside an action: leave it by a way out it declares
 amenbo automation edge-add --in-action --from "11:gave up" --exit-to "gave up"
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
-amenbo automation place-add 3 --action 7               # 33: put that action on the picture; its steps start with the default agent
-amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, if not the default (--model too)
+amenbo automation place-add 3 --action 7               # 33: put that action on the picture; a step nobody chooses for falls back to its role's agent, then Amenbo's
+amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, ahead of its role's default (--model too)
 amenbo automation role-add 3 --name Implement --entry 32 --agent claude-code # a role: where its round starts, and the agent its steps fall back to — 31 then takes only a task of one of its roles, and goes on to where that task's role starts
 amenbo automation update 3 --failures-to 8           # where a failed round is filed: a role of it (8, from role-add) or `human`; a start is refused until one is named
 amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in

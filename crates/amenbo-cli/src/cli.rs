@@ -1968,8 +1968,9 @@ pub enum AutomationCmd {
     PlaceAdd {
         /// automation id
         automation: i64,
-        /// the library action to place. Each of its steps starts out carried by the default agent —
-        /// the project's, else the one a pane was last opened with — and `agent-set` changes it
+        /// the library action to place. A step nobody chooses for with `agent-set` is carried out by
+        /// its role's default agent, else by Amenbo's — the project's, else the one a pane was last
+        /// opened with
         #[arg(long, value_name = "ID", required_unless_present = "builtin", conflicts_with = "builtin")]
         action: Option<i64>,
         /// place one of Amenbo's built-ins instead (`automation builtin-list` names them). Placed first,
@@ -2090,9 +2091,9 @@ pub enum AutomationCmd {
         id: i64,
     },
     /// Add a step to a library action. One step is one terminal, and it carries its own prompt; who
-    /// carries it out is chosen where the action is placed (`agent-set`). Where the action is placed
-    /// already, the new step starts out there with the default agent, as a placed step does. With
-    /// `--program` the step is a script instead, and runs that program rather than a prompt
+    /// carries it out is chosen where the action is placed (`agent-set`), else falls back to its
+    /// role's default agent and then Amenbo's. With `--program` the step is a script instead, and runs
+    /// that program rather than a prompt
     StepAdd {
         /// action id
         action: i64,
@@ -2327,7 +2328,8 @@ pub enum AutomationCmd {
         filter: Box<TaskFilterArgs>,
     },
     /// Choose who carries one step out at one placement — the agent, and the model where one is named.
-    /// A step nobody is chosen for is refused at launch
+    /// A step nobody is chosen for falls back to its role's default, then Amenbo's; with neither, it
+    /// is refused at launch
     AgentSet {
         /// placement id
         placement: i64,
@@ -2340,7 +2342,7 @@ pub enum AutomationCmd {
         /// which model; left out, the agent's own default stands
         #[arg(long, conflicts_with = "clear")]
         model: Option<String>,
-        /// leave nobody chosen for it
+        /// leave nobody chosen for it here, so it falls back to its role's default, then Amenbo's
         #[arg(long)]
         clear: bool,
     },

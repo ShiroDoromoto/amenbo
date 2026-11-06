@@ -945,6 +945,7 @@ mod tests {
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let startable = vec!["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&startable),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -1111,7 +1112,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, "test_stamp");
             let startable = vec!["claude".to_string()];
-            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None).expect("check");
             // The picture ends with the task open, and takes it at a step of its own rather than a
             // built-in — each its own reason, and neither the one asked here.
             let gaps: Vec<_> = unmet

@@ -1252,10 +1252,11 @@ datasets! {
     // automation. It is `RESTRICT`, as the automation's own entry is, so taking a placement off drops
     // the reference first. NULL while it is still being built.
     //
-    // `agent` and `model` are defaults only (`AMB-D-960`): the choice made for a step where its action
-    // is placed (`automation_placement_step`) stays. `model` is named only beside an agent. `icon` is
-    // the name the GUI draws it by, NULL for none chosen. `order_key` is the order the roles are defined
-    // in. No name is held unique: a role is pointed at by its id.
+    // `agent` and `model` are defaults only: the choice made for a step where its action is placed
+    // (`automation_placement_step`) comes first, then this, then Amenbo's own default agent. `model` is
+    // named only beside an agent. `icon` is the name the GUI draws it by, NULL for none chosen.
+    // `order_key` is the order the roles are defined in. No name is held unique: a role is pointed at
+    // by its id.
     automation_role {
         automation_id: fk("automation", "RESTRICT"),
         name: col(REQ),

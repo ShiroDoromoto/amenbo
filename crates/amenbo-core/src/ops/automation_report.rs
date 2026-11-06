@@ -897,6 +897,7 @@ mod tests {
     fn a_run(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let startable = vec!["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&startable),
             models: crate::ops::automation_run::nothing_asked(),
             workspace_open: Some(true),

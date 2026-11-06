@@ -1920,6 +1920,17 @@ pub enum AutomationCmd {
         #[arg(long, conflicts_with_all = ["every", "title", "notes"])]
         off: bool,
     },
+    /// Stop an automation from starting new rounds, or let it start them again with --off. While it is
+    /// stopped, a start and its trigger are refused, and a run of it finishes the round it is on and
+    /// pauses before it takes its next task — one waiting for a task pauses at once. Picking such a run up
+    /// again (`resume`) is refused until the automation is started again
+    Stop {
+        /// automation id
+        id: i64,
+        /// let it start new rounds again; the runs it paused stay paused until resumed
+        #[arg(long)]
+        off: bool,
+    },
     /// Delete an automation with every placement, edge and wire built onto it — confirms unless -y.
     /// One that runs were launched from cannot be deleted: archive it (`update --archived true`)
     Rm {

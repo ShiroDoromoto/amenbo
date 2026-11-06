@@ -1602,6 +1602,37 @@ mod tests {
         });
     }
 
+    /// **A stopped automation's trigger files nothing**: it is not due, it decides no, and the time it
+    /// is next asked stays where it was. Started again, it files its task.
+    #[test]
+    fn a_stopped_automations_trigger_files_nothing() {
+        use crate::model::{TriggerTask, TriggerWhen};
+        use crate::ops::automation_run::{fire, triggers_due, TriggersDue};
+        with_tx(|tx| {
+            let (automation, _, _) = entry(tx);
+            let trigger = automation::NewTrigger {
+                when: TriggerWhen::Every { minutes: 5 },
+                task: TriggerTask::Fixed { title: "見る".into(), notes: String::new() },
+            };
+            automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
+            automation::stop(tx, automation.id, true).expect("stop");
+            let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");
+            let due = before.trigger.as_ref().expect("kept").next_at;
+            let claude = ["claude".to_string()];
+            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+
+            assert_eq!(triggers_due(tx.conn(), due).expect("ask"), TriggersDue::default(), "not asked at all");
+            assert!(fire(tx, automation.id, &by, due).expect("fire").is_none(), "it decides no");
+            let after = read::automation(tx.conn(), automation.id).expect("read").expect("there");
+            assert_eq!(after.trigger, before.trigger, "next_at is where it was");
+            assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty());
+
+            automation::stop(tx, automation.id, false).expect("start it again");
+            assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![automation.id]);
+            assert!(fire(tx, automation.id, &by, due).expect("fire").is_some(), "and it files its task");
+        });
+    }
+
     /// **A trigger whose run the launch refuses files nothing**: the refusal comes back, and the time it
     /// is next asked stays where it was.
     #[test]

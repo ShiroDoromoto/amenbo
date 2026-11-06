@@ -1490,10 +1490,12 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 
 /// **Launch an automation**: check it, copy what is placed on it into a run, and start it.
 ///
-/// Four things refuse, in this order.
+/// Five things refuse, in this order.
 ///
 /// - **Archived.** Archiving is what keeps an automation nobody launches any more out of the lists, and
 ///   launching one straight past that would make the word mean nothing.
+/// - **Stopped.** A person stopped it so that it starts no new round ([`Automation::stopped`]); a launch
+///   is one.
 /// - **The check** ([`check`]), as one `not_ready` refusal carrying a part per reason.
 /// - **The workspace being closed**, last on purpose. What the check found is wrong with the automation
 ///   and stays wrong after a window is opened, so saying "open a window" first would send somebody to do
@@ -1575,9 +1577,10 @@ pub struct TriggersDue {
 }
 
 /// **Which triggers are due at `now`** — the first part of each, asked of every automation that may be
-/// started by one ([`read::automations_triggered`]). One whose automation already has its most runs
-/// under way is not due: it would decide not to file a task, so a look need not open a write to hear
-/// it say so. It writes nothing: [`fire`] asks all of it again, in the transaction it writes in.
+/// started by one ([`read::automations_triggered`]), which leaves out a stopped one. One whose
+/// automation already has its most runs under way is not due: it would decide not to file a task, so a
+/// look need not open a write to hear it say so. It writes nothing: [`fire`] asks all of it again, in
+/// the transaction it writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
@@ -1599,7 +1602,8 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 ///
 /// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while the automation already
 ///    has its most runs under way (`max_concurrent_runs`): a task filed then would have no run to go to.
-///    An archived automation, one kept for export only and one with no trigger file none either.
+///    An archived automation, a stopped one, one kept for export only and one with no trigger file none
+///    either.
 /// 2. **What it says.** The title and notes written on the trigger.
 /// 3. **The run.** A launch like any other ([`launch_handing`]), of the newest saved version, the task
 ///    handed to its entry as a person's would be — so it is the entry, the built-in that files a task,
@@ -1613,7 +1617,7 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timestamp) -> Result<Option<AutomationRun>> {
     let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     let Some(trigger) = before.trigger.clone() else { return Ok(None) };
-    if before.archived || before.export_only || now < trigger.next_at {
+    if before.archived || before.stopped || before.export_only || now < trigger.next_at {
         return Ok(None);
     }
     let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
@@ -1734,6 +1738,12 @@ fn launch_asking(
             .with("automation", &automation.name),
         ));
     }
+    if automation.stopped {
+        return Err(Error::invalid(format!(
+            "automation '{}' is stopped — start it again (`automation stop {} --off`) before launching it",
+            automation.name, automation.id
+        )));
+    }
     let (pic, version) = definition(tx.conn(), &automation, reads)?;
     let unmet: Vec<Unmet> = check_picture(tx.conn(), &automation, &pic, by.startable, by.models)?
         .into_iter()
@@ -1833,8 +1843,8 @@ fn copy_down(tx: &WriteTx<'_>, run_id: i64, pic: &Picture, version: Option<i64>,
 /// answer the copy of its entry — where the run picks up.
 ///
 /// It reads the saved definition, as a launch does ([`ReadsFrom::Saved`]). The new copy is checked
-/// first, as a launch checks it ([`checked_saved`]): an archived automation, or one [`check`] finds
-/// anything unmet in, is refused, and nothing is written.
+/// first, as a launch checks it ([`checked_saved`]): an archived automation, a stopped one, or one
+/// [`check`] finds anything unmet in, is refused, and nothing is written.
 pub(crate) fn copy_down_again(
     tx: &WriteTx<'_>,
     run: &AutomationRun,
@@ -1849,8 +1859,8 @@ pub(crate) fn copy_down_again(
 }
 
 /// **The automation's newest saved definition, checked as a launch checks it** ([`launch_asking`]) — for
-/// a run about to be copied down afresh. An archived automation, or one [`check`] finds anything unmet
-/// in, is refused.
+/// a run about to be copied down afresh. An archived automation, a stopped one, or one [`check`] finds
+/// anything unmet in, is refused.
 fn checked_saved(
     conn: &Connection,
     run: &AutomationRun,
@@ -1868,6 +1878,13 @@ fn checked_saved(
             .coded(ErrorCode::InvalidAutomationArchived)
             .with("automation", &automation.name),
         ));
+    }
+    if automation.stopped {
+        return Err(Error::invalid(format!(
+            "automation '{}' is stopped, and picking up run '{}' would start a new round — start the \
+             automation again (`automation stop {} --off`) first",
+            automation.name, run.id, automation.id
+        )));
     }
     let (pic, version) = definition(conn, &automation, ReadsFrom::Saved)?;
     let unmet = check_picture(conn, &automation, &pic, startable, models)?;

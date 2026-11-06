@@ -596,6 +596,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         export_only: get(r, C.export_only)?,
         trigger: trigger(r)?,
         stopped: get(r, C.stopped)?,
+        waits_for_task_since: ts_opt(r, C.waits_for_task_since)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

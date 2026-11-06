@@ -1935,8 +1935,9 @@ pub enum AutomationCmd {
     },
     /// Stop an automation from starting new rounds, or let it start them again with --off. While it is
     /// stopped, a start and its trigger are refused, and a run of it finishes the round it is on and
-    /// pauses before it takes its next task — one waiting for a task pauses at once. Picking such a run up
-    /// again (`resume`) is refused until the automation is started again
+    /// pauses before it takes its next task — one waiting for room to take one pauses at once, and a wait
+    /// for a task ends. Picking such a run up again (`resume`) is refused until the automation is started
+    /// again
     Stop {
         /// automation id
         id: i64,
@@ -2555,6 +2556,12 @@ pub enum AutomationCmd {
         /// placement leaves open — a value on each of those is required
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
+    },
+    /// Stop an automation waiting for a task: the app no longer starts a run of it once a task its
+    /// take_task entry looks for turns up. One that is not waiting is answered as it stands
+    StopWaiting {
+        /// automation id
+        id: i64,
     },
 
     /// Walk an automation's draft, unsaved changes included, from its entry to its end without running

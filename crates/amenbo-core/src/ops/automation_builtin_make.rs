@@ -7,7 +7,7 @@
 //!
 //! **It can take the task it filed** ([`WHAT_THEN`] answered [`TAKE_IT`]): in progress from the moment it
 //! exists, and the task this run works from here on. Filed and reserved as two acts, the task would stand
-//! `todo` between them, and a run waiting for a task to take looks once a second.
+//! `todo` between them, and another run's take could reserve it there.
 //!
 //! **Everything the task is filed with is decided where it is placed**: what it depends on — the task
 //! this run works, and tasks named by their number — how it is classified, who it is given to, how

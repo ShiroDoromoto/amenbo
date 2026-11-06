@@ -17,9 +17,9 @@
 //! asked instead to stop where it next comes to the built-in that takes a task — before
 //! taking one, so a run paused there holds none, and one picked up again goes on to take the next.
 //! What reads that flag is [`crate::ops::automation_step::open`], the one place that step is reached.
-//! A run already waiting there for a task to turn up is paused at once instead: it holds no task, so
-//! there is nothing to wait for. A run that takes no tasks cannot be asked: it has no task boundary
-//! to stop at, and runs on to its end.
+//! A run standing there before a take that would wait for a task is paused at once instead: it holds
+//! no task, so there is nothing to wait for. A run that takes no tasks cannot be asked: it has no task
+//! boundary to stop at, and runs on to its end.
 //!
 //! **Canceling is for a paused run** ([`cancel`], `AMB-D-1002`). Nothing is under way then, so it ends
 //! the run at once and cuts nothing off. A run still going is refused: pause it first, or force-cancel
@@ -489,11 +489,11 @@ pub fn pause(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
 /// **Ask a run to pause before it takes its next task** (`AMB-D-1019`). It finishes the task it is on
 /// and pauses where it next comes to the built-in that takes one, without taking it.
 ///
-/// A run waiting there for a task to turn up, or for room in the action that step is the first of, is
-/// paused at once ([`Paused::Now`]): it holds no task, and its next look would only pause it. A run
-/// already asked for either pause is answered as it stands,
-/// still asked: the request is not taken back, and one asked to pause at the end of its action stops
-/// sooner. A run that takes no tasks is refused, having no task boundary to stop at.
+/// A run standing there before a take that would wait for a task, or waiting for room in the action
+/// that step is the first of, is paused at once ([`Paused::Now`]): it holds no task, and its next look
+/// would only pause it. A run already asked for either pause is answered as it stands, still asked: the
+/// request is not taken back, and one asked to pause at the end of its action stops sooner. A run that
+/// takes no tasks is refused, having no task boundary to stop at.
 pub fn pause_run_before_next_task(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
     let before = live_run(tx, run_id)?;
     match before.status {
@@ -543,8 +543,8 @@ pub(crate) fn automation_stopped(conn: &Connection, run: &AutomationRun) -> Resu
     Ok(read::automation(conn, run.automation_id)?.is_some_and(|a| a.stopped))
 }
 
-/// Whether this run stands waiting at the built-in that takes a task — for one to turn up, or for room
-/// in the action it is the first step of.
+/// Whether this run stands at the built-in that takes a task — before a take that would wait for one,
+/// or waiting for room in the action it is the first step of.
 fn waits_to_take_a_task(conn: &Connection, run_id: i64) -> Result<bool> {
     use crate::ops::automation_run::{is_waiting, next_def, waits_for_room, Waiting};
     let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(false) };
@@ -884,7 +884,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
             Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -1840,7 +1840,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
             Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),

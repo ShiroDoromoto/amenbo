@@ -970,19 +970,15 @@ impl Store {
         Ok(out)
     }
 
-    /// **Whether a run is waiting for a task**: still running, and standing before a built-in set to
-    /// wait that has nothing yet to act on. The same answer the run's pane is drawn from.
-    pub fn automation_run_waiting(&self, run_id: i64) -> Result<bool> {
-        let Some(run) = self.automation_run(run_id)? else { return Ok(false) };
-        if run.status != crate::model::AutomationRunStatus::Running {
-            return Ok(false);
-        }
-        crate::ops::automation_run::is_waiting(self.engine.conn(), run_id)
+    /// **Whether an automation is waiting for a task** to start a run on, since when, and what it looks
+    /// for ([`crate::ops::automation_run::task_wait`]).
+    pub fn automation_task_wait(&self, automation_id: i64) -> Result<Option<crate::ops::automation_run::TaskWait>> {
+        crate::ops::automation_run::task_wait(self.engine.conn(), automation_id)
     }
 
     /// **Whether a run is waiting for room** before an action that takes one run at a time, and whom it
-    /// waits behind ([`crate::ops::automation_run::waits_for_room`]). `None` for a run waiting for a task,
-    /// which is that wait and not this one.
+    /// waits behind ([`crate::ops::automation_run::waits_for_room`]). `None` for a run standing before a
+    /// built-in that would wait for a task, which ends there rather than wait.
     pub fn automation_run_waits_for_room(
         &self,
         run_id: i64,

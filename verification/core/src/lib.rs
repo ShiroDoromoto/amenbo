@@ -446,9 +446,10 @@ const REGISTRY: &[OpSpec] = &[
     // above like every other.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create-in-pane", required: &["title", "shows"], refs: &[], strings: &["title", "shows"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], refs: &["target"], strings: &["assignee"], binds: false },
-    // A value something other than the road writes, waited for. A run waiting for a task looks again
-    // only every so often, so a task handed to the AI is reserved some seconds after the hand-over and
-    // not at it: the `field` assert right after the move would read the task before the run had looked.
+    // A value something other than the road writes, waited for. An automation waiting for a
+    // task is asked again only every so often, so a task handed to the AI is reserved some seconds after
+    // the hand-over and not at it: the `field` assert right after the move would read the task before the
+    // automation had been asked.
     // `seconds` is how long the road gives it, and the wait ends as soon as the value is there. It is an
     // action and not an assert, since it proves nothing — a value that never comes is left for the
     // `field` assert behind it to read.

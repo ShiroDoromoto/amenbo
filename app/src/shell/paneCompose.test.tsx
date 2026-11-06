@@ -667,10 +667,10 @@ describe("a press that moves the pane being worked in", () => {
   });
 });
 
-// A run's pane opens on its picture, with its terminal still under it (`AMB-T-5832`). What is typed
-// into that terminal reaches the agent running there, and nobody looking at a picture meant to type
+// A run's pane opens on its roles, with its terminal still under them (`./RunPicture`). What is typed
+// into that terminal reaches the agent running there, and nobody looking at the roles meant to type
 // at it: the way to the program is turning to the terminal.
-describe("a run's pane turned to its picture", () => {
+describe("a run's pane turned to its roles", () => {
   const RUNNING: Say = {
     automation: "Nightly", run: 15, step: "check", automationId: 3, placement: 2, box: 2, builtin: false,
     interactive: false, by: null, command: null, startedAt: null, action: null, task: null,
@@ -686,7 +686,7 @@ describe("a run's pane turned to its picture", () => {
 
     await pressOn(slot());
 
-    expect(document.activeElement, "a press on the picture handed the keyboard to the terminal under it")
+    expect(document.activeElement, "a press on the roles handed the keyboard to the terminal under them")
       .toBe(elsewhere);
     elsewhere.remove();
   });
@@ -699,7 +699,7 @@ describe("a run's pane turned to its picture", () => {
 
     await opened();
 
-    expect(document.activeElement, "a terminal opening under the picture took the keyboard").toBe(elsewhere);
+    expect(document.activeElement, "a terminal opening under the roles took the keyboard").toBe(elsewhere);
     elsewhere.remove();
   });
 });

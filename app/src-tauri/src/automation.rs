@@ -67,9 +67,9 @@ use crate::dto::{
     AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
-    AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunPassedStepDto, AutomationRunStartedDto,
+    AutomationRunHistoryDto, AutomationRunIncidentDto, AutomationRunStartedDto,
     AutomationRunTaskDto,
-    AutomationRunTrailDto, AutomationSavedDto, AutomationStepDto, AutomationStepScriptDto,
+    AutomationSavedDto, AutomationStepDto, AutomationStepScriptDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
@@ -1837,7 +1837,7 @@ fn run_card(
     let version = amenbo_core::ops::automation_run::entry_def(conn, run.id)?
         .and_then(|def| def.automation_version);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
-    let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
+    let stretch = read::automation_run_task_last(conn, run.id)?;
     // The steps that owed the task their report and could not leave it, the task being closed.
     let mut report_withheld = Vec::new();
     for step in steps.iter().filter(|one| one.report_withheld) {
@@ -1873,7 +1873,10 @@ fn run_card(
         placement,
         steps_done: steps.len(),
         exit_name,
-        task: worked_task(store, stretch)?,
+        task: worked_task(store, stretch.as_ref().map(|one| one.id))?,
+        role: stretch.as_ref().and_then(|one| one.role_id),
+        role_started_at: stretch.as_ref().and_then(|one| one.started_at).map(|at| at.to_rfc3339_z()),
+        incident: incident_of(store, stretch.as_ref().and_then(|one| one.incident_task_id))?,
         report_withheld,
         acknowledged: run.acknowledged_at.is_some(),
         acknowledged_by: run.acknowledged_by_kind.map(|by| by.as_str()),
@@ -1958,39 +1961,6 @@ pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBack
         first_start: held.first_start.map(|day| day.format("%Y-%m-%d").to_string()),
         drafts: held.drafts,
     }))
-}
-
-/// **The way a run has come on the task it is working** (`automation_run::trail`) — the spots it
-/// passed with the way out and the line it left each by, the spot it stands at now, and the steps it
-/// passed inside that spot and the one it stands at. What the picture on the run's pane lights up.
-#[tauri::command]
-pub fn automation_run_trail(run_id: i64) -> Result<AutomationRunTrailDto, CmdError> {
-    let _perf = amenbo_core::perf::Timer::start("automation_run_trail");
-    let store = open_store_read()?;
-    let trail = automation_run::trail(store.read_model().conn(), run_id)?;
-    Ok(AutomationRunTrailDto {
-        passed: trail
-            .passed
-            .into_iter()
-            .map(|pass| AutomationRunPassDto {
-                placement: pass.placement_id,
-                status: pass.status.as_str(),
-                exit: pass.exit_id,
-                edge: pass.edge_id,
-            })
-            .collect(),
-        at: trail.at,
-        steps: trail
-            .steps
-            .into_iter()
-            .map(|step| AutomationRunPassedStepDto {
-                step: step.step_id,
-                status: step.status.as_str(),
-                edge: step.edge_id,
-            })
-            .collect(),
-        step: trail.step,
-    })
 }
 
 /// The event the workspace hears when a step of a run is ready to be drawn.
@@ -2773,6 +2743,22 @@ fn worked_task(
         r#ref: amenbo_core::idref::task(task_id),
         title,
         seq: stretch.seq,
+    }))
+}
+
+/// **The task a failed round was filed as**, by its id `filed`, and who it went to. Nothing where the
+/// round filed none, or the task has since been deleted.
+fn incident_of(
+    store: &amenbo_core::Store,
+    filed: Option<i64>,
+) -> Result<Option<AutomationRunIncidentDto>, CmdError> {
+    let Some(id) = filed else { return Ok(None) };
+    Ok(read::task(store.read_model().conn(), id)?.map(|task| AutomationRunIncidentDto {
+        id,
+        r#ref: amenbo_core::idref::task(id),
+        role: task.role_id,
+        person: task.role_id.is_none()
+            && task.assignee_kind == Some(ActorKind::Human),
     }))
 }
 

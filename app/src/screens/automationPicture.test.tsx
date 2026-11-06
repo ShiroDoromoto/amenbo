@@ -13,7 +13,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { t, tf } from "../core/i18n";
 import { AutomationPicture } from "./AutomationPicture";
-import { automationGraph, layOut, TAKES_INSET, type PicGraph } from "./automationLayout";
+import { automationGraph, TAKES_INSET, type PicGraph } from "./automationLayout";
 import type { AutomationDetailDto, AutomationPlacementDto } from "../bindings/bindings";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -65,24 +65,6 @@ async function render(props: Parameters<typeof AutomationPicture>[0]) {
   await act(async () => {
     root.render(createElement(AutomationPicture, props));
   });
-}
-
-/** Lays a run's picture out as a browser would, which jsdom does not: its frame 400 by 300 at
- *  (200, 100), and every box in it 80 by 40 at (900, 500), out of the frame's sight. Gives back what
- *  puts jsdom's own back. */
-function layOutSight(): () => void {
-  const wasRect = Element.prototype.getBoundingClientRect;
-  Element.prototype.getBoundingClientRect = function (this: Element) {
-    const [left, top, width, height] = this.classList.contains("autopic") ? [200, 100, 400, 300] : [900, 500, 80, 40];
-    return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top } as DOMRect;
-  };
-  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 400 });
-  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 300 });
-  return () => {
-    Element.prototype.getBoundingClientRect = wasRect;
-    Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
-    Reflect.deleteProperty(HTMLElement.prototype, "clientHeight");
-  };
 }
 
 const nodes = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__node")];
@@ -602,241 +584,6 @@ describe("what the picture marks, as the mock draws it", () => {
   });
 });
 
-/// Drawn on a run's pane, the picture is the run's trail (`AMB-T-5775`).
-describe("the picture of a run", () => {
-  const two = () =>
-    detail({
-      placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] })],
-      edges: [
-        { id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" },
-        { id: 2, fromId: 2, exitName: "完了", ends: "done" },
-      ],
-    });
-  const trail = { boxes: new Set([1, 2]), edges: new Set([1]), at: 2 };
-
-  it("lights what the run walked, marks the box under way, and puts nothing in", async () => {
-    await render({ graph: two(), selectedBoxId: 2, trail });
-    expect(nodes()[0]!.className).toContain("autopic__node--lit");
-    expect(nodes()[0]!.className).not.toContain("autopic__node--at");
-    expect(nodes()[1]!.className).toContain("autopic__node--at");
-    expect(nodes()[1]!.className).toContain("autopic__node--on");
-    const lit = [...container.querySelectorAll("polyline.autopic__line")].map((one) =>
-      (one.getAttribute("class") ?? "").includes("autopic__line--lit"),
-    );
-    // Drawn after the lines the run did not walk, so none of them lies over it.
-    expect(lit).toEqual([false, true]);
-    // Its arrowhead is lit with it.
-    expect(container.querySelector("polyline.autopic__line--lit")?.getAttribute("marker-end")).toMatch(/-lit\)$/);
-    expect(plusses()).toHaveLength(0);
-    expect(container.querySelector(".autopic__legend")).toBeNull();
-  });
-
-  it("dashes the box waiting for a task, and says it waits with a spinner in place of the word that it takes the task", async () => {
-    await render({ graph: two(), selectedBoxId: 1, trail: { boxes: new Set([1]), edges: new Set<number>(), at: 1, waiting: true } });
-    expect(nodes()[0]!.className).toContain("autopic__node--wait");
-    expect(nodes()[0]!.className).not.toContain("autopic__node--at");
-    expect(nodes()[1]!.className).not.toContain("autopic__node--wait");
-    const takes = [...container.querySelectorAll<HTMLElement>(".autopic__takes")];
-    expect(takes.map((one) => one.textContent)).toEqual([t("auto.run.body.taskWait")]);
-    expect(takes[0]!.querySelector(".autopic__spin")).not.toBeNull();
-    expect(takes[0]!.style.top).toBe(nodes()[0]!.style.top);
-  });
-
-  it("lights the way from the leg of the way out the run left by into the box, where lines join on a lane (AMB-T-5824)", async () => {
-    // Checking leaves by either of two ways out back into the work; the run went back by "b".
-    const back = detail({
-      placements: [
-        step({ id: 1, name: "take" }),
-        step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] }),
-        step({ id: 3, name: "check", exits: [{ id: 31, name: "a", outputs: [] }, { id: 32, name: "b", outputs: [] }] }),
-      ],
-      edges: [
-        { id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" },
-        { id: 2, fromId: 2, exitName: "完了", toId: 3, ends: "go" },
-        { id: 3, fromId: 3, exitName: "a", toId: 2, ends: "go" },
-        { id: 4, fromId: 3, exitName: "b", toId: 2, ends: "go" },
-      ],
-    });
-    await render({ graph: back, trail: { boxes: new Set([1, 2, 3]), edges: new Set([1, 2, 4]), at: 2 } });
-    const drawn = layOut(back).lines;
-    const polyline = (key: string) => {
-      const points = drawn.find((one) => one.key === key)!.points.map((p) => `${p.x},${p.y}`).join(" ");
-      return [...container.querySelectorAll("polyline.autopic__line")].find((one) => one.getAttribute("points") === points)!;
-    };
-    const lit = (key: string) => (polyline(key).getAttribute("class") ?? "").includes("autopic__line--lit");
-    expect(lit("edge-4")).toBe(true);
-    expect(lit("edge-3")).toBe(false);
-    // Every piece of the lane "b" runs along is lit, and the line on into the box ends in the lit head.
-    const along = drawn.filter((one) => one.carries?.includes(4));
-    expect(along.length).toBeGreaterThan(1);
-    for (const one of along) expect(lit(one.key)).toBe(true);
-    const into = along.find((one) => one.joins !== true)!;
-    expect(polyline(into.key).getAttribute("marker-end")).toMatch(/-lit\)$/);
-  });
-
-  it("lights the leg of the way out the run left by into the row under, drawn over the other ways into that box (AMB-T-5824)", async () => {
-    // Merging leaves by two ways out down into the work, and by one into closing; the run went by "main".
-    const down = detail({
-      placements: [
-        step({ id: 1, name: "merge", exits: [{ id: 10, name: "完了", outputs: [] }, { id: 11, name: "ci", outputs: [] }, { id: 12, name: "main", outputs: [] }] }),
-        step({ id: 2, name: "work" }),
-        step({ id: 3, name: "close" }),
-      ],
-      edges: [
-        { id: 1, fromId: 1, exitName: "ci", toId: 2, ends: "go" },
-        { id: 2, fromId: 1, exitName: "main", toId: 2, ends: "go" },
-        { id: 3, fromId: 1, exitName: "完了", toId: 3, ends: "go" },
-      ],
-    });
-    await render({ graph: down, trail: { boxes: new Set([1, 2]), edges: new Set([2]), at: 2 } });
-    const drawn = layOut(down).lines;
-    const pointsOf = (key: string) =>
-      drawn.find((one) => one.key === key)!.points.map((p) => `${p.x},${p.y}`).join(" ");
-    const polylines = [...container.querySelectorAll("polyline.autopic__line")];
-    const lit = polylines.filter((one) => (one.getAttribute("class") ?? "").includes("autopic__line--lit"));
-    expect(lit.map((one) => one.getAttribute("points"))).toEqual([pointsOf("edge-2")]);
-    // Its own leg, apart from the other way into the work, and drawn after it.
-    expect(drawn.find((one) => one.key === "edge-2")!.points[0]!.x).not.toBe(drawn.find((one) => one.key === "edge-1")!.points[0]!.x);
-    const nth = (key: string) => polylines.findIndex((one) => one.getAttribute("points") === pointsOf(key));
-    expect(nth("edge-2")).toBeGreaterThan(nth("edge-1"));
-  });
-
-  it("brings the box the run reaches to the middle of the picture, though it is in sight already", async () => {
-    const wasObserver = globalThis.IntersectionObserver;
-    const wasScroll = Element.prototype.scrollIntoView;
-    const roots: (Element | Document | null | undefined)[] = [];
-    globalThis.IntersectionObserver = class {
-      constructor(_: IntersectionObserverCallback, how?: IntersectionObserverInit) {
-        roots.push(how?.root);
-      }
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    } as unknown as typeof IntersectionObserver;
-    const scrolled = vi.fn();
-    Element.prototype.scrollIntoView = scrolled;
-    const putBack = layOutSight();
-    try {
-      await render({ graph: two(), selectedBoxId: 1, trail: { ...trail, at: 1 } });
-      const frame = container.querySelector<HTMLElement>(".autopic")!;
-      // The box's middle (940, 520) onto the frame's (400, 250).
-      expect([frame.scrollLeft, frame.scrollTop]).toEqual([540, 270]);
-      frame.scrollLeft = 0;
-      frame.scrollTop = 0;
-      await render({ graph: two(), selectedBoxId: 2, trail });
-      expect([frame.scrollLeft, frame.scrollTop]).toEqual([540, 270]);
-      // Only the frame moves, and only its sight is looked at: the workspace around the pane stays
-      // on the page the reader is on.
-      expect(scrolled).not.toHaveBeenCalled();
-      expect(roots).toEqual([frame, frame]);
-    } finally {
-      putBack();
-      globalThis.IntersectionObserver = wasObserver;
-      Element.prototype.scrollIntoView = wasScroll;
-    }
-  });
-});
-
-/// The box the run is under way in, grown with its action's picture inside (`AMB-T-6505`).
-describe("the box a run is under way in", () => {
-  const two = () =>
-    detail({
-      placements: [step({ id: 1, name: "take" }), step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] })],
-      edges: [{ id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" }],
-    });
-  /** The action standing on the second box: two steps, the first going on to the second. */
-  const action = (): PicGraph => ({
-    ...detail({
-      entryPlacementId: 5,
-      placements: [
-        step({ id: 5, name: "draft", exits: [{ id: 50, name: "完了", outputs: [] }] }),
-        step({ id: 6, name: "review", exits: [{ id: 60, name: "完了", outputs: [] }] }),
-      ],
-      edges: [
-        { id: 7, fromId: 5, exitName: "完了", toId: 6, ends: "go" },
-        { id: 8, fromId: 6, exitName: "完了", ends: "exit", exitTo: "完了" },
-      ],
-    }),
-    boundary: { inputs: [], exits: [{ id: 80, name: "完了", outputs: [] }] },
-  });
-  const trail = { boxes: new Set([1, 2]), edges: new Set([1]), at: 2 };
-  const inside = { boxId: 2, graph: action(), trail: { boxes: new Set([5, 6]), edges: new Set([7]), at: 6 } };
-  const grown = () => container.querySelector<HTMLElement>(".autopic__node--grown");
-  const steps = () => [...(grown()?.querySelectorAll<HTMLButtonElement>("button.autopic__node") ?? [])];
-
-  it("grows the box with the action's picture inside, and marks the step under way with the heavier border, not the box", async () => {
-    await render({ graph: two(), selectedBoxId: 2, trail, inside });
-    expect(grown()).not.toBeNull();
-    expect(grown()!.className).not.toContain("autopic__node--at");
-    expect(parseFloat(grown()!.style.height)).toBeGreaterThan(parseFloat(nodes()[0]!.style.height));
-    expect(steps().map((one) => one.querySelector(".autopic__nodename")?.textContent)).toEqual(["draft", "review"]);
-    expect(steps()[0]!.className).toContain("autopic__node--lit");
-    expect(steps()[0]!.className).not.toContain("autopic__node--at");
-    expect(steps()[1]!.className).toContain("autopic__node--at");
-    expect(steps()[1]!.className).toContain("autopic__node--on");
-    expect(container.querySelectorAll(".autopic__node--at")).toHaveLength(1);
-    // The action's input over its steps, and its ways out under them, as its build screen draws them.
-    expect(grown()!.querySelector(".autopic__frame--in")).not.toBeNull();
-    expect(grown()!.querySelectorAll(".autopic__frame")).toHaveLength(2);
-    expect(grown()!.querySelector("polyline.autopic__line--lit")).not.toBeNull();
-    // Its head says which of the steps the run is at.
-    expect(grown()!.querySelector(".autopic__grownat")?.textContent).toBe(tf("auto.run.body.stepOf", { total: 2, no: 2 }));
-    expect(plusses()).toHaveLength(0);
-  });
-
-  it("dashes the step waiting for a task inside it, not the box", async () => {
-    await render({
-      graph: two(),
-      selectedBoxId: 2,
-      trail: { ...trail, waiting: true },
-      inside: { ...inside, trail: { boxes: new Set<number>(), edges: new Set<number>(), at: 5, waiting: true } },
-    });
-    expect(grown()!.className).not.toContain("autopic__node--wait");
-    expect(steps()[0]!.className).toContain("autopic__node--wait");
-    const waits = [...container.querySelectorAll(".autopic__takes--wait")];
-    expect(waits).toHaveLength(1);
-    expect(grown()!.contains(waits[0]!)).toBe(true);
-  });
-
-  it("draws the box as it was where the action has no step", async () => {
-    await render({ graph: two(), selectedBoxId: 2, trail, inside: { ...inside, graph: { ...action(), boxes: [], edges: [] } } });
-    expect(grown()).toBeNull();
-    expect(nodes()[1]!.className).toContain("autopic__node--at");
-  });
-
-  it("lights no step for a step the action no longer has", async () => {
-    await render({ graph: two(), selectedBoxId: 2, trail, inside: { ...inside, trail: { ...inside.trail, at: 99 } } });
-    expect(steps()).toHaveLength(2);
-    expect(container.querySelectorAll(".autopic__node--at")).toHaveLength(0);
-    expect(grown()!.querySelector(".autopic__grownat")).toBeNull();
-  });
-
-  it("brings the step under way to the middle of the picture", async () => {
-    const wasObserver = globalThis.IntersectionObserver;
-    const wasScroll = Element.prototype.scrollIntoView;
-    globalThis.IntersectionObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    } as unknown as typeof IntersectionObserver;
-    const scrolled = vi.fn();
-    Element.prototype.scrollIntoView = scrolled;
-    const putBack = layOutSight();
-    try {
-      await render({ graph: two(), selectedBoxId: 2, trail, inside });
-      // The picture's frame, not the one drawn inside the grown box, is what scrolls.
-      const frames = container.querySelectorAll<HTMLElement>(".autopic");
-      expect(frames).toHaveLength(1);
-      expect([frames[0]!.scrollLeft, frames[0]!.scrollTop]).toEqual([540, 270]);
-      expect(scrolled).not.toHaveBeenCalled();
-    } finally {
-      putBack();
-      globalThis.IntersectionObserver = wasObserver;
-      Element.prototype.scrollIntoView = wasScroll;
-    }
-  });
-});
-
 describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   const lone = () => detail({ entryPlacementId: 1, placements: [step({ id: 1, name: "write" })] });
   const presses = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__open")];
@@ -851,10 +598,8 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
     expect(onOpenExit).toHaveBeenCalledWith({ boxId: 1, exitName: "完了" });
   });
 
-  it("holds the press shut where nothing can be put in, and draws none on a run's trail", async () => {
+  it("holds the press shut where nothing can be put in", async () => {
     await render({ graph: lone() });
     expect(presses()[0]!.disabled).toBe(true);
-    await render({ graph: lone(), trail: { boxes: new Set(), edges: new Set() } });
-    expect(presses()).toHaveLength(0);
   });
 });

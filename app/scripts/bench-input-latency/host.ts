@@ -1,10 +1,11 @@
 // A stand-in for the Tauri host, so the app's own reads run as they do in the shell.
 //
 // `inTauri()` only asks whether `__TAURI_INTERNALS__` is there, and every command goes out through
-// its `invoke` (`src/core/ipc.ts`). Answering the three reads a run's picture makes is what lets the
-// real picture be drawn here; anything else is answered with nothing, and noted, so a read the panes
+// its `invoke` (`src/core/ipc.ts`). Answering the two reads a run's pane makes — the automation, for
+// the box its step is numbered by, and the project's roles — is what lets the real roles be drawn
+// here; anything else is answered with nothing, and noted, so a read the panes
 // start making later shows up in the bench's output instead of passing unseen.
-import { action, automation, trail } from "./fixture";
+import { automation, roles } from "./fixture";
 
 const unknown = new Set<string>();
 let callbacks = 0;
@@ -13,10 +14,8 @@ function answer(cmd: string): unknown {
   switch (cmd) {
     case "automation_detail":
       return automation;
-    case "automation_action_detail":
-      return action;
-    case "automation_run_trail":
-      return trail;
+    case "project_roles":
+      return roles;
     case "pty_sessions":
       return [];
     case "skin_in_use":

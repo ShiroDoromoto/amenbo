@@ -480,6 +480,12 @@ export function iconSvg(name: DrawnIcon, size: IconSize = "sm"): SVGSVGElement {
   return svg;
 }
 
+/** Whether `name` is one of the icons drawn here — a name written somewhere else, such as the icon a
+ *  role was given, is checked by this before it is drawn. */
+export function isIconName(name: string): name is IconName {
+  return Object.prototype.hasOwnProperty.call(ART, name);
+}
+
 /**
  * One icon. `label` is for the rare icon that stands alone and has to say what it is; an
  * icon that sits beside its own text takes the default and stays out of the element's

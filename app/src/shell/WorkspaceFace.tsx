@@ -47,7 +47,7 @@ import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { fetchRunCards, useRunCards } from "../core/automations";
-import { roomWaitState, runSayOf, waitingState } from "../core/runWords";
+import { roomWaitState, roundOf, runSayOf, waitingState } from "../core/runWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
@@ -471,6 +471,8 @@ export function WorkspaceFace({
       // A built-in waiting for the next task is on none: what it still carries is the task
       // the run closed before it, and a line naming that one would say the run was on it.
       task: builtin?.waiting ? null : on.task ?? null,
+      // The round the step is in, and the role it is worked under, are the run's (`roundOf`).
+      ...roundOf(runCardOf.get(frame.run)),
       // Whether the run is going, held or over, and where a failure failed
       // (`AMB-T-5506`). Null until it has been read. A run whose built-in is waiting
       // for a task, or for room before an action that takes one run at a time, is still

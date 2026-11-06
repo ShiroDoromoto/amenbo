@@ -129,6 +129,7 @@ mod tests {
             crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("to the AI");
             let claude = ["claude".to_string()];
             let by = Launcher {
+                default_agent: None,
                 startable: Some(&claude),
                 models: nothing_asked(),
                 workspace_open: Some(true),
@@ -222,6 +223,7 @@ mod tests {
             crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("to the AI");
             let claude = ["claude".to_string()];
             let by = Launcher {
+                default_agent: None,
                 startable: Some(&claude),
                 models: nothing_asked(),
                 workspace_open: Some(true),

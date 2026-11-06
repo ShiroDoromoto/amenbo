@@ -919,6 +919,7 @@ mod tests {
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -1207,7 +1208,7 @@ mod tests {
     fn the_launch_check_names_a_folder_left_empty_among_several() {
         let startable = ["claude".to_string()];
         let unchosen = |tx: &WriteTx<'_>, p: &Picture| -> Vec<(String, String, usize, Option<String>, i64)> {
-            check(tx.conn(), p.automation.id, Some(&startable), nothing_asked())
+            check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None)
                 .expect("check")
                 .into_iter()
                 .filter_map(|unmet| match unmet {
@@ -1248,7 +1249,7 @@ mod tests {
             answer(tx, &p, CLASSIFY, "職能=実装\n職能=営業\nnosuch=x");
             answer(tx, &p, AI_AXES, "職能\n種別");
             let startable = ["claude".to_string()];
-            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None).expect("check");
             let found: Vec<(String, String)> = unmet
                 .into_iter()
                 .filter_map(|unmet| match unmet {
@@ -1299,7 +1300,7 @@ mod tests {
             crate::ops::dimension::value_set_closed(tx, build.id, true).expect("close it");
             answer(tx, &p, CLASSIFY, "職能=実装\n職能=設計\n職能=営業");
             let startable = ["claude".to_string()];
-            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None).expect("check");
             let closed: Vec<(String, String)> = unmet
                 .iter()
                 .filter_map(|unmet| match unmet {
@@ -1466,7 +1467,7 @@ mod tests {
             crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
             let automation = automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
             let startable = ["claude".to_string()];
-            let unmet = |tx: &WriteTx<'_>| check(tx.conn(), automation.id, Some(&startable), nothing_asked()).expect("check");
+            let unmet = |tx: &WriteTx<'_>| check(tx.conn(), automation.id, Some(&startable), nothing_asked(), None).expect("check");
 
             let left = unmet(tx);
             assert!(left.iter().any(|u| matches!(u, Unmet::EntryTakesNoTask { .. })), "{left:?}");
@@ -1503,6 +1504,7 @@ mod tests {
     fn launch_with(tx: &WriteTx<'_>, automation: &Automation, handed: &HandedAtLaunch) -> Result<AutomationRun> {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -1580,6 +1582,7 @@ mod tests {
             let every = TriggerWhen::Every { minutes: 60 };
             let trigger = automation::NewTrigger {
                 when: every,
+                condition: None,
                 task: TriggerTask::Fixed { title: "受信箱を見る".into(), notes: "what to do".into() },
             };
             automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
@@ -1588,7 +1591,7 @@ mod tests {
             };
             let due = next_at(tx);
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
             let under_way = |tx: &WriteTx<'_>| read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read");
 
             let early = Timestamp(due.0 - chrono::Duration::seconds(1));
@@ -1628,6 +1631,7 @@ mod tests {
             automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
             let trigger = automation::NewTrigger {
                 when: TriggerWhen::Idle,
+                condition: None,
                 task: TriggerTask::Fixed { title: "手が空いたら見る".into(), notes: String::new() },
             };
             let written = Timestamp::now();
@@ -1638,7 +1642,13 @@ mod tests {
             let due = next_at(tx);
             assert!(due > written, "not on the spot, but counted from the write");
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                default_agent: None,
+                workspace_open: None,
+                by: None,
+            };
             let early = Timestamp(due.0 - chrono::Duration::seconds(1));
             assert!(fire(tx, automation.id, &by, early).expect("fire").is_none(), "not before it is due");
 
@@ -1660,6 +1670,61 @@ mod tests {
         });
     }
 
+    /// **A trigger with a condition files only while fewer tasks than it says match its filter** — on its
+    /// own (`tasks`), or laid on an `every`. A time it says no leaves `next_at` where it was, and once
+    /// the tasks go below it again it files the next one.
+    #[test]
+    fn a_trigger_with_a_condition_files_only_while_few_enough_tasks_match() {
+        use crate::model::{TriggerCondition, TriggerTask, TriggerWhen};
+        use crate::ops::automation_run::{fire, triggers_due};
+        use crate::ops::test_support::mk_task_in;
+        with_tx(|tx| {
+            let (automation, _, project) = entry(tx);
+            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
+            let trigger = automation::NewTrigger {
+                when: TriggerWhen::Tasks,
+                condition: Some(TriggerCondition { filter: "status:todo".into(), below: 2 }),
+                task: TriggerTask::Fixed { title: "足りなければ起こす".into(), notes: String::new() },
+            };
+            automation::trigger_set(tx, automation.id, Some(trigger.clone())).expect("trigger");
+            let next_at = |tx: &WriteTx<'_>| {
+                read::automation(tx.conn(), automation.id).expect("read").expect("there").trigger.expect("kept").next_at
+            };
+            let due = next_at(tx);
+            let claude = ["claude".to_string()];
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+
+            let waiting = mk_task_in(tx, "待っている", Some(project));
+            assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![automation.id], "one todo, fewer than two");
+            assert!(fire(tx, automation.id, &by, due).expect("fire").is_some(), "so it files one");
+            let then = TriggerWhen::Tasks.after(due);
+            assert_eq!(next_at(tx), then, "a minute on from when it filed");
+
+            // Room for one more run, but two todo now: it waits.
+            let another = mk_task_in(tx, "もう一つ", Some(project));
+            assert!(triggers_due(tx.conn(), then).expect("ask").due.is_empty(), "not due with two todo");
+            assert!(fire(tx, automation.id, &by, then).expect("fire").is_none(), "nothing filed");
+            assert_eq!(next_at(tx), then, "a time it decides no leaves nothing");
+
+            for id in [waiting, another] {
+                task::set_status(tx, id, TaskStatus::Done, ActorKind::Human).expect("done");
+            }
+            assert_eq!(triggers_due(tx.conn(), then).expect("ask").due, vec![automation.id], "fewer again");
+            assert!(fire(tx, automation.id, &by, then).expect("fire").is_some(), "so it files the next one");
+
+            // Laid on an `every`, it holds the clock back too.
+            let hourly = automation::NewTrigger { when: TriggerWhen::Every { minutes: 60 }, ..trigger };
+            automation::update(tx, automation.id, None, None, None, Some(4), None).expect("room for more");
+            automation::trigger_set(tx, automation.id, Some(hourly)).expect("an every with a condition");
+            let due = next_at(tx);
+            mk_task_in(tx, "三つ目", Some(project));
+            mk_task_in(tx, "四つ目", Some(project));
+            assert!(triggers_due(tx.conn(), due).expect("ask").due.is_empty(), "due on the clock, but two todo");
+            assert!(fire(tx, automation.id, &by, due).expect("fire").is_none());
+            assert_eq!(next_at(tx), due);
+        });
+    }
+
     /// **A stopped automation's trigger files nothing**: it is not due, it decides no, and the time it
     /// is next asked stays where it was. Started again, it files its task.
     #[test]
@@ -1670,6 +1735,7 @@ mod tests {
             let (automation, _, _) = entry(tx);
             let trigger = automation::NewTrigger {
                 when: TriggerWhen::Every { minutes: 5 },
+                condition: None,
                 task: TriggerTask::Fixed { title: "見る".into(), notes: String::new() },
             };
             automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
@@ -1677,7 +1743,13 @@ mod tests {
             let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             let due = before.trigger.as_ref().expect("kept").next_at;
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                default_agent: None,
+                workspace_open: None,
+                by: None,
+            };
 
             assert_eq!(triggers_due(tx.conn(), due).expect("ask"), TriggersDue::default(), "not asked at all");
             assert!(fire(tx, automation.id, &by, due).expect("fire").is_none(), "it decides no");
@@ -1703,13 +1775,14 @@ mod tests {
             automation::cfg_set(tx, make.id, WHAT_THEN, None).expect("leave it unanswered");
             let trigger = automation::NewTrigger {
                 when: TriggerWhen::Every { minutes: 5 },
+                condition: None,
                 task: TriggerTask::Fixed { title: "見る".into(), notes: String::new() },
             };
             automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
             let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             let due = before.trigger.as_ref().expect("kept").next_at;
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
 
             assert!(fire(tx, automation.id, &by, due).is_err(), "the launch check refuses it");
             let after = read::automation(tx.conn(), automation.id).expect("read").expect("there");
@@ -1736,7 +1809,7 @@ mod tests {
             // A file has to say who handed it over, so a launcher that says nothing about itself cannot.
             let claude = ["claude".to_string()];
             let nobody =
-                Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: Some(true), by: None };
+                Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: Some(true), by: None };
             assert!(launch_handing(tx, automation.id, &nobody, &handed, ReadsFrom::Saved).is_err());
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
 

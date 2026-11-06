@@ -593,7 +593,7 @@ pub fn settle(tx: &WriteTx<'_>, before: AutomationRun, kind: AutomationPauseKind
 ///
 /// - **Paused before its next task**, it holds no task, so it is copied down afresh from the automation's
 ///   newest saved version, as a launch reads it, and starts at the new copy's entry. The new copy is
-///   checked as a launch checks it, with `startable` and `models` as
+///   checked as a launch checks it, with `startable`, `models` and `default_agent` as
 ///   [`crate::ops::automation_run::Launcher`] takes them; one that does not pass is refused, and the run
 ///   stays paused.
 /// - **Paused at the end of an action**, it goes on from the copy it has, at the step the way out the
@@ -606,6 +606,7 @@ pub fn resume(
     run_id: i64,
     startable: Option<&[String]>,
     models: &crate::ops::automation_run::ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<Resumed> {
     let before = live_run(tx, run_id)?;
     if before.status != AutomationRunStatus::Paused {
@@ -616,7 +617,7 @@ pub fn resume(
     }
     let next = match before.pause_kind {
         Some(AutomationPauseKind::BeforeNextTask) => {
-            crate::ops::automation_run::copy_down_again(tx, &before, startable, models)?
+            crate::ops::automation_run::copy_down_again(tx, &before, startable, models, default_agent)?
         }
         Some(AutomationPauseKind::EndOfAction) | None => match next_after_the_pause(tx.conn(), &before)? {
             Some(next) => next,
@@ -853,6 +854,7 @@ mod tests {
     fn a_run(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let startable = vec!["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&startable),
             models: crate::ops::automation_run::nothing_asked(),
             workspace_open: Some(true),
@@ -1064,7 +1066,7 @@ mod tests {
             );
 
             let Resumed { run: after, next } =
-                resume(tx, run.id, None, crate::ops::automation_run::nothing_asked()).expect("resume");
+                resume(tx, run.id, None, crate::ops::automation_run::nothing_asked(), None).expect("resume");
             assert_eq!(after.status, AutomationRunStatus::Running);
             assert_eq!(after.pause_kind, None, "a running run is stopped at neither");
             assert_eq!(next.step_id, Some(p.second.id), "it goes on where it left off");
@@ -1102,7 +1104,7 @@ mod tests {
             .expect("rewrite the fix");
 
             let Resumed { run: after, next } =
-                resume(tx, run.id, None, crate::ops::automation_run::nothing_asked()).expect("resume");
+                resume(tx, run.id, None, crate::ops::automation_run::nothing_asked(), None).expect("resume");
             assert_eq!(after.status, AutomationRunStatus::Running);
             assert_eq!(next.id, second.id, "the step after the one it paused on, from the copy it has");
             assert_eq!(next.prompt.as_deref(), Some("fix"), "the fix as it was written at launch");

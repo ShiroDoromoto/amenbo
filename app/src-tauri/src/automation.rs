@@ -304,8 +304,7 @@ pub fn automation_builtin_page() -> Result<Vec<AutomationBuiltinDto>, CmdError> 
     let conn = store.read_model().conn();
     let mut out = Vec::new();
     for one in automation_builtin::all() {
-        // The one that splits by an axis has an action per axis, and an automation placing two of them
-        // is still one automation.
+        // One action per version of it, and an automation placing two of them is still one automation.
         let mut placing = std::collections::BTreeSet::new();
         for action in read::automation_actions_builtin(conn, one.key)? {
             placing.extend(automation_view::automations_placing(conn, action.id)?);
@@ -350,12 +349,11 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
 /// **Put a built-in on a picture**, standing on its own — how the first placement comes in, which is
 /// one of the built-ins a run starts at (`AMB-D-977`). Its library action is written from the
 /// definition the first time any automation places it
-/// ([`amenbo_core::ops::automation_builtin::action_on`]). `axis` is the axis the one that splits by an
-/// axis splits by, and nothing for any other (`AMB-D-973`).
+/// ([`amenbo_core::ops::automation_builtin::action`]).
 #[tauri::command]
-pub fn automation_builtin_place(automation_id: i64, key: String, axis: Option<i64>) -> Result<WriteAck, CmdError> {
+pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_place(automation_id, &key, axis)?;
+        store.automation_builtin_place(automation_id, &key)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -363,27 +361,26 @@ pub fn automation_builtin_place(automation_id: i64, key: String, axis: Option<i6
 
 /// **Put a built-in in on a line** ([`automation_step_insert`] for a built-in) — the way out that was
 /// pressed comes to point at the new placement, in one transaction with the library action written
-/// where none was yet. `axis` as for [`automation_builtin_place`].
+/// where none was yet.
 #[tauri::command]
-pub fn automation_builtin_insert(edge_id: i64, key: String, axis: Option<i64>) -> Result<WriteAck, CmdError> {
+pub fn automation_builtin_insert(edge_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert(edge_id, &key, axis)?;
+        store.automation_builtin_insert(edge_id, &key)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Put a built-in on after a way out that says nothing yet** — [`automation_builtin_insert`] for a
-/// way out with no line to press. `axis` as for [`automation_builtin_place`].
+/// way out with no line to press.
 #[tauri::command]
 pub fn automation_builtin_insert_at_exit(
     from_id: i64,
     exit_name: Option<String>,
     key: String,
-    axis: Option<i64>,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key, axis)?;
+        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -1476,9 +1473,16 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
     let held_by =
         run_cards(&store, automation_view::run_ids_holding_automation(store.read_model().conn(), id)?)?;
     // Asked the way the save asks it (`amenbo_core::ops::automation::save`): without the agents and
-    // models of this machine, which are the launch's to judge and not the definition's.
-    let save_blocks =
-        automation_run::check(store.read_model().conn(), id, None, automation_run::nothing_asked())?;
+    // models of this machine, which are the launch's to judge and not the definition's, and with
+    // Amenbo's own default agent, which a step nobody chose for falls back to.
+    let default_agent = store.automation_default_agent(id)?;
+    let save_blocks = automation_run::check(
+        store.read_model().conn(),
+        id,
+        None,
+        automation_run::nothing_asked(),
+        default_agent.as_deref(),
+    )?;
     Ok(Some(detail_dto(view, held_by, &save_blocks)))
 }
 
@@ -1505,11 +1509,13 @@ pub fn automation_launch_check(
 ) -> Result<AutomationLaunchCheckDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_launch_check");
     let store = open_store_read()?;
+    let default_agent = store.automation_default_agent(id)?;
     let unmet = automation_run::check(
         store.read_model().conn(),
         id,
         agents.as_deref(),
         &crate::agent_models::offered_here(),
+        default_agent.as_deref(),
     )?;
     Ok(AutomationLaunchCheckDto {
         ready: unmet.is_empty(),
@@ -1596,6 +1602,7 @@ pub fn automation_launch(
     // refused at the press rather than met inside the pane the run just opened.
     let offered = crate::agent_models::offered_here();
     let by = automation_run::Launcher {
+        default_agent: None,
         startable: agents.as_deref(),
         models: &offered,
         workspace_open: Some(workspace_open),
@@ -1637,6 +1644,7 @@ pub fn automation_test_run(
     let _perf = amenbo_core::perf::Timer::start("automation_test_run");
     let offered = crate::agent_models::offered_here();
     let by = automation_run::Launcher {
+        default_agent: None,
         startable: agents.as_deref(),
         models: &offered,
         workspace_open: None,

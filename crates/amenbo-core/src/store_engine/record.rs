@@ -568,8 +568,20 @@ pub fn automation(a: &Automation) -> Record {
                     "trigger_every_minutes",
                     match a.trigger.as_ref().map(|t| t.when) {
                         Some(TriggerWhen::Every { minutes }) => iv(minutes.into()),
-                        Some(TriggerWhen::Idle) | None => Value::Null,
+                        Some(TriggerWhen::Idle | TriggerWhen::Tasks) | None => Value::Null,
                     },
+                ),
+                (
+                    "trigger_condition_filter",
+                    a.trigger.as_ref().and_then(|t| t.condition.as_ref()).map(|c| tv(&c.filter)).unwrap_or(Value::Null),
+                ),
+                (
+                    "trigger_condition_below",
+                    a.trigger
+                        .as_ref()
+                        .and_then(|t| t.condition.as_ref())
+                        .map(|c| iv(c.below.into()))
+                        .unwrap_or(Value::Null),
                 ),
                 ("trigger_task_kind", a.trigger.as_ref().map(|t| tv(t.task.kind_str())).unwrap_or(Value::Null)),
                 (
@@ -892,6 +904,7 @@ pub fn automation_run_def(d: &AutomationRunDef) -> Record {
                 ("ins", tv(&d.ins)),
                 ("cfg", tv(&d.cfg)),
                 ("entry", bv(d.entry)),
+                ("roles", tv(&d.roles)),
             ],
             &d.created_at,
             &d.updated_at,
@@ -910,6 +923,7 @@ pub fn automation_run_task(t: &AutomationRunTask) -> Record {
                 ("task_id", kv_opt(&t.task_id)),
                 ("started_at", tsov(&t.started_at)),
                 ("ended_at", tsov(&t.ended_at)),
+                ("role_id", kv_opt(&t.role_id)),
                 ("incident_task_id", kv_opt(&t.incident_task_id)),
             ],
             &t.created_at,

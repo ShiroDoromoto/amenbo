@@ -1795,10 +1795,10 @@ pub struct AutomationAction {
     /// ([`crate::ops::automation_builtin`]).
     #[serde(default)]
     pub builtin: Option<String>,
-    /// **The axis it splits by**, for the built-in whose ways out are an axis's values (`AMB-D-972`),
-    /// and `None` on every other action. There is one such action per axis: the ways out are the
-    /// action's rows, and they follow the axis's values ([`crate::ops::automation_builtin_split`]).
-    /// `None` on one of them is an axis deleted from under it.
+    /// **The axis it split by**, on an action of the built-in `split_by_dim` an automation written before
+    /// automations had roles still places, and `None` on every other action. That built-in is gone —
+    /// where a round goes is its task's role — and an automation placing it is only exported, which
+    /// writes the axis out by name. `None` on one of them is an axis deleted from under it.
     #[serde(default)]
     pub builtin_dimension_id: Option<i64>,
     /// **Which version of the built-in's definition these rows were written from**, or `None` for an
@@ -1909,22 +1909,27 @@ impl FailuresTo {
 }
 
 /// The fewest minutes a trigger waits between two tasks it files: the least a [`TriggerWhen::Every`]
-/// may be written with, and the rest a [`TriggerWhen::Idle`] always takes after each one.
+/// may be written with, and the rest a [`TriggerWhen::Idle`] or a [`TriggerWhen::Tasks`] always takes
+/// after each one.
 pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 
 /// **An automation's trigger** ([`Automation::trigger`]) — what starts a run with nobody pressing
-/// start, in three parts: [`TriggerWhen`] answers whether to file a task now, [`TriggerTask`] writes
-/// what the task says, and the run is the automation's own, started on the task filed. No agent works
-/// on the first two; the third is a run like any other.
+/// start, in three parts: [`TriggerWhen`], with its [`TriggerCondition`] if it has one, answers whether
+/// to file a task now, [`TriggerTask`] writes what the task says, and the run is the automation's own,
+/// started on the task filed. No agent works on the first two; the third is a run like any other.
 ///
 /// A time it answers no leaves nothing behind — no task, no run, no record — so the only thing it
 /// keeps is `next_at`, which moves on only when a task is filed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutomationTrigger {
     pub when: TriggerWhen,
+    /// The tasks it looks at before filing one, on top of `when` — `None` where it looks at none. A
+    /// [`TriggerWhen::Tasks`] always has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<TriggerCondition>,
     pub task: TriggerTask,
-    /// When it is next asked whether to file a task (for an `idle`, the soonest it may file one): set
-    /// when the trigger is written, and moved on each time it files one.
+    /// When it is next asked whether to file a task (for an `idle` or a `tasks`, the soonest it may file
+    /// one): set when the trigger is written, and moved on each time it files one.
     pub next_at: Timestamp,
 }
 
@@ -1940,6 +1945,10 @@ pub enum TriggerWhen {
     /// [`MIN_TRIGGER_EVERY_MINUTES`] after it is written and after each task it files, so a run that
     /// ends at once is not followed by another on every look.
     Idle,
+    /// Whenever its [`TriggerCondition`] holds, with nothing else to wait for — but, like an `every`,
+    /// not while the automation has its most runs under way. It waits [`MIN_TRIGGER_EVERY_MINUTES`]
+    /// after it is written and after each task it files, as an `idle` does.
+    Tasks,
 }
 
 impl TriggerWhen {
@@ -1948,6 +1957,7 @@ impl TriggerWhen {
         match self {
             TriggerWhen::Every { .. } => "every",
             TriggerWhen::Idle => "idle",
+            TriggerWhen::Tasks => "tasks",
         }
     }
 
@@ -1955,10 +1965,22 @@ impl TriggerWhen {
     pub fn after(&self, from: Timestamp) -> Timestamp {
         let minutes = match self {
             TriggerWhen::Every { minutes } => *minutes,
-            TriggerWhen::Idle => MIN_TRIGGER_EVERY_MINUTES,
+            TriggerWhen::Idle | TriggerWhen::Tasks => MIN_TRIGGER_EVERY_MINUTES,
         };
         Timestamp(from.0 + chrono::Duration::minutes(i64::from(minutes)))
     }
+}
+
+/// **The tasks a trigger looks at before it files one** ([`AutomationTrigger::condition`]): it files
+/// one only while fewer than `below` tasks of the automation's project match `filter`. So a trigger
+/// keeps a queue topped up rather than piling tasks onto one nobody is working through.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TriggerCondition {
+    /// What `task list --filter` takes, read inside the automation's project — so it may not name a
+    /// `project:` of its own. Empty counts every task of the project.
+    pub filter: String,
+    /// It files a task only while fewer than this many match: 1 or more.
+    pub below: u32,
 }
 
 /// **What the task a trigger files says** — the second part of [`AutomationTrigger`].
@@ -2000,7 +2022,7 @@ pub struct AutomationPlacement {
 
 /// **One step of one action**, and one terminal when it is opened. Its `prompt` is its own — an action
 /// holds the prompts rather than being one. Who carries it out is not: that is chosen where the action
-/// is placed ([`AutomationPlacementStep`], `AMB-D-960`).
+/// is placed ([`AutomationPlacementStep`]), else falls back to its role's default and then Amenbo's.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationStep {
     pub id: i64,
@@ -2061,9 +2083,11 @@ pub struct StepScript {
     pub timeout_minutes: i64,
 }
 
-/// **Who carries one step out at one placement** — chosen where the action is placed, step by step
-/// (`AMB-D-960`). A step with no row here has nobody chosen, and the launch check refuses a run that
-/// would open it.
+/// **Who carries one step out at one placement** — chosen where the action is placed, step by step.
+/// It is the first of the three a step's agent is chosen from: a step with no row here falls back to the
+/// default of the role whose round reaches the placement ([`AutomationRole`]), and then to Amenbo's own
+/// ([`crate::ops::automation_run::Launcher::default_agent`]). Where none of the three names an agent,
+/// the launch check refuses a run that would open the step.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationPlacementStep {
     pub id: i64,
@@ -2086,9 +2110,13 @@ pub struct AutomationPlacementStep {
 /// **The way it works is where its round starts** (`entry_placement_id`), a placement of the same
 /// automation. `None` while it is still being built, as the automation's own entry is.
 ///
-/// **`agent` and `model` are defaults, nothing more** (`AMB-D-960`). The choice made for a step where its
-/// action is placed ([`AutomationPlacementStep`]) stays where it is; which of the two is asked first is
-/// not decided here. `model` is named only beside an agent, and `None` leaves the agent's own default.
+/// **`agent` and `model` are defaults, nothing more.** A step's agent is chosen from three, in order: the
+/// choice made for the step where its action is placed ([`AutomationPlacementStep`]), then this default
+/// for every placement the role's round reaches from `entry_placement_id` — up to where the
+/// automation's entry or another role's round begins — then Amenbo's own
+/// ([`crate::ops::automation_run::Launcher::default_agent`]). A placement more than one round reaches
+/// takes the first of those roles in the order they are defined in. `model` is named only beside an
+/// agent and comes with it, and `None` leaves the agent's own default.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationRole {
     pub id: i64,
@@ -2570,11 +2598,23 @@ pub struct AutomationRunDef {
     /// the picture stood at launch.
     #[serde(default)]
     pub entry: bool,
+    /// **The roles whose round starts at this step** — JSON, an array of [`AutomationRole`] ids. A role
+    /// names the placement its round starts at (`entry_placement_id`), and this is the copy of that
+    /// placement's first step, as the roles stood at launch. `[]` on every other copy, and on one written
+    /// before roles were copied.
+    #[serde(default)]
+    pub roles: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
 
 impl AutomationRunDef {
+    /// **The roles whose round starts at this copy** ([`AutomationRunDef::roles`]) — none where its JSON
+    /// is empty or does not read.
+    pub fn role_ids(&self) -> Vec<i64> {
+        serde_json::from_str(&self.roles).unwrap_or_default()
+    }
+
     /// **The name one port of this copy was declared under**, by the id the run's values key it by
     /// ([`RunDefPort::id`]) — an output on any of its ways out, or one of its inputs. `None` where the
     /// copy declares no port of that id, or its JSON does not read.
@@ -2743,6 +2783,12 @@ pub struct AutomationRunTask {
     pub started_at: Option<Timestamp>,
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
+    /// **The role the round is worked under** — the role the task named when it was taken, among the
+    /// roles the run's copies start ([`AutomationRunDef::roles`]). `None` for a round of a run whose
+    /// automation defines no role, for one that has not taken its task yet, and where the role has since
+    /// been taken out.
+    #[serde(default)]
+    pub role_id: Option<i64>,
     /// **The task this round was filed as when it failed** — filed to whoever the automation sends a
     /// failed round to ([`Automation::failures_to`]), with `task_id` waiting on it. `None` for a round
     /// that did not fail, and where that task has since been deleted.

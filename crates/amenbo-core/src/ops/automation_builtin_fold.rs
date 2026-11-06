@@ -157,6 +157,7 @@ mod tests {
     fn walk(tx: &WriteTx<'_>, automation: &Automation) -> (i64, Next) {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),

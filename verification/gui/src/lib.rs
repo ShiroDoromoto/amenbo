@@ -7116,11 +7116,6 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
         ],
     },
     BuiltinWords {
-        key: "split_by_dim",
-        called: "the built-in that splits the task by its value on one axis",
-        words: &[("分類なし", "the way out for a task with no value on that axis")],
-    },
-    BuiltinWords {
         key: "wait",
         called: "the built-in that waits (it holds the run for the hours, minutes and seconds set on it)",
         words: &[

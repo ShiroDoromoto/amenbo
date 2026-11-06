@@ -1096,10 +1096,9 @@ datasets! {
         // and never edited: the ways out and the outputs they declare have to be the ones the code
         // leaves by.
         builtin: col(OPT),
-        // The axis a built-in that splits by one splits by (`AMB-D-972`), or NULL for every other
-        // action. Its ways out are that axis's values, so there is one such action per axis rather than
-        // one per key. An axis deleted from under it leaves it with none, and carrying it out then falls
-        // over rather than guess.
+        // The axis the built-in `split_by_dim` split by (`AMB-D-972`), on an action of it an automation
+        // written before automations had roles still places, or NULL for every other action. That
+        // built-in is gone and such an automation is only exported, which writes the axis out by name.
         builtin_dimension_id: fk_opt("dimension", "SET NULL"),
         // The version of the built-in's definition the rows were written from (`AMB-D-1000`), or NULL
         // for an action a person wrote. One action per version: a placement points at the one it was
@@ -1152,9 +1151,15 @@ datasets! {
         // `archived`, none of it is part of a saved version.
         //
         // When to file one: `every` is every `trigger_every_minutes` minutes; `idle` is whenever the
-        // automation has no run under way, and leaves `trigger_every_minutes` NULL.
-        trigger_when_kind: enum_opt("every", "idle"),
+        // automation has no run under way; `tasks` is whenever the condition below holds. The last two
+        // leave `trigger_every_minutes` NULL.
+        trigger_when_kind: enum_opt("every", "idle", "tasks"),
         trigger_every_minutes: col(INT_OPT),
+        // The tasks it looks at first, on top of the when: it files one only while fewer than
+        // `trigger_condition_below` tasks of the automation's project match `trigger_condition_filter`
+        // (what `task list --filter` takes). Both NULL is no condition; a `tasks` always has one.
+        trigger_condition_filter: col(OPT),
+        trigger_condition_below: col(INT_OPT),
         // What the task says: `fixed` is the title and notes written here.
         trigger_task_kind: enum_opt("fixed"),
         trigger_task_title: col(OPT),
@@ -1253,10 +1258,11 @@ datasets! {
     // automation. It is `RESTRICT`, as the automation's own entry is, so taking a placement off drops
     // the reference first. NULL while it is still being built.
     //
-    // `agent` and `model` are defaults only (`AMB-D-960`): the choice made for a step where its action
-    // is placed (`automation_placement_step`) stays. `model` is named only beside an agent. `icon` is
-    // the name the GUI draws it by, NULL for none chosen. `order_key` is the order the roles are defined
-    // in. No name is held unique: a role is pointed at by its id.
+    // `agent` and `model` are defaults only: the choice made for a step where its action is placed
+    // (`automation_placement_step`) comes first, then this, then Amenbo's own default agent. `model` is
+    // named only beside an agent. `icon` is the name the GUI draws it by, NULL for none chosen.
+    // `order_key` is the order the roles are defined in. No name is held unique: a role is pointed at
+    // by its id.
     automation_role {
         automation_id: fk("automation", "RESTRICT"),
         name: col(REQ),
@@ -1536,6 +1542,11 @@ datasets! {
         ins: col(REQ),
         cfg: col(REQ),
         entry: bool_col,
+        // The roles whose round starts at this step — a JSON array of `automation_role` ids, plain ids
+        // for the reason `placement_id` is. Copied from the roles the automation held at launch onto the
+        // copy of the first step of the placement each one starts at (`automation_role.entry_placement_id`),
+        // and `[]` on every other copy and on a row written before this was copied (v110).
+        roles: col(REQ),
     }
 
     // **One task a run worked on**, in the order it took them — one round of the run, from the entry
@@ -1552,6 +1563,10 @@ datasets! {
         task_id: fk_opt("task", "SET NULL"),
         started_at: ts_opt,
         ended_at: ts_opt,
+        // The role the round is worked under — the role the task named when it was taken. NULL for a
+        // round of a run whose automation defines no role, for one that has not taken its task yet, and
+        // where the role has since been taken out (`SET NULL`, for the reason `task_id` is).
+        role_id: fk_opt("automation_role", "SET NULL"),
         // The task filed to whoever the automation sends a failed round to, where this round failed —
         // the round's task waits on it. `SET NULL` for the reason `task_id` is.
         incident_task_id: fk_opt("task", "SET NULL"),

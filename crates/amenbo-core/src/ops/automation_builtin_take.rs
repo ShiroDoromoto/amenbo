@@ -9,6 +9,11 @@
 //! reserved, so the filter's own `status:` and `ready:` are dropped and those two put in their place:
 //! a setting that asked for anything else would be asking for a task the reservation refuses.
 //!
+//! **Only a task of one of the run's roles is taken**, where the automation's roles say where each
+//! starts ([`roles_started`]): a task is worked under the role it names, so one naming none, or a role
+//! the run starts no round of, is left for a person. An automation defining no such role takes any task
+//! the filter finds.
+//!
 //! **Left unanswered, the filter is the tasks given to the AI** (`assignee:me-ai`). The built-in that
 //! hands a task back to a person gives it to the human, and so does a run a person canceled; a filter
 //! that did not ask for the AI's would take it straight back.
@@ -33,6 +38,7 @@ use crate::ops::automation_builtin::{
     HeldByValue, Waits, Work,
 };
 use crate::ops::automation_report;
+use crate::ops::automation_run::roles_started;
 use crate::run_wording::builtin as say;
 use crate::ops::automation_step::{taskfilter_expr, taskfilter_sort, TASKFILTER_SORT_DEFAULT};
 use crate::query::{self, ListParams};
@@ -141,7 +147,8 @@ fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
 /// **Whether there is a task to take now** — the one question asked while it waits. One row is read,
 /// however many the filter matches, and none is counted or sorted.
 fn turned_up(conn: &Connection, run: &AutomationRun, cfg: &[RunDefCfg]) -> Result<bool> {
-    query::any(conn, Reach::binding(run.project_id), &expression(answer(cfg, FILTER)))
+    let roles = roles_started(conn, run.id)?;
+    query::any_in_roles(conn, Reach::binding(run.project_id), &expression(answer(cfg, FILTER)), &roles)
 }
 
 /// **What is keeping it waiting** (`AMB-D-999`): every task the filter matches that is not started and
@@ -151,9 +158,10 @@ fn held_back(conn: &Connection, run: &AutomationRun, cfg: &[RunDefCfg]) -> Resul
     let expr = with_asked(narrowing(answer(cfg, FILTER)), HELD);
     let mut held = HeldBack::default();
     let (mut blockers, mut decisions): (Counts, Counts) = (Vec::new(), Vec::new());
+    let roles = roles_started(conn, run.id)?;
     let mut offset = 0;
     loop {
-        let page = query::list(
+        let page = query::list_in_roles(
             conn,
             Reach::binding(run.project_id),
             ListParams {
@@ -163,6 +171,7 @@ fn held_back(conn: &Connection, run: &AutomationRun, cfg: &[RunDefCfg]) -> Resul
                 offset: Some(offset),
                 ..Default::default()
             },
+            &roles,
         )?;
         for task in &page.tasks {
             held.tasks += 1;
@@ -222,7 +231,8 @@ fn titled(
         .collect()
 }
 
-/// One page of the tasks the filter answered with lists, in the order it asks for.
+/// One page of the tasks the filter answered with lists, in the order it asks for — of those worked under a
+/// role the run starts a round of, where it starts any ([`roles_started`]).
 fn search(
     conn: &Connection,
     run: &AutomationRun,
@@ -231,7 +241,7 @@ fn search(
     offset: usize,
 ) -> Result<query::TaskListResult> {
     let sort = answer.map(taskfilter_sort).unwrap_or_else(|| TASKFILTER_SORT_DEFAULT.to_string());
-    query::list(
+    query::list_in_roles(
         conn,
         Reach::binding(run.project_id),
         ListParams {
@@ -241,6 +251,7 @@ fn search(
             offset: Some(offset),
             ..Default::default()
         },
+        &roles_started(conn, run.id)?,
     )
 }
 
@@ -284,7 +295,7 @@ mod tests {
         ActorKind, Automation, AutomationPictureOwner, AutomationPlacement, AutomationPortKind,
         AutomationRun, AutomationRunStatus, AutomationStoppedReason, Priority, TaskStatus,
     };
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
@@ -319,6 +330,7 @@ mod tests {
     fn carried(tx: &WriteTx<'_>, automation: &Automation) -> (AutomationRun, i64, Next) {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -450,6 +462,7 @@ mod tests {
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -474,7 +487,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
             let startable = ["claude".to_string()];
-            let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked(), None).expect("check");
             assert!(unmet.is_empty(), "nothing has to follow the way out it never takes: {unmet:?}");
 
             let run = launched(tx, &automation);
@@ -578,7 +591,7 @@ mod tests {
             }
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
 
-            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
+            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked(), None).expect("resume");
             assert_eq!(resumed.run.pause_kind, None, "a running run is stopped at neither");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at its entry");
             assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
@@ -674,7 +687,7 @@ mod tests {
             let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert!(!automation_stop::pauses_before_next_task(tx.conn(), &paused).expect("judge"));
 
-            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
+            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked(), None).expect("resume");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
             assert_eq!(resumed.run.pause_kind, None);
             assert!(matches!(
@@ -722,7 +735,7 @@ mod tests {
             );
             automation::version_add(tx, automation.id).expect("save the automation");
 
-            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
+            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked(), None).expect("resume");
             assert_eq!(resumed.run.status, AutomationRunStatus::Running);
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "at the new copy's entry");
             assert!(resumed.next.id > last_copied, "copied down afresh");
@@ -763,7 +776,7 @@ mod tests {
             let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
             automation::set_entry(tx, automation.id, None).expect("no entry");
 
-            let refused = automation_stop::resume(tx, run.id, None, nothing_asked()).expect_err("refused");
+            let refused = automation_stop::resume(tx, run.id, None, nothing_asked(), None).expect_err("refused");
             assert!(matches!(refused, crate::error::Error::NotReady(_)), "{refused:?}");
             let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(paused.status, AutomationRunStatus::Paused, "it stays paused");
@@ -817,7 +830,7 @@ mod tests {
             assert_eq!(paused.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
             assert!(read::automation_run_steps_of(tx.conn(), run.id).expect("steps").is_empty(), "nothing taken");
 
-            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked()).expect("resume");
+            let resumed = automation_stop::resume(tx, run.id, None, nothing_asked(), None).expect("resume");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
         });
     }
@@ -878,13 +891,13 @@ mod tests {
             let automation = waiting_picture(tx, project);
             let run = launched(tx, &automation);
             assert!(matches!(open_entry(tx, &run), Opened::Waiting { .. }));
-            assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked()).expect("look"), TakenUp::Same));
+            assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"), TakenUp::Same));
             let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             let last_copied = launched_with.last().expect("a copy").id;
             assert!(launched_with.iter().all(|d| d.automation_version.is_none()), "taken from the draft");
 
             automation::version_add(tx, automation.id).expect("save the automation");
-            let TakenUp::Copied(entry) = take_up_newer(tx, run.id, None, nothing_asked()).expect("look") else {
+            let TakenUp::Copied(entry) = take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look") else {
                 panic!("copied down afresh");
             };
             assert!(entry.id > last_copied, "on the new copy");
@@ -896,7 +909,7 @@ mod tests {
             assert_eq!(waiting.id, entry.id, "the new copy's entry is what is opened next");
             let kept = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             assert_eq!(kept.len(), launched_with.len() * 2, "the copy it launched with is kept");
-            assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked()).expect("look"), TakenUp::Same));
+            assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"), TakenUp::Same));
             let still = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(still.status, AutomationRunStatus::Running);
         });
@@ -915,7 +928,7 @@ mod tests {
             automation::version_add(tx, automation.id).expect("save the automation");
             let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
 
-            assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked()).expect("look"), TakenUp::Same));
+            assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"), TakenUp::Same));
             assert_eq!(read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(), copies);
         });
     }
@@ -932,7 +945,7 @@ mod tests {
             automation::set_entry(tx, automation.id, None).expect("no entry");
             automation::version_add(tx, automation.id).expect("save past the check");
 
-            let TakenUp::Failed(failed) = take_up_newer(tx, run.id, None, nothing_asked()).expect("look") else {
+            let TakenUp::Failed(failed) = take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look") else {
                 panic!("the run fails");
             };
             assert_eq!(failed.status, AutomationRunStatus::Failed);
@@ -969,11 +982,11 @@ mod tests {
                 .expect("onward");
             automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
             let claude = ["claude".to_string()];
-            let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None).expect("check");
             assert!(unmet.is_empty(), "it would launch: {unmet:?}");
             automation::version_add(tx, automation.id).expect("save the automation");
 
-            let TakenUp::Failed(failed) = take_up_newer(tx, run.id, None, nothing_asked()).expect("look") else {
+            let TakenUp::Failed(failed) = take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look") else {
                 panic!("the run fails");
             };
             assert_eq!(failed.stopped_reason, Some(AutomationStoppedReason::FailedCheck));
@@ -1054,6 +1067,7 @@ mod tests {
             let taskless = automation::set_entry(tx, taskless.id, Some(work.id)).expect("entry");
             let claude = ["claude".to_string()];
             let by = Launcher {
+                default_agent: None,
                 startable: Some(&claude),
                 models: nothing_asked(),
                 workspace_open: Some(true),
@@ -1081,7 +1095,7 @@ mod tests {
             let startable = ["claude".to_string()];
             for answer in [None, Some(format!("\"{GO_ON}\""))] {
                 automation::cfg_set(tx, spot, WHEN_NONE, answer.as_deref()).expect("answer");
-                let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked()).expect("check");
+                let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked(), None).expect("check");
                 let open = unmet
                     .iter()
                     .find(|u| matches!(u, Unmet::OpenExit { exit: e, .. } if e == NONE_TO_TAKE))
@@ -1121,5 +1135,91 @@ mod tests {
             "assignee:me-ai status:todo ready:yes",
             "an answer that is not its parts narrows as no answer does, never to every task",
         );
+    }
+
+    /// An automation with two roles, each starting its round at an agent's step that goes on to closing
+    /// the task. Nothing is drawn from the way out that takes a task: where it goes is the task's role.
+    fn by_role(tx: &WriteTx<'_>, project: i64) -> (Automation, [(i64, AutomationPlacement); 2]) {
+        let automation =
+            automation::add(tx, project, NewAutomation { name: "roles".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
+                .expect("automation");
+        let written = action(tx, "take_task").expect("the built-in's action");
+        let spot = automation::placement_add(tx, automation.id, written.id).expect("place it");
+        let on = AutomationPictureOwner::Automation;
+        automation::edge_add(tx, on, spot.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
+        let mut roles = Vec::new();
+        for name in ["実装", "レビュー"] {
+            let (_, work) = mk_placed(tx, &automation, name, "work on it", "claude");
+            crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
+            let new = NewRole { name: name.into(), entry_placement_id: Some(work.id), ..NewRole::default() };
+            let role = automation::role_add(tx, automation.id, new).expect("a role");
+            roles.push((role.id, work));
+        }
+        let automation = automation::set_entry(tx, automation.id, Some(spot.id)).expect("entry");
+        let reviewer = roles.pop().expect("the reviewer");
+        let builder = roles.pop().expect("the builder");
+        (automation, [builder, reviewer])
+    }
+
+    fn under(tx: &WriteTx<'_>, task: i64, role: i64) {
+        task::update(tx, task, TaskPatch { role_id: Some(role), ..Default::default() }).expect("the role");
+    }
+
+    /// **A round goes on to where its task's role starts**, with no line drawn from the way out that took
+    /// it, and is worked under that role. A task with no role is not taken, however high it stands.
+    #[test]
+    fn a_round_goes_on_to_where_its_tasks_role_starts() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [_, (reviewer, review)]) = by_role(tx, project);
+            let claude = ["claude".to_string()];
+            let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None).expect("check");
+            assert!(unmet.is_empty(), "the way out that takes a task needs no line: {unmet:?}");
+
+            let roleless = for_ai(tx, "no role", project, Some(Priority::High));
+            let reviewed = for_ai(tx, "to review", project, None);
+            under(tx, reviewed, reviewer);
+
+            let (run, _, next) = carried(tx, &automation);
+            assert_eq!(status(tx, reviewed), TaskStatus::InProgress, "the task of a role is taken");
+            assert_eq!(status(tx, roleless), TaskStatus::Todo, "one with no role is left for a person");
+            let stretch = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("stretch");
+            assert_eq!((stretch.task_id, stretch.role_id), (Some(reviewed), Some(reviewer)));
+            let Next::Step(def) = next else { panic!("the round goes on, not {next:?}") };
+            assert_eq!(def.placement_id, Some(review.id), "where the reviewer's round starts");
+        });
+    }
+
+    /// **Where every task left has no role, there is none to take.**
+    #[test]
+    fn a_task_with_no_role_is_not_taken_where_roles_say_where_rounds_start() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, _) = by_role(tx, project);
+            let roleless = for_ai(tx, "no role", project, None);
+            let (_, run_step_id, _) = carried(tx, &automation);
+            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+            assert_eq!(ran.exit_id, way_out(tx, run_step_id, NONE_TO_TAKE));
+            assert_eq!(status(tx, roleless), TaskStatus::Todo);
+        });
+    }
+
+    /// **Where a role starts is checked before a launch**, as a placement a line reaches is: nothing
+    /// draws a line to it, and the way out that takes a task leads there all the same.
+    #[test]
+    fn where_a_role_starts_is_checked_as_a_placement_a_run_reaches() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, _) = by_role(tx, project);
+            let (_, bare) = mk_placed(tx, &automation, "bare", "nothing after it", "claude");
+            let new = NewRole { name: "設計".into(), entry_placement_id: Some(bare.id), ..NewRole::default() };
+            automation::role_add(tx, automation.id, new).expect("a role");
+            let claude = ["claude".to_string()];
+            let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None).expect("check");
+            assert!(
+                unmet.iter().any(|u| matches!(u, Unmet::OpenExit { placement, .. } if *placement == Some(bare.id))),
+                "its way out has nothing after it: {unmet:?}",
+            );
+        });
     }
 }

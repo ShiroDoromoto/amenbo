@@ -37,6 +37,13 @@
 //! finds no task to take. A round is one stretch of the run ([`crate::model::AutomationRunTask`]), and
 //! a definition saved while one is under way is taken up as the next round starts — never in the middle
 //! of one.
+//!
+//! **Where a round goes after its task is taken is the task's role.** An automation's roles each name
+//! the placement their round starts at, and a launch copies that onto the run ([`AutomationRunDef::roles`]);
+//! the way out that hands on the task taken then goes on to where the task's role starts rather than
+//! along a line ([`by_role`]), and only a task of one of those roles is taken ([`roles_started`]). A task
+//! with no role is not taken at all. An automation with no role naming where its round starts walks its
+//! picture as it is drawn.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -46,14 +53,14 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
-    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
+    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationRole,
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
 };
 use crate::ops::automation::{ActionDef, Picture};
-use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
+use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -161,8 +168,9 @@ pub enum Unmet {
     /// linked folders (`AMB-D-1012`). Which one the task is worked in is not the built-in's to pick, so it
     /// would file nothing and halt the run there.
     FolderUnchosen { step: String, cfg: String, count: usize, builtin: Option<String>, placement: i64 },
-    /// A step nobody has been chosen to carry out where its action is placed (`AMB-D-960`). A pane
-    /// opened on it would have no agent to start.
+    /// A step nobody carries out: no agent is chosen for it where its action is placed, the role whose
+    /// round reaches it names none, and Amenbo has no default either ([`carrier`]). A pane opened on it
+    /// would have no agent to start.
     AgentUnchosen { step: String, placement: i64 },
     /// A step asking for an agent this machine cannot start. A pane opened on it would come up on
     /// `command not found`.
@@ -204,11 +212,6 @@ pub enum Unmet {
     ///
     /// `step` names the action, or the step inside it, whose way out `exit` is.
     HandsOnTaskTaken { step: String, exit: String, placement: i64 },
-    /// The built-in that splits by an axis, placed while its axis was there, whose axis has been deleted
-    /// since (`AMB-D-987`). A run reaching it would have nothing to split by and halt, so the launch is
-    /// refused here instead. `step` is the action's name, which every split shares, so the placement is
-    /// named in the sentence too.
-    SplitAxisGone { step: String, placement: i64 },
 }
 
 impl Unmet {
@@ -281,7 +284,10 @@ impl Unmet {
                 )
             }
             Unmet::AgentUnchosen { step, .. } => {
-                format!("nobody is chosen to carry out '{step}' where its action is placed")
+                format!(
+                    "nobody is chosen to carry out '{step}' — not where its action is placed, not by its role, \
+                     and Amenbo has no default agent"
+                )
             }
             Unmet::AgentMissing { step, agent, .. } => {
                 format!("'{step}' asks for '{agent}', which this machine cannot start")
@@ -319,12 +325,6 @@ impl Unmet {
                     named(exit)
                 )
             }
-            Unmet::SplitAxisGone { step, placement } => {
-                format!(
-                    "'{step}' on placement {placement} splits by an axis that has been deleted — take the \
-                     placement off and place the split again on an axis that is there"
-                )
-            }
         }
     }
 }
@@ -359,7 +359,6 @@ impl Unmet {
             Unmet::LeavesTaskOpen { to: Some(_), .. } => ErrorCode::NotReadyAutomationTaskLeftOpen,
             Unmet::LeavesTaskOpen { to: None, .. } => ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
             Unmet::HandsOnTaskTaken { .. } => ErrorCode::NotReadyAutomationHandsOnTaskTaken,
-            Unmet::SplitAxisGone { .. } => ErrorCode::NotReadyAutomationSplitAxisGone,
         }
     }
 
@@ -423,7 +422,6 @@ impl Unmet {
                 }
             }
             Unmet::HandsOnTaskTaken { step, exit, .. } => msg.with("step", step).with("exit", exit),
-            Unmet::SplitAxisGone { step, .. } => msg.with("step", step),
         }
     }
 
@@ -449,8 +447,7 @@ impl Unmet {
             | Unmet::ScriptMissing { placement, .. }
             | Unmet::ScriptNotExecutable { placement, .. }
             | Unmet::LeavesTaskOpen { placement, .. }
-            | Unmet::HandsOnTaskTaken { placement, .. }
-            | Unmet::SplitAxisGone { placement, .. } => Some(*placement),
+            | Unmet::HandsOnTaskTaken { placement, .. } => Some(*placement),
         }
     }
 
@@ -478,7 +475,6 @@ impl Unmet {
             | Unmet::CfgValueClosed { builtin, .. }
             | Unmet::FolderUnchosen { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
-            Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
             _ => None,
         }
     }
@@ -502,6 +498,13 @@ pub struct Launcher<'a> {
     /// The models each agent offers on this machine ([`ModelsHere`]) — empty from a caller that has
     /// asked nobody, which is every caller outside the app.
     pub models: &'a ModelsHere,
+    /// **Amenbo's own default agent** — the last of the three a step's agent is chosen from, after the
+    /// step at its placement and the role whose round reaches it ([`carrier`]). It is the answer a pane
+    /// would open with for the automation's project ([`crate::wake::step_agent`]), and names no model.
+    ///
+    /// The store fills it from its configuration on every launch it carries
+    /// ([`crate::store::Store::automation_launch`]), so a caller going through the store writes `None`.
+    pub default_agent: Option<&'a str>,
     /// Whether the talk window is open — `Some(false)` refuses, and **`None` is a caller that cannot
     /// see** (`AMB-D-792`'s discipline, the same one [`Launcher::startable`] takes).
     ///
@@ -631,12 +634,13 @@ fn not_found(what: &str, id: i64) -> Error {
 /// **What is asked of a placement is asked of the action standing on it**, and then of every step the
 /// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
 /// inside that nothing reaches stop a run just as surely as the same gaps on the automation's picture
-/// ([`inside`]). The agent and the model are asked of each step as it is placed here — they are chosen
-/// where the action is placed, step by step (`AMB-D-960`). A script step is asked instead whether its
-/// program is a file this machine can run (`AMB-D-1016`).
+/// ([`inside`]). The agent and the model are asked of each step as it is placed here — the step's own
+/// choice, else the default of the role whose round reaches it, else Amenbo's ([`carrier`]). A script
+/// step is asked instead whether its program is a file this machine can run (`AMB-D-1016`).
 ///
 /// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade. `models` is
 /// [`Launcher::models`], and an agent it says nothing about leaves that step's model check unmade.
+/// `default_agent` is [`Launcher::default_agent`], Amenbo's own default.
 ///
 /// Asked of the draft — the automation's picture as it is written now. A launch asks it of the
 /// picture it is about to copy down ([`check_picture`]).
@@ -645,10 +649,134 @@ pub fn check(
     automation_id: i64,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<Vec<Unmet>> {
     let automation = read::automation(conn, automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
-    check_picture(conn, &automation, &Picture::read(conn, &automation)?, startable, models)
+    check_picture(conn, &automation, &Picture::read(conn, &automation)?, startable, models, default_agent)
+}
+
+/// **Where the agent carrying a step out was chosen** — the first of three that names one: the step at
+/// its placement, the role whose round reaches that placement, and Amenbo as a whole ([`carrier`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ChosenAt {
+    /// Chosen for this step where its action is placed ([`crate::model::AutomationPlacementStep`]).
+    Step,
+    /// The default of this role ([`AutomationRole`]).
+    Role { role_id: i64 },
+    /// Amenbo's own default ([`Launcher::default_agent`]).
+    Amenbo,
+}
+
+/// **Who carries one step out at one placement**, and where that was chosen.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct Carrier {
+    pub agent: String,
+    /// `None` leaves the agent's own default model.
+    pub model: Option<String>,
+    pub at: ChosenAt,
+}
+
+/// **The role each placement falls back to** — for every role, in the order they are defined in, the
+/// placements its round reaches ([`round_of`]). A placement more than one round reaches falls back to the
+/// first of those roles. A role that names no agent is passed by: it has nothing for a step to fall back
+/// to.
+fn roles_by_placement<'p>(
+    pic: &'p Picture,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
+) -> BTreeMap<i64, &'p AutomationRole> {
+    let starts: BTreeSet<i64> =
+        pic.roles().iter().filter_map(|role| role.entry_placement_id).chain(pic.entry_placement_id).collect();
+    let mut found = BTreeMap::new();
+    for role in pic.roles().iter().filter(|role| role.agent.is_some()) {
+        let Some(entry) = role.entry_placement_id else { continue };
+        for id in round_of(entry, pic, by_id, defs, &starts) {
+            found.entry(id).or_insert(role);
+        }
+    }
+    found
+}
+
+/// **The placements one round reaches** — walked from where it starts, as [`reachable`] walks, but not
+/// on into a placement in `starts` other than its own: that is where the automation's entry or another
+/// role's round begins, and a line going there has left this round.
+fn round_of(
+    entry: i64,
+    pic: &Picture,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
+    starts: &BTreeSet<i64>,
+) -> BTreeSet<i64> {
+    let mut seen = BTreeSet::new();
+    let mut todo = vec![entry];
+    while let Some(id) = todo.pop() {
+        if (id != entry && starts.contains(&id)) || !by_id.contains_key(&id) || !seen.insert(id) {
+            continue;
+        }
+        for exit in defs[&id].action_exits() {
+            if let Some(next) = pic.edge_for_exit(id, exit.id).and_then(|e| e.to_id) {
+                todo.push(next);
+            }
+        }
+    }
+    seen
+}
+
+/// **Who carries one step out at one placement**: the agent chosen for the step there, else the default
+/// of the role the placement falls back to ([`roles_by_placement`]), else Amenbo's own default. `None`
+/// where none of the three names one.
+///
+/// **The model comes from where the agent did.** It is the agent's model and is named only beside it
+/// (`AMB-D-865`), so a step's agent is never put with a role's model. Amenbo's default names no model,
+/// which is the agent's own default.
+fn carrier(
+    pic: &Picture,
+    roles: &BTreeMap<i64, &AutomationRole>,
+    placement_id: i64,
+    step_id: i64,
+    default_agent: Option<&str>,
+) -> Option<Carrier> {
+    if let Some(chosen) = pic.chosen(placement_id, step_id) {
+        return Some(Carrier { agent: chosen.agent.clone(), model: chosen.model.clone(), at: ChosenAt::Step });
+    }
+    if let Some(role) = roles.get(&placement_id) {
+        if let Some(agent) = &role.agent {
+            let at = ChosenAt::Role { role_id: role.id };
+            return Some(Carrier { agent: agent.clone(), model: role.model.clone(), at });
+        }
+    }
+    default_agent.map(|agent| Carrier { agent: agent.to_string(), model: None, at: ChosenAt::Amenbo })
+}
+
+/// **Who carries each step out**, keyed by (placement, step), for the definition `reads` names — every
+/// step an agent carries out, wherever one of the three names somebody ([`carrier`]). A built-in and a
+/// script are left out: Amenbo carries the one out and the other is its own program.
+pub fn carriers(
+    conn: &Connection,
+    automation_id: i64,
+    reads: ReadsFrom,
+    default_agent: Option<&str>,
+) -> Result<BTreeMap<(i64, i64), Carrier>> {
+    let automation = read::automation(conn, automation_id)?
+        .ok_or_else(|| not_found("automation", automation_id))?;
+    let (pic, _) = definition(conn, &automation, reads)?;
+    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
+    let defs = defs_of(conn, &pic.placements)?;
+    let roles = roles_by_placement(&pic, &by_id, &defs);
+    let mut found = BTreeMap::new();
+    for placement in &pic.placements {
+        for step in &defs[&placement.id].steps {
+            if step.builtin.is_some() || step.script.is_some() {
+                continue;
+            }
+            if let Some(carried) = carrier(&pic, &roles, placement.id, step.id, default_agent) {
+                found.insert((placement.id, step.id), carried);
+            }
+        }
+    }
+    Ok(found)
 }
 
 /// [`check`], asked of `pic` — the draft or a saved version of `automation` ([`ReadsFrom`]).
@@ -658,6 +786,7 @@ fn check_picture(
     pic: &Picture,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<Vec<Unmet>> {
     if automation.export_only {
         return Ok(vec![Unmet::ExportOnly]);
@@ -680,6 +809,8 @@ fn check_picture(
     let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
     let defs = defs_of(conn, placements)?;
     let live = reachable(entry_id, pic, &by_id, &defs);
+    let routed = !role_entries(pic, &by_id).is_empty();
+    let roles = roles_by_placement(pic, &by_id, &defs);
 
     for placement in placements {
         if let Some(action) = read::automation_action(conn, placement.action_id)?.filter(|a| a.draft) {
@@ -714,6 +845,11 @@ fn check_picture(
             // is already handled. Left alone it halts the run and calls a person, and an edge on it
             // is how somebody says otherwise.
             if exit.name == ERROR_EXIT {
+                continue;
+            }
+            // A way out that hands on the task taken goes where the task's role starts, in an automation
+            // whose roles say where that is (`by_role`) — no line drawn from it is walked.
+            if routed && goes_by_role(def, exit.id) {
                 continue;
             }
             if !decided(pic, placement.id, exit.id, &by_id) {
@@ -793,9 +929,6 @@ fn check_picture(
                 });
             }
         }
-        if crate::ops::automation_builtin_split::lost_its_axis(conn, placement.action_id)? {
-            unmet.push(Unmet::SplitAxisGone { step: name.clone(), placement: placement.id });
-        }
         let steps = steps_opened_by(def);
         if builtin.is_none() {
             push_new(&mut unmet, hands_on_the_task(placement, def, &name, &steps));
@@ -814,7 +947,7 @@ fn check_picture(
                 continue;
             }
             let mut found = Vec::new();
-            let Some(chosen) = pic.chosen(placement.id, step.id) else {
+            let Some(chosen) = carrier(pic, &roles, placement.id, step.id, default_agent) else {
                 found.push(Unmet::AgentUnchosen { step: step.name.clone(), placement: placement.id });
                 push_new(&mut unmet, found);
                 continue;
@@ -918,6 +1051,7 @@ fn leaves_task_open(
     by_id: &BTreeMap<i64, &AutomationPlacement>,
     defs: &Defs,
 ) -> Result<Vec<Unmet>> {
+    let routed = role_entries(pic, by_id);
     let mut unmet = Vec::new();
     for &start in live {
         let Some(placement) = by_id.get(&start) else { continue };
@@ -927,62 +1061,70 @@ fn leaves_task_open(
             if Some(exit.name.as_str()) == never_taken(conn, pic, placement, def)? {
                 continue;
             }
-            if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+            if hands_on_taken(def, exit.id) {
                 lines.push((*placement, exit));
             }
         }
         let mut walked = BTreeSet::new();
         while let Some((from, exit)) = lines.pop() {
-            let Some(edge) = pic.edge_for_exit(from.id, exit.id) else {
-                // Nothing drawn: the error way out halts, and any other is refused as an open way out.
-                continue;
+            // The way out that hands on the task taken goes on to where each role starts (`by_role`);
+            // any other goes where its line is drawn to.
+            let tos: Vec<&AutomationPlacement> = if !routed.is_empty() && goes_by_role(&defs[&from.id], exit.id) {
+                routed.iter().filter_map(|id| by_id.get(id).copied()).collect()
+            } else {
+                let Some(edge) = pic.edge_for_exit(from.id, exit.id) else {
+                    // Nothing drawn: the error way out halts, and any other is refused as an open way out.
+                    continue;
+                };
+                match edge.ends {
+                    AutomationEnds::Halt | AutomationEnds::Exit => continue,
+                    AutomationEnds::Done => {
+                        push_new(
+                            &mut unmet,
+                            vec![Unmet::LeavesTaskOpen {
+                                step: action_name(conn, from.action_id)?,
+                                exit: exit.name.clone(),
+                                to: None,
+                                builtin: action_builtin(conn, from.action_id)?,
+                                to_builtin: None,
+                                placement: from.id,
+                                inside: None,
+                            }],
+                        );
+                        continue;
+                    }
+                    AutomationEnds::Go => match edge.to_id.and_then(|id| by_id.get(&id)) {
+                        Some(to) => vec![*to],
+                        None => continue,
+                    },
+                }
             };
-            let to = match edge.ends {
-                AutomationEnds::Halt | AutomationEnds::Exit => continue,
-                AutomationEnds::Done => {
+            for to in tos {
+                if lets_go_of_the_task(conn, to.action_id)? {
+                    continue;
+                }
+                if takes_a_task(conn, pic, to, &defs[&to.id])? {
                     push_new(
                         &mut unmet,
                         vec![Unmet::LeavesTaskOpen {
                             step: action_name(conn, from.action_id)?,
                             exit: exit.name.clone(),
-                            to: None,
+                            to: Some(action_name(conn, to.action_id)?),
                             builtin: action_builtin(conn, from.action_id)?,
-                            to_builtin: None,
+                            to_builtin: action_builtin(conn, to.action_id)?,
                             placement: from.id,
                             inside: None,
                         }],
                     );
                     continue;
                 }
-                AutomationEnds::Go => match edge.to_id.and_then(|id| by_id.get(&id)) {
-                    Some(to) => *to,
-                    None => continue,
-                },
-            };
-            if lets_go_of_the_task(conn, to.action_id)? {
-                continue;
-            }
-            if takes_a_task(conn, pic, to, &defs[&to.id])? {
-                push_new(
-                    &mut unmet,
-                    vec![Unmet::LeavesTaskOpen {
-                        step: action_name(conn, from.action_id)?,
-                        exit: exit.name.clone(),
-                        to: Some(action_name(conn, to.action_id)?),
-                        builtin: action_builtin(conn, from.action_id)?,
-                        to_builtin: action_builtin(conn, to.action_id)?,
-                        placement: from.id,
-                        inside: None,
-                    }],
-                );
-                continue;
-            }
-            if !walked.insert(to.id) {
-                continue;
-            }
-            push_new(&mut unmet, ends_inside(to, &defs[&to.id]));
-            for exit in defs[&to.id].action_exits() {
-                lines.push((to, exit));
+                if !walked.insert(to.id) {
+                    continue;
+                }
+                push_new(&mut unmet, ends_inside(to, &defs[&to.id]));
+                for exit in defs[&to.id].action_exits() {
+                    lines.push((to, exit));
+                }
             }
         }
     }
@@ -1003,7 +1145,7 @@ fn hands_on_the_task(
     let mut found = Vec::new();
     for (owner, owner_id, name) in owners {
         for exit in def.exits_of(owner, owner_id) {
-            if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+            if hands_on_taken(def, exit.id) {
                 push_new(
                     &mut found,
                     vec![Unmet::HandsOnTaskTaken { step: name.clone(), exit: exit.name, placement: placement.id }],
@@ -1183,7 +1325,7 @@ fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
 /// [`Unmet::ActionEmpty`] is raised on.
 ///
 /// Which of them one run walks is decided by the ways out taken while it goes; this is every one it
-/// could walk, in display order, and that is what the agent and the model are asked of (`AMB-D-960`)
+/// could walk, in display order, and that is what the agent and the model are asked of ([`carrier`])
 /// and what a launch copies into the run ([`snapshot`]).
 /// A step nothing inside leads to is left out for the reason [`reachable`] leaves a placement out: no
 /// pane ever comes up on it, so refusing the launch over the agent it names would hold a run back for
@@ -1217,7 +1359,8 @@ fn steps_reached(def: &ActionDef, steps: &[AutomationStep], avoiding: Option<i64
 }
 
 /// The placements a run could actually reach, walked from the entry along the edges that go on to
-/// another placement. A placement nothing reaches is not checked: it cannot stop a run, and refusing to
+/// another placement — and, from a way out that hands on the task taken, on to where each role starts
+/// ([`role_entries`]). A placement nothing reaches is not checked: it cannot stop a run, and refusing to
 /// launch over one would make an automation undeletable-in-practice while its author was still drawing
 /// it.
 fn reachable(
@@ -1238,6 +1381,7 @@ fn reachable_without(
     defs: &Defs,
     avoiding: Option<i64>,
 ) -> BTreeSet<i64> {
+    let routed = role_entries(pic, by_id);
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry_id];
     while let Some(id) = todo.pop() {
@@ -1245,12 +1389,44 @@ fn reachable_without(
             continue;
         }
         for exit in defs[&id].action_exits() {
+            if !routed.is_empty() && goes_by_role(&defs[&id], exit.id) {
+                todo.extend(routed.iter().copied());
+                continue;
+            }
             if let Some(next) = pic.edge_for_exit(id, exit.id).and_then(|e| e.to_id) {
                 todo.push(next);
             }
         }
     }
     seen
+}
+
+/// **The placements the automation's roles start their rounds at** (`AutomationRole::entry_placement_id`),
+/// in the order the roles are defined in, each once — the ones on the picture. Empty where it defines no
+/// role, or none of them names where its round starts: such a picture is walked as it is drawn.
+///
+/// Where there are any, **a way out that hands on the task taken goes on to the one its task's role
+/// starts at** ([`by_role`]), so every one of them is where such a way out leads.
+fn role_entries(pic: &Picture, by_id: &BTreeMap<i64, &AutomationPlacement>) -> Vec<i64> {
+    let mut entries = Vec::new();
+    for id in pic.roles().iter().filter_map(|r| r.entry_placement_id) {
+        if by_id.contains_key(&id) && !entries.contains(&id) {
+            entries.push(id);
+        }
+    }
+    entries
+}
+
+/// Whether this way out of a placed action hands on the task a run works — the way out that takes one.
+fn hands_on_taken(def: &ActionDef, exit_id: i64) -> bool {
+    def.outs_of(exit_id).iter().any(|p| p.kind == AutomationPortKind::TaskTake)
+}
+
+/// **Whether this way out goes where the task's role starts** rather than along a line, where the
+/// automation's roles say where that is ([`by_role`]): the way out of the built-in that takes a task
+/// which hands it on. A task the run files itself and takes has no role, so it walks the line drawn.
+fn goes_by_role(def: &ActionDef, exit_id: i64) -> bool {
+    def.steps.iter().any(|s| s.builtin.as_deref() == Some(TAKE_TASK.key)) && hands_on_taken(def, exit_id)
 }
 
 /// **The lines a run could walk back to an entry that reads what was handed over at launch**
@@ -1317,7 +1493,7 @@ fn takes_a_task(
         if Some(exit.name.as_str()) == never {
             continue;
         }
-        if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+        if hands_on_taken(def, exit.id) {
             return Ok(true);
         }
     }
@@ -1578,16 +1754,20 @@ pub struct TriggersDue {
 
 /// **Which triggers are due at `now`** — the first part of each, asked of every automation that may be
 /// started by one ([`read::automations_triggered`]), which leaves out a stopped one. One whose runs
-/// under way say no ([`has_room`]) is not due: it would decide not to file a task, so a look need not
-/// open a write to hear it say so. It writes nothing: [`fire`] asks all of it again, in the transaction
-/// it writes in.
+/// under way say no ([`has_room`]), or whose condition does not hold ([`condition_holds`]), is not
+/// due: it would decide not to file a task, so a look need not open a write to hear it say so. It
+/// writes nothing: [`fire`] asks all of it again, in the transaction it writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
-        let Some(trigger) = automation.trigger else { continue };
+        let Some(trigger) = &automation.trigger else { continue };
         if trigger.next_at <= now {
             let under_way = read::automation_run_ids_under_way(conn, automation.id)?;
-            if has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs) {
+            // A condition that no longer reads (an axis it names gone since) is left for `fire` to
+            // refuse, as a launch refused is, rather than stopping every other trigger on this look.
+            if has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs)
+                && condition_holds(conn, automation.project_id, trigger).unwrap_or(true)
+            {
                 found.due.push(automation.id);
             }
         } else if found.next_at.is_none_or(|soonest| trigger.next_at < soonest) {
@@ -1601,10 +1781,10 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// start a run of the automation on it — `Some(run)` when it did, `None` when it decided not to.
 ///
 /// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while its runs under way say
-///    no ([`has_room`]): an `every` waits while the automation has its most runs under way
+///    no ([`has_room`]): an `every` or a `tasks` waits while the automation has its most runs under way
 ///    (`max_concurrent_runs`), where a task filed would have no run to go to, and an `idle` waits until
-///    it has none at all. An archived automation, a stopped one, one kept for export only and one with
-///    no trigger file none either.
+///    it has none at all. Nor while its condition does not hold ([`condition_holds`]). An archived
+///    automation, a stopped one, one kept for export only and one with no trigger file none either.
 /// 2. **What it says.** The title and notes written on the trigger.
 /// 3. **The run.** A launch like any other ([`launch_handing`]), of the newest saved version, the task
 ///    handed to its entry as a person's would be — so it is the entry, the built-in that files a task,
@@ -1622,7 +1802,9 @@ pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timest
         return Ok(None);
     }
     let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
-    if !has_room(&trigger.when, under_way.len(), before.max_concurrent_runs) {
+    if !has_room(&trigger.when, under_way.len(), before.max_concurrent_runs)
+        || !condition_holds(tx.conn(), before.project_id, &trigger)?
+    {
         return Ok(None);
     }
     let handed = match &trigger.task {
@@ -1640,13 +1822,21 @@ pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timest
 }
 
 /// **Whether the runs under way leave a trigger room to file a task** — `under_way` being the
-/// automation's runs `running` or `paused`, and `max` its `max_concurrent_runs`. An `every` files one
-/// while there is room for one more run; an `idle` only once there is none under way.
+/// automation's runs `running` or `paused`, and `max` its `max_concurrent_runs`. An `every` or a
+/// `tasks` files one while there is room for one more run; an `idle` only once there is none under way.
 fn has_room(when: &crate::model::TriggerWhen, under_way: usize, max: u32) -> bool {
     match when {
-        crate::model::TriggerWhen::Every { .. } => under_way < max as usize,
+        crate::model::TriggerWhen::Every { .. } | crate::model::TriggerWhen::Tasks => under_way < max as usize,
         crate::model::TriggerWhen::Idle => under_way == 0,
     }
+}
+
+/// **Whether a trigger's condition lets it file a task** — fewer than `below` tasks of the automation's
+/// project (`project_id`) matching its filter. One with no condition always does.
+fn condition_holds(conn: &Connection, project_id: i64, trigger: &crate::model::AutomationTrigger) -> Result<bool> {
+    let Some(condition) = &trigger.condition else { return Ok(true) };
+    let matched = crate::query::count(conn, crate::reach::Reach::binding(project_id), &condition.filter)?;
+    Ok(matched < condition.below as usize)
 }
 
 /// [`launch_handing`], counting the runs under way only where `limited`.
@@ -1756,7 +1946,7 @@ fn launch_asking(
         )));
     }
     let (pic, version) = definition(tx.conn(), &automation, reads)?;
-    let unmet: Vec<Unmet> = check_picture(tx.conn(), &automation, &pic, by.startable, by.models)?
+    let unmet: Vec<Unmet> = check_picture(tx.conn(), &automation, &pic, by.startable, by.models, by.default_agent)?
         .into_iter()
         .filter(|u| counts(u))
         .collect();
@@ -1816,7 +2006,7 @@ fn launch_asking(
         updated_at: now,
     };
     emit_create(tx, record::automation_run(&run))?;
-    copy_down(tx, run.id, &pic, version, now)?;
+    copy_down(tx, run.id, &pic, version, by.default_agent, now)?;
     Ok(run)
 }
 
@@ -1831,8 +2021,17 @@ fn launch_asking(
 /// records the saved version it is — `version`, `None` for the draft. **What is copied of each placement
 /// is the version of the action it stands on** ([`ActionDef::placed`]), not the action as it has since
 /// been written on.
-fn copy_down(tx: &WriteTx<'_>, run_id: i64, pic: &Picture, version: Option<i64>, now: Timestamp) -> Result<()> {
+fn copy_down(
+    tx: &WriteTx<'_>,
+    run_id: i64,
+    pic: &Picture,
+    version: Option<i64>,
+    default_agent: Option<&str>,
+    now: Timestamp,
+) -> Result<()> {
     let defs = defs_of(tx.conn(), &pic.placements)?;
+    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
+    let roles = roles_by_placement(pic, &by_id, &defs);
     let mut steps = Vec::new();
     for placement in &pic.placements {
         let def = &defs[&placement.id];
@@ -1843,7 +2042,8 @@ fn copy_down(tx: &WriteTx<'_>, run_id: i64, pic: &Picture, version: Option<i64>,
     }
     steps.sort_by_key(|(_, _, entry)| !entry);
     for (placement, step, entry) in steps {
-        if let Some(def) = snapshot(tx, run_id, version, pic, placement, &defs, &step, entry, now)? {
+        let carried = carrier(pic, &roles, placement.id, step.id, default_agent);
+        if let Some(def) = snapshot(tx, run_id, version, pic, placement, &defs, &step, carried, entry, now)? {
             emit_create(tx, record::automation_run_def(&def))?;
         }
     }
@@ -1861,9 +2061,10 @@ pub(crate) fn copy_down_again(
     run: &AutomationRun,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<AutomationRunDef> {
-    let (pic, version) = checked_saved(tx.conn(), run, startable, models)?;
-    copy_down(tx, run.id, &pic, version, Timestamp::now())?;
+    let (pic, version) = checked_saved(tx.conn(), run, startable, models, default_agent)?;
+    copy_down(tx, run.id, &pic, version, default_agent, Timestamp::now())?;
     entry_def(tx.conn(), run.id)?.ok_or_else(|| {
         Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
     })
@@ -1877,6 +2078,7 @@ fn checked_saved(
     run: &AutomationRun,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<(Picture, Option<i64>)> {
     let automation: Automation =
         read::automation(conn, run.automation_id)?.ok_or_else(|| not_found("automation", run.automation_id))?;
@@ -1898,7 +2100,7 @@ fn checked_saved(
         )));
     }
     let (pic, version) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let unmet = check_picture(conn, &automation, &pic, startable, models)?;
+    let unmet = check_picture(conn, &automation, &pic, startable, models, default_agent)?;
     if !unmet.is_empty() {
         return Err(not_ready("launch", &automation.name, &unmet));
     }
@@ -1938,6 +2140,7 @@ pub fn take_up_newer(
     run_id: i64,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<TakenUp> {
     let run = read::automation_run(tx.conn(), run_id)?.ok_or_else(|| not_found("run", run_id))?;
     let Waiting::Step(standing) = next_def(tx.conn(), run_id)? else { return Ok(TakenUp::Same) };
@@ -1950,7 +2153,7 @@ pub fn take_up_newer(
     if standing.automation_version.is_some_and(|copied| copied >= saved.version) {
         return Ok(TakenUp::Same);
     }
-    let refused = match checked_saved(tx.conn(), &run, startable, models) {
+    let refused = match checked_saved(tx.conn(), &run, startable, models, default_agent) {
         Ok((pic, version)) => match files_a_task(tx.conn(), &pic)? {
             Some(step) => format!(
                 "cannot pick up run '{}' at version {}: the entry '{step}' files a task, and only a launch \
@@ -1958,7 +2161,7 @@ pub fn take_up_newer(
                 run.id, saved.version
             ),
             None => {
-                copy_down(tx, run.id, &pic, version, Timestamp::now())?;
+                copy_down(tx, run.id, &pic, version, default_agent, Timestamp::now())?;
                 let entry = entry_def(tx.conn(), run.id)?.ok_or_else(|| {
                     Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
                 })?;
@@ -2118,14 +2321,14 @@ fn refused_over(head: String, code: ErrorCode, field: &'static str, name: &str, 
 /// edge ([`onward`], [`wired_into`]). Each input carries the outputs wired into it, resolved here, so a
 /// run hands a value along the wires it launched with (`AMB-D-961`). The settings are the placement's —
 /// the action's declarations with this spot's answers written in — because a step reads them by name and
-/// the answer is given once, where the action is placed. The agent and the model are the placement's too
-/// — chosen there, step by step (`AMB-D-960`). The prompt, the agent, the model and the three flags are
-/// resolved here rather than kept as a pointer, so the step is not read halfway through the run as
-/// whatever it had since been edited into.
+/// the answer is given once, where the action is placed. The agent and the model are `carried` — the
+/// step's own choice at the placement, else its role's default, else Amenbo's ([`carrier`]). The prompt,
+/// the agent, the model and the three flags are resolved here rather than kept as a pointer, so the
+/// step is not read halfway through the run as whatever it had since been edited into.
 ///
-/// **A step nobody is chosen for is not copied**, and `None` says so. The launch check refuses a run
-/// that could open one ([`Unmet::AgentUnchosen`]), so the only such step left here stands on a
-/// placement no run reaches — copied, it would need an agent it does not have. A built-in is copied
+/// **A step none of the three names an agent for is not copied**, and `None` says so. The launch
+/// check refuses a run that could open one ([`Unmet::AgentUnchosen`]), so the only such step left here
+/// stands on a placement no run reaches — copied, it would need an agent it does not have. A built-in is copied
 /// with nobody named and no prompt: Amenbo carries it out itself (`AMB-D-964`). A script is copied with
 /// nobody named too: its program is what is started (`AMB-D-1016`).
 ///
@@ -2141,6 +2344,7 @@ fn snapshot(
     placement: &AutomationPlacement,
     defs: &Defs,
     step: &AutomationStep,
+    carried: Option<Carrier>,
     entry: bool,
     now: Timestamp,
 ) -> Result<Option<AutomationRunDef>> {
@@ -2148,11 +2352,11 @@ fn snapshot(
     let def = &defs[&placement.id];
     // A built-in is carried out by Amenbo and a script by its program, so nobody was chosen for either
     // and its copy names nobody.
-    let chosen = if step.builtin.is_some() || step.script.is_some() {
-        AutomationPlacementStep::default()
+    let (agent, model) = if step.builtin.is_some() || step.script.is_some() {
+        (String::new(), None)
     } else {
-        match pic.chosen(placement.id, step.id) {
-            Some(chosen) => chosen.clone(),
+        match carried {
+            Some(carried) => (carried.agent, carried.model),
             None => return Ok(None),
         }
     };
@@ -2188,6 +2392,11 @@ fn snapshot(
             value: c.value,
         })
         .collect();
+    // The roles whose round starts here: those naming this placement, on the copy of its first step.
+    let roles: Vec<i64> = match def.entry_step_id == Some(step.id) {
+        true => pic.roles().iter().filter(|r| r.entry_placement_id == Some(placement.id)).map(|r| r.id).collect(),
+        false => Vec::new(),
+    };
     Ok(Some(AutomationRunDef {
         id: read::next_id(conn, "automation_run_def")?,
         run_id,
@@ -2201,8 +2410,8 @@ fn snapshot(
         builtin_version,
         automation_version,
         script: step.script.clone(),
-        agent: chosen.agent,
-        model: chosen.model,
+        agent,
+        model,
         interactive: step.interactive,
         work_dir_ref: step.work_dir_ref.clone(),
         report_to_task: step.report_to_task,
@@ -2214,6 +2423,7 @@ fn snapshot(
         ins: serde_json::to_string(&ins).map_err(Error::from)?,
         cfg: serde_json::to_string(&cfg).map_err(Error::from)?,
         entry,
+        roles: serde_json::to_string(&roles).map_err(Error::from)?,
         created_at: now,
         updated_at: now,
     }))
@@ -2405,6 +2615,9 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
     let Some(exit) = exit else { return Ok(Onward::Nowhere) };
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
     let Some(taken) = exits.into_iter().find(|e| e.id == exit) else { return Ok(Onward::Nowhere) };
+    if let Some(routed) = by_role(conn, def, &taken)? {
+        return Ok(routed);
+    }
     let Some(line) = taken.then else {
         // **An error way out nobody drew a line from halts the run**, and the round is filed as a failure
         // — which is why the launch check never asks for one. That holds for the step's own error way
@@ -2430,6 +2643,62 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
             }
         }
     })
+}
+
+/// **Where the built-in that takes a task goes once it has taken one, in a run whose copies start roles'
+/// rounds** — on to the copy the round's role starts at ([`AutomationRunDef::roles`]), whatever line is
+/// drawn from it. `None` for any other way out, and for every way out of a run whose automation defines
+/// no role that names where its round starts: that run walks its picture as it is drawn.
+///
+/// The role is the one the round was taken under ([`crate::model::AutomationRunTask::role_id`]). Only a
+/// task of a role the copies start a round of is taken ([`roles_started`]), so a round with none has
+/// nowhere to go ([`Onward::Nowhere`]) — which a task whose role was changed under the run as it was being
+/// taken is the one way to reach.
+///
+/// No line is drawn for it, so the line it hands back is made up: on the automation's picture, from the
+/// placement it leaves, with no edge (`edge_id` 0) and no limit on how often it is taken. That it is on the
+/// automation's picture is what lets a pause asked for take hold on it, as on any line between two
+/// placements.
+fn by_role(conn: &Connection, def: &AutomationRunDef, taken: &RunDefExit) -> Result<Option<Onward>> {
+    if def.builtin.as_deref() != Some(TAKE_TASK.key)
+        || !taken.outs.iter().any(|p| p.kind == AutomationPortKind::TaskTake)
+    {
+        return Ok(None);
+    }
+    let defs = current_defs(conn, def.run_id)?;
+    if defs.iter().all(|d| d.role_ids().is_empty()) {
+        return Ok(None);
+    }
+    let role = read::automation_run_task_last(conn, def.run_id)?.and_then(|stretch| stretch.role_id);
+    let Some(next) = role.and_then(|role| defs.into_iter().find(|d| d.role_ids().contains(&role))) else {
+        return Ok(Some(Onward::Nowhere));
+    };
+    let line = RunDefLine {
+        edge_id: 0,
+        picture: AutomationPictureOwner::Automation,
+        from_id: def.placement_id.unwrap_or_default(),
+        exit_id: taken.returns_to.unwrap_or(taken.id),
+        ends: AutomationEnds::Go,
+        placement_id: next.placement_id,
+        step_id: next.step_id,
+        max_times: None,
+    };
+    Ok(Some(Onward::Go { def: Box::new(next), line }))
+}
+
+/// **The roles a run's copies start rounds of** ([`AutomationRunDef::roles`]), as it was last copied down,
+/// each once. Empty for a run whose automation defines no role that names where its round starts.
+///
+/// Where there are any, the built-in that takes a task takes only a task of one of them, so a task with
+/// no role, or one of a role no copy starts, is not taken.
+pub(crate) fn roles_started(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
+    let mut roles = Vec::new();
+    for role in current_defs(conn, run_id)?.iter().flat_map(|d| d.role_ids()) {
+        if !roles.contains(&role) {
+            roles.push(role);
+        }
+    }
+    Ok(roles)
 }
 
 /// **Which of an action's ways out one way out of a step inside it returns to** — the action's way out
@@ -2812,7 +3081,7 @@ pub fn trail(conn: &Connection, run_id: i64) -> Result<Trail> {
 mod tests {
     use super::*;
     use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewScript, NewStep};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep};
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::test_support::{exit_id, mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
 
@@ -2893,6 +3162,7 @@ mod tests {
     /// open.
     fn here<'a>(startable: &'a [String]) -> Launcher<'a> {
         Launcher {
+            default_agent: None,
             startable: Some(startable),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -2909,7 +3179,7 @@ mod tests {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
             );
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
@@ -2924,7 +3194,7 @@ mod tests {
         with_tx(|tx| {
             let automation = mk_automation(tx, "空");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoSteps],
                 "nothing else is worth saying about it",
             );
@@ -2937,7 +3207,7 @@ mod tests {
             let (automation, _, _) = launchable(tx);
             automation::set_entry(tx, automation.id, None).expect("clear entry");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoEntry],
                 "with no entry nothing is reachable, so every other check is asked of nothing",
             );
@@ -2956,20 +3226,20 @@ mod tests {
                 .expect("add automation");
             assert_eq!(empty.failures_to, None, "born with nobody unless somebody is named");
             assert_eq!(
-                check(tx.conn(), empty.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), empty.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoFailuresTo, Unmet::NoSteps],
             );
 
             let (automation, _, _) = launchable(tx);
             automation::update(tx, automation.id, None, None, None, None, Some(None)).expect("leave it unsaid");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoFailuresTo],
             );
             let refused = launch(tx, automation.id, &here(&claude())).expect_err("nobody to file to");
             assert_eq!(refused.error_code(), ErrorCode::NotReadyAutomation, "{refused}");
             assert!(refused.to_string().contains("failed round"), "{refused}");
-            let refused = automation::save(tx, automation.id).expect_err("a save asks the same");
+            let refused = automation::save(tx, automation.id, None).expect_err("a save asks the same");
             assert!(matches!(refused, Error::NotReady(_)), "{refused}");
             assert_eq!(Unmet::NoFailuresTo.placement(), None);
             assert_eq!(Unmet::NoFailuresTo.code(), ErrorCode::NotReadyAutomationNoFailuresTo);
@@ -2982,7 +3252,7 @@ mod tests {
             .expect("a role");
             let to_role = Some(Some(FailuresTo::Role { role_id: role.id }));
             automation::update(tx, automation.id, None, None, None, None, to_role).expect("to the role");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
             launch(tx, automation.id, &here(&claude())).expect("launch");
         });
     }
@@ -3001,7 +3271,7 @@ mod tests {
             )
             .expect("written before automations had roles");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::ExportOnly],
                 "nothing else is worth saying about it",
             );
@@ -3030,13 +3300,13 @@ mod tests {
             )
             .expect("mark it as still being written");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::ActionDraft { action: "直す".into(), placement: placement.id }],
             );
 
             automation::action_save(tx, action.id).expect("save it");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
             );
         });
@@ -3050,7 +3320,7 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             automation::action_set_entry(tx, action.id, None).expect("take the entry off");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::ActionEmpty { action: "直す".into(), placement: Some(placement.id) }],
             );
         });
@@ -3072,7 +3342,7 @@ mod tests {
             .expect("edge");
             automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::EntryTakesNoTask { step: "取る".into(), builtin: None, placement: placement.id }],
             );
         });
@@ -3091,7 +3361,7 @@ mod tests {
     }
 
     fn checked(tx: &WriteTx<'_>, automation: &Automation) -> Vec<Unmet> {
-        check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check")
+        check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check")
     }
 
     /// **A line that ends the run with the task still open is refused** (`AMB-D-967`), named by the way
@@ -3305,7 +3575,7 @@ mod tests {
                 automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
                     .expect("exit");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::OpenExit {
                     step: "直す".into(),
                     exit: exit.name.clone(),
@@ -3325,7 +3595,7 @@ mod tests {
             // refuse the automation every other test here launches.
             let (automation, _, _) = launchable(tx);
             let unmet =
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check");
             assert_eq!(unmet, vec![], "the error way out is carried from birth, not written");
         });
     }
@@ -3345,7 +3615,7 @@ mod tests {
             )
             .expect("port");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "直す".into(),
                     port: "下書き".into(),
@@ -3398,7 +3668,7 @@ mod tests {
             )
             .expect("wire back into itself");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "直す".into(),
                     port: "下書き".into(),
@@ -3457,7 +3727,7 @@ mod tests {
             )
             .expect("wire");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "直す".into(),
                     port: "下書き".into(),
@@ -3484,7 +3754,7 @@ mod tests {
             )
             .expect("cfg");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnansweredCfg {
                     step: "直す".into(),
                     cfg: "作業フォルダ".into(),
@@ -3494,7 +3764,7 @@ mod tests {
                 "the declaration is the action's and the answer is the placement's",
             );
             automation::cfg_set(tx, placement.id, "作業フォルダ", Some("\"~/work\"")).expect("answer");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
         });
     }
 
@@ -3514,9 +3784,9 @@ mod tests {
             )
             .expect("cfg");
             automation::cfg_set(tx, placement.id, "どれ", Some(r#""b""#)).expect("answer");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
             automation::cfg_update(tx, cfg.id, None, None, None, Some(Some(r#"["a"]"#))).expect("take b off");
-            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check");
             assert!(
                 matches!(
                     unmet.as_slice(),
@@ -3533,11 +3803,11 @@ mod tests {
         with_tx(|tx| {
             let (automation, _, placement) = launchable(tx);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&[]), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&[]), nothing_asked(), None).expect("check"),
                 vec![Unmet::AgentMissing { step: "直す".into(), agent: "claude".into(), placement: placement.id }],
             );
             assert_eq!(
-                check(tx.conn(), automation.id, None, nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, None, nothing_asked(), None).expect("check"),
                 vec![],
                 "a machine nobody asked is not a machine with nothing on it (AMB-D-792)",
             );
@@ -3570,8 +3840,9 @@ mod tests {
             .expect("choose who carries it out");
     }
 
-    /// **A step nobody is chosen for where it is placed is refused** (`AMB-D-960`), even on a machine
-    /// nobody has asked what it can start — there is no agent to ask about at all.
+    /// **A step none of the three chooses for is refused** — not at its placement, not by a role, and
+    /// with no default of Amenbo's — even on a machine nobody has asked what it can start: there is no
+    /// agent to ask about at all.
     #[test]
     fn a_step_nobody_is_chosen_for_where_it_is_placed_is_refused() {
         with_tx(|tx| {
@@ -3579,7 +3850,7 @@ mod tests {
             let step = only_step(tx, &action);
             automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
             assert_eq!(
-                check(tx.conn(), automation.id, None, nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, None, nothing_asked(), None).expect("check"),
                 vec![Unmet::AgentUnchosen { step: "直す".into(), placement: placement.id }],
             );
             let err = launch(tx, automation.id, &here(&claude())).expect_err("refused");
@@ -3588,6 +3859,119 @@ mod tests {
                 msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
                 vec![Some(ErrorCode::NotReadyAutomationAgentUnchosen)],
             );
+        });
+    }
+
+    /// Who carries `step` at `placement` in the draft, with `default_agent` as Amenbo's own.
+    fn carried(
+        tx: &WriteTx<'_>,
+        automation: &Automation,
+        placement: &AutomationPlacement,
+        step: &AutomationStep,
+        default_agent: Option<&str>,
+    ) -> Option<Carrier> {
+        carriers(tx.conn(), automation.id, ReadsFrom::Draft, default_agent)
+            .expect("carriers")
+            .remove(&(placement.id, step.id))
+    }
+
+    /// A role named `name` whose round starts at `entry`, falling back to `agent` and `model`.
+    fn role_at(
+        tx: &WriteTx<'_>,
+        automation: &Automation,
+        name: &str,
+        entry: i64,
+        agent: Option<&str>,
+        model: Option<&str>,
+    ) -> crate::model::AutomationRole {
+        let new = NewRole {
+            name: name.into(),
+            entry_placement_id: Some(entry),
+            agent: agent.map(str::to_string),
+            model: model.map(str::to_string),
+            ..NewRole::default()
+        };
+        automation::role_add(tx, automation.id, new).expect("a role")
+    }
+
+    /// **A step's agent is chosen from three, in order** — the step at its placement, then the role whose
+    /// round reaches the placement, then Amenbo's own default — and the model comes from wherever the
+    /// agent did: Amenbo's names none, and a step's own choice never takes its role's model.
+    #[test]
+    fn a_step_falls_back_to_its_role_and_then_to_amenbo() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
+
+            assert_eq!(carried(tx, &automation, &placement, &step, None), None, "none of the three");
+            assert_eq!(
+                carried(tx, &automation, &placement, &step, Some("codex")),
+                Some(Carrier { agent: "codex".into(), model: None, at: ChosenAt::Amenbo }),
+            );
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), Some("claude")).expect("check"),
+                vec![],
+                "Amenbo's default carries a step nobody chose for",
+            );
+
+            let role = role_at(tx, &automation, "実装", placement.id, Some("claude"), Some("opus"));
+            assert_eq!(
+                carried(tx, &automation, &placement, &step, Some("codex")),
+                Some(Carrier { agent: "claude".into(), model: Some("opus".into()), at: ChosenAt::Role { role_id: role.id } }),
+                "the role comes before Amenbo, with its model",
+            );
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
+
+            automation::placement_step_set(tx, placement.id, step.id, "gemini", None).expect("choose");
+            assert_eq!(
+                carried(tx, &automation, &placement, &step, Some("codex")),
+                Some(Carrier { agent: "gemini".into(), model: None, at: ChosenAt::Step }),
+                "the step's own choice comes first, and the role's model does not come with it",
+            );
+        });
+    }
+
+    /// **A placement more than one round reaches takes the first role defined** that names an agent, and
+    /// a round stops where the automation's entry or another role's round begins.
+    #[test]
+    fn a_placement_falls_back_to_the_first_role_whose_round_reaches_it() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
+            let entry = automation.entry_placement_id.expect("an entry");
+
+            // Defined first, and starting at the automation's entry — but the work placement is where
+            // another role's round begins, so this round stops short of it.
+            role_at(tx, &automation, "受付", entry, Some("codex"), None);
+            role_at(tx, &automation, "名無し", placement.id, None, None);
+            let first = role_at(tx, &automation, "実装", placement.id, Some("claude"), None);
+            role_at(tx, &automation, "予備", placement.id, Some("gemini"), None);
+
+            assert_eq!(
+                carried(tx, &automation, &placement, &step, None),
+                Some(Carrier { agent: "claude".into(), model: None, at: ChosenAt::Role { role_id: first.id } }),
+            );
+        });
+    }
+
+    /// **A launch copies the agent a step falls back to** into the run, so the pane opens on it.
+    #[test]
+    fn a_launch_copies_the_agent_a_step_falls_back_to() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
+            let startable = claude();
+            let by = Launcher { default_agent: Some("claude"), ..here(&startable) };
+            let run = launch(tx, automation.id, &by).expect("launch");
+            let copy = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|def| def.step_id == Some(step.id))
+                .expect("the step is copied");
+            assert_eq!((copy.agent.as_str(), copy.model.as_deref()), ("claude", None));
         });
     }
 
@@ -3625,9 +4009,9 @@ mod tests {
                 program: program.to_string_lossy().into_owned(),
                 placement: placement.id,
             }];
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), missing);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), missing);
             std::fs::create_dir(&program).expect("a folder where the program should be");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), missing);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), missing);
             let err = launch(tx, automation.id, &here(&claude())).expect_err("refused");
             let Error::NotReady(msg) = err else { panic!("a launch that cannot go ahead is not_ready") };
             assert_eq!(
@@ -3652,7 +4036,7 @@ mod tests {
             std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o644)).expect("not executable");
             runs_a_script(tx, &action, &program);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::ScriptNotExecutable {
                     step: "直す".into(),
                     program: program.to_string_lossy().into_owned(),
@@ -3660,10 +4044,10 @@ mod tests {
                 }],
             );
             std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("executable");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
             automation::placement_step_clear(tx, placement.id, only_step(tx, &action).id).expect("nobody chosen");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "a script needs nobody chosen to carry it out",
             );
@@ -3703,7 +4087,7 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             goes_on_to(tx, &action, &placement, "書く", "codex");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::AgentMissing { step: "書く".into(), agent: "codex".into(), placement: placement.id }],
                 "the check walks the picture inside the action, not its entry alone",
             );
@@ -3717,7 +4101,7 @@ mod tests {
             automation::step_add(tx, action.id, NewStep::new("書く", "続ける"))
                 .expect("a step with no line into it");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "no pane comes up on it, so the agent it names cannot hold the launch back",
             );
@@ -3743,6 +4127,7 @@ mod tests {
                     automation.id,
                     Some(&claude()),
                     &offering("claude", &["sonnet", "haiku"]),
+                    None,
                 )
                 .expect("check"),
                 vec![Unmet::ModelMissing {
@@ -3758,6 +4143,7 @@ mod tests {
                     automation.id,
                     Some(&claude()),
                     &offering("claude", &["sonnet", "opus-9"]),
+                    None,
                 )
                 .expect("check"),
                 vec![],
@@ -3772,12 +4158,12 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             names_model(tx, &placement, &action, "opus-9");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "an agent nobody has asked says nothing about its models (AMB-D-865)",
             );
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), &offering("codex-cli", &["gpt"]))
+                check(tx.conn(), automation.id, Some(&claude()), &offering("codex-cli", &["gpt"]), None)
                     .expect("check"),
                 vec![],
                 "another agent's list is not this one's",
@@ -3795,6 +4181,7 @@ mod tests {
                     automation.id,
                     Some(&claude()),
                     &offering("claude", &["sonnet"]),
+                    None,
                 )
                 .expect("check"),
                 vec![],
@@ -3851,7 +4238,7 @@ mod tests {
             let (automation, action, _) = launchable(tx);
             automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
                 .expect("exit");
-            let err = automation::save(tx, automation.id).expect_err("refused");
+            let err = automation::save(tx, automation.id, None).expect_err("refused");
             let Error::NotReady(msg) = err else { panic!("a save that cannot go ahead is not_ready") };
             assert_eq!(msg.code(), Some(ErrorCode::NotReadyAutomation));
             assert_eq!(
@@ -3874,10 +4261,10 @@ mod tests {
 
             let (automation, _, placement) = launchable(tx);
             assert!(automation::unsaved(tx.conn(), automation.id).expect("unsaved"), "never saved");
-            let first = automation::save(tx, automation.id).expect("save");
+            let first = automation::save(tx, automation.id, None).expect("save");
             assert_eq!(first.version, 1);
             assert!(!automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
-            let again = automation::save(tx, automation.id).expect("save with nothing written");
+            let again = automation::save(tx, automation.id, None).expect("save with nothing written");
             assert_eq!(again.id, first.id, "nothing written since, so no new version");
 
             automation::update(tx, automation.id, Some("2件やりきる"), None, None, None, None).expect("rename");
@@ -3888,7 +4275,7 @@ mod tests {
             automation::placement_move(tx, placement.id, crate::ops::Position::Top).expect("move");
             assert!(automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
             launch(tx, automation.id, &here(&claude())).expect("launch");
-            let second = automation::save(tx, automation.id).expect("saved while a run goes on");
+            let second = automation::save(tx, automation.id, None).expect("saved while a run goes on");
             assert_eq!(second.version, 2);
             assert!(!automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
         });
@@ -4093,7 +4480,7 @@ mod tests {
             let unsaved = launch(tx, automation.id, &here(&startable)).expect("launch");
             assert_eq!(copied(tx, &unsaved), ("claude".to_string(), None), "never saved: the draft");
 
-            automation::save(tx, automation.id).expect("save");
+            automation::save(tx, automation.id, None).expect("save");
             automation::placement_step_set(tx, placement.id, step.id, "codex", None).expect("choose another");
             let saved = launch(tx, automation.id, &here(&startable)).expect("launch");
             assert_eq!(copied(tx, &saved), ("claude".to_string(), Some(1)), "the saved version");
@@ -4587,7 +4974,7 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             let second = a_second_step(tx, &action, &placement);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::OpenExit {
                     step: "見直す".into(),
                     exit: crate::model::DONE_EXIT.into(),
@@ -4622,20 +5009,20 @@ mod tests {
             )
             .expect("return to it");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
             );
 
             automation::exit_rename(tx, mine.id, Some("戻す")).expect("rename");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "both lines stay on the way out they key",
             );
 
             automation::exit_delete(tx, mine.id).expect("delete");
             let unmet =
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check");
             assert!(
                 unmet.contains(&Unmet::OpenExit {
                     step: "見直す".into(),
@@ -4667,7 +5054,7 @@ mod tests {
             )
             .expect("in");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "見直す".into(),
                     port: "下書き".into(),
@@ -4697,7 +5084,7 @@ mod tests {
             automation::wire_add(tx, on, first.id, None, "下書き", second.id, "下書き")
                 .expect("wire");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "the first step inside hands it on",
             );
@@ -4739,7 +5126,7 @@ mod tests {
             automation::wire_add(tx, on, second.id, None, "下書き", second.id, "下書き")
                 .expect("wire back into itself");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "見直す".into(),
                     port: "下書き".into(),
@@ -4771,7 +5158,7 @@ mod tests {
             .expect("the step's input");
             automation::port_update(tx, port.id, None, None, Some(true)).expect("required inside");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "直す".into(),
                     port: "下書き".into(),
@@ -4804,7 +5191,7 @@ mod tests {
             )
             .expect("on to the second placement");
             let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
-            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check");
             let about = |at: i64| Unmet::OpenExit {
                 step: "見直す".into(),
                 exit: crate::model::DONE_EXIT.into(),

@@ -12,6 +12,7 @@
 # 4 = `pr` saw every check finish green and the pull request still open, and stopped.
 # 5 = what was being watched read the same for AMENBO_CI_STALL seconds; the state it was
 # stuck in is printed last. Nothing is decided: read it, and watch again if it is fine.
+# 6 = `pr` saw the pull request conflict (DIRTY) twice in a row, and stopped.
 #
 # Usage — one mode per KIND of CI, so the caller names the thing and not the filter:
 #
@@ -291,9 +292,10 @@ watch_run() {
     done
 }
 
-# Watch a pull request until it lands, until one of its checks goes red, or until it
-# sits green without landing. Four things are worth a line: a check that failed, a merge
-# that now needs a hand, a green pull request that is not merging, and the landing itself.
+# Watch a pull request until it lands, until one of its checks goes red, until it
+# conflicts, or until it sits green without landing. Four things are worth a line: a check
+# that failed, a merge that now needs a hand, a green pull request that is not merging, and
+# the landing itself.
 #
 # A failed check ends the watch. A required check that is red does not clear on its
 # own — the pull request cannot land until someone pushes a fix — so watching on is
@@ -301,6 +303,12 @@ watch_run() {
 # reach a caller reading through a pipe only once the process ends, the red that was
 # already detected would not even be shown. A re-run is what clears a flaky check, and
 # starting another watch after it is the caller's, as it is for `run`.
+#
+# A conflict ends the watch too, with exit code 6 and `needs a hand: DIRTY` as the last
+# line. DIRTY is the only merge state that will not clear on its own: CI does not run on a
+# conflicting pull request, so its checks never finish, STUCK_ROUNDS never counts it, and
+# only STALL_SECONDS would end it — with the line still unseen by a caller reading through
+# a pipe. It takes DIRTY read twice in a row, so one misread round does not stop the watch.
 #
 # A pull request whose checks have all finished green and that is still open ends the
 # watch too, with exit code 4 and the state `gh pr view` gave. Without auto-merge on it
@@ -326,9 +334,11 @@ watch_pr() {
         state=$(jq -r .state <<< "$v")
         [ "$state" != OPEN ] && { echo "pull request $pr: $state"; [ "$state" = MERGED ]; return $?; }
         ms=$(jq -r .mergeStateStatus <<< "$v")
-        # DIRTY is the only merge state that will not clear on its own.
-        if [ "$ms" = DIRTY ] && [ "$ms" != "$prevms" ]; then
-            echo "needs a hand: $ms"
+        # DIRTY is the only merge state that will not clear on its own. The first read of
+        # it is only remembered; the second in a row ends the watch.
+        if [ "$ms" = DIRTY ] && [ "$prevms" = DIRTY ]; then
+            echo "needs a hand: DIRTY"
+            return 6
         fi
         prevms=$ms
         # `gh pr checks` refuses, rather than reporting nothing, when the head commit

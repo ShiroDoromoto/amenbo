@@ -48,7 +48,10 @@ use amenbo_core::model::{
     AutomationPortKind, AutomationPortOwner, AutomationRole, AutomationRunStatus,
     AutomationWire,
 };
-use amenbo_core::ops::automation::{ActionShelf, EdgeTarget, NewAutomation, NewScript, NewStep};
+use amenbo_core::ops::automation::{
+    ActionShelf, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange,
+};
+use amenbo_core::ops::Position;
 use amenbo_core::ops::automation_builtin;
 use amenbo_core::ops::automation_rehearse::Cut;
 use amenbo_core::ops::automation_run::{self, Carrier, ReadsFrom, Unmet};
@@ -1239,6 +1242,108 @@ pub fn automation_placement_step_set(
 pub fn automation_placement_version_set(placement_id: i64, version: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.automation_placement_version_set(placement_id, version)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Define a role in an automation**, after the roles already there
+/// ([`amenbo_core::ops::automation::role_add`]). Only the name is required. `model` is named beside
+/// `agent` and with no agent is refused by core: the model is the agent's model.
+#[tauri::command]
+pub fn automation_role_add(
+    automation_id: i64,
+    name: String,
+    icon: Option<String>,
+    entry_placement_id: Option<i64>,
+    agent: Option<String>,
+    model: Option<String>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_role_add(
+            automation_id,
+            NewRole { name, icon, entry_placement_id, agent, model },
+        )?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Change a role's name, icon, the placement its round starts at, or its default agent and model**
+/// ([`amenbo_core::ops::automation::role_update`]). Only the fields named are written.
+///
+/// Each of the four taken-away fields has a third answer — written, cleared, or left alone — and is
+/// carried as the pair `x` / `clear_x` for the reason [`automation_step_edit`]'s `work_dir` is: the
+/// clear beats a value beside it. Clearing the agent clears the model with it.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn automation_role_edit(
+    id: i64,
+    name: Option<String>,
+    icon: Option<String>,
+    clear_icon: Option<bool>,
+    entry_placement_id: Option<i64>,
+    clear_entry: Option<bool>,
+    agent: Option<String>,
+    clear_agent: Option<bool>,
+    model: Option<String>,
+    clear_model: Option<bool>,
+) -> Result<WriteAck, CmdError> {
+    let change = RoleChange {
+        name,
+        icon: write_or_clear(icon, clear_icon),
+        entry_placement_id: write_or_clear(entry_placement_id, clear_entry),
+        agent: write_or_clear(agent, clear_agent),
+        model: write_or_clear(model, clear_model),
+    };
+    with_store_mut(|store| {
+        store.automation_role_update(id, change)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// A field with three answers, from the pair a screen writes it with: cleared where `clear` says so,
+/// written where a value came, left alone otherwise.
+fn write_or_clear<T>(value: Option<T>, clear: Option<bool>) -> Option<Option<T>> {
+    match (clear, value) {
+        (Some(true), _) => Some(None),
+        (_, Some(value)) => Some(Some(value)),
+        _ => None,
+    }
+}
+
+/// **Reorder a role among its automation's roles** ([`amenbo_core::ops::automation::role_move`]).
+/// `position` is one of `top` / `bottom` / `before` / `after`, the last two placed against
+/// `anchor_id` — another role of the same automation. No index is taken: the order is the roles'
+/// order keys (`AMB-D-42`).
+#[tauri::command]
+pub fn automation_role_move(
+    id: i64,
+    position: String,
+    anchor_id: Option<i64>,
+) -> Result<WriteAck, CmdError> {
+    let pos = match position.as_str() {
+        "top" => Position::Top,
+        "bottom" => Position::Bottom,
+        "before" => Position::Before(anchor_id.ok_or("position 'before' needs an anchor_id to place against")?),
+        "after" => Position::After(anchor_id.ok_or("position 'after' needs an anchor_id to place against")?),
+        other => return Err(format!("position '{other}' is not one of top / bottom / before / after").into()),
+    };
+    with_store_mut(|store| {
+        store.automation_role_move(id, pos)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Take a role out of its automation** ([`amenbo_core::ops::automation::role_delete`]). The
+/// placement its round started at stays on the picture, and the tasks worked under it are left with
+/// no role.
+#[tauri::command]
+pub fn automation_role_remove(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_role_delete(id)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
@@ -3118,5 +3223,64 @@ mod tests {
             serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "role", "roleId": 7 } }),
         );
         assert_eq!(json(ChosenAt::Amenbo)["chosenAt"], serde_json::json!({ "kind": "amenbo" }));
+    }
+
+    /// **The four role doors write through core and read back on the detail.** A role is added with
+    /// its agent and model, renamed, reordered against another, has its agent cleared — the model
+    /// going with it — and is taken away. A model with no agent and a role that is not there are
+    /// core's refusals, passed on rather than reworded.
+    #[test]
+    fn roles_are_added_edited_reordered_and_removed() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-roles");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let automation_id = {
+            let mut store = amenbo_core::Store::open().unwrap();
+            let project = store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "Roles".into(),
+                    view: amenbo_core::model::View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap();
+            store.automation_add(project.id, NewAutomation { name: "Dev".into(), ..Default::default() }).unwrap().id
+        };
+        let roles = || automation_detail(automation_id).unwrap().expect("the automation").roles;
+
+        automation_role_add(automation_id, "Alice".into(), None, None, Some("claude".into()), Some("opus".into()))
+            .unwrap();
+        automation_role_add(automation_id, "Bob".into(), Some("eye".into()), None, None, None).unwrap();
+        assert!(
+            automation_role_add(automation_id, "Alice".into(), None, None, None, Some("opus".into())).is_err(),
+            "a model with no agent names nothing"
+        );
+        let names = |roles: &[AutomationRoleDto]| roles.iter().map(|r| r.name.clone()).collect::<Vec<_>>();
+        let listed = roles();
+        assert_eq!(names(&listed), ["Alice", "Bob"]);
+        let (alice, bob) = (listed[0].id, listed[1].id);
+        assert_eq!((listed[0].agent.as_deref(), listed[0].model.as_deref()), (Some("claude"), Some("opus")));
+
+        automation_role_move(bob, "before".into(), Some(alice)).unwrap();
+        assert_eq!(names(&roles()), ["Bob", "Alice"]);
+        assert!(automation_role_move(bob, "before".into(), None).is_err(), "before needs an anchor");
+        assert!(automation_role_move(bob, "middle".into(), None).is_err());
+
+        automation_role_edit(bob, Some("Carol".into()), None, Some(true), None, None, None, None, None, None).unwrap();
+        automation_role_edit(alice, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        let listed = roles();
+        assert_eq!(names(&listed), ["Carol", "Alice"]);
+        assert_eq!(listed[0].icon, None, "the clear takes the icon away");
+        assert_eq!((listed[1].agent.as_deref(), listed[1].model.as_deref()), (None, None), "the model goes with the agent");
+        assert!(
+            automation_role_edit(alice, None, None, None, None, None, None, None, Some("opus".into()), None).is_err(),
+            "a model with no agent is refused on an edit too"
+        );
+
+        automation_role_remove(bob).unwrap();
+        assert_eq!(names(&roles()), ["Alice"]);
+        assert!(automation_role_remove(bob).is_err(), "a role that is gone is not found");
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

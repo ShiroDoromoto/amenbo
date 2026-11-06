@@ -131,6 +131,14 @@ pub(super) fn automation_placement(conn: &Connection, id: i64) -> Result<Owner> 
     }
 }
 
+/// The project a role is defined in — its automation's.
+pub(super) fn automation_role(conn: &Connection, id: i64) -> Result<Owner> {
+    match read::automation_role(conn, id).map_err(crate::error::engine_on(conn))? {
+        Some(r) => automation(conn, r.automation_id),
+        None => Ok(Owner::Missing),
+    }
+}
+
 /// The project behind whichever of the two declared a way out or a port.
 fn automation_declarer(
     conn: &Connection,

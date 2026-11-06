@@ -244,7 +244,7 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation" => "project_id = ?1",
         "automation_run" => "project_id = ?1",
 
-        "automation_placement" | "automation_version" => {
+        "automation_placement" | "automation_version" | "automation_role" => {
             "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)"
         }
         "automation_action_step" | "automation_action_version" => {
@@ -1099,6 +1099,13 @@ mod tests {
                  (placement_id, step_id, agent, model, created_at, updated_at) \
              VALUES (?1, ?2, 'claude-code', 'opus', ?3, ?3)",
             rusqlite::params![placement, step, at],
+        );
+        put(
+            "INSERT INTO automation_role \
+                 (automation_id, name, icon, entry_placement_id, agent, model, order_key, created_at, \
+                  updated_at) \
+             VALUES (?1, 'レビュー', 'eye', ?2, 'claude-code', 'opus', 'a0', ?3, ?3)",
+            rusqlite::params![automation, placement, at],
         );
         put(
             "INSERT INTO automation_cfg \

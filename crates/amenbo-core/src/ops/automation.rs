@@ -46,8 +46,8 @@ use crate::model::{
     AutomationCfgKind,
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
-    AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationStep,
-    AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY, DEFAULT_MAX_TIMES,
+    AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRole,
+    AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY, DEFAULT_MAX_TIMES,
     DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, MAX_SCRIPT_TIMEOUT_MINUTES,
 };
@@ -1449,7 +1449,9 @@ pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
     let draft = Picture::read(conn, &automation)?;
     match read::automation_version_latest(conn, automation_id)? {
         Some(latest) => Ok(!draft.is(&latest)?),
-        None => Ok(draft.entry_placement_id.is_some() || !draft.placements.is_empty()),
+        None => Ok(draft.entry_placement_id.is_some()
+            || !draft.placements.is_empty()
+            || !draft.roles.is_empty()),
     }
 }
 
@@ -1493,15 +1495,18 @@ pub fn discard(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion
     restore_rows(tx, &draft.edges, &saved.edges, record::automation_edge)?;
     restore_rows(tx, &draft.placement_steps, &saved.placement_steps, record::automation_placement_step)?;
     restore_rows(tx, &draft.cfgs, &saved.cfgs, record::automation_cfg)?;
+    // A role names the placement its round starts at, `RESTRICT`, so the roles are put back before a
+    // placement the version does not hold is taken off.
+    restore_rows(tx, &draft.roles, saved_roles(&saved), record::automation_role)?;
     restore_rows(tx, &draft.placements, &saved.placements, record::automation_placement)?;
     Ok(saved)
 }
 
 /// **The automation's picture** — the rows a version is saved from, with the version of its action each
 /// placement stands on, the answers written for their settings, the agents chosen for their steps, the
-/// edges and wires drawn on the automation, and the placement it opens first. Read off its tables (the
-/// draft, [`Picture::read`]) or off a saved version ([`Picture::saved`]), and asked the same way either
-/// way, as [`ActionDef`] is.
+/// edges and wires drawn on the automation, the roles defined in it, and the placement it opens first.
+/// Read off its tables (the draft, [`Picture::read`]) or off a saved version ([`Picture::saved`]), and
+/// asked the same way either way, as [`ActionDef`] is.
 pub(crate) struct Picture {
     pub(crate) entry_placement_id: Option<i64>,
     pub(crate) placements: Vec<AutomationPlacement>,
@@ -1509,6 +1514,13 @@ pub(crate) struct Picture {
     placement_steps: Vec<AutomationPlacementStep>,
     edges: Vec<AutomationEdge>,
     wires: Vec<AutomationWire>,
+    roles: Vec<AutomationRole>,
+}
+
+/// The roles a version holds, as the JSON it keeps them in. A version saved before roles existed and
+/// not yet carried by v102 holds `''`, which is read as none.
+pub(crate) fn saved_roles(version: &AutomationVersion) -> &str {
+    if version.roles.is_empty() { "[]" } else { &version.roles }
 }
 
 impl Picture {
@@ -1528,6 +1540,7 @@ impl Picture {
             placement_steps,
             edges: read::automation_edges_of(conn, AutomationPictureOwner::Automation, automation.id)?,
             wires: read::automation_wires_of(conn, AutomationPictureOwner::Automation, automation.id)?,
+            roles: read::automation_roles_of(conn, automation.id)?,
         })
     }
 
@@ -1540,7 +1553,13 @@ impl Picture {
             placement_steps: serde_json::from_str(&version.placement_steps).map_err(Error::from)?,
             edges: serde_json::from_str(&version.edges).map_err(Error::from)?,
             wires: serde_json::from_str(&version.wires).map_err(Error::from)?,
+            roles: serde_json::from_str(saved_roles(version)).map_err(Error::from)?,
         })
+    }
+
+    /// The roles defined in the automation, in the order they are defined in.
+    pub(crate) fn roles(&self) -> &[AutomationRole] {
+        &self.roles
     }
 
     /// The answers written for one placement's settings.
@@ -1607,7 +1626,8 @@ impl Picture {
             && same_rows(&self.cfgs, &saved.cfgs)?
             && same_rows(&self.placement_steps, &saved.placement_steps)?
             && same_rows(&self.edges, &saved.edges)?
-            && same_rows(&self.wires, &saved.wires)?)
+            && same_rows(&self.wires, &saved.wires)?
+            && same_rows(&self.roles, saved_roles(saved))?)
     }
 }
 
@@ -1633,6 +1653,7 @@ pub fn version_add(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVer
         placement_steps: serde_json::to_string(&picture.placement_steps).map_err(Error::from)?,
         edges: serde_json::to_string(&picture.edges).map_err(Error::from)?,
         wires: serde_json::to_string(&picture.wires).map_err(Error::from)?,
+        roles: serde_json::to_string(&picture.roles).map_err(Error::from)?,
         created_at: now,
         updated_at: now,
     };
@@ -1640,9 +1661,9 @@ pub fn version_add(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVer
     Ok(saved)
 }
 
-/// Delete an automation and everything built onto it — wires, edges, the placements with the answers
-/// written on them, and the versions saved of it. The library actions those placements stood on are
-/// left where they are: the library outlives any one picture.
+/// Delete an automation and everything built onto it — wires, edges, the roles defined in it, the
+/// placements with the answers written on them, and the versions saved of it. The library actions
+/// those placements stood on are left where they are: the library outlives any one picture.
 ///
 /// **Refused while a run stands behind it**, naming how many (`invalid_automation_has_runs`). A run
 /// carries its own copy of the steps and would go on reading correctly, but it is filed under the
@@ -1668,7 +1689,11 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     for edge in read::automation_edge_ids(tx.conn(), AutomationPictureOwner::Automation, id)? {
         tx.delete_record("automation_edge", edge)?;
     }
-    // The entry is a reference into the placements that are about to go, so it is dropped before them.
+    // The roles and the entry are references into the placements that are about to go, so they are
+    // dropped before them.
+    for role in read::automation_roles_of(tx.conn(), id)? {
+        tx.delete_record("automation_role", role.id)?;
+    }
     if automation.entry_placement_id.is_some() {
         name_entry(tx, id, None)?;
     }
@@ -2102,7 +2127,8 @@ pub fn placement_version_set(tx: &WriteTx<'_>, id: i64, version: i64) -> Result<
 }
 
 /// Take a placement off its automation, with the answers written on it and every edge and wire
-/// naming it at either end. The action it stood on is untouched.
+/// naming it at either end. A role whose round started there is left with no way of working until one
+/// is chosen again. The action it stood on is untouched.
 ///
 /// **The entry comes off last** (`AMB-D-977`). While anything else is on the picture it is refused —
 /// a picture with no entry has nowhere to start, and nothing but a first placement names one — and
@@ -2130,6 +2156,7 @@ pub fn placement_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 /// One placement and everything hanging off it, with no word about the entry — what [`delete`] walks,
 /// where the entry has already been dropped and the automation itself is going anyway.
 fn delete_placement_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
+    drop_role_entries(tx, &live_placement(tx, id)?)?;
     delete_lines_naming_box(tx, AutomationPictureOwner::Automation, id)?;
     delete_cfgs(tx, AutomationCfgOwner::Placement, id)?;
     for chosen in read::automation_placement_step_ids(tx.conn(), id)? {
@@ -2261,6 +2288,154 @@ fn checked_step_of_placement(
             "step '{step_id}' is not inside the action placed at placement '{}'",
             placement.id
         )));
+    }
+    Ok(())
+}
+
+// ───────────────────────────── roles ─────────────────────────────
+
+/// What a new role is made of. Only the name is required; the rest may be written later
+/// ([`role_update`]).
+#[derive(Clone, Debug, Default)]
+pub struct NewRole {
+    pub name: String,
+    /// The icon it is drawn with, by the name the GUI knows it under.
+    pub icon: Option<String>,
+    /// The placement its round starts at — one of the same automation's.
+    pub entry_placement_id: Option<i64>,
+    /// The agent its steps fall back to.
+    pub agent: Option<String>,
+    /// The model beside `agent`. Named only with an agent.
+    pub model: Option<String>,
+}
+
+/// What [`role_update`] writes. Only the `Some` fields are written; `Some(None)` takes the value away.
+#[derive(Clone, Debug, Default)]
+pub struct RoleChange {
+    pub name: Option<String>,
+    pub icon: Option<Option<String>>,
+    pub entry_placement_id: Option<Option<i64>>,
+    /// Taking the agent away takes the model with it.
+    pub agent: Option<Option<String>>,
+    pub model: Option<Option<String>>,
+}
+
+fn live_role(tx: &WriteTx<'_>, id: i64) -> Result<AutomationRole> {
+    read::automation_role(tx.conn(), id)?.ok_or_else(|| not_found("role", id))
+}
+
+/// A role's icon, agent or model: not blank, where one is written.
+fn checked_opt(what: &str, value: Option<&str>) -> Result<Option<String>> {
+    value.map(|v| checked_name(what, v)).transpose()
+}
+
+/// The placement a role's round starts at has to be one of the same automation's.
+fn checked_role_entry(tx: &WriteTx<'_>, automation_id: i64, placement_id: Option<i64>) -> Result<()> {
+    let Some(placement_id) = placement_id else { return Ok(()) };
+    if live_placement(tx, placement_id)?.automation_id != automation_id {
+        return Err(Error::invalid(format!(
+            "placement '{placement_id}' belongs to another automation, so a role of this one cannot start \
+             there"
+        )));
+    }
+    Ok(())
+}
+
+/// A model is named beside an agent: it is the agent's model, and with no agent it names nothing.
+fn checked_role_model(role: &AutomationRole) -> Result<()> {
+    if role.agent.is_none() && role.model.is_some() {
+        return Err(Error::invalid(format!(
+            "role '{}' has no agent, so it cannot name a model — choose its agent first",
+            role.name
+        )));
+    }
+    Ok(())
+}
+
+/// **Define a role in an automation**, after the roles already there. A role's name is not held unique:
+/// what points at a role points at its id. Nothing here asks whether the automation launches — the
+/// launch check is where an unfinished definition is refused.
+pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<AutomationRole> {
+    live_automation(tx, automation_id)?;
+    let name = checked_name("role", &new.name)?;
+    checked_role_entry(tx, automation_id, new.entry_placement_id)?;
+    let sibs = read::automation_role_siblings(tx.conn(), automation_id, None)?;
+    let now = Timestamp::now();
+    let role = AutomationRole {
+        id: read::next_id(tx.conn(), "automation_role")?,
+        automation_id,
+        name,
+        icon: checked_opt("icon", new.icon.as_deref())?,
+        entry_placement_id: new.entry_placement_id,
+        agent: checked_opt("agent", new.agent.as_deref())?,
+        model: checked_opt("model", new.model.as_deref())?,
+        order_key: place(&sibs, &Position::Bottom)?,
+        created_at: now,
+        updated_at: now,
+    };
+    checked_role_model(&role)?;
+    emit_create(tx, record::automation_role(&role))?;
+    Ok(role)
+}
+
+/// Change a role's name, icon, way of working (the placement its round starts at), or default agent and
+/// model. Only the fields `change` names are written.
+pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<AutomationRole> {
+    let before = live_role(tx, id)?;
+    let mut after = before.clone();
+    if let Some(name) = &change.name {
+        after.name = checked_name("role", name)?;
+    }
+    if let Some(icon) = &change.icon {
+        after.icon = checked_opt("icon", icon.as_deref())?;
+    }
+    if let Some(entry) = change.entry_placement_id {
+        checked_role_entry(tx, before.automation_id, entry)?;
+        after.entry_placement_id = entry;
+    }
+    if let Some(agent) = &change.agent {
+        after.agent = checked_opt("agent", agent.as_deref())?;
+        if after.agent.is_none() {
+            after.model = None;
+        }
+    }
+    if let Some(model) = &change.model {
+        after.model = checked_opt("model", model.as_deref())?;
+    }
+    checked_role_model(&after)?;
+    after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation_role(&before), record::automation_role(&after))?;
+    Ok(after)
+}
+
+/// Reorder a role among the roles of its automation — the order they are defined in.
+pub fn role_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationRole> {
+    let before = live_role(tx, id)?;
+    let sibs = read::automation_role_siblings(tx.conn(), before.automation_id, Some(id))?;
+    let mut after = before.clone();
+    after.order_key = place(&sibs, &pos)?;
+    after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation_role(&before), record::automation_role(&after))?;
+    Ok(after)
+}
+
+/// Take a role out of its automation. The placement its round started at stays on the picture.
+pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
+    live_role(tx, id)?;
+    tx.delete_record("automation_role", id)?;
+    Ok(())
+}
+
+/// Drop the reference of every role whose round starts at a placement that is about to be taken off.
+/// `entry_placement_id` is `RESTRICT`, so this goes before the placement's row does.
+fn drop_role_entries(tx: &WriteTx<'_>, placement: &AutomationPlacement) -> Result<()> {
+    for before in read::automation_roles_of(tx.conn(), placement.automation_id)? {
+        if before.entry_placement_id != Some(placement.id) {
+            continue;
+        }
+        let after =
+            AutomationRole { entry_placement_id: None, updated_at: Timestamp::now(), ..before.clone() };
+        emit_update(tx, record::automation_role(&before), record::automation_role(&after))?;
     }
     Ok(())
 }
@@ -3818,6 +3993,109 @@ mod tests {
             let cleared = update(tx, automation.id, None, None, None, Some(None)).expect("take it away");
             assert_eq!(cleared.max_concurrent_runs, None);
             assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, None);
+        });
+    }
+
+    /// **A role is defined, changed, reordered and taken out.** Its name, icon, way of working and
+    /// default agent and model are its own; a model is named only beside an agent, and the placement it
+    /// starts at is one of the same automation's.
+    #[test]
+    fn a_role_is_defined_changed_reordered_and_taken_out() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, placement) = mk_placed(tx, &automation, "実装");
+            let new = NewRole {
+                name: " 実装 ".into(),
+                icon: Some("hammer".into()),
+                entry_placement_id: Some(placement.id),
+                agent: Some("claude-code".into()),
+                model: Some("opus".into()),
+            };
+            let first = role_add(tx, automation.id, new).expect("define a role");
+            assert_eq!(first.name, "実装", "the name is trimmed");
+            assert_eq!(
+                (first.icon.as_deref(), first.entry_placement_id, first.agent.as_deref(), first.model.as_deref()),
+                (Some("hammer"), Some(placement.id), Some("claude-code"), Some("opus"))
+            );
+            let second =
+                role_add(tx, automation.id, NewRole { name: "レビュー".into(), ..NewRole::default() }).expect("a bare one");
+            let names = |tx: &WriteTx<'_>| -> Vec<String> {
+                read::automation_roles_of(tx.conn(), automation.id).expect("read").into_iter().map(|r| r.name).collect()
+            };
+            assert_eq!(names(tx), ["実装", "レビュー"], "in the order they are defined in");
+
+            let blank = role_add(tx, automation.id, NewRole { name: " ".into(), ..NewRole::default() });
+            assert!(matches!(blank, Err(Error::Invalid(_))), "a role has a name");
+            let no_agent = NewRole { name: "x".into(), model: Some("opus".into()), ..NewRole::default() };
+            assert!(matches!(role_add(tx, automation.id, no_agent), Err(Error::Invalid(_))), "a model needs an agent");
+            let other = add(tx, automation.project_id, NewAutomation { name: "別".into(), ..Default::default() })
+                .expect("another automation");
+            let (_, elsewhere) = mk_placed(tx, &other, "よそ");
+            let change = RoleChange { entry_placement_id: Some(Some(elsewhere.id)), ..RoleChange::default() };
+            assert!(matches!(role_update(tx, second.id, change), Err(Error::Invalid(_))), "another automation's placement");
+
+            let change = RoleChange { name: Some("見る".into()), icon: Some(None), ..RoleChange::default() };
+            let renamed = role_update(tx, first.id, change).expect("rename");
+            assert_eq!((renamed.name.as_str(), renamed.icon.as_deref()), ("見る", None));
+            assert_eq!(renamed.model.as_deref(), Some("opus"), "left out, it is kept");
+            let change = RoleChange { model: Some(Some("opus".into())), ..RoleChange::default() };
+            assert!(matches!(role_update(tx, second.id, change), Err(Error::Invalid(_))), "no agent to name a model of");
+            let change = RoleChange { agent: Some(None), ..RoleChange::default() };
+            let cleared = role_update(tx, first.id, change).expect("take the agent away");
+            assert_eq!((cleared.agent, cleared.model), (None, None), "the model goes with the agent");
+
+            role_move(tx, second.id, Position::Top).expect("move it up");
+            assert_eq!(names(tx), ["レビュー", "見る"]);
+            role_delete(tx, second.id).expect("take it out");
+            assert_eq!(names(tx), ["見る"]);
+            assert!(matches!(role_delete(tx, second.id), Err(Error::NotFound(_))));
+        });
+    }
+
+    /// **Taking a placement off leaves a role that started there starting nowhere**, and deleting the
+    /// automation takes its roles with it.
+    #[test]
+    fn a_role_outlives_its_placement_and_goes_with_its_automation() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, placement) = mk_placed(tx, &automation, "実装");
+            let new = NewRole { name: "実装".into(), entry_placement_id: Some(placement.id), ..NewRole::default() };
+            let role = role_add(tx, automation.id, new).expect("define a role");
+
+            placement_delete(tx, placement.id).expect("take the placement off");
+            let left = read::automation_role(tx.conn(), role.id).expect("read").expect("the role stays");
+            assert_eq!(left.entry_placement_id, None);
+
+            delete(tx, automation.id).expect("delete the automation");
+            assert!(read::automation_role(tx.conn(), role.id).expect("read").is_none());
+        });
+    }
+
+    /// **A role is part of the saved version**: defining one leaves the draft unsaved, the version holds
+    /// it, and throwing the draft away puts the roles back as the version holds them.
+    #[test]
+    fn the_roles_are_saved_and_thrown_away_with_the_version() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (_, placement) = mk_placed(tx, &automation, "実装");
+            let new = NewRole { name: "実装".into(), entry_placement_id: Some(placement.id), ..NewRole::default() };
+            let kept = role_add(tx, automation.id, new).expect("define a role");
+            let saved = version_add(tx, automation.id).expect("save");
+            let held: Vec<AutomationRole> = serde_json::from_str(&saved.roles).expect("roles");
+            assert_eq!(held.iter().map(|r| r.id).collect::<Vec<_>>(), [kept.id]);
+            assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"));
+
+            let change = RoleChange { name: Some("見る".into()), ..RoleChange::default() };
+            role_update(tx, kept.id, change).expect("rename");
+            let added =
+                role_add(tx, automation.id, NewRole { name: "レビュー".into(), ..NewRole::default() }).expect("another");
+            assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "a role written is unsaved");
+
+            discard(tx, automation.id).expect("throw the draft away");
+            let back = read::automation_role(tx.conn(), kept.id).expect("read").expect("kept");
+            assert_eq!((back.name.as_str(), back.entry_placement_id), ("実装", Some(placement.id)));
+            assert!(read::automation_role(tx.conn(), added.id).expect("read").is_none(), "the new one goes");
+            assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"));
         });
     }
 

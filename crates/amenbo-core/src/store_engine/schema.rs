@@ -1205,6 +1205,28 @@ datasets! {
         model: col(OPT),
     } => "UNIQUE (placement_id, step_id)"
 
+    // **One role defined in an automation** — the name and the icon a person knows it by, the way it
+    // works, and the agent and model its steps fall back to. It is not the task's assignee (`human` or
+    // `ai`): the two are kept apart.
+    //
+    // The way it works is where its round starts, `entry_placement_id`, a placement of the same
+    // automation. It is `RESTRICT`, as the automation's own entry is, so taking a placement off drops
+    // the reference first. NULL while it is still being built.
+    //
+    // `agent` and `model` are defaults only (`AMB-D-960`): the choice made for a step where its action
+    // is placed (`automation_placement_step`) stays. `model` is named only beside an agent. `icon` is
+    // the name the GUI draws it by, NULL for none chosen. `order_key` is the order the roles are defined
+    // in. No name is held unique: a role is pointed at by its id.
+    automation_role {
+        automation_id: fk("automation", "RESTRICT"),
+        name: col(REQ),
+        icon: col(OPT),
+        entry_placement_id: fk_opt("automation_placement", "RESTRICT"),
+        agent: col(OPT),
+        model: col(OPT),
+        order_key: col(ORDER_KEY),
+    }
+
     // **A setting, declared by an action and answered where it is placed.** The action's row is the
     // declaration alone, so its `value` is NULL; each placement of that action carries a row of its
     // own under the same `name`, and that is where the answer written while building sits. A step
@@ -1351,12 +1373,12 @@ datasets! {
     //
     // `version` counts up from 1 within one automation.
     //
-    // The five JSON columns hold the rows as they stood — the placements, the answers written for each
-    // placement's settings, the agents chosen for each placement's steps, and the edges and wires drawn
-    // on the automation — each the row's own record, under its own id, for the reason
-    // `automation_action_version`'s are (`AMB-D-961`). A placement in the copy keeps the version of its
-    // action it stood on. `entry_placement_id` is the placement the copy opens first, a key into
-    // `placements` rather than a reference to a placement that may since have been taken off.
+    // The six JSON columns hold the rows as they stood — the placements, the answers written for each
+    // placement's settings, the agents chosen for each placement's steps, the edges and wires drawn
+    // on the automation, and the roles defined in it — each the row's own record, under its own id,
+    // for the reason `automation_action_version`'s are (`AMB-D-961`). A placement in the copy keeps the
+    // version of its action it stood on. `entry_placement_id` is the placement the copy opens first, a
+    // key into `placements` rather than a reference to a placement that may since have been taken off.
     automation_version {
         automation_id: fk("automation", "RESTRICT"),
         version: col(COUNT),
@@ -1366,6 +1388,8 @@ datasets! {
         placement_steps: col(REQ),
         edges: col(REQ),
         wires: col(REQ),
+        // `[]` on a version saved before roles existed (v102).
+        roles: col(REQ),
     } => "UNIQUE (automation_id, version)"
 
     // ───────────────────────── automation: what ran ─────────────────────────

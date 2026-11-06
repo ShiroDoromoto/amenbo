@@ -30,7 +30,7 @@ use crate::model::{
     Automation, AutomationAction, AutomationEnds, AutomationOwner, AutomationPictureOwner,
     AutomationPortDirection, AutomationPortOwner, ACTION_BOUNDARY, DONE_EXIT,
 };
-use crate::ops::automation::{self, ActionDef, EdgeTarget, NewAutomation, NewScript, NewStep};
+use crate::ops::automation::{self, ActionDef, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep};
 use crate::ops::automation_builtin;
 use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
 use crate::ops::automation_export::{
@@ -46,7 +46,8 @@ pub fn parse(text: &str) -> Result<AutomationFile> {
 }
 
 /// **Take one automation in as new**, into `project_id`: the actions a person wrote, then the
-/// automation with its placements, the answers and choices written on them, and the lines between them.
+/// automation with its placements, the answers and choices written on them, the lines between them,
+/// and the roles defined in it.
 ///
 /// Refused for a file of another format, for a built-in this build does not have or has at an older
 /// version than the file, for an axis the project has no axis of that name for, and for a file whose
@@ -124,6 +125,17 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
             continue;
         }
         automation::wire_add(tx, on, from.id, Some(from_exit), &wire.from_port, to.id, &wire.to_port)?;
+    }
+    for role in &file.roles {
+        let entry_placement_id = role.entry.map(|place| at(place).map(|p| p.id)).transpose()?;
+        let new = NewRole {
+            name: role.name.clone(),
+            icon: role.icon.clone(),
+            entry_placement_id,
+            agent: role.agent.clone(),
+            model: role.model.clone(),
+        };
+        automation::role_add(tx, automation.id, new)?;
     }
     read::automation(tx.conn(), automation.id)?
         .ok_or_else(|| Error::not_found(format!("automation '{}' not found", automation.id)))
@@ -351,6 +363,16 @@ mod tests {
         automation::cfg_set(tx, first.id, "深さ", Some("3")).expect("answer");
         let step = action.entry_step_id.expect("an entry step");
         automation::placement_step_set(tx, first.id, step, "claude", Some("opus")).expect("choose");
+        let reviewer = NewRole {
+            name: "レビュー".into(),
+            icon: Some("eye".into()),
+            entry_placement_id: Some(second.id),
+            agent: Some("codex".into()),
+            model: Some("gpt-5".into()),
+        };
+        automation::role_add(tx, automation.id, reviewer).expect("a role");
+        automation::role_add(tx, automation.id, NewRole { name: "実装".into(), ..NewRole::default() })
+            .expect("a bare role");
         automation::version_add(tx, automation.id).expect("save the automation");
         export(tx.conn(), automation.id).expect("export")
     }
@@ -396,7 +418,9 @@ mod tests {
             let into = mk_project(tx, "別のPJ");
             axis(tx, into, "職能", &["技術"]);
             let actions_before = count(tx, "automation_action");
+            let roles_before = count(tx, "automation_role");
             let imported = import(tx, into, &parse(&text).expect("parse")).expect("import");
+            assert_eq!(count(tx, "automation_role"), roles_before + 2, "the roles come in as new");
             assert_eq!((imported.project_id, imported.name.as_str()), (into, "1件やりきる"));
             assert!(read::automation_version_latest(tx.conn(), imported.id).expect("read").is_none(), "not saved");
             assert!(automation::unsaved(tx.conn(), imported.id).expect("unsaved"), "left being written");
@@ -432,6 +456,9 @@ mod tests {
             older["actions"][0].as_object_mut().expect("an action").remove("one_at_a_time");
             let older = parse(&older.to_string()).expect("a file from before one_at_a_time");
             assert!(!older.actions[0].one_at_a_time, "an older file reads as off");
+            let mut roleless = serde_json::to_value(&file).expect("json");
+            roleless.as_object_mut().expect("a file").remove("roles");
+            assert!(parse(&roleless.to_string()).expect("a file from before roles").roles.is_empty());
 
             let other = AutomationFile { format: "amenbo-automation/v0".into(), ..file.clone() };
             assert!(matches!(import(tx, project, &other), Err(Error::Invalid(_))), "another format");

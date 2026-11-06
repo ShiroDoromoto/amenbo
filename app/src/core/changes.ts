@@ -88,7 +88,7 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   binding_project_dir: ["projects"],
   hook_optout: ["projects"],
   harness_consent: ["projects"],
-  // The twelve tables an automation's definition is built in. Most of them are what the build screen
+  // The thirteen tables an automation's definition is built in. Most of them are what the build screen
   // reads as one answer — the definition is fetched whole and its picture, its panel and its launch
   // check all walk it (`core/automations`) — so they share one scope. A run's own tables are the
   // exception below, naming the scopes the band and the "running" tab read.
@@ -107,6 +107,8 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_placement: ["automationActions", "automations"],
   // Who carries a step out is read on the automation's definition alone; the library does not show it.
   automation_placement_step: ["automations"],
+  // The roles defined in an automation are read on its definition alone, as who carries a step out is.
+  automation_role: ["automations"],
   automation_action_step: ["automationActions", "automations"],
   automation_cfg: ["automationActions", "automations"],
   automation_exit: ["automationActions", "automations"],

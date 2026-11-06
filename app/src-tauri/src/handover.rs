@@ -525,7 +525,8 @@ mod tests {
     /// `Drawn`). A test double mostly writes plain text and gets it back, which is the point: the one
     /// that writes what a TUI writes is the one this has to be real for.
     fn drawn(wrote: &[u8]) -> String {
-        let mut screen = vt100::Parser::new(40, 120, 0);
+        let size = |n| std::num::NonZeroU16::new(n).expect("a screen of some size");
+        let mut screen = vt100::Parser::new(size(40), size(120), 0);
         screen.process(wrote);
         screen.screen().contents()
     }

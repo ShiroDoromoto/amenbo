@@ -29,7 +29,7 @@ pub(crate) fn resolve_task(store: &Store, id: &str) -> amenbo_core::Result<i64> 
 
 pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError> {
     match sub {
-        TaskCmd::Add { title, project, due, start, priority, notes, to, ai, dim, at } => {
+        TaskCmd::Add { title, project, due, start, priority, notes, to, ai, dim, at, role } => {
             if ai && to.is_none() {
                 return Err(CliError::from(amenbo_core::Error::invalid("--ai requires --to")));
             }
@@ -75,6 +75,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 title, project_id: Some(project_id), due, start, priority, notes,
                 created_by_kind: Some(flags.facet()?), at_binding_id,
                 made_in,
+                role_id: role,
             }, &dimension_values).map_err(CliError::from)?;
             // And the pane it was typed in is told, where it was typed in one (`AMB-D-897`). Left
             // after the create rather than with it: what the band under the pane counts is a task
@@ -250,6 +251,10 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 if let Some(at) = &detail.at {
                     human(flags, format!("folder: {}", at.dir));
                 }
+                // The role it is worked under, folded away when it has none, as the folder is.
+                if let Some(role) = &detail.role {
+                    human(flags, format!("role: {} ({}) — automation {}", role.name, role.role_id, role.automation));
+                }
                 // What the task is classified as (`AMB-D-101`). Unlike the lines around it this one folds
                 // away when there is nothing to say: an axis is something a store opts into, so a
                 // `dimensions: (none)` would be printed forever in every store that classifies nothing,
@@ -372,7 +377,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 }
             }
         }
-        TaskCmd::Update { id, title, notes, due, start, priority, clear_due, clear_start, clear_priority, at, clear_at } => {
+        TaskCmd::Update { id, title, notes, due, start, priority, clear_due, clear_start, clear_priority, at, clear_at, role, clear_role } => {
             let notes = body_arg_opt(notes)?;
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
@@ -383,6 +388,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             if start.is_some() || clear_start { changed.extend(["start_on".to_string(), "start_at".to_string()]); }
             if priority.is_some() || clear_priority { changed.push("priority".to_string()); }
             if at.is_some() || clear_at { changed.push("at_binding_id".to_string()); }
+            if role.is_some() || clear_role { changed.push("role_id".to_string()); }
             let due = parse_schedule_opt(&due)?;
             let start = parse_schedule_opt(&start)?;
             let priority = match priority { Some(p) => Some(parse_priority(&p)?), None => None };
@@ -401,7 +407,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             };
             let t = store.update_task(tid, ops::task::TaskPatch {
                 title, notes, due, start, priority, clear_due, clear_priority, clear_start,
-                at_binding_id, clear_at,
+                at_binding_id, clear_at, role_id: role, clear_role,
             }).map_err(CliError::from)?;
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
             // Hint only when notes were actually written — an update that touches just the title should not

@@ -39,6 +39,7 @@ fn hydrated(s: &Store) -> Database {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             },
         );
@@ -66,6 +67,7 @@ fn hydrated(s: &Store) -> Database {
                 notes: "n".to_string(),
                 created_by_kind: None,
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             })
             .unwrap();
@@ -105,6 +107,7 @@ fn hydrated(s: &Store) -> Database {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                role_id: None,
                 made_in: None,
             })
             .unwrap();
@@ -142,6 +145,7 @@ fn hydrated(s: &Store) -> Database {
                     notes: String::new(),
                     created_by_kind: None,
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 })
                 .unwrap()
@@ -208,6 +212,7 @@ fn hydrated(s: &Store) -> Database {
             notes: String::new(),
             created_by_kind: None,
             at_binding_id: None,
+            role_id: None,
             made_in: None,
         });
         s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
@@ -264,6 +269,7 @@ fn hydrated(s: &Store) -> Database {
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
+                    role_id: None,
                     made_in: None,
                 })
                 .unwrap();
@@ -377,6 +383,7 @@ fn task(title: &str, project_id: Option<i64>) -> NewTask {
         notes: String::new(),
         created_by_kind: None,
         at_binding_id: None,
+        role_id: None,
         made_in: None,
     }
 }

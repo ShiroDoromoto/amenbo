@@ -634,6 +634,11 @@ datasets! {
         // fail or drop the value. Instead the id is read for what the task's own project still offers
         // (`crate::view::task_detail`), and an id that answers to nothing reads as no folder at all.
         at_binding_id: col(INT_OPT),
+        // The role this task is worked under — an `automation_role` of an automation in the task's own
+        // project. Kept apart from `assignee_kind`: handing a task back to a person writes the assignee
+        // and leaves this alone. NULL is a task with no role. `RESTRICT`, so a role is taken off the
+        // tasks that name it before it goes (`ops::automation`).
+        role_id: fk_opt("automation_role", "RESTRICT"),
     }
 
     decision {

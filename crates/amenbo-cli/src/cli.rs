@@ -1319,6 +1319,10 @@ pub enum TaskCmd {
         /// refuses nothing — no reservation and no worktree is stopped for it
         #[arg(long, value_name = "FOLDER")]
         at: Option<String>,
+        /// the role this task is worked under — the id `automation role-list` shows, of a role defined in
+        /// an automation of the task's own project. It is not the assignee: `--to` says who holds the task
+        #[arg(long, value_name = "ROLE_ID")]
+        role: Option<i64>,
     },
     /// Finish creating a task — the second stage of every create. `task add` leaves the task still
     /// being created: it is on the board and in every listing, but held out of the mailbox and refused
@@ -1376,6 +1380,13 @@ pub enum TaskCmd {
         /// forget the folder this task named (it goes back to naming none)
         #[arg(long)]
         clear_at: bool,
+        /// the role this task is worked under — the id `automation role-list` shows, of a role defined in
+        /// an automation of the task's own project
+        #[arg(long, value_name = "ROLE_ID")]
+        role: Option<i64>,
+        /// take the role off (the task goes back to having none)
+        #[arg(long)]
+        clear_role: bool,
     },
     /// Mark a task done, with its completion report
     Done {

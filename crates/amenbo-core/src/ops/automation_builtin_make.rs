@@ -217,6 +217,7 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
             created_by_kind: Some(ActorKind::Ai),
             at_binding_id,
             made_in: None,
+            role_id: None,
         },
     )?;
     for (_, value) in values {

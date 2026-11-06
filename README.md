@@ -195,6 +195,10 @@ amenbo task depend <n> --on <m>            # <n> waits on <m> (dependency, not a
 # outside them all, add asks for `--at`. It refuses nothing: nothing is stopped for
 # being worked somewhere else
 amenbo task add --title "Fix the mail face" --project "Website refresh" --at website-mailer
+# A task can be worked under a role, one an automation of its project defines
+# (`--role <id>` on add or update, the id `automation role-list` shows; `--clear-role`
+# takes it off). It is not the assignee: handing a task back to a person leaves its role
+amenbo task update <n> --role 3
 # A task ends one of two ways. Work you carried out ends at `done`, with a report of
 # what was done — it lands on the timeline as a comment, in the same write as the end
 amenbo task done <n> --report "wireframes for all three pages, linked in the notes"

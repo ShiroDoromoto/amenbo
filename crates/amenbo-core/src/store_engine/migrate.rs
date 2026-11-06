@@ -1266,7 +1266,30 @@ pub const STEPS: &[Step] = &[
         // not turned into roles. A version already saved holds none, `[]`.
         apply: Apply::Custom(give_the_automations_roles),
     },
+    Step {
+        to: 103,
+        name: "add task.role_id, the role a task is worked under",
+        // **Unseeded.** No task is given a role it was not given: nothing in an existing store says
+        // which role a task belongs to — not its assignee, not its classification — so NULL is what
+        // every task written before this means.
+        apply: Apply::Custom(let_a_task_name_its_role),
+    },
 ];
+
+/// v103: `task.role_id`, the role a task is worked under.
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason. The key may be added by
+/// `ALTER TABLE` because the column has no default but NULL.
+fn let_a_task_name_its_role(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "task")?.iter().any(|c| c == "role_id") {
+        tx.execute_batch(
+            "ALTER TABLE task ADD COLUMN role_id BIGINT REFERENCES automation_role(id) \
+                 ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    Ok(())
+}
 
 /// v102: `automation_role` and `automation_version.roles`.
 ///
@@ -10994,6 +11017,31 @@ mod tests {
                 [],
             )
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v103: a task written before the step names no role, and can be given one of its project's.
+    #[test]
+    fn a_task_written_before_v103_names_no_role() {
+        let dir = scratch("task-role");
+        let engine = store_at(&dir, 102);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, project_id) VALUES (1, 'old', 1);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_role (id, automation_id, name) VALUES (1, 1, 'さくら');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let role: Option<i64> =
+            engine.conn().query_row("SELECT role_id FROM task WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(role, None, "no task is given a role it was not given");
+        engine.conn().execute("UPDATE task SET role_id = 1 WHERE id = 1", []).unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

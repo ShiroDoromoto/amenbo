@@ -1528,6 +1528,32 @@ fn a_role_is_defined_listed_changed_and_taken_out() {
     assert_eq!(listed["count"].as_u64(), Some(0), "{listed}");
 }
 
+/// **A task is worked under a role by the id `role-list` hands back**: set on add, read back by `task
+/// show`, taken off with `--clear-role`, and taken off the task when the role itself is taken out.
+#[test]
+fn a_task_is_worked_under_a_role_its_project_defines() {
+    let cli = Cli::new();
+    let (p, a, _, _) = an_automation(&cli);
+    let role = id_of(&cli.json(&["automation", "role-add", &a, "--name", "レビュー", "--json"]), "automation_role");
+
+    let t = cli.json(&["task", "add", "--title", "名前を直す", "--project", &p, "--role", &role, "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+    assert_eq!(id_str(&t["task"]["role"]["role_id"]), role, "{t}");
+    assert_eq!(t["task"]["role"]["name"].as_str(), Some("レビュー"));
+    let (shown, code) = cli.run(&["task", "show", &tid]);
+    assert_eq!(code, 0, "{shown}");
+    assert!(shown.contains(&format!("role: レビュー ({role}) — automation A")), "{shown}");
+
+    let cleared = cli.json(&["task", "update", &tid, "--clear-role", "--json"]);
+    assert!(cleared["task"]["role"].is_null(), "{cleared}");
+    assert!(cleared["changed"].as_array().unwrap().iter().any(|c| c == "role_id"), "{cleared}");
+
+    cli.json(&["task", "update", &tid, "--role", &role, "--json"]);
+    cli.json(&["automation", "role-rm", &role, "--yes", "--json"]);
+    let after = cli.json(&["task", "show", &tid, "--json"]);
+    assert!(after["role"].is_null(), "a role taken out is no task's role: {after}");
+}
+
 /// A script step runs its own program (`AMB-D-1016`), so `show` names the program and its arguments
 /// where an agent's step names the agent — never the agent chosen by default where it was placed.
 #[test]

@@ -7342,12 +7342,13 @@ pub fn automation_run_ids_under_way(conn: &Connection, automation_id: i64) -> Re
 }
 
 /// **The automations a trigger may start a run of** — every one carrying a trigger that is not
-/// archived and not kept for export only, across projects, oldest first. A trigger is asked by the app's
-/// look, and that look is this machine's, not one project's.
+/// archived, not stopped and not kept for export only, across projects, oldest first. A trigger is
+/// asked by the app's look, and that look is this machine's, not one project's.
 pub fn automations_triggered(conn: &Connection) -> Result<Vec<crate::model::Automation>> {
     const A: col::automation::Cols = col::automation::ALL;
     let pred = Pred::is_not_null(A.trigger_when_kind)
         .and(Pred::eq(A.archived, false))
+        .and(Pred::eq(A.stopped, false))
         .and(Pred::eq(A.export_only, false));
     automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_row)
 }

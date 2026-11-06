@@ -387,10 +387,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 for card in &cards {
                     let archived = if card.automation.archived { "  archived" } else { "" };
                     let export_only = if card.automation.export_only { "  export only" } else { "" };
+                    let stopped = if card.automation.stopped { "  stopped" } else { "" };
                     human(
                         flags,
                         format!(
-                            "  {}  {}  {} placement(s){export_only}{archived}",
+                            "  {}  {}  {} placement(s){export_only}{stopped}{archived}",
                             card.automation.id, card.automation.name, card.placements
                         ),
                     );
@@ -500,6 +501,24 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 None => format!("✓ Automation {} ({}) has no trigger", a.name, a.id),
             };
             write_envelope(flags, "automation.trigger", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
+        }
+        AutomationCmd::Stop { id, off } => {
+            let done = store.automation_set_stopped(id, !off).map_err(CliError::from)?;
+            let a = &done.automation;
+            let line = match (a.stopped, done.paused.is_empty()) {
+                (false, _) => format!("✓ Automation {} ({}) starts new rounds again", a.name, a.id),
+                (true, true) => format!("✓ Stopped automation {} ({}) — it starts no new round", a.name, a.id),
+                (true, false) => format!(
+                    "✓ Stopped automation {} ({}) — it starts no new round; paused run(s) waiting for a task: {}",
+                    a.name,
+                    a.id,
+                    done.paused.iter().map(|r| r.id.to_string()).collect::<Vec<_>>().join(", ")
+                ),
+            };
+            let paused: Vec<i64> = done.paused.iter().map(|r| r.id).collect();
+            let mut resource = serde_json::to_value(a).unwrap();
+            resource["paused_runs"] = json!(paused);
+            write_envelope(flags, "automation.stop", "automation", resource, None, false, line);
         }
         AutomationCmd::Rm { id } => {
             if !confirm(flags, "delete automation")? {
@@ -1467,11 +1486,12 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
         None => "starts nowhere".to_string(),
     };
     let archived = if a.archived { "  archived" } else { "" };
+    let stopped = if a.stopped { "  stopped" } else { "" };
     let at_most = format!("  at most {} run(s) at once", a.max_concurrent_runs);
     human(
         flags,
         format!(
-            "project {}  {}  {} placement(s){at_most}{archived}",
+            "project {}  {}  {} placement(s){at_most}{stopped}{archived}",
             a.project_id,
             entry,
             view.placements.len()

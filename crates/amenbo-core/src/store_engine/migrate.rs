@@ -1315,6 +1315,13 @@ pub const STEPS: &[Step] = &[
         // **Unseeded.** Every trigger written before this is an `every`, and stays one.
         apply: Apply::Custom(let_a_trigger_wait_for_idle),
     },
+    Step {
+        to: 109,
+        name: "add automation.stopped, an automation a person stopped from starting new rounds",
+        // **Unseeded.** Nobody could stop an automation before, so every one written before this goes on
+        // as it did.
+        apply: Apply::Custom(let_a_person_stop_an_automation),
+    },
 ];
 
 /// v108: `automation.trigger_when_kind` admits `idle` beside `every`.
@@ -1339,6 +1346,19 @@ fn let_a_trigger_wait_for_idle(ctx: &Ctx<'_>) -> Result<()> {
          UPDATE automation SET trigger_when_kind = trigger_when_kind_kept;
          ALTER TABLE automation DROP COLUMN trigger_when_kind_kept;",
     )?;
+    Ok(())
+}
+
+/// v109: `automation.stopped` — a person stopped the automation, so it starts no new round.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason.
+fn let_a_person_stop_an_automation(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation")?.iter().any(|c| c == "stopped") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN stopped BOOLEAN NOT NULL DEFAULT 0 CHECK(stopped IN (0, 1));",
+        )?;
+    }
     Ok(())
 }
 
@@ -11400,6 +11420,31 @@ mod tests {
                 [],
             )
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v109: an automation written before the step is not stopped, and the column admits only 0 or 1.
+    #[test]
+    fn an_automation_written_before_v109_is_not_stopped() {
+        let dir = scratch("automation-stopped");
+        let engine = store_at(&dir, 108);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let stopped: bool =
+            engine.conn().query_row("SELECT stopped FROM automation WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert!(!stopped, "nobody could stop an automation before");
+        let refused = engine.conn().execute("UPDATE automation SET stopped = 2 WHERE id = 1", []);
+        assert!(refused.is_err(), "only 0 or 1");
+        engine.conn().execute("UPDATE automation SET stopped = 1 WHERE id = 1", []).unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

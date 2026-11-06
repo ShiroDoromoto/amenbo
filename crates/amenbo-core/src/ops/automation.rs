@@ -1283,6 +1283,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         failures_to: new.failures_to,
         export_only: false,
         trigger: None,
+        stopped: false,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1405,6 +1406,44 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     after.updated_at = now;
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     Ok(after)
+}
+
+/// **What stopping an automation did** ([`stop`]): the automation as it now stands, and the runs of it
+/// that were waiting at their entry to take a task and so were paused there and then.
+#[derive(Clone, Debug)]
+pub struct Stopped {
+    pub automation: Automation,
+    pub paused: Vec<crate::model::AutomationRun>,
+}
+
+/// **Stop an automation** (`stopped` true), so it starts no new round, **or let it start them again**
+/// (false). Stopping is a person's way to have an automation stop working without cutting short what
+/// it is in the middle of:
+///
+/// - **No run of it starts.** A launch is refused, and so is picking up a run paused before its next
+///   task, which would start a round from the entry ([`automation_run`]).
+/// - **Its trigger files nothing** while it is stopped, and `next_at` stays where it was.
+/// - **A run of it finishes the round it is on**, and pauses where the round is over, before it takes
+///   its next task. One standing at its entry waiting for a task to take, or for room in the action that
+///   takes one, is paused here at once ([`Stopped::paused`]). A run that takes no tasks has no round to
+///   finish and goes on to its end.
+///
+/// Letting it start again picks up no run: those paused stay paused until somebody resumes them. Writing
+/// what already stands writes nothing.
+pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
+    let before = live_automation(tx, id)?;
+    if before.stopped == stopped {
+        return Ok(Stopped { automation: before, paused: Vec::new() });
+    }
+    let mut after = before.clone();
+    after.stopped = stopped;
+    after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation(&before), record::automation(&after))?;
+    let paused = match stopped {
+        true => crate::ops::automation_stop::pause_the_waiting(tx, id)?,
+        false => Vec::new(),
+    };
+    Ok(Stopped { automation: after, paused })
 }
 
 /// Reorder an automation within its project.

@@ -578,6 +578,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         failures_to: failures_to(get(r, C.failures_to_kind)?, get(r, C.failures_to_role_id)?)?,
         export_only: get(r, C.export_only)?,
         trigger: trigger(r)?,
+        stopped: get(r, C.stopped)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

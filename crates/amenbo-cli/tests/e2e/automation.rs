@@ -592,6 +592,24 @@ fn an_update_sets_the_most_runs_at_once_between_one_and_the_cap() {
     assert_eq!(after["automation"]["max_concurrent_runs"], serde_json::json!(cap), "a refused update changes nothing: {after}");
 }
 
+/// `automation stop` stops an automation, `show` says so, and `--off` lets it start new rounds again.
+#[test]
+fn an_automation_is_stopped_and_started_again() {
+    let cli = Cli::new();
+    let (_, a, _, _) = an_automation(&cli);
+
+    let stopped = cli.json(&["automation", "stop", &a, "--json"]);
+    assert_eq!(stopped["automation"]["stopped"], serde_json::json!(true), "{stopped}");
+    assert_eq!(stopped["automation"]["paused_runs"], serde_json::json!([]), "no run was waiting: {stopped}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("  stopped"), "{text}");
+
+    let again = cli.json(&["automation", "stop", &a, "--off", "--json"]);
+    assert_eq!(again["automation"]["stopped"], serde_json::json!(false), "{again}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(!text.contains("  stopped"), "{text}");
+}
+
 /// `automation trigger` writes a trigger — every so many minutes, or whenever no run is under way —
 /// `show` says what it files and when it is next asked, and `--off` takes it away. A wait under a
 /// minute, a trigger with no title or no when, `--every` beside `--when-idle`, and `--off` beside a

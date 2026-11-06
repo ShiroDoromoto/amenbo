@@ -1187,6 +1187,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         export_only: false,
         trigger: None,
         stopped: false,
+        waits_for_task_since: None,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1344,7 +1345,7 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
 }
 
 /// **What stopping an automation did** ([`stop`]): the automation as it now stands, and the runs of it
-/// that were waiting at their entry to take a task and so were paused there and then.
+/// that were waiting for room in the action that takes a task and so were paused there and then.
 #[derive(Clone, Debug)]
 pub struct Stopped {
     pub automation: Automation,
@@ -1359,12 +1360,14 @@ pub struct Stopped {
 ///   task, which would start a round from the entry ([`automation_run`]).
 /// - **Its trigger files nothing** while it is stopped, and `next_at` stays where it was.
 /// - **A run of it finishes the round it is on**, and pauses where the round is over, before it takes
-///   its next task. One standing at its entry waiting for a task to take, or for room in the action that
-///   takes one, is paused here at once ([`Stopped::paused`]). A run that takes no tasks has no round to
-///   finish and goes on to its end.
+///   its next task. One standing at its entry waiting for room in the action that takes one is paused
+///   here at once ([`Stopped::paused`]). A run that takes no tasks has no round to finish and goes on to
+///   its end.
+/// - **It stops waiting for a task** ([`Automation::waits_for_task_since`]): no run of it is started
+///   once one turns up.
 ///
-/// Letting it start again picks up no run: those paused stay paused until somebody resumes them. Writing
-/// what already stands writes nothing.
+/// Letting it start again picks up no run and waits for no task: those paused stay paused until somebody
+/// resumes them, and a start waits again. Writing what already stands writes nothing.
 pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
     let before = live_automation(tx, id)?;
     if before.stopped == stopped {
@@ -1372,6 +1375,9 @@ pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
     }
     let mut after = before.clone();
     after.stopped = stopped;
+    if stopped {
+        after.waits_for_task_since = None;
+    }
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     let paused = match stopped {

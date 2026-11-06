@@ -31,7 +31,9 @@ use amenbo_core::model::AutomationPictureOwner;
 use amenbo_core::model::{AutomationRole, FailuresTo};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
-use amenbo_core::ops::automation_run::{Carrier, ChosenAt, ForRoom, HandedAtLaunch, HandedFile, Launcher, ReadsFrom};
+use amenbo_core::ops::automation_run::{
+    Carrier, ChosenAt, ForRoom, HandedAtLaunch, HandedFile, Launcher, ReadsFrom, Started, TaskWait,
+};
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{
     ActionView, AutomationView, PlacementView, SavedVersion, Showing, StepView,
@@ -421,7 +423,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     default_agent.as_deref(),
                 )
                 .map_err(CliError::from)?;
-                render_automation(flags, &view, &carriers);
+                let waits = store.automation_task_wait(id).map_err(CliError::from)?;
+                render_automation(flags, &view, &carriers, waits.as_ref());
             }
         }
         AutomationCmd::Export { id, out, force } => {
@@ -548,7 +551,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (false, _) => format!("✓ Automation {} ({}) starts new rounds again", a.name, a.id),
                 (true, true) => format!("✓ Stopped automation {} ({}) — it starts no new round", a.name, a.id),
                 (true, false) => format!(
-                    "✓ Stopped automation {} ({}) — it starts no new round; paused run(s) waiting for a task: {}",
+                    "✓ Stopped automation {} ({}) — it starts no new round; paused run(s) waiting for room to take a task: {}",
                     a.name,
                     a.id,
                     done.paused.iter().map(|r| r.id.to_string()).collect::<Vec<_>>().join(", ")
@@ -1117,7 +1120,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let defs = store.automation_run_defs(id).map_err(CliError::from)?;
             let stretches = store.automation_run_tasks(id).map_err(CliError::from)?;
             let moves = store.automation_run_steps(id).map_err(CliError::from)?;
-            let waiting = store.automation_run_waiting(id).map_err(CliError::from)?;
             let room = store.automation_run_waits_for_room(id).map_err(CliError::from)?;
             if flags.json {
                 let mut walked = Vec::with_capacity(moves.len());
@@ -1134,7 +1136,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
                 print_json(&json!({
                     "run": serde_json::to_value(&run).unwrap(),
-                    "waiting": waiting,
                     "waits_for_room": serde_json::to_value(room).unwrap(),
                     "versions": taken_up(&defs)
                         .iter()
@@ -1144,7 +1145,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     "steps": walked,
                 }));
             } else {
-                render_run(store, flags, &run, waiting, room, &defs, &stretches, &moves)?;
+                render_run(store, flags, &run, room, &defs, &stretches, &moves)?;
             }
         }
 
@@ -1205,9 +1206,26 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 workspace_open: None,
                 by: Some(flags.facet()?),
             };
-            let r = store.automation_launch(id, &by, &handed).map_err(CliError::from)?;
-            let line = format!("✓ Run {} started from version {}", r.id, saved.version);
-            write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
+            match store.automation_launch(id, &by, &handed).map_err(CliError::from)? {
+                Started::Run(r) => {
+                    let line = format!("✓ Run {} started from version {}", r.id, saved.version);
+                    write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
+                }
+                // Its entry would have waited for a task with none to take: no run is made, and the app
+                // starts one once a task turns up (`AMB-D-969`).
+                Started::Waits(a) => {
+                    let line = format!(
+                        "✓ Automation {} ({}) waits for a task to take — the app starts a run once one turns up",
+                        a.name, a.id
+                    );
+                    write_envelope(flags, "automation.start", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
+                }
+            }
+        }
+        AutomationCmd::StopWaiting { id } => {
+            let a = store.automation_wait_stop(id).map_err(CliError::from)?;
+            let line = format!("✓ Automation {} ({}) is not waiting for a task", a.name, a.id);
+            write_envelope(flags, "automation.stop-waiting", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
         }
         AutomationCmd::TestRun { id, title, notes, dim } => {
             // Nothing is started, so the app need not be running, and nothing is kept, so there is no
@@ -1234,7 +1252,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let verb = if before_next_task { "pause --before-next-task" } else { "pause" };
             not_from_its_own_step(store, run, verb)?;
             // `--before-next-task` stops at the next take_task rather than the end of the action
-            // (`AMB-D-1019`); a run waiting there for a task comes back already paused.
+            // (`AMB-D-1019`); a run waiting there for room comes back already paused.
             let paused = match before_next_task {
                 true => store.automation_pause_run_before_next_task(run),
                 false => store.automation_pause(run),
@@ -1508,7 +1526,12 @@ fn next_line(next: &Next) -> String {
 // ───────────────────────── what was built ─────────────────────────
 
 /// One automation in full: the placements on it, and what each runs under.
-fn render_automation(flags: &Flags, view: &AutomationView, carriers: &BTreeMap<(i64, i64), Carrier>) {
+fn render_automation(
+    flags: &Flags,
+    view: &AutomationView,
+    carriers: &BTreeMap<(i64, i64), Carrier>,
+    waits: Option<&TaskWait>,
+) {
     let a = &view.automation;
     human(flags, format!("Automation {}  {}", a.id, a.name));
     let entry = match a.entry_placement_id {
@@ -1534,6 +1557,9 @@ fn render_automation(flags: &Flags, view: &AutomationView, carriers: &BTreeMap<(
     }
     if let Some(trigger) = &a.trigger {
         human(flags, trigger_line(trigger));
+    }
+    if let Some(waits) = waits {
+        human(flags, task_wait_line(a.id, waits));
     }
     human(flags, saved_line(view.saved.as_ref(), view.unsaved));
     if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
@@ -1572,6 +1598,16 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
         TriggerTask::Fixed { title, .. } => format!("\"{title}\""),
     };
     format!("starts a run on its own {when}, filing {task} — {next} {}", trigger.next_at.to_rfc3339_z())
+}
+
+/// An automation Amenbo is waiting on a task for: since when, what for, and how to stop it.
+fn task_wait_line(id: i64, waits: &TaskWait) -> String {
+    let what = waits.looks_for.as_deref().map(|f| format!(" ({f})")).unwrap_or_default();
+    format!(
+        "waiting for a task to take{what} since {} — the app starts a run once one turns up; \
+         `automation stop-waiting {id}` stops it",
+        waits.since.to_rfc3339_z()
+    )
 }
 
 /// An automation from before automations had roles, which is kept only to be written out, and what to
@@ -1996,18 +2032,14 @@ fn one_edge(
 /// spent on that task under it. The order is the order it happened in, which is the only order a run
 /// reads in.
 ///
-/// **A run waiting for a task says so**, as its pane does. A round that came to the end of the picture
-/// closed its stretch; one a line brought back to the entry leaves it open until the next task is taken,
-/// but every step of it has ended — so it is written as over, not as still going.
-///
-/// **So does a run waiting for room** before an action that takes one run at a time, naming the action
+/// **A run waiting for room says so** before an action that takes one run at a time, naming the action
 /// and the run it waits behind. Its stretch is still going: the task it took is not done with yet.
-#[allow(clippy::too_many_arguments)]
+///
+/// No run waits for a task: one that would ends, and its automation waits instead (`automation show`).
 fn render_run(
     store: &mut Store,
     flags: &Flags,
     run: &AutomationRun,
-    waiting: bool,
     room: Option<ForRoom>,
     defs: &[AutomationRunDef],
     stretches: &[AutomationRunTask],
@@ -2048,9 +2080,6 @@ fn render_run(
         };
         human(flags, format!("acknowledged: {seen}"));
     }
-    if waiting {
-        human(flags, "waiting: for a task — the next step opens once one turns up");
-    }
     if let Some(room) = room {
         human(
             flags,
@@ -2061,26 +2090,12 @@ fn render_run(
         );
     }
     let switched = switches(defs, moves);
-    let last = stretches.last().map(|s| s.id);
     for stretch in stretches {
         let about = match stretch.task_id {
             Some(task_id) => task_label(task_id),
             None => "no task".to_string(),
         };
-        let stood = if waiting && Some(stretch.id) == last && stretch.ended_at.is_none() {
-            let ended = moves
-                .iter()
-                .filter(|m| m.run_task_id == Some(stretch.id))
-                .filter_map(|m| m.ended_at)
-                .max();
-            match (stretch.started_at, ended) {
-                (Some(from), Some(to)) => format!("{} → {}  (over)", from.to_rfc3339_z(), to.to_rfc3339_z()),
-                (Some(from), None) => format!("{} → over", from.to_rfc3339_z()),
-                (None, _) => "over".to_string(),
-            }
-        } else {
-            span(stretch.started_at, stretch.ended_at)
-        };
+        let stood = span(stretch.started_at, stretch.ended_at);
         human(flags, format!("\ntask {} — {about}  {stood}", stretch.seq));
         // A round that failed was filed as a task, and the round's task waits on it.
         if let Some(filed) = stretch.incident_task_id {

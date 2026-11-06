@@ -3519,6 +3519,10 @@ pub struct AutomationDetailDto {
     pub(crate) archived: bool,
     /// How many runs of it may be going at once, from 1 up to the cap; a launch past it is refused.
     pub(crate) max_concurrent_runs: u32,
+    /// **The automation's roles, in the order they are defined in.** A placement names the one whose
+    /// round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
+    /// (`AutomationCarrierDto::chosen_at`).
+    pub(crate) roles: Vec<AutomationRoleDto>,
     pub(crate) placements: Vec<AutomationPlacementDto>,
     pub(crate) edges: Vec<AutomationEdgeDto>,
     pub(crate) wires: Vec<AutomationWireDto>,
@@ -3535,6 +3539,75 @@ pub struct AutomationDetailDto {
     /// **Why a save would be refused** — the launch check asked the way the save asks it, without this
     /// machine's agents and models ([`amenbo_core::ops::automation::save`]). Empty when it would pass.
     pub(crate) save_blocks: Vec<AutomationLaunchBlockDto>,
+}
+
+/// **One role of an automation**: who works the placements its round reaches, and the agent their
+/// steps fall back to where no step chose one (`AMB-D-960`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRoleDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) name: String,
+    /// The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) icon: Option<String>,
+    /// The placement its round starts at. Absent while it starts nowhere.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) entry_placement_id: Option<i64>,
+    /// The agent its steps fall back to. Absent for none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) agent: Option<String>,
+    /// The model beside `agent`. Absent leaves the agent's own default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) model: Option<String>,
+}
+
+/// **Who carries one step out at one spot, and where that was chosen** — the step at the spot, the
+/// role whose round reaches it, or Amenbo as a whole ([`amenbo_core::ops::automation_run::Carrier`]).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationCarrierDto {
+    pub(crate) agent: String,
+    /// Absent leaves the agent's own default model.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) model: Option<String>,
+    pub(crate) chosen_at: AutomationChosenAtDto,
+}
+
+/// **Where a step's agent was chosen** — the wire form of
+/// [`amenbo_core::ops::automation_run::ChosenAt`]: `step` for the step at this spot, `role` for the
+/// default of the role whose round reaches it, `amenbo` for Amenbo's own default. The words for each
+/// are the GUI's (`AMB-D-396`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum AutomationChosenAtDto {
+    Step,
+    Role {
+        #[serde(rename = "roleId")]
+        #[ts(type = "number")]
+        role_id: i64,
+    },
+    Amenbo,
+}
+
+impl From<amenbo_core::ops::automation_run::ChosenAt> for AutomationChosenAtDto {
+    fn from(at: amenbo_core::ops::automation_run::ChosenAt) -> Self {
+        use amenbo_core::ops::automation_run::ChosenAt;
+        match at {
+            ChosenAt::Step => AutomationChosenAtDto::Step,
+            ChosenAt::Role { role_id } => AutomationChosenAtDto::Role { role_id },
+            ChosenAt::Amenbo => AutomationChosenAtDto::Amenbo,
+        }
+    }
 }
 
 /// **One saved version of an automation**: its number, and when it was saved.
@@ -3563,6 +3636,11 @@ pub struct AutomationPlacementDto {
     pub(crate) name: String,
     #[ts(type = "number")]
     pub(crate) action_id: i64,
+    /// **The role whose round reaches this spot** — the first defined, where two rounds reach it, and a
+    /// role naming no agent included. Absent where no round reaches it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) role_id: Option<i64>,
     /// The action standing here is held by the device rather than by this project — the reach the
     /// box says under its name, as the library list does. False where the action is gone.
     pub(crate) global: bool,
@@ -3619,8 +3697,8 @@ pub struct AutomationPlacementDto {
 }
 
 /// **One step of the action standing on a spot**, and who is chosen to carry it out there
-/// (`AMB-D-960`). `agent` absent is nobody chosen yet, which the launch check names for a step a run
-/// could open.
+/// (`AMB-D-960`). `agent` and `model` are what the step itself chose here — absent is nobody chosen for
+/// it; `carrier` is who carries it out once the role and Amenbo are fallen back to.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3636,6 +3714,12 @@ pub struct AutomationPlacementStepDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) model: Option<String>,
+    /// **Who carries the step out, and where that was chosen.** Absent for a built-in or a script step,
+    /// which no agent carries out, and where none of the step, the role and Amenbo names an agent —
+    /// which the launch check names for a step a run could open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) carrier: Option<AutomationCarrierDto>,
 }
 
 /// **One library action's whole definition** — the steps inside it, the lines drawn between them, and
@@ -3881,13 +3965,14 @@ pub struct AutomationLaunchCheckDto {
 ///
 /// A run says nothing beyond its id: it starts on the spot, nothing being in line ahead of it
 /// (`AMB-D-947`), and the pane arriving is what it looks like — that comes as an event
-/// ([`AutomationStepOpenDto`]).
+/// ([`AutomationStepOpenDto`]). No run (`null`) where the entry would have waited for a task with none
+/// to take: the automation waits for one instead, and a run is started once it turns up (`AMB-D-969`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationRunStartedDto {
-    #[ts(type = "number")]
-    pub(crate) run: i64,
+    #[ts(type = "number | null")]
+    pub(crate) run: Option<i64>,
 }
 
 /// **What a test run found** ([`amenbo_core::ops::automation_rehearse::Rehearsal`]) — every step it

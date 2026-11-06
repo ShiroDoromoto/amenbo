@@ -1277,32 +1277,6 @@ fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
     cli.json(&["automation", "cancel", &own, "--force", "--json"]);
 }
 
-/// **A run waiting for a task is paused by the time the asking returns** (`AMB-D-1019`) — with no
-/// watch looking on to open its step again.
-#[test]
-fn pause_before_next_task_pauses_a_run_waiting_for_a_task_at_once() {
-    let cli = Cli::new();
-    let _app = cli.the_app_up();
-    let (a, _, _, take) = a_picture(&cli, false);
-    cli.json(&[
-        "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
-        "--choice", "着手できるタスクが出るまで待つ", "--json",
-    ]);
-    saved(&cli, &a);
-    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
-    assert_eq!(cli.json(&["automation", "run-show", &run, "--json"])["waiting"].as_bool(), Some(true));
-
-    let asked = cli.json(&["automation", "pause", &run, "--before-next-task", "--json"]);
-    assert_eq!(asked["automation_run"]["state"].as_str(), Some("paused"), "{asked}");
-
-    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
-    assert_eq!(shown["run"]["status"].as_str(), Some("paused"), "{shown}");
-    assert_eq!(shown["run"]["pause_before_next_task"].as_bool(), Some(false), "{shown}");
-
-    let canceled = cli.json(&["automation", "cancel", &run, "--json"]);
-    assert_eq!(canceled["automation_run"]["status"].as_str(), Some("canceled"), "{canceled}");
-}
-
 /// **Only a failure is waiting to be seen** (`AMB-D-989`): a run a person stopped needs nobody, so
 /// saying it has been seen is refused, and its account says nothing about being seen. That a failure
 /// takes the mark, with whoever set it, is held by the core's own tests — a terminal has no way to make
@@ -1324,11 +1298,10 @@ fn only_a_failed_run_is_acknowledged() {
     assert!(!shown.contains("acknowledged:"), "a cancel is not waiting on anyone: {shown}");
 }
 
-/// **A run waiting for a task says so** on `run-show`, in the same answer its pane is drawn from: an
-/// entry set to wait, with nothing to take, leaves the run running and waiting. A run that is no longer
-/// running waits for nothing.
+/// **A start with nothing to take makes no run** where the entry is set to wait for a task: the
+/// automation waits instead, `show` says since when and what for, and `stop-waiting` ends the wait.
 #[test]
-fn run_show_says_when_a_run_is_waiting_for_a_task() {
+fn a_start_with_nothing_to_take_waits_and_stop_waiting_ends_it() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _, take) = a_picture(&cli, false);
@@ -1337,19 +1310,18 @@ fn run_show_says_when_a_run_is_waiting_for_a_task() {
         "--choice", "着手できるタスクが出るまで待つ", "--json",
     ]);
     saved(&cli, &a);
-    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
 
-    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
-    assert_eq!(shown["run"]["status"].as_str(), Some("running"), "{shown}");
-    assert_eq!(shown["waiting"].as_bool(), Some(true), "{shown}");
-    let (text, _) = cli.run(&["automation", "run-show", &run]);
-    assert!(text.contains("waiting: for a task"), "{text}");
+    let started = cli.json(&["automation", "start", &a, "--json"]);
+    assert!(started["automation_run"].is_null(), "no run is made: {started}");
+    assert!(started["automation"]["waits_for_task_since"].is_string(), "{started}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("waiting for a task to take"), "{text}");
+    assert!(text.contains(&format!("automation stop-waiting {a}")), "{text}");
 
-    cli.json(&["automation", "cancel", &run, "--force", "--json"]);
-    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
-    assert_eq!(shown["waiting"].as_bool(), Some(false), "{shown}");
-    let (text, _) = cli.run(&["automation", "run-show", &run]);
-    assert!(!text.contains("waiting:"), "{text}");
+    let stopped = cli.json(&["automation", "stop-waiting", &a, "--json"]);
+    assert!(stopped["automation"]["waits_for_task_since"].is_null(), "{stopped}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(!text.contains("waiting for a task"), "{text}");
 }
 
 /// **A run waiting for room says so** on `run-show`: two runs come to an action that takes one run at a
@@ -1393,7 +1365,6 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
 
     let shown = cli.json(&["automation", "run-show", &second, "--json"]);
     assert_eq!(shown["run"]["status"].as_str(), Some("running"), "{shown}");
-    assert_eq!(shown["waiting"].as_bool(), Some(false), "{shown}");
     assert_eq!(id_str(&shown["waits_for_room"]["action_id"]), action, "{shown}");
     assert_eq!(id_str(&shown["waits_for_room"]["behind"]), first, "{shown}");
     let (text, _) = cli.run(&["automation", "run-show", &second]);
@@ -1413,7 +1384,7 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
 }
 
 /// **A run picked up after a pause before its next task goes on from the newest saved version**
-/// (`AMB-D-1015`), and `run-show` says which versions it was copied from, in turn. A run waiting at its
+/// (`AMB-D-1015`), and `run-show` says which versions it was copied from, in turn. A run standing at its
 /// entry has run no step yet, so which version each step ran on is not held here.
 #[test]
 fn run_show_names_the_versions_a_run_was_copied_from() {
@@ -1425,7 +1396,13 @@ fn run_show_names_the_versions_a_run_was_copied_from() {
         "--choice", "着手できるタスクが出るまで待つ", "--json",
     ]);
     saved(&cli, &a);
+    // A start with nothing to take makes no run, so there is one to take as it starts. Taken by
+    // somebody else straight after, it leaves the run standing before a take that would wait.
+    let project = cli.json(&["automation", "show", &a, "--json"])["automation"]["project_id"].to_string();
+    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &project, "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    cli.json(&["task", "status", &t, "in_progress", "--json"]);
     let shown = cli.json(&["automation", "run-show", &run, "--json"]);
     let versions: Vec<Option<i64>> =
         shown["versions"].as_array().unwrap().iter().map(|v| v["version"].as_i64()).collect();

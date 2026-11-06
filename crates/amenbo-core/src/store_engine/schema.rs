@@ -1146,6 +1146,21 @@ datasets! {
         // its definition never edited. Set by the upgrade on every automation already there, never by a
         // write. Like `archived`, not part of a saved version.
         export_only: bool_col,
+        // **The trigger**: what files a task on its own and starts a run with it, in three parts — when
+        // to file one, what the task says, and the run, which is this automation's. NULL in
+        // `trigger_when_kind` is no trigger, and then every other `trigger_` column is NULL too. Like
+        // `archived`, none of it is part of a saved version.
+        //
+        // When to file one: `every` is every `trigger_every_minutes` minutes.
+        trigger_when_kind: enum_opt("every"),
+        trigger_every_minutes: col(INT_OPT),
+        // What the task says: `fixed` is the title and notes written here.
+        trigger_task_kind: enum_opt("fixed"),
+        trigger_task_title: col(OPT),
+        trigger_task_notes: col(OPT),
+        // When the trigger is next asked whether to file one. Moved on only when it does, so a time it
+        // says no leaves nothing behind.
+        trigger_next_at: ts_opt,
         order_key: col(ORDER_KEY),
     }
 

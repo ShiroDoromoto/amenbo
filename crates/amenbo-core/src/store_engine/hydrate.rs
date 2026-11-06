@@ -35,7 +35,8 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationStoppedReason, AutomationVersion, AutomationWire, Database,
+    AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationVersion, AutomationWire, Database,
+    TriggerTask, TriggerWhen,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
@@ -535,6 +536,30 @@ fn failures_to(kind: Option<String>, role_id: Option<i64>) -> rusqlite::Result<O
     }
 }
 
+/// An automation's trigger, read back from its six columns. No kind of when is no trigger, and then
+/// every other column is NULL; a kind beside a missing part is a row nothing writes, and reads as an
+/// error.
+fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
+    const C: col::automation::Cols = col::automation::ALL;
+    let Some(when_kind) = get(r, C.trigger_when_kind)? else { return Ok(None) };
+    let when = match (when_kind.as_str(), get(r, C.trigger_every_minutes)?) {
+        ("every", Some(minutes)) => TriggerWhen::Every {
+            minutes: u32::try_from(minutes).map_err(|_| bad(format!("bad trigger_every_minutes {minutes}")))?,
+        },
+        (kind, minutes) => return Err(bad(format!("bad trigger_when {kind:?} with minutes {minutes:?}"))),
+    };
+    let task_kind: Option<String> = get(r, C.trigger_task_kind)?;
+    let task = match task_kind.as_deref() {
+        Some("fixed") => TriggerTask::Fixed {
+            title: get(r, C.trigger_task_title)?.unwrap_or_default(),
+            notes: get(r, C.trigger_task_notes)?.unwrap_or_default(),
+        },
+        kind => return Err(bad(format!("bad trigger_task {kind:?}"))),
+    };
+    let next_at = ts_opt(r, C.trigger_next_at)?.ok_or_else(|| bad("a trigger with no trigger_next_at".to_string()))?;
+    Ok(Some(AutomationTrigger { when, task, next_at }))
+}
+
 pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
     const C: col::automation::Cols = col::automation::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -551,6 +576,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         },
         failures_to: failures_to(get(r, C.failures_to_kind)?, get(r, C.failures_to_role_id)?)?,
         export_only: get(r, C.export_only)?,
+        trigger: trigger(r)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

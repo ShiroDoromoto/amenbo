@@ -479,6 +479,23 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
+        AutomationCmd::Trigger { id, every, title, notes, off } => {
+            use amenbo_core::model::{TriggerTask, TriggerWhen};
+            let trigger = match (off, every, title) {
+                (false, Some(minutes), Some(title)) => Some(amenbo_core::ops::automation::NewTrigger {
+                    when: TriggerWhen::Every { minutes },
+                    task: TriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() },
+                }),
+                // clap asks for both unless --off is given, and refuses them beside it.
+                _ => None,
+            };
+            let a = store.automation_trigger_set(id, trigger).map_err(CliError::from)?;
+            let line = match &a.trigger {
+                Some(t) => format!("✓ Automation {} ({}) {}", a.name, a.id, trigger_line(t)),
+                None => format!("✓ Automation {} ({}) has no trigger", a.name, a.id),
+            };
+            write_envelope(flags, "automation.trigger", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
+        }
         AutomationCmd::Rm { id } => {
             if !confirm(flags, "delete automation")? {
                 return Ok(0);
@@ -1460,6 +1477,9 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
     } else {
         human(flags, failures_to_line(a.failures_to, &view.roles));
     }
+    if let Some(trigger) = &a.trigger {
+        human(flags, trigger_line(trigger));
+    }
     human(flags, saved_line(view.saved.as_ref(), view.unsaved));
     if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
         human(flags, line);
@@ -1471,6 +1491,18 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
     for placement in &view.placements {
         render_placement(flags, view, placement);
     }
+}
+
+/// What an automation's trigger does, and when it is next asked.
+fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
+    use amenbo_core::model::{TriggerTask, TriggerWhen};
+    let when = match trigger.when {
+        TriggerWhen::Every { minutes } => format!("every {minutes} minute(s)"),
+    };
+    let task = match &trigger.task {
+        TriggerTask::Fixed { title, .. } => format!("\"{title}\""),
+    };
+    format!("starts a run on its own {when}, filing {task} — next at {}", trigger.next_at.to_rfc3339_z())
 }
 
 /// An automation from before automations had roles, which is kept only to be written out, and what to

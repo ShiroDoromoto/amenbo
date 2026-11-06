@@ -592,6 +592,42 @@ fn an_update_sets_the_most_runs_at_once_between_one_and_the_cap() {
     assert_eq!(after["automation"]["max_concurrent_runs"], serde_json::json!(cap), "a refused update changes nothing: {after}");
 }
 
+/// `automation trigger` writes a trigger, `show` says what it files and when it is next asked, and
+/// `--off` takes it away. A wait under a minute, a trigger with no title, and `--off` beside a part of
+/// one are refused.
+#[test]
+fn a_trigger_is_written_shown_and_taken_away() {
+    let cli = Cli::new();
+    let (_, a, _, _) = an_automation(&cli);
+
+    let set = cli.json(&["automation", "trigger", &a, "--every", "60", "--title", "Look over the inbox", "--notes", "what to do", "--json"]);
+    let trigger = &set["automation"]["trigger"];
+    assert_eq!(trigger["when"], serde_json::json!({ "kind": "every", "minutes": 60 }), "{set}");
+    assert_eq!(
+        trigger["task"],
+        serde_json::json!({ "kind": "fixed", "title": "Look over the inbox", "notes": "what to do" }),
+        "{set}"
+    );
+    assert!(trigger["next_at"].is_string(), "{set}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("every 60 minute(s), filing \"Look over the inbox\""), "{text}");
+
+    for wrong in [
+        vec!["automation", "trigger", a.as_str(), "--every", "0", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5"],
+        vec!["automation", "trigger", a.as_str(), "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--off", "--every", "5"],
+    ] {
+        let (_, code) = cli.run_err(&wrong);
+        assert_ne!(code, 0, "{wrong:?} is refused");
+    }
+
+    let off = cli.json(&["automation", "trigger", &a, "--off", "--json"]);
+    assert!(off["automation"]["trigger"].is_null(), "{off}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(!text.contains("starts a run on its own"), "{text}");
+}
+
 /// The library answers as the one list an automation could place, and `--global` narrows it to the
 /// device's shelf rather than opening a second place to look.
 #[test]

@@ -1365,7 +1365,6 @@ export const ru: Translation = {
     "auto.about.copy": "Копировать",
     "auto.about.copied": "Скопировано",
     "auto.about.notesHint": "Одна строка, видимая в списке",
-    "auto.about.limitRuns": "Ограничить одновременные запуски",
     "auto.about.mostRuns": "Не больше одновременно",
     "auto.about.archive": "В архиве",
     "auto.about.remove": "Удалить эту автоматизацию",

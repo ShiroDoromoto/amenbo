@@ -20,8 +20,8 @@
 //! and the same key crosses the boundary (an `i64` in Rust, a `number` in TS), so nothing renders a
 //! key as text on the way through. The constructors are `col!` (plain text/integer), `ts!`/`ts_opt!`
 //! (RFC3339Z instant), `ts_opt_apart!` (an instant beside a day it excludes), `date_opt!` (`%Y-%m-%d`
-//! day), `enum_col!`/`enum_opt!` (closed value set), `bool_col!`, `limit_opt!` (an upper bound of at
-//! least 1), `hash_opt!` (blake3 hex) and
+//! day), `enum_col!`/`enum_opt!` (closed value set), `bool_col!`, `limit!` (a whole number from 1 up
+//! to a cap), `hash_opt!` (blake3 hex) and
 //! `fk!`/`fk_opt!` (foreign key) — declared below in this module.
 //!
 //! The **spelling** of an integer type says what the column is, not how SQLite stores it: `INTEGER` and
@@ -285,13 +285,16 @@ macro_rules! bool_col {
     };
 }
 
-/// Nullable upper bound: a whole number of at least 1, or `NULL` for no bound at all. `0` is refused,
-/// so "none allowed" and "no bound" are never spelled the same.
-macro_rules! limit_opt {
-    ($name:ident) => {
+/// Required upper bound: a whole number from 1 up to `$max`, `1` until written. `0` is refused, and so
+/// is anything past the cap. The default is `1` rather than the `0` sentinel the other required kinds
+/// use, since the `CHECK` must admit it (see the rules).
+macro_rules! limit {
+    ($name:ident, $max:literal) => {
         Column {
             name: stringify!($name),
-            decl: concat!("BIGINT CHECK(", stringify!($name), " IS NULL OR ", stringify!($name), " >= 1)"),
+            decl: concat!(
+                "BIGINT NOT NULL DEFAULT 1 CHECK(", stringify!($name), " >= 1 AND ", stringify!($name), " <= ", $max, ")"
+            ),
         }
     };
 }
@@ -354,7 +357,7 @@ macro_rules! column {
     ($name:ident : ts_opt_apart($day:ident))             => { ts_opt_apart!($name, $day) };
     ($name:ident : date_opt)                             => { date_opt!($name) };
     ($name:ident : bool_col)                             => { bool_col!($name) };
-    ($name:ident : limit_opt)                            => { limit_opt!($name) };
+    ($name:ident : limit($max:literal))                  => { limit!($name, $max) };
     ($name:ident : hash_opt)                             => { hash_opt!($name) };
     ($name:ident : actor_kind)                           => { actor_kind!($name) };
     ($name:ident : enum_col($($v:literal),+ $(,)?))      => { enum_col!($name, $($v),+) };
@@ -391,7 +394,7 @@ macro_rules! column_type {
     ($name:ident : enum_col($($v:literal),+ $(,)?)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
     ($name:ident : enum_opt($($v:literal),+ $(,)?)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : bool_col)            => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Bool> };
-    ($name:ident : limit_opt)           => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int, $crate::store_engine::sql::Nullable> };
+    ($name:ident : limit($max:literal)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     ($name:ident : fk($parent:literal, $od:literal))     => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     ($name:ident : fk_opt($parent:literal, $od:literal)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int, $crate::store_engine::sql::Nullable> };
 }
@@ -1128,9 +1131,10 @@ datasets! {
         notes: col(REQ),
         entry_placement_id: fk_opt("automation_placement", "RESTRICT"),
         archived: bool_col,
-        // How many runs of this automation may be going at once; `NULL` for no limit. Like
-        // `archived`, it is not part of a saved version.
-        max_concurrent_runs: limit_opt,
+        // How many runs of this automation may be going at once, 1 until somebody changes it. The cap
+        // is `model::MAX_CONCURRENT_RUNS_LIMIT`, spelled here as a literal because `concat!` takes no
+        // `const`; a test holds the two equal. Like `archived`, it is not part of a saved version.
+        max_concurrent_runs: limit(4),
         // Where a round that fails is filed: `human` for a person, `role` for the role
         // `failures_to_role_id` names. NULL while nobody has said, which the launch check refuses. Like
         // `max_concurrent_runs`, not part of a saved version.
@@ -2257,6 +2261,23 @@ pub fn table_content_is_empty(conn: &rusqlite::Connection) -> rusqlite::Result<b
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The cap on `automation.max_concurrent_runs` is spelled twice — once in the model, once as a
+    /// literal in the column's `CHECK`, since `concat!` takes no `const`. Held to each other here, so
+    /// the two cannot drift apart.
+    #[test]
+    fn the_cap_on_runs_at_once_is_the_models() {
+        let decl = dataset("automation")
+            .expect("the dataset is declared")
+            .columns
+            .iter()
+            .find(|c| c.name == "max_concurrent_runs")
+            .expect("the column is declared")
+            .decl;
+        let cap = crate::model::MAX_CONCURRENT_RUNS_LIMIT;
+        assert!(decl.ends_with(&format!("<= {cap})")), "{decl}");
+        assert!(decl.contains(&format!("DEFAULT {}", crate::model::DEFAULT_MAX_CONCURRENT_RUNS)), "{decl}");
+    }
 
     /// Every name in [`FEED_PLAIN_TABLES`] is a table that exists, and none of them is a record's. A name
     /// nothing answers to would be silently inert — the feed would go on not collecting the table, and the

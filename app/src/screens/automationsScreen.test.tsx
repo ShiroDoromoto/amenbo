@@ -47,6 +47,8 @@ vi.mock("../core/automations", () => ({
   useAutomationAction: () => null,
   insertAutomationAction: () => Promise.resolve([]),
   ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
+  // The about panel's number field reads it as its `max`.
+  MAX_CONCURRENT_RUNS: 4,
   launchAutomation: hoisted.launch,
   saveAutomation: hoisted.save,
   discardAutomation: hoisted.discard,
@@ -124,6 +126,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     name: "Morning round",
     notes: "",
     archived: false,
+    maxConcurrentRuns: 1,
     placements: [],
     edges: [],
     wires: [],

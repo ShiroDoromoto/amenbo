@@ -1365,7 +1365,6 @@ export const pl: Translation = {
     "auto.about.copy": "Kopiuj",
     "auto.about.copied": "Skopiowano",
     "auto.about.notesHint": "Jedna linijka widoczna na liście",
-    "auto.about.limitRuns": "Ogranicz równoczesne uruchomienia",
     "auto.about.mostRuns": "Najwyżej naraz",
     "auto.about.archive": "Zarchiwizowana",
     "auto.about.remove": "Usuń tę automatyzację",

@@ -1349,7 +1349,6 @@ export const vi: Translation = {
     "auto.about.copy": "Sao chép",
     "auto.about.copied": "Đã sao chép",
     "auto.about.notesHint": "Một dòng hiện trong danh sách",
-    "auto.about.limitRuns": "Giới hạn số lần chạy cùng lúc",
     "auto.about.mostRuns": "Tối đa cùng lúc",
     "auto.about.archive": "Đã lưu trữ",
     "auto.about.remove": "Xoá tự động hoá này",

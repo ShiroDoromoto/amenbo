@@ -1348,7 +1348,6 @@ export const nl: Translation = {
     "auto.about.copy": "Kopiëren",
     "auto.about.copied": "Gekopieerd",
     "auto.about.notesHint": "Eén regel die in de lijst staat",
-    "auto.about.limitRuns": "Gelijktijdige runs beperken",
     "auto.about.mostRuns": "Hoogstens tegelijk",
     "auto.about.archive": "Gearchiveerd",
     "auto.about.remove": "Deze automatisering verwijderen",

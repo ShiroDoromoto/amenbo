@@ -125,6 +125,12 @@ export async function importAutomation(projectId: number, src: string): Promise<
 }
 
 /**
+ * The most `maxConcurrentRuns` may be set at — core's `MAX_CONCURRENT_RUNS_LIMIT`
+ * (`amenbo_core::model`), which refuses anything past it.
+ */
+export const MAX_CONCURRENT_RUNS = 4;
+
+/**
  * **Rename an automation, rewrite its notes, put it out of the way, or set how many of its runs may
  * be going at once.** Only what is passed is written.
  *
@@ -132,12 +138,12 @@ export async function importAutomation(projectId: number, src: string): Promise<
  * launches any more out of a reader's way, and the row stays in the list with the mark on it —
  * which is what the list draws, rather than dropping the row.
  *
- * `maxConcurrentRuns` is a number, at least 1, to set the most at, or `null` to lift it; left out, it
- * is kept. A launch past it is refused rather than queued.
+ * `maxConcurrentRuns` is the most at, from 1 up to `MAX_CONCURRENT_RUNS`; left out, it is kept. There
+ * is no lifting it. A launch past it is refused rather than queued.
  */
 export async function editAutomation(
   id: number,
-  patch: { name?: string; notes?: string; archived?: boolean; maxConcurrentRuns?: number | null },
+  patch: { name?: string; notes?: string; archived?: boolean; maxConcurrentRuns?: number },
 ): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_edit", {
@@ -146,7 +152,6 @@ export async function editAutomation(
     notes: patch.notes ?? null,
     archived: patch.archived ?? null,
     maxConcurrentRuns: patch.maxConcurrentRuns ?? null,
-    noMaxConcurrentRuns: patch.maxConcurrentRuns === null ? true : null,
   });
 }
 

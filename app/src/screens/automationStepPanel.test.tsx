@@ -118,6 +118,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     notes: "",
     entryPlacementId: 1,
     archived: false,
+    maxConcurrentRuns: 1,
     placements: [spot()],
     edges: [],
     wires: [],

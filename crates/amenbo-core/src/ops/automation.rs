@@ -47,9 +47,9 @@ use crate::model::{
     AutomationCfgOwner, AutomationEdge, AutomationEnds, AutomationExit,
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRole,
-    AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY, DEFAULT_MAX_TIMES,
-    DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
-    ERROR_EXIT, FailuresTo, MAX_SCRIPT_TIMEOUT_MINUTES,
+    AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
+    DEFAULT_MAX_CONCURRENT_RUNS, DEFAULT_MAX_TIMES, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
+    ERROR_EXIT, FailuresTo, MAX_CONCURRENT_RUNS_LIMIT, MAX_SCRIPT_TIMEOUT_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -1278,7 +1278,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         notes: new.notes,
         entry_placement_id: None,
         archived: false,
-        max_concurrent_runs: None,
+        max_concurrent_runs: DEFAULT_MAX_CONCURRENT_RUNS,
         failures_to: new.failures_to,
         export_only: false,
         order_key,
@@ -1305,17 +1305,17 @@ fn checked_failures_to(tx: &WriteTx<'_>, automation_id: i64, to: Option<Failures
 /// Change an automation's name, notes, whether it is archived, how many of its runs may be going at
 /// once, or where a failed round is filed. Only the `Some` fields are written. Archiving takes nothing
 /// away: it is what keeps an automation nobody launches any more out of the lists. A run of the
-/// automation going on does not stop it. `max_concurrent_runs` is `Some(Some(n))` to set the most at
-/// `n`, at least 1, and `Some(None)` to take the limit away. `failures_to` is `Some(Some(to))` to file
-/// failed rounds to a person or to one of the automation's own roles, and `Some(None)` to leave it
-/// unsaid again, which the launch check refuses.
+/// automation going on does not stop it. `max_concurrent_runs` is `Some(n)` to set the most at `n`, from
+/// 1 up to [`MAX_CONCURRENT_RUNS_LIMIT`]; the limit is never taken away. `failures_to` is
+/// `Some(Some(to))` to file failed rounds to a person or to one of the automation's own roles, and
+/// `Some(None)` to leave it unsaid again, which the launch check refuses.
 pub fn update(
     tx: &WriteTx<'_>,
     id: i64,
     name: Option<&str>,
     notes: Option<&str>,
     archived: Option<bool>,
-    max_concurrent_runs: Option<Option<u32>>,
+    max_concurrent_runs: Option<u32>,
     failures_to: Option<Option<FailuresTo>>,
 ) -> Result<Automation> {
     let before = live_automation(tx, id)?;
@@ -1330,10 +1330,10 @@ pub fn update(
         after.archived = archived;
     }
     if let Some(max) = max_concurrent_runs {
-        if max == Some(0) {
-            return Err(Error::invalid(
-                "the most runs of an automation going at once is at least 1; take the limit away for none",
-            ));
+        if !(1..=MAX_CONCURRENT_RUNS_LIMIT).contains(&max) {
+            return Err(Error::invalid(format!(
+                "the most runs of an automation going at once is from 1 to {MAX_CONCURRENT_RUNS_LIMIT}, not {max}"
+            )));
         }
         after.max_concurrent_runs = max;
     }
@@ -4105,28 +4105,31 @@ mod tests {
         });
     }
 
-    /// **The most runs going at once is set, kept, taken away and never 0.** An automation is born
-    /// with no limit; leaving the field out keeps what is there.
+    /// **The most runs going at once is 1 at birth, set and kept, and held between 1 and the cap.**
+    /// Leaving the field out keeps what is there.
     #[test]
-    fn the_most_runs_going_at_once_is_set_and_taken_away_and_never_zero() {
+    fn the_most_runs_going_at_once_is_one_at_birth_and_held_under_the_cap() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            assert_eq!(automation.max_concurrent_runs, None, "born with no limit");
+            assert_eq!(automation.max_concurrent_runs, 1, "born with a most of one");
+            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, 1);
 
-            let set = update(tx, automation.id, None, None, None, Some(Some(2)), None).expect("set the most");
-            assert_eq!(set.max_concurrent_runs, Some(2));
-            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, Some(2));
+            let set = update(tx, automation.id, None, None, None, Some(2), None).expect("set the most");
+            assert_eq!(set.max_concurrent_runs, 2);
+            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, 2);
 
             let renamed = update(tx, automation.id, Some("別名"), None, None, None, None).expect("rename");
-            assert_eq!(renamed.max_concurrent_runs, Some(2), "left out, it is kept");
+            assert_eq!(renamed.max_concurrent_runs, 2, "left out, it is kept");
 
-            let refused = update(tx, automation.id, None, None, None, Some(Some(0)), None);
-            assert!(matches!(refused, Err(Error::Invalid(_))), "0 runs at once is refused");
-            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, Some(2));
+            for wrong in [0, MAX_CONCURRENT_RUNS_LIMIT + 1] {
+                let refused = update(tx, automation.id, None, None, None, Some(wrong), None);
+                assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong} runs at once is refused");
+                assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, 2);
+            }
 
-            let cleared = update(tx, automation.id, None, None, None, Some(None), None).expect("take it away");
-            assert_eq!(cleared.max_concurrent_runs, None);
-            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, None);
+            let capped = update(tx, automation.id, None, None, None, Some(MAX_CONCURRENT_RUNS_LIMIT), None)
+                .expect("up to the cap");
+            assert_eq!(capped.max_concurrent_runs, MAX_CONCURRENT_RUNS_LIMIT);
         });
     }
 

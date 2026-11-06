@@ -1361,7 +1361,6 @@ export const ptBR: Translation = {
     "auto.about.copy": "Copiar",
     "auto.about.copied": "Copiado",
     "auto.about.notesHint": "Uma linha exibida na lista",
-    "auto.about.limitRuns": "Limitar execuções simultâneas",
     "auto.about.mostRuns": "No máximo ao mesmo tempo",
     "auto.about.archive": "Arquivada",
     "auto.about.remove": "Excluir esta automação",

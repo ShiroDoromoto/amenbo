@@ -1365,7 +1365,7 @@ impl Store {
         name: Option<&str>,
         notes: Option<&str>,
         archived: Option<bool>,
-        max_concurrent_runs: Option<Option<u32>>,
+        max_concurrent_runs: Option<u32>,
         failures_to: Option<Option<crate::model::FailuresTo>>,
     ) -> Result<crate::model::Automation> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {

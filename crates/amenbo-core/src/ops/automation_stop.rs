@@ -814,6 +814,7 @@ mod tests {
     fn the_running_index_holds_what_is_not_over_and_the_stops_behind_it() {
         with_tx(|tx| {
             let p = picture(tx, false);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let running = a_run(tx, &p.automation);
             let paused = a_run(tx, &p.automation);
             let stopped = a_run(tx, &p.automation);
@@ -847,6 +848,7 @@ mod tests {
     fn a_launch_stops_every_run_the_last_one_left_standing_and_hands_their_tasks_back() {
         with_tx(|tx| {
             let p = picture(tx, false);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let going = a_run(tx, &p.automation);
             let other = a_run(tx, &p.automation);
             assert_eq!(status_of(tx, going.id), AutomationRunStatus::Running);
@@ -1371,6 +1373,7 @@ mod tests {
     fn a_restart_stops_a_run_whose_task_was_closed_along_with_the_rest() {
         with_tx(|tx| {
             let p = picture(tx, false);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let closed = a_run(tx, &p.automation);
             let step = opened(tx, &closed, &p.first);
             let task = a_task_in_hand(tx, p.project, step.run_step.id);
@@ -1389,6 +1392,7 @@ mod tests {
     fn a_restart_stops_every_run_that_was_going() {
         with_tx(|tx| {
             let p = picture(tx, false);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
             let one = a_run(tx, &p.automation);
             let under_way = opened(tx, &one, &p.first).run_step.id;
             let another = a_run(tx, &p.automation);

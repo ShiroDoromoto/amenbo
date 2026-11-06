@@ -1360,7 +1360,6 @@ export const it: Translation = {
     "auto.about.copy": "Copia",
     "auto.about.copied": "Copiato",
     "auto.about.notesHint": "Una riga mostrata nell’elenco",
-    "auto.about.limitRuns": "Limita le esecuzioni simultanee",
     "auto.about.mostRuns": "Al massimo insieme",
     "auto.about.archive": "Archiviata",
     "auto.about.remove": "Elimina questa automazione",

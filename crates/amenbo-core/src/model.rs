@@ -2871,10 +2871,11 @@ pub struct AutomationRunValue {
 
 /// A serde-shaped vessel holding every record of one store at once. It is **not the store's contents**:
 /// the truth source is SQLite, and [`crate::store::Store`] does not hold one of these. The shape exists
-/// for the two places that need the records handed over **as a single lump**: verifying a backup or a
-/// restore (that this vessel can be raised from a snapshot is the proof that the snapshot has not just the
-/// structure but the contents — [`mod@crate::archive`]), and the projection-parity tests (raise the vessel
-/// from the truth source, project it back onto the engine, and compare for fidelity). It is not the
+/// for the places that need the records handed over **as a single lump**, none of them in production:
+/// the projection-parity tests (raise the vessel from the truth source with
+/// [`crate::store_engine::hydrate_database`], project it back onto the engine, and compare for
+/// fidelity), and the `seed` binary in `amenbo-cli`. Backup and restore do not raise it: they prove a
+/// snapshot with `integrity_check` and row counts ([`mod@crate::archive`]). It is not the
 /// substrate of export: export streams rows straight out of the read model and never
 /// hydrates into this ([`crate::export`]). Nor is there any way to load rows into a store through it.
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -31,7 +31,7 @@ use crate::model::{
     AutomationActionVersion, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
     AutomationEnds,
     AutomationExit, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
-    AutomationPauseKind, AutomationPlacementStep,
+    AutomationPauseKind, AutomationPlacementStep, AutomationRole,
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
@@ -570,6 +570,23 @@ pub(super) fn automation_placement_step_row(r: &Row) -> rusqlite::Result<Automat
     })
 }
 
+pub(super) fn automation_role_row(r: &Row) -> rusqlite::Result<AutomationRole> {
+    const C: col::automation_role::Cols = col::automation_role::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationRole {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        name: get(r, C.name)?,
+        icon: get(r, C.icon)?,
+        entry_placement_id: get(r, C.entry_placement_id)?,
+        agent: get(r, C.agent)?,
+        model: get(r, C.model)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
+}
+
 pub(super) fn automation_action_step_row(r: &Row) -> rusqlite::Result<AutomationStep> {
     const C: col::automation_action_step::Cols = col::automation_action_step::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -738,6 +755,7 @@ pub(super) fn automation_version_row(r: &Row) -> rusqlite::Result<AutomationVers
         placement_steps: get(r, C.placement_steps)?,
         edges: get(r, C.edges)?,
         wires: get(r, C.wires)?,
+        roles: get(r, C.roles)?,
         created_at,
         updated_at,
     })

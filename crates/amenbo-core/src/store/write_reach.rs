@@ -54,8 +54,8 @@ pub(super) enum WriteTarget {
     /// An attachment's target (the polymorphic `target_type` + id).
     AttachTo(AttachmentTarget, i64),
     /// One row of an automation's definition, named by the table it sits in. Which table it is decides
-    /// the walk up to the project, and that walk is the whole difference between them — so the nine
-    /// ride one variant rather than nine.
+    /// the walk up to the project, and that walk is the whole difference between them — so the ten
+    /// ride one variant rather than ten.
     AutomationPart(AutomationPart, i64),
     /// Where an entity about to be created would go (`None` = in no project at all).
     NewIn(Option<i64>),
@@ -63,19 +63,20 @@ pub(super) enum WriteTarget {
     NewProject,
 }
 
-/// Which of the nine definition tables a [`WriteTarget::AutomationPart`] names.
+/// Which of the ten definition tables a [`WriteTarget::AutomationPart`] names.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum AutomationPart {
     Automation,
     Action,
     Placement,
+    Role,
     Step,
     Exit,
     Port,
     Cfg,
     Edge,
     Wire,
-    /// One launch of an automation. It is on this list rather than beside the nine because a run walks
+    /// One launch of an automation. It is on this list rather than beside the ten because a run walks
     /// up to a project by a road of its own: it carries the project it was launched from, and so
     /// stays readable after the automation it came from is archived.
     Run,
@@ -89,6 +90,7 @@ impl AutomationPart {
             AutomationPart::Automation => owner::automation(conn, id),
             AutomationPart::Action => owner::automation_action(conn, id),
             AutomationPart::Placement => owner::automation_placement(conn, id),
+            AutomationPart::Role => owner::automation_role(conn, id),
             AutomationPart::Step => owner::automation_step(conn, id),
             AutomationPart::Exit => owner::automation_exit(conn, id),
             AutomationPart::Port => owner::automation_port(conn, id),
@@ -106,6 +108,7 @@ impl AutomationPart {
             AutomationPart::Automation => "automation",
             AutomationPart::Action => "action",
             AutomationPart::Placement => "automation placement",
+            AutomationPart::Role => "automation role",
             AutomationPart::Step => "automation step",
             AutomationPart::Exit => "automation way out",
             AutomationPart::Port => "automation port",

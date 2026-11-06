@@ -44,6 +44,22 @@ pub struct AutomationFile {
     pub wires: Vec<WireFile>,
     /// The actions a person wrote that the placements stand on, each once per version placed.
     pub actions: Vec<ActionFile>,
+    /// The roles defined in the automation, in the order they are defined in. A file written before
+    /// roles were carried reads as none.
+    #[serde(default)]
+    pub roles: Vec<RoleFile>,
+}
+
+/// **One role defined in the automation.** Taken in as a new role, never matched to one already there
+/// by its name (`AMB-D-1033`).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RoleFile {
+    pub name: String,
+    pub icon: Option<String>,
+    /// The placement its round starts at, by its place in `placements`.
+    pub entry: Option<usize>,
+    pub agent: Option<String>,
+    pub model: Option<String>,
 }
 
 /// **One placement**: what it stands on, the answers written for its settings and who carries out each
@@ -281,6 +297,17 @@ pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
         edges,
         wires,
         actions,
+        roles: picture
+            .roles()
+            .iter()
+            .map(|r| RoleFile {
+                name: r.name.clone(),
+                icon: r.icon.clone(),
+                entry: r.entry_placement_id.and_then(at),
+                agent: r.agent.clone(),
+                model: r.model.clone(),
+            })
+            .collect(),
     })
 }
 

@@ -22,7 +22,7 @@ use rusqlite::types::Value;
 use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationActionVersion, AutomationCfg,
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
-    AutomationRun, AutomationRunDef,
+    AutomationRole, AutomationRun, AutomationRunDef,
     AutomationRunStep, AutomationRunTask, AutomationRunValue,
     AutomationStep, AutomationVersion,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
@@ -601,6 +601,26 @@ pub fn automation_placement_step(p: &AutomationPlacementStep) -> Record {
     )
 }
 
+pub fn automation_role(r: &AutomationRole) -> Record {
+    Record::new(
+        "automation_role",
+        r.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(r.automation_id)),
+                ("name", tv(&r.name)),
+                ("icon", ov(&r.icon)),
+                ("entry_placement_id", kv_opt(&r.entry_placement_id)),
+                ("agent", ov(&r.agent)),
+                ("model", ov(&r.model)),
+                ("order_key", tv(&r.order_key)),
+            ],
+            &r.created_at,
+            &r.updated_at,
+        ),
+    )
+}
+
 pub fn automation_action_step(s: &AutomationStep) -> Record {
     let [script_program, script_args, script_timeout_minutes] = script_values(&s.script);
     Record::new(
@@ -798,6 +818,7 @@ pub fn automation_version(v: &AutomationVersion) -> Record {
                 ("placement_steps", tv(&v.placement_steps)),
                 ("edges", tv(&v.edges)),
                 ("wires", tv(&v.wires)),
+                ("roles", tv(&v.roles)),
             ],
             &v.created_at,
             &v.updated_at,

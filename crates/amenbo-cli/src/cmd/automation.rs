@@ -26,7 +26,8 @@ use amenbo_core::model::{
 use amenbo_core::model::AttachmentTarget;
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::model::AutomationPictureOwner;
-use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewScript, NewStep};
+use amenbo_core::model::AutomationRole;
+use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{ForRoom, HandedAtLaunch, HandedFile, Launcher};
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
@@ -120,6 +121,11 @@ impl Draft {
     fn of_placement(store: &Store, id: i64) -> Option<Draft> {
         let p = read::automation_placement(store.read_model().conn(), id).ok().flatten()?;
         Some(Draft::Automation(p.automation_id))
+    }
+
+    fn of_role(store: &Store, id: i64) -> Option<Draft> {
+        let r = read::automation_role(store.read_model().conn(), id).ok().flatten()?;
+        Some(Draft::Automation(r.automation_id))
     }
 
     fn of_step(store: &Store, id: i64) -> Option<Draft> {
@@ -862,6 +868,50 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
             }
         }
+        AutomationCmd::RoleAdd { automation, name, icon, entry, agent, model } => {
+            let new = NewRole { name, icon, entry_placement_id: entry, agent, model };
+            let r = store.automation_role_add(automation, new).map_err(CliError::from)?;
+            let line = format!("✓ Defined role {} in automation {automation} ({})", r.name, r.id);
+            write_draft(flags, "automation.role-add", "automation_role", serde_json::to_value(&r).unwrap(), None, line, Some(Draft::Automation(r.automation_id)));
+        }
+        AutomationCmd::RoleList { automation } => {
+            let view = store.automation_detail(automation).map_err(CliError::from)?.ok_or_else(|| {
+                CliError::from(amenbo_core::Error::not_found(format!("automation '{automation}' not found")))
+            })?;
+            if flags.json {
+                print_json(&json!({
+                    "count": view.roles.len(),
+                    "automation_id": automation,
+                    "roles": serde_json::to_value(&view.roles).unwrap(),
+                }));
+            } else {
+                human(flags, format!("{} role(s) — automation {automation}", view.roles.len()));
+                for role in &view.roles {
+                    human(flags, format!("  {}", one_role(role)));
+                }
+            }
+        }
+        AutomationCmd::RoleUpdate { id, name, icon, clear_icon, entry, clear_entry, agent, clear_agent, model, clear_model } => {
+            // clap holds each value and its `--clear-…` apart, so at most one of the two is there.
+            let change = RoleChange {
+                name,
+                icon: if clear_icon { Some(None) } else { icon.map(Some) },
+                entry_placement_id: if clear_entry { Some(None) } else { entry.map(Some) },
+                agent: if clear_agent { Some(None) } else { agent.map(Some) },
+                model: if clear_model { Some(None) } else { model.map(Some) },
+            };
+            let r = store.automation_role_update(id, change).map_err(CliError::from)?;
+            let line = format!("✓ Updated role: {} ({})", r.name, r.id);
+            write_draft(flags, "automation.role-update", "automation_role", serde_json::to_value(&r).unwrap(), None, line, Some(Draft::Automation(r.automation_id)));
+        }
+        AutomationCmd::RoleRm { id } => {
+            if !confirm(flags, "take role out")? {
+                return Ok(0);
+            }
+            let draft = Draft::of_role(store, id);
+            store.automation_role_delete(id).map_err(CliError::from)?;
+            write_draft(flags, "automation.role-rm", "automation_role", json!({ "id": id, "deleted": true }), None, format!("✓ Took role out: {id}"), draft);
+        }
         AutomationCmd::CfgRm { id } => {
             if !confirm(flags, "delete setting")? {
                 return Ok(0);
@@ -1399,9 +1449,31 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
         human(flags, line);
     }
     write_body(flags, "notes", &a.notes);
+    for role in &view.roles {
+        human(flags, format!("role {}", one_role(role)));
+    }
     for placement in &view.placements {
         render_placement(flags, view, placement);
     }
+}
+
+/// One role on one line: its id and name, its icon, where its round starts, and the agent and model its
+/// steps fall back to.
+fn one_role(role: &AutomationRole) -> String {
+    let mut line = format!("{}  {}", role.id, role.name);
+    if let Some(icon) = &role.icon {
+        line.push_str(&format!("  icon {icon}"));
+    }
+    match role.entry_placement_id {
+        Some(placement) => line.push_str(&format!("  starts at placement {placement}")),
+        None => line.push_str("  starts nowhere"),
+    }
+    match (&role.agent, &role.model) {
+        (Some(agent), Some(model)) => line.push_str(&format!("  agent {agent} ({model})")),
+        (Some(agent), None) => line.push_str(&format!("  agent {agent}")),
+        (None, _) => line.push_str("  no agent"),
+    }
+    line
 }
 
 /// One placement: which action stands there, what it takes, what it is set to, and what happens after

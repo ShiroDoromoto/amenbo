@@ -1932,6 +1932,41 @@ pub struct AutomationPlacementStep {
     pub updated_at: Timestamp,
 }
 
+/// **One role defined in an automation** — a name and an icon a person knows it by, the way it works,
+/// and the agent and model its steps fall back to.
+///
+/// It is not the task's assignee, which says whether a person or an AI is to do the task: a role is one
+/// of the parts an automation is split into, and the two are kept apart.
+///
+/// **The way it works is where its round starts** (`entry_placement_id`), a placement of the same
+/// automation. `None` while it is still being built, as the automation's own entry is.
+///
+/// **`agent` and `model` are defaults, nothing more** (`AMB-D-960`). The choice made for a step where its
+/// action is placed ([`AutomationPlacementStep`]) stays where it is; which of the two is asked first is
+/// not decided here. `model` is named only beside an agent, and `None` leaves the agent's own default.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationRole {
+    pub id: i64,
+    pub automation_id: i64,
+    pub name: String,
+    /// The icon it is drawn with, by the name the GUI knows it under, or `None` for none chosen.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// The placement its round starts at, or `None`.
+    #[serde(default)]
+    pub entry_placement_id: Option<i64>,
+    /// The agent its steps fall back to, or `None` for none.
+    #[serde(default)]
+    pub agent: Option<String>,
+    /// The model beside `agent`, or `None` for the agent's own default.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// The order the roles are defined in.
+    pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// **A setting, declared by an action and answered where it is placed.** The action's row is the
 /// declaration alone, so its `value` is `None`; each placement of that action carries a row of its own
 /// under the same `name`, and that is where the answer written while building sits.
@@ -2084,7 +2119,7 @@ pub struct AutomationActionVersion {
 /// **One saved version of an automation** — its picture at the moment it was saved, copied whole and
 /// never rewritten. A run records which one it was copied from ([`AutomationRunDef::automation_version`]).
 ///
-/// The five JSON fields are the rows as they stood, each its own record under its own id, for the reason
+/// The six JSON fields are the rows as they stood, each its own record under its own id, for the reason
 /// [`AutomationActionVersion`]'s are (`AMB-D-961`).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationVersion {
@@ -2106,6 +2141,10 @@ pub struct AutomationVersion {
     pub edges: String,
     /// The wires drawn on the automation — JSON, [`AutomationWire`]s.
     pub wires: String,
+    /// The roles defined in the automation — JSON, [`AutomationRole`]s. A version saved before roles
+    /// existed holds `[]`.
+    #[serde(default)]
+    pub roles: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

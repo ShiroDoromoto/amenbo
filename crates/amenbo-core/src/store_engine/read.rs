@@ -7077,6 +7077,33 @@ pub fn automation_placements_of(
     )
 }
 
+/// The `automation_role` record with this id.
+pub fn automation_role(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRole>> {
+    super::hydrate::row_by_id(conn, "automation_role", id, super::hydrate::automation_role_row)
+}
+
+/// The roles defined in one automation, in the order they are defined in.
+pub fn automation_roles_of(conn: &Connection, automation_id: i64) -> Result<Vec<crate::model::AutomationRole>> {
+    const R: col::automation_role::Cols = col::automation_role::ALL;
+    automation_rows(
+        conn,
+        R.table,
+        &Pred::eq(R.automation_id, automation_id),
+        &[Sort::by(R.order_key), Sort::by(R.id)],
+        super::hydrate::automation_role_row,
+    )
+}
+
+/// Live role siblings within one automation.
+pub fn automation_role_siblings(
+    conn: &Connection,
+    automation_id: i64,
+    exclude: Option<i64>,
+) -> Result<Vec<(i64, String)>> {
+    const R: col::automation_role::Cols = col::automation_role::ALL;
+    order_siblings(conn, R.id, R.order_key, Some(Pred::eq(R.automation_id, automation_id)), exclude)
+}
+
 /// Every wire feeding one box's input — usually one, and more than one where the same input is fed
 /// from two ways out that cannot both be taken.
 pub fn automation_wires_to_port(

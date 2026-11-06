@@ -1259,7 +1259,45 @@ pub const STEPS: &[Step] = &[
         // what it was taken with. Off is what every action meant before v100.
         apply: Apply::Custom(copy_the_action_into_a_run),
     },
+    Step {
+        to: 102,
+        name: "add automation_role, the roles defined in an automation, and automation_version.roles, the roles a saved version holds",
+        // **Seeded with nothing.** No automation is given a role it did not have: an old definition is
+        // not turned into roles. A version already saved holds none, `[]`.
+        apply: Apply::Custom(give_the_automations_roles),
+    },
 ];
+
+/// v102: `automation_role` and `automation_version.roles`.
+///
+/// **The table is laid down here in frozen text** as well as by genesis, for the reason v53's are, and
+/// **the column is appended only where it is missing**, v68's guard and for v53's reason. Every version
+/// already saved is given `[]`, the empty list its rows are read as.
+fn give_the_automations_roles(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    tx.execute_batch(AUTOMATION_ROLE_TABLE)?;
+    if !column_names(tx, "automation_version")?.iter().any(|c| c == "roles") {
+        tx.execute_batch("ALTER TABLE automation_version ADD COLUMN roles TEXT NOT NULL DEFAULT '';")?;
+    }
+    tx.execute_batch("UPDATE automation_version SET roles = '[]' WHERE roles = '';")?;
+    Ok(())
+}
+
+/// The table v102 lays down — frozen text, like every step's.
+const AUTOMATION_ROLE_TABLE: &str = r"
+CREATE TABLE IF NOT EXISTS automation_role (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    name TEXT NOT NULL DEFAULT '',
+    icon TEXT,
+    entry_placement_id BIGINT REFERENCES automation_placement(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    agent TEXT,
+    model TEXT,
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+";
 
 /// v101: `automation_run_def.action_id` and `automation_run_def.one_at_a_time`, copied from the
 /// placement's action at launch.
@@ -10920,6 +10958,42 @@ mod tests {
             .unwrap();
         let refused = engine.conn().execute("UPDATE automation_run_def SET one_at_a_time = 2", []);
         assert!(refused.is_err(), "only 0 and 1");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v102: a version saved before the step holds no role, and an automation can be given one.
+    #[test]
+    fn a_version_saved_before_v102_holds_no_role() {
+        let dir = scratch("automation-role");
+        let engine = store_at(&dir, 101);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_version (automation_id, version, placements, cfgs, placement_steps, edges, wires)
+                 VALUES (1, 1, '[]', '[]', '[]', '[]', '[]');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let roles: String = engine
+            .conn()
+            .query_row("SELECT roles FROM automation_version WHERE automation_id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(roles, "[]");
+        let made: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_role", [], |r| r.get(0)).unwrap();
+        assert_eq!(made, 0, "no automation is given a role it did not have");
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO automation_role (automation_id, name, agent) VALUES (1, 'さくら', 'claude')",
+                [],
+            )
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

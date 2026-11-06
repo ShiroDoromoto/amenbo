@@ -2292,6 +2292,68 @@ pub enum AutomationCmd {
         #[arg(long)]
         clear: bool,
     },
+    /// Define a role in an automation — a name and an icon, the way it works (the placement its round
+    /// starts at), and the agent and model its steps fall back to. Not the task's assignee
+    RoleAdd {
+        /// automation id
+        automation: i64,
+        /// what the role is called
+        #[arg(long)]
+        name: String,
+        /// the icon it is drawn with, by its name
+        #[arg(long)]
+        icon: Option<String>,
+        /// the placement its round starts at — one of the same automation's
+        #[arg(long, value_name = "PLACEMENT")]
+        entry: Option<i64>,
+        /// the agent its steps fall back to (e.g. claude-code)
+        #[arg(long)]
+        agent: Option<String>,
+        /// the model beside the agent; left out, the agent's own default stands
+        #[arg(long, requires = "agent")]
+        model: Option<String>,
+    },
+    /// The roles defined in one automation, in the order they are defined in
+    RoleList {
+        /// automation id
+        automation: i64,
+    },
+    /// Change a role (only the given fields change)
+    RoleUpdate {
+        /// role id
+        id: i64,
+        #[arg(long)]
+        name: Option<String>,
+        /// the icon it is drawn with, by its name
+        #[arg(long, conflicts_with = "clear_icon")]
+        icon: Option<String>,
+        /// draw it with no icon chosen
+        #[arg(long)]
+        clear_icon: bool,
+        /// the placement its round starts at — one of the same automation's
+        #[arg(long, value_name = "PLACEMENT", conflicts_with = "clear_entry")]
+        entry: Option<i64>,
+        /// leave it with no placement to start at
+        #[arg(long)]
+        clear_entry: bool,
+        /// the agent its steps fall back to
+        #[arg(long, conflicts_with = "clear_agent")]
+        agent: Option<String>,
+        /// leave it with no agent, and so no model
+        #[arg(long)]
+        clear_agent: bool,
+        /// the model beside the agent
+        #[arg(long, conflicts_with_all = ["clear_model", "clear_agent"])]
+        model: Option<String>,
+        /// leave the agent's own default model
+        #[arg(long)]
+        clear_model: bool,
+    },
+    /// Take a role out of its automation — confirms unless -y
+    RoleRm {
+        /// role id
+        id: i64,
+    },
     /// Delete a setting — confirms unless -y
     CfgRm {
         /// setting id

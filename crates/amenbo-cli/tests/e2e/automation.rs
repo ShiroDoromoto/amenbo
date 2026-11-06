@@ -1489,6 +1489,45 @@ fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
     assert_eq!(code, 2, "an agent or --clear has to be said: {err}");
 }
 
+/// **A role is defined in an automation by the ids the other commands hand back**: its round starts at
+/// a placement, its agent and model are defaults, `role-list` and `show` read it back, and it goes into
+/// the draft and out again.
+#[test]
+fn a_role_is_defined_listed_changed_and_taken_out() {
+    let cli = Cli::new();
+    let (_, a, _, placement) = an_automation(&cli);
+
+    let added = cli.json(&[
+        "automation", "role-add", &a, "--name", "レビュー", "--icon", "eye", "--entry", &placement,
+        "--agent", "codex", "--model", "gpt-5", "--json",
+    ]);
+    let role = id_of(&added, "automation_role");
+    assert_eq!(added["automation_role"]["entry_placement_id"].to_string(), placement);
+    assert_eq!(added["draft"]["kind"].as_str(), Some("automation"), "it goes into the draft: {added}");
+
+    let listed = cli.json(&["automation", "role-list", &a, "--json"]);
+    assert_eq!(listed["count"].as_u64(), Some(1), "{listed}");
+    assert_eq!(listed["roles"][0]["agent"].as_str(), Some("codex"));
+    let (shown, code) = cli.run(&["automation", "show", &a]);
+    assert_eq!(code, 0, "{shown}");
+    assert!(
+        shown.contains(&format!("role {role}  レビュー  icon eye  starts at placement {placement}  agent codex (gpt-5)")),
+        "{shown}"
+    );
+
+    let changed = cli.json(&["automation", "role-update", &role, "--clear-agent", "--clear-entry", "--json"]);
+    assert!(changed["automation_role"]["agent"].is_null() && changed["automation_role"]["model"].is_null(), "{changed}");
+    assert!(changed["automation_role"]["entry_placement_id"].is_null(), "{changed}");
+    let (err, code) = cli.run_err(&["automation", "role-update", &role, "--model", "opus", "--json"]);
+    assert_ne!(code, 0, "a model is named beside an agent: {err}");
+    let (err, code) = cli.run_err(&["automation", "role-add", &a, "--name", "x", "--model", "opus", "--json"]);
+    assert_eq!(code, 2, "clap asks for the agent beside the model: {err}");
+
+    cli.json(&["automation", "role-rm", &role, "--yes", "--json"]);
+    let listed = cli.json(&["automation", "role-list", &a, "--json"]);
+    assert_eq!(listed["count"].as_u64(), Some(0), "{listed}");
+}
+
 /// A script step runs its own program (`AMB-D-1016`), so `show` names the program and its arguments
 /// where an agent's step names the agent — never the agent chosen by default where it was placed.
 #[test]

@@ -25,9 +25,9 @@ use crate::model::{
     Automation, AutomationAction, AutomationCfg, AutomationCfgOwner, AutomationEdge, AutomationExit,
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPort,
-    AutomationPortDirection, AutomationPortOwner, AutomationStep, AutomationWire,
+    AutomationPortDirection, AutomationPortOwner, AutomationRole, AutomationStep, AutomationWire,
 };
-use crate::ops::automation::ActionDef;
+use crate::ops::automation::{saved_roles, ActionDef};
 use crate::store_engine::read;
 use crate::time::Timestamp;
 use crate::{Error, Result};
@@ -100,6 +100,8 @@ pub struct AutomationView {
     pub placements: Vec<PlacementView>,
     pub edges: Vec<AutomationEdge>,
     pub wires: Vec<AutomationWire>,
+    /// The roles defined in the automation, in the order they are defined in.
+    pub roles: Vec<AutomationRole>,
 }
 
 /// **One placement**, with the action standing on it read in and the declarations it runs under
@@ -371,6 +373,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
     }
     let edges = read::automation_edges_of(conn, AutomationPictureOwner::Automation, id)?;
     let wires = read::automation_wires_of(conn, AutomationPictureOwner::Automation, id)?;
+    let roles = read::automation_roles_of(conn, id)?;
     let saved = saved_version(conn, id)?;
     let unsaved = super::automation::unsaved(conn, id)?;
     Ok(Some(AutomationView {
@@ -381,6 +384,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
         placements,
         edges,
         wires,
+        roles,
     }))
 }
 
@@ -427,6 +431,7 @@ pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>
         placements,
         edges: rows(&version.edges)?,
         wires: rows(&version.wires)?,
+        roles: rows(saved_roles(&version))?,
     }))
 }
 

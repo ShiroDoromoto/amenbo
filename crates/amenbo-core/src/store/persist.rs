@@ -1637,6 +1637,48 @@ impl Store {
         })
     }
 
+    /// Define a role in an automation (one operation = one transaction) —
+    /// [`crate::ops::automation::role_add`].
+    pub fn automation_role_add(
+        &mut self,
+        automation_id: i64,
+        new: crate::ops::automation::NewRole,
+    ) -> Result<crate::model::AutomationRole> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)], |tx| {
+            crate::ops::automation::role_add(tx, automation_id, new)
+        })
+    }
+
+    /// Change a role's name, icon, way of working or default agent and model (one operation = one
+    /// transaction) — [`crate::ops::automation::role_update`].
+    pub fn automation_role_update(
+        &mut self,
+        id: i64,
+        change: crate::ops::automation::RoleChange,
+    ) -> Result<crate::model::AutomationRole> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Role, id)], |tx| {
+            crate::ops::automation::role_update(tx, id, change)
+        })
+    }
+
+    /// Reorder a role among its automation's roles (one operation = one transaction).
+    pub fn automation_role_move(
+        &mut self,
+        id: i64,
+        pos: crate::ops::Position,
+    ) -> Result<crate::model::AutomationRole> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Role, id)], |tx| {
+            crate::ops::automation::role_move(tx, id, pos)
+        })
+    }
+
+    /// Take a role out of its automation (one operation = one transaction).
+    pub fn automation_role_delete(&mut self, id: i64) -> Result<()> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Role, id)], |tx| {
+            crate::ops::automation::role_delete(tx, id)
+        })
+    }
+
     /// Delete an automation and everything built into it (one operation = one transaction). The
     /// subtree rides one transaction: apply it half-way and a step's ways out outlive the step.
     pub fn automation_delete(&mut self, id: i64) -> Result<()> {

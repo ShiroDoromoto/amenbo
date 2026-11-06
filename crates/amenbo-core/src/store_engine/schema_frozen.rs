@@ -133,7 +133,8 @@
 //! | v105 | `a83344da4` | |
 //! | v106 | `aa07bea97` | |
 //! | v107 | `c6f8e260f` | |
-//! | v108 | this commit | held equal to the live registry by the test below |
+//! | v108 | `41a2d9c1f` | |
+//! | v109 | this commit | held equal to the live registry by the test below |
 //!
 //! [`super::migrate::BASELINE_VERSION`] itself is **not** here: this repository's history begins with the
 //! chain already at [`OLDEST_FROZEN_VERSION`], so no build in it ever emitted a v2 store and there is no
@@ -263,6 +264,7 @@ pub fn frozen(version: i64) -> Option<&'static str> {
         106 => include_str!("schema_frozen/v106.sql"),
         107 => include_str!("schema_frozen/v107.sql"),
         108 => include_str!("schema_frozen/v108.sql"),
+        109 => include_str!("schema_frozen/v109.sql"),
         _ => return None,
     })
 }

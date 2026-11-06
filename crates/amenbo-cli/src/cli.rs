@@ -1901,19 +1901,28 @@ pub enum AutomationCmd {
         #[arg(long, conflicts_with = "failures_to")]
         no_failures_to: bool,
     },
-    /// Give an automation a trigger: every so many minutes, or whenever none of its runs is under way,
-    /// it files a task and starts a run of the automation on it, with nobody pressing start (the entry
-    /// has to be make_task) — or take it away with --off. Only the app runs triggers
+    /// Give an automation a trigger: every so many minutes, whenever none of its runs is under way, or
+    /// whenever few enough tasks match a filter, it files a task and starts a run of the automation on
+    /// it, with nobody pressing start (the entry has to be make_task) — or take it away with --off. Only
+    /// the app runs triggers
     Trigger {
         /// automation id
         id: i64,
         /// file a task every this many minutes, counted from now and then from each task filed
-        #[arg(long, value_name = "MINUTES", required_unless_present_any = ["off", "when_idle"], conflicts_with = "when_idle", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
+        #[arg(long, value_name = "MINUTES", required_unless_present_any = ["off", "when_idle", "if_tasks"], conflicts_with = "when_idle", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
         every: Option<u32>,
         /// file a task whenever none of the automation's runs is running or paused, a minute after it
         /// last filed one at the soonest
         #[arg(long)]
         when_idle: bool,
+        /// file a task only while fewer than --fewer-than tasks of the automation's project match this
+        /// filter (what `task list --filter` takes; no `project:`). On its own, with no --every or
+        /// --when-idle, it files one whenever that holds, a minute after it last filed one at the soonest
+        #[arg(long, value_name = "FILTER", requires = "fewer_than")]
+        if_tasks: Option<String>,
+        /// how few tasks matching --if-tasks let it file one (1 or more)
+        #[arg(long, value_name = "N", requires = "if_tasks", value_parser = clap::value_parser!(u32).range(1..))]
+        fewer_than: Option<u32>,
         /// the title of the task it files
         #[arg(long, required_unless_present = "off")]
         title: Option<String>,
@@ -1921,7 +1930,7 @@ pub enum AutomationCmd {
         #[arg(long)]
         notes: Option<String>,
         /// take the trigger away
-        #[arg(long, conflicts_with_all = ["every", "when_idle", "title", "notes"])]
+        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "title", "notes"])]
         off: bool,
     },
     /// Delete an automation with every placement, edge and wire built onto it — confirms unless -y.

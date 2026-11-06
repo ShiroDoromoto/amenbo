@@ -243,26 +243,26 @@ fn this_devices_own_tables_move_nobodys_version() {
 fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in() {
     use amenbo_core::model::AutomationPictureOwner;
     use amenbo_core::ops::automation::{EdgeTarget, NewAutomation};
-    use amenbo_core::ops::automation_builtin_take::{TAKEN, WAIT, WHEN_NONE};
-    use amenbo_core::ops::automation_run::Launcher;
+    use amenbo_core::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use amenbo_core::ops::automation_run::{Launcher, Started};
 
     let mut store = temp_store();
     let mine = store.project_add(new_project("走らせる側")).unwrap().id;
     let other = store.project_add(new_project("隣")).unwrap().id;
     let _ = filed(&mut store, new_task("隣の1件", other));
 
-    // The smallest automation that launches and stays running: the built-in that takes a task, set to
-    // wait for one (`AMB-D-969`), the built-in that closes it, and the end of the run. The first thing
-    // placed is the entry (`AMB-D-977`), and a run does not end with the task it took still open
-    // (`AMB-D-967`).
+    // The smallest automation that launches and stays running until its entry is opened, which nothing
+    // here does: the built-in that takes a task, the built-in that closes it, and the end of the run.
+    // The first thing placed is the entry (`AMB-D-977`), and a run does not end with the task it took
+    // still open (`AMB-D-967`).
     let automation = store
         .automation_add(mine, NewAutomation { name: "1件やりきる".into(), failures_to: Some(amenbo_core::model::FailuresTo::Human), ..Default::default() })
         .unwrap();
     let take = store.automation_builtin_place(automation.id, "take_task", None).unwrap();
-    store.automation_cfg_set(take.id, WHEN_NONE, Some(&format!("\"{WAIT}\""))).unwrap();
     let on = AutomationPictureOwner::Automation;
     let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
     store.automation_edge_add(on, take.id, Some(TAKEN), EdgeTarget::Go(close.id), None).unwrap();
+    store.automation_edge_add(on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).unwrap();
     store.automation_edge_add(on, close.id, None, EdgeTarget::Done, None).unwrap();
 
     let startable = ["claude".to_string()];
@@ -274,7 +274,9 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
         workspace_open: None,
         by: Some(ActorKind::Ai),
     };
-    let run = store.automation_launch(automation.id, &by, &Default::default()).unwrap();
+    let Started::Run(run) = store.automation_launch(automation.id, &by, &Default::default()).unwrap() else {
+        panic!("an entry that does not wait makes a run");
+    };
 
     let mine_before = version_of(&store, mine);
     let other_before = version_of(&store, other);

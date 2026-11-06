@@ -1283,6 +1283,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         failures_to: new.failures_to,
         export_only: false,
         trigger: None,
+        waits_for_task_since: None,
         order_key,
         created_at: now,
         updated_at: now,

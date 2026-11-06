@@ -1601,7 +1601,7 @@ pub fn automation_launch(
         workspace_open: Some(workspace_open),
         by: Some(ActorKind::Human),
     };
-    let run = with_store_mut(|store| {
+    let started = with_store_mut(|store| {
         let mut handed = automation_run::HandedAtLaunch {
             title,
             notes,
@@ -1614,7 +1614,12 @@ pub fn automation_launch(
         Ok(store.automation_launch(id, &by, &handed)?)
     })?;
     crate::automation_watch::wake();
-    Ok(AutomationRunStartedDto { run: run.id })
+    Ok(AutomationRunStartedDto {
+        run: match started {
+            automation_run::Started::Run(run) => Some(run.id),
+            automation_run::Started::Waits(_) => None,
+        },
+    })
 }
 
 /// **Walk this automation through as a test run** — the build screen's "test run"
@@ -2179,16 +2184,16 @@ fn open_one(
     // for as long as it takes — a worktree cut from a fetch is not instant (`AMB-D-964`). Carried out,
     // it is told again below, in the same place.
     //
-    // **Not while it waits** (`AMB-D-969`): the watch opens a waiting built-in on every look, and the
-    // pane already stands on the card that says it is waiting.
+    // **Not where it would wait for a task** (`AMB-D-969`): nothing is carried out — the run ends there
+    // and its automation waits instead.
     //
     // **Nor while it waits for room** in an action that takes one run at a time: nothing is carried
     // out until the action is free, and the watch opens it again on every look.
     let mut about_to = read::automation_run_def(store.read_model().conn(), def_id)?
-        .filter(|def| def.builtin.is_some())
-        .filter(|_| standing_wait(app, run_id).is_none());
+        .filter(|def| def.builtin.is_some());
     if about_to.is_some()
-        && amenbo_core::ops::automation_run::waits_for_room(store.read_model().conn(), run_id)?.is_some()
+        && (amenbo_core::ops::automation_run::is_waiting(store.read_model().conn(), run_id)?
+            || amenbo_core::ops::automation_run::waits_for_room(store.read_model().conn(), run_id)?.is_some())
     {
         about_to = None;
     }
@@ -2265,27 +2270,15 @@ fn open_one(
             log::warn!("run {run_id} went for its next task with the last one still in progress");
             (run.project_id, None, None, Vec::new())
         }
-        // A built-in set to wait found nothing to act on, and nothing was written (`AMB-D-969`). The
-        // pane stands on the card that says it is waiting — told once, since the watch opens it again
-        // on every look. A pause asked for while it waited took hold here instead, and the paused
-        // run has no pane to stand on until it is picked up again.
-        Opened::Waiting { run } => {
-            use amenbo_core::model::AutomationRunStatus::Running;
-            match (run.status, standing_wait(app, run_id)) {
-                (Running, Some(told)) => return Ok(told),
-                (Running, None) => {
-                    let def = read::automation_run_def(store.read_model().conn(), def_id)?.ok_or_else(|| {
-                        CmdError::from(amenbo_core::error::Error::not_found(format!(
-                            "step '{def_id}' of run '{run_id}' not found"
-                        )))
-                    })?;
-                    let (project, mut builtin) = builtin_about_to(store, run_id, &def)?;
-                    builtin.waiting = true;
-                    builtin.looks_for = amenbo_core::ops::automation_builtin::looks_for(&def)?;
-                    (project, None, Some(builtin), Vec::new())
-                }
-                _ => (run.project_id, None, None, Vec::new()),
-            }
+        // The run was paused before this step, which was not opened: before its next task
+        // (`AMB-D-1009`), or where a pause asked for met a built-in that would wait. The paused run has
+        // no pane to stand on until it is picked up again.
+        Opened::Waiting { run } => (run.project_id, None, None, Vec::new()),
+        // A built-in set to wait found nothing to act on (`AMB-D-969`): the run ended there with
+        // nothing written, and its automation waits for a task in its place. Its pane is taken down.
+        Opened::LeftToWait { run } => {
+            log::info!("run {run_id} found no task to take, and its automation waits for one");
+            (run.project_id, None, None, Vec::new())
         }
         // The action this step goes into takes one run at a time, and another run is in it or came to
         // it first. Nothing was written and nothing moved, so the pane is left as it stands and the
@@ -2340,12 +2333,7 @@ fn open_one(
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
     // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,
     // where it costs nothing: that loop is about to come round anyway.
-    //
-    // **Except where nothing moved**: a built-in that is waiting is opened again on every look, and
-    // waking the watch from there would have it look again at once, round and round without a pause.
-    if !matches!(builtin, Some(AutomationBuiltinRunDto { waiting: true, .. })) {
-        crate::automation_watch::wake();
-    }
+    crate::automation_watch::wake();
     let dto = AutomationStepOpenDto { run: run_id, project, step, builtin, session, missing };
     tell(app, dto.clone());
     // Waited for only once its card has been told under way, so a program that ends at once is not
@@ -2375,13 +2363,6 @@ fn tell(app: &tauri::AppHandle, dto: AutomationStepOpenDto) {
     }
 }
 
-/// What this run's pane stands on, where that is the card of a built-in that is waiting.
-fn standing_wait(app: &tauri::AppHandle, run_id: i64) -> Option<AutomationStepOpenDto> {
-    let standing = app.state::<StepsStanding>();
-    let standing = standing.0.lock().expect("steps standing lock");
-    standing.get(&run_id).filter(|one| one.builtin.as_ref().is_some_and(|b| b.waiting)).cloned()
-}
-
 /// **Take up what has been saved since a run's copy was taken, before its entry is opened**
 /// (`AMB-D-1015`, [`automation_run::take_up_newer`]) — and answer the step to open now, or `None`
 /// where the newer version did not pass and the run failed.
@@ -2390,8 +2371,8 @@ fn standing_wait(app: &tauri::AppHandle, run_id: i64) -> Option<AutomationStepOp
 /// step on every look, and nearly always nothing has been saved since: the entry and the versions are
 /// read first, and the write is opened only where there is something newer to take up.
 ///
-/// **The card a waiting run stood on is the old entry's**, so it is dropped: opening the new entry
-/// tells its own card, rather than handing back the old one ([`open_one`]). A run that failed is told
+/// **The card the run stood on is dropped**: opening the new entry tells its own card, rather than
+/// handing back the old one ([`open_one`]). A run that failed is told
 /// with nothing to stand on, which takes its pane down.
 pub(crate) fn take_up_newer(
     app: &tauri::AppHandle,

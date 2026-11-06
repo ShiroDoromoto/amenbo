@@ -1014,9 +1014,10 @@ edge?: number, };
  *
  * A run says nothing beyond its id: it starts on the spot, nothing being in line ahead of it
  * (`AMB-D-947`), and the pane arriving is what it looks like — that comes as an event
- * ([`AutomationStepOpenDto`]).
+ * ([`AutomationStepOpenDto`]). No run (`null`) where the entry would have waited for a task with none
+ * to take: the automation waits for one instead, and a run is started once it turns up (`AMB-D-969`).
  */
-export type AutomationRunStartedDto = { run: number, };
+export type AutomationRunStartedDto = { run: number | null, };
 
 /**
  * **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).

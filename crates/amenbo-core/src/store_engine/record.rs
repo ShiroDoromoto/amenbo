@@ -593,6 +593,7 @@ pub fn automation(a: &Automation) -> Record {
                         .unwrap_or(Value::Null),
                 ),
                 ("trigger_next_at", tsov(&a.trigger.as_ref().map(|t| t.next_at))),
+                ("waits_for_task_since", tsov(&a.waits_for_task_since)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,

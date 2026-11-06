@@ -2534,6 +2534,12 @@ pub enum AutomationCmd {
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },
+    /// Stop an automation waiting for a task: the app no longer starts a run of it once a task its
+    /// take_task entry looks for turns up. One that is not waiting is answered as it stands
+    StopWaiting {
+        /// automation id
+        id: i64,
+    },
 
     /// Walk an automation's draft, unsaved changes included, from its entry to its end without running
     /// anything — saving is not needed, unlike `automation start`: the launch check, what

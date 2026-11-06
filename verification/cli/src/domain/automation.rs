@@ -551,7 +551,7 @@ impl Driver<'_> {
                 self.run_json(&["automation", verb, &run.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("{verb}d run {run}")))
             }
-            // One run, asked to pause before its next task. One waiting for a task pauses on the spot.
+            // One run, asked to pause before its next task. One waiting for room before it pauses on the spot.
             "pause-before-next-task" => {
                 let run = self.resolve(with)?;
                 let v = self.run_json(&["automation", "pause", &run.to_string(), "--before-next-task", "--json"])?;

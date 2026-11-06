@@ -24,7 +24,7 @@ use crate::model::{
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
     AutomationRole, AutomationRun, AutomationRunDef,
     AutomationRunStep, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationVersion,
+    AutomationStep, AutomationVersion, TriggerTask, TriggerWhen,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
@@ -563,6 +563,36 @@ pub fn automation(a: &Automation) -> Record {
                 ("failures_to_kind", a.failures_to.map(|f| tv(f.kind_str())).unwrap_or(Value::Null)),
                 ("failures_to_role_id", kv_opt(&a.failures_to.and_then(|f| f.role_id()))),
                 ("export_only", bv(a.export_only)),
+                ("trigger_when_kind", a.trigger.as_ref().map(|t| tv(t.when.kind_str())).unwrap_or(Value::Null)),
+                (
+                    "trigger_every_minutes",
+                    a.trigger
+                        .as_ref()
+                        .map(|t| match t.when {
+                            TriggerWhen::Every { minutes } => iv(minutes.into()),
+                        })
+                        .unwrap_or(Value::Null),
+                ),
+                ("trigger_task_kind", a.trigger.as_ref().map(|t| tv(t.task.kind_str())).unwrap_or(Value::Null)),
+                (
+                    "trigger_task_title",
+                    a.trigger
+                        .as_ref()
+                        .map(|t| match &t.task {
+                            TriggerTask::Fixed { title, .. } => tv(title),
+                        })
+                        .unwrap_or(Value::Null),
+                ),
+                (
+                    "trigger_task_notes",
+                    a.trigger
+                        .as_ref()
+                        .map(|t| match &t.task {
+                            TriggerTask::Fixed { notes, .. } => tv(notes),
+                        })
+                        .unwrap_or(Value::Null),
+                ),
+                ("trigger_next_at", tsov(&a.trigger.as_ref().map(|t| t.next_at))),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,

@@ -1554,6 +1554,82 @@ mod tests {
         });
     }
 
+    /// **A trigger files its task and starts a run on it once it is due** — the title and notes written
+    /// on it, filed by the entry as a person's would be. Before it is due, and while the automation
+    /// already has its most runs under way, it decides not to, and leaves nothing behind: no run, and
+    /// the time it is next asked where it was.
+    #[test]
+    fn a_trigger_files_its_task_and_starts_a_run_once_due() {
+        use crate::model::{TriggerTask, TriggerWhen};
+        use crate::ops::automation_run::{fire, triggers_due, TriggersDue};
+        use crate::time::Timestamp;
+        with_tx(|tx| {
+            let (automation, make, _) = entry(tx);
+            let every = TriggerWhen::Every { minutes: 60 };
+            let trigger = automation::NewTrigger {
+                when: every,
+                task: TriggerTask::Fixed { title: "受信箱を見る".into(), notes: "what to do".into() },
+            };
+            automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
+            let next_at = |tx: &WriteTx<'_>| {
+                read::automation(tx.conn(), automation.id).expect("read").expect("there").trigger.expect("kept").next_at
+            };
+            let due = next_at(tx);
+            let claude = ["claude".to_string()];
+            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let under_way = |tx: &WriteTx<'_>| read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read");
+
+            let early = Timestamp(due.0 - chrono::Duration::seconds(1));
+            assert_eq!(triggers_due(tx.conn(), early).expect("ask"), TriggersDue { due: vec![], next_at: Some(due) });
+            assert!(fire(tx, automation.id, &by, early).expect("fire").is_none(), "not before it is due");
+            assert!(under_way(tx).is_empty(), "and no run");
+            assert_eq!(next_at(tx), due);
+
+            assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![automation.id]);
+            let run = fire(tx, automation.id, &by, due).expect("fire").expect("a run");
+            assert_eq!(run.started_by_kind, None, "nobody pressed start");
+            let filed = filed_first(tx, &run, &make);
+            assert_eq!(filed.title, "受信箱を見る");
+            assert_eq!(filed.notes, "what to do");
+            let then = every.after(due);
+            assert_eq!(next_at(tx), then, "counted on from when it filed");
+
+            // The run is still under way, and the most is one.
+            assert!(triggers_due(tx.conn(), then).expect("ask").due.is_empty(), "not due while it is full");
+            assert!(fire(tx, automation.id, &by, then).expect("fire").is_none(), "no task with no run to go to");
+            assert_eq!(under_way(tx), vec![run.id]);
+            assert_eq!(next_at(tx), then, "a time it decides no leaves nothing");
+        });
+    }
+
+    /// **A trigger whose run the launch refuses files nothing**: the refusal comes back, and the time it
+    /// is next asked stays where it was.
+    #[test]
+    fn a_trigger_refused_at_launch_files_nothing() {
+        use crate::model::{TriggerTask, TriggerWhen};
+        use crate::ops::automation_run::fire;
+        with_tx(|tx| {
+            let (automation, make, _) = entry(tx);
+            // Left unanswered, it does not take what it files — which the launch check refuses at the entry.
+            automation::cfg_set(tx, make.id, WHAT_THEN, None).expect("leave it unanswered");
+            let trigger = automation::NewTrigger {
+                when: TriggerWhen::Every { minutes: 5 },
+                task: TriggerTask::Fixed { title: "見る".into(), notes: String::new() },
+            };
+            automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
+            let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");
+            let due = before.trigger.as_ref().expect("kept").next_at;
+            let claude = ["claude".to_string()];
+            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+
+            assert!(fire(tx, automation.id, &by, due).is_err(), "the launch check refuses it");
+            let after = read::automation(tx.conn(), automation.id).expect("read").expect("there");
+            assert_eq!(after.trigger, before.trigger, "next_at is where it was");
+            assert_eq!(after.updated_at, before.updated_at);
+            assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty());
+        });
+    }
+
     /// **The files handed over at launch are moved on to the task it files** (`AMB-D-981`) — in the order
     /// they were handed, each still saying who handed it, and none left on the run.
     #[test]

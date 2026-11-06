@@ -1864,6 +1864,11 @@ pub struct Automation {
     /// saved version.
     #[serde(default)]
     pub export_only: bool,
+    /// **What files a task on its own and starts a run of this automation with it**, or `None` for an
+    /// automation only a person starts. Like `archived`, it is the automation's, not part of a saved
+    /// version.
+    #[serde(default)]
+    pub trigger: Option<AutomationTrigger>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -1893,6 +1898,67 @@ impl FailuresTo {
         match self {
             FailuresTo::Human => None,
             FailuresTo::Role { role_id } => Some(*role_id),
+        }
+    }
+}
+
+/// The fewest minutes a trigger may be written to wait between two tasks ([`TriggerWhen::Every`]).
+pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
+
+/// **An automation's trigger** ([`Automation::trigger`]) — what starts a run with nobody pressing
+/// start, in three parts: [`TriggerWhen`] answers whether to file a task now, [`TriggerTask`] writes
+/// what the task says, and the run is the automation's own, started on the task filed. No agent works
+/// on the first two; the third is a run like any other.
+///
+/// A time it answers no leaves nothing behind — no task, no run, no record — so the only thing it
+/// keeps is `next_at`, which moves on only when a task is filed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutomationTrigger {
+    pub when: TriggerWhen,
+    pub task: TriggerTask,
+    /// When it is next asked whether to file a task: set when the trigger is written, and moved on each
+    /// time it files one.
+    pub next_at: Timestamp,
+}
+
+/// **Whether a trigger files a task now** — the first part of [`AutomationTrigger`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TriggerWhen {
+    /// Every `minutes` minutes, counted from when the trigger was written and then from each task it
+    /// filed.
+    Every { minutes: u32 },
+}
+
+impl TriggerWhen {
+    /// The stored spelling of the kind (`automation.trigger_when_kind`).
+    pub fn kind_str(&self) -> &'static str {
+        match self {
+            TriggerWhen::Every { .. } => "every",
+        }
+    }
+
+    /// How long after `from` it is next asked.
+    pub fn after(&self, from: Timestamp) -> Timestamp {
+        match self {
+            TriggerWhen::Every { minutes } => Timestamp(from.0 + chrono::Duration::minutes(i64::from(*minutes))),
+        }
+    }
+}
+
+/// **What the task a trigger files says** — the second part of [`AutomationTrigger`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TriggerTask {
+    /// The same title and notes every time, as written on the trigger.
+    Fixed { title: String, notes: String },
+}
+
+impl TriggerTask {
+    /// The stored spelling of the kind (`automation.trigger_task_kind`).
+    pub fn kind_str(&self) -> &'static str {
+        match self {
+            TriggerTask::Fixed { .. } => "fixed",
         }
     }
 }
@@ -2383,7 +2449,8 @@ pub struct AutomationRun {
     /// Why it failed. Set only while `status` is `Failed`.
     #[serde(default)]
     pub stopped_reason: Option<AutomationStoppedReason>,
-    /// Who pressed launch. `None` for a run whose launcher said nothing about itself.
+    /// Who pressed launch. `None` for a run whose launcher said nothing about itself, and for one an
+    /// automation's trigger started, which nobody pressed ([`AutomationTrigger`]).
     #[serde(default)]
     pub started_by_kind: Option<ActorKind>,
     /// When it began. Set at launch, since a launch starts on the spot (`AMB-D-947`); `None` only on a
@@ -2401,7 +2468,8 @@ pub struct AutomationRun {
     #[serde(default)]
     pub acknowledged_by_kind: Option<ActorKind>,
     /// **What a person handed over to file the task a run starts by filing** — the title, the notes and
-    /// the classification, as JSON ([`crate::ops::automation_run::HandedTask`]). Only a run whose entry is
+    /// the classification, as JSON ([`crate::ops::automation_run::HandedTask`]) — or what an
+    /// automation's trigger wrote for it ([`AutomationTrigger`]). Only a run whose entry is
     /// the built-in that files a task is handed these, and that built-in is what reads them. `None` for
     /// every other run (`AMB-D-970`). The files handed along with them hang off the run
     /// ([`AttachmentTarget::AutomationRun`]) until that built-in moves them on to the task (`AMB-D-981`).

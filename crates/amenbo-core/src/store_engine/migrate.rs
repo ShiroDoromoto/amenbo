@@ -1302,7 +1302,42 @@ pub const STEPS: &[Step] = &[
         // a measurement (`model::MAX_CONCURRENT_RUNS_LIMIT`).
         apply: Apply::Custom(cap_the_runs_side_by_side),
     },
+    Step {
+        to: 107,
+        name: "add the automation.trigger_ columns, what files a task on its own and starts a run with it",
+        // **Unseeded.** No automation had a trigger before, so every one written before this has none,
+        // and is started only by a person, as it always was.
+        apply: Apply::Custom(let_an_automation_carry_a_trigger),
+    },
 ];
+
+/// v107: `automation.trigger_when_kind`, `trigger_every_minutes`, `trigger_task_kind`,
+/// `trigger_task_title`, `trigger_task_notes` and `trigger_next_at` — the trigger of an automation.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Every one is nullable with no
+/// default but NULL, so `ALTER TABLE` adds it as it stands.
+fn let_an_automation_carry_a_trigger(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let cols = column_names(tx, "automation")?;
+    let wanted: [(&str, &str); 6] = [
+        ("trigger_when_kind", "TEXT CHECK(trigger_when_kind IN ('every'))"),
+        ("trigger_every_minutes", "BIGINT"),
+        ("trigger_task_kind", "TEXT CHECK(trigger_task_kind IN ('fixed'))"),
+        ("trigger_task_title", "TEXT"),
+        ("trigger_task_notes", "TEXT"),
+        (
+            "trigger_next_at",
+            "TEXT CHECK(trigger_next_at GLOB \
+             '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')",
+        ),
+    ];
+    for (name, decl) in wanted {
+        if !cols.iter().any(|c| c == name) {
+            tx.execute_batch(&format!("ALTER TABLE automation ADD COLUMN {name} {decl};"))?;
+        }
+    }
+    Ok(())
+}
 
 /// v106: `automation.max_concurrent_runs` becomes `NOT NULL DEFAULT 1`, from 1 up to 4 — `NULL` (no
 /// limit) becomes `1`, and a number past 4 becomes 4.
@@ -11249,6 +11284,50 @@ mod tests {
             assert!(refused.is_err(), "{wrong} is refused");
         }
         engine.conn().execute("UPDATE automation SET max_concurrent_runs = 4 WHERE id = 1", []).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v107: an automation written before the step has no trigger, and the columns admit only the
+    /// kinds declared and an instant.
+    #[test]
+    fn an_automation_written_before_v107_has_no_trigger() {
+        let dir = scratch("automation-trigger");
+        let engine = store_at(&dir, 106);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let (when, next): (Option<String>, Option<String>) = engine
+            .conn()
+            .query_row("SELECT trigger_when_kind, trigger_next_at FROM automation WHERE id = 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!((when, next), (None, None), "no automation had a trigger before");
+        for wrong in [
+            "trigger_when_kind = 'hourly'",
+            "trigger_task_kind = 'file'",
+            "trigger_next_at = 'tomorrow'",
+        ] {
+            let refused = engine.conn().execute(&format!("UPDATE automation SET {wrong} WHERE id = 1"), []);
+            assert!(refused.is_err(), "{wrong} is refused");
+        }
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation SET trigger_when_kind = 'every', trigger_every_minutes = 60, \
+                 trigger_task_kind = 'fixed', trigger_task_title = 'look', trigger_task_notes = '', \
+                 trigger_next_at = '2026-11-07T00:00:00Z' WHERE id = 1",
+                [],
+            )
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

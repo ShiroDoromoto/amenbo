@@ -50,6 +50,7 @@ use crate::model::{
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
     DEFAULT_MAX_CONCURRENT_RUNS, DEFAULT_MAX_TIMES, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, FailuresTo, MAX_CONCURRENT_RUNS_LIMIT, MAX_SCRIPT_TIMEOUT_MINUTES,
+    AutomationTrigger, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -1281,6 +1282,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         max_concurrent_runs: DEFAULT_MAX_CONCURRENT_RUNS,
         failures_to: new.failures_to,
         export_only: false,
+        trigger: None,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1342,6 +1344,63 @@ pub fn update(
         after.failures_to = to;
     }
     after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation(&before), record::automation(&after))?;
+    Ok(after)
+}
+
+/// **What a trigger is written as** ([`trigger_set`]): when it files a task and what the task says.
+/// When it is next asked is not the writer's to say — it is counted from the write.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NewTrigger {
+    pub when: TriggerWhen,
+    pub task: TriggerTask,
+}
+
+/// **Write an automation's trigger** (`Some`), or take it away (`None`) — what files a task on its own
+/// and starts a run of this automation with it ([`AutomationTrigger`]).
+///
+/// The first time it is asked is counted from now, so writing one files nothing on the spot; writing
+/// it again counts afresh. A trigger asks no question of the picture here: a run it starts is checked
+/// at launch as any other is, and one refused there files nothing ([`automation_run::fire`]).
+///
+/// Refused on an automation kept for export only, which is never launched. A task with no title is
+/// refused, as is a wait of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. Taking a trigger away
+/// that is not there writes nothing.
+pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
+    let before = live_automation(tx, id)?;
+    if before.trigger.is_none() && trigger.is_none() {
+        return Ok(before);
+    }
+    if before.export_only && trigger.is_some() {
+        return Err(Error::invalid(format!(
+            "automation '{}' is kept for export only and is never launched, so nothing can start it",
+            before.name
+        )));
+    }
+    let now = Timestamp::now();
+    let mut after = before.clone();
+    after.trigger = match trigger {
+        None => None,
+        Some(NewTrigger { when, task }) => {
+            let TriggerWhen::Every { minutes } = when;
+            if minutes < MIN_TRIGGER_EVERY_MINUTES {
+                return Err(Error::invalid(format!(
+                    "a trigger waits at least {MIN_TRIGGER_EVERY_MINUTES} minute(s) between tasks, not {minutes}"
+                )));
+            }
+            let task = match task {
+                TriggerTask::Fixed { title, notes } => {
+                    let title = title.trim();
+                    if title.is_empty() {
+                        return Err(Error::invalid("the task a trigger files needs a title"));
+                    }
+                    TriggerTask::Fixed { title: title.to_string(), notes }
+                }
+            };
+            Some(AutomationTrigger { when, task, next_at: when.after(now) })
+        }
+    };
+    after.updated_at = now;
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     Ok(after)
 }
@@ -4130,6 +4189,47 @@ mod tests {
             let capped = update(tx, automation.id, None, None, None, Some(MAX_CONCURRENT_RUNS_LIMIT), None)
                 .expect("up to the cap");
             assert_eq!(capped.max_concurrent_runs, MAX_CONCURRENT_RUNS_LIMIT);
+        });
+    }
+
+    /// **A trigger is written, counted from the write, and taken away.** A wait under a minute, a task
+    /// with no title and an automation kept for export only are refused; taking away one that is not
+    /// there writes nothing.
+    #[test]
+    fn a_trigger_is_written_and_taken_away() {
+        let hourly = |title: &str| NewTrigger {
+            when: TriggerWhen::Every { minutes: 60 },
+            task: TriggerTask::Fixed { title: title.into(), notes: "メモ".into() },
+        };
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            assert_eq!(automation.trigger, None, "born with none");
+            let untouched = trigger_set(tx, automation.id, None).expect("nothing to take away");
+            assert_eq!(untouched.updated_at, automation.updated_at, "and nothing is written");
+
+            let before = Timestamp::now();
+            let set = trigger_set(tx, automation.id, Some(hourly("  受信箱を見る "))).expect("write one");
+            let trigger = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(trigger.task, TriggerTask::Fixed { title: "受信箱を見る".into(), notes: "メモ".into() });
+            assert_eq!(trigger.when, TriggerWhen::Every { minutes: 60 });
+            assert!(trigger.next_at > before, "the first is counted from the write, not due at once");
+            assert_eq!(set.trigger.map(|t| t.task), Some(trigger.task.clone()));
+
+            let zero = NewTrigger { when: TriggerWhen::Every { minutes: 0 }, ..hourly("見る") };
+            for wrong in [zero, hourly("   ")] {
+                let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
+                assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
+            }
+            assert_eq!(live_automation(tx, automation.id).expect("read").trigger.map(|t| t.task), Some(trigger.task));
+
+            let off = trigger_set(tx, automation.id, None).expect("take it away");
+            assert_eq!(off.trigger, None);
+            assert_eq!(live_automation(tx, automation.id).expect("read").trigger, None);
+
+            let old = Automation { export_only: true, ..off.clone() };
+            emit_update(tx, record::automation(&off), record::automation(&old)).expect("mark it");
+            let refused = trigger_set(tx, automation.id, Some(hourly("見る")));
+            assert!(matches!(refused, Err(Error::Invalid(_))), "nothing starts one kept for export only");
         });
     }
 

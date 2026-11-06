@@ -1901,6 +1901,25 @@ pub enum AutomationCmd {
         #[arg(long, conflicts_with = "failures_to")]
         no_failures_to: bool,
     },
+    /// Give an automation a trigger: every so many minutes it files a task and starts a run of the
+    /// automation on it, with nobody pressing start (the entry has to be make_task) — or take it away
+    /// with --off. Only the app runs triggers
+    Trigger {
+        /// automation id
+        id: i64,
+        /// file a task every this many minutes, counted from now and then from each task filed
+        #[arg(long, value_name = "MINUTES", required_unless_present = "off", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
+        every: Option<u32>,
+        /// the title of the task it files
+        #[arg(long, required_unless_present = "off")]
+        title: Option<String>,
+        /// that task's notes, in Markdown (`-` reads it from stdin)
+        #[arg(long)]
+        notes: Option<String>,
+        /// take the trigger away
+        #[arg(long, conflicts_with_all = ["every", "title", "notes"])]
+        off: bool,
+    },
     /// Delete an automation with every placement, edge and wire built onto it — confirms unless -y.
     /// One that runs were launched from cannot be deleted: archive it (`update --archived true`)
     Rm {

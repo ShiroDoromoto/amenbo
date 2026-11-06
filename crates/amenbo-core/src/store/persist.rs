@@ -1373,6 +1373,18 @@ impl Store {
         })
     }
 
+    /// Write an automation's trigger, or take it away (one operation = one transaction) —
+    /// [`crate::ops::automation::trigger_set`].
+    pub fn automation_trigger_set(
+        &mut self,
+        id: i64,
+        trigger: Option<crate::ops::automation::NewTrigger>,
+    ) -> Result<crate::model::Automation> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
+            crate::ops::automation::trigger_set(tx, id, trigger)
+        })
+    }
+
     /// Reorder an automation within its project (one operation = one transaction).
     pub fn automation_move(
         &mut self,
@@ -1736,6 +1748,20 @@ impl Store {
                     crate::ops::automation_run::ReadsFrom::Saved,
                 )
             },
+        )
+    }
+
+    /// **Fire an automation's trigger** — file its task and start a run on it, or decide not to (one
+    /// operation = one transaction) — [`crate::ops::automation_run::fire`]. A launch its checks refuse
+    /// takes the whole transaction with it, so nothing of that time is left.
+    pub fn automation_trigger_fire(
+        &mut self,
+        automation_id: i64,
+        by: &crate::ops::automation_run::Launcher<'_>,
+    ) -> Result<Option<crate::model::AutomationRun>> {
+        self.write_one(
+            &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
+            |tx| crate::ops::automation_run::fire(tx, automation_id, by, crate::time::Timestamp::now()),
         )
     }
 

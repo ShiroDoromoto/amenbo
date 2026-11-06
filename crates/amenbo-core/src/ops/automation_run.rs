@@ -523,6 +523,8 @@ pub struct Launcher<'a> {
 /// what its entry does not read is refused rather than left lying on the run where nothing reads it
 /// ([`entry_reads`]).
 ///
+/// A trigger hands its task over the same way, as the title and notes written on it ([`fire`]).
+///
 /// Nothing handed is the default, and a launch that hands nothing starts as it always has.
 #[derive(Clone, Debug, Default)]
 pub struct HandedAtLaunch {
@@ -1559,6 +1561,77 @@ pub fn launch_handing_past_the_limit(
     reads: ReadsFrom,
 ) -> Result<AutomationRun> {
     hand(tx, automation_id, by, handed, reads, false)
+}
+
+/// **What the triggers say on one look** ([`triggers_due`]): the automations whose trigger is due now,
+/// and when the soonest of the rest is.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TriggersDue {
+    /// The automations to [`fire`], oldest first.
+    pub due: Vec<i64>,
+    /// When the next trigger not yet due is, or `None` where there is none — so a look can sleep no
+    /// longer than that.
+    pub next_at: Option<Timestamp>,
+}
+
+/// **Which triggers are due at `now`** — the first part of each, asked of every automation that may be
+/// started by one ([`read::automations_triggered`]). One whose automation already has its most runs
+/// under way is not due: it would decide not to file a task, so a look need not open a write to hear
+/// it say so. It writes nothing: [`fire`] asks all of it again, in the transaction it writes in.
+pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
+    let mut found = TriggersDue::default();
+    for automation in read::automations_triggered(conn)? {
+        let Some(trigger) = automation.trigger else { continue };
+        if trigger.next_at <= now {
+            let under_way = read::automation_run_ids_under_way(conn, automation.id)?;
+            if under_way.len() < automation.max_concurrent_runs as usize {
+                found.due.push(automation.id);
+            }
+        } else if found.next_at.is_none_or(|soonest| trigger.next_at < soonest) {
+            found.next_at = Some(trigger.next_at);
+        }
+    }
+    Ok(found)
+}
+
+/// **Fire an automation's trigger** at `now`: decide whether to file a task, write what it says, and
+/// start a run of the automation on it — `Some(run)` when it did, `None` when it decided not to.
+///
+/// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while the automation already
+///    has its most runs under way (`max_concurrent_runs`): a task filed then would have no run to go to.
+///    An archived automation, one kept for export only and one with no trigger file none either.
+/// 2. **What it says.** The title and notes written on the trigger.
+/// 3. **The run.** A launch like any other ([`launch_handing`]), of the newest saved version, the task
+///    handed to its entry as a person's would be — so it is the entry, the built-in that files a task,
+///    that files it. What `by` says is passed on as it stands.
+///
+/// **A time it decides no leaves nothing**: no task, no run, and `next_at` where it was, so the next
+/// look asks again. A launch refused by its checks is an error, and the transaction it is written in
+/// takes nothing with it either. Only a task filed moves `next_at` on, counted from `now` rather than
+/// from when it was due, so an app that was closed for a day files one task when it comes back rather
+/// than a day's worth.
+pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timestamp) -> Result<Option<AutomationRun>> {
+    let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    let Some(trigger) = before.trigger.clone() else { return Ok(None) };
+    if before.archived || before.export_only || now < trigger.next_at {
+        return Ok(None);
+    }
+    let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
+    if under_way.len() >= before.max_concurrent_runs as usize {
+        return Ok(None);
+    }
+    let handed = match &trigger.task {
+        crate::model::TriggerTask::Fixed { title, notes } => HandedAtLaunch {
+            title: Some(title.clone()),
+            notes: Some(notes.clone()),
+            ..Default::default()
+        },
+    };
+    let run = launch_handing(tx, automation_id, by, &handed, ReadsFrom::Saved)?;
+    let mut after = before.clone();
+    after.trigger = Some(crate::model::AutomationTrigger { next_at: trigger.when.after(now), ..trigger });
+    crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
+    Ok(Some(run))
 }
 
 /// [`launch_handing`], counting the runs under way only where `limited`.

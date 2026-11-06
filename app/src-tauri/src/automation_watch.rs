@@ -1,10 +1,11 @@
 //! **The thread that keeps a run going**: it looks at what is running, and opens whatever step is
 //! waiting to be opened (`AMB-D-945`).
 //!
-//! **A run is the subject, not a reaction.** Somebody presses start, and from there the run carries
-//! itself — the same shape as pressing play. The other road available was to hang the advance off the
-//! store changing, and that one inverts it: the run would become an answer to somebody else's write,
-//! and every entrance into it would carry its own copy of "and then open the next one".
+//! **A run is the subject, not a reaction.** Somebody presses start, or an automation's trigger files a
+//! task and starts one, and from there the run carries itself — the same shape as pressing play. The
+//! other road available was to hang the advance off the store changing, and that one inverts it: the
+//! run would become an answer to somebody else's write, and every entrance into it would carry its own
+//! copy of "and then open the next one".
 //!
 //! **It is not where the truth is.** What a run is doing is in the store, written by the ops that do
 //! it; this thread only asks and opens. It dies with the app, and a run that was under way when that
@@ -14,8 +15,8 @@
 //!
 //! **What one look costs.** One read of the runs that are running, and one read per run of what it is
 //! waiting for — a few more where a step is under way, for whether it is a wait whose time has come
-//! (`AMB-D-983`) and for the task it may have taken. Every run is one somebody pressed start on, so a look is a handful of small reads on
-//! tables with tens of rows in them, through a connection the thread keeps. A run standing before a
+//! (`AMB-D-983`) and for the task it may have taken. A look is a handful of small reads on tables with
+//! tens of rows in them, through a connection the thread keeps. A run standing before a
 //! built-in that waits (`AMB-D-969`) has that step opened when it is looked at, which asks one row of
 //! the tasks — whether there is one to take yet — and writes nothing until there is.
 //!
@@ -26,6 +27,12 @@
 //! machine where every run is waiting pays one read of the running runs per `WHILE_IDLE` and nothing
 //! more. A press inside the app skips the wait ([`wake`]), a waiting run's included; a `start` typed in
 //! a terminal cannot reach this process, so that one waits out the idle sleep.
+//!
+//! **Triggers are asked here too** (`fire_triggers`): each look asks which are due before it looks at
+//! the runs, so a run a trigger started is opened in the same look. A trigger keeps the time it is next
+//! due in the store and nothing runs beside this thread for it (`AMB-D-983`'s shape): a look sleeps no
+//! longer than until the soonest one. The app being closed is what stops them — a terminal starts no
+//! run on its own (`AMB-D-995`).
 
 use std::collections::HashMap;
 use std::sync::{Condvar, Mutex};
@@ -81,10 +88,13 @@ pub fn watch(app: tauri::AppHandle) {
     // The runs waiting for a task, and when each is next looked at. Kept here rather than in the store
     // because it is only a pace: a restart that loses it looks at them once more, which is all.
     let mut resting = HashMap::new();
+    // The automations whose trigger was refused at launch, and when each is asked again. A pace, like
+    // `resting`: a restart that loses it asks them once more, which is all.
+    let mut held = HashMap::new();
     loop {
         // A failure is not fatal and not a reason to stop looking: the store may be mid-swap, or a
         // run may have been deleted between the two reads. The next look is a second away.
-        let pause = match advance(&app, &mut resting) {
+        let pause = match advance(&app, &mut resting, &mut held) {
             Ok(pause) => pause,
             Err(e) => {
                 log::warn!("the automation watch could not look: {e}");
@@ -93,6 +103,7 @@ pub fn watch(app: tauri::AppHandle) {
         };
         if sleep(pause) {
             resting.clear();
+            held.clear();
         }
     }
 }
@@ -151,10 +162,15 @@ fn sleep(how_long: Duration) -> bool {
 ///
 /// A run whose built-in answered that it is waiting for a task goes into `resting` and is skipped
 /// until it is due (`AMB-D-983`). A run that is no longer running leaves it.
+///
+/// The triggers are fired first (`fire_triggers`), and the wait is cut short to when the next one is
+/// due.
 fn advance(
     app: &tauri::AppHandle,
     resting: &mut HashMap<i64, Instant>,
+    held: &mut HashMap<i64, Instant>,
 ) -> Result<Duration, crate::error::CmdError> {
+    let next_trigger = fire_triggers(held)?;
     let running = {
         let store = crate::commands::open_store_read()?;
         amenbo_core::store_engine::read::automation_run_ids_running(store.read_model().conn())?
@@ -227,9 +243,51 @@ fn advance(
     if running.iter().any(|run| !resting.contains_key(run)) {
         return Ok(WHILE_GOING);
     }
-    let first_due = resting.values().min();
+    let first_due = resting.values().chain(held.values()).min().copied().into_iter().chain(next_trigger).min();
     Ok(first_due
         .map_or(WHILE_IDLE, |due| due.saturating_duration_since(Instant::now()).min(WHILE_IDLE)))
+}
+
+/// **Fire every trigger that is due** ([`amenbo_core::ops::automation_run::fire`]), and answer when the
+/// next one not yet due is, if any.
+///
+/// Each is fired in a write of its own, so one refused does not take the others with it. Nobody pressed
+/// anything, so the launch says nothing about who did, cannot see a window, and has asked nobody which
+/// agents this machine can start (`AMB-D-792`): no step is judged on its agent, and the run waits for
+/// its first step to be opened as one started from a terminal does. The models are asked, as a press
+/// in the app asks them.
+///
+/// A trigger whose launch was refused — its automation not saved, its entry not the built-in that files
+/// a task — goes into `held` and is not asked again until `WHILE_WAITING` has passed, rather than every
+/// second with a warning each time. Nothing of that time is left in the store.
+fn fire_triggers(held: &mut HashMap<i64, Instant>) -> Result<Option<Instant>, crate::error::CmdError> {
+    let found = {
+        let store = crate::commands::open_store_read()?;
+        amenbo_core::ops::automation_run::triggers_due(store.read_model().conn(), amenbo_core::time::Timestamp::now())?
+    };
+    held.retain(|automation, due| found.due.contains(automation) && Instant::now() < *due);
+    let due: Vec<i64> = found.due.into_iter().filter(|automation| !held.contains_key(automation)).collect();
+    if !due.is_empty() {
+        let offered = crate::agent_models::offered_here();
+        let by = amenbo_core::ops::automation_run::Launcher {
+            startable: None,
+            models: &offered,
+            workspace_open: None,
+            by: None,
+        };
+        for automation in due {
+            match crate::commands::with_store_mut(|store| Ok(store.automation_trigger_fire(automation, &by)?)) {
+                Ok(Some(run)) => log::info!("the trigger of automation {automation} started run {}", run.id),
+                Ok(None) => {}
+                Err(e) => {
+                    log::warn!("the trigger of automation {automation} could not start a run: {}", e.message_en);
+                    held.insert(automation, Instant::now() + WHILE_WAITING);
+                }
+            }
+        }
+    }
+    let now = amenbo_core::time::Timestamp::now();
+    Ok(found.next_at.map(|at| Instant::now() + (at.0 - now.0).to_std().unwrap_or(Duration::ZERO)))
 }
 
 /// **End the terminal of a run that is over** — completed, failed or canceled — and forget what was

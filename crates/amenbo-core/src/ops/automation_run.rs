@@ -37,6 +37,13 @@
 //! finds no task to take. A round is one stretch of the run ([`crate::model::AutomationRunTask`]), and
 //! a definition saved while one is under way is taken up as the next round starts — never in the middle
 //! of one.
+//!
+//! **Where a round goes after its task is taken is the task's role.** An automation's roles each name
+//! the placement their round starts at, and a launch copies that onto the run ([`AutomationRunDef::roles`]);
+//! the way out that hands on the task taken then goes on to where the task's role starts rather than
+//! along a line ([`by_role`]), and only a task of one of those roles is taken ([`roles_started`]). A task
+//! with no role is not taken at all. An automation with no role naming where its round starts walks its
+//! picture as it is drawn.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -53,7 +60,7 @@ use crate::model::{
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY, ERROR_EXIT,
 };
 use crate::ops::automation::{ActionDef, Picture};
-use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
+use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -204,11 +211,6 @@ pub enum Unmet {
     ///
     /// `step` names the action, or the step inside it, whose way out `exit` is.
     HandsOnTaskTaken { step: String, exit: String, placement: i64 },
-    /// The built-in that splits by an axis, placed while its axis was there, whose axis has been deleted
-    /// since (`AMB-D-987`). A run reaching it would have nothing to split by and halt, so the launch is
-    /// refused here instead. `step` is the action's name, which every split shares, so the placement is
-    /// named in the sentence too.
-    SplitAxisGone { step: String, placement: i64 },
 }
 
 impl Unmet {
@@ -319,12 +321,6 @@ impl Unmet {
                     named(exit)
                 )
             }
-            Unmet::SplitAxisGone { step, placement } => {
-                format!(
-                    "'{step}' on placement {placement} splits by an axis that has been deleted — take the \
-                     placement off and place the split again on an axis that is there"
-                )
-            }
         }
     }
 }
@@ -359,7 +355,6 @@ impl Unmet {
             Unmet::LeavesTaskOpen { to: Some(_), .. } => ErrorCode::NotReadyAutomationTaskLeftOpen,
             Unmet::LeavesTaskOpen { to: None, .. } => ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
             Unmet::HandsOnTaskTaken { .. } => ErrorCode::NotReadyAutomationHandsOnTaskTaken,
-            Unmet::SplitAxisGone { .. } => ErrorCode::NotReadyAutomationSplitAxisGone,
         }
     }
 
@@ -423,7 +418,6 @@ impl Unmet {
                 }
             }
             Unmet::HandsOnTaskTaken { step, exit, .. } => msg.with("step", step).with("exit", exit),
-            Unmet::SplitAxisGone { step, .. } => msg.with("step", step),
         }
     }
 
@@ -449,8 +443,7 @@ impl Unmet {
             | Unmet::ScriptMissing { placement, .. }
             | Unmet::ScriptNotExecutable { placement, .. }
             | Unmet::LeavesTaskOpen { placement, .. }
-            | Unmet::HandsOnTaskTaken { placement, .. }
-            | Unmet::SplitAxisGone { placement, .. } => Some(*placement),
+            | Unmet::HandsOnTaskTaken { placement, .. } => Some(*placement),
         }
     }
 
@@ -478,7 +471,6 @@ impl Unmet {
             | Unmet::CfgValueClosed { builtin, .. }
             | Unmet::FolderUnchosen { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
-            Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
             _ => None,
         }
     }
@@ -680,6 +672,7 @@ fn check_picture(
     let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
     let defs = defs_of(conn, placements)?;
     let live = reachable(entry_id, pic, &by_id, &defs);
+    let routed = !role_entries(pic, &by_id).is_empty();
 
     for placement in placements {
         if let Some(action) = read::automation_action(conn, placement.action_id)?.filter(|a| a.draft) {
@@ -714,6 +707,11 @@ fn check_picture(
             // is already handled. Left alone it halts the run and calls a person, and an edge on it
             // is how somebody says otherwise.
             if exit.name == ERROR_EXIT {
+                continue;
+            }
+            // A way out that hands on the task taken goes where the task's role starts, in an automation
+            // whose roles say where that is (`by_role`) — no line drawn from it is walked.
+            if routed && goes_by_role(def, exit.id) {
                 continue;
             }
             if !decided(pic, placement.id, exit.id, &by_id) {
@@ -792,9 +790,6 @@ fn check_picture(
                     placement: placement.id,
                 });
             }
-        }
-        if crate::ops::automation_builtin_split::lost_its_axis(conn, placement.action_id)? {
-            unmet.push(Unmet::SplitAxisGone { step: name.clone(), placement: placement.id });
         }
         let steps = steps_opened_by(def);
         if builtin.is_none() {
@@ -918,6 +913,7 @@ fn leaves_task_open(
     by_id: &BTreeMap<i64, &AutomationPlacement>,
     defs: &Defs,
 ) -> Result<Vec<Unmet>> {
+    let routed = role_entries(pic, by_id);
     let mut unmet = Vec::new();
     for &start in live {
         let Some(placement) = by_id.get(&start) else { continue };
@@ -927,62 +923,70 @@ fn leaves_task_open(
             if Some(exit.name.as_str()) == never_taken(conn, pic, placement, def)? {
                 continue;
             }
-            if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+            if hands_on_taken(def, exit.id) {
                 lines.push((*placement, exit));
             }
         }
         let mut walked = BTreeSet::new();
         while let Some((from, exit)) = lines.pop() {
-            let Some(edge) = pic.edge_for_exit(from.id, exit.id) else {
-                // Nothing drawn: the error way out halts, and any other is refused as an open way out.
-                continue;
+            // The way out that hands on the task taken goes on to where each role starts (`by_role`);
+            // any other goes where its line is drawn to.
+            let tos: Vec<&AutomationPlacement> = if !routed.is_empty() && goes_by_role(&defs[&from.id], exit.id) {
+                routed.iter().filter_map(|id| by_id.get(id).copied()).collect()
+            } else {
+                let Some(edge) = pic.edge_for_exit(from.id, exit.id) else {
+                    // Nothing drawn: the error way out halts, and any other is refused as an open way out.
+                    continue;
+                };
+                match edge.ends {
+                    AutomationEnds::Halt | AutomationEnds::Exit => continue,
+                    AutomationEnds::Done => {
+                        push_new(
+                            &mut unmet,
+                            vec![Unmet::LeavesTaskOpen {
+                                step: action_name(conn, from.action_id)?,
+                                exit: exit.name.clone(),
+                                to: None,
+                                builtin: action_builtin(conn, from.action_id)?,
+                                to_builtin: None,
+                                placement: from.id,
+                                inside: None,
+                            }],
+                        );
+                        continue;
+                    }
+                    AutomationEnds::Go => match edge.to_id.and_then(|id| by_id.get(&id)) {
+                        Some(to) => vec![*to],
+                        None => continue,
+                    },
+                }
             };
-            let to = match edge.ends {
-                AutomationEnds::Halt | AutomationEnds::Exit => continue,
-                AutomationEnds::Done => {
+            for to in tos {
+                if lets_go_of_the_task(conn, to.action_id)? {
+                    continue;
+                }
+                if takes_a_task(conn, pic, to, &defs[&to.id])? {
                     push_new(
                         &mut unmet,
                         vec![Unmet::LeavesTaskOpen {
                             step: action_name(conn, from.action_id)?,
                             exit: exit.name.clone(),
-                            to: None,
+                            to: Some(action_name(conn, to.action_id)?),
                             builtin: action_builtin(conn, from.action_id)?,
-                            to_builtin: None,
+                            to_builtin: action_builtin(conn, to.action_id)?,
                             placement: from.id,
                             inside: None,
                         }],
                     );
                     continue;
                 }
-                AutomationEnds::Go => match edge.to_id.and_then(|id| by_id.get(&id)) {
-                    Some(to) => *to,
-                    None => continue,
-                },
-            };
-            if lets_go_of_the_task(conn, to.action_id)? {
-                continue;
-            }
-            if takes_a_task(conn, pic, to, &defs[&to.id])? {
-                push_new(
-                    &mut unmet,
-                    vec![Unmet::LeavesTaskOpen {
-                        step: action_name(conn, from.action_id)?,
-                        exit: exit.name.clone(),
-                        to: Some(action_name(conn, to.action_id)?),
-                        builtin: action_builtin(conn, from.action_id)?,
-                        to_builtin: action_builtin(conn, to.action_id)?,
-                        placement: from.id,
-                        inside: None,
-                    }],
-                );
-                continue;
-            }
-            if !walked.insert(to.id) {
-                continue;
-            }
-            push_new(&mut unmet, ends_inside(to, &defs[&to.id]));
-            for exit in defs[&to.id].action_exits() {
-                lines.push((to, exit));
+                if !walked.insert(to.id) {
+                    continue;
+                }
+                push_new(&mut unmet, ends_inside(to, &defs[&to.id]));
+                for exit in defs[&to.id].action_exits() {
+                    lines.push((to, exit));
+                }
             }
         }
     }
@@ -1003,7 +1007,7 @@ fn hands_on_the_task(
     let mut found = Vec::new();
     for (owner, owner_id, name) in owners {
         for exit in def.exits_of(owner, owner_id) {
-            if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+            if hands_on_taken(def, exit.id) {
                 push_new(
                     &mut found,
                     vec![Unmet::HandsOnTaskTaken { step: name.clone(), exit: exit.name, placement: placement.id }],
@@ -1217,7 +1221,8 @@ fn steps_reached(def: &ActionDef, steps: &[AutomationStep], avoiding: Option<i64
 }
 
 /// The placements a run could actually reach, walked from the entry along the edges that go on to
-/// another placement. A placement nothing reaches is not checked: it cannot stop a run, and refusing to
+/// another placement — and, from a way out that hands on the task taken, on to where each role starts
+/// ([`role_entries`]). A placement nothing reaches is not checked: it cannot stop a run, and refusing to
 /// launch over one would make an automation undeletable-in-practice while its author was still drawing
 /// it.
 fn reachable(
@@ -1238,6 +1243,7 @@ fn reachable_without(
     defs: &Defs,
     avoiding: Option<i64>,
 ) -> BTreeSet<i64> {
+    let routed = role_entries(pic, by_id);
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry_id];
     while let Some(id) = todo.pop() {
@@ -1245,12 +1251,44 @@ fn reachable_without(
             continue;
         }
         for exit in defs[&id].action_exits() {
+            if !routed.is_empty() && goes_by_role(&defs[&id], exit.id) {
+                todo.extend(routed.iter().copied());
+                continue;
+            }
             if let Some(next) = pic.edge_for_exit(id, exit.id).and_then(|e| e.to_id) {
                 todo.push(next);
             }
         }
     }
     seen
+}
+
+/// **The placements the automation's roles start their rounds at** (`AutomationRole::entry_placement_id`),
+/// in the order the roles are defined in, each once — the ones on the picture. Empty where it defines no
+/// role, or none of them names where its round starts: such a picture is walked as it is drawn.
+///
+/// Where there are any, **a way out that hands on the task taken goes on to the one its task's role
+/// starts at** ([`by_role`]), so every one of them is where such a way out leads.
+fn role_entries(pic: &Picture, by_id: &BTreeMap<i64, &AutomationPlacement>) -> Vec<i64> {
+    let mut entries = Vec::new();
+    for id in pic.roles().iter().filter_map(|r| r.entry_placement_id) {
+        if by_id.contains_key(&id) && !entries.contains(&id) {
+            entries.push(id);
+        }
+    }
+    entries
+}
+
+/// Whether this way out of a placed action hands on the task a run works — the way out that takes one.
+fn hands_on_taken(def: &ActionDef, exit_id: i64) -> bool {
+    def.outs_of(exit_id).iter().any(|p| p.kind == AutomationPortKind::TaskTake)
+}
+
+/// **Whether this way out goes where the task's role starts** rather than along a line, where the
+/// automation's roles say where that is ([`by_role`]): the way out of the built-in that takes a task
+/// which hands it on. A task the run files itself and takes has no role, so it walks the line drawn.
+fn goes_by_role(def: &ActionDef, exit_id: i64) -> bool {
+    def.steps.iter().any(|s| s.builtin.as_deref() == Some(TAKE_TASK.key)) && hands_on_taken(def, exit_id)
 }
 
 /// **The lines a run could walk back to an entry that reads what was handed over at launch**
@@ -1317,7 +1355,7 @@ fn takes_a_task(
         if Some(exit.name.as_str()) == never {
             continue;
         }
-        if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+        if hands_on_taken(def, exit.id) {
             return Ok(true);
         }
     }
@@ -2202,6 +2240,11 @@ fn snapshot(
             value: c.value,
         })
         .collect();
+    // The roles whose round starts here: those naming this placement, on the copy of its first step.
+    let roles: Vec<i64> = match def.entry_step_id == Some(step.id) {
+        true => pic.roles().iter().filter(|r| r.entry_placement_id == Some(placement.id)).map(|r| r.id).collect(),
+        false => Vec::new(),
+    };
     Ok(Some(AutomationRunDef {
         id: read::next_id(conn, "automation_run_def")?,
         run_id,
@@ -2228,6 +2271,7 @@ fn snapshot(
         ins: serde_json::to_string(&ins).map_err(Error::from)?,
         cfg: serde_json::to_string(&cfg).map_err(Error::from)?,
         entry,
+        roles: serde_json::to_string(&roles).map_err(Error::from)?,
         created_at: now,
         updated_at: now,
     }))
@@ -2419,6 +2463,9 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
     let Some(exit) = exit else { return Ok(Onward::Nowhere) };
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
     let Some(taken) = exits.into_iter().find(|e| e.id == exit) else { return Ok(Onward::Nowhere) };
+    if let Some(routed) = by_role(conn, def, &taken)? {
+        return Ok(routed);
+    }
     let Some(line) = taken.then else {
         // **An error way out nobody drew a line from halts the run and calls a person** (`AMB-D-966`)
         // — which is why the launch check never asks for one. That holds for the step's own error way
@@ -2444,6 +2491,62 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
             }
         }
     })
+}
+
+/// **Where the built-in that takes a task goes once it has taken one, in a run whose copies start roles'
+/// rounds** — on to the copy the round's role starts at ([`AutomationRunDef::roles`]), whatever line is
+/// drawn from it. `None` for any other way out, and for every way out of a run whose automation defines
+/// no role that names where its round starts: that run walks its picture as it is drawn.
+///
+/// The role is the one the round was taken under ([`crate::model::AutomationRunTask::role_id`]). Only a
+/// task of a role the copies start a round of is taken ([`roles_started`]), so a round with none has
+/// nowhere to go ([`Onward::Nowhere`]) — which a task whose role was changed under the run as it was being
+/// taken is the one way to reach.
+///
+/// No line is drawn for it, so the line it hands back is made up: on the automation's picture, from the
+/// placement it leaves, with no edge (`edge_id` 0) and no limit on how often it is taken. That it is on the
+/// automation's picture is what lets a pause asked for take hold on it, as on any line between two
+/// placements.
+fn by_role(conn: &Connection, def: &AutomationRunDef, taken: &RunDefExit) -> Result<Option<Onward>> {
+    if def.builtin.as_deref() != Some(TAKE_TASK.key)
+        || !taken.outs.iter().any(|p| p.kind == AutomationPortKind::TaskTake)
+    {
+        return Ok(None);
+    }
+    let defs = current_defs(conn, def.run_id)?;
+    if defs.iter().all(|d| d.role_ids().is_empty()) {
+        return Ok(None);
+    }
+    let role = read::automation_run_task_last(conn, def.run_id)?.and_then(|stretch| stretch.role_id);
+    let Some(next) = role.and_then(|role| defs.into_iter().find(|d| d.role_ids().contains(&role))) else {
+        return Ok(Some(Onward::Nowhere));
+    };
+    let line = RunDefLine {
+        edge_id: 0,
+        picture: AutomationPictureOwner::Automation,
+        from_id: def.placement_id.unwrap_or_default(),
+        exit_id: taken.returns_to.unwrap_or(taken.id),
+        ends: AutomationEnds::Go,
+        placement_id: next.placement_id,
+        step_id: next.step_id,
+        max_times: None,
+    };
+    Ok(Some(Onward::Go { def: Box::new(next), line }))
+}
+
+/// **The roles a run's copies start rounds of** ([`AutomationRunDef::roles`]), as it was last copied down,
+/// each once. Empty for a run whose automation defines no role that names where its round starts.
+///
+/// Where there are any, the built-in that takes a task takes only a task of one of them, so a task with
+/// no role, or one of a role no copy starts, is not taken.
+pub(crate) fn roles_started(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
+    let mut roles = Vec::new();
+    for role in current_defs(conn, run_id)?.iter().flat_map(|d| d.role_ids()) {
+        if !roles.contains(&role) {
+            roles.push(role);
+        }
+    }
+    Ok(roles)
 }
 
 /// **Which of an action's ways out one way out of a step inside it returns to** — the action's way out

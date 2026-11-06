@@ -256,10 +256,8 @@ CREATE TABLE IF NOT EXISTS automation (
     failures_to_kind TEXT CHECK(failures_to_kind IN ('human', 'role')),
     failures_to_role_id BIGINT REFERENCES automation_role(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     export_only BOOLEAN NOT NULL DEFAULT 0 CHECK(export_only IN (0, 1)),
-    trigger_when_kind TEXT CHECK(trigger_when_kind IN ('every', 'idle', 'tasks')),
+    trigger_when_kind TEXT CHECK(trigger_when_kind IN ('every', 'idle')),
     trigger_every_minutes BIGINT,
-    trigger_condition_filter TEXT,
-    trigger_condition_below BIGINT,
     trigger_task_kind TEXT CHECK(trigger_task_kind IN ('fixed')),
     trigger_task_title TEXT,
     trigger_task_notes TEXT,
@@ -458,6 +456,7 @@ CREATE TABLE IF NOT EXISTS automation_run_def (
     ins TEXT NOT NULL DEFAULT '',
     cfg TEXT NOT NULL DEFAULT '',
     entry BOOLEAN NOT NULL DEFAULT 0 CHECK(entry IN (0, 1)),
+    roles TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
@@ -468,6 +467,7 @@ CREATE TABLE IF NOT EXISTS automation_run_task (
     task_id BIGINT REFERENCES task(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     started_at TEXT CHECK(started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    role_id BIGINT REFERENCES automation_role(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );

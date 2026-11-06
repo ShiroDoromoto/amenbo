@@ -1324,6 +1324,13 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 110,
+        name: "add automation_run_def.roles and automation_run_task.role_id, the roles a run's copy starts and the role a round is worked under",
+        // **Unseeded.** A run launched before this went round as its picture was drawn, never by a role,
+        // so no copy of it starts a role's round and none of its rounds was worked under one.
+        apply: Apply::Custom(let_a_run_go_round_by_role),
+    },
+    Step {
+        to: 111,
         name: "add automation.trigger_condition_filter and _below, the tasks a trigger looks at first, and admit tasks in trigger_when_kind",
         // **Unseeded.** No trigger had a condition before, so every one written before this has none,
         // and keeps its kind.
@@ -1331,7 +1338,7 @@ pub const STEPS: &[Step] = &[
     },
 ];
 
-/// v110: `automation.trigger_condition_filter` and `trigger_condition_below`, and
+/// v111: `automation.trigger_condition_filter` and `trigger_condition_below`, and
 /// `automation.trigger_when_kind` admits `tasks` beside `every` and `idle`.
 ///
 /// **Each part only where it is not there yet.** A store whose automation table was created in the live
@@ -1395,6 +1402,26 @@ fn let_a_person_stop_an_automation(ctx: &Ctx<'_>) -> Result<()> {
     if !column_names(tx, "automation")?.iter().any(|c| c == "stopped") {
         tx.execute_batch(
             "ALTER TABLE automation ADD COLUMN stopped BOOLEAN NOT NULL DEFAULT 0 CHECK(stopped IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
+
+/// v110: `automation_run_def.roles`, the roles whose round starts at a run's copy of a step, and
+/// `automation_run_task.role_id`, the role a round is worked under.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. `roles` is added as v102 added
+/// `automation_version.roles` — `''` by default, then `[]` on every row already there.
+fn let_a_run_go_round_by_role(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run_def")?.iter().any(|c| c == "roles") {
+        tx.execute_batch("ALTER TABLE automation_run_def ADD COLUMN roles TEXT NOT NULL DEFAULT '';")?;
+    }
+    tx.execute_batch("UPDATE automation_run_def SET roles = '[]' WHERE roles = '';")?;
+    if !column_names(tx, "automation_run_task")?.iter().any(|c| c == "role_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run_task ADD COLUMN role_id BIGINT REFERENCES automation_role(id) \
+             ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
         )?;
     }
     Ok(())
@@ -11486,12 +11513,41 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v110: a trigger written before the step keeps its kind and has no condition, the column admits
+    /// v110: a run launched before the step starts no role's round from any copy, and none of its
+    /// rounds was worked under a role.
+    #[test]
+    fn a_run_launched_before_v110_goes_round_by_no_role() {
+        let dir = scratch("run-roles");
+        let engine = store_at(&dir, 109);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, name, prompt) VALUES (1, 1, 'one', 'p');
+                 INSERT INTO automation_run_task (id, run_id, seq) VALUES (1, 1, 1);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let roles: String =
+            engine.conn().query_row("SELECT roles FROM automation_run_def WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(roles, "[]", "no copy starts a role's round");
+        let role: Option<i64> =
+            engine.conn().query_row("SELECT role_id FROM automation_run_task WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(role, None, "no round was worked under a role");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v111: a trigger written before the step keeps its kind and has no condition, the column admits
     /// `tasks` beside `every` and `idle`, and a condition is written in the two new columns.
     #[test]
-    fn a_trigger_written_before_v110_keeps_its_kind_and_tasks_is_admitted() {
+    fn a_trigger_written_before_v111_keeps_its_kind_and_tasks_is_admitted() {
         let dir = scratch("automation-trigger-tasks");
-        let engine = store_at(&dir, 109);
+        let engine = store_at(&dir, 110);
         engine
             .conn()
             .execute_batch(

@@ -40,7 +40,6 @@ pub mod automation_builtin_fetch;
 pub mod automation_builtin_fold;
 pub mod automation_builtin_hand_back;
 pub mod automation_builtin_make;
-pub mod automation_builtin_split;
 pub mod automation_builtin_take;
 pub mod automation_builtin_wait;
 pub mod automation_export;

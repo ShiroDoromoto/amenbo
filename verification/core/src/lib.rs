@@ -4175,11 +4175,7 @@ const REGISTRY: &[OpSpec] = &[
     // Amenbo's built-ins (`take_task`, …) — one of the two, never both. A built-in is defined in the
     // code and not in the store, so it is named by its key rather than by a binding. Its ways out
     // carry the names the code gives them, and an edge off one is written with that name.
-    //
-    // `axis` is the axis the built-in that splits by one (`split_by_dim`) splits by, named as the
-    // project names it. There is one of that built-in per axis, and its ways out are the axis's values,
-    // so an edge off one is written with a value's name.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target"], refs: &["target", "action"], strings: &["builtin", "axis"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target"], refs: &["target", "action"], strings: &["builtin"], binds: true },
     // Who carries one step (`step`) out at one placement (`target`), and the model where one is named.
     // A step a run could open with nobody chosen is refused at launch, so a premise
     // that stands up a definition to be run chooses for every step of every placement. `agent` is the

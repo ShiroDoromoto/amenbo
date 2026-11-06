@@ -1282,7 +1282,33 @@ pub const STEPS: &[Step] = &[
         // somebody says.
         apply: Apply::Custom(let_an_automation_name_where_failures_go),
     },
+    Step {
+        to: 105,
+        name: "add automation.export_only, set on every automation written before",
+        // **Seeded, and not converted.** Every automation already here was written before automations
+        // had roles. Which axis of it becomes a role, and which of its lines hand on or sort out an
+        // error, only the person who built it can say, so it is not turned into the new shape: it is
+        // kept to be written out and rebuilt by hand, and is never launched or edited.
+        apply: Apply::Custom(keep_the_old_automations_for_export),
+    },
 ];
+
+/// v105: `automation.export_only`, set on every automation the store already holds.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. The rows are marked only in the
+/// pass that adds the column, so a run that finds it already there leaves every row as it stands.
+fn keep_the_old_automations_for_export(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if column_names(tx, "automation")?.iter().any(|c| c == "export_only") {
+        return Ok(());
+    }
+    tx.execute_batch(
+        "ALTER TABLE automation ADD COLUMN export_only BOOLEAN NOT NULL DEFAULT 0 \
+             CHECK(export_only IN (0, 1));
+         UPDATE automation SET export_only = 1;",
+    )?;
+    Ok(())
+}
 
 /// v104: `automation.failures_to_kind` and `automation.failures_to_role_id`, where a failed round of the
 /// automation is filed.
@@ -11107,6 +11133,37 @@ mod tests {
             .conn()
             .execute("UPDATE automation SET failures_to_kind = 'role', failures_to_role_id = 1 WHERE id = 1", [])
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v105: an automation written before the step is kept only to be written out, and one added after
+    /// it is not.
+    #[test]
+    fn an_automation_written_before_v105_is_kept_for_export_only() {
+        let dir = scratch("automation-export-only");
+        let engine = store_at(&dir, 104);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let marked = |id: i64| -> bool {
+            engine
+                .conn()
+                .query_row("SELECT export_only FROM automation WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap()
+        };
+        assert!(marked(1), "an automation that was there is kept for export");
+        engine.conn().execute("INSERT INTO automation (id, project_id, name) VALUES (2, 1, 'new')", []).unwrap();
+        assert!(!marked(2), "one added after is not");
+        let refused = engine.conn().execute("UPDATE automation SET export_only = 2 WHERE id = 1", []);
+        assert!(refused.is_err(), "only 0 or 1");
         std::fs::remove_dir_all(&dir).ok();
     }
 

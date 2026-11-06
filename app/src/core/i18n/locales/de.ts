@@ -1700,6 +1700,7 @@ export const de: Translation = {
     not_ready_automation: "„{automation}“ kann noch nicht gestartet werden: {reasons}",
     not_ready_automation_no_steps: "Es ist keine Aktion darauf platziert",
     not_ready_automation_no_entry: "Keine Platzierung ist der Start",
+    not_ready_automation_export_only: "es ist eine alte Definition und kann nur noch exportiert werden",
     not_ready_automation_no_failures_to: "Niemand ist festgelegt, an den ein fehlgeschlagener Durchlauf gemeldet wird",
     not_ready_automation_action_draft: "Die platzierte Aktion „{action}“ wird noch erstellt",
     not_ready_automation_action_empty: "Die platzierte Aktion „{action}“ hat keinen Startschritt",

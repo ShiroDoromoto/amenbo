@@ -1854,7 +1854,9 @@ pub enum AutomationCmd {
         saved: bool,
     },
     /// Write one automation out as a JSON file — its newest saved version, with the actions it places,
-    /// to be taken into another project with `automation import`. Refused for one nobody has saved
+    /// to be taken into another project with `automation import`. Refused for one nobody has saved,
+    /// except one written before automations had roles, which is kept only to be exported and is
+    /// written out from its draft
     Export {
         /// automation id
         id: i64,

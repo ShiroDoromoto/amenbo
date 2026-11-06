@@ -197,18 +197,25 @@ pub struct StepFile {
 
 /// **Write out the newest saved version of one automation**, with the actions it places.
 ///
-/// Refused as not found for an automation that is not there, and as invalid for one nobody has saved and
-/// for one whose saved version places an action a person wrote that nobody has saved.
+/// An automation kept only to be written out ([`crate::model::Automation::export_only`]) that nobody
+/// ever saved is written out from its draft instead: it can no longer be saved, and writing it out is
+/// the one way left to rebuild it.
+///
+/// Refused as not found for an automation that is not there, and as invalid for any other one nobody has
+/// saved and for one whose picture places an action a person wrote that nobody has saved.
 pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
     let automation = read::automation(conn, automation_id)?
         .ok_or_else(|| Error::not_found(format!("automation '{automation_id}' not found")))?;
-    let saved = read::automation_version_latest(conn, automation_id)?.ok_or_else(|| {
-        Error::invalid(format!(
-            "automation '{}' has never been saved — only a saved version is written out",
-            automation.name
-        ))
-    })?;
-    let picture = Picture::saved(&saved)?;
+    let picture = match read::automation_version_latest(conn, automation_id)? {
+        Some(saved) => Picture::saved(&saved)?,
+        None if automation.export_only => Picture::read(conn, &automation)?,
+        None => {
+            return Err(Error::invalid(format!(
+                "automation '{}' has never been saved — only a saved version is written out",
+                automation.name
+            )))
+        }
+    };
 
     let mut actions: Vec<ActionFile> = Vec::new();
     let mut action_at: BTreeMap<(i64, i64), usize> = BTreeMap::new();
@@ -543,6 +550,31 @@ mod tests {
             automation::version_add(tx, automation.id).expect("save the automation");
             assert!(matches!(export(tx.conn(), automation.id), Err(Error::Invalid(_))), "the action is unsaved");
             assert!(matches!(export(tx.conn(), 9999), Err(Error::NotFound(_))));
+        });
+    }
+
+    /// **An old definition nobody saved is written out from its draft**, since it can no longer be
+    /// saved; one that was saved is written out from its saved version, as any other is.
+    #[test]
+    fn an_old_definition_nobody_saved_is_written_out_from_its_draft() {
+        with_tx(|tx| {
+            let (automation, entry) = mk_automation(tx);
+            let take = automation_builtin::find("take_task").expect("take_task");
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, entry.id, Some(take.exits[0].name), EdgeTarget::Done, None).expect("an edge");
+            let old = crate::model::Automation { export_only: true, ..automation.clone() };
+            crate::ops::emit_update(
+                tx,
+                crate::store_engine::record::automation(&automation),
+                crate::store_engine::record::automation(&old),
+            )
+            .expect("written before automations had roles");
+
+            let file = export(tx.conn(), automation.id).expect("written out from the draft");
+            assert_eq!(file.name, automation.name);
+            assert_eq!(file.placements.len(), 1);
+            assert_eq!(file.entry, Some(0));
+            assert_eq!(file.edges.len(), 1, "what the draft holds is in the file");
         });
     }
 }

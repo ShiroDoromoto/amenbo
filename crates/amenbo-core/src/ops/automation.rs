@@ -130,7 +130,7 @@ fn live_wire(tx: &WriteTx<'_>, id: i64) -> Result<AutomationWire> {
     read::automation_wire(tx.conn(), id)?.ok_or_else(|| not_found("wire", id))
 }
 
-// ───────────────────────────── a definition built into Amenbo ─────────────────────────────
+// ──────────────────── a definition built into Amenbo, or kept only to be written out ────────────────────
 
 /// The definition an op is about to rewrite: an automation's picture, a library action's insides, or
 /// what one step of an action declares.
@@ -140,7 +140,7 @@ fn live_wire(tx: &WriteTx<'_>, id: i64) -> Result<AutomationWire> {
 /// task is resumed and copies it down afresh.
 #[derive(Clone, Copy, Debug)]
 enum Def {
-    Automation,
+    Automation(i64),
     Action(i64),
     /// One step's own declarations — its fields, its ways out and its ports. It is the step's own for
     /// whether it is a built-in, and its action's after that.
@@ -158,9 +158,26 @@ enum Def {
 ///
 /// The rows are written from the definition before the key is set on them, which is how the writes
 /// that build a built-in get past this.
-fn not_built_in(tx: &WriteTx<'_>, def: Def) -> Result<()> {
+///
+/// **An automation kept only to be written out is not rewritten either**
+/// ([`Automation::export_only`]). Nothing turns it into the present shape, and editing it in place would
+/// leave a picture from before roles looking as though somebody had rebuilt it. It is exported, rebuilt
+/// by hand and imported as a new automation. Its name, notes, archiving and deletion are not its
+/// definition, and stay open ([`update`], [`delete`]).
+fn rewritable(tx: &WriteTx<'_>, def: Def) -> Result<()> {
     let refused = match def {
-        Def::Automation => None,
+        Def::Automation(id) => {
+            let automation = live_automation(tx, id)?;
+            if automation.export_only {
+                return Err(Error::invalid(format!(
+                    "automation '{}' was written before automations had roles and is kept only to be \
+                     written out — export it with `automation export`, rebuild it and import it as a new \
+                     automation",
+                    automation.name
+                )));
+            }
+            None
+        }
         Def::Action(id) => {
             let action = live_action(tx, id)?;
             action.builtin.map(|_| format!("action '{}'", action.name))
@@ -213,17 +230,14 @@ fn def_of_port_owner(tx: &WriteTx<'_>, owner_kind: AutomationPortOwner, owner_id
 fn def_of_cfg_owner(tx: &WriteTx<'_>, owner_kind: AutomationCfgOwner, owner_id: i64) -> Result<Def> {
     Ok(match owner_kind {
         AutomationCfgOwner::Action => Def::Action(owner_id),
-        AutomationCfgOwner::Placement => {
-            live_placement(tx, owner_id)?;
-            Def::Automation
-        }
+        AutomationCfgOwner::Placement => Def::Automation(live_placement(tx, owner_id)?.automation_id),
     })
 }
 
 /// The definition a line is drawn in.
 fn def_of_picture(owner_kind: AutomationPictureOwner, owner_id: i64) -> Def {
     match owner_kind {
-        AutomationPictureOwner::Automation => Def::Automation,
+        AutomationPictureOwner::Automation => Def::Automation(owner_id),
         AutomationPictureOwner::Action => Def::Action(owner_id),
     }
 }
@@ -574,7 +588,7 @@ pub fn action_update(
     note: Option<&str>,
 ) -> Result<AutomationAction> {
     let before = live_action(tx, id)?;
-    not_built_in(tx, Def::Action(id))?;
+    rewritable(tx, Def::Action(id))?;
     let mut after = before.clone();
     if let Some(name) = name {
         after.name = checked_name("action", name)?;
@@ -592,7 +606,7 @@ pub fn action_update(
 /// the next version, so it leaves the action unsaved until then — unlike its name and note.
 pub fn action_set_one_at_a_time(tx: &WriteTx<'_>, id: i64, on: bool) -> Result<AutomationAction> {
     let before = live_action(tx, id)?;
-    not_built_in(tx, Def::Action(id))?;
+    rewritable(tx, Def::Action(id))?;
     let mut after = before.clone();
     after.one_at_a_time = on;
     after.updated_at = Timestamp::now();
@@ -608,7 +622,7 @@ pub fn action_set_entry(
     step_id: Option<i64>,
 ) -> Result<AutomationAction> {
     let before = live_action(tx, action_id)?;
-    not_built_in(tx, Def::Action(action_id))?;
+    rewritable(tx, Def::Action(action_id))?;
     if let Some(step_id) = step_id {
         let step = live_step(tx, step_id)?;
         if step.action_id != action_id {
@@ -725,7 +739,7 @@ pub fn action_set_scope(
     if before.project_id == project_id {
         return Ok(before);
     }
-    not_built_in(tx, Def::Action(id))?;
+    rewritable(tx, Def::Action(id))?;
     if let Some(project_id) = project_id {
         if read::project(tx.conn(), project_id)?.is_none() {
             return Err(crate::ops::project::NOUN.not_found(project_id.to_string()));
@@ -814,7 +828,7 @@ fn automations_placing_outside(
 /// created.
 pub fn action_save(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionVersion> {
     let action = live_action(tx, action_id)?;
-    not_built_in(tx, Def::Action(action_id))?;
+    rewritable(tx, Def::Action(action_id))?;
     let unmet = automation_run::check_action(tx.conn(), action_id)?;
     if !unmet.is_empty() {
         return Err(automation_run::not_ready_to_save_action(&action.name, &unmet));
@@ -874,7 +888,7 @@ pub fn action_unsaved(conn: &Connection, action_id: i64) -> Result<bool> {
 /// what comes back.
 pub fn action_discard(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionVersion> {
     let action = live_action(tx, action_id)?;
-    not_built_in(tx, Def::Action(action_id))?;
+    rewritable(tx, Def::Action(action_id))?;
     let Some(saved) = read::automation_action_version_latest(tx.conn(), action_id)? else {
         return Err(Error::invalid(format!(
             "action '{}' has never been saved, so there is no saved version to go back to",
@@ -1111,7 +1125,7 @@ fn restore_rows<T: serde::de::DeserializeOwned>(
 /// Refused for a built-in: its versions are actions of their own (`AMB-D-1000`).
 pub fn action_version_add(tx: &WriteTx<'_>, action_id: i64) -> Result<AutomationActionVersion> {
     live_action(tx, action_id)?;
-    not_built_in(tx, Def::Action(action_id))?;
+    rewritable(tx, Def::Action(action_id))?;
     let conn = tx.conn();
     let def = ActionDef::live(conn, action_id)?;
     let version = read::automation_action_version_latest(conn, action_id)?.map_or(1, |v| v.version + 1);
@@ -1143,7 +1157,7 @@ pub fn action_version_add(tx: &WriteTx<'_>, action_id: i64) -> Result<Automation
 /// nothing, and what should stand there instead is not this op's to guess.
 pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let action = live_action(tx, id)?;
-    not_built_in(tx, Def::Action(id))?;
+    rewritable(tx, Def::Action(id))?;
     let users = read::automation_placement_ids_using_action(tx.conn(), id)?;
     if !users.is_empty() {
         return Err(Error::Invalid(
@@ -1266,6 +1280,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         archived: false,
         max_concurrent_runs: None,
         failures_to: new.failures_to,
+        export_only: false,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1352,6 +1367,7 @@ pub(crate) fn set_entry(
     automation_id: i64,
     placement_id: Option<i64>,
 ) -> Result<Automation> {
+    rewritable(tx, Def::Automation(automation_id))?;
     if let Some(placement_id) = placement_id {
         let placement = live_placement(tx, placement_id)?;
         if placement.automation_id != automation_id {
@@ -1390,6 +1406,7 @@ fn name_entry(tx: &WriteTx<'_>, automation_id: i64, placement_id: Option<i64>) -
 /// Refused on an automation with nothing on it: the first placement is where the entry is chosen
 /// ([`placement_add`]).
 pub fn entry_replace(tx: &WriteTx<'_>, automation_id: i64, key: &str) -> Result<AutomationPlacement> {
+    rewritable(tx, Def::Automation(automation_id))?;
     let automation = live_automation(tx, automation_id)?;
     if !automation_builtin::starts_a_run(key) {
         return Err(not_an_entry(key));
@@ -1452,6 +1469,7 @@ fn not_an_entry(what: &str) -> Error {
 /// A draft with nothing changed since the newest version saves nothing, and that version is what comes
 /// back.
 pub fn save(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion> {
+    rewritable(tx, Def::Automation(automation_id))?;
     let automation = live_automation(tx, automation_id)?;
     let unmet = automation_run::check(tx.conn(), automation_id, None, automation_run::nothing_asked())?;
     if !unmet.is_empty() {
@@ -1491,6 +1509,7 @@ pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
 /// A draft with nothing changed since the newest version writes nothing. The version gone back to is
 /// what comes back.
 pub fn discard(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion> {
+    rewritable(tx, Def::Automation(automation_id))?;
     let automation = live_automation(tx, automation_id)?;
     let Some(saved) = read::automation_version_latest(tx.conn(), automation_id)? else {
         return Err(Error::invalid(format!(
@@ -1669,6 +1688,7 @@ impl Picture {
 /// Every row goes in as its own record under its own id, as [`action_version_add`]'s do (`AMB-D-961`).
 /// The number is one past the automation's newest, and 1 for its first.
 pub fn version_add(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion> {
+    rewritable(tx, Def::Automation(automation_id))?;
     let automation = live_automation(tx, automation_id)?;
     let conn = tx.conn();
     let picture = Picture::read(conn, &automation)?;
@@ -1797,6 +1817,7 @@ pub fn placement_add(
     automation_id: i64,
     action_id: i64,
 ) -> Result<AutomationPlacement> {
+    rewritable(tx, Def::Automation(automation_id))?;
     let automation = live_automation(tx, automation_id)?;
     checked_action(tx, &automation, action_id)?;
     if !read::automation_placement_ids(tx.conn(), automation_id)?.is_empty() {
@@ -1846,6 +1867,7 @@ pub(crate) fn placement_add_by_hand(
     automation_id: i64,
     action_id: i64,
 ) -> Result<AutomationPlacement> {
+    rewritable(tx, Def::Automation(automation_id))?;
     let automation = live_automation(tx, automation_id)?;
     checked_action(tx, &automation, action_id)?;
     put_placement(tx, &automation, action_id)
@@ -1942,6 +1964,7 @@ pub fn placement_insert_new(
     let edge = live_edge(tx, edge_id)?;
     if edge.owner_kind != AutomationPictureOwner::Action {
         let automation_id = box_picture(tx, AutomationPictureOwner::Automation, edge.from_id)?;
+        rewritable(tx, Def::Automation(automation_id))?;
         let project_id = live_automation(tx, automation_id)?.project_id;
         let action = write_action(tx, shelf.under(project_id), name, "", true)?;
         let placement = placement_add(tx, automation_id, action.id)?;
@@ -1968,8 +1991,9 @@ pub fn placement_insert_at_exit(
     exit_name: Option<&str>,
     action_id: i64,
 ) -> Result<AutomationPlacement> {
-    open_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name)?;
     let automation_id = live_placement(tx, from_id)?.automation_id;
+    rewritable(tx, Def::Automation(automation_id))?;
+    open_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name)?;
     let placement = placement_add(tx, automation_id, action_id)?;
     hang_on_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name, placement.id)?;
     Ok(placement)
@@ -1985,8 +2009,9 @@ pub fn placement_insert_new_at_exit(
     shelf: ActionShelf,
     name: &str,
 ) -> Result<AutomationPlacement> {
-    open_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name)?;
     let automation_id = live_placement(tx, from_id)?.automation_id;
+    rewritable(tx, Def::Automation(automation_id))?;
+    open_exit(tx, AutomationPictureOwner::Automation, from_id, exit_name)?;
     let project_id = live_automation(tx, automation_id)?.project_id;
     let action = write_action(tx, shelf.under(project_id), name, "", true)?;
     let placement = placement_add(tx, automation_id, action.id)?;
@@ -2096,6 +2121,7 @@ fn hang_on_exit(
 /// from the entry along the edges, and no order here reaches it.
 pub fn placement_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationPlacement> {
     let before = live_placement(tx, id)?;
+    rewritable(tx, Def::Automation(before.automation_id))?;
     let sibs = read::automation_placement_siblings(tx.conn(), before.automation_id, Some(id))?;
     let mut after = before.clone();
     after.order_key = place(&sibs, &pos)?;
@@ -2120,7 +2146,8 @@ pub fn placement_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automa
 /// a run of the automation goes on (`AMB-D-1015`).
 pub fn placement_version_set(tx: &WriteTx<'_>, id: i64, version: i64) -> Result<AutomationPlacement> {
     let before = live_placement(tx, id)?;
-    not_built_in(tx, Def::Action(before.action_id))?;
+    rewritable(tx, Def::Automation(before.automation_id))?;
+    rewritable(tx, Def::Action(before.action_id))?;
     let saved = read::automation_action_version(tx.conn(), before.action_id, version)?.ok_or_else(|| {
         Error::not_found(format!("version {version} of action '{}' not found", before.action_id))
     })?;
@@ -2169,6 +2196,7 @@ pub fn placement_version_set(tx: &WriteTx<'_>, id: i64, version: i64) -> Result<
 /// next thing placed is the entry again.
 pub fn placement_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let placement = live_placement(tx, id)?;
+    rewritable(tx, Def::Automation(placement.automation_id))?;
     let automation = live_automation(tx, placement.automation_id)?;
     if automation.entry_placement_id == Some(id) {
         let others = read::automation_placement_ids(tx.conn(), automation.id)?.len() - 1;
@@ -2213,6 +2241,7 @@ pub fn placement_step_set(
     model: Option<&str>,
 ) -> Result<AutomationPlacementStep> {
     let placement = live_placement(tx, placement_id)?;
+    rewritable(tx, Def::Automation(placement.automation_id))?;
     checked_step_of_placement(tx, &placement, step_id)?;
     if let Some(key) = live_step(tx, step_id)?.builtin {
         return Err(Error::invalid(format!(
@@ -2302,6 +2331,7 @@ pub fn placement_step_default(
 /// nothing to take back, and that is not an error.
 pub fn placement_step_clear(tx: &WriteTx<'_>, placement_id: i64, step_id: i64) -> Result<()> {
     let placement = live_placement(tx, placement_id)?;
+    rewritable(tx, Def::Automation(placement.automation_id))?;
     checked_step_of_placement(tx, &placement, step_id)?;
     if let Some(chosen) = read::automation_placement_step_for(tx.conn(), placement_id, step_id)? {
         tx.delete_record("automation_placement_step", chosen.id)?;
@@ -2389,7 +2419,7 @@ fn checked_role_model(role: &AutomationRole) -> Result<()> {
 /// what points at a role points at its id. Nothing here asks whether the automation launches — the
 /// launch check is where an unfinished definition is refused.
 pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<AutomationRole> {
-    live_automation(tx, automation_id)?;
+    rewritable(tx, Def::Automation(automation_id))?;
     let name = checked_name("role", &new.name)?;
     checked_role_entry(tx, automation_id, new.entry_placement_id)?;
     let sibs = read::automation_role_siblings(tx.conn(), automation_id, None)?;
@@ -2415,6 +2445,7 @@ pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<Au
 /// model. Only the fields `change` names are written.
 pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<AutomationRole> {
     let before = live_role(tx, id)?;
+    rewritable(tx, Def::Automation(before.automation_id))?;
     let mut after = before.clone();
     if let Some(name) = &change.name {
         after.name = checked_name("role", name)?;
@@ -2444,6 +2475,7 @@ pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<Auto
 /// Reorder a role among the roles of its automation — the order they are defined in.
 pub fn role_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationRole> {
     let before = live_role(tx, id)?;
+    rewritable(tx, Def::Automation(before.automation_id))?;
     let sibs = read::automation_role_siblings(tx.conn(), before.automation_id, Some(id))?;
     let mut after = before.clone();
     after.order_key = place(&sibs, &pos)?;
@@ -2457,6 +2489,7 @@ pub fn role_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationR
 /// left with nobody to file them to, which the launch check refuses until somebody says again.
 pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let role = live_role(tx, id)?;
+    rewritable(tx, Def::Automation(role.automation_id))?;
     take_role_off_tasks(tx, id)?;
     stop_filing_failures_to(tx, &role)?;
     tx.delete_record("automation_role", id)?;
@@ -2595,7 +2628,7 @@ fn checked_action(tx: &WriteTx<'_>, automation: &Automation, action_id: i64) -> 
 /// is the one a placement opens first, and an action with steps never stands there without one.
 pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<AutomationStep> {
     let action = live_action(tx, action_id)?;
-    not_built_in(tx, Def::Action(action_id))?;
+    rewritable(tx, Def::Action(action_id))?;
     let name = checked_name("step", &new.name)?;
     let script = new.script.map(checked_script).transpose()?;
     let sibs = read::automation_action_step_siblings(tx.conn(), action_id, None)?;
@@ -2764,7 +2797,7 @@ pub fn step_update(
     script: Option<Option<NewScript>>,
 ) -> Result<AutomationStep> {
     let before = live_step(tx, id)?;
-    not_built_in(tx, Def::Step(id))?;
+    rewritable(tx, Def::Step(id))?;
     let mut after = before.clone();
     if let Some(name) = name {
         after.name = checked_name("step", name)?;
@@ -2809,7 +2842,7 @@ pub fn step_update(
 /// the entry along the edges, and no order here reaches it.
 pub fn step_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationStep> {
     let before = live_step(tx, id)?;
-    not_built_in(tx, Def::Action(before.action_id))?;
+    rewritable(tx, Def::Action(before.action_id))?;
     let sibs = read::automation_action_step_siblings(tx.conn(), before.action_id, Some(id))?;
     let mut after = before.clone();
     after.order_key = place(&sibs, &pos)?;
@@ -2830,7 +2863,7 @@ pub fn step_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationS
 /// with no entry, and an action with nothing to open is refused at the launch check.
 pub fn step_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let step = live_step(tx, id)?;
-    not_built_in(tx, Def::Action(step.action_id))?;
+    rewritable(tx, Def::Action(step.action_id))?;
     let action = live_action(tx, step.action_id)?;
     // `entry_step_id` is `RESTRICT`, and that check bites at the statement rather than at the commit —
     // so the reference is moved off the row before the row goes, not after.
@@ -2878,7 +2911,7 @@ pub fn exit_add(
     name: Option<&str>,
 ) -> Result<AutomationExit> {
     checked_declarer(tx, owner_kind, owner_id)?;
-    not_built_in(tx, def_of_declarer(tx, owner_kind, owner_id)?)?;
+    rewritable(tx, def_of_declarer(tx, owner_kind, owner_id)?)?;
     let name = checked_exit_name(name.unwrap_or(DONE_EXIT))?;
     if read::automation_exit_by_name(tx.conn(), owner_kind, owner_id, Some(&name))?.is_some() {
         return Err(exit_taken(&name));
@@ -2905,7 +2938,7 @@ fn exit_taken(name: &str) -> Error {
 /// **A way out keeps a name**: `None` is refused, since a way out with none is drawn blank on its line.
 pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<AutomationExit> {
     let before = live_exit(tx, id)?;
-    not_built_in(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
+    rewritable(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
     if before.name == ERROR_EXIT {
         return Err(Error::invalid(
             "the error way out's name is fixed — every step and every action is read as carrying it",
@@ -2932,7 +2965,7 @@ pub fn exit_rename(tx: &WriteTx<'_>, id: i64, name: Option<&str>) -> Result<Auto
 /// Reorder a way out within its owner's list.
 pub fn exit_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationExit> {
     let before = live_exit(tx, id)?;
-    not_built_in(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
+    rewritable(tx, def_of_declarer(tx, before.owner_kind, before.owner_id)?)?;
     let sibs =
         read::automation_exit_siblings(tx.conn(), before.owner_kind, before.owner_id, Some(id))?;
     let mut after = before.clone();
@@ -2947,7 +2980,7 @@ pub fn exit_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationE
 /// anyone wrote one.
 pub fn exit_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let exit = live_exit(tx, id)?;
-    not_built_in(tx, def_of_declarer(tx, exit.owner_kind, exit.owner_id)?)?;
+    rewritable(tx, def_of_declarer(tx, exit.owner_kind, exit.owner_id)?)?;
     if exit.name == ERROR_EXIT {
         return Err(Error::invalid(
             "the error way out cannot be deleted — every step and every action carries one",
@@ -3021,7 +3054,7 @@ pub(crate) fn declare_port(
             ))
         }
     }
-    not_built_in(tx, def_of_port_owner(tx, owner_kind, owner_id)?)?;
+    rewritable(tx, def_of_port_owner(tx, owner_kind, owner_id)?)?;
     if read::automation_port_by_name(tx.conn(), owner_kind, owner_id, direction, &name)?.is_some() {
         let (said, code) = match direction {
             AutomationPortDirection::In => ("input", ErrorCode::InvalidAutomationInputTaken),
@@ -3065,7 +3098,7 @@ pub fn port_update(
     required: Option<bool>,
 ) -> Result<AutomationPort> {
     let before = live_port(tx, id)?;
-    not_built_in(tx, def_of_port_owner(tx, before.owner_kind, before.owner_id)?)?;
+    rewritable(tx, def_of_port_owner(tx, before.owner_kind, before.owner_id)?)?;
     let mut after = before.clone();
     if let Some(name) = name {
         let name = checked_name("port", name)?;
@@ -3097,7 +3130,7 @@ pub fn port_update(
 /// Reorder a port within its owner's list for that direction.
 pub fn port_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationPort> {
     let before = live_port(tx, id)?;
-    not_built_in(tx, def_of_port_owner(tx, before.owner_kind, before.owner_id)?)?;
+    rewritable(tx, def_of_port_owner(tx, before.owner_kind, before.owner_id)?)?;
     let sibs = read::automation_port_siblings(
         tx.conn(),
         before.owner_kind,
@@ -3116,7 +3149,7 @@ pub fn port_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationP
 /// port that is gone carries nothing ([`INSIDE`]).
 pub fn port_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let port = live_port(tx, id)?;
-    not_built_in(tx, def_of_port_owner(tx, port.owner_kind, port.owner_id)?)?;
+    rewritable(tx, def_of_port_owner(tx, port.owner_kind, port.owner_id)?)?;
     delete_port_row(tx, INSIDE, id)
 }
 
@@ -3146,7 +3179,7 @@ pub fn cfg_add(
     options: Option<&str>,
 ) -> Result<AutomationCfg> {
     live_action(tx, action_id)?;
-    not_built_in(tx, Def::Action(action_id))?;
+    rewritable(tx, Def::Action(action_id))?;
     let name = checked_name("setting", name)?;
     checked_options(kind, options)?;
     if read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Action, action_id, &name)?.is_some()
@@ -3305,7 +3338,7 @@ pub fn cfg_update(
     options: Option<Option<&str>>,
 ) -> Result<AutomationCfg> {
     let before = live_cfg(tx, id)?;
-    not_built_in(tx, def_of_cfg_owner(tx, before.owner_kind, before.owner_id)?)?;
+    rewritable(tx, def_of_cfg_owner(tx, before.owner_kind, before.owner_id)?)?;
     let mut after = before.clone();
     if let Some(name) = name {
         let name = checked_name("setting", name)?;
@@ -3390,6 +3423,7 @@ pub fn cfg_set(
     value: Option<&str>,
 ) -> Result<AutomationCfg> {
     let placement = live_placement(tx, placement_id)?;
+    rewritable(tx, Def::Automation(placement.automation_id))?;
     let name = checked_name("setting", name)?;
     let declared =
         read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Action, placement.action_id, &name)?;
@@ -3456,7 +3490,7 @@ fn filter_names_what_is_there(tx: &WriteTx<'_>, kind: AutomationCfgKind, value: 
 /// Reorder a setting within its owner's list.
 pub fn cfg_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationCfg> {
     let before = live_cfg(tx, id)?;
-    not_built_in(tx, def_of_cfg_owner(tx, before.owner_kind, before.owner_id)?)?;
+    rewritable(tx, def_of_cfg_owner(tx, before.owner_kind, before.owner_id)?)?;
     let sibs = read::automation_cfg_siblings(tx.conn(), before.owner_kind, before.owner_id, Some(id))?;
     let mut after = before.clone();
     after.order_key = place(&sibs, &pos)?;
@@ -3468,7 +3502,7 @@ pub fn cfg_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationCf
 /// Delete a setting — the action's declaration, or one placement's answer to it.
 pub fn cfg_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let cfg = live_cfg(tx, id)?;
-    not_built_in(tx, def_of_cfg_owner(tx, cfg.owner_kind, cfg.owner_id)?)?;
+    rewritable(tx, def_of_cfg_owner(tx, cfg.owner_kind, cfg.owner_id)?)?;
     tx.delete_record("automation_cfg", id)?;
     Ok(())
 }
@@ -3647,7 +3681,7 @@ pub fn edge_add(
     max_times: Option<i64>,
 ) -> Result<AutomationEdge> {
     let owner_id = box_picture(tx, owner_kind, from_id)?;
-    not_built_in(tx, def_of_picture(owner_kind, owner_id))?;
+    rewritable(tx, def_of_picture(owner_kind, owner_id))?;
     let exit = box_exit(tx, owner_kind, from_id, exit_name)?;
     let (ends, to_id, exit_to) = target.parts();
     if let Some(to_id) = to_id {
@@ -3698,7 +3732,7 @@ pub fn edge_update(
     max_times: Option<Option<i64>>,
 ) -> Result<AutomationEdge> {
     let before = live_edge(tx, id)?;
-    not_built_in(tx, def_of_picture(before.owner_kind, before.owner_id))?;
+    rewritable(tx, def_of_picture(before.owner_kind, before.owner_id))?;
     let mut after = before.clone();
     if let Some(target) = target {
         let (ends, to_id, exit_to) = target.parts();
@@ -3738,7 +3772,7 @@ pub fn edge_update(
 /// the run and calling a person, and for any other means the run has nowhere to go.
 pub fn edge_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let edge = live_edge(tx, id)?;
-    not_built_in(tx, def_of_picture(edge.owner_kind, edge.owner_id))?;
+    rewritable(tx, def_of_picture(edge.owner_kind, edge.owner_id))?;
     tx.delete_record("automation_edge", id)?;
     Ok(())
 }
@@ -3816,7 +3850,7 @@ pub fn draw_wire(
     to_port_name: &str,
 ) -> Result<(AutomationWire, bool)> {
     let owner_id = wire_picture(tx, owner_kind, from_id, to_id)?;
-    not_built_in(tx, def_of_picture(owner_kind, owner_id))?;
+    rewritable(tx, def_of_picture(owner_kind, owner_id))?;
     let mut from_exit_id = None;
     let out = if from_id == ACTION_BOUNDARY {
         if from_exit_name.is_some() {
@@ -3919,7 +3953,7 @@ pub fn draw_wire(
 /// Delete a wire. The box then reads nothing on that input unless another wire lands on it.
 pub fn wire_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let wire = live_wire(tx, id)?;
-    not_built_in(tx, def_of_picture(wire.owner_kind, wire.owner_id))?;
+    rewritable(tx, def_of_picture(wire.owner_kind, wire.owner_id))?;
     tx.delete_record("automation_wire", id)?;
     Ok(())
 }
@@ -4031,6 +4065,44 @@ mod tests {
             .into_iter()
             .map(|e| e.name)
             .collect()
+    }
+
+    /// **An automation kept only to be written out is not rewritten**: nothing is placed on it, taken
+    /// off it or drawn on it, no role is added to it or taken out, and it is not saved. Its name and
+    /// archiving are not its definition and stay open, and so does deleting it.
+    #[test]
+    fn an_automation_kept_only_to_be_written_out_is_not_rewritten() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let (action, first) = mk_placed(tx, &automation, "直す");
+            let (_, second) = mk_placed(tx, &automation, "見る");
+            let role = role_add(tx, automation.id, NewRole { name: "さくら".into(), ..Default::default() })
+                .expect("a role");
+            let old = Automation { export_only: true, ..automation.clone() };
+            emit_update(tx, record::automation(&automation), record::automation(&old))
+                .expect("written before automations had roles");
+
+            let kept = |r: Result<_>| match r {
+                Err(Error::Invalid(msg)) => assert!(msg.to_string().contains("kept only to be written out"), "{msg}"),
+                Err(other) => panic!("refused as something else: {other}"),
+                Ok(_) => panic!("rewritten"),
+            };
+            let on = AutomationPictureOwner::Automation;
+            kept(placement_add_by_hand(tx, automation.id, action.id).map(|_| ()));
+            kept(edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), None).map(|_| ()));
+            kept(placement_move(tx, second.id, Position::Top).map(|_| ()));
+            kept(placement_delete(tx, second.id));
+            kept(role_add(tx, automation.id, NewRole { name: "山田".into(), ..Default::default() }).map(|_| ()));
+            kept(role_delete(tx, role.id));
+            kept(set_entry(tx, automation.id, Some(second.id)).map(|_| ()));
+            kept(version_add(tx, automation.id).map(|_| ()));
+            assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read").len(), 2);
+
+            let renamed = update(tx, automation.id, Some("古い版"), None, Some(true), None, None).expect("rename, archive");
+            assert!(renamed.archived && renamed.export_only);
+            delete(tx, automation.id).expect("deleted");
+            assert!(read::automation(tx.conn(), automation.id).expect("read").is_none());
+        });
     }
 
     /// **The most runs going at once is set, kept, taken away and never 0.** An automation is born

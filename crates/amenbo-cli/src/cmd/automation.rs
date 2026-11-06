@@ -386,10 +386,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 human(flags, format!("{} automation(s) — project {pid}", cards.len()));
                 for card in &cards {
                     let archived = if card.automation.archived { "  archived" } else { "" };
+                    let export_only = if card.automation.export_only { "  export only" } else { "" };
                     human(
                         flags,
                         format!(
-                            "  {}  {}  {} placement(s){archived}",
+                            "  {}  {}  {} placement(s){export_only}{archived}",
                             card.automation.id, card.automation.name, card.placements
                         ),
                     );
@@ -1459,7 +1460,11 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
             view.placements.len()
         ),
     );
-    human(flags, failures_to_line(a.failures_to, &view.roles));
+    if a.export_only {
+        human(flags, export_only_line(a.id));
+    } else {
+        human(flags, failures_to_line(a.failures_to, &view.roles));
+    }
     human(flags, saved_line(view.saved.as_ref(), view.unsaved));
     if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
         human(flags, line);
@@ -1471,6 +1476,15 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
     for placement in &view.placements {
         render_placement(flags, view, placement);
     }
+}
+
+/// An automation from before automations had roles, which is kept only to be written out, and what to
+/// do with it instead. Where its failed rounds would go is not said: it is never started.
+fn export_only_line(id: i64) -> String {
+    format!(
+        "written before automations had roles — kept only to be exported: `automation export {id} --out <file>`, \
+         rebuild it and `automation import` it as a new automation"
+    )
 }
 
 /// Where a failed round is filed, on a line of its own: a person, a role by its id and name, or nobody

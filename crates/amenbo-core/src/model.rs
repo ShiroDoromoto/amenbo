@@ -1840,6 +1840,15 @@ pub struct Automation {
     /// no entry is. Like `max_concurrent_runs`, it is the automation's, not part of a saved version.
     #[serde(default)]
     pub failures_to: Option<FailuresTo>,
+    /// **A definition from before automations had roles, kept only to be written out.** Set on every
+    /// automation a store already held when the definition took its present shape, and on none made or
+    /// imported since. It is not turned into the new shape: which axis becomes a role, and which lines are
+    /// there to hand on or sort out an error, only the person who built it can say. So it is never
+    /// launched and its definition is not edited; it can be exported, rebuilt by hand and imported as a
+    /// new automation, and archived or deleted. Like `archived`, it is the automation's, not part of a
+    /// saved version.
+    #[serde(default)]
+    pub export_only: bool,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,

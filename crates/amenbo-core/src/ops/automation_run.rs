@@ -68,8 +68,8 @@ use crate::time::Timestamp;
 /// where the gap is, or holding the action whose picture has it. A name alone cannot say which: the same
 /// action placed twice is two boxes with one name, and a screen that opens the box a reason is about has
 /// to know which of the two. So the same gap in an action placed twice is two reasons, one per placement.
-/// The reasons about the automation as a whole ([`Unmet::NoSteps`], [`Unmet::NoEntry`],
-/// [`Unmet::NoFailuresTo`]) name none,
+/// The reasons about the automation as a whole ([`Unmet::ExportOnly`], [`Unmet::NoSteps`],
+/// [`Unmet::NoEntry`], [`Unmet::NoFailuresTo`]) name none,
 /// and nor do the ones the action's own check finds ([`check_action`]): it is asked with the action on
 /// no picture.
 ///
@@ -79,6 +79,10 @@ use crate::time::Timestamp;
 /// turned, since a person's action may use the same word for something of its own.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unmet {
+    /// The automation is a definition from before automations had roles, kept only to be written out
+    /// ([`crate::model::Automation::export_only`]). It is not mended in place: it is exported, rebuilt by
+    /// hand and imported as a new automation. Nothing else is worth saying about it.
+    ExportOnly,
     /// Nothing is placed on the automation at all. Nothing else is worth saying about it.
     NoSteps,
     /// No placement is named as the entry, so there is nowhere for a run to start and nothing is
@@ -212,6 +216,11 @@ impl Unmet {
     /// falls back to.
     pub fn say(&self) -> String {
         match self {
+            Unmet::ExportOnly => {
+                "it was written before automations had roles and is kept only to be written out — export it \
+                 with `automation export`, rebuild it and import it as a new automation"
+                    .to_string()
+            }
             Unmet::NoSteps => "no action is placed on it".to_string(),
             Unmet::NoEntry => {
                 "no placement is named as the entry — choose what a run starts at with `automation entry-replace`"
@@ -326,6 +335,7 @@ impl Unmet {
     /// fallback for a surface holding no dictionary; this is the other half of the same sentence.
     pub fn code(&self) -> ErrorCode {
         match self {
+            Unmet::ExportOnly => ErrorCode::NotReadyAutomationExportOnly,
             Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
             Unmet::NoEntry => ErrorCode::NotReadyAutomationNoEntry,
             Unmet::NoFailuresTo => ErrorCode::NotReadyAutomationNoFailuresTo,
@@ -374,7 +384,7 @@ impl Unmet {
             None => msg,
         };
         match self {
-            Unmet::NoSteps | Unmet::NoEntry | Unmet::NoFailuresTo => msg,
+            Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoEntry | Unmet::NoFailuresTo => msg,
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
             Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
             Unmet::BackToEntry { step, exit, to, to_builtin, .. } => {
@@ -421,7 +431,7 @@ impl Unmet {
     /// the action's own check.
     pub fn placement(&self) -> Option<i64> {
         match self {
-            Unmet::NoSteps | Unmet::NoEntry | Unmet::NoFailuresTo => None,
+            Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoEntry | Unmet::NoFailuresTo => None,
             Unmet::ActionEmpty { placement, .. }
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. } => *placement,
@@ -607,8 +617,10 @@ fn not_found(what: &str, id: i64) -> Error {
 
 /// **Is this automation ready to be launched?** An empty answer is yes.
 ///
-/// The list is walked in display order, so a person reading it walks their own picture. It opens with
-/// the one reason that is about the automation's own settings rather than its picture: nobody chosen to
+/// The list is walked in display order, so a person reading it walks their own picture. An automation
+/// kept only to be written out ([`Unmet::ExportOnly`]) has that one reason and no other: its picture is
+/// not mended in place, so nothing found in it is worth saying. Otherwise the list opens with the one
+/// reason that is about the automation's own settings rather than its picture: nobody chosen to
 /// file a failed round to ([`Unmet::NoFailuresTo`]). Two of the rest answer alone, beside that one: an
 /// automation with nothing placed on it has nothing else to say about it, and one with no entry has
 /// nothing reachable to say it about — every other check is asked of the placements a run would
@@ -645,6 +657,9 @@ fn check_picture(
     startable: Option<&[String]>,
     models: &ModelsHere,
 ) -> Result<Vec<Unmet>> {
+    if automation.export_only {
+        return Ok(vec![Unmet::ExportOnly]);
+    }
     // Read off the automation, not off `pic`: where a failed round goes is not part of a saved version,
     // so a launch of one asks the automation as it stands now.
     let mut unmet = Vec::new();
@@ -2867,6 +2882,32 @@ mod tests {
             automation::update(tx, automation.id, None, None, None, None, to_role).expect("to the role");
             assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
             launch(tx, automation.id, &here(&claude())).expect("launch");
+        });
+    }
+
+    /// **An automation kept only to be written out is refused**, with that one reason and no other, by
+    /// the check and by a launch — however ready its picture is.
+    #[test]
+    fn an_automation_kept_only_to_be_written_out_is_refused() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let old = crate::model::Automation { export_only: true, failures_to: None, ..automation.clone() };
+            crate::ops::emit_update(
+                tx,
+                crate::store_engine::record::automation(&automation),
+                crate::store_engine::record::automation(&old),
+            )
+            .expect("written before automations had roles");
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                vec![Unmet::ExportOnly],
+                "nothing else is worth saying about it",
+            );
+            let refused = launch(tx, automation.id, &here(&claude())).expect_err("kept only to be written out");
+            assert_eq!(refused.error_code(), ErrorCode::NotReadyAutomation, "{refused}");
+            assert!(refused.to_string().contains("automation export"), "{refused}");
+            assert_eq!(Unmet::ExportOnly.placement(), None);
+            assert_eq!(Unmet::ExportOnly.code(), ErrorCode::NotReadyAutomationExportOnly);
         });
     }
 

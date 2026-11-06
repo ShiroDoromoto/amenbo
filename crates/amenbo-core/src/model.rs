@@ -1744,6 +1744,14 @@ pub const DEFAULT_SCRIPT_TIMEOUT_MINUTES: i64 = 30;
 /// The longest a script step's timeout may be written as, in minutes: six hours.
 pub const MAX_SCRIPT_TIMEOUT_MINUTES: i64 = 360;
 
+/// **How long a step is expected to take when it does not say** ([`AutomationStep::expected_minutes`]),
+/// in minutes. It stops nothing: it is what a step that has been quiet for a while is measured
+/// against before it is taken to have stalled. The number is a placeholder, not a measurement.
+pub const DEFAULT_EXPECTED_MINUTES: i64 = 10;
+
+/// The longest a step's expected time may be written as, in minutes: six hours, as a script's timeout.
+pub const MAX_EXPECTED_MINUTES: i64 = 360;
+
 /// How many runs of an automation may be going at once when nobody has said otherwise: one.
 pub const DEFAULT_MAX_CONCURRENT_RUNS: u32 = 1;
 
@@ -2040,6 +2048,15 @@ pub struct AutomationStep {
     /// Are the comments on the task the run is on handed to this step? On unless somebody turns it off.
     #[serde(default)]
     pub show_comments: bool,
+    /// **How long this step is expected to take**, in minutes, or `None` for
+    /// [`DEFAULT_EXPECTED_MINUTES`] — between 1 and [`MAX_EXPECTED_MINUTES`] where written. It stops
+    /// nothing: it is what the step is measured against before it is taken to have stalled.
+    ///
+    /// **Left out of the JSON when unwritten.** A saved version ([`AutomationActionVersion::steps`]) is
+    /// compared with the live steps as JSON, and one saved before steps said this has no such key — so a
+    /// step that says nothing has to write none, or every action saved before would read as unsaved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_minutes: Option<i64>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -2560,6 +2577,12 @@ pub struct AutomationRunDef {
     pub show_decisions: bool,
     #[serde(default)]
     pub show_comments: bool,
+    /// How long the step was expected to take, in minutes, as it stood at launch with
+    /// [`DEFAULT_EXPECTED_MINUTES`] already put in where the step said nothing
+    /// ([`AutomationStep::expected_minutes`]). `None` only on a copy written before this was copied,
+    /// which [`AutomationRunDef::expected_minutes_or_default`] reads as the default.
+    #[serde(default)]
+    pub expected_minutes: Option<i64>,
     /// The ways out, with the outputs declared on each — JSON ([`RunDefExit`]).
     pub exits: String,
     /// The inputs the step takes, each with the outputs wired into it — JSON ([`RunDefIn`]).
@@ -2575,6 +2598,12 @@ pub struct AutomationRunDef {
 }
 
 impl AutomationRunDef {
+    /// **How long the step was expected to take**, in minutes: what was copied at launch, or
+    /// [`DEFAULT_EXPECTED_MINUTES`] on a copy written before that was copied.
+    pub fn expected_minutes_or_default(&self) -> i64 {
+        self.expected_minutes.unwrap_or(DEFAULT_EXPECTED_MINUTES)
+    }
+
     /// **The name one port of this copy was declared under**, by the id the run's values key it by
     /// ([`RunDefPort::id`]) — an output on any of its ways out, or one of its inputs. `None` where the
     /// copy declares no port of that id, or its JSON does not read.

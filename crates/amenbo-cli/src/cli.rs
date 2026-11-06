@@ -2139,6 +2139,9 @@ pub enum AutomationCmd {
         /// is passed)
         #[arg(long)]
         no_task_comments: bool,
+        /// how long this step is expected to take, 1 to 360 minutes (10 unless given). It stops nothing
+        #[arg(long, value_name = "MINUTES")]
+        expected_minutes: Option<i64>,
     },
     /// Change a step (only the given fields change)
     StepUpdate {
@@ -2188,6 +2191,12 @@ pub enum AutomationCmd {
         /// stop this step being a script, so an agent carries it out on its prompt
         #[arg(long)]
         clear_script: bool,
+        /// how long this step is expected to take, 1 to 360 minutes. It stops nothing
+        #[arg(long, value_name = "MINUTES", conflicts_with = "clear_expected_minutes")]
+        expected_minutes: Option<i64>,
+        /// put this step's expected time back on the default (10 minutes)
+        #[arg(long)]
+        clear_expected_minutes: bool,
     },
     /// Delete a step with its declarations and every edge and wire naming it — confirms unless -y
     StepRm {

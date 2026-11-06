@@ -49,7 +49,7 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRole,
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
     DEFAULT_MAX_CONCURRENT_RUNS, DEFAULT_MAX_TIMES, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
-    ERROR_EXIT, FailuresTo, MAX_CONCURRENT_RUNS_LIMIT, MAX_SCRIPT_TIMEOUT_MINUTES,
+    ERROR_EXIT, FailuresTo, MAX_CONCURRENT_RUNS_LIMIT, MAX_EXPECTED_MINUTES, MAX_SCRIPT_TIMEOUT_MINUTES,
     AutomationTrigger, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
@@ -2640,7 +2640,7 @@ fn drop_role_entries(tx: &WriteTx<'_>, placement: &AutomationPlacement) -> Resul
 /// What a new step is made of. `show_history`, `show_notes`, `show_decisions` and `show_comments` start
 /// on — a step is handed the run's story so far and the task it is on (its notes, the decisions linked to
 /// it and its comments) unless somebody says otherwise — while `interactive` and `report_to_task` start
-/// off.
+/// off. `expected_minutes` starts unwritten, which is [`crate::model::DEFAULT_EXPECTED_MINUTES`].
 #[derive(Clone, Debug)]
 pub struct NewStep {
     pub name: String,
@@ -2653,6 +2653,8 @@ pub struct NewStep {
     pub show_notes: bool,
     pub show_decisions: bool,
     pub show_comments: bool,
+    /// How long the step is expected to take, in minutes, or `None` for the default.
+    pub expected_minutes: Option<i64>,
     /// The script the step is, or `None` for a step an agent carries out (`AMB-D-1016`).
     pub script: Option<NewScript>,
 }
@@ -2679,6 +2681,7 @@ impl NewStep {
             show_notes: true,
             show_decisions: true,
             show_comments: true,
+            expected_minutes: None,
             script: None,
         }
     }
@@ -2707,6 +2710,17 @@ fn checked_script(new: NewScript) -> Result<StepScript> {
     Ok(StepScript { program: new.program, args: new.args, timeout_minutes })
 }
 
+/// How long a step is expected to take, as it may be saved: unwritten, or between 1 and
+/// [`MAX_EXPECTED_MINUTES`] minutes.
+fn checked_expected_minutes(minutes: Option<i64>) -> Result<Option<i64>> {
+    match minutes {
+        Some(m) if !(1..=MAX_EXPECTED_MINUTES).contains(&m) => Err(Error::invalid(format!(
+            "a step's expected time is 1 to {MAX_EXPECTED_MINUTES} minutes, not {m}"
+        ))),
+        _ => Ok(minutes),
+    }
+}
+
 /// The library action a placement may stand on has to be within reach of the automation's project: its
 /// own project's library, or the device's. Another project's is refused — the prompt would be read
 /// across a boundary that is there to keep one project's context out of another's.
@@ -2731,6 +2745,7 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
     rewritable(tx, Def::Action(action_id))?;
     let name = checked_name("step", &new.name)?;
     let script = new.script.map(checked_script).transpose()?;
+    let expected_minutes = checked_expected_minutes(new.expected_minutes)?;
     let sibs = read::automation_action_step_siblings(tx.conn(), action_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
     let now = Timestamp::now();
@@ -2749,6 +2764,7 @@ pub fn step_add(tx: &WriteTx<'_>, action_id: i64, new: NewStep) -> Result<Automa
         show_notes: new.show_notes,
         show_decisions: new.show_decisions,
         show_comments: new.show_comments,
+        expected_minutes,
         order_key,
         created_at: now,
         updated_at: now,
@@ -2880,7 +2896,8 @@ fn write_step(
 }
 
 /// Change a step. Only the `Some` fields are written. `script` turns the step into a script, or with
-/// `Some(None)` back into a step an agent carries out; it is written whole.
+/// `Some(None)` back into a step an agent carries out; it is written whole. `expected_minutes` with
+/// `Some(None)` puts the step back on the default.
 #[allow(clippy::too_many_arguments)]
 pub fn step_update(
     tx: &WriteTx<'_>,
@@ -2895,6 +2912,7 @@ pub fn step_update(
     show_decisions: Option<bool>,
     show_comments: Option<bool>,
     script: Option<Option<NewScript>>,
+    expected_minutes: Option<Option<i64>>,
 ) -> Result<AutomationStep> {
     let before = live_step(tx, id)?;
     rewritable(tx, Def::Step(id))?;
@@ -2928,6 +2946,9 @@ pub fn step_update(
     }
     if let Some(script) = script {
         after.script = script.map(checked_script).transpose()?;
+    }
+    if let Some(expected_minutes) = expected_minutes {
+        after.expected_minutes = checked_expected_minutes(expected_minutes)?;
     }
     after.updated_at = Timestamp::now();
     emit_update(
@@ -5193,13 +5214,14 @@ mod tests {
     }
 
     /// Write one step into `action` with both of its ways out led out of the action, so the action's
-    /// own check has nothing to refuse.
-    fn fill(tx: &WriteTx<'_>, action_id: i64) {
+    /// own check has nothing to refuse. The step written is handed back.
+    fn fill(tx: &WriteTx<'_>, action_id: i64) -> AutomationStep {
         let step = step_add(tx, action_id, NewStep::new("書く", "do it")).expect("write a step");
         for name in [DONE_EXIT, ERROR_EXIT] {
             edge_add(tx, AutomationPictureOwner::Action, step.id, Some(name), EdgeTarget::Exit(Some(name.into())), None)
                 .expect("lead the way out out of the action");
         }
+        step
     }
 
     /// **The first save of an action still being created makes version 1 and finishes its creation**
@@ -6654,7 +6676,7 @@ mod tests {
             let action = action_add(tx, None, "確かめる", "").expect("add action");
             let step = step_add(tx, action.id, NewStep::new("待つ", "wait")).expect("add step");
             let update = |script| {
-                step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script)
+                step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script, None)
             };
             update(Some(Some(a_script(None)))).expect("make it a script");
             let read = live_step(tx, step.id).unwrap();
@@ -6669,6 +6691,59 @@ mod tests {
 
             update(Some(None)).expect("back to an agent's step");
             assert_eq!(live_step(tx, step.id).unwrap().script, None);
+        });
+    }
+
+    /// **A step says how long it is expected to take, or takes the default**: it is written between 1
+    /// and six hours, refused outside that, and put back on the default by clearing it.
+    #[test]
+    fn a_step_says_how_long_it_is_expected_to_take_or_takes_the_default() {
+        with_tx(|tx| {
+            assert_eq!(crate::model::DEFAULT_EXPECTED_MINUTES, 10);
+            assert_eq!(MAX_EXPECTED_MINUTES, 360);
+            let action = action_add(tx, None, "確かめる", "").expect("add action");
+            let expecting = |m| NewStep { expected_minutes: m, ..NewStep::new("書く", "write") };
+            let step = step_add(tx, action.id, expecting(None)).expect("add step");
+            assert_eq!(live_step(tx, step.id).unwrap().expected_minutes, None, "unwritten, it is the default");
+            let written = step_add(tx, action.id, expecting(Some(MAX_EXPECTED_MINUTES))).expect("six hours");
+            assert_eq!(live_step(tx, written.id).unwrap().expected_minutes, Some(MAX_EXPECTED_MINUTES));
+            for refused in [MAX_EXPECTED_MINUTES + 1, 0, -5] {
+                assert!(
+                    matches!(step_add(tx, action.id, expecting(Some(refused))), Err(Error::Invalid(_))),
+                    "{refused} minutes"
+                );
+            }
+
+            let update = |minutes| {
+                step_update(tx, step.id, None, None, None, None, None, None, None, None, None, None, minutes)
+            };
+            update(Some(Some(20))).expect("write it");
+            assert_eq!(live_step(tx, step.id).unwrap().expected_minutes, Some(20));
+            update(None).expect("leave it alone");
+            assert_eq!(live_step(tx, step.id).unwrap().expected_minutes, Some(20));
+            assert!(matches!(update(Some(Some(0))), Err(Error::Invalid(_))));
+            assert_eq!(live_step(tx, step.id).unwrap().expected_minutes, Some(20), "a refusal writes nothing");
+            update(Some(None)).expect("back on the default");
+            assert_eq!(live_step(tx, step.id).unwrap().expected_minutes, None);
+        });
+    }
+
+    /// **A version saved before steps said how long they take is still the action as it stands**: a
+    /// step that says nothing writes no `expected_minutes` into the version's JSON, so an older version,
+    /// which has no such key, is not taken for unsaved work.
+    #[test]
+    fn a_step_that_says_nothing_of_its_time_leaves_a_saved_version_saved() {
+        with_tx(|tx| {
+            let action = action_add(tx, None, "確かめる", "").expect("add action");
+            let step = fill(tx, action.id);
+            let saved = action_save(tx, action.id).expect("save");
+            assert!(!saved.steps.contains("expected_minutes"), "{}", saved.steps);
+            assert!(!action_unsaved(tx.conn(), action.id).expect("unsaved"));
+
+            step_update(tx, step.id, None, None, None, None, None, None, None, None, None, None, Some(Some(20)))
+                .expect("write how long it takes");
+            assert!(action_unsaved(tx.conn(), action.id).expect("unsaved"), "a written time is part of the version");
+            assert!(action_save(tx, action.id).expect("save again").steps.contains("\"expected_minutes\":20"));
         });
     }
 
@@ -6811,7 +6886,7 @@ mod tests {
             assert_eq!(wires.len(), 1, "the input carried from the action into the step");
 
             let prompt = Some("もう一度見る");
-            step_update(tx, step.id, None, prompt, None, None, None, None, None, None, None, None)
+            step_update(tx, step.id, None, prompt, None, None, None, None, None, None, None, None, None)
                 .expect("write on");
             port_delete(tx, found.id).expect("take the output away");
             let second = action_version_add(tx, action.id).expect("save again");
@@ -6903,7 +6978,7 @@ mod tests {
             action_update(tx, action.id, Some("見直す"), None).expect("rename");
             assert!(!action_unsaved(tx.conn(), action.id).expect("unsaved"), "the name is not part of a version");
             let prompt = Some("もう一度見る");
-            step_update(tx, step.id, None, prompt, None, None, None, None, None, None, None, None)
+            step_update(tx, step.id, None, prompt, None, None, None, None, None, None, None, None, None)
                 .expect("write on the step");
             assert!(action_unsaved(tx.conn(), action.id).expect("unsaved"), "a step is saved with its action");
             let second = action_save(tx, action.id).expect("save again");
@@ -6926,7 +7001,7 @@ mod tests {
             assert_eq!(action_discard(tx, action.id).expect("nothing to discard").id, first.id);
 
             let prompt = Some("もう一度見る");
-            step_update(tx, step.id, None, prompt, None, None, None, None, None, None, None, None)
+            step_update(tx, step.id, None, prompt, None, None, None, None, None, None, None, None, None)
                 .expect("write on the step");
             let added = step_add(tx, action.id, NewStep::new("直す", "直す")).expect("add a step");
             action_update(tx, action.id, Some("見直す"), None).expect("rename");
@@ -7477,7 +7552,7 @@ mod rewritten_under_a_run {
         );
         not_held(
             "rewrite a step",
-            step_update(tx, step.id, None, Some("again"), None, None, None, None, None, None, None, None),
+            step_update(tx, step.id, None, Some("again"), None, None, None, None, None, None, None, None, None),
         );
         not_held("reorder a step", step_move(tx, step.id, Position::Bottom));
         not_held("delete a step", step_delete(tx, step.id));
@@ -7569,7 +7644,7 @@ mod rewritten_under_a_run {
                 let moved = action_set_scope(tx, p.first_action.id, None).expect("to the device");
                 assert_eq!(moved.project_id, None);
                 let step = only_step(tx, &p.first_action);
-                step_update(tx, step.id, None, Some("look again"), None, None, None, None, None, None, None, None)
+                step_update(tx, step.id, None, Some("look again"), None, None, None, None, None, None, None, None, None)
                     .expect("rewrite a step");
 
                 assert_eq!(copied(tx, &run), before);

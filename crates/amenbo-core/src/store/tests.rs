@@ -1788,6 +1788,7 @@ fn an_import_leaves_nothing_when_refused_and_the_device_library_is_a_humans() {
         show_notes: true,
         show_decisions: true,
         show_comments: true,
+        expected_minutes: None,
         inputs: vec![],
         exits: vec![],
     };

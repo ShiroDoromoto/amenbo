@@ -190,6 +190,7 @@ fn action_in(tx: &WriteTx<'_>, project_id: i64, file: &ActionFile) -> Result<Wri
                 show_notes: step.show_notes,
                 show_decisions: step.show_decisions,
                 show_comments: step.show_comments,
+                expected_minutes: step.expected_minutes,
                 script: step.script.clone().map(|s| NewScript {
                     program: s.program,
                     args: s.args,

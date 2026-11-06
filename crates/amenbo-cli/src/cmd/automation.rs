@@ -770,7 +770,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let resource = json!({ "id": v.id, "action_id": v.action_id, "version": v.version });
             write_envelope(flags, "automation.action-discard", "automation_action_version", resource, None, !unsaved, line);
         }
-        AutomationCmd::StepAdd { action, name, prompt, program, args, timeout_minutes, interactive, work_dir, report_to_task, no_history, no_task_notes, no_task_decisions, no_task_comments } => {
+        AutomationCmd::StepAdd { action, name, prompt, program, args, timeout_minutes, interactive, work_dir, report_to_task, no_history, no_task_notes, no_task_decisions, no_task_comments, expected_minutes } => {
             // A script step runs its program, not a prompt, so it may be written without one.
             let prompt = body_arg_opt(prompt)?.unwrap_or_default();
             let new = NewStep {
@@ -786,12 +786,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 show_notes: !no_task_notes,
                 show_decisions: !no_task_decisions,
                 show_comments: !no_task_comments,
+                expected_minutes,
                 script: program.map(|program| NewScript { program, args, timeout_minutes }),
             };
             let s = store.automation_step_add(action, new).map_err(CliError::from)?;
             write_draft(flags, "automation.step-add", "automation_step", serde_json::to_value(&s).unwrap(), None, format!("✓ Added step: {} ({})", s.name, s.id), Some(Draft::Action(s.action_id)));
         }
-        AutomationCmd::StepUpdate { id, name, prompt, interactive, work_dir, clear_work_dir, report_to_task, history, task_notes, task_decisions, task_comments, program, args, timeout_minutes, clear_script } => {
+        AutomationCmd::StepUpdate { id, name, prompt, interactive, work_dir, clear_work_dir, report_to_task, history, task_notes, task_decisions, task_comments, program, args, timeout_minutes, clear_script, expected_minutes, clear_expected_minutes } => {
             let prompt = body_arg_opt(prompt)?;
             let work_dir = match clear_work_dir {
                 true => Some(None),
@@ -802,8 +803,12 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 true => Some(None),
                 false => program.map(|program| Some(NewScript { program, args, timeout_minutes })),
             };
+            let expected_minutes = match clear_expected_minutes {
+                true => Some(None),
+                false => expected_minutes.map(Some),
+            };
             let s = store
-                .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history, task_notes, task_decisions, task_comments, script)
+                .automation_step_update(id, name.as_deref(), prompt.as_deref(), interactive, work_dir, report_to_task, history, task_notes, task_decisions, task_comments, script, expected_minutes)
                 .map_err(CliError::from)?;
             write_draft(flags, "automation.step-update", "automation_step", serde_json::to_value(&s).unwrap(), None, format!("✓ Updated step: {} ({})", s.name, s.id), Some(Draft::Action(s.action_id)));
         }
@@ -1814,6 +1819,10 @@ fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
     }
     if !row.show_comments {
         marks.push("no task comments".to_string());
+    }
+    // Only a time the step writes is shown: one that says nothing takes the default.
+    if let Some(minutes) = row.expected_minutes {
+        marks.push(format!("expected {minutes} min"));
     }
     // A step that says none of these is written bare — who carries it out is the placement's to say.
     let marks = match marks.is_empty() {

@@ -475,7 +475,7 @@ mod tests {
                 NewScript { program: program.to_string_lossy().into_owned(), args: Vec::new(), timeout_minutes: None };
             let step = only_step(tx, &work_action);
             let script = Some(Some(script));
-            automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script)
+            automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script, None)
                 .expect("make it a script");
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");

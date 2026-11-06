@@ -1824,3 +1824,30 @@ fn inside_a_step_the_entry_is_the_steps_own() {
     let outside: serde_json::Value = serde_json::from_str(&out).expect("json");
     assert!(outside.get("agentCycle").is_some(), "outside a step the entry is the whole one");
 }
+
+/// **A step says how long it is expected to take** with `--expected-minutes`, is put back on the
+/// default with `--clear-expected-minutes`, and a time outside 1 to 360 minutes is refused.
+#[test]
+fn a_step_says_how_long_it_is_expected_to_take() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    let action = id_of(&cli.json(&["automation", "action-add", "--project", &p, "--name", "A", "--json"]), "automation_action");
+    let added = cli.json(&[
+        "automation", "step-add", &action, "--name", "write", "--prompt", "write it", "--expected-minutes", "20", "--json",
+    ]);
+    assert_eq!(added["automation_step"]["expected_minutes"].as_i64(), Some(20), "{added}");
+    let step = id_of(&added, "automation_step");
+
+    let updated = cli.json(&["automation", "step-update", &step, "--expected-minutes", "45", "--json"]);
+    assert_eq!(updated["automation_step"]["expected_minutes"].as_i64(), Some(45), "{updated}");
+    let cleared = cli.json(&["automation", "step-update", &step, "--clear-expected-minutes", "--json"]);
+    assert!(cleared["automation_step"]["expected_minutes"].is_null(), "back on the default: {cleared}");
+
+    let (err, code) = cli.run_err(&["automation", "step-update", &step, "--expected-minutes", "361", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("1 to 360 minutes"), "{err}");
+    let (err, code) = cli.run_err(&[
+        "automation", "step-update", &step, "--expected-minutes", "5", "--clear-expected-minutes", "--json",
+    ]);
+    assert_ne!(code, 0, "the two say opposite things: {err}");
+}

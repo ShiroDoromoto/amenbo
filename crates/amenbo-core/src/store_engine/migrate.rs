@@ -1322,7 +1322,29 @@ pub const STEPS: &[Step] = &[
         // as it did.
         apply: Apply::Custom(let_a_person_stop_an_automation),
     },
+    Step {
+        to: 110,
+        name: "add the expected_minutes columns, how long a step is expected to take, to the step and its run's copy",
+        // **Unseeded.** No step said how long it was expected to take before, so every one written
+        // before this takes the default, and so does every copy a run took of one.
+        apply: Apply::Custom(let_a_step_say_how_long_it_takes),
+    },
 ];
+
+/// v110: `automation_action_step.expected_minutes` and `automation_run_def.expected_minutes` — how long
+/// a step is expected to take, and that as a run copied it at launch.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Both are nullable with no
+/// default: NULL is the default the model puts in.
+fn let_a_step_say_how_long_it_takes(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for table in ["automation_action_step", "automation_run_def"] {
+        if !column_names(tx, table)?.iter().any(|c| c == "expected_minutes") {
+            tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN expected_minutes BIGINT;"))?;
+        }
+    }
+    Ok(())
+}
 
 /// v108: `automation.trigger_when_kind` admits `idle` beside `every`.
 ///
@@ -11420,6 +11442,38 @@ mod tests {
                 [],
             )
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v110: a step written before the step, and a run's copy of one, say nothing of how long it is
+    /// expected to take, and both columns take a number afterwards.
+    #[test]
+    fn a_step_written_before_v110_says_nothing_of_how_long_it_takes() {
+        let dir = scratch("step-expected-minutes");
+        let engine = store_at(&dir, 109);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_action_step (id, action_id, name) VALUES (1, 1, 'write');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id) VALUES (1, 1, 1);
+                 INSERT INTO automation_run_def (id, run_id, name) VALUES (1, 1, 'write');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        for table in ["automation_action_step", "automation_run_def"] {
+            let expected: Option<i64> = engine
+                .conn()
+                .query_row(&format!("SELECT expected_minutes FROM {table} WHERE id = 1"), [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(expected, None, "{table}: nobody said how long a step takes before");
+            engine.conn().execute(&format!("UPDATE {table} SET expected_minutes = 20 WHERE id = 1"), []).unwrap();
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 

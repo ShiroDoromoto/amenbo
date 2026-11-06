@@ -366,6 +366,62 @@ mod tests {
         });
     }
 
+    /// **An automation a person stops finishes the round it is on and starts no new one**: the run
+    /// pauses where the round ends, and is not picked up again until the automation is started again.
+    #[test]
+    fn a_stopped_automation_finishes_its_round_and_starts_no_new_one() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let p = picture(tx, project);
+            let task = for_ai(tx, project);
+            let claude = ["claude".to_string()];
+            let by = Launcher {
+                startable: Some(&claude),
+                models: nothing_asked(),
+                workspace_open: Some(true),
+                by: Some(ActorKind::Ai),
+            };
+            let run = launch(tx, p.automation.id, &by).expect("launch");
+            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| d.entry)
+                .expect("the entry");
+            let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
+            else {
+                panic!("the take goes on to the work");
+            };
+            let stopped = automation::stop(tx, p.automation.id, true).expect("stop");
+            assert!(stopped.automation.stopped);
+            assert!(stopped.paused.is_empty(), "a run in the middle of its round is not paused");
+
+            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("work") else {
+                panic!("the round under way goes on");
+            };
+            let Next::Step(close) = automation_report::done(tx, opening.run_step.id, None, "Done.").expect("report")
+            else {
+                panic!("the work goes on to the close");
+            };
+            let Opened::Carried { next: Next::Paused(paused), .. } =
+                open(tx, run.id, close.id, Some(&claude)).expect("close")
+            else {
+                panic!("the round is over, and the next one is not started");
+            };
+            assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Done));
+            assert_eq!(paused.run.status, AutomationRunStatus::Paused);
+            assert_eq!(paused.run.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
+
+            let refused = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked());
+            assert!(refused.is_err(), "picking it up would start a new round");
+            assert!(launch(tx, p.automation.id, &by).is_err(), "and so would a launch");
+
+            automation::stop(tx, p.automation.id, false).expect("start it again");
+            let resumed = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked())
+                .expect("resume");
+            assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"));
+        });
+    }
+
     /// **No commit handed on is no failure** — a task can be closed with nothing merged.
     #[test]
     fn with_no_commit_it_closes_the_task_all_the_same() {

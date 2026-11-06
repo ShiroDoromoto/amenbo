@@ -508,7 +508,9 @@ fn whats_next(
 ///
 /// - **The round's stretch ends here**, so the run holds no task between two rounds.
 /// - **A pause asked for takes hold here** as the pause before the next task: the run holds no task, so
-///   picking it up copies the automation down afresh ([`automation_stop::resume`]).
+///   picking it up copies the automation down afresh ([`automation_stop::resume`]). So does a person
+///   having stopped the automation ([`crate::model::Automation::stopped`]): the next round is not
+///   started.
 /// - **Otherwise the next step is the entry, as the run's newest copy marks it.** Nothing is copied
 ///   down here: what has been saved since is taken up as the entry is about to be opened
 ///   ([`automation_run::take_up_newer`]), so a newer definition starts with the next round and never
@@ -517,7 +519,7 @@ fn round_over(tx: &WriteTx<'_>, run: AutomationRun) -> Result<Next> {
     let conn = tx.conn();
     let stretch = read::automation_run_task_last(conn, run.id)?;
     automation_stop::close_stretch(tx, stretch.as_ref(), Timestamp::now(), None)?;
-    if run.pause_requested || run.pause_before_next_task {
+    if run.pause_requested || run.pause_before_next_task || automation_stop::automation_stopped(conn, &run)? {
         return Ok(Next::Paused(automation_stop::settle(tx, run, AutomationPauseKind::BeforeNextTask)?));
     }
     match automation_run::entry_def(conn, run.id)? {

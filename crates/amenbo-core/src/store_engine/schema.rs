@@ -1151,8 +1151,9 @@ datasets! {
         // `trigger_when_kind` is no trigger, and then every other `trigger_` column is NULL too. Like
         // `archived`, none of it is part of a saved version.
         //
-        // When to file one: `every` is every `trigger_every_minutes` minutes.
-        trigger_when_kind: enum_opt("every"),
+        // When to file one: `every` is every `trigger_every_minutes` minutes; `idle` is whenever the
+        // automation has no run under way, and leaves `trigger_every_minutes` NULL.
+        trigger_when_kind: enum_opt("every", "idle"),
         trigger_every_minutes: col(INT_OPT),
         // What the task says: `fixed` is the title and notes written here.
         trigger_task_kind: enum_opt("fixed"),
@@ -1161,6 +1162,10 @@ datasets! {
         // When the trigger is next asked whether to file one. Moved on only when it does, so a time it
         // says no leaves nothing behind.
         trigger_next_at: ts_opt,
+        // A person stopped this automation: no run of it starts, its trigger files nothing, and a run of
+        // it that finishes a round pauses rather than starting the next. Like `archived`, not part of a
+        // saved version.
+        stopped: bool_col,
         order_key: col(ORDER_KEY),
     }
 

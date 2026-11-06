@@ -248,9 +248,12 @@ fn open_as(
         )?;
         return Ok(Opened::LeftTaskOpen { run: stopped.run });
     }
-    // **A run asked to pause before its next task pauses here, without taking one** (`AMB-D-1009`).
-    // Nothing is written but the pause, so picking it up again opens this step afresh.
-    if run.pause_before_next_task && super::automation_stop::takes_a_task(&def) {
+    // **A run asked to pause before its next task pauses here, without taking one** (`AMB-D-1009`), as
+    // does a run of an automation a person stopped. Nothing is written but the pause, so picking it up
+    // again opens this step afresh.
+    if super::automation_stop::takes_a_task(&def)
+        && (run.pause_before_next_task || super::automation_stop::automation_stopped(conn, &run)?)
+    {
         let run = super::automation_stop::settle(tx, run, AutomationPauseKind::BeforeNextTask)?.run;
         return Ok(Opened::Waiting { run });
     }

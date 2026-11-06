@@ -40,7 +40,7 @@ const MOCK_FILED_AT = "2026-06-01T09:00:00Z";
 type MockTaskInput = Partial<TaskCard> &
   Pick<TaskCard, "id" | "title" | "projectId" | "status" | "assignee" | "priority" | "due" | "comments" | "createdBy">;
 const mt = (t: MockTaskInput): TaskCard => ({
-  ref: taskRef(t.id), notes: "", completedAt: null,
+  ref: taskRef(t.id), notes: "", completedAt: null, roleId: null,
   createdAt: MOCK_FILED_AT, updatedAt: MOCK_FILED_AT,
   ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], waitingOnValues: [], start: null, notStartedUntil: null,
   draft: false,

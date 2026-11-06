@@ -281,6 +281,8 @@ export const ko: Translation = {
     "detail.notFound": "작업을 찾을 수 없습니다",
     "detail.unassign": "담당 해제", "detail.assignAi": "AI에게 맡기기",
     "detail.assignee": "담당", "detail.unassigned": "담당 없음",
+    "detail.role": "역할", "detail.roleNone": "역할 없음(세션에서 다룸)", "detail.rolePick": "선택하세요",
+    "detail.roleRequired": "역할을 선택하세요. 자동화의 회차에서 다루지 않는다면 「역할 없음」을 선택합니다.",
     "detail.project": "프로젝트", "detail.none": "없음",
     "detail.blockedBy": "기다리는 대상", "detail.blockedByHint": "막힘(의존)",
     "detail.notStarted": "시작일",

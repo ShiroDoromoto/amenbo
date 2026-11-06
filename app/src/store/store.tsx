@@ -25,6 +25,8 @@ interface Store {
     due?: string | null,
     start?: string | null,
     at?: string | null,
+    assignee?: Facet | null,
+    roleId?: number | null,
   ): Promise<number | null>;
   /**
    * Move a task's status. `rejected` is the one value that carries a reason, and it is required — the
@@ -45,6 +47,8 @@ interface Store {
   /** Set the start (`YYYY-MM-DD`, or `YYYY-MM-DD HH:MM` on the reader's clock), or null to take it away. A start still ahead holds the task unready. */
   setStart(id: number, start: string | null): void;
   setAssignee(id: number, kind: Facet | null): void;
+  /** Set the role the task is worked under, or null for none (worked in a session). */
+  setRole(id: number, roleId: number | null): void;
   addComment(taskId: number, text: string): void;
   /** Take back a comment posted by mistake (it is deleted outright). */
   removeComment(commentId: number, taskId: number): void;
@@ -190,7 +194,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const store: Store = useMemo(() => ({
     listActivity() { return activity; },
 
-    addTask(projectId, title, notes, due, start, at) { return runResult(mut.addTask(projectId, title, notes, due, start, at)); },
+    addTask(projectId, title, notes, due, start, at, assignee, roleId) {
+      return runResult(mut.addTask(projectId, title, notes, due, start, at, assignee, roleId));
+    },
     setStatus(id, status, text) {
       // The fork on the way down: each terminal goes through the write that also keeps its text — the
       // reason for a rejection, the report for a completion — so no surface can reach either one and
@@ -204,6 +210,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDue(id, due) { run(mut.setDue(id, due)); },
     setStart(id, start) { run(mut.setStart(id, start)); },
     setAssignee(id, kind) { run(mut.setAssignee(id, kind)); },
+    setRole(id, roleId) { run(mut.setTaskRole(id, roleId)); },
     addComment(taskId, text) { run(mut.addComment(taskId, text)); },
     removeComment(commentId, taskId) { run(mut.removeComment(commentId, taskId)); },
     removeDecisionComment(commentId, decisionId) { run(mut.removeDecisionComment(commentId, decisionId)); },

@@ -283,6 +283,8 @@ export const ja: Translation = {
     "detail.notFound": "タスクが見つかりません",
     "detail.unassign": "委任を解除", "detail.assignAi": "に任せる",
     "detail.assignee": "担当", "detail.unassigned": "担当者なし",
+    "detail.role": "役割", "detail.roleNone": "役割なし（セッションで扱う）", "detail.rolePick": "選んでください",
+    "detail.roleRequired": "役割を選んでください。周で扱わないなら「役割なし」を選びます。",
     "detail.project": "プロジェクト", "detail.none": "なし",
     "detail.blockedBy": "待ち", "detail.blockedByHint": "着手不可（依存）",
     "detail.notStarted": "着手日待ち",

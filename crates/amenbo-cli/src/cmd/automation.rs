@@ -2061,6 +2061,10 @@ fn render_run(
             span(stretch.started_at, stretch.ended_at)
         };
         human(flags, format!("\ntask {} — {about}  {stood}", stretch.seq));
+        // A round that failed was filed as a task, and the round's task waits on it.
+        if let Some(filed) = stretch.incident_task_id {
+            human(flags, format!("  failure filed as {}", task_label(filed)));
+        }
         for m in moves.iter().filter(|m| m.run_task_id == Some(stretch.id)) {
             render_move(store, flags, defs, &switched, m)?;
         }

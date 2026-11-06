@@ -403,7 +403,7 @@ amenbo automation place-add 3 --builtin close_task     # 35: done, with the comm
 amenbo automation edge-add --from 32: --to 33         # what happens after each way out (--max-times caps a way back)
 amenbo automation wire-add --from 32: --from-port worktree --to 33 --to-port worktree
 amenbo automation edge-add --from 33: --to 34
-amenbo automation edge-add --from "33:gave up" --halt  # stop the run and call a person
+amenbo automation edge-add --from "33:gave up" --halt  # stop the run; the round is filed to --failures-to
 amenbo automation edge-add --from 34: --to 35
 amenbo automation edge-add --from "34:<unmerged>" --to 33 --max-times 3
 amenbo automation edge-add --from 35: --to 31          # and on to the next task

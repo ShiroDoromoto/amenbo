@@ -1567,6 +1567,9 @@ datasets! {
         // round of a run whose automation defines no role, for one that has not taken its task yet, and
         // where the role has since been taken out (`SET NULL`, for the reason `task_id` is).
         role_id: fk_opt("automation_role", "SET NULL"),
+        // The task filed to whoever the automation sends a failed round to, where this round failed —
+        // the round's task waits on it. `SET NULL` for the reason `task_id` is.
+        incident_task_id: fk_opt("task", "SET NULL"),
     }
 
     // **One step, run once.** `seq` is the move number within the run, so a step the run comes back

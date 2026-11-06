@@ -36,9 +36,11 @@
 //!
 //! **Paused holds its task.** The work is half done and nobody else should take it. Stopping does the
 //! opposite — hands the task back to `todo` — because a run that was cut off left no one carrying it.
-//! A run that stopped to call a person also gives the task to the human, with the report of the step
-//! that stopped on it (`AMB-D-966`), and so does one a person canceled or one that crashed
-//! (`AMB-D-985`).
+//! **A round that failed is filed**: a task goes to whoever the automation sends a failed round to
+//! ([`crate::model::Automation::failures_to`]), carrying why it failed and where, and the round's task
+//! waits on it. Its own assignee and role are left as they were, so the run that takes it once that
+//! task is closed is the one that would have, and starts it from the first step. A run a person
+//! canceled gives the task to the human instead, with the report of the step it stopped on.
 //!
 //! **A crash is told to core, or read at startup.** A step's program that ends before its step has
 //! reported is seen by the app that started it, which says so here ([`step_ended`], `AMB-D-961`). An
@@ -46,11 +48,11 @@
 //! run marked `running` cannot be running in a process that no longer exists. So that check is made
 //! once, at startup ([`sweep`]), by whoever opens the store.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, ErrorCode, Result};
 use rusqlite::Connection;
 use crate::model::{
     ActorKind, AutomationPauseKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStepStatus,
-    AutomationRunTask, AutomationStoppedReason, TaskStatus,
+    AutomationRunTask, AutomationStoppedReason, FailuresTo, TaskStatus,
 };
 use crate::run_wording::Reached;
 use crate::store_engine::{read, record, WriteTx};
@@ -170,10 +172,11 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
 
     close_step(tx, before.id, ending, now)?;
-    close_stretch(tx, stretch.as_ref(), now)?;
-    if ending.cut_short() {
-        hand_the_task_back(tx, &after, stretch.as_ref(), ending)?;
-    }
+    let incident = match ending.cut_short() {
+        true => hand_the_task_back(tx, &after, stretch.as_ref(), ending)?,
+        false => None,
+    };
+    close_stretch(tx, stretch.as_ref(), now, incident)?;
     Ok(Ended { run: after })
 }
 
@@ -221,12 +224,19 @@ fn close_step(tx: &WriteTx<'_>, run_id: i64, ending: Ending, now: Timestamp) -> 
 }
 
 /// Close the stretch the run was in — at the run's end, and at the end of a round
-/// ([`crate::ops::automation_report`]). A stretch already closed is left alone: a run that handed its
-/// task back has nothing open.
-pub(crate) fn close_stretch(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>, now: Timestamp) -> Result<()> {
+/// ([`crate::ops::automation_report`]) — naming the task it was filed as where it failed
+/// ([`hand_the_task_back`]). A stretch already closed is left alone: a run that handed its task back
+/// has nothing open.
+pub(crate) fn close_stretch(
+    tx: &WriteTx<'_>,
+    stretch: Option<&AutomationRunTask>,
+    now: Timestamp,
+    incident: Option<i64>,
+) -> Result<()> {
     let Some(before) = stretch.filter(|s| s.ended_at.is_none()) else { return Ok(()) };
     let mut ended = before.clone();
     ended.ended_at = Some(now);
+    ended.incident_task_id = incident;
     ended.updated_at = now;
     crate::ops::emit_update(
         tx,
@@ -235,7 +245,8 @@ pub(crate) fn close_stretch(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask
     )
 }
 
-/// Give the task the run was working back, and say on it what became of the run.
+/// Give the task the run was working back, and say on it what became of the run — and, where the round
+/// failed, file the failure. Answers the task it was filed as.
 ///
 /// **Only a task the run itself reserved** is handed back: a step takes its task from `todo` to
 /// `in_progress` ([`crate::ops::automation_report::take`]), and anything else it is in by now was put
@@ -244,16 +255,18 @@ pub(crate) fn close_stretch(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask
 ///
 /// The line is left on a task that is still open, because what a person needs is to know the run is
 /// not coming back — and where it got to, so they can judge what is half done. A closed task gets no
-/// line: nobody reads one there, and the run's history already says how it ended (`AMB-D-963`).
+/// line and files nothing: nobody reads one there, nothing is left to wait, and the run's history
+/// already says how it ended (`AMB-D-963`).
 ///
-/// **A run that stopped to call a person gives the task to that person** (`AMB-D-966`). Back in `todo`
-/// alone, it is a task any run may take, and the next one takes it at once and stops at the same place.
-/// So it is also assigned to the human — the one who launched the run, since a local store knows a
-/// launcher only by facet, and a launch by the AI facet handed back to the AI would be that loop again.
-/// Taking it up means handing it back to the AI. [`to_a_person`] names the endings that do this.
+/// **A failed round files a task and leaves its own alone** ([`file_the_failure`]). Back in `todo`
+/// alone, it is a task any run may take, and the next one takes it at once and falls at the same place.
+/// Waiting on the filed task, it is taken by nobody until that one is closed — and then by whoever
+/// would have taken it, since its assignee and role are as they were. A run that failed is not picked
+/// up again (`AMB-D-961`), so the one that takes it starts at the first step.
 ///
-/// What the person reads there is the report of the step that stopped, under the line: that is where
-/// the agent said what it needs, and the line alone says only that it stopped.
+/// **A run a person canceled gives the task to the human** — the one who launched the run, since a
+/// local store knows a launcher only by facet. A person stopped it, so what happens next is theirs to
+/// say. What they read there is the report of the step it stopped on, under the line.
 ///
 /// **A stretch already ended handed its task back before the run stopped**
 /// ([`crate::ops::automation_builtin_hand_back`]) or put it off
@@ -265,51 +278,123 @@ fn hand_the_task_back(
     run: &AutomationRun,
     stretch: Option<&AutomationRunTask>,
     ending: Ending,
-) -> Result<()> {
+) -> Result<Option<i64>> {
     let Some(task_id) = stretch.filter(|s| s.ended_at.is_none()).and_then(|s| s.task_id) else {
-        return Ok(());
+        return Ok(None);
     };
     if read::task_status(tx.conn(), task_id)? == Some(TaskStatus::InProgress) {
         crate::ops::task::set_status(tx, task_id, TaskStatus::Todo, ActorKind::Ai)?;
     }
     if crate::ops::comment::task_closed(tx, task_id)? {
-        return Ok(());
+        return Ok(None);
     }
     let line = said(tx, run, ending)?;
-    if !to_a_person(ending) {
-        crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
-        return Ok(());
-    }
-    crate::ops::task::set_assignee(tx, task_id, Some(ActorKind::Human), ActorKind::Ai)?;
-    match unsaid_report(tx, run)? {
-        Some((run_step_id, report)) => {
-            let text = format!("{line}\n\n{report}");
-            crate::ops::comment::add_report_comment(tx, task_id, ActorKind::Ai, &text, run_step_id)?;
-        }
-        None => {
+    match ending {
+        Ending::Failed(_) => {
+            let filed = file_the_failure(tx, run, task_id, &line)?;
             crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
+            Ok(Some(filed))
         }
+        Ending::Canceled => {
+            crate::ops::task::set_assignee(tx, task_id, Some(ActorKind::Human), ActorKind::Ai)?;
+            match unsaid_report(tx, run)? {
+                Some((run_step_id, report)) => {
+                    let text = format!("{line}\n\n{report}");
+                    crate::ops::comment::add_report_comment(tx, task_id, ActorKind::Ai, &text, run_step_id)?;
+                }
+                None => {
+                    crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
+                }
+            }
+            Ok(None)
+        }
+        Ending::Completed => Ok(None),
     }
-    Ok(())
 }
 
-/// **Whether an ending gives the task to a person** rather than back to the AI.
+/// **File a failed round** to whoever the automation sends one to ([`FailuresTo`]), and make the
+/// round's task wait on it. Answers the task filed.
 ///
-/// - [`AutomationStoppedReason::Halted`]: a way out the picture sends to a person — one the author drew
-///   so, or the error one, which goes there unless drawn elsewhere (`AMB-D-966`).
-/// - [`Ending::Canceled`]: a person stopped it, so what happens next is theirs to say (`AMB-D-985`).
-/// - [`AutomationStoppedReason::Crashed`]: Amenbo cannot tell why it went down — something in the task
-///   that brings every run down at the same place, or a worktree left half written. The next run would
-///   take it at once and could fall the same way, with no limit on the turns (`AMB-D-985`).
-///
-/// Every other failure is the run's own — the picture's shape or the machine's — and not a question
-/// about the task.
-fn to_a_person(ending: Ending) -> bool {
-    matches!(
-        ending,
-        Ending::Canceled
-            | Ending::Failed(AutomationStoppedReason::Halted | AutomationStoppedReason::Crashed)
-    )
+/// - **What it says** is why the run failed and the step it got to — the line ([`said`]) as its title —
+///   and, in its notes, the line again with the report that step left, where it left one. Why it went
+///   wrong, how to put it right, and whether it is the same fault as another are not Amenbo's to say.
+/// - **Who it goes to**: a person is the human assignee; a role is the task's role, worked by the AI.
+///   An automation that names nobody — one launched before it had to — or a role that is not its own
+///   any more files to the human, since a failure filed to nobody is one nobody reads.
+/// - **It is filed in the round's task's project**, so the edge stays inside one project. A role is
+///   named only there, since a task takes a role from its own project's automations.
+/// - **A classification the project requires** is filled from the time axis where that is the one; any
+///   other leaves the task still being written, where a person sees it and fills it in. A failure is
+///   filed either way: refusing it would leave the run unable to end.
+fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &str) -> Result<i64> {
+    let conn = tx.conn();
+    let project_id = read::task(conn, task_id)?.and_then(|t| t.project_id);
+    let to = failures_to(tx, run)?;
+    let role_id = to.role_id().filter(|_| project_id == Some(run.project_id));
+    let notes = match last_report(tx, run)? {
+        Some(report) => format!("{line}\n\n{report}"),
+        None => line.to_string(),
+    };
+    let filed = crate::ops::task::add(
+        tx,
+        crate::ops::task::NewTask {
+            title: line.to_string(),
+            project_id,
+            due: None,
+            start: None,
+            priority: None,
+            notes,
+            created_by_kind: Some(ActorKind::Ai),
+            at_binding_id: None,
+            made_in: None,
+            role_id,
+        },
+    )?;
+    if let Some(project_id) = project_id {
+        let today = crate::time::today();
+        if let Some((_, value)) = crate::ops::task::time_axis_default(conn, project_id, today, &[])? {
+            crate::ops::dimension::set(tx, filed.id, value)?;
+        }
+    }
+    let assignee = match role_id {
+        Some(_) => ActorKind::Ai,
+        None => ActorKind::Human,
+    };
+    crate::ops::task::set_assignee(tx, filed.id, Some(assignee), ActorKind::Ai)?;
+    crate::ops::dependency::add(tx, task_id, filed.id, Some(ActorKind::Ai))?;
+    match crate::ops::task::finish_creating(tx, filed.id, ActorKind::Ai) {
+        Err(e) if e.error_code() == ErrorCode::InvalidTaskRequiredDimension => {}
+        other => {
+            other?;
+        }
+    }
+    Ok(filed.id)
+}
+
+/// **Who the run's automation sends a failed round to** — read off the automation as it stands, since
+/// it is the automation's and not part of a saved version. Nobody, or a role that is no longer one of
+/// its own, is the human.
+fn failures_to(tx: &WriteTx<'_>, run: &AutomationRun) -> Result<FailuresTo> {
+    let conn = tx.conn();
+    let named = read::automation(conn, run.automation_id)?.and_then(|a| a.failures_to);
+    Ok(match named {
+        Some(FailuresTo::Role { role_id }) => {
+            match read::automation_role(conn, role_id)? {
+                Some(role) if role.automation_id == run.automation_id => FailuresTo::Role { role_id },
+                _ => FailuresTo::Human,
+            }
+        }
+        _ => FailuresTo::Human,
+    })
+}
+
+/// The report of the step the run stopped at, whole — whether or not the step also carried it onto the
+/// task. `None` where it left none.
+fn last_report(tx: &WriteTx<'_>, run: &AutomationRun) -> Result<Option<String>> {
+    let Some(last) = read::automation_run_steps_of(tx.conn(), run.id)?.pop() else {
+        return Ok(None);
+    };
+    Ok((!last.report.trim().is_empty()).then_some(last.report))
 }
 
 /// The report of the step the run stopped at, with that execution's id — unless it is empty, or the
@@ -823,6 +908,18 @@ mod tests {
             .collect()
     }
 
+    /// **The task a failed round was filed as** — named on the round, and what the round's task waits
+    /// on.
+    fn filed_for(tx: &WriteTx<'_>, run_id: i64, task: i64) -> crate::model::Task {
+        let round = read::automation_run_task_last(tx.conn(), run_id).expect("read").expect("a round");
+        let filed = round.incident_task_id.expect("the round was filed");
+        assert!(
+            read::dependency_id(tx.conn(), task, filed).expect("read").is_some(),
+            "the round's task waits on it",
+        );
+        read::task(tx.conn(), filed).expect("read").expect("the filed task")
+    }
+
     /// The step execution as it stands now.
     fn step_row(tx: &WriteTx<'_>, run_step_id: i64) -> crate::model::AutomationRunStep {
         read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("the step")
@@ -877,6 +974,7 @@ mod tests {
             assert_eq!(status_of(tx, other.id), AutomationRunStatus::Running);
             let opening = opened(tx, &going, &p.first);
             let task = a_task_in_hand(tx, p.automation.project_id, opening.run_step.id);
+            let assignee = read::task(tx.conn(), task).expect("read").expect("the task").assignee_kind;
 
             let swept = sweep(tx).expect("sweep");
             assert_eq!(swept.len(), 2, "both were going when the window went");
@@ -894,12 +992,20 @@ mod tests {
                 crate::model::TaskStatus::Todo,
             );
             assert!(!comments_on(tx, task).is_empty(), "and it was told what happened");
-            // Amenbo cannot tell why it went down, so the next run does not take it straight back
-            // and fall the same way (`AMB-D-985`).
+            // Amenbo cannot tell why it went down, so the round is filed, and the task waits on that
+            // rather than being taken straight back to fall the same way. It stays whose it was.
+            let filed = filed_for(tx, going.id, task);
+            assert_eq!(filed.assignee_kind, Some(ActorKind::Human), "filed to the person");
+            assert!(!filed.draft, "filed and finished");
             assert_eq!(
                 read::task(tx.conn(), task).expect("read").expect("the task").assignee_kind,
-                Some(ActorKind::Human),
-                "it is the person's turn",
+                assignee,
+                "the task's own assignee is left alone",
+            );
+            assert_eq!(
+                read::automation_run_task_last(tx.conn(), other.id).expect("read").and_then(|r| r.incident_task_id),
+                None,
+                "a run with no task in hand files nothing",
             );
         });
     }
@@ -1086,21 +1192,23 @@ mod tests {
         });
     }
 
-    /// **A run that stops to call a person gives the task to the human, with the step's report on it**
-    /// (`AMB-D-966`) — so the next run does not take it straight back and stop at the same place.
+    /// **A round that stops on a way out that halts it is filed** — to whoever the automation sends a
+    /// failed round to, saying why and with the step's report — and the round's task waits on it, its
+    /// own assignee left alone, so the next run does not take it straight back and stop at the same
+    /// place.
     #[test]
-    fn a_run_that_calls_a_person_gives_the_task_to_the_human_with_the_report() {
+    fn a_halted_round_is_filed_with_the_report_and_its_task_waits_on_it() {
         with_tx(|tx| {
             let p = picture(tx, false);
             let on = crate::model::AutomationPictureOwner::Automation;
             automation::edge_add(tx, on, p.second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
-                .expect("error calls a person");
+                .expect("error halts");
             let run = a_run(tx, &p.automation);
             let first = opened(tx, &run, &p.first);
             let task = a_task_in_hand(tx, p.project, first.run_step.id);
+            let before = read::task(tx.conn(), task).expect("read").expect("the task");
             done(tx, first.run_step.id, None, "Looked at it.").expect("done");
             let second = opened(tx, &run, &p.second);
-            let head = outbox_head(tx);
             let stopped = done(
                 tx,
                 second.run_step.id,
@@ -1110,30 +1218,60 @@ mod tests {
             .expect("done");
 
             assert!(matches!(stopped, Next::Halted(_)));
-            assert_eq!(
-                events_after(tx, head),
-                vec![
-                    by_ai(TASK_STATUS_CHANGED, Some("todo")),
-                    by_ai(TASK_ASSIGNED, Some("human")),
-                    by_ai(COMMENT_ADDED, None),
-                ],
-                "the person it is handed to hears of it, as the AI's doing",
-            );
             let after = read::task(tx.conn(), task).expect("read").expect("the task");
             assert_eq!(after.status, TaskStatus::Todo);
-            assert_eq!(after.assignee_kind, Some(ActorKind::Human), "it is the person's turn");
+            assert_eq!(after.assignee_kind, before.assignee_kind, "its assignee is left alone");
+            assert_eq!(after.role_id, before.role_id, "and so is its role");
             let said = comments_on(tx, task);
             assert_eq!(said.len(), 1, "{said:?}");
-            assert!(said[0].contains("Which currency should the total be in?"), "{}", said[0]);
             assert!(said[0].contains(&format!("run {}", run.id)), "{}", said[0]);
+
+            let filed = filed_for(tx, run.id, task);
+            assert_eq!(filed.project_id, Some(p.project), "filed in the task's own project");
+            assert_eq!(filed.assignee_kind, Some(ActorKind::Human), "filed to the person");
+            assert_eq!(filed.status, TaskStatus::Todo);
+            assert!(!filed.draft, "filed and finished");
+            assert!(filed.title.contains("直す"), "the title names the step: {}", filed.title);
+            assert!(filed.title.contains(&format!("run {}", run.id)), "{}", filed.title);
+            assert!(filed.notes.contains("Which currency should the total be in?"), "{}", filed.notes);
         });
     }
 
-    /// **An error way out with no line after it calls a person too** (`AMB-D-966`), where the step's
-    /// error way out returns to the action's and the automation draws nothing after that — the shape
-    /// every action written from a prompt is born in, and the one a run walked into `no_way_on` before.
+    /// **A round filed to a role** gets that role, worked by the AI; the round's task keeps the
+    /// assignee and the role it had.
     #[test]
-    fn an_error_way_out_nobody_drew_a_line_from_calls_a_person() {
+    fn a_round_filed_to_a_role_names_the_role() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let role = automation::role_add(
+                tx,
+                p.automation.id,
+                automation::NewRole { name: "直す人".into(), ..Default::default() },
+            )
+            .expect("a role");
+            let to = Some(Some(crate::model::FailuresTo::Role { role_id: role.id }));
+            automation::update(tx, p.automation.id, None, None, None, None, to).expect("to the role");
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, first.run_step.id);
+            let before = read::task(tx.conn(), task).expect("read").expect("the task");
+
+            step_ended(tx, first.run_step.id).expect("step ended").expect("a run to end");
+
+            let filed = filed_for(tx, run.id, task);
+            assert_eq!(filed.role_id, Some(role.id), "filed to the role");
+            assert_eq!(filed.assignee_kind, Some(ActorKind::Ai), "which the AI works");
+            let after = read::task(tx.conn(), task).expect("read").expect("the task");
+            assert_eq!(after.role_id, before.role_id, "the task's role is left alone");
+            assert_eq!(after.assignee_kind, before.assignee_kind, "and so is its assignee");
+        });
+    }
+
+    /// **An error way out with no line after it halts the round too**, where the step's error way out
+    /// returns to the action's and the automation draws nothing after that — the shape every action
+    /// written from a prompt is born in, and the one a run walked into `no_way_on` before.
+    #[test]
+    fn an_error_way_out_nobody_drew_a_line_from_files_the_round() {
         with_tx(|tx| {
             let p = picture(tx, false);
             let run = a_run(tx, &p.automation);
@@ -1149,19 +1287,18 @@ mod tests {
             )
             .expect("done");
 
-            let Next::Halted(ended) = stopped else { panic!("the run stops to call a person") };
+            let Next::Halted(ended) = stopped else { panic!("the run halts") };
             assert_eq!(ended.run.stopped_reason, Some(AutomationStoppedReason::Halted));
             let after = read::task(tx.conn(), task).expect("read").expect("the task");
             assert_eq!(after.status, TaskStatus::Todo);
-            assert_eq!(after.assignee_kind, Some(ActorKind::Human), "it is the person's turn");
-            let said = comments_on(tx, task);
-            assert!(said.iter().any(|line| line.contains("The tests would not build.")), "{said:?}");
+            let filed = filed_for(tx, run.id, task);
+            assert!(filed.notes.contains("The tests would not build."), "{}", filed.notes);
         });
     }
 
     /// The same holds for the step's own error way out, with the line inside the action rubbed out.
     #[test]
-    fn a_step_error_way_out_with_no_line_inside_calls_a_person() {
+    fn a_step_error_way_out_with_no_line_inside_files_the_round() {
         with_tx(|tx| {
             let p = picture(tx, false);
             let step = read::automation_action(tx.conn(), p.second.action_id)
@@ -1191,21 +1328,21 @@ mod tests {
             let stopped =
                 done(tx, second.run_step.id, Some(error.id), "Stuck on it.").expect("done");
 
-            let Next::Halted(ended) = stopped else { panic!("the run stops to call a person") };
+            let Next::Halted(ended) = stopped else { panic!("the run halts") };
             assert_eq!(ended.run.stopped_reason, Some(AutomationStoppedReason::Halted));
-            let after = read::task(tx.conn(), task).expect("read").expect("the task");
-            assert_eq!(after.assignee_kind, Some(ActorKind::Human), "it is the person's turn");
+            filed_for(tx, run.id, task);
         });
     }
 
-    /// A step that already carries its report onto the task is not said twice when it calls a person.
+    /// A step that already carries its report onto the task is not said there twice when its round is
+    /// filed.
     #[test]
-    fn a_report_already_on_the_task_is_not_said_again_when_the_run_calls_a_person() {
+    fn a_report_already_on_the_task_is_not_said_again_when_the_round_is_filed() {
         with_tx(|tx| {
             let p = picture(tx, false);
             let on = crate::model::AutomationPictureOwner::Automation;
             automation::edge_add(tx, on, p.second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
-                .expect("error calls a person");
+                .expect("error halts");
             let action = read::automation_action(tx.conn(), p.second.action_id)
                 .expect("read")
                 .expect("the action");
@@ -1252,8 +1389,8 @@ mod tests {
     }
 
     /// **A run does not complete with its task still in progress** (`AMB-D-967`). It fails with a
-    /// reason of its own, and the task is handed back as any failure's is — to `todo`, with a line, and
-    /// with the assignee it had: this is the machinery's fault, not a question for a person.
+    /// reason of its own, and the task is handed back as any failure's is — to `todo`, with a line, with
+    /// the assignee it had, and waiting on the task the round was filed as.
     #[test]
     fn a_run_that_reaches_the_end_with_its_task_in_progress_fails() {
         with_tx(|tx| {
@@ -1271,10 +1408,12 @@ mod tests {
             assert_eq!(after.stopped_reason, Some(AutomationStoppedReason::LeftTaskOpen));
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Todo));
             let back = read::task(tx.conn(), task).expect("read").expect("task");
-            assert_eq!(back.assignee_kind, assignee, "nobody is called");
+            assert_eq!(back.assignee_kind, assignee, "its assignee is left alone");
             let said = comments_on(tx, task);
             assert_eq!(said.len(), 1, "{said:?}");
             assert!(said[0].contains("without closing the task"), "{said:?}");
+            let filed = filed_for(tx, run.id, task);
+            assert!(filed.title.contains("without closing the task"), "{}", filed.title);
         });
     }
 

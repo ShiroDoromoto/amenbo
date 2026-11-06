@@ -2387,8 +2387,8 @@ pub enum AutomationStoppedReason {
     /// it was out ([`crate::ops::automation_run::Waiting::NoWayOn`]), or a way out leads to a spot the
     /// run never copied down.
     NoWayOn,
-    /// A step left through a way out the picture wires to "stop and call a person" — an ending the
-    /// author of the automation chose, rather than one the machinery ran into.
+    /// A step left through a way out the picture wires to halt the run — an ending the author of the
+    /// automation chose, rather than one the machinery ran into. Its round is filed as any failure's is.
     Halted,
     /// The run went on — to the next task, or to its end — with the task it had taken still in progress
     /// (`AMB-D-967`). The launch check refuses a picture that can do this, so reaching it means the
@@ -2789,6 +2789,11 @@ pub struct AutomationRunTask {
     /// been taken out.
     #[serde(default)]
     pub role_id: Option<i64>,
+    /// **The task this round was filed as when it failed** — filed to whoever the automation sends a
+    /// failed round to ([`Automation::failures_to`]), with `task_id` waiting on it. `None` for a round
+    /// that did not fail, and where that task has since been deleted.
+    #[serde(default)]
+    pub incident_task_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

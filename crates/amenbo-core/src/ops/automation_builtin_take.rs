@@ -14,9 +14,9 @@
 //! the run starts no round of, is left for a person. An automation defining no such role takes any task
 //! the filter finds.
 //!
-//! **Left unanswered, the filter is the tasks given to the AI** (`assignee:me-ai`). A run that stops to
-//! call a person hands its task to that person (`AMB-D-966`); a filter that did not ask for the AI's
-//! would take it straight back.
+//! **Left unanswered, the filter is the tasks given to the AI** (`assignee:me-ai`). The built-in that
+//! hands a task back to a person gives it to the human, and so does a run a person canceled; a filter
+//! that did not ask for the AI's would take it straight back.
 //!
 //! It leaves by [`TAKEN`] with the task it reserved, or by [`NONE_TO_TAKE`] with nothing —
 //! the step that went looking and found none, which owes no report and keeps no stretch

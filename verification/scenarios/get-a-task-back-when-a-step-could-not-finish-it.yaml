@@ -4,14 +4,15 @@
 # a step that took one failed the run with nothing left to open — and the task went back to `todo`
 # still assigned to the AI, where the next run would take it straight back and stop in the same place.
 #
-# Now the run halts there, as it does on a way out drawn to call a person: the task goes to the
-# person who launched the run, with the step's report on it.
+# Now the run halts there, as it does on a way out drawn to halt. The task goes back to `todo` with its
+# own assignee, and waits on a task filed to whoever the automation sends a failed round to, carrying
+# the step's report — so no run takes it again until that one is closed.
 id: get-a-task-back-when-a-step-could-not-finish-it
-title: A step that leaves by an error way out nobody drew a line from hands its task to a person
+title: A step that leaves by an error way out nobody drew a line from files its round as a failure
 description: >
   Start a run whose built-in takes a task, then report the step after it done by its error way out, which has no
-  line drawn from it. The run fails because a way out called for a person, and the task is `todo`
-  again, assigned to a human, with the step's report on its timeline. Then say the failure has been
+  line drawn from it. The run fails halted, and the task is `todo` again, still the AI's, with a line
+  on its timeline naming the step it stopped at. Then say the failure has been
   seen from a plain shell, as a person's AI would for them, and it leaves the running tab for the
   history, still saying why it stopped.
 given:
@@ -83,8 +84,8 @@ steps_gui:
       exit: "*"
       report: the tests would not build
 
-  # The person's turn: back to `todo`, and on a human rather than the AI, so no run takes it again
-  # until somebody has looked.
+  # Back to `todo`, its assignee left as it was: what keeps a run from taking it straight back is the
+  # failure filed for it, which it now waits on.
   - type: assert
     domain: task
     op: field
@@ -99,14 +100,14 @@ steps_gui:
     with:
       target: seed
       field: assignee_kind
-      equals: human
+      equals: ai
 
   - type: assert
     domain: task
     op: commented
     with:
       target: seed
-      text: the tests would not build
+      text: claim
       present: true
 
   - type: action

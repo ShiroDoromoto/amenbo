@@ -499,8 +499,8 @@ fn whats_next(
             true => round_over(tx, run),
             false => Ok(Next::Closed(automation_stop::ended(tx, run, Ending::Completed)?)),
         },
-        // The way out calls a person: an ending the author of the picture chose, or an error way out
-        // nobody drew a line from (`AMB-D-966`).
+        // The way out halts the run, and the round is filed as a failure: an ending the author of the
+        // picture chose, or an error way out nobody drew a line from.
         Onward::Halt => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::Halted)?)),
         // Nothing says what follows the way out — or it leads somewhere the run never copied down,
         // such as a placement added after the launch. The run has no snapshot of that and will not
@@ -535,7 +535,7 @@ fn whats_next(
 fn round_over(tx: &WriteTx<'_>, run: AutomationRun) -> Result<Next> {
     let conn = tx.conn();
     let stretch = read::automation_run_task_last(conn, run.id)?;
-    automation_stop::close_stretch(tx, stretch.as_ref(), Timestamp::now())?;
+    automation_stop::close_stretch(tx, stretch.as_ref(), Timestamp::now(), None)?;
     if run.pause_requested || run.pause_before_next_task || automation_stop::automation_stopped(conn, &run)? {
         return Ok(Next::Paused(automation_stop::settle(tx, run, AutomationPauseKind::BeforeNextTask)?));
     }

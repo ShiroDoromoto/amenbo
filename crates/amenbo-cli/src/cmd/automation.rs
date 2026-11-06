@@ -387,10 +387,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 for card in &cards {
                     let archived = if card.automation.archived { "  archived" } else { "" };
                     let export_only = if card.automation.export_only { "  export only" } else { "" };
+                    let stopped = if card.automation.stopped { "  stopped" } else { "" };
                     human(
                         flags,
                         format!(
-                            "  {}  {}  {} placement(s){export_only}{archived}",
+                            "  {}  {}  {} placement(s){export_only}{stopped}{archived}",
                             card.automation.id, card.automation.name, card.placements
                         ),
                     );
@@ -480,14 +481,19 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
-        AutomationCmd::Trigger { id, every, title, notes, off } => {
+        AutomationCmd::Trigger { id, every, when_idle, title, notes, off } => {
             use amenbo_core::model::{TriggerTask, TriggerWhen};
-            let trigger = match (off, every, title) {
-                (false, Some(minutes), Some(title)) => Some(amenbo_core::ops::automation::NewTrigger {
-                    when: TriggerWhen::Every { minutes },
+            let when = match (every, when_idle) {
+                (Some(minutes), _) => Some(TriggerWhen::Every { minutes }),
+                (None, true) => Some(TriggerWhen::Idle),
+                (None, false) => None,
+            };
+            let trigger = match (off, when, title) {
+                (false, Some(when), Some(title)) => Some(amenbo_core::ops::automation::NewTrigger {
+                    when,
                     task: TriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() },
                 }),
-                // clap asks for both unless --off is given, and refuses them beside it.
+                // clap asks for a when and a title unless --off is given, and refuses them beside it.
                 _ => None,
             };
             let a = store.automation_trigger_set(id, trigger).map_err(CliError::from)?;
@@ -496,6 +502,24 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 None => format!("✓ Automation {} ({}) has no trigger", a.name, a.id),
             };
             write_envelope(flags, "automation.trigger", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
+        }
+        AutomationCmd::Stop { id, off } => {
+            let done = store.automation_set_stopped(id, !off).map_err(CliError::from)?;
+            let a = &done.automation;
+            let line = match (a.stopped, done.paused.is_empty()) {
+                (false, _) => format!("✓ Automation {} ({}) starts new rounds again", a.name, a.id),
+                (true, true) => format!("✓ Stopped automation {} ({}) — it starts no new round", a.name, a.id),
+                (true, false) => format!(
+                    "✓ Stopped automation {} ({}) — it starts no new round; paused run(s) waiting for room to take a task: {}",
+                    a.name,
+                    a.id,
+                    done.paused.iter().map(|r| r.id.to_string()).collect::<Vec<_>>().join(", ")
+                ),
+            };
+            let paused: Vec<i64> = done.paused.iter().map(|r| r.id).collect();
+            let mut resource = serde_json::to_value(a).unwrap();
+            resource["paused_runs"] = json!(paused);
+            write_envelope(flags, "automation.stop", "automation", resource, None, false, line);
         }
         AutomationCmd::Rm { id } => {
             if !confirm(flags, "delete automation")? {
@@ -1478,11 +1502,12 @@ fn render_automation(flags: &Flags, view: &AutomationView, waits: Option<&TaskWa
         None => "starts nowhere".to_string(),
     };
     let archived = if a.archived { "  archived" } else { "" };
+    let stopped = if a.stopped { "  stopped" } else { "" };
     let at_most = format!("  at most {} run(s) at once", a.max_concurrent_runs);
     human(
         flags,
         format!(
-            "project {}  {}  {} placement(s){at_most}{archived}",
+            "project {}  {}  {} placement(s){at_most}{stopped}{archived}",
             a.project_id,
             entry,
             view.placements.len()
@@ -1512,16 +1537,17 @@ fn render_automation(flags: &Flags, view: &AutomationView, waits: Option<&TaskWa
     }
 }
 
-/// What an automation's trigger does, and when it is next asked.
+/// What an automation's trigger does, and when it is next asked (for an `idle`, the soonest it may be).
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
-    let when = match trigger.when {
-        TriggerWhen::Every { minutes } => format!("every {minutes} minute(s)"),
+    let (when, next) = match trigger.when {
+        TriggerWhen::Every { minutes } => (format!("every {minutes} minute(s)"), "next at"),
+        TriggerWhen::Idle => ("whenever none of its runs is under way".to_string(), "not before"),
     };
     let task = match &trigger.task {
         TriggerTask::Fixed { title, .. } => format!("\"{title}\""),
     };
-    format!("starts a run on its own {when}, filing {task} — next at {}", trigger.next_at.to_rfc3339_z())
+    format!("starts a run on its own {when}, filing {task} — {next} {}", trigger.next_at.to_rfc3339_z())
 }
 
 /// An automation Amenbo is waiting on a task for: since when, what for, and how to stop it.

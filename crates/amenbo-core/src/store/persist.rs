@@ -1385,6 +1385,18 @@ impl Store {
         })
     }
 
+    /// Stop an automation from starting new rounds, or let it start them again (one operation = one
+    /// transaction) — [`crate::ops::automation::stop`].
+    pub fn automation_set_stopped(
+        &mut self,
+        id: i64,
+        stopped: bool,
+    ) -> Result<crate::ops::automation::Stopped> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
+            crate::ops::automation::stop(tx, id, stopped)
+        })
+    }
+
     /// Reorder an automation within its project (one operation = one transaction).
     pub fn automation_move(
         &mut self,

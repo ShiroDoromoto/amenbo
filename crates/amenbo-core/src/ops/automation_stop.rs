@@ -438,6 +438,26 @@ pub fn pause_run_before_next_task(tx: &WriteTx<'_>, run_id: i64) -> Result<Pause
     }
 }
 
+/// **Pause every run of an automation that stands waiting to take a task** — what a person stopping
+/// the automation pauses at once ([`crate::ops::automation::stop`]). Each holds no task, so it pauses
+/// before its next task, as [`pause_run_before_next_task`] pauses one. A run anywhere else goes on.
+pub(crate) fn pause_the_waiting(tx: &WriteTx<'_>, automation_id: i64) -> Result<Vec<AutomationRun>> {
+    let mut paused = Vec::new();
+    for run_id in read::automation_run_ids_under_way(tx.conn(), automation_id)? {
+        let run = live_run(tx, run_id)?;
+        if run.status == AutomationRunStatus::Running && waits_to_take_a_task(tx.conn(), run_id)? {
+            paused.push(settle(tx, run, AutomationPauseKind::BeforeNextTask)?.run);
+        }
+    }
+    Ok(paused)
+}
+
+/// **Whether the automation a run belongs to is stopped** ([`crate::model::Automation::stopped`]) — where
+/// the run, about to take its next task, pauses instead.
+pub(crate) fn automation_stopped(conn: &Connection, run: &AutomationRun) -> Result<bool> {
+    Ok(read::automation(conn, run.automation_id)?.is_some_and(|a| a.stopped))
+}
+
 /// Whether this run stands at the built-in that takes a task — before a take that would wait for one,
 /// or waiting for room in the action it is the first step of.
 fn waits_to_take_a_task(conn: &Connection, run_id: i64) -> Result<bool> {

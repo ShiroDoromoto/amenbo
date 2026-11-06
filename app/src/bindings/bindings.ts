@@ -3922,7 +3922,11 @@ export type TaskCardDto = { id: number, title: string,
 /**
  * The name it goes by on screen, `#<n>` (the display form of `id`).
  */
-ref: string, notes: string, projectId: number | null, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", assignee: ActorDto | null, priority: "high" | "medium" | "low" | null, due: ScheduleDto | null, 
+ref: string, notes: string, projectId: number | null, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", assignee: ActorDto | null, 
+/**
+ * The role the task is worked under, by its id — one of [`TaskRoleDto`]'s — or `null` for none.
+ */
+roleId: number | null, priority: "high" | "medium" | "low" | null, due: ScheduleDto | null, 
 /**
  * The declared start, whether or not it has come. `not_started_until` below is the premise this
  * field can raise; this is the field itself, which is what the pane editing it has to show — a start
@@ -4041,6 +4045,21 @@ limit: number | null, };
  * A reference to a task (id + title). The id is an integer key.
  */
 export type TaskRefDto = { id: number, name: string, };
+
+/**
+ * One role a task of a project can be worked under: a role defined in one of the project's
+ * automations. The task editor lists these, automation by automation and each in the order it is
+ * defined in, as the choices of its role field.
+ */
+export type TaskRoleDto = { id: number, name: string, 
+/**
+ * The icon it is drawn with, by the name the GUI knows it under, or `null` for none chosen.
+ */
+icon: string | null, automationId: number, 
+/**
+ * The name of the automation it is defined in, to tell apart two roles of the same name.
+ */
+automationName: string, };
 
 /**
  * The **update available** state, for the GUI. Takes the store's `version_status` and raises

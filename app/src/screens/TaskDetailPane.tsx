@@ -25,6 +25,8 @@ import { DimensionField } from "../components/DimensionField";
 import type { DimensionDto } from "../bindings/bindings";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
 import { ErrorNote } from "../components/ErrorNote";
+import { RoleField, ROLE_NONE } from "../components/RoleField";
+import { useProjectRoles } from "../core/projectRoles";
 import { Icon } from "../components/Icon";
 
 // The placement to display. The Tauri DTO already carries task.placement (name included); the mock
@@ -159,6 +161,8 @@ export function TaskDetailPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editCommentAt?.nonce]);
   const roster = dataAdapter.listRoster();
+  // The roles of the task's project, for the role field drawn while the task is the AI's.
+  const roles = useProjectRoles(task ? (placementOf(task)?.project.id ?? task.projectId ?? null) : null);
   // The comment box: a second send before the first has landed is dropped: the box still holds the body, so it would post it again.
   const { busy: commentBusy, run: runComment } = useSingleFlight();
   if (!task) return <div className="rightpane__empty">{t("detail.notFound")}</div>;
@@ -301,6 +305,21 @@ export function TaskDetailPane({
               />
             </span>
           </div>
+          {/* Asked only of a task the AI holds, in a project that defines a role. A choice writes at
+              once, as every field here does (`AMB-D-32`), so there is no unchosen state to refuse a
+              save over: a task without a role is shown as "no role", which is what it is. */}
+          {task.assignee?.kind === "ai" && roles.length > 0 && (
+            <div className="detail__field">
+              <span className="detail__flabel">{t("detail.role")}</span>
+              <span>
+                <RoleField
+                  roles={roles}
+                  value={task.roleId ? String(task.roleId) : ROLE_NONE}
+                  onChange={(v) => store.setRole(taskId, v === ROLE_NONE ? null : Number(v))}
+                />
+              </span>
+            </div>
+          )}
           <div className="detail__field">
             <span className="detail__flabel">{t("detail.project")}</span>
             <span>

@@ -6,10 +6,16 @@ import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
 import { useBoundFolders } from "../core/boundFolders";
+import { useProjectRoles } from "../core/projectRoles";
+import { dataAdapter } from "../mock/adapter";
+import { RoleField, ROLE_NONE } from "../components/RoleField";
+import { ErrorNote } from "../components/ErrorNote";
+import type { Facet } from "../mock/types";
 
 // Creating a new task in the right pane: enter a title plus notes (Markdown) and create it. Where it is created is
 // chosen by the caller (the plus in a column header). A task only gets placed in a project; classification (assigning
-// it to a dimension) is added afterwards from the task detail.
+// it to a dimension) is added afterwards from the task detail. Who it is handed to can be said here, and handed to
+// the AI in a project that defines roles, it also has to say which role it is worked under.
 export function TaskComposePane({
   projectId, label, onCreated, onCancel, onDirtyChange,
 }: {
@@ -36,20 +42,34 @@ export function TaskComposePane({
   const choosing = folders.all.length >= 2;
   const [at, setAt] = useState("");
   const canCreate = title.trim() !== "" && (!choosing || at !== "");
+  // The facet it is handed to, "" for nobody.
+  const [assignee, setAssignee] = useState<Facet | "">("");
+  // The role, asked of a task handed to the AI in a project that defines one. Nothing is chosen until
+  // the person chooses, "no role" included (`AMB-D-531`); creating before that says why under the field
+  // rather than greying the button, so the press is answered.
+  const roles = useProjectRoles(projectId);
+  const askingRole = assignee === "ai" && roles.length > 0;
+  const [role, setRole] = useState("");
+  const [roleMissing, setRoleMissing] = useState(false);
+  const pickAssignee = (next: Facet | "") => { setAssignee(next); setRole(""); setRoleMissing(false); };
 
-  // Dirty whenever there is input (title, notes, either day, or a chosen folder). On unmount, always drop it back to false.
+  // Dirty whenever there is input (title, notes, either day, a chosen folder, an assignee). On unmount, always drop it back to false.
   useEffect(() => {
-    onDirtyChange?.(title.trim() !== "" || notes.trim() !== "" || due !== null || start !== null || at !== "");
+    onDirtyChange?.(title.trim() !== "" || notes.trim() !== "" || due !== null || start !== null || at !== "" || assignee !== "");
     return () => onDirtyChange?.(false);
-  }, [title, notes, due, start, at, onDirtyChange]);
+  }, [title, notes, due, start, at, assignee, onDirtyChange]);
 
   // The button, Enter and Cmd+Enter all come here, and a second of any of them before the answer is dropped:
   // each one that got through would file a task of its own.
   const { busy, run } = useSingleFlight();
   const submit = () => {
     if (!canCreate) return;
+    if (askingRole && role === "") { setRoleMissing(true); return; }
+    const roleId = askingRole && role !== ROLE_NONE ? Number(role) : null;
     run(async () => {
-      const newId = await store.addTask(projectId, title.trim(), notes.trim() || undefined, due, start, choosing ? at : null);
+      const newId = await store.addTask(
+        projectId, title.trim(), notes.trim() || undefined, due, start, choosing ? at : null, assignee || null, roleId,
+      );
       onCreated(newId);
     });
   };
@@ -97,6 +117,27 @@ export function TaskComposePane({
           <span className="detail__flabel">{t("date.start")}</span>
           <DateField label={t("date.start")} value={start ? parseSchedule(start) : null} onChange={setStart} />
         </div>
+        <div className="detail__field">
+          <span className="detail__flabel">{t("detail.assignee")}</span>
+          <select
+            className="btn"
+            aria-label={t("detail.assignee")}
+            value={assignee}
+            onChange={(e) => pickAssignee(e.target.value as Facet | "")}
+          >
+            <option value="">{t("detail.unassigned")}</option>
+            {dataAdapter.listRoster().map((a) => <option value={a.kind} key={a.kind}>{a.name}</option>)}
+          </select>
+        </div>
+        {askingRole && (
+          <>
+            <div className="detail__field">
+              <span className="detail__flabel">{t("detail.role")}</span>
+              <RoleField roles={roles} value={role} onChange={(v) => { setRole(v); setRoleMissing(false); }} />
+            </div>
+            {roleMissing && role === "" && <ErrorNote>{t("detail.roleRequired")}</ErrorNote>}
+          </>
+        )}
         {choosing && (
           <div className="detail__field">
             <span className="detail__flabel">{t("compose.folder")}</span>

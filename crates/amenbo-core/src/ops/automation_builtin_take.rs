@@ -922,6 +922,53 @@ mod tests {
         });
     }
 
+    /// **An automation waiting for a task stops waiting as soon as a person stops it**, with no run to
+    /// pause, and a run that comes back round to take its next task pauses there without taking it.
+    #[test]
+    fn stopping_the_automation_ends_its_wait_and_pauses_its_runs_before_their_next_task() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let waits = waiting_picture(tx, project);
+            let run = launched(tx, &waits);
+            assert!(matches!(open_entry(tx, &run), Opened::LeftToWait { .. }));
+            assert!(waits_since(tx, &waits).is_some(), "the automation waits in the run's place");
+            let stopped = automation::stop(tx, waits.id, true).expect("stop");
+            assert!(stopped.paused.is_empty(), "no run stands waiting for a task");
+            assert_eq!(stopped.automation.waits_for_task_since, None, "the wait ends");
+            assert_eq!(waits_since(tx, &waits), None);
+            assert!(tasks_turned_up(tx.conn(), &[waits.id]).expect("ask").is_empty(), "not waiting");
+            let again = automation::stop(tx, waits.id, true).expect("stop again");
+            assert!(again.paused.is_empty(), "stopping a stopped one writes nothing");
+
+            let rounds = round_picture(tx, project);
+            let a = for_ai(tx, "a", project, Some(Priority::High));
+            let b = for_ai(tx, "b", project, Some(Priority::Low));
+            let claude = ["claude".to_string()];
+            let run = launched(tx, &rounds);
+            let Opened::Carried { next: Next::Step(work), .. } = open_entry(tx, &run) else {
+                panic!("the take goes on to the work");
+            };
+            assert_eq!(status(tx, a), TaskStatus::InProgress);
+            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("open the work") else {
+                panic!("the work opens a terminal");
+            };
+            automation::stop(tx, rounds.id, true).expect("stop");
+            let Next::Step(close) = report_done(tx, &opening) else { panic!("the work goes on to the close") };
+            let Opened::Carried { next: Next::Step(take), .. } = open(tx, run.id, close.id, Some(&claude)).expect("close")
+            else {
+                panic!("the close goes back round to the take");
+            };
+            assert_eq!(status(tx, a), TaskStatus::Done, "the round under way is finished");
+            let Opened::Waiting { run: paused } = open(tx, run.id, take.id, Some(&claude)).expect("open the take")
+            else {
+                panic!("the run pauses before the take");
+            };
+            assert_eq!(paused.status, AutomationRunStatus::Paused);
+            assert_eq!(paused.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
+            assert_eq!(status(tx, b), TaskStatus::Todo, "the next task is not taken");
+        });
+    }
+
     /// **A run standing at its entry is copied down afresh once a newer version is saved**
     /// (`AMB-D-1015`), and starts at the new copy's entry. The copy it launched with is kept, and with
     /// nothing newer saved since, it is left as it is.

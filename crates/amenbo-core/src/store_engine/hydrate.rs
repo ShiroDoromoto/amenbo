@@ -546,6 +546,7 @@ fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
         ("every", Some(minutes)) => TriggerWhen::Every {
             minutes: u32::try_from(minutes).map_err(|_| bad(format!("bad trigger_every_minutes {minutes}")))?,
         },
+        ("idle", None) => TriggerWhen::Idle,
         (kind, minutes) => return Err(bad(format!("bad trigger_when {kind:?} with minutes {minutes:?}"))),
     };
     let task_kind: Option<String> = get(r, C.trigger_task_kind)?;
@@ -577,6 +578,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         failures_to: failures_to(get(r, C.failures_to_kind)?, get(r, C.failures_to_role_id)?)?,
         export_only: get(r, C.export_only)?,
         trigger: trigger(r)?,
+        stopped: get(r, C.stopped)?,
         waits_for_task_since: ts_opt(r, C.waits_for_task_since)?,
         order_key: get(r, C.order_key)?,
         created_at,

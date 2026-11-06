@@ -76,7 +76,6 @@ dependencies = [
  "fs2",
  "getrandom 0.4.3",
  "libc",
- "minisign-verify",
  "objc2",
  "objc2-core-foundation",
  "objc2-foundation",
@@ -944,12 +943,6 @@ name = "memchr"
 version = "2.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
-
-[[package]]
-name = "minisign-verify"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22f9645cb765ea72b8111f36c522475d2daa0d22c957a9826437e97534bc4e9e"
 
 [[package]]
 name = "miniz_oxide"

@@ -1146,9 +1146,21 @@ mod tests {
                 // Said in the reader's language, so the setting goes by its translated name; what was
                 // written in it is nobody's to translate.
                 assert!(ran.report.contains(written), "{}", ran.report);
-                assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
+                nothing_filed(tx, run_step_id, first, "nothing filed");
             });
         }
+    }
+
+    /// **Nothing was filed after `first` but the failed round itself** — the task the run's stop files
+    /// for whoever the automation sends a failed round to, which is not this built-in's doing.
+    fn nothing_filed(tx: &WriteTx<'_>, run_step_id: i64, first: i64, said: &str) {
+        let run_id = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row").run_id;
+        let round = read::automation_run_task_last(tx.conn(), run_id).expect("read");
+        let mut next = first + 1;
+        if round.and_then(|r| r.incident_task_id) == Some(next) {
+            next += 1;
+        }
+        assert!(read::task(tx.conn(), next).expect("read").is_none(), "{said}");
     }
 
     /// Links `dirs` to the picture's project, as its folders.
@@ -1185,7 +1197,7 @@ mod tests {
             assert!(matches!(next, Next::Halted(_)), "{next:?}");
             let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
             assert_eq!(ran.exit_id, way_out(tx, run_step_id, crate::model::ERROR_EXIT));
-            assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
+            nothing_filed(tx, run_step_id, first, "nothing filed");
         });
     }
 
@@ -1338,7 +1350,7 @@ mod tests {
             assert_eq!(ran.exit_id, way_out(tx, run_step_id, crate::model::ERROR_EXIT));
             let filed = read::automation_run_values_of(tx.conn(), run_step_id).expect("values");
             assert!(filed.iter().all(|v| v.task_id.is_none()), "nothing handed on");
-            assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "and nothing filed");
+            nothing_filed(tx, run_step_id, first, "and nothing filed");
         });
     }
 
@@ -1362,7 +1374,7 @@ mod tests {
         let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
         assert!(ran.report.contains(what), "{}", ran.report);
         assert_eq!(ran.exit_id, way_out(tx, run_step_id, crate::model::ERROR_EXIT));
-        assert!(read::task(tx.conn(), first + 1).expect("read").is_none(), "nothing filed");
+        nothing_filed(tx, run_step_id, first, "nothing filed");
     }
 
     /// **A value the step before it chose, on an axis it was offered, is on the task it files**

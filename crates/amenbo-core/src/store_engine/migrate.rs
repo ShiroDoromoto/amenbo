@@ -1309,7 +1309,29 @@ pub const STEPS: &[Step] = &[
         // and is started only by a person, as it always was.
         apply: Apply::Custom(let_an_automation_carry_a_trigger),
     },
+    Step {
+        to: 108,
+        name: "add automation_run_task.incident_task_id, the task a failed round was filed as",
+        // **Unseeded.** A round that failed before this handed its task to a person rather than filing
+        // one, so there is nothing to point at.
+        apply: Apply::Custom(let_a_round_name_its_incident),
+    },
 ];
+
+/// v108: `automation_run_task.incident_task_id`, the task a failed round was filed as.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. The key may be added by
+/// `ALTER TABLE` because the column has no default but NULL.
+fn let_a_round_name_its_incident(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run_task")?.iter().any(|c| c == "incident_task_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run_task ADD COLUMN incident_task_id BIGINT REFERENCES task(id) \
+                 ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    Ok(())
+}
 
 /// v107: `automation.trigger_when_kind`, `trigger_every_minutes`, `trigger_task_kind`,
 /// `trigger_task_title`, `trigger_task_notes` and `trigger_next_at` — the trigger of an automation.
@@ -11327,6 +11349,37 @@ mod tests {
                  trigger_next_at = '2026-11-07T00:00:00Z' WHERE id = 1",
                 [],
             )
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v108: a round written before the step was filed as nothing, and the column points at a task.
+    #[test]
+    fn a_round_written_before_v108_names_no_incident() {
+        let dir = scratch("run-task-incident");
+        let engine = store_at(&dir, 107);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'work', 'todo', 1), (2, 'incident', 'todo', 1);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'failed');
+                 INSERT INTO automation_run_task (id, run_id, seq, task_id) VALUES (1, 1, 1, 1);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let incident: Option<i64> = engine
+            .conn()
+            .query_row("SELECT incident_task_id FROM automation_run_task WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(incident, None, "no round was filed as a task before");
+        engine
+            .conn()
+            .execute("UPDATE automation_run_task SET incident_task_id = 2 WHERE id = 1", [])
             .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }

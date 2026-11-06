@@ -911,6 +911,7 @@ pub fn automation_run_task(t: &AutomationRunTask) -> Record {
                 ("task_id", kv_opt(&t.task_id)),
                 ("started_at", tsov(&t.started_at)),
                 ("ended_at", tsov(&t.ended_at)),
+                ("incident_task_id", kv_opt(&t.incident_task_id)),
             ],
             &t.created_at,
             &t.updated_at,

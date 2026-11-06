@@ -1547,6 +1547,9 @@ datasets! {
         task_id: fk_opt("task", "SET NULL"),
         started_at: ts_opt,
         ended_at: ts_opt,
+        // The task filed to whoever the automation sends a failed round to, where this round failed —
+        // the round's task waits on it. `SET NULL` for the reason `task_id` is.
+        incident_task_id: fk_opt("task", "SET NULL"),
     }
 
     // **One step, run once.** `seq` is the move number within the run, so a step the run comes back

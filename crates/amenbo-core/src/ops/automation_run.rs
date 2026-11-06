@@ -2378,7 +2378,7 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
     let Some(taken) = exits.into_iter().find(|e| e.id == exit) else { return Ok(Onward::Nowhere) };
     let Some(line) = taken.then else {
-        // **An error way out nobody drew a line from halts the run and calls a person** (`AMB-D-966`)
+        // **An error way out nobody drew a line from halts the run**, and the round is filed as a failure
         // — which is why the launch check never asks for one. That holds for the step's own error way
         // out left without a line inside the action, and for one returned to an action's way out the
         // automation draws nothing after: the launch check lets that through only for the action's

@@ -627,6 +627,7 @@ fn new_stretch(
         task_id: None,
         started_at: Some(now),
         ended_at: None,
+        incident_task_id: None,
         created_at: now,
         updated_at: now,
     };

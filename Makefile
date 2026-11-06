@@ -963,8 +963,8 @@ test-spawn-gate:
 	@guards/check-test-spawn.sh
 
 ## Guard the one thing the window will not run: dependency bumps are merged unattended, and the PDF
-## reader publishes a wasm build of its own from its next major on. Needs an install and a bundle to
-## read, so `gate-gui` is what runs it.
+## reader publishes wasm files of its own and is kept from shipping them. Needs an install and a
+## bundle to read, so `gate-gui` is what runs it.
 wasm-gate:
 	@guards/check-no-wasm.sh
 

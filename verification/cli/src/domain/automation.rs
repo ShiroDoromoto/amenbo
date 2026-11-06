@@ -48,6 +48,10 @@ impl Driver<'_> {
                         args.push(v.to_string());
                     }
                 }
+                // A start is refused while nobody is named to file a failed round to, and a road is
+                // about something else, so a failed round goes to a person unless the road says.
+                args.push("--failures-to".into());
+                args.push(with.get("failures_to").and_then(|v| v.as_str()).unwrap_or("human").to_string());
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation", bind)?;
                 Ok(Outcome::action(format!("built automation {id} `{name}`")))

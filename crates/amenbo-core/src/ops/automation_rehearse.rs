@@ -323,7 +323,7 @@ mod tests {
             let real = mk_task_in(tx, "直すもの", Some(project));
             crate::ops::task::set_assignee(tx, real, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
             let automation =
-                automation::add(tx, project, NewAutomation { name: "round".into(), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: "round".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
             let on = AutomationPictureOwner::Automation;
             let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
@@ -367,7 +367,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                automation::add(tx, project, NewAutomation { name: "back".into(), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: "back".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
             let on = AutomationPictureOwner::Automation;
             let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
@@ -403,7 +403,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                automation::add(tx, project, NewAutomation { name: "entry".into(), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: "entry".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
             let make = automation::placement_add(tx, automation.id, action(tx, "make_task").expect("make").id)
                 .expect("place it");
@@ -433,7 +433,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                automation::add(tx, project, NewAutomation { name: "file".into(), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: "file".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
             let make = automation::placement_add(tx, automation.id, action(tx, "make_task").expect("make").id)
                 .expect("place it");
@@ -464,7 +464,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                automation::add(tx, project, NewAutomation { name: "script".into(), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: "script".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
             let on = AutomationPictureOwner::Automation;
             let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)

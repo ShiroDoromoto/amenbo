@@ -302,7 +302,7 @@ mod tests {
     /// does not end with its task still in progress (`AMB-D-967`); nothing to take closes the run.
     fn picture(tx: &WriteTx<'_>, project: i64) -> (Automation, AutomationPlacement) {
         let automation =
-            automation::add(tx, project, NewAutomation { name: "take".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "take".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let written = action(tx, "take_task").expect("the built-in's action");
         let spot = automation::placement_add(tx, automation.id, written.id).expect("place it");
@@ -435,7 +435,7 @@ mod tests {
     /// The same picture, set to wait: nothing follows [`NONE_TO_TAKE`], since it is never taken.
     fn waiting_picture(tx: &WriteTx<'_>, project: i64) -> Automation {
         let automation =
-            automation::add(tx, project, NewAutomation { name: "wait".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "wait".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let written = action(tx, "take_task").expect("the built-in's action");
         let spot = automation::placement_add(tx, automation.id, written.id).expect("place it");
@@ -589,7 +589,7 @@ mod tests {
     /// nothing to take closes the run.
     fn round_picture(tx: &WriteTx<'_>, project: i64) -> Automation {
         let automation =
-            automation::add(tx, project, NewAutomation { name: "round".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "round".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let on = AutomationPictureOwner::Automation;
         let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
@@ -999,7 +999,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let taskless =
-                automation::add(tx, project, NewAutomation { name: "no tasks".into(), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: "no tasks".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
             let (work_action, work) = mk_placed(tx, &taskless, "work", "work on it", "claude");
             mk_out(tx, &work_action, None, "task", AutomationPortKind::TaskTake, false);

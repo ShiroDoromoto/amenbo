@@ -49,7 +49,7 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRole,
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY, DEFAULT_MAX_TIMES,
     DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
-    ERROR_EXIT, MAX_SCRIPT_TIMEOUT_MINUTES,
+    ERROR_EXIT, FailuresTo, MAX_SCRIPT_TIMEOUT_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -1240,10 +1240,13 @@ fn take_off_as_before(tx: &WriteTx<'_>, placement_id: i64) -> Result<()> {
 pub struct NewAutomation {
     pub name: String,
     pub notes: String,
+    /// Where a failed round is filed, or `None` to say later. A new automation defines no role yet, so
+    /// only a person can be named here.
+    pub failures_to: Option<FailuresTo>,
 }
 
-/// Create an automation. It is born with nothing placed on it and no entry; what refuses to launch it is
-/// the launch check, not this.
+/// Create an automation. It is born with nothing placed on it and no entry, and with nobody to file a
+/// failed round to unless `new` names a person; what refuses to launch it is the launch check, not this.
 pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Automation> {
     let name = checked_name("automation", &new.name)?;
     if read::project(tx.conn(), project_id)?.is_none() {
@@ -1253,6 +1256,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
     let order_key = place(&sibs, &Position::Bottom)?;
     let now = Timestamp::now();
     let id = read::next_id(tx.conn(), "automation")?;
+    checked_failures_to(tx, id, new.failures_to)?;
     let automation = Automation {
         id,
         project_id,
@@ -1261,6 +1265,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         entry_placement_id: None,
         archived: false,
         max_concurrent_runs: None,
+        failures_to: new.failures_to,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1269,11 +1274,26 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
     Ok(automation)
 }
 
-/// Change an automation's name, notes, whether it is archived, or how many of its runs may be going
-/// at once. Only the `Some` fields are written. Archiving takes nothing away: it is what keeps an
-/// automation nobody launches any more out of the lists. A run of the automation going on does not
-/// stop it. `max_concurrent_runs` is `Some(Some(n))` to set the most at `n`, at least 1, and
-/// `Some(None)` to take the limit away.
+/// A failed round of an automation is filed to a person or to one of **its own** roles — a role of
+/// another automation is not one this automation's runs know.
+fn checked_failures_to(tx: &WriteTx<'_>, automation_id: i64, to: Option<FailuresTo>) -> Result<()> {
+    let Some(FailuresTo::Role { role_id }) = to else { return Ok(()) };
+    if live_role(tx, role_id)?.automation_id != automation_id {
+        return Err(Error::invalid(format!(
+            "role '{role_id}' belongs to another automation, so a failed round of this one cannot be filed \
+             to it"
+        )));
+    }
+    Ok(())
+}
+
+/// Change an automation's name, notes, whether it is archived, how many of its runs may be going at
+/// once, or where a failed round is filed. Only the `Some` fields are written. Archiving takes nothing
+/// away: it is what keeps an automation nobody launches any more out of the lists. A run of the
+/// automation going on does not stop it. `max_concurrent_runs` is `Some(Some(n))` to set the most at
+/// `n`, at least 1, and `Some(None)` to take the limit away. `failures_to` is `Some(Some(to))` to file
+/// failed rounds to a person or to one of the automation's own roles, and `Some(None)` to leave it
+/// unsaid again, which the launch check refuses.
 pub fn update(
     tx: &WriteTx<'_>,
     id: i64,
@@ -1281,6 +1301,7 @@ pub fn update(
     notes: Option<&str>,
     archived: Option<bool>,
     max_concurrent_runs: Option<Option<u32>>,
+    failures_to: Option<Option<FailuresTo>>,
 ) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     let mut after = before.clone();
@@ -1300,6 +1321,10 @@ pub fn update(
             ));
         }
         after.max_concurrent_runs = max;
+    }
+    if let Some(to) = failures_to {
+        checked_failures_to(tx, id, to)?;
+        after.failures_to = to;
     }
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation(&before), record::automation(&after))?;
@@ -1501,6 +1526,7 @@ pub fn discard(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion
     let kept: Vec<i64> = Picture::saved(&saved)?.roles.iter().map(|r| r.id).collect();
     for role in draft.roles.iter().filter(|r| !kept.contains(&r.id)) {
         take_role_off_tasks(tx, role.id)?;
+        stop_filing_failures_to(tx, role)?;
     }
     restore_rows(tx, &draft.roles, saved_roles(&saved), record::automation_role)?;
     restore_rows(tx, &draft.placements, &saved.placements, record::automation_placement)?;
@@ -1698,6 +1724,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     // dropped before them.
     for role in read::automation_roles_of(tx.conn(), id)? {
         take_role_off_tasks(tx, role.id)?;
+        stop_filing_failures_to(tx, &role)?;
         tx.delete_record("automation_role", role.id)?;
     }
     if automation.entry_placement_id.is_some() {
@@ -2426,12 +2453,25 @@ pub fn role_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationR
 }
 
 /// Take a role out of its automation. The placement its round started at stays on the picture, and the
-/// tasks worked under it are left with no role.
+/// tasks worked under it are left with no role. Where failed rounds were filed to it, the automation is
+/// left with nobody to file them to, which the launch check refuses until somebody says again.
 pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
-    live_role(tx, id)?;
+    let role = live_role(tx, id)?;
     take_role_off_tasks(tx, id)?;
+    stop_filing_failures_to(tx, &role)?;
     tx.delete_record("automation_role", id)?;
     Ok(())
+}
+
+/// Where a role that is about to go is where its automation files failed rounds, leave that unsaid.
+/// `automation.failures_to_role_id` is `RESTRICT`, so this goes before the role's row does.
+fn stop_filing_failures_to(tx: &WriteTx<'_>, role: &AutomationRole) -> Result<()> {
+    let before = live_automation(tx, role.automation_id)?;
+    if before.failures_to != Some(FailuresTo::Role { role_id: role.id }) {
+        return Ok(());
+    }
+    let after = Automation { failures_to: None, updated_at: Timestamp::now(), ..before.clone() };
+    emit_update(tx, record::automation(&before), record::automation(&after))
 }
 
 /// Take a role that is about to go off every task worked under it. `task.role_id` is `RESTRICT`, so
@@ -3957,7 +3997,7 @@ mod tests {
 
     fn mk_automation(tx: &WriteTx<'_>) -> Automation {
         let project = mk_project(tx, "amenbo");
-        add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
+        add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
             .expect("add automation")
     }
 
@@ -4001,20 +4041,116 @@ mod tests {
             let automation = mk_automation(tx);
             assert_eq!(automation.max_concurrent_runs, None, "born with no limit");
 
-            let set = update(tx, automation.id, None, None, None, Some(Some(2))).expect("set the most");
+            let set = update(tx, automation.id, None, None, None, Some(Some(2)), None).expect("set the most");
             assert_eq!(set.max_concurrent_runs, Some(2));
             assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, Some(2));
 
-            let renamed = update(tx, automation.id, Some("別名"), None, None, None).expect("rename");
+            let renamed = update(tx, automation.id, Some("別名"), None, None, None, None).expect("rename");
             assert_eq!(renamed.max_concurrent_runs, Some(2), "left out, it is kept");
 
-            let refused = update(tx, automation.id, None, None, None, Some(Some(0)));
+            let refused = update(tx, automation.id, None, None, None, Some(Some(0)), None);
             assert!(matches!(refused, Err(Error::Invalid(_))), "0 runs at once is refused");
             assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, Some(2));
 
-            let cleared = update(tx, automation.id, None, None, None, Some(None)).expect("take it away");
+            let cleared = update(tx, automation.id, None, None, None, Some(None), None).expect("take it away");
             assert_eq!(cleared.max_concurrent_runs, None);
             assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, None);
+        });
+    }
+
+    /// **Where a failed round is filed is set, kept and left unsaid again.** A person or one of the
+    /// automation's own roles; a role of another automation, or none at all, is refused, and a new
+    /// automation can name only a person, having no role yet.
+    #[test]
+    fn where_a_failed_round_is_filed_is_a_person_or_one_of_its_own_roles() {
+        use crate::model::FailuresTo;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let born = add(tx, project, NewAutomation { name: "決めていない".into(), ..Default::default() })
+                .expect("add automation");
+            assert_eq!(born.failures_to, None, "born with nobody");
+            let automation = mk_automation(tx);
+            assert_eq!(automation.failures_to, Some(FailuresTo::Human), "named when it is added");
+
+            let role = role_add(tx, automation.id, NewRole { name: "見る".into(), ..NewRole::default() }).expect("a role");
+            let to_role = FailuresTo::Role { role_id: role.id };
+            let set = update(tx, automation.id, None, None, None, None, Some(Some(to_role))).expect("to the role");
+            assert_eq!(set.failures_to, Some(to_role));
+            assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, Some(to_role));
+
+            let renamed = update(tx, automation.id, Some("別名"), None, None, None, None).expect("rename");
+            assert_eq!(renamed.failures_to, Some(to_role), "left out, it is kept");
+
+            let theirs = role_add(tx, born.id, NewRole { name: "よその".into(), ..NewRole::default() }).expect("a role");
+            let refused =
+                update(tx, automation.id, None, None, None, None, Some(Some(FailuresTo::Role { role_id: theirs.id })));
+            assert!(matches!(refused, Err(Error::Invalid(_))), "another automation's role");
+            let refused = update(
+                tx,
+                automation.id,
+                None,
+                None,
+                None,
+                None,
+                Some(Some(FailuresTo::Role { role_id: theirs.id + 1000 })),
+            );
+            assert!(matches!(refused, Err(Error::NotFound(_))), "no such role");
+            let refused = add(
+                tx,
+                project,
+                NewAutomation {
+                    name: "役割へ".into(),
+                    failures_to: Some(FailuresTo::Role { role_id: role.id }),
+                    ..Default::default()
+                },
+            );
+            assert!(matches!(refused, Err(Error::Invalid(_))), "a new automation has no role of its own");
+            assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, Some(to_role));
+
+            let cleared = update(tx, automation.id, None, None, None, None, Some(None)).expect("leave it unsaid");
+            assert_eq!(cleared.failures_to, None);
+            assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, None);
+        });
+    }
+
+    /// **A role failed rounds are filed to lets go of that when it goes** — taken out by hand, thrown away
+    /// with the draft, or gone with its automation — and the automation is left with nobody, for the
+    /// launch check to refuse. A person named is left alone.
+    #[test]
+    fn a_role_that_goes_is_no_longer_where_failed_rounds_are_filed() {
+        use crate::model::FailuresTo;
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let to = |tx: &WriteTx<'_>, role: i64| {
+                let to = Some(Some(FailuresTo::Role { role_id: role }));
+                update(tx, automation.id, None, None, None, None, to).expect("to the role");
+            };
+            let failures_to = |tx: &WriteTx<'_>| live_automation(tx, automation.id).expect("read").failures_to;
+
+            let role = role_add(tx, automation.id, NewRole { name: "見る".into(), ..NewRole::default() }).expect("a role");
+            let other = role_add(tx, automation.id, NewRole { name: "直す".into(), ..NewRole::default() }).expect("a role");
+            to(tx, role.id);
+            role_delete(tx, other.id).expect("take another role out");
+            assert_eq!(failures_to(tx), Some(FailuresTo::Role { role_id: role.id }), "another role going leaves it");
+            role_delete(tx, role.id).expect("take the role out");
+            assert_eq!(failures_to(tx), None);
+
+            update(tx, automation.id, None, None, None, None, Some(Some(FailuresTo::Human))).expect("a person");
+            let kept = role_add(tx, automation.id, NewRole { name: "残す".into(), ..NewRole::default() }).expect("a role");
+            role_delete(tx, kept.id).expect("take a role out");
+            assert_eq!(failures_to(tx), Some(FailuresTo::Human), "a person is left alone");
+
+            version_add(tx, automation.id).expect("save with no role");
+            let added = role_add(tx, automation.id, NewRole { name: "足す".into(), ..NewRole::default() }).expect("a role");
+            to(tx, added.id);
+            discard(tx, automation.id).expect("throw the draft away");
+            assert!(read::automation_role(tx.conn(), added.id).expect("read").is_none());
+            assert_eq!(failures_to(tx), None);
+
+            let last = role_add(tx, automation.id, NewRole { name: "最後".into(), ..NewRole::default() }).expect("a role");
+            to(tx, last.id);
+            delete(tx, automation.id).expect("delete the automation");
+            assert!(read::automation(tx.conn(), automation.id).expect("read").is_none());
         });
     }
 
@@ -4050,7 +4186,7 @@ mod tests {
             assert!(matches!(blank, Err(Error::Invalid(_))), "a role has a name");
             let no_agent = NewRole { name: "x".into(), model: Some("opus".into()), ..NewRole::default() };
             assert!(matches!(role_add(tx, automation.id, no_agent), Err(Error::Invalid(_))), "a model needs an agent");
-            let other = add(tx, automation.project_id, NewAutomation { name: "別".into(), ..Default::default() })
+            let other = add(tx, automation.project_id, NewAutomation { name: "別".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("another automation");
             let (_, elsewhere) = mk_placed(tx, &other, "よそ");
             let change = RoleChange { entry_placement_id: Some(Some(elsewhere.id)), ..RoleChange::default() };
@@ -5241,7 +5377,7 @@ mod tests {
         with_tx(|tx| {
             let here = mk_automation(tx);
             let there =
-                add(tx, here.project_id, NewAutomation { name: "別".into(), ..Default::default() })
+                add(tx, here.project_id, NewAutomation { name: "別".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("add automation");
             let (_, from) = mk_placed(tx, &here, "実装する");
             let (_, to) = mk_placed(tx, &there, "点検する");
@@ -5966,7 +6102,7 @@ mod tests {
             assert!(read::automation_placement_ids(tx.conn(), automation.id).unwrap().is_empty());
 
             for key in automation_builtin::entries() {
-                let other = add(tx, automation.project_id, NewAutomation { name: (*key).into(), ..Default::default() })
+                let other = add(tx, automation.project_id, NewAutomation { name: (*key).into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("add automation");
                 let entry = entry_placed(tx, &other, key);
                 assert_eq!(live_automation(tx, other.id).unwrap().entry_placement_id, Some(entry.id));
@@ -6050,7 +6186,7 @@ mod tests {
 
             assert!(entry_replace(tx, automation.id, "close_task").is_err(), "not one a run starts at");
             assert!(entry_replace(tx, automation.id, "no_such").is_err());
-            let empty = add(tx, automation.project_id, NewAutomation { name: "空".into(), ..Default::default() })
+            let empty = add(tx, automation.project_id, NewAutomation { name: "空".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("add automation");
             assert!(entry_replace(tx, empty.id, "take_task").is_err(), "the first placement chooses it");
         });
@@ -6144,7 +6280,7 @@ mod tests {
             let later = placement_add(tx, automation.id, make.id).expect("place it again");
             assert_eq!(answer(tx, later.id), None, "not first, so not answered");
 
-            let other = add(tx, automation.project_id, NewAutomation { name: "差し替え".into(), ..Default::default() })
+            let other = add(tx, automation.project_id, NewAutomation { name: "差し替え".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("add automation");
             let fetch = entry_placed(tx, &other, "fetch");
             let replaced = entry_replace(tx, other.id, "make_task").expect("replace");
@@ -6992,7 +7128,7 @@ mod rewritten_under_a_run {
 
     fn picture(tx: &WriteTx<'_>) -> Picture {
         let project = mk_project(tx, "amenbo");
-        let automation = add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
+        let automation = add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
             .expect("add automation");
         let (first_action, first) = mk_placed(tx, &automation, "調べる", "look at it", "claude");
         mk_exit(tx, &first_action, "found");
@@ -7077,8 +7213,8 @@ mod rewritten_under_a_run {
                 .expect("the answer");
 
         // The automation's picture.
-        not_held("rename", update(tx, p.automation.id, Some("別名"), None, None, None));
-        not_held("archive", update(tx, p.automation.id, None, None, Some(true), None));
+        not_held("rename", update(tx, p.automation.id, Some("別名"), None, None, None, None));
+        not_held("archive", update(tx, p.automation.id, None, None, Some(true), None, None));
         not_held("entry", entry_replace(tx, p.automation.id, "fetch"));
         not_held("delete", delete(tx, p.automation.id));
         not_held("place", placement_add(tx, p.automation.id, p.second_action.id));
@@ -7204,9 +7340,9 @@ mod rewritten_under_a_run {
                 let run = if pause { paused(tx, &run) } else { run };
                 let before = copied(tx, &run);
 
-                let renamed = update(tx, p.automation.id, Some("別名"), None, None, None).expect("rename");
+                let renamed = update(tx, p.automation.id, Some("別名"), None, None, None, None).expect("rename");
                 assert_eq!(renamed.name, "別名");
-                let archived = update(tx, p.automation.id, None, None, Some(true), None).expect("archive");
+                let archived = update(tx, p.automation.id, None, None, Some(true), None, None).expect("archive");
                 assert!(archived.archived);
                 let moved = action_set_scope(tx, p.first_action.id, None).expect("to the device");
                 assert_eq!(moved.project_id, None);

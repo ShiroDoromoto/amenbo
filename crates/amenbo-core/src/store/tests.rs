@@ -1599,7 +1599,7 @@ fn placing_an_action_writes_the_default_agent_onto_its_steps() {
     let (mut s, dir) = fresh_store("placement-default-agent");
     let p = s.project_add(project("PJ")).unwrap();
     let automation =
-        s.automation_add(p.id, NewAutomation { name: "回す".into(), ..Default::default() }).unwrap();
+        s.automation_add(p.id, NewAutomation { name: "回す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
     let action =
         s.automation_action_from_prompt(Some(p.id), NewStep::new("調べる", "do it"), &[], &[]).unwrap();
     let step = action.entry_step_id.unwrap();
@@ -1645,9 +1645,9 @@ fn a_step_added_after_placing_is_given_the_default_agent_at_every_placement() {
     let mine = s.project_add(project("PJ")).unwrap();
     let theirs = s.project_add(project("よそ")).unwrap();
     let here =
-        s.automation_add(mine.id, NewAutomation { name: "回す".into(), ..Default::default() }).unwrap();
+        s.automation_add(mine.id, NewAutomation { name: "回す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
     let there =
-        s.automation_add(theirs.id, NewAutomation { name: "よそで回す".into(), ..Default::default() })
+        s.automation_add(theirs.id, NewAutomation { name: "よそで回す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
             .unwrap();
     let action =
         s.automation_action_from_prompt(None, NewStep::new("調べる", "do it"), &[], &[]).unwrap();
@@ -1700,7 +1700,7 @@ fn a_builtin_put_in_on_a_line_leaves_its_own_ways_out_saying_nothing() {
 
     for (key, on) in [("take_task", None), ("make_task", None), ("fetch", None), ("split_by_dim", Some(axis.id))] {
         let automation =
-            s.automation_add(p.id, NewAutomation { name: format!("回す {key}"), ..Default::default() }).unwrap();
+            s.automation_add(p.id, NewAutomation { name: format!("回す {key}"), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
         let first = s.automation_builtin_place(automation.id, "take_task", None).unwrap();
         let next = s.automation_placement_add(automation.id, action.id).unwrap();
         let go = s
@@ -1743,7 +1743,7 @@ fn a_builtin_put_on_after_a_way_out_that_says_nothing_is_pointed_at_by_it() {
     let (mut s, dir) = fresh_store("builtin-at-exit");
     let p = s.project_add(project("PJ")).unwrap();
     let automation =
-        s.automation_add(p.id, NewAutomation { name: "回す".into(), ..Default::default() }).unwrap();
+        s.automation_add(p.id, NewAutomation { name: "回す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
     let first = s.automation_builtin_place(automation.id, "take_task", None).unwrap();
 
     let put = s.automation_builtin_insert_at_exit(first.id, Some(ERROR_EXIT), "take_task", None).unwrap();

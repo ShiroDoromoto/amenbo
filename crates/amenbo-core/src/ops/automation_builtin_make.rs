@@ -886,7 +886,7 @@ mod tests {
     fn picture(tx: &WriteTx<'_>) -> Picture {
         let project = mk_project(tx, "amenbo");
         let automation =
-            automation::add(tx, project, NewAutomation { name: "file".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "file".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let (first_action, first) = mk_placed(tx, &automation, "Take", "take one", "claude");
         crate::ops::test_support::mk_exit(tx, &first_action, "found");
@@ -1441,7 +1441,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                automation::add(tx, project, NewAutomation { name: "entry".into(), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: "entry".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
             let written = action(tx, "make_task").expect("the built-in's action");
             let make = automation::placement_add(tx, automation.id, written.id).expect("place it");
@@ -1473,7 +1473,7 @@ mod tests {
     fn entry(tx: &WriteTx<'_>) -> (Automation, AutomationPlacement, i64) {
         let project = mk_project(tx, "amenbo");
         let automation =
-            automation::add(tx, project, NewAutomation { name: "entry".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "entry".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let written = action(tx, "make_task").expect("the built-in's action");
         let make = automation::placement_add(tx, automation.id, written.id).expect("place it");
@@ -1720,7 +1720,7 @@ mod tests {
             assert_eq!(asked(tx), vec![axis("種別", &["不具合"], true)]);
 
             let another = |tx: &WriteTx<'_>, name: &str| {
-                automation::add(tx, project, NewAutomation { name: name.into(), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: name.into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation")
             };
             let agent = another(tx, "agent");

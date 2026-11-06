@@ -48,7 +48,7 @@ fn an_entry(cli: &Cli, automation: &str, key: &str) -> String {
 /// nothing has bound.
 fn an_automation(cli: &Cli) -> (String, String, String, String) {
     let p = cli.a_project();
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
     an_entry(cli, &a, "take_task");
     let (action, _) = an_action(cli, &p, "one", "do it");
     let placement = id_of(
@@ -69,7 +69,7 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
     let p = cli.a_project();
     let (review_action, _) = an_action(&cli, &p, "Review", "review it");
     let (fix_action, _) = an_action(&cli, &p, "Fix", "fix it");
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--failures-to", "human", "--json"]), "automation");
 
     // The first thing placed is where a run starts (`AMB-D-977`).
     let take = an_entry(&cli, &a, "take_task");
@@ -182,7 +182,7 @@ fn a_line_is_drawn_on_an_automation_or_inside_an_action() {
     assert_eq!(inside["automation_edge"]["owner_kind"].as_str(), Some("action"));
     assert_eq!(inside["automation_edge"]["owner_id"], serde_json::json!(action.parse::<i64>().unwrap()));
 
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
     an_entry(&cli, &a, "take_task");
     let placement = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
@@ -487,7 +487,7 @@ fn a_definition_is_read_back_whole_with_each_placement_resolved() {
     let p = cli.a_project();
     let (review_action, _) = an_action(&cli, &p, "Review", "review it");
     let (fix_action, _) = an_action(&cli, &p, "Fix", "fix it");
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--failures-to", "human", "--json"]), "automation");
     an_entry(&cli, &a, "take_task");
     let review = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &review_action, "--json"]),
@@ -608,7 +608,7 @@ fn the_library_is_one_list_and_global_narrows_it() {
 
     // One action placed twice on one automation is one automation whose runs change when the prompt
     // is rewritten, which is what the count is about.
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
     an_entry(&cli, &a, "take_task");
     for _ in 0..2 {
         cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]);
@@ -858,7 +858,7 @@ fn an_automation_is_saved_and_what_is_written_after_is_thrown_away() {
 fn an_action_is_saved_and_a_placement_is_moved_onto_its_version() {
     let cli = Cli::new();
     let p = cli.a_project();
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
     an_entry(&cli, &a, "take_task");
     let (action, step) = an_action(&cli, &p, "one", "do it");
     let placement = id_of(
@@ -973,7 +973,7 @@ fn an_action_is_set_to_take_one_run_at_a_time_in_its_draft() {
     assert_eq!(both["automation_action"]["name"].as_str(), Some("uno"), "{both}");
     assert_eq!(both["automation_action"]["one_at_a_time"], serde_json::json!(true), "{both}");
 
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
     an_entry(&cli, &a, "take_task");
     let builtin = id_str(&cli.json(&["automation", "show", &a, "--json"])["placements"][0]["placement"]["action_id"]);
     let (err, code) = cli.run_err(&["automation", "action-update", &builtin, "--one-at-a-time", "on", "--json"]);
@@ -987,7 +987,7 @@ fn an_action_is_set_to_take_one_run_at_a_time_in_its_draft() {
 fn a_built_in_is_not_saved_or_moved_by_hand() {
     let cli = Cli::new();
     let p = cli.a_project();
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
     let take = an_entry(&cli, &a, "take_task");
     let (err, code) = cli.run_err(&["automation", "place-version", &take, "1", "--json"]);
     assert_ne!(code, 0, "{err}");
@@ -1029,7 +1029,7 @@ fn saved(cli: &Cli, a: &str) {
 /// where one is asked for.
 fn a_picture(cli: &Cli, with_task: bool) -> (String, String, String, String) {
     let p = cli.a_project();
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--failures-to", "human", "--json"]), "automation");
     if with_task {
         let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
         cli.finish_creating(&t);
@@ -1349,7 +1349,7 @@ fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let p = cli.a_project();
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "File one", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "File one", "--failures-to", "human", "--json"]), "automation");
     let make = an_entry(&cli, &a, "make_task");
     cli.json(&[
         "automation", "cfg-set", &make, "--name", "起票したタスク",
@@ -1416,7 +1416,7 @@ fn a_save_is_refused_while_a_way_out_has_nothing_after_it() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let p = cli.a_project();
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Half drawn", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Half drawn", "--failures-to", "human", "--json"]), "automation");
     an_entry(&cli, &a, "take_task");
 
     let (err, code) = cli.run_err(&["automation", "save", &a, "--json"]);
@@ -1425,6 +1425,49 @@ fn a_save_is_refused_while_a_way_out_has_nothing_after_it() {
     assert!(err.contains("nothing is set to happen after"), "it names what is missing: {err}");
     let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
     assert_ne!(code, 0, "so it does not launch either: {err}");
+}
+
+/// **Where a failed round is filed is said on `add` or `update`** — a person, or one of the automation's
+/// own roles by id — and `show` reads it back. Left unsaid, a start is refused and names it; a value
+/// that is neither is refused, and a role taken out leaves it unsaid again.
+#[test]
+fn a_start_is_refused_until_somebody_is_named_to_file_a_failed_round_to() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_saved_launchable(&cli);
+
+    let shown = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(shown["automation"]["failures_to"]["kind"].as_str(), Some("human"), "{shown}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("failed rounds go to a person"), "{text}");
+
+    let unsaid = cli.json(&["automation", "update", &a, "--no-failures-to", "--json"]);
+    assert!(unsaid["automation"]["failures_to"].is_null(), "{unsaid}");
+    let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("not_ready"), "{err}");
+    assert!(err.contains("nobody is chosen to file a failed round to"), "{err}");
+    assert!(err.contains("--failures-to"), "the refusal names the way to say it: {err}");
+    let runs = cli.json(&["automation", "run-list", "--automation", &a, "--json"]);
+    assert_eq!(runs["count"].as_u64(), Some(0), "no run was made: {runs}");
+
+    let (err, code) = cli.run_err(&["automation", "update", &a, "--failures-to", "team", "--json"]);
+    assert_ne!(code, 0, "neither a person nor a role: {err}");
+    let (_, code) = cli.run_err(&["automation", "update", &a, "--failures-to", "human", "--no-failures-to"]);
+    assert_ne!(code, 0, "saying it and leaving it unsaid at once is refused");
+
+    let role = id_of(&cli.json(&["automation", "role-add", &a, "--name", "Review", "--json"]), "automation_role");
+    let set = cli.json(&["automation", "update", &a, "--failures-to", &role, "--json"]);
+    assert_eq!(set["automation"]["failures_to"]["kind"].as_str(), Some("role"), "{set}");
+    assert_eq!(id_str(&set["automation"]["failures_to"]["role_id"]), role, "{set}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains(&format!("failed rounds go to role {role}  Review")), "{text}");
+    saved(&cli, &a);
+    cli.json(&["automation", "start", &a, "--json"]);
+
+    cli.json(&["automation", "role-rm", &role, "--yes", "--json"]);
+    let after = cli.json(&["automation", "show", &a, "--json"]);
+    assert!(after["automation"]["failures_to"].is_null(), "a role taken out is filed nothing: {after}");
 }
 
 /// **A launch starts from the newest saved version, and a test run tries the draft.** An automation
@@ -1643,7 +1686,7 @@ fn inside_a_step_what_was_once_refused_goes_through() {
 fn inside_a_step_the_reading_verbs_still_answer() {
     let cli = Cli::new();
     let p = cli.a_project();
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "one", "--json"]), "automation");
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "one", "--failures-to", "human", "--json"]), "automation");
     let (action, _) = an_action(&cli, &p, "Review", "review it");
 
     for args in [

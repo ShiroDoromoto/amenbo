@@ -119,7 +119,7 @@ mod tests {
     /// `waits` sets the take to wait for a task rather than end the run where there is none.
     fn picture(tx: &WriteTx<'_>, project: i64, waits: bool) -> Picture {
         let automation =
-            automation::add(tx, project, NewAutomation { name: "hand back".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "hand back".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let on = AutomationPictureOwner::Automation;
         let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)

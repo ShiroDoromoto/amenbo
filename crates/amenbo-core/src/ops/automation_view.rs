@@ -675,7 +675,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
             let action = action_from_prompt(tx, Some(project), NewStep::new("点検", "見る"), &[], &[]).unwrap();
             action_version_add(tx, action.id).unwrap();
             let placement = placement_add_by_hand(tx, automation.id, action.id).unwrap();
@@ -708,7 +708,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
             let take = crate::ops::automation_builtin::action(tx, "take_task").unwrap();
             let entry = placement_add(tx, automation.id, take.id).unwrap();
             let (action, placement) = mk_placed(tx, &automation, "点検", "見る", "claude");
@@ -745,7 +745,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
             let (action, placement) = mk_placed(tx, &automation, "点検", "見る", "claude");
             assert!(matches!(saved_detail(tx.conn(), automation.id), Err(Error::Conflict(_))));
 
@@ -774,7 +774,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
             let fresh = action_from_prompt(tx, Some(project), NewStep::new("直す", "直す"), &[], &[]).unwrap();
             assert!(matches!(action_saved_detail(tx.conn(), fresh.id), Err(Error::Conflict(_))));
 
@@ -814,7 +814,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation =
-                add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
             let (action, _) = mk_placed(tx, &automation, "点検", "見る", "claude");
             let take = crate::ops::automation_builtin::action(tx, "take_task").unwrap();
 
@@ -857,9 +857,9 @@ mod tests {
         with_tx(|tx| {
             let amenbo = mk_project(tx, "amenbo");
             let site = mk_project(tx, "site");
-            add(tx, amenbo, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
-            add(tx, site, NewAutomation { name: "記事を出す".into(), ..Default::default() }).unwrap();
-            add(tx, amenbo, NewAutomation { name: "起票する".into(), ..Default::default() }).unwrap();
+            add(tx, amenbo, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
+            add(tx, site, NewAutomation { name: "記事を出す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
+            add(tx, amenbo, NewAutomation { name: "起票する".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
 
             let all = every_card(tx.conn(), None).unwrap();
             assert_eq!(
@@ -877,7 +877,7 @@ mod tests {
     fn every_card_keeps_an_archived_projects_automations() {
         with_tx(|tx| {
             let old = mk_project(tx, "old");
-            add(tx, old, NewAutomation { name: "片付ける".into(), ..Default::default() }).unwrap();
+            add(tx, old, NewAutomation { name: "片付ける".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
             crate::ops::project::set_archived(tx, old, true).unwrap();
 
             let all = every_card(tx.conn(), None).unwrap();
@@ -890,8 +890,8 @@ mod tests {
         with_tx(|tx| {
             let amenbo = mk_project(tx, "amenbo");
             let site = mk_project(tx, "site");
-            add(tx, amenbo, NewAutomation { name: "1件やりきる".into(), ..Default::default() }).unwrap();
-            add(tx, site, NewAutomation { name: "記事を出す".into(), ..Default::default() }).unwrap();
+            add(tx, amenbo, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
+            add(tx, site, NewAutomation { name: "記事を出す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
 
             let bound = every_card(tx.conn(), Some(site)).unwrap();
             assert_eq!(names(&bound), vec![("site".into(), "記事を出す".into())]);

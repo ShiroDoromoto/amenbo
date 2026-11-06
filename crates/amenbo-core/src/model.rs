@@ -1835,9 +1835,42 @@ pub struct Automation {
     /// `archived`, it is the automation's, not part of a saved version.
     #[serde(default)]
     pub max_concurrent_runs: Option<u32>,
+    /// **Where a round that fails is filed** — a person, or one of this automation's own roles. `None`
+    /// while nobody has said; launching without one is refused at the launch check, as launching with
+    /// no entry is. Like `max_concurrent_runs`, it is the automation's, not part of a saved version.
+    #[serde(default)]
+    pub failures_to: Option<FailuresTo>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+/// **Who a failed round of an automation is filed to** ([`Automation::failures_to`]): a person, or a
+/// role defined in the same automation ([`AutomationRole`]). A person carries no id: it is who a task
+/// assigned to [`ActorKind::Human`] goes to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum FailuresTo {
+    Human,
+    Role { role_id: i64 },
+}
+
+impl FailuresTo {
+    /// The stored spelling of the kind (`automation.failures_to_kind`).
+    pub fn kind_str(&self) -> &'static str {
+        match self {
+            FailuresTo::Human => "human",
+            FailuresTo::Role { .. } => "role",
+        }
+    }
+
+    /// The role it names, or `None` for a person.
+    pub fn role_id(&self) -> Option<i64> {
+        match self {
+            FailuresTo::Human => None,
+            FailuresTo::Role { role_id } => Some(*role_id),
+        }
+    }
 }
 
 /// **One action, placed on one automation.** It carries no prompt and no way out of its own — those

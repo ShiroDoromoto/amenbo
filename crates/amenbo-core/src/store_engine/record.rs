@@ -560,6 +560,8 @@ pub fn automation(a: &Automation) -> Record {
                 ("entry_placement_id", kv_opt(&a.entry_placement_id)),
                 ("archived", bv(a.archived)),
                 ("max_concurrent_runs", a.max_concurrent_runs.map(|n| iv(n.into())).unwrap_or(Value::Null)),
+                ("failures_to_kind", a.failures_to.map(|f| tv(f.kind_str())).unwrap_or(Value::Null)),
+                ("failures_to_role_id", kv_opt(&a.failures_to.and_then(|f| f.role_id()))),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,

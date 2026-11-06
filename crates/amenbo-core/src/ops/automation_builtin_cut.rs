@@ -230,7 +230,7 @@ mod tests {
     /// Take a task, cut its worktree, and go on to an agent's step.
     fn picture(tx: &WriteTx<'_>, project: i64) -> Automation {
         let automation =
-            automation::add(tx, project, NewAutomation { name: "cut".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "cut".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let on = AutomationPictureOwner::Automation;
         let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)

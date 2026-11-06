@@ -133,7 +133,7 @@ mod tests {
     /// where there was nothing to take.
     fn picture(tx: &WriteTx<'_>, project: i64) -> (Automation, i64) {
         let automation =
-            automation::add(tx, project, NewAutomation { name: "wait".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "wait".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let on = AutomationPictureOwner::Automation;
         let place = |key: &str| {

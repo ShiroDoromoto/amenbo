@@ -325,7 +325,7 @@ mod tests {
             let role = axis(tx, project, "職能", &["技術", "デザイン"]);
             let split = action(tx, role).expect("write");
             let automation =
-                automation::add(tx, project, NewAutomation { name: "split".into(), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: "split".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
             let placed = automation::placement_add_by_hand(tx, automation.id, split.id).expect("place");
             let on = AutomationPictureOwner::Automation;
@@ -367,7 +367,7 @@ mod tests {
         let project = mk_project(tx, "amenbo");
         let role = axis(tx, project, "職能", &["技術", "デザイン"]);
         let automation =
-            automation::add(tx, project, NewAutomation { name: "split".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "split".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let on = AutomationPictureOwner::Automation;
         let take = crate::ops::automation_builtin::action(tx, "take_task").expect("take");

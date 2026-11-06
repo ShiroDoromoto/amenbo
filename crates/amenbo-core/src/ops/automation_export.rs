@@ -433,7 +433,7 @@ mod tests {
     /// An automation that opens at the built-in that takes a task, with nothing else on it yet.
     fn mk_automation(tx: &WriteTx<'_>) -> (crate::model::Automation, crate::model::AutomationPlacement) {
         let project = mk_project(tx, "amenbo");
-        let automation = automation::add(tx, project, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
+        let automation = automation::add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
             .expect("add automation");
         let take = automation_builtin::action(tx, "take_task").expect("built-in");
         let entry = automation::placement_add(tx, automation.id, take.id).expect("place the built-in");

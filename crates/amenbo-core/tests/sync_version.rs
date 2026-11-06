@@ -256,7 +256,7 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     // placed is the entry (`AMB-D-977`), and a run does not end with the task it took still open
     // (`AMB-D-967`).
     let automation = store
-        .automation_add(mine, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
+        .automation_add(mine, NewAutomation { name: "1件やりきる".into(), failures_to: Some(amenbo_core::model::FailuresTo::Human), ..Default::default() })
         .unwrap();
     let take = store.automation_builtin_place(automation.id, "take_task", None).unwrap();
     store.automation_cfg_set(take.id, WHEN_NONE, Some(&format!("\"{WAIT}\""))).unwrap();
@@ -301,7 +301,7 @@ fn a_test_run_moves_no_version_and_takes_no_task() {
     let mine = store.project_add(new_project("走らせる側")).unwrap().id;
     let waiting = filed(&mut store, new_task("取られるはずの1件", mine));
     let automation = store
-        .automation_add(mine, NewAutomation { name: "1件やりきる".into(), ..Default::default() })
+        .automation_add(mine, NewAutomation { name: "1件やりきる".into(), failures_to: Some(amenbo_core::model::FailuresTo::Human), ..Default::default() })
         .unwrap();
     let take = store.automation_builtin_place(automation.id, "take_task", None).unwrap();
     let on = AutomationPictureOwner::Automation;

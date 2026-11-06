@@ -965,7 +965,7 @@ mod tests {
     fn picture(tx: &WriteTx<'_>, key: &str) -> Picture {
         let project = mk_project(tx, "amenbo");
         let automation =
-            automation::add(tx, project, NewAutomation { name: "loop".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "loop".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let (first_action, first) = mk_placed(tx, &automation, "Take", "take one", "claude");
         crate::ops::test_support::mk_exit(tx, &first_action, "found");

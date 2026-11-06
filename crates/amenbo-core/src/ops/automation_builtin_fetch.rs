@@ -308,7 +308,7 @@ mod tests {
         crate::ops::task::set_assignee(tx, mk_task_in(tx, "one", Some(project)), Some(ActorKind::Ai), ActorKind::Ai)
             .expect("give it to the AI");
         let automation =
-            automation::add(tx, project, NewAutomation { name: "fetch".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "fetch".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let on = AutomationPictureOwner::Automation;
         let place = |key: &str| {
@@ -334,7 +334,7 @@ mod tests {
     /// instead, the picture the launch refuses.
     fn starting_at_the_fetch(tx: &WriteTx<'_>, project: i64, straight_to_an_agent: bool) -> Automation {
         let automation =
-            automation::add(tx, project, NewAutomation { name: "inbox".into(), ..Default::default() })
+            automation::add(tx, project, NewAutomation { name: "inbox".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let on = AutomationPictureOwner::Automation;
         let place = |key: &str| {

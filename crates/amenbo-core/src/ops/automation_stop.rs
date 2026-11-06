@@ -719,7 +719,7 @@ mod tests {
         let automation = automation::add(
             tx,
             project,
-            NewAutomation { name: "1件やりきる".into(), ..Default::default() },
+            NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() },
         )
         .expect("add automation");
         let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
@@ -1263,7 +1263,7 @@ mod tests {
             let automation = automation::add(
                 tx,
                 project,
-                NewAutomation { name: "回し続ける".into(), ..Default::default() },
+                NewAutomation { name: "回し続ける".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() },
             )
             .expect("add automation");
             let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
@@ -1305,7 +1305,7 @@ mod tests {
             let automation = automation::add(
                 tx,
                 project,
-                NewAutomation { name: "人に返す".into(), ..Default::default() },
+                NewAutomation { name: "人に返す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() },
             )
             .expect("add automation");
             let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
@@ -1617,7 +1617,7 @@ mod tests {
         let automation = automation::add(
             tx,
             project,
-            NewAutomation { name: "書いて見直す".into(), ..Default::default() },
+            NewAutomation { name: "書いて見直す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() },
         )
         .expect("add automation");
         let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");
@@ -1736,7 +1736,7 @@ mod tests {
             let automation = automation::add(
                 tx,
                 project,
-                NewAutomation { name: "渡す".into(), ..Default::default() },
+                NewAutomation { name: "渡す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() },
             )
             .expect("add automation");
             let (first_action, first) = mk_placed(tx, &automation, "調べる", "look", "claude");

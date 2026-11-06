@@ -65,8 +65,10 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         .map(|action| action_in(tx, project_id, action))
         .collect::<Result<Vec<_>>>()?;
 
-    let automation =
-        automation::add(tx, project_id, NewAutomation { name: file.name.clone(), notes: file.notes.clone() })?;
+    // Where a failed round is filed is the automation's, as how many runs go at once is, and a file
+    // carries neither: the new automation names nobody until somebody says.
+    let new = NewAutomation { name: file.name.clone(), notes: file.notes.clone(), failures_to: None };
+    let automation = automation::add(tx, project_id, new)?;
     let mut placed: Vec<Placed> = Vec::new();
     for placement in &file.placements {
         let (action_id, steps, builtin) = match &placement.stands_on {
@@ -332,7 +334,7 @@ mod tests {
     fn written_out(tx: &WriteTx<'_>, project: i64) -> AutomationFile {
         axis(tx, project, "職能", &["技術"]);
         let automation =
-            automation::add(tx, project, NewAutomation { name: "1件やりきる".into(), notes: "メモ".into() })
+            automation::add(tx, project, NewAutomation { name: "1件やりきる".into(), notes: "メモ".into(), failures_to: Some(crate::model::FailuresTo::Human) })
                 .expect("add automation");
         let take = automation_builtin::action(tx, "take_task").expect("built-in");
         let entry = automation::placement_add(tx, automation.id, take.id).expect("place the built-in");

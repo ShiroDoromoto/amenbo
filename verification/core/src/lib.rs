@@ -4118,7 +4118,7 @@ const REGISTRY: &[OpSpec] = &[
     // own prompt is Amenbo's own, the same on every automation, so no road writes it. **On the screen
     // it is made from a name alone**, off the automations tab, and the press lands on its build
     // screen; the notes are the build screen's to write, so a screen road names none here.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "create", required: &["name"], refs: &["project"], strings: &["name", "notes"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "create", required: &["name"], refs: &["project"], strings: &["name", "notes", "failures_to"], binds: true },
     // The three fields the definition itself holds, written after it is built: its name, its notes,
     // and whether it is kept out of a reader's way. Archiving takes nothing away and stops nothing
     // already running, which is why it is one of the three rather than a verb of its own — and why

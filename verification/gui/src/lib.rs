@@ -6731,7 +6731,7 @@ impl Instructor {
                         Some(at) => format!(" and \"{at}\" on it"),
                         None => String::new(),
                     },
-                    // A reason about one box is a press that opens it; the two about the automation as
+                    // A reason about one box is a press that opens it; the ones about the automation as
                     // a whole are a line to read, and a click on one opens nothing.
                     match step_mark(with, "pressable")? {
                         Some(true) => ", and that its line is a press, with the word saying it is seen on the picture after it",
@@ -7400,6 +7400,7 @@ fn launch_reason(reason: &str) -> Result<&'static str, String> {
     Ok(match reason {
         "no_steps" => "that no action is placed on it",
         "no_entry" => "that no placement is named as the one a run starts on",
+        "no_failures_to" => "that nobody is chosen to file a failed round to",
         "action_empty" => "that an action placed on it has no step to start at",
         "action_draft" => "that an action placed on it is still being created",
         "entry_takes_no_task" => "that the action a run starts on takes no task",

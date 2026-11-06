@@ -1982,6 +1982,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation: "“{automation}” is not ready to start: {reasons}",
   not_ready_automation_no_steps: "no action is placed on it",
   not_ready_automation_no_entry: "no placement is the start",
+  not_ready_automation_no_failures_to: "nobody is chosen to file a failed round to",
   not_ready_automation_action_draft: "the action “{action}” placed on it is still being created",
   not_ready_automation_action_empty: "the action “{action}” placed on it has no start step",
   not_ready_automation_entry_takes_no_task:

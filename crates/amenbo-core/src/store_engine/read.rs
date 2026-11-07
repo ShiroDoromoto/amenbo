@@ -7438,6 +7438,62 @@ pub fn automation_run(conn: &Connection, id: i64) -> Result<Option<crate::model:
     super::hydrate::row_by_id(conn, "automation_run", id, super::hydrate::automation_run_row)
 }
 
+/// The `automation_launch` record with this id.
+pub fn automation_launch(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationLaunch>> {
+    super::hydrate::row_by_id(conn, "automation_launch", id, super::hydrate::automation_launch_row)
+}
+
+/// **The launch of one automation that has not ended** — running or paused — or `None` where there is
+/// none. An automation has at most one; were there ever two, the newest is the one standing.
+pub fn automation_launch_standing(
+    conn: &Connection,
+    automation_id: i64,
+) -> Result<Option<crate::model::AutomationLaunch>> {
+    use crate::model::AutomationLaunchStatus as S;
+    const L: col::automation_launch::Cols = col::automation_launch::ALL;
+    let pred = Pred::eq(L.automation_id, automation_id)
+        .and(Pred::is_in(L.status, [S::Running.as_str(), S::Paused.as_str()]));
+    let rows = automation_rows(conn, L.table, &pred, &[Sort::by(L.id).desc()], super::hydrate::automation_launch_row)?;
+    Ok(rows.into_iter().next())
+}
+
+/// **The launches that are running**, across every project, oldest first — the ones the app's look
+/// keeps topped up with runs ([`crate::ops::automation_run::top_up`]). A paused one starts no run, and
+/// is left out.
+pub fn automation_launches_running(conn: &Connection) -> Result<Vec<crate::model::AutomationLaunch>> {
+    use crate::model::AutomationLaunchStatus as S;
+    const L: col::automation_launch::Cols = col::automation_launch::ALL;
+    let pred = Pred::eq(L.status, S::Running.as_str());
+    automation_rows(conn, L.table, &pred, &[Sort::by(L.id)], super::hydrate::automation_launch_row)
+}
+
+/// **Every run one launch started**, oldest first, whatever it stands at now.
+pub fn automation_launch_run_ids(conn: &Connection, launch_id: i64) -> Result<Vec<i64>> {
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    select_ids(conn, R.id, Some(&Pred::eq(R.launch_id, launch_id)))
+}
+
+/// **The runs of one launch that are still going** — `running` or `paused` — oldest first.
+pub fn automation_launch_run_ids_under_way(conn: &Connection, launch_id: i64) -> Result<Vec<i64>> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.launch_id, launch_id)
+        .and(Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]));
+    select_ids(conn, R.id, Some(&pred))
+}
+
+/// The launches of one automation, for the automation delete's walk.
+pub fn automation_launch_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
+    const L: col::automation_launch::Cols = col::automation_launch::ALL;
+    select_ids(conn, L.id, Some(&Pred::eq(L.automation_id, automation_id)))
+}
+
+/// The launches of one project, for the project delete's walk.
+pub fn automation_launch_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
+    const L: col::automation_launch::Cols = col::automation_launch::ALL;
+    select_ids(conn, L.id, Some(&Pred::eq(L.project_id, project_id)))
+}
+
 /// The `automation_run_def` record with this id.
 pub fn automation_run_def(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRunDef>> {
     super::hydrate::row_by_id(conn, "automation_run_def", id, super::hydrate::automation_run_def_row)

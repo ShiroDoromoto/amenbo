@@ -1487,6 +1487,22 @@ datasets! {
     // of turns, an agent that was not there, or an input nothing filled. Set only while
     // `status = 'failed'` (`AMB-D-955`).
     //
+    // **One launch of an automation** — the runs it starts side by side, taken as one. A person
+    // launches once, and the launch keeps up to `automation.max_concurrent_runs` runs going while there
+    // are tasks to take; a run a trigger starts, or one started once a task turns up, joins the launch
+    // standing. Pausing and stopping a launch act on each of its runs. An automation has at most one
+    // launch that is not `ended`.
+    //
+    // `started_by_kind` is who pressed launch, NULL for one a trigger or a task turning up opened.
+    // `ended_at` is set with `status = 'ended'` and only then.
+    automation_launch {
+        automation_id: fk("automation", "RESTRICT"),
+        project_id: fk("project", "RESTRICT"),
+        status: enum_col("running", "paused", "ended"),
+        started_by_kind: actor_kind,
+        ended_at: ts_opt,
+    }
+
     // `acknowledged_at` is when a person said they had seen a failure. Until then the failure stays at
     // the top of the runs tab, because the task it handed back is one nobody is carrying.
     automation_run {
@@ -1510,6 +1526,9 @@ datasets! {
         // What a run failed with `failed_check` did not pass, as the refusal said it. Set with that
         // reason and only then.
         stopped_detail: col(OPT),
+        // The launch the run was started in. NULL on a run written before launches were kept (v118
+        // gives each run then under way one of its own) and on a test run, which belongs to none.
+        launch_id: fk_opt("automation_launch", "RESTRICT"),
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is

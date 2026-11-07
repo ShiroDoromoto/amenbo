@@ -222,6 +222,13 @@ pub(super) fn automation_run(conn: &Connection, id: i64) -> Result<Owner> {
     ))
 }
 
+/// The project a launch was made from, carried on its own row as a run's is.
+pub(super) fn automation_launch(conn: &Connection, id: i64) -> Result<Owner> {
+    Ok(Owner::of(
+        read::automation_launch(conn, id).map_err(crate::error::engine_on(conn))?.map(|l| Some(l.project_id)),
+    ))
+}
+
 /// The project a step execution is filed under — the run's, since a run is filed under a project of
 /// its own and not only under the automation it was launched from.
 pub(super) fn automation_run_step(conn: &Connection, id: i64) -> Result<Owner> {

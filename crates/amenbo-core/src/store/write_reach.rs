@@ -80,6 +80,9 @@ pub(super) enum AutomationPart {
     /// up to a project by a road of its own: it carries the project it was launched from, and so
     /// stays readable after the automation it came from is archived.
     Run,
+    /// One launch of an automation — the runs it started side by side. It carries the project it was
+    /// launched from, as a run does.
+    Launch,
 }
 
 impl AutomationPart {
@@ -98,6 +101,7 @@ impl AutomationPart {
             AutomationPart::Edge => owner::automation_edge(conn, id),
             AutomationPart::Wire => owner::automation_wire(conn, id),
             AutomationPart::Run => owner::automation_run(conn, id),
+            AutomationPart::Launch => owner::automation_launch(conn, id),
         }
     }
 
@@ -116,6 +120,7 @@ impl AutomationPart {
             AutomationPart::Edge => "automation edge",
             AutomationPart::Wire => "automation wire",
             AutomationPart::Run => "automation run",
+            AutomationPart::Launch => "automation launch",
         };
         format!("{en} '{id}'")
     }

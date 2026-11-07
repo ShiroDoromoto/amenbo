@@ -200,6 +200,11 @@ pub fn automation_edit(
         store.automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs, failures_to)?;
         Ok(())
     })?;
+    // A most raised takes hold in the launch standing at once: the look that tops it up reads the most
+    // as it stands (`amenbo_core::ops::automation_run::top_up`), and this has it look now.
+    if max_concurrent_runs.is_some() {
+        crate::automation_watch::wake();
+    }
     Ok(WriteAck::new(&["automations"]))
 }
 
@@ -1708,6 +1713,11 @@ pub fn automation_launch_asks(id: i64) -> Result<AutomationLaunchAsksDto, CmdErr
 /// next one". This press only nudges that thread ([`crate::automation_watch::wake`]), so the pane is
 /// stood at once rather than at the end of its wait.
 ///
+/// **One press runs side by side.** The run is started in a launch — the one standing for the
+/// automation, or a new one — and the watch starts more in it up to the automation's
+/// `max_concurrent_runs` while there are tasks to take (`amenbo_core::ops::automation_run::top_up`).
+/// The answer names that launch.
+///
 /// **What the person hands over with the press** (`AMB-D-981`): `title`, `notes`, `classification`
 /// (axis and value, by name) and `files` by their paths on this machine, all for the built-in that
 /// files a task, the one entry that reads anything ([`automation_launch_asks`] says whether this one
@@ -1748,14 +1758,24 @@ pub fn automation_launch(
         for path in files.unwrap_or_default() {
             handed.files.push(handed_file(store, &path)?);
         }
-        Ok(store.automation_launch(id, &by, &handed)?)
+        let started = store.automation_launch(id, &by, &handed)?;
+        // A start that made no run still opened the launch the run started once a task turns up joins.
+        let launch = match &started {
+            automation_run::Started::Run(run) => run.launch_id,
+            automation_run::Started::Waits(_) => {
+                read::automation_launch_standing(store.read_model().conn(), id)?.map(|launch| launch.id)
+            }
+        };
+        Ok((started, launch))
     })?;
+    let (started, launch) = started;
     crate::automation_watch::wake();
     Ok(AutomationRunStartedDto {
         run: match started {
             automation_run::Started::Run(run) => Some(run.id),
             automation_run::Started::Waits(_) => None,
         },
+        launch,
     })
 }
 
@@ -1985,6 +2005,7 @@ fn run_card(
         project: run.project_id,
         project_name: read::project(conn, run.project_id)?.map(|p| p.name).unwrap_or_default(),
         automation: run.automation_id,
+        launch: run.launch_id,
         automation_name: read::automation(conn, run.automation_id)?
             .map(|one| one.name)
             .unwrap_or_default(),
@@ -2912,6 +2933,64 @@ pub fn automation_run_stop(run_id: i64) -> Result<bool, CmdError> {
 pub fn automation_run_cancel(run_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_cancel(run_id)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Pause a launch** — every run of it still going settles at the end of the action under way, and the
+/// watch starts no run in it until it is picked up again
+/// ([`amenbo_core::ops::automation_stop::pause_launch`]). Not a `WriteAck` write, for the reason
+/// [`automation_run_pause`] is not.
+#[tauri::command]
+pub fn automation_launch_pause(launch_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_pause(launch_id)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Pause a launch before each of its runs takes its next task**
+/// ([`amenbo_core::ops::automation_stop::pause_launch_before_next_task`], `AMB-D-1019`). Refused where a
+/// run of it takes no tasks.
+#[tauri::command]
+pub fn automation_launch_pause_before_next_task(launch_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_pause_before_next_task(launch_id)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Pick a paused launch up again** ([`amenbo_core::ops::automation_stop::resume_launch`]). Each run
+/// is picked up as [`automation_run_resume`] picks one up, and the agents and models are asked the
+/// same way; the steps are opened by the watch.
+#[tauri::command]
+pub fn automation_launch_resume(launch_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    let startable = amenbo_core::wake::startable_ids(&store.config);
+    let offered = crate::agent_models::offered_here();
+    store.automation_launch_resume(launch_id, startable.as_deref(), &offered)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Cancel a paused launch** ([`amenbo_core::ops::automation_stop::cancel_launch`], `AMB-D-1002`).
+/// Refused while a run of it is running: the launch is paused first, or stopped
+/// ([`automation_launch_stop`]).
+#[tauri::command]
+pub fn automation_launch_cancel(launch_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_cancel(launch_id)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Stop a launch now** — the force-cancel of every run of it still going
+/// ([`amenbo_core::ops::automation_stop::stop_launch`]). The terminals standing in their panes are ended
+/// by the look the press wakes, as [`automation_run_stop`]'s are.
+#[tauri::command]
+pub fn automation_launch_stop(launch_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_stop(launch_id)?;
     crate::automation_watch::wake();
     Ok(())
 }

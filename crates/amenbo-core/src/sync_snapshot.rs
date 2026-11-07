@@ -243,6 +243,7 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation_action" => "project_id = ?1",
         "automation" => "project_id = ?1",
         "automation_run" => "project_id = ?1",
+        "automation_launch" => "project_id = ?1",
 
         "automation_placement" | "automation_version" | "automation_role" => {
             "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)"

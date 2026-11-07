@@ -31,6 +31,13 @@
 //! nothing more. A press inside the app skips the wait ([`wake`]), the waiting automations included; a
 //! `start` typed in a terminal cannot reach this process, so that one waits out the idle sleep.
 //!
+//! **One launch keeps its runs going side by side** (`top_up`). Each look asks every running launch
+//! whether it has room under its automation's `max_concurrent_runs`, read as it stands, and a task to
+//! take, and starts one more run in it where it does — so a launch fills up to its most one run a look,
+//! a run that ends makes room for the next, and a most raised takes hold on the next look. A launch none
+//! of whose runs is about to take a task is the only one given another, so two runs are not started for
+//! one task.
+//!
 //! **Triggers are asked here too** (`fire_triggers`): each look asks which are due before it looks at
 //! the runs, so a run a trigger started is opened in the same look. A trigger keeps the time it is next
 //! due in the store and nothing runs beside this thread for it (`AMB-D-983`'s shape): a look sleeps no
@@ -113,10 +120,12 @@ pub fn watch(app: tauri::AppHandle) {
     // The triggers whose script is running or has answered. Not cleared by a nudge, so a press in the
     // app does not start a program again; a restart that loses it asks them once more, which is all.
     let mut asking = HashMap::new();
+    // The launches whose next run was refused, and when each is asked again. A pace, like `held`.
+    let mut refused = HashMap::new();
     loop {
         // A failure is not fatal and not a reason to stop looking: the store may be mid-swap, or a
         // run may have been deleted between the two reads. The next look is a second away.
-        let pause = match advance(&app, &mut resting, &mut held, &mut asking) {
+        let pause = match advance(&app, &mut resting, &mut held, &mut asking, &mut refused) {
             Ok(pause) => pause,
             Err(e) => {
                 log::warn!("the automation watch could not look: {e}");
@@ -126,6 +135,7 @@ pub fn watch(app: tauri::AppHandle) {
         if sleep(pause) {
             resting.clear();
             held.clear();
+            refused.clear();
         }
     }
 }
@@ -183,15 +193,18 @@ fn sleep(how_long: Duration) -> bool {
 /// this sees it as a run that is no longer running rather than as a failure to handle.
 ///
 /// The triggers are fired first (`fire_triggers`), then the automations waiting for a task are asked
-/// (`start_waiting`), and the wait is cut short to when the next of either is due.
+/// (`start_waiting`), then the running launches are topped up (`top_up`), and the wait is cut short to
+/// when the next trigger or waiting automation is due.
 fn advance(
     app: &tauri::AppHandle,
     resting: &mut HashMap<i64, Instant>,
     held: &mut HashMap<i64, Instant>,
     asking: &mut HashMap<i64, Asking>,
+    refused: &mut HashMap<i64, Instant>,
 ) -> Result<Duration, crate::error::CmdError> {
     let next_trigger = fire_triggers(held, asking)?;
     let next_waiting = start_waiting(resting)?;
+    top_up(refused)?;
     let running = {
         let store = crate::commands::open_store_read()?;
         amenbo_core::store_engine::read::automation_run_ids_running(store.read_model().conn())?
@@ -411,6 +424,52 @@ fn start_waiting(resting: &mut HashMap<i64, Instant>) -> Result<Option<Instant>,
         }
     }
     Ok(waiting.iter().filter_map(|automation| resting.get(automation)).min().copied())
+}
+
+/// **Start one more run in each running launch that has room and a task to take**
+/// ([`amenbo_core::ops::automation_run::top_up`]).
+///
+/// Asked every look, as the runs are: a launch that is running has a run going, so the look is
+/// `WHILE_GOING` anyway, and what is asked is a few small reads and one row of the tasks. Each run is
+/// started in a write of its own, launched as a trigger launches — no window is seen and no agent probe
+/// is passed, and the models are asked; who it is started by is the launch's. A launch whose run was
+/// refused goes into `refused` and is not asked again until `WHILE_WAITING` has passed, rather than
+/// every second with a warning each time.
+fn top_up(refused: &mut HashMap<i64, Instant>) -> Result<(), crate::error::CmdError> {
+    let now = Instant::now();
+    refused.retain(|_, due| now < *due);
+    let due = {
+        let store = crate::commands::open_store_read()?;
+        let conn = store.read_model().conn();
+        let running: Vec<i64> = amenbo_core::store_engine::read::automation_launches_running(conn)?
+            .into_iter()
+            .map(|launch| launch.id)
+            .filter(|launch| !refused.contains_key(launch))
+            .collect();
+        amenbo_core::ops::automation_run::launches_to_top_up(conn, &running)?
+    };
+    if due.is_empty() {
+        return Ok(());
+    }
+    let offered = crate::agent_models::offered_here();
+    let by = amenbo_core::ops::automation_run::Launcher {
+        default_agent: None,
+        startable: None,
+        models: &offered,
+        workspace_open: None,
+        by: None,
+    };
+    for launch in due {
+        match crate::commands::with_store_mut(|store| Ok(store.automation_launch_top_up(launch, &by)?)) {
+            Ok(Some(run)) => log::info!("launch {launch} had room and a task, and started run {}", run.id),
+            Ok(None) => {}
+            Err(e) => {
+                log::warn!("launch {launch} could not start another run: {}", e.message_en);
+                refused.insert(launch, Instant::now() + WHILE_WAITING);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// **End the terminal of a run that is over** — completed, failed or canceled — and forget what was

@@ -1414,7 +1414,7 @@ pub struct Stopped {
 ///   here at once ([`Stopped::paused`]). A run that takes no tasks has no round to finish and goes on to
 ///   its end.
 /// - **It stops waiting for a task** ([`Automation::waits_for_task_since`]): no run of it is started
-///   once one turns up.
+///   once one turns up, and a launch of it standing with no run under way ends.
 ///
 /// Letting it start again picks up no run and waits for no task: those paused stay paused until somebody
 /// resumes them, and a start waits again. Writing what already stands writes nothing.
@@ -1434,6 +1434,10 @@ pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
         true => crate::ops::automation_stop::pause_the_waiting(tx, id)?,
         false => Vec::new(),
     };
+    if stopped {
+        // Its wait has ended, so a launch standing with no run under way has nothing left to start.
+        crate::ops::automation_stop::settle_standing_launch(tx, id)?;
+    }
     Ok(Stopped { automation: after, paused })
 }
 
@@ -1849,6 +1853,11 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     }
     for version in read::automation_version_ids(tx.conn(), id)? {
         tx.delete_record("automation_version", version)?;
+    }
+    // A launch with no run behind it — one opened for an entry that waited, and never started one —
+    // is filed under nothing a person reads, and goes with the automation.
+    for launch in read::automation_launch_ids(tx.conn(), id)? {
+        tx.delete_record("automation_launch", launch)?;
     }
     tx.delete_record("automation", id)?;
     Ok(())

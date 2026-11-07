@@ -3529,7 +3529,8 @@ pub struct AutomationDetailDto {
     #[ts(optional, type = "number")]
     pub(crate) entry_placement_id: Option<i64>,
     pub(crate) archived: bool,
-    /// How many runs of it may be going at once, from 1 up to the cap; a launch past it is refused.
+    /// How many runs of it may be going at once, from 1 up to the cap. One launch runs up to it side by
+    /// side, and a start past it is refused.
     pub(crate) max_concurrent_runs: u32,
     /// What files a task on its own and starts a run with it. Absent for an automation only a person
     /// starts.
@@ -4236,6 +4237,11 @@ pub struct AutomationLaunchCheckDto {
 pub struct AutomationRunStartedDto {
     #[ts(type = "number | null")]
     pub(crate) run: Option<i64>,
+    /// **The launch the press started or joined** ([`amenbo_core::model::AutomationLaunch`]) — the
+    /// runs it keeps going side by side, and where a run started once a task turns up goes. Set
+    /// whether or not a run was made.
+    #[ts(type = "number | null")]
+    pub(crate) launch: Option<i64>,
 }
 
 /// **What a test run found** ([`amenbo_core::ops::automation_rehearse::Rehearsal`]) — every step it
@@ -4700,6 +4706,11 @@ pub struct AutomationRunCardDto {
     pub(crate) project_name: String,
     #[ts(type = "number")]
     pub(crate) automation: i64,
+    /// **The launch it was started in** ([`amenbo_core::model::AutomationLaunch`]) — the runs of one
+    /// press that go side by side, by its id. Absent on a run written before launches were kept.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) launch: Option<i64>,
     /// What the automation was called at launch. Read from the run's own copy of the entry step's
     /// automation where the definition has since been deleted, and empty where neither is left.
     pub(crate) automation_name: String,

@@ -7377,6 +7377,17 @@ pub fn automation_run_ids_under_way(conn: &Connection, automation_id: i64) -> Re
     select_ids(conn, R.id, Some(&pred))
 }
 
+/// [`automation_run_ids_under_way`], of the runs sitting in one role's seats — those bound to `role_id`
+/// ([`crate::model::AutomationRun::role_id`]). A run bound to no role is in none of them.
+pub fn automation_run_ids_under_way_as(conn: &Connection, automation_id: i64, role_id: i64) -> Result<Vec<i64>> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.automation_id, automation_id)
+        .and(Pred::eq(R.role_id, role_id))
+        .and(Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]));
+    select_ids(conn, R.id, Some(&pred))
+}
+
 /// **The automations a trigger may start a run of** — every one carrying a trigger that is enabled and
 /// not archived, not stopped and not kept for export only, across projects, oldest first, each with all
 /// its triggers. A trigger is asked by the app's look, and that look is this machine's, not one

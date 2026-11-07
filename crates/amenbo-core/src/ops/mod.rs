@@ -224,7 +224,7 @@ pub(crate) mod test_support {
     /// **Let an automation have `n` runs going at once** — its roles' headcount added up to `n`. Its first
     /// role (every automation has one) is given what the others leave of `n`, and where a version of it is
     /// saved the draft is saved again, since the runs under way are measured against the newest saved
-    /// version ([`crate::ops::automation_run::headcount`]).
+    /// version ([`crate::ops::automation_run::seats`]).
     pub(crate) fn room_for(tx: &WriteTx<'_>, automation_id: i64, n: u32) {
         use crate::ops::automation::{role_update, version_add, RoleChange};
         let roles = crate::store_engine::read::automation_roles_of(tx.conn(), automation_id).expect("read roles");

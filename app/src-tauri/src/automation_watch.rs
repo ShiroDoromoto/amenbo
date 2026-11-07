@@ -32,12 +32,11 @@
 //! `start` typed in a terminal cannot reach this process, so that one waits out the idle sleep.
 //!
 //! **One launch keeps its runs going side by side** (`top_up`). Each look asks every running launch
-//! whether it has room under its automation's roles' headcount, read from its newest saved version as it
-//! stands, and a task to take, and starts one more run in it where it does — so a launch fills up to its
-//! most one run a look, a run that ends makes room for the next, and a headcount raised and saved takes
-//! hold on the next look. A launch none
-//! of whose runs is about to take a task is the only one given another, so two runs are not started for
-//! one task.
+//! whether one of its automation's roles has a free seat under its headcount, read from its newest saved
+//! version as it stands, and a task of its own to take, and starts one more run in that seat where it
+//! does — so a launch fills its seats one run a look, a run that ends makes room for the next, and a
+//! headcount raised and saved takes hold on the next look. A role none of whose runs is about to take a
+//! task is the only one given another, so two runs are not started for one task.
 //!
 //! **Triggers are asked here too** (`fire_triggers`): each look asks which are due before it looks at
 //! the runs, so a run a trigger started is opened in the same look. A trigger keeps the time it is next
@@ -427,11 +426,11 @@ fn start_waiting(resting: &mut HashMap<i64, Instant>) -> Result<Option<Instant>,
     Ok(waiting.iter().filter_map(|automation| resting.get(automation)).min().copied())
 }
 
-/// **Start one more run in each running launch that has room and a task to take**
+/// **Start one more run in each running launch where a role has a free seat and a task to take**
 /// ([`amenbo_core::ops::automation_run::top_up`]).
 ///
-/// Asked every look, as the runs are: a launch that is running has a run going, so the look is
-/// `WHILE_GOING` anyway, and what is asked is a few small reads and one row of the tasks. Each run is
+/// Asked every look, as the runs are. A launch stays running with no run going until a person stops
+/// it, so what is asked is kept small: a few small reads and one row of the tasks for each role. Each run is
 /// started in a write of its own, launched as a trigger launches — no window is seen and no agent probe
 /// is passed, and the models are asked; who it is started by is the launch's. A launch whose run was
 /// refused goes into `refused` and is not asked again until `WHILE_WAITING` has passed, rather than

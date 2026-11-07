@@ -541,8 +541,8 @@ fn failures_to(kind: Option<String>, role_id: Option<i64>) -> rusqlite::Result<O
     }
 }
 
-/// An automation's trigger, read back from its fifteen columns. No kind of when is no trigger, and then
-/// every other column is NULL (the scripts' arguments '', as a step's are); a kind beside a missing
+/// An automation's trigger, read back from its seventeen columns. No kind of when is no trigger, and
+/// then every other column is NULL (the scripts' arguments '', as a step's are); a kind beside a missing
 /// part is a row nothing writes, and reads as an error.
 fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
     const C: col::automation::Cols = col::automation::ALL;
@@ -592,7 +592,15 @@ fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
         kind => return Err(bad(format!("bad trigger_task {kind:?}"))),
     };
     let next_at = ts_opt(r, C.trigger_next_at)?.ok_or_else(|| bad("a trigger with no trigger_next_at".to_string()))?;
-    Ok(Some(AutomationTrigger { when, condition, script: ask_script, task, next_at }))
+    Ok(Some(AutomationTrigger {
+        name: get(r, C.trigger_name)?.unwrap_or_default(),
+        role_id: get(r, C.trigger_role_id)?,
+        when,
+        condition,
+        script: ask_script,
+        task,
+        next_at,
+    }))
 }
 
 pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {

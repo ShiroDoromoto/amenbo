@@ -1209,6 +1209,19 @@ fn checked_failures_to(tx: &WriteTx<'_>, automation_id: i64, to: Option<Failures
     Ok(())
 }
 
+/// The task a trigger files is worked under one of **its own automation's** roles — a role of another
+/// automation is not one this automation's runs know.
+fn checked_trigger_role(tx: &WriteTx<'_>, automation_id: i64, role_id: Option<i64>) -> Result<()> {
+    let Some(role_id) = role_id else { return Ok(()) };
+    if live_role(tx, role_id)?.automation_id != automation_id {
+        return Err(Error::invalid(format!(
+            "role '{role_id}' belongs to another automation, so the task this one's trigger files cannot be \
+             worked under it"
+        )));
+    }
+    Ok(())
+}
+
 /// Change an automation's name, notes, whether it is archived, how many of its runs may be going at
 /// once, or where a failed round is filed. Only the `Some` fields are written. Archiving takes nothing
 /// away: it is what keeps an automation nobody launches any more out of the lists. A run of the
@@ -1253,11 +1266,16 @@ pub fn update(
     Ok(after)
 }
 
-/// **What a trigger is written as** ([`trigger_set`]): when it files a task, the tasks it looks at
-/// and the program it asks first, and what the task says. When it is next asked is not the writer's
-/// to say — it is counted from the write.
+/// **What a trigger is written as** ([`trigger_set`]): what it is called and the role the task it
+/// files is worked under, when it files a task, the tasks it looks at and the program it asks first,
+/// and what the task says. When it is next asked is not the writer's to say — it is counted from the
+/// write.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewTrigger {
+    /// [`AutomationTrigger::name`]. Trimmed; blank is kept blank.
+    pub name: String,
+    /// [`AutomationTrigger::role_id`] — one of this automation's own roles, or `None`.
+    pub role_id: Option<i64>,
     pub when: TriggerWhen,
     pub condition: Option<TriggerCondition>,
     pub script: Option<NewScript>,
@@ -1290,8 +1308,8 @@ pub enum NewTriggerTask {
 /// with no condition is refused. A script is refused as a script step's is ([`checked_script`]), and a
 /// `script` with none is refused; it is not run here. What the task says is refused the same way: a
 /// file not named by its full path, and a program that writes it as a script is; neither is read or
-/// run here, so one missing now is only found out when the task is filed. Taking a trigger away that
-/// is not there writes nothing.
+/// run here, so one missing now is only found out when the task is filed. A role that is not this
+/// automation's own is refused. Taking a trigger away that is not there writes nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     if before.trigger.is_none() && trigger.is_none() {
@@ -1307,7 +1325,8 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     let mut after = before.clone();
     after.trigger = match trigger {
         None => None,
-        Some(NewTrigger { when, condition, script, task }) => {
+        Some(NewTrigger { name, role_id, when, condition, script, task }) => {
+            checked_trigger_role(tx, id, role_id)?;
             match when {
                 TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
                     return Err(Error::invalid(format!(
@@ -1359,7 +1378,15 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
                 }
                 NewTriggerTask::Script(script) => TriggerTask::Script { script: checked_script(script)? },
             };
-            Some(AutomationTrigger { when, condition, script, task, next_at: when.after(now) })
+            Some(AutomationTrigger {
+                name: name.trim().to_string(),
+                role_id,
+                when,
+                condition,
+                script,
+                task,
+                next_at: when.after(now),
+            })
         }
     };
     after.updated_at = now;
@@ -2515,8 +2542,22 @@ pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     rewritable(tx, Def::Automation(role.automation_id))?;
     take_role_off_tasks(tx, id)?;
     stop_filing_failures_to(tx, &role)?;
+    take_role_off_trigger(tx, &role)?;
     tx.delete_record("automation_role", id)?;
     Ok(())
+}
+
+/// Where a role that is about to go is the one its automation's trigger files tasks under, have the
+/// trigger file them under none. `automation.trigger_role_id` is `RESTRICT`, so this goes before the
+/// role's row does. The trigger keeps its `next_at`.
+fn take_role_off_trigger(tx: &WriteTx<'_>, role: &AutomationRole) -> Result<()> {
+    let before = live_automation(tx, role.automation_id)?;
+    let Some(trigger) = before.trigger.as_ref().filter(|t| t.role_id == Some(role.id)) else {
+        return Ok(());
+    };
+    let trigger = AutomationTrigger { role_id: None, ..trigger.clone() };
+    let after = Automation { trigger: Some(trigger), updated_at: Timestamp::now(), ..before.clone() };
+    emit_update(tx, record::automation(&before), record::automation(&after))
 }
 
 /// Where a role that is about to go is where its automation files failed rounds, leave that unsaid.
@@ -4166,6 +4207,8 @@ mod tests {
     #[test]
     fn a_trigger_is_written_and_taken_away() {
         let hourly = |title: &str| NewTrigger {
+            name: String::new(),
+            role_id: None,
             when: TriggerWhen::Every { minutes: 60 },
             condition: None,
             script: None,

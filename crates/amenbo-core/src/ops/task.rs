@@ -331,6 +331,14 @@ fn record_line(
     Ok(())
 }
 
+/// **Leave the line saying an automation's trigger named `name` filed `task`**
+/// ([`activity_log::event::task_filed_by_trigger`]) — written by the built-in that files the task a
+/// trigger handed it, beside the `task.created` [`add`] wrote, and nowhere else. No actor: nobody
+/// pressed anything.
+pub(crate) fn record_filed_by_trigger(tx: &WriteTx<'_>, task: &Task, name: &str) -> Result<()> {
+    record_line(tx, task, None, activity_log::event::task_filed_by_trigger(name))
+}
+
 pub fn update(tx: &WriteTx<'_>, id: i64, patch: TaskPatch) -> Result<Task> {
     let before = live_before(tx, id)?;
     let mut t = before.clone();

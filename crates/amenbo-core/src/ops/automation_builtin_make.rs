@@ -182,6 +182,12 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     let project_id = carry.run.project_id;
     let mut values = fixed(conn, project_id, choice(carry, CLASSIFY)?.as_deref())?;
     let at_launch = at_launch(carry)?;
+    // A trigger hands the role the task is worked under and its own name with the task it files.
+    let handed = match at_launch {
+        true => crate::ops::automation_run::HandedTask::of(carry.run)?,
+        false => None,
+    };
+    let role_id = handed.as_ref().and_then(|h| h.role_id);
     if let Some(written) = carry.input(CHOSEN).filter(|w| !w.trim().is_empty()) {
         let ai_axes = choice(carry, AI_AXES)?;
         let by = match at_launch {
@@ -217,9 +223,12 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
             created_by_kind: Some(ActorKind::Ai),
             at_binding_id,
             made_in: None,
-            role_id: None,
+            role_id,
         },
     )?;
+    if let Some(trigger) = handed.as_ref().and_then(|h| h.trigger.as_deref()) {
+        task::record_filed_by_trigger(tx, &filed, trigger)?;
+    }
     for (_, value) in values {
         crate::ops::dimension::set(tx, filed.id, value)?;
     }
@@ -1581,6 +1590,8 @@ mod tests {
             let (automation, make, _) = entry(tx);
             let every = TriggerWhen::Every { minutes: 60 };
             let trigger = automation::NewTrigger {
+                name: String::new(),
+                role_id: None,
                 when: every,
                 condition: None,
                 script: None,
@@ -1618,6 +1629,66 @@ mod tests {
         });
     }
 
+    /// **A trigger files its task under its role, and the task's timeline names it** — one line beside
+    /// `task.created`, written only when it files one: a time it decides not to leaves none. A role of
+    /// another automation is refused, and a role that goes is taken off the trigger.
+    #[test]
+    fn a_trigger_files_its_task_under_its_role_and_names_itself_in_the_timeline() {
+        use crate::model::TriggerWhen;
+        use crate::ops::automation_run::fire;
+        use crate::time::Timestamp;
+        with_tx(|tx| {
+            let (automation, make, project) = entry(tx);
+            let new_role = |name: &str| automation::NewRole { name: name.into(), ..Default::default() };
+            let role = automation::role_add(tx, automation.id, new_role("さくら")).expect("a role");
+            let trigger = |role_id: Option<i64>| automation::NewTrigger {
+                name: "  毎時の見回り  ".into(),
+                role_id,
+                when: TriggerWhen::Every { minutes: 60 },
+                condition: None,
+                script: None,
+                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new() },
+            };
+
+            let other = automation::add(
+                tx,
+                project,
+                NewAutomation { name: "other".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() },
+            )
+            .expect("another automation");
+            let theirs = automation::role_add(tx, other.id, new_role("佐藤")).expect("their role");
+            let refused = automation::trigger_set(tx, automation.id, Some(trigger(Some(theirs.id))));
+            assert!(matches!(refused, Err(Error::Invalid(_))), "another automation's role is refused: {refused:?}");
+
+            let set = automation::trigger_set(tx, automation.id, Some(trigger(Some(role.id)))).expect("trigger");
+            let kept = read::automation(tx.conn(), automation.id).expect("read").expect("there").trigger.expect("kept");
+            assert_eq!(set.trigger.as_ref(), Some(&kept), "read back as written");
+            assert_eq!((kept.name.as_str(), kept.role_id), ("毎時の見回り", Some(role.id)), "the name trimmed");
+
+            let claude = ["claude".to_string()];
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let named = |tx: &WriteTx<'_>| {
+                tx.queued_activity().into_iter().filter(|l| l.event["kind"] == "task.filed_by_trigger").collect::<Vec<_>>()
+            };
+            let early = Timestamp(kept.next_at.0 - chrono::Duration::seconds(1));
+            assert!(fire(tx, automation.id, &by, early, None).expect("fire").is_none(), "not before it is due");
+            assert!(named(tx).is_empty(), "a time it decides no leaves no line");
+
+            let run = fire(tx, automation.id, &by, kept.next_at, None).expect("fire").expect("a run");
+            let filed = filed_first(tx, &run, &make);
+            assert_eq!(filed.role_id, Some(role.id), "filed under the trigger's role");
+            let lines = named(tx);
+            assert_eq!(lines.len(), 1, "one line: {lines:?}");
+            assert_eq!(lines[0].task, Some(filed.id));
+            assert_eq!(lines[0].event, serde_json::json!({ "kind": "task.filed_by_trigger", "name": "毎時の見回り" }));
+
+            automation::role_delete(tx, role.id).expect("the role goes");
+            let after = read::automation(tx.conn(), automation.id).expect("read").expect("there").trigger.expect("kept");
+            assert_eq!(after.role_id, None, "the trigger lets go of it");
+            assert_eq!(after.name, "毎時の見回り");
+        });
+    }
+
     /// **An idle trigger files only once none of the automation's runs is under way** — even with room
     /// for more beside it — and a minute after the task it last filed at the soonest. A time it says no
     /// leaves `next_at` where it was.
@@ -1631,6 +1702,8 @@ mod tests {
             let (automation, make, _) = entry(tx);
             automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
             let trigger = automation::NewTrigger {
+                name: String::new(),
+                role_id: None,
                 when: TriggerWhen::Idle,
                 condition: None,
                 script: None,
@@ -1684,6 +1757,8 @@ mod tests {
             let (automation, _, project) = entry(tx);
             automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
             let trigger = automation::NewTrigger {
+                name: String::new(),
+                role_id: None,
                 when: TriggerWhen::Tasks,
                 condition: Some(TriggerCondition { filter: "status:todo".into(), below: 2 }),
                 script: None,
@@ -1740,6 +1815,8 @@ mod tests {
             // Named by its full path, as a program is written; it is never run here.
             let judge = std::env::temp_dir().join("judge").to_string_lossy().into_owned();
             let trigger = automation::NewTrigger {
+                name: String::new(),
+                role_id: None,
                 when: TriggerWhen::Script,
                 condition: None,
                 script: Some(automation::NewScript {
@@ -1787,6 +1864,8 @@ mod tests {
             std::fs::create_dir_all(&dir).expect("dir");
             let path = dir.join("task.md");
             let trigger = automation::NewTrigger {
+                name: String::new(),
+                role_id: None,
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,
@@ -1826,6 +1905,8 @@ mod tests {
             // Named by its full path, as a program is written; it is never run here.
             let writer = std::env::temp_dir().join("write-task").to_string_lossy().into_owned();
             let trigger = automation::NewTrigger {
+                name: String::new(),
+                role_id: None,
                 when: TriggerWhen::Idle,
                 condition: None,
                 script: None,
@@ -1878,6 +1959,8 @@ mod tests {
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
             let trigger = automation::NewTrigger {
+                name: String::new(),
+                role_id: None,
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,
@@ -1919,6 +2002,8 @@ mod tests {
             // Left unanswered, it does not take what it files — which the launch check refuses at the entry.
             automation::cfg_set(tx, make.id, WHAT_THEN, None).expect("leave it unanswered");
             let trigger = automation::NewTrigger {
+                name: String::new(),
+                role_id: None,
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,

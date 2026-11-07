@@ -544,7 +544,16 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             };
             let trigger = match (off, when, task) {
                 (false, Some(when), Some(task)) => {
-                    Some(amenbo_core::ops::automation::NewTrigger { when, condition, script, task })
+                    // The CLI writes no name or role: the trigger is called blank and files
+                    // its task under no role.
+                    Some(amenbo_core::ops::automation::NewTrigger {
+                        name: String::new(),
+                        role_id: None,
+                        when,
+                        condition,
+                        script,
+                        task,
+                    })
                 }
                 // clap asks for a when and one of --title, --task-from-file and --task-from-script unless
                 // --off is given, and refuses them beside it.

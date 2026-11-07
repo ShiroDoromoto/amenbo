@@ -1365,7 +1365,37 @@ pub const STEPS: &[Step] = &[
         // `fixed` and has neither a file nor a program.
         apply: Apply::Custom(let_a_trigger_read_or_write_its_task),
     },
+    Step {
+        to: 116,
+        name: "add automation.trigger_name and trigger_role_id, what a trigger is called and the role the task it files is worked under",
+        // **Seeded blank.** No trigger had a name before, so each one already there is called '' and
+        // files its task under no role, as it always has.
+        apply: Apply::Custom(let_a_trigger_have_a_name_and_a_role),
+    },
 ];
+
+/// v116: `automation.trigger_name` and `automation.trigger_role_id`, what a trigger is called and the
+/// role the task it files is worked under. Every trigger already there is called '' and names no role.
+///
+/// **Each only where it is not there yet.** A store whose automation table was created in the live shape
+/// already has them.
+fn let_a_trigger_have_a_name_and_a_role(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let cols = column_names(tx, "automation")?;
+    if !cols.iter().any(|c| c == "trigger_name") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN trigger_name TEXT;
+             UPDATE automation SET trigger_name = '' WHERE trigger_when_kind IS NOT NULL;",
+        )?;
+    }
+    if !cols.iter().any(|c| c == "trigger_role_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation ADD COLUMN trigger_role_id BIGINT REFERENCES automation_role(id) \
+                 ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    Ok(())
+}
 
 /// v115: `automation.trigger_task_path`, `trigger_task_script_program`, `trigger_task_script_args` and
 /// `trigger_task_script_timeout_minutes`, and `automation.trigger_task_kind` admits `file` and `script`
@@ -11877,6 +11907,47 @@ mod tests {
                 [],
             )
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v116: a trigger written before the step is called '' and names no role, an automation with no
+    /// trigger has neither, and a role of the automation can be named.
+    #[test]
+    fn a_trigger_written_before_v116_is_called_blank_and_names_no_role() {
+        let dir = scratch("automation-trigger-name");
+        let engine = store_at(&dir, 115);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, trigger_when_kind, trigger_every_minutes, \
+                     trigger_task_kind, trigger_task_title, trigger_task_notes, trigger_next_at) \
+                     VALUES (1, 1, 'work', 'every', 60, 'fixed', 'look', 'notes', '2026-11-07T00:00:00Z');
+                 INSERT INTO automation (id, project_id, name) VALUES (2, 1, 'still');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let kept = |id: i64| -> (Option<String>, Option<i64>) {
+            engine
+                .conn()
+                .query_row("SELECT trigger_name, trigger_role_id FROM automation WHERE id = ?1", [id], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .unwrap()
+        };
+        assert_eq!(kept(1), (Some(String::new()), None), "a trigger already there is called blank, with no role");
+        assert_eq!(kept(2), (None, None), "no trigger, no name");
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO automation_role (id, automation_id, name) VALUES (1, 1, 'reviewer');
+                 UPDATE automation SET trigger_name = 'every hour', trigger_role_id = 1 WHERE id = 1;",
+            )
+            .unwrap();
+        assert_eq!(kept(1), (Some("every hour".into()), Some(1)));
         std::fs::remove_dir_all(&dir).ok();
     }
 

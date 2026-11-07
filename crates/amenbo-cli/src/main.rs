@@ -40,6 +40,7 @@ use cmd::decision::decision;
 use cmd::dimension::dimension;
 use cmd::hard_erase::hard_erase;
 use cmd::labels::project_label;
+use cmd::licenses::licenses_cmd;
 use cmd::lint::lint_cmd;
 use cmd::outbox::{resume_dispatch, resume_the_viewer, with_dispatch};
 use cmd::place::{binding_project, location_header, named_project_flag};
@@ -220,6 +221,7 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // Facts about this build and this machine's own settings; no store content either way.
         Command::Agent { .. }
         | Command::Version
+        | Command::Licenses // texts compiled into this build
         | Command::Update { .. }
         | Command::Whoami
         | Command::Config { .. } // settings live in the user layer, outside any project
@@ -363,8 +365,8 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
 /// receives the pointer rather than to the one the command was typed in. A `--dir` that names no directory
 /// is left to the command itself to report.
 ///
-/// Out of reach are the commands that place no pointer and read no store (`version` / `update` / `lint` /
-/// `agent-hook`),
+/// Out of reach are the commands that place no pointer and read no store (`version` / `licenses` / `update` /
+/// `lint` / `agent-hook`),
 /// and `unbind` — the way *out*. Refusing that one would strand a pointer an older build wrote, leaving a
 /// text editor as the only way to remove it, and its single store write forgets this folder's registration:
 /// that cleans the binding up rather than driving the backlog with it. So is the notification sender: it is
@@ -374,6 +376,7 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
 fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
     match cmd {
         Some(Command::Version)
+        | Some(Command::Licenses)
         | Some(Command::Update { .. })
         | Some(Command::Lint { .. })
         | Some(Command::GithookPreCommit)
@@ -443,8 +446,8 @@ fn refuse_a_nested_worktree(cmd: &Option<Command>) -> Result<(), CliError> {
 /// `project add --dir` claim the folder for this store, `init` raises a project in it. Refusing those
 /// would leave a text editor as the only way to release a folder — the same reason `unbind` (the other
 /// way out) is outside the nested-worktree guard. So are the faces that decide nothing by this
-/// directory: `version`, `update`, `lint`, the git hooks, `agent-hook`, the notification sender, the Viewer
-/// carrier, and `mcp` (whose child meets this guard in the folder its call named).
+/// directory: `version`, `licenses`, `update`, `lint`, the git hooks, `agent-hook`, the notification sender,
+/// the Viewer carrier, and `mcp` (whose child meets this guard in the folder its call named).
 fn refuse_a_pointer_from_another_store(cmd: &Option<Command>) -> Result<(), CliError> {
     match pointer_store_guard_target(cmd).and_then(|dir| amenbo_core::binding::foreign_pointer(&dir)) {
         Some(foreign) => Err(CliError::pointer_other_store(
@@ -464,6 +467,7 @@ fn pointer_store_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBu
     let out_of_reach = matches!(
         cmd,
         Some(Command::Version)
+            | Some(Command::Licenses)
             | Some(Command::Update { .. })
             | Some(Command::Lint { .. })
             | Some(Command::GithookPreCommit)
@@ -589,6 +593,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // nothing to guard. That is not a concession: CI is exactly where this must run, and there is no
         // `.amenbo` there to find.
         Some(Command::Lint { paths, stdin }) => return lint_cmd(flags, paths.clone(), *stdin),
+        // The license texts are compiled into this binary, so they answer on the same store-free footing
+        // as `lint`: someone reading them may have no project at all.
+        Some(Command::Licenses) => return licenses_cmd(flags),
         // The surface layer (`AMB-D-749`), on the same store-free footing as `lint` and ahead of the exec
         // guard for a sharper reason: it must answer the same in a bound folder, a worktree and a bare
         // directory, because the pane it speaks to is the same pane in all three. Opening a store to say
@@ -1016,7 +1023,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Unbind { .. } => {
             unreachable!("handled before open")
         }
-        Command::Lint { .. } => {
+        Command::Lint { .. } | Command::Licenses => {
             unreachable!("handled before open")
         }
         Command::Talk { .. } => {
@@ -1374,6 +1381,7 @@ mod tests {
         }
         for store_free in [
             vec!["amenbo", "version"],
+            vec!["amenbo", "licenses"],
             vec!["amenbo", "lint", "--stdin"],
             vec!["amenbo", "agent-hook", "snippet", "cursor"],
             vec!["amenbo", "mcp", "--dir", "/tmp"],
@@ -1476,6 +1484,7 @@ mod tests {
         // Facts about this build, this machine's settings, and text handed in — no facet either way.
         assert!(!uses_facet(&Some(Command::Agent { command: None, full: false })));
         assert!(!uses_facet(&Some(Command::Version)));
+        assert!(!uses_facet(&Some(Command::Licenses)));
         assert!(!uses_facet(&Some(Command::Whoami)));
         assert!(!uses_facet(&Some(Command::Bind { project: None, dir: None, force: false, rebind: None })));
         assert!(!uses_facet(&Some(Command::Lint { paths: Vec::new(), stdin: false })));

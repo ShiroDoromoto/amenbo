@@ -14,6 +14,7 @@ pub(crate) mod dimension;
 pub(crate) mod guard;
 pub(crate) mod hard_erase;
 pub(crate) mod labels;
+pub(crate) mod licenses;
 pub(crate) mod lint;
 pub(crate) mod notify;
 pub(crate) mod outbox;

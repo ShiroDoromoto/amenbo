@@ -74,6 +74,8 @@ pub enum Command {
     },
     /// Version information
     Version,
+    /// Print Amenbo's license and the third-party notices compiled into this binary
+    Licenses,
     /// Update Amenbo to the latest release. By default this opens this OS's one-piece installer
     /// (resolved from the published latest.json) in your browser — and where that cannot be read,
     /// says so rather than opening a page of its own choosing.

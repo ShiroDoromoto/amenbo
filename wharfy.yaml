@@ -22,6 +22,8 @@ channels: [releases, script]
 # unified installer side).
 # The build runs on public CI (release.yml): each OS's native runner does `cargo build -p amenbo-cli`
 # into dist/, and wharfy does only package→release→publish.
+# The archive holds the binary alone (wharfy takes no extra files), so LICENSE and THIRD-PARTY-NOTICES
+# are compiled into it and printed by `amenbo licenses`.
 prebuilt:
   binaries:
     - { os: darwin,  arch: arm64, path: dist/amenbo-darwin-arm64 }

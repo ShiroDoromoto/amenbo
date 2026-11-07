@@ -35,6 +35,10 @@ rust:
   # these entries cover the other direction — a tape edited on its own.
   - 'assets/cli-demo.tape'
   - 'assets/cli-demo.transcript.txt'
+  # The texts `amenbo licenses` compiles into the CLI binary: an edit to either alone changes
+  # what the build prints.
+  - 'LICENSE'
+  - 'THIRD-PARTY-NOTICES'
 # The pre-distribution verification harness is a third out-of-workspace cargo workspace,
 # so the `rust` job (default manifest = main workspace) never builds or tests it. This
 # gates its own clippy+test job in _ci.yml — the ONLY thing that compiles core/cli/gui in CI.
@@ -155,7 +159,6 @@ npm_deps:
 # to that fallback, never here.
 ungated:
   - '**/*.md'
-  - 'LICENSE'
   - 'assets/*.png'
   - 'assets/*.svg'
   - 'assets/*.gif'

@@ -397,6 +397,16 @@ fn the_version_face_says_which_build_it_is() {
 }
 
 #[test]
+fn the_licenses_face_prints_the_license_and_the_notices_built_in() {
+    let cli = Cli::new();
+    let v = cli.json(&["licenses", "--json"]);
+    let license = v["license"].as_str().unwrap_or_else(|| panic!("license text: {v}"));
+    assert!(license.contains("Apache License"), "Amenbo's own license is Apache-2.0: {license:.200}");
+    let notices = v["third_party_notices"].as_str().unwrap_or_else(|| panic!("notices text: {v}"));
+    assert!(notices.starts_with("THIRD-PARTY NOTICES"), "the notices file is carried whole: {notices:.200}");
+}
+
+#[test]
 fn personal_mode_has_no_sharing_commands() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);

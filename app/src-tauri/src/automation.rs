@@ -2807,7 +2807,8 @@ fn start_script(
     let given = script
         .given(&store.blobs())
         .map_err(|e| format!("its inputs could not be read: {}", CmdError::from(e).message_en))?;
-    let prepared = amenbo_core::ops::automation_script::prepare(&script.script, &given)?;
+    let prepared =
+        amenbo_core::ops::automation_script::prepare(&script.script, &given, Some((run_id, script.run_step.id)))?;
     let terminal = crate::pty::open_script(app, run_id, &prepared).map_err(|e| e.message_en)?;
     let group = terminal
         .pid

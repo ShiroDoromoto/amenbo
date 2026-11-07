@@ -94,6 +94,7 @@ fn generate(store: &mut Store, opts: &Opts) -> amenbo_core::Result<Summary> {
             created_by_kind: Some(ActorKind::Ai),
             at_binding_id: None,
             role_id: None,
+            made_in_run_step_id: None,
             // Seeded, not filed: no session made these, whatever pane the seeder was run from
             // (`AMB-D-897`).
             made_in: None,

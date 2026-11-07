@@ -45,6 +45,7 @@ fn fresh_store_reads_as_content_empty_then_not_after_a_task() {
                 created_by_kind: None,
                 at_binding_id: None,
                 role_id: None,
+                made_in_run_step_id: None,
                 made_in: None,
             })
             .unwrap();

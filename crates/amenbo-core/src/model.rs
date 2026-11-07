@@ -426,6 +426,11 @@ pub struct Task {
     /// it. `None` is a task with no role, which is every task unless someone named one.
     #[serde(default)]
     pub role_id: Option<i64>,
+    /// The step execution of an automation run this task was filed in ([`AutomationRunStep`]), by its
+    /// id — which run it was is read off that step. `None` is every task filed outside a run. Written at
+    /// the create and never rewritten.
+    #[serde(default)]
+    pub made_in_run_step_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

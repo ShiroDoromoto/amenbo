@@ -2090,6 +2090,7 @@ pub fn task_add(
             // is exactly why the create is handed this rather than reading it.
             made_in: None,
             role_id,
+            made_in_run_step_id: None,
         })?;
         if assignee.is_some() {
             store.set_task_assignee(t.id, assignee, ActorKind::Human)?;
@@ -5737,6 +5738,7 @@ pub(crate) mod tests {
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
                     role_id: None,
+                    made_in_run_step_id: None,
                     made_in: None,
                 })
                 .unwrap();
@@ -5805,6 +5807,7 @@ pub(crate) mod tests {
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
                     role_id: None,
+                    made_in_run_step_id: None,
                     made_in: None,
                 })
                 .unwrap();
@@ -5830,6 +5833,7 @@ pub(crate) mod tests {
                 created_by_kind: Some(ActorKind::Human),
                 at_binding_id: None,
                 role_id: None,
+                made_in_run_step_id: None,
                 made_in: None,
             })
             .expect("a write still lands after the sidecars were cleared");
@@ -5949,6 +5953,7 @@ pub(crate) mod tests {
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
                     role_id: None,
+                    made_in_run_step_id: None,
                     made_in: None,
                 })
                 .unwrap()
@@ -6006,6 +6011,7 @@ pub(crate) mod tests {
                 created_by_kind: Some(ActorKind::Ai),
                 at_binding_id: None,
                 role_id: None,
+                made_in_run_step_id: None,
                 made_in: None,
             })
             .unwrap()
@@ -6059,6 +6065,7 @@ pub(crate) mod tests {
                     created_by_kind: Some(ActorKind::Ai),
                     at_binding_id: None,
                     role_id: None,
+                    made_in_run_step_id: None,
                     made_in: None,
                 })
                 .unwrap()
@@ -7818,6 +7825,7 @@ pub(crate) mod tests {
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
                     role_id: None,
+                    made_in_run_step_id: None,
                     made_in: None,
                 })
                 .unwrap();
@@ -7890,6 +7898,7 @@ pub(crate) mod tests {
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
                     role_id: None,
+                    made_in_run_step_id: None,
                     made_in: None,
                 })
                 .unwrap();
@@ -7933,6 +7942,7 @@ pub(crate) mod tests {
                     created_by_kind: Some(ActorKind::Human),
                     at_binding_id: None,
                     role_id: None,
+                    made_in_run_step_id: None,
                     made_in: None,
                 })
                 .unwrap()
@@ -8133,6 +8143,7 @@ pub(crate) mod tests {
                         created_by_kind: Some(ActorKind::Human),
                         at_binding_id: None,
                         role_id: None,
+                        made_in_run_step_id: None,
                         made_in: None,
                     })
                     .unwrap()

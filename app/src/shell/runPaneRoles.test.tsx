@@ -10,7 +10,8 @@
 //
 // **A role with a round is a card, and the rest are icons on the bar** — the cards in the order the
 // roles are defined in, whatever the round is doing. **A card draws a line only to a role it touches**,
-// and where that role has no card it says "→ role" instead.
+// and where that role has no card it says "→ role" instead. **Where the cards do not all fit in the
+// room, each round is a row of a list**, unless the reader holds the room to one or the other.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,7 +20,7 @@ import type { TaskRoleDto } from "../bindings/bindings";
 import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
-import { filedLine, handsAway, handsOf, roleCards } from "./RunPicture";
+import { cardsFit, filedLine, fitOf, handsAway, handsOf, roleCards } from "./RunPicture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -102,6 +103,8 @@ const pressed = () => faces().find((one) => one.getAttribute("aria-pressed") ===
 const shown = () => container.querySelector(".runroles");
 const cards = () => [...container.querySelectorAll<HTMLElement>(".runroles__card")];
 const idle = () => [...container.querySelectorAll<HTMLElement>(".runroles__idlelist > li")];
+const views = () => [...container.querySelectorAll<HTMLButtonElement>(".slot__view")];
+const rows = () => [...container.querySelectorAll<HTMLElement>(".runroles__row")];
 
 describe("the face a run's pane is turned to", () => {
   it("opens on the roles, with the terminal face kept behind them", async () => {
@@ -355,5 +358,112 @@ describe("handsOf and handsAway", () => {
     expect(handsAway(2, [one], [card(2), card(4)])).toEqual([]);
     expect(handsAway(2, [one], [])).toEqual([one]);
     expect(handsAway(4, [one], [])).toEqual([]);
+  });
+});
+
+describe("cards or the list", () => {
+  const RUNNING: Say = {
+    ...FAILED,
+    run: 51,
+    step: "write the tests",
+    task: { ref: "AMB-T-7", title: "Fix the search filter", seq: 1 },
+    round: { role: 12, startedAt: Date.now() - 65_000 },
+    state: { ...FAILED.state!, status: "running", word: "Running" },
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  /** Rooms measured at `width` by `height`, as a laid-out page would measure them. */
+  const room = (width: number, height: number) => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(height);
+  };
+
+  it("is the room's to decide until the reader holds it, and is offered only while the roles are up", async () => {
+    roles = [role(12, "Bob")];
+    await pane(RUNNING);
+    expect(views().map((one) => one.textContent)).toEqual([t("auto.run.viewAuto"), t("auto.run.viewCards"), t("auto.run.viewList")]);
+    expect(views().find((one) => one.getAttribute("aria-pressed") === "true")?.textContent).toBe(t("auto.run.viewAuto"));
+    expect(cards()).toHaveLength(1);
+
+    await act(async () => faces()[1]!.click());
+    expect(views(), "the terminal face offers a layout of the roles").toHaveLength(0);
+  });
+
+  it("draws a row of the list for a round where the cards do not fit the room", async () => {
+    roles = [role(12, "Bob"), role(14, "Dave")];
+    room(140, 100);
+    await pane({
+      ...RUNNING,
+      run: 52,
+      round: { role: 12, startedAt: null, incident: { ref: "AMB-T-99", role: 14, person: false } },
+      state: FAILED.state,
+    });
+    expect(cards()).toHaveLength(0);
+    expect(rows().map((one) => [one.dataset.role, one.dataset.state])).toEqual([["12", "failed"]]);
+    const row = rows()[0]!;
+    expect(row.querySelector(".runroles__name")?.textContent).toBe("Bob");
+    expect(row.querySelector(".runroles__task")?.textContent).toBe("AMB-T-7 Fix the search filter");
+    expect(row.querySelector(".runroles__chip")?.textContent).toBe(t("auto.run.roles.failed"));
+    expect(row.querySelector(".runroles__hand")?.textContent).toBe("→ Dave");
+    expect(row.querySelector(".runroles__pulse"), "a row has the dot").toBeNull();
+  });
+
+  it("holds to what the reader pressed, and keeps it for that run's pane", async () => {
+    roles = [role(12, "Bob")];
+    await pane({ ...RUNNING, run: 53 });
+    await act(async () => views()[2]!.click());
+    expect(rows()).toHaveLength(1);
+    expect(cards()).toHaveLength(0);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await pane({ ...RUNNING, run: 53 });
+    expect(rows(), "a pane back up for the same run forgot the layout it was held to").toHaveLength(1);
+
+    await pane({ ...RUNNING, run: 54 });
+    expect(views().find((one) => one.getAttribute("aria-pressed") === "true")?.textContent).toBe(t("auto.run.viewAuto"));
+
+    // Held to cards, a room too small for them still draws them.
+    room(140, 100);
+    await act(async () => views()[1]!.click());
+    expect(cards()).toHaveLength(1);
+    expect(rows()).toHaveLength(0);
+  });
+});
+
+describe("cardsFit and fitOf", () => {
+  it("counts the cards a room holds, its padding and the gaps between them taken out", () => {
+    expect(cardsFit(166, 134)).toBe(1);
+    expect(cardsFit(165, 134)).toBe(0);
+    expect(cardsFit(166, 133)).toBe(0);
+    expect(cardsFit(324, 260)).toBe(4);
+    expect(cardsFit(0, 0)).toBe(0);
+  });
+
+  it("turns to the list as soon as the cards do not fit, and back only once the room has grown 40px past it", () => {
+    const first = fitOf(null, 166, 134, 1);
+    expect(first.view).toBe("cards");
+    const down = fitOf(first, 165, 134, 1);
+    expect(down).toEqual({ view: "list", width: 165, height: 134 });
+    expect(fitOf(down, 166, 134, 1).view, "the list turned back the moment the card fit").toBe("list");
+    expect(fitOf(down, 204, 134, 1).view).toBe("list");
+    expect(fitOf(down, 205, 134, 1).view).toBe("cards");
+    expect(fitOf(down, 166, 174, 1).view).toBe("cards");
+    // Grown, but still too small for the cards.
+    expect(fitOf(down, 165, 300, 1).view).toBe("list");
+  });
+
+  it("starts on the list where the cards do not fit, and leaves it as soon as they do", () => {
+    const first = fitOf(null, 160, 134, 1);
+    expect(first.view).toBe("list");
+    expect(fitOf(first, 166, 134, 1).view).toBe("cards");
+  });
+
+  it("turns to the list where more rounds come than the room holds", () => {
+    const cards = fitOf(null, 324, 134, 2);
+    expect(cards.view).toBe("cards");
+    expect(fitOf(cards, 324, 134, 3).view).toBe("list");
+    expect(fitOf(null, 10, 10, 0).view).toBe("cards");
   });
 });

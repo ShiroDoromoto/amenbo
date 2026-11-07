@@ -6785,7 +6785,7 @@ impl Instructor {
             // card to be looked at rather than read.
             (Domain::Automation, "run-roles") => match req(with, "face")? {
                 "roles" => {
-                    let mut line = "In the workspace, confirm the pane this run is drawn in has \"Roles\" pressed on the line over it, and that its body is the cards of the roles rather than a terminal".to_string();
+                    let mut line = "In the workspace, confirm the pane this run is drawn in has \"Roles\" pressed on the line over it, and that its body is the cards of the roles rather than a terminal (where the pane is too small for the cards and draws its roles as a list, press \"Cards\" on the line over it first)".to_string();
                     if let Some(card) = arg_str(with, "card") {
                         line.push_str(&format!(". Confirm a card named \"{card}\" stands there"));
                         if let Some(step) = arg_str(with, "step") {

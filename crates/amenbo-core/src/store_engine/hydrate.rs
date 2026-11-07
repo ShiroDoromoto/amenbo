@@ -618,10 +618,6 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         notes: get(r, C.notes)?,
         entry_placement_id: get(r, C.entry_placement_id)?,
         archived: get(r, C.archived)?,
-        max_concurrent_runs: {
-            let n: i64 = get(r, C.max_concurrent_runs)?;
-            u32::try_from(n).map_err(|_| bad(format!("bad max_concurrent_runs {n}")))?
-        },
         failures_to: failures_to(get(r, C.failures_to_kind)?, get(r, C.failures_to_role_id)?)?,
         export_only: get(r, C.export_only)?,
         triggers: Vec::new(),
@@ -673,6 +669,10 @@ pub(super) fn automation_role_row(r: &Row) -> rusqlite::Result<AutomationRole> {
         agent: get(r, C.agent)?,
         model: get(r, C.model)?,
         order_key: get(r, C.order_key)?,
+        headcount: {
+            let n: i64 = get(r, C.headcount)?;
+            u32::try_from(n).map_err(|_| bad(format!("bad headcount {n}")))?
+        },
         created_at,
         updated_at,
     })

@@ -47,8 +47,6 @@ vi.mock("../core/automations", () => ({
   useAutomationAction: () => null,
   insertAutomationAction: () => Promise.resolve([]),
   ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
-  // The about panel's number field reads it as its `max`.
-  MAX_CONCURRENT_RUNS: 4,
   launchAutomation: hoisted.launch,
   saveAutomation: hoisted.save,
   discardAutomation: hoisted.discard,
@@ -126,7 +124,6 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     name: "Morning round",
     notes: "",
     archived: false,
-    maxConcurrentRuns: 1,
     triggers: [],
     roles: [],
     placements: [],
@@ -313,7 +310,7 @@ describe("the automations screen", () => {
   // (the picture), then its agent and model.
   it("puts the picture of how the role works between the role's head and its agent and model", async () => {
     hoisted.automations = [card()];
-    hoisted.detail = detail({ roles: [{ id: 1, name: "Alice", passes: [] }] });
+    hoisted.detail = detail({ roles: [{ id: 1, name: "Alice", headcount: 1, passes: [] }] });
     hoisted.check = { ready: true, blocks: [] };
     await render();
     await act(async () => { button("Morning round").click(); });

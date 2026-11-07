@@ -48,8 +48,8 @@ use crate::model::{
     AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRole,
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
-    DEFAULT_MAX_CONCURRENT_RUNS, DEFAULT_MAX_TIMES, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
-    ERROR_EXIT, FailuresTo, MAX_CONCURRENT_RUNS_LIMIT, MAX_EXPECTED_MINUTES, MAX_SCRIPT_TIMEOUT_MINUTES,
+    DEFAULT_MAX_TIMES, DEFAULT_ROLE_HEADCOUNT, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
+    ERROR_EXIT, FailuresTo, MAX_EXPECTED_MINUTES, MAX_ROLE_HEADCOUNT, MAX_SCRIPT_TIMEOUT_MINUTES,
     AutomationTrigger, TriggerCondition, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
@@ -1279,7 +1279,6 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         notes: new.notes,
         entry_placement_id: None,
         archived: false,
-        max_concurrent_runs: DEFAULT_MAX_CONCURRENT_RUNS,
         failures_to: new.failures_to,
         export_only: false,
         triggers: Vec::new(),
@@ -1319,11 +1318,10 @@ fn checked_trigger_role(tx: &WriteTx<'_>, automation_id: i64, role_id: Option<i6
     Ok(())
 }
 
-/// Change an automation's name, notes, whether it is archived, how many of its runs may be going at
-/// once, or where a failed round is filed. Only the `Some` fields are written. Archiving takes nothing
-/// away: it is what keeps an automation nobody launches any more out of the lists. A run of the
-/// automation going on does not stop it. `max_concurrent_runs` is `Some(n)` to set the most at `n`, from
-/// 1 up to [`MAX_CONCURRENT_RUNS_LIMIT`]; the limit is never taken away. `failures_to` is
+/// Change an automation's name, notes, whether it is archived, or where a failed round is filed. Only
+/// the `Some` fields are written. Archiving takes nothing away: it is what keeps an automation nobody
+/// launches any more out of the lists. A run of the automation going on does not stop it. How many of
+/// its tasks go at once is not written here: it is its roles' headcount ([`role_update`]). `failures_to` is
 /// `Some(Some(to))` to file failed rounds to a person or to one of the automation's own roles, and
 /// `Some(None)` to leave it unsaid again, which the launch check refuses.
 pub fn update(
@@ -1332,7 +1330,6 @@ pub fn update(
     name: Option<&str>,
     notes: Option<&str>,
     archived: Option<bool>,
-    max_concurrent_runs: Option<u32>,
     failures_to: Option<Option<FailuresTo>>,
 ) -> Result<Automation> {
     let before = live_automation(tx, id)?;
@@ -1345,14 +1342,6 @@ pub fn update(
     }
     if let Some(archived) = archived {
         after.archived = archived;
-    }
-    if let Some(max) = max_concurrent_runs {
-        if !(1..=MAX_CONCURRENT_RUNS_LIMIT).contains(&max) {
-            return Err(Error::invalid(format!(
-                "the most runs of an automation going at once is from 1 to {MAX_CONCURRENT_RUNS_LIMIT}, not {max}"
-            )));
-        }
-        after.max_concurrent_runs = max;
     }
     if let Some(to) = failures_to {
         checked_failures_to(tx, id, to)?;
@@ -2629,6 +2618,8 @@ fn checked_step_of_placement(
 #[derive(Clone, Debug, Default)]
 pub struct NewRole {
     pub name: String,
+    /// How many are in it, from 1 up to [`MAX_ROLE_HEADCOUNT`]. `None` is [`DEFAULT_ROLE_HEADCOUNT`].
+    pub headcount: Option<u32>,
     /// The icon it is drawn with, by the name the GUI knows it under.
     pub icon: Option<String>,
     /// The placement its round starts at — one of the same automation's.
@@ -2643,6 +2634,8 @@ pub struct NewRole {
 #[derive(Clone, Debug, Default)]
 pub struct RoleChange {
     pub name: Option<String>,
+    /// How many are in it, from 1 up to [`MAX_ROLE_HEADCOUNT`].
+    pub headcount: Option<u32>,
     pub icon: Option<Option<String>>,
     pub entry_placement_id: Option<Option<i64>>,
     /// Taking the agent away takes the model with it.
@@ -2657,6 +2650,17 @@ fn live_role(tx: &WriteTx<'_>, id: i64) -> Result<AutomationRole> {
 /// A role's icon, agent or model: not blank, where one is written.
 fn checked_opt(what: &str, value: Option<&str>) -> Result<Option<String>> {
     value.map(|v| checked_name(what, v)).transpose()
+}
+
+/// How many are in a role: from 1 up to [`MAX_ROLE_HEADCOUNT`] (`AMB-D-1124`). A number past it is turned
+/// away rather than brought down to it, so what is written is what was asked for.
+fn checked_headcount(headcount: u32) -> Result<u32> {
+    if !(1..=MAX_ROLE_HEADCOUNT).contains(&headcount) {
+        return Err(Error::invalid(format!(
+            "how many are in a role is from 1 to {MAX_ROLE_HEADCOUNT}, not {headcount}"
+        )));
+    }
+    Ok(headcount)
 }
 
 /// The placement a role's round starts at has to be one of the same automation's.
@@ -2688,6 +2692,7 @@ fn checked_role_model(role: &AutomationRole) -> Result<()> {
 pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<AutomationRole> {
     rewritable(tx, Def::Automation(automation_id))?;
     let name = checked_name("role", &new.name)?;
+    let headcount = checked_headcount(new.headcount.unwrap_or(DEFAULT_ROLE_HEADCOUNT))?;
     checked_role_entry(tx, automation_id, new.entry_placement_id)?;
     let sibs = read::automation_role_siblings(tx.conn(), automation_id, None)?;
     let now = Timestamp::now();
@@ -2695,6 +2700,7 @@ pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<Au
         id: read::next_id(tx.conn(), "automation_role")?,
         automation_id,
         name,
+        headcount,
         icon: checked_opt("icon", new.icon.as_deref())?,
         entry_placement_id: new.entry_placement_id,
         agent: checked_opt("agent", new.agent.as_deref())?,
@@ -2708,14 +2714,17 @@ pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<Au
     Ok(role)
 }
 
-/// Change a role's name, icon, way of working (the placement its round starts at), or default agent and
-/// model. Only the fields `change` names are written.
+/// Change a role's name, how many are in it, icon, way of working (the placement its round starts at), or
+/// default agent and model. Only the fields `change` names are written.
 pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<AutomationRole> {
     let before = live_role(tx, id)?;
     rewritable(tx, Def::Automation(before.automation_id))?;
     let mut after = before.clone();
     if let Some(name) = &change.name {
         after.name = checked_name("role", name)?;
+    }
+    if let Some(headcount) = change.headcount {
+        after.headcount = checked_headcount(headcount)?;
     }
     if let Some(icon) = &change.icon {
         after.icon = checked_opt("icon", icon.as_deref())?;
@@ -4405,38 +4414,68 @@ mod tests {
             kept(version_add(tx, automation.id).map(|_| ()));
             assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read").len(), 2);
 
-            let renamed = update(tx, automation.id, Some("古い版"), None, Some(true), None, None).expect("rename, archive");
+            let renamed = update(tx, automation.id, Some("古い版"), None, Some(true), None).expect("rename, archive");
             assert!(renamed.archived && renamed.export_only);
             delete(tx, automation.id).expect("deleted");
             assert!(read::automation(tx.conn(), automation.id).expect("read").is_none());
         });
     }
 
-    /// **The most runs going at once is 1 at birth, set and kept, and held between 1 and the cap.**
-    /// Leaving the field out keeps what is there.
+    /// **A role is one at birth, its headcount set and kept, and held between 1 and the cap**
+    /// (`AMB-D-1124`). Leaving it out keeps what is there, and a number outside is refused, not brought in.
     #[test]
-    fn the_most_runs_going_at_once_is_one_at_birth_and_held_under_the_cap() {
+    fn a_role_is_one_at_birth_and_held_under_the_cap() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            assert_eq!(automation.max_concurrent_runs, 1, "born with a most of one");
-            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, 1);
+            let role = role_add(tx, automation.id, NewRole { name: "さくら".into(), ..NewRole::default() })
+                .expect("a role");
+            assert_eq!(role.headcount, DEFAULT_ROLE_HEADCOUNT, "born with one");
+            assert_eq!(live_role(tx, role.id).expect("read").headcount, 1);
 
-            let set = update(tx, automation.id, None, None, None, Some(2), None).expect("set the most");
-            assert_eq!(set.max_concurrent_runs, 2);
-            assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, 2);
+            let two = role_add(tx, automation.id, NewRole { name: "山田".into(), headcount: Some(2), ..NewRole::default() })
+                .expect("a role of two");
+            assert_eq!(two.headcount, 2);
 
-            let renamed = update(tx, automation.id, Some("別名"), None, None, None, None).expect("rename");
-            assert_eq!(renamed.max_concurrent_runs, 2, "left out, it is kept");
+            let set = role_update(tx, role.id, RoleChange { headcount: Some(3), ..RoleChange::default() })
+                .expect("set the headcount");
+            assert_eq!(set.headcount, 3);
+            assert_eq!(live_role(tx, role.id).expect("read").headcount, 3);
 
-            for wrong in [0, MAX_CONCURRENT_RUNS_LIMIT + 1] {
-                let refused = update(tx, automation.id, None, None, None, Some(wrong), None);
-                assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong} runs at once is refused");
-                assert_eq!(live_automation(tx, automation.id).expect("read").max_concurrent_runs, 2);
+            let renamed = role_update(tx, role.id, RoleChange { name: Some("佐藤".into()), ..RoleChange::default() })
+                .expect("rename");
+            assert_eq!(renamed.headcount, 3, "left out, it is kept");
+
+            for wrong in [0, MAX_ROLE_HEADCOUNT + 1] {
+                let refused = role_update(tx, role.id, RoleChange { headcount: Some(wrong), ..RoleChange::default() });
+                assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong} in a role is refused");
+                assert_eq!(live_role(tx, role.id).expect("read").headcount, 3);
+                let born =
+                    role_add(tx, automation.id, NewRole { name: "x".into(), headcount: Some(wrong), ..NewRole::default() });
+                assert!(matches!(born, Err(Error::Invalid(_))), "nor is a role born with {wrong}");
             }
 
-            let capped = update(tx, automation.id, None, None, None, Some(MAX_CONCURRENT_RUNS_LIMIT), None)
+            let capped = role_update(tx, role.id, RoleChange { headcount: Some(MAX_ROLE_HEADCOUNT), ..RoleChange::default() })
                 .expect("up to the cap");
-            assert_eq!(capped.max_concurrent_runs, MAX_CONCURRENT_RUNS_LIMIT);
+            assert_eq!(capped.headcount, MAX_ROLE_HEADCOUNT);
+            assert_eq!(read::automation_roles_of(tx.conn(), automation.id).expect("read").len(), 2);
+        });
+    }
+
+    /// **A saved version keeps each role's headcount**, and the draft reads as changed once a headcount
+    /// moves away from it.
+    #[test]
+    fn a_saved_version_keeps_the_headcount() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let role = role_add(tx, automation.id, NewRole { name: "さくら".into(), headcount: Some(2), ..NewRole::default() })
+                .expect("a role");
+            let saved = version_add(tx, automation.id).expect("save");
+            let roles: Vec<AutomationRole> = serde_json::from_str(&saved.roles).expect("roles");
+            assert_eq!(roles[0].headcount, 2);
+            assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"), "nothing changed since");
+
+            role_update(tx, role.id, RoleChange { headcount: Some(3), ..RoleChange::default() }).expect("change it");
+            assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "the headcount is part of the version");
         });
     }
 
@@ -4740,21 +4779,20 @@ mod tests {
 
             let role = role_add(tx, automation.id, NewRole { name: "見る".into(), ..NewRole::default() }).expect("a role");
             let to_role = FailuresTo::Role { role_id: role.id };
-            let set = update(tx, automation.id, None, None, None, None, Some(Some(to_role))).expect("to the role");
+            let set = update(tx, automation.id, None, None, None, Some(Some(to_role))).expect("to the role");
             assert_eq!(set.failures_to, Some(to_role));
             assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, Some(to_role));
 
-            let renamed = update(tx, automation.id, Some("別名"), None, None, None, None).expect("rename");
+            let renamed = update(tx, automation.id, Some("別名"), None, None, None).expect("rename");
             assert_eq!(renamed.failures_to, Some(to_role), "left out, it is kept");
 
             let theirs = role_add(tx, born.id, NewRole { name: "よその".into(), ..NewRole::default() }).expect("a role");
             let refused =
-                update(tx, automation.id, None, None, None, None, Some(Some(FailuresTo::Role { role_id: theirs.id })));
+                update(tx, automation.id, None, None, None, Some(Some(FailuresTo::Role { role_id: theirs.id })));
             assert!(matches!(refused, Err(Error::Invalid(_))), "another automation's role");
             let refused = update(
                 tx,
                 automation.id,
-                None,
                 None,
                 None,
                 None,
@@ -4773,7 +4811,7 @@ mod tests {
             assert!(matches!(refused, Err(Error::Invalid(_))), "a new automation has no role of its own");
             assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, Some(to_role));
 
-            let cleared = update(tx, automation.id, None, None, None, None, Some(None)).expect("leave it unsaid");
+            let cleared = update(tx, automation.id, None, None, None, Some(None)).expect("leave it unsaid");
             assert_eq!(cleared.failures_to, None);
             assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, None);
         });
@@ -4789,7 +4827,7 @@ mod tests {
             let automation = mk_automation(tx);
             let to = |tx: &WriteTx<'_>, role: i64| {
                 let to = Some(Some(FailuresTo::Role { role_id: role }));
-                update(tx, automation.id, None, None, None, None, to).expect("to the role");
+                update(tx, automation.id, None, None, None, to).expect("to the role");
             };
             let failures_to = |tx: &WriteTx<'_>| live_automation(tx, automation.id).expect("read").failures_to;
 
@@ -4801,7 +4839,7 @@ mod tests {
             role_delete(tx, role.id).expect("take the role out");
             assert_eq!(failures_to(tx), None);
 
-            update(tx, automation.id, None, None, None, None, Some(Some(FailuresTo::Human))).expect("a person");
+            update(tx, automation.id, None, None, None, Some(Some(FailuresTo::Human))).expect("a person");
             let kept = role_add(tx, automation.id, NewRole { name: "残す".into(), ..NewRole::default() }).expect("a role");
             role_delete(tx, kept.id).expect("take a role out");
             assert_eq!(failures_to(tx), Some(FailuresTo::Human), "a person is left alone");
@@ -4830,6 +4868,7 @@ mod tests {
             let (_, placement) = mk_placed(tx, &automation, "実装");
             let new = NewRole {
                 name: " 実装 ".into(),
+                headcount: None,
                 icon: Some("hammer".into()),
                 entry_placement_id: Some(placement.id),
                 agent: Some("claude-code".into()),
@@ -7900,8 +7939,8 @@ mod rewritten_under_a_run {
                 .expect("the answer");
 
         // The automation's picture.
-        not_held("rename", update(tx, p.automation.id, Some("別名"), None, None, None, None));
-        not_held("archive", update(tx, p.automation.id, None, None, Some(true), None, None));
+        not_held("rename", update(tx, p.automation.id, Some("別名"), None, None, None));
+        not_held("archive", update(tx, p.automation.id, None, None, Some(true), None));
         not_held("entry", entry_replace(tx, p.automation.id, "fetch"));
         not_held("delete", delete(tx, p.automation.id));
         not_held("place", placement_add(tx, p.automation.id, p.second_action.id));
@@ -8027,9 +8066,9 @@ mod rewritten_under_a_run {
                 let run = if pause { paused(tx, &run) } else { run };
                 let before = copied(tx, &run);
 
-                let renamed = update(tx, p.automation.id, Some("別名"), None, None, None, None).expect("rename");
+                let renamed = update(tx, p.automation.id, Some("別名"), None, None, None).expect("rename");
                 assert_eq!(renamed.name, "別名");
-                let archived = update(tx, p.automation.id, None, None, Some(true), None, None).expect("archive");
+                let archived = update(tx, p.automation.id, None, None, Some(true), None).expect("archive");
                 assert!(archived.archived);
                 let moved = action_set_scope(tx, p.first_action.id, None).expect("to the device");
                 assert_eq!(moved.project_id, None);

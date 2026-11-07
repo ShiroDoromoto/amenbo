@@ -32,9 +32,10 @@
 //! `start` typed in a terminal cannot reach this process, so that one waits out the idle sleep.
 //!
 //! **One launch keeps its runs going side by side** (`top_up`). Each look asks every running launch
-//! whether it has room under its automation's `max_concurrent_runs`, read as it stands, and a task to
-//! take, and starts one more run in it where it does — so a launch fills up to its most one run a look,
-//! a run that ends makes room for the next, and a most raised takes hold on the next look. A launch none
+//! whether it has room under its automation's roles' headcount, read from its newest saved version as it
+//! stands, and a task to take, and starts one more run in it where it does — so a launch fills up to its
+//! most one run a look, a run that ends makes room for the next, and a headcount raised and saved takes
+//! hold on the next look. A launch none
 //! of whose runs is about to take a task is the only one given another, so two runs are not started for
 //! one task.
 //!

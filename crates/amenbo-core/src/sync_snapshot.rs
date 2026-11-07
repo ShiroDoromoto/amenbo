@@ -1235,7 +1235,7 @@ mod tests {
             "UPDATE task_comment SET automation_run_step_id = ?2 WHERE id = ?1",
             rusqlite::params![comment, run_step],
         );
-        // And the step the task says it was filed in, for the column v123 added to `task`, the same way.
+        // And the step the task says it was filed in, for the column v124 added to `task`, the same way.
         put(
             "UPDATE task SET made_in_run_step_id = ?2 WHERE id = ?1",
             rusqlite::params![task, run_step],

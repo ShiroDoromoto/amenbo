@@ -1878,8 +1878,8 @@ pub enum AutomationCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// Change an automation's name, notes, whether it is archived, the most runs it may have going at
-    /// once, or where a failed round is filed (only the given fields change)
+    /// Change an automation's name, notes, whether it is archived, or where a failed round is filed
+    /// (only the given fields change)
     Update {
         /// automation id
         id: i64,
@@ -1891,10 +1891,6 @@ pub enum AutomationCmd {
         /// whether it is archived (`--archived true|false`)
         #[arg(long)]
         archived: Option<bool>,
-        /// the most runs it may have going at once (1 to 4; 1 until changed); one start runs up to it
-        /// side by side, a launch already going included, and a start past it is refused
-        #[arg(long, value_parser = clap::value_parser!(u32).range(1..=i64::from(amenbo_core::model::MAX_CONCURRENT_RUNS_LIMIT)))]
-        max_concurrent_runs: Option<u32>,
         /// where a failed round is filed: `human` for a person, or the id of one of this automation's
         /// roles
         #[arg(long, value_name = "human|ROLE_ID")]
@@ -2430,14 +2426,18 @@ pub enum AutomationCmd {
         #[arg(long)]
         clear: bool,
     },
-    /// Define a role in an automation — a name and an icon, the way it works (the placement its round
-    /// starts at), and the agent and model its steps fall back to. Not the task's assignee
+    /// Define a role in an automation — a name, how many are in it, an icon, the way it works (the
+    /// placement its round starts at), and the agent and model its steps fall back to. Not the task's
+    /// assignee
     RoleAdd {
         /// automation id
         automation: i64,
         /// what the role is called
         #[arg(long)]
         name: String,
+        /// how many are in it — how many of its tasks may be under way at once, 1 to 10 (1 unless given)
+        #[arg(long)]
+        headcount: Option<u32>,
         /// the icon it is drawn with, by its name
         #[arg(long)]
         icon: Option<String>,
@@ -2462,6 +2462,9 @@ pub enum AutomationCmd {
         id: i64,
         #[arg(long)]
         name: Option<String>,
+        /// how many are in it — how many of its tasks may be under way at once, 1 to 10
+        #[arg(long)]
+        headcount: Option<u32>,
         /// the icon it is drawn with, by its name
         #[arg(long, conflicts_with = "clear_icon")]
         icon: Option<String>,

@@ -136,6 +136,7 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         let new = NewRole {
             name: role.name.clone(),
             headcount: Some(role.headcount),
+            take_order: Some(role.take_order),
             icon: role.icon.clone(),
             entry_placement_id,
             agent: role.agent.clone(),
@@ -376,6 +377,7 @@ mod tests {
         let reviewer = NewRole {
             name: "レビュー".into(),
             headcount: Some(2),
+            take_order: Some(crate::model::TakeOrder::Due),
             icon: Some("eye".into()),
             entry_placement_id: Some(second.id),
             agent: Some("codex".into()),
@@ -439,6 +441,17 @@ mod tests {
                 [("1件やりきるの係", 1), ("レビュー", 2), ("実装", 1)],
                 "each role comes in with its headcount"
             );
+            let orders: Vec<(&str, crate::model::TakeOrder)> =
+                roles.iter().map(|r| (r.name.as_str(), r.take_order)).collect();
+            assert_eq!(
+                orders,
+                [
+                    ("1件やりきるの係", crate::model::TakeOrder::Priority),
+                    ("レビュー", crate::model::TakeOrder::Due),
+                    ("実装", crate::model::TakeOrder::Priority),
+                ],
+                "each role comes in with the order it takes its tasks in"
+            );
             assert_eq!((imported.project_id, imported.name.as_str()), (into, "1件やりきる"));
             assert!(read::automation_version_latest(tx.conn(), imported.id).expect("read").is_none(), "not saved");
             assert!(automation::unsaved(tx.conn(), imported.id).expect("unsaved"), "left being written");
@@ -482,6 +495,13 @@ mod tests {
             uncounted["roles"][0].as_object_mut().expect("a role").remove("headcount");
             let uncounted = parse(&uncounted.to_string()).expect("a file from before headcounts");
             assert_eq!(uncounted.roles[0].headcount, crate::model::DEFAULT_ROLE_HEADCOUNT, "an older file reads as one");
+            let mut unordered = serde_json::to_value(&file).expect("json");
+            unordered["roles"][0].as_object_mut().expect("a role").remove("take_order");
+            let unordered = parse(&unordered.to_string()).expect("a file from before orders");
+            assert_eq!(unordered.roles[0].take_order, crate::model::TakeOrder::Priority, "an older file takes by priority");
+            let mut misordered = serde_json::to_value(&file).expect("json");
+            misordered["roles"][0]["take_order"] = serde_json::json!("title");
+            assert!(parse(&misordered.to_string()).is_err(), "an order that is none of the four is refused");
 
             for headcount in [0, crate::model::MAX_ROLE_HEADCOUNT + 1] {
                 let mut counted = file.clone();

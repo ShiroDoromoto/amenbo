@@ -59,6 +59,11 @@ pub struct RoleFile {
     /// [`crate::model::DEFAULT_ROLE_HEADCOUNT`]; the import checks it as any other headcount written.
     #[serde(default = "crate::model::default_role_headcount")]
     pub headcount: u32,
+    /// The order it takes its tasks in. A file written before orders were carried reads as
+    /// [`crate::model::TakeOrder::Priority`]; a word that is none of the four is refused as the file
+    /// is read.
+    #[serde(default)]
+    pub take_order: crate::model::TakeOrder,
     pub icon: Option<String>,
     /// The placement its round starts at, by its place in `placements`.
     pub entry: Option<usize>,
@@ -318,6 +323,7 @@ pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
             .map(|r| RoleFile {
                 name: r.name.clone(),
                 headcount: r.headcount,
+                take_order: r.take_order,
                 icon: r.icon.clone(),
                 entry: r.entry_placement_id.and_then(at),
                 agent: r.agent.clone(),

@@ -1151,16 +1151,32 @@ pub fn is_task_sort(sort: &str) -> bool {
     order_by(sort).is_ok()
 }
 
-/// Build the `ORDER BY` body for `sort`. Ties break on `id`; `-` reverses the whole ordering, so every
-/// component (including the `id` tiebreak and any NULLs-grouping term) flips direction together. Every
+/// Build the `ORDER BY` body for `sort`. Ties break on `id`; a key's `-` reverses that key whole, so every
+/// component of it (including any NULLs-grouping term) flips direction together. Every
 /// term names its column through the registry, so a
 /// sort key cannot outlive the column it sorts by, and the "not written" grouping terms are
 /// [`Pred::is_blank`]'s own fragment — the same reading of an unwritten text column the `due:none` filter
 /// uses, not a second spelling of it.
+///
+/// **Several keys may be written, separated by commas** (`priority,created`): tasks the first key
+/// leaves level are put in order by the next, and only those every key leaves level by `id`. Each key
+/// takes its own `-`, and the `id` tiebreak takes the direction of the last one.
 fn order_by(sort: &str) -> Result<Vec<Sort>> {
-    let desc = sort.starts_with('-');
-    let key = sort.trim_start_matches('-');
-    let comps: Vec<String> = match key {
+    let mut keys: Vec<Sort> = Vec::new();
+    let mut desc = false;
+    for one in sort.split(',') {
+        desc = one.starts_with('-');
+        keys.extend(order_by_key(one.trim_start_matches('-'))?.into_iter().map(|c| Sort::expr(c).dir(desc)));
+    }
+    // The direction is the caller's (`-due`), the keys are the registry's — and the `id` tiebreak takes
+    // the same direction, so a reversed sort reverses whole.
+    keys.push(Sort::by(T.id).dir(desc));
+    Ok(keys)
+}
+
+/// The `ORDER BY` terms of one key of [`order_by`], ascending.
+fn order_by_key(key: &str) -> Result<Vec<String>> {
+    Ok(match key {
         // Placement is task-held: sort by the task's own order_key.
         "order" => vec![format!("COALESCE({}, '')", T.order_key.to_sql())],
         // A task with no deadline at all sorts last (ascending); the grouping term flips with `-`.
@@ -1176,12 +1192,7 @@ fn order_by(sort: &str) -> Result<Vec<Sort>> {
         "completed" => vec![Pred::is_blank(T.completed_at).sql().to_string(), T.completed_at.to_sql()],
         "title" => vec![T.title.to_sql()],
         other => return Err(StoreEngineError::InvalidSort(other.to_string())),
-    };
-    // The direction is the caller's (`-due`), the keys are the registry's — and the `id` tiebreak takes
-    // the same direction, so a reversed sort reverses whole.
-    let mut keys: Vec<Sort> = comps.into_iter().map(|c| Sort::expr(c).dir(desc)).collect();
-    keys.push(Sort::by(T.id).dir(desc));
-    Ok(keys)
+    })
 }
 
 /// The subset of decision `ids` that exist in this read-model, by an indexed primary-key lookup — the
@@ -7896,6 +7907,17 @@ mod tests {
     /// A field value for a record these tests write.
     fn text(s: &str) -> Value {
         Value::Text(s.to_string())
+    }
+
+    /// **Several sort keys, separated by commas, are one sort**: each key is checked as one alone is, and
+    /// a key nothing answers to anywhere in the list refuses the whole.
+    #[test]
+    fn several_sort_keys_are_one_sort() {
+        assert!(is_task_sort("priority,created"));
+        assert!(is_task_sort("-due,created"));
+        assert!(!is_task_sort("priority,nope"));
+        assert!(!is_task_sort("priority,"));
+        assert_eq!(order_by("priority,created").expect("sort").len(), 3, "both keys, then the id");
     }
 
     /// What a watcher leans on: `data_version` moves when **another** connection commits — including a

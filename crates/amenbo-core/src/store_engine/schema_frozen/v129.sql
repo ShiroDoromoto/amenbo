@@ -312,6 +312,7 @@ CREATE TABLE IF NOT EXISTS automation_role (
     model TEXT,
     order_key TEXT NOT NULL DEFAULT '',
     headcount BIGINT NOT NULL DEFAULT 1,
+    take_order TEXT NOT NULL DEFAULT 'priority',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
@@ -442,15 +443,6 @@ CREATE TABLE IF NOT EXISTS automation_launch (
     ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
-);
-CREATE TABLE IF NOT EXISTS automation_launch_role (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    launch_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_launch(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
-    role_id BIGINT NOT NULL DEFAULT 0,
-    headcount BIGINT NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-    UNIQUE (launch_id, role_id)
 );
 CREATE TABLE IF NOT EXISTS automation_run (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

@@ -163,6 +163,10 @@ const COUNT: &str = "BIGINT NOT NULL DEFAULT 0";
 /// checked where it is written (`ops::automation`), not here, so the cap can change without a
 /// migration.
 const HEADCOUNT: &str = "BIGINT NOT NULL DEFAULT 1";
+/// The order an automation's role takes its tasks in (`automation_role.take_order`), `priority` until
+/// written — one of `model::TakeOrder`'s words. Which words are taken is held by that type, which the
+/// ops write and `hydrate` reads back, not by a `CHECK`, as the headcount's range is.
+const TAKE_ORDER: &str = "TEXT NOT NULL DEFAULT 'priority'";
 /// A polymorphic reference (`attachment.target_id`): a key like `fk!`'s, minus
 /// the `REFERENCES` — SQLite cannot branch a constraint on a sibling `target_type` column, so the ops
 /// sweep these rows by hand. An integer because every key is one; a TEXT affinity here would
@@ -374,6 +378,7 @@ macro_rules! column_type {
     ($name:ident : col(KEY_REF_OPT))    => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int, $crate::store_engine::sql::Nullable> };
     ($name:ident : col(COUNT))          => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     ($name:ident : col(HEADCOUNT))      => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
+    ($name:ident : col(TAKE_ORDER))     => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
     ($name:ident : ts)                  => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
     ($name:ident : ts_opt)              => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : ts_opt_apart($day:ident)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
@@ -1246,6 +1251,11 @@ datasets! {
     // `headcount` is how many are in the role — how many of its tasks may be under way at once — 1
     // until somebody changes it. Its range (`model::MAX_ROLE_HEADCOUNT`) is checked by the ops, not by
     // a `CHECK`. A saved version keeps it with the role.
+    //
+    // `take_order` is the order the role takes its tasks in — `priority` (and the oldest first within
+    // one priority), `due`, `created` or `order` (the task's own `order_key`) — `priority` until
+    // somebody changes it. Which words are taken is held by `model::TakeOrder`, not by a `CHECK`. A
+    // saved version keeps it with the role.
     automation_role {
         automation_id: fk("automation", "RESTRICT"),
         name: col(REQ),
@@ -1255,6 +1265,7 @@ datasets! {
         model: col(OPT),
         order_key: col(ORDER_KEY),
         headcount: col(HEADCOUNT),
+        take_order: col(TAKE_ORDER),
     }
 
     // **One trigger of an automation**: what files a task on its own and starts a run with it, in three

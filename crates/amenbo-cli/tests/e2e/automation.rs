@@ -1490,6 +1490,51 @@ fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
     cli.json(&["automation", "cancel", &own, "--force", "--json"]);
 }
 
+/// **A task filed inside a step says which step it was filed in** — in an AI step's terminal, which
+/// names its step in `AMENBO_AUTOMATION_STEP`, and in a script step's program, which names it in
+/// `AMENBO_RUN_STEP` instead. Filed outside every run, or under a step this store has no row for, it
+/// says none, and the filing is not refused for it.
+#[test]
+fn a_task_filed_inside_a_step_remembers_the_step() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_saved_launchable(&cli);
+    let run: i64 = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run").parse().unwrap();
+    let open = || amenbo_core::Store::open_at(amenbo_core::config::Paths::at(cli.home.clone())).expect("the store");
+    // No watch opens a step here, so the run's first one is opened on the store, as the app's watch would.
+    let step = {
+        let mut store = open();
+        let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| d.entry).expect("an entry");
+        match store.automation_step_open(run, entry.id, None).expect("open") {
+            amenbo_core::ops::automation_step::Opened::Carried { run_step_id, .. } => run_step_id,
+            _ => panic!("the entry takes a task and is carried out"),
+        }
+    };
+    let p = cli.a_project();
+    let step_text = step.to_string();
+    let filed = |env: &[(&str, &str)], title: &str| -> i64 {
+        let t = cli.json_env(env, &["task", "add", "--title", title, "--project", &p, "--json"]);
+        id_str(&t["task"]["id"]).parse().unwrap()
+    };
+    let by_agent = filed(&[("AMENBO_AUTOMATION_STEP", &step_text)], "AI のステップで立てた");
+    let by_script = filed(&[("AMENBO_RUN", &run.to_string()), ("AMENBO_RUN_STEP", &step_text)], "スクリプトで立てた");
+    let outside = cli.json(&["task", "add", "--title", "外で立てた", "--project", &p, "--json"]);
+    let outside: i64 = id_str(&outside["task"]["id"]).parse().unwrap();
+    let unknown = filed(&[("AMENBO_RUN_STEP", "999999")], "知らないステップで立てた");
+
+    let store = open();
+    let made_in = |id: i64| store.task(id).expect("read").expect("the task").made_in_run_step_id;
+    assert_eq!(made_in(by_agent), Some(step), "an AI step's terminal names its step");
+    assert_eq!(made_in(by_script), Some(step), "a script step's program names its step");
+    assert_eq!(made_in(outside), None, "a terminal outside every run names none");
+    assert_eq!(made_in(unknown), None, "a step this store has no row for is dropped");
+    let steps = store.automation_run_steps(run).expect("read");
+    assert!(steps.iter().any(|s| s.id == step), "the run is read off the step");
+    drop(store);
+
+    cli.json(&["automation", "cancel", &run.to_string(), "--force", "--json"]);
+}
+
 /// **Only a failure is waiting to be seen** (`AMB-D-989`): a run a person stopped needs nobody, so
 /// saying it has been seen is refused, and its account says nothing about being seen. That a failure
 /// takes the mark, with whoever set it, is held by the core's own tests — a terminal has no way to make

@@ -1426,22 +1426,49 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 124,
+        name: "add task.made_in_run_step_id, the step of a run a task was filed in",
+        // **Seeded with nothing.** Which step a task was filed in was not kept before this, so every
+        // task already there says it was filed in none.
+        apply: Apply::Custom(let_a_task_say_which_step_filed_it),
+    },
+    Step {
+        to: 125,
+        name: "index a run's steps and its copy of the automation by run",
+        // Every read of a run seeks `automation_run_step` and `automation_run_def` by `run_id`, and
+        // unindexed each one scans the whole table.
+        //
+        // **The version is what this step is for**, as at v28: both columns are there from the tables'
+        // first shape, so the indexes are declared in `schema::EXTRA_SQL` and every open creates them.
+        // The statements are repeated in frozen text rather than referenced, as every step's are.
+        apply: Apply::Sql(
+            "CREATE INDEX IF NOT EXISTS automation_run_step_by_run ON automation_run_step(run_id, seq); \
+             CREATE INDEX IF NOT EXISTS automation_run_def_by_run ON automation_run_def(run_id);",
+        ),
+    },
+    Step {
+        to: 126,
+        name: "add automation_run_step.exit_code, what the program of an agent's step that failed its run exited with",
+        // **Left NULL on every row already there.** No code a program exited with was kept before this.
+        apply: Apply::Custom(let_a_step_keep_its_exit_code),
+    },
+    Step {
+        to: 127,
         name: "give every automation with no role one role, of one, starting where its entry's line for a task taken goes",
         // **Seeded from what is there**, in the draft and in the newest saved version alike. The role is
         // named after its automation, holds one, and starts at the placement the line out of the entry's
-        // way out for a task taken (`V124_TAKEN`) goes to — nowhere where there is no such line. No task
+        // way out for a task taken (`V127_TAKEN`) goes to — nowhere where there is no such line. No task
         // is touched.
         apply: Apply::Custom(give_every_automation_a_role),
     },
 ];
 
-/// v124: **every automation has at least one role** from here on, so one that has none is given one —
+/// v127: **every automation has at least one role** from here on, so one that has none is given one —
 /// named after it as `ops::automation::born_role` names one, one in it, with no icon, agent or model.
 /// The draft gets the row, and the newest saved version, where it holds no role, gets the same role in
 /// its JSON: a draft that read as its newest version before this still does
 /// (`ops::automation::unsaved`).
 ///
-/// **Where its round starts** is the placement the line out of the entry's [`V124_TAKEN`] goes to — the
+/// **Where its round starts** is the placement the line out of the entry's [`V127_TAKEN`] goes to — the
 /// way out of the built-in that takes a task, once it has taken one — read off the draft for the row
 /// and off the version's own entry and lines for its copy. An entry with no such line (one that files a
 /// task, or no entry at all) leaves the role starting nowhere.
@@ -1528,10 +1555,10 @@ fn give_every_automation_a_role(ctx: &Ctx<'_>) -> Result<()> {
 }
 
 /// The name of the way out of the built-in that takes a task which it leaves by once it has taken one,
-/// as it stood at v124.
-const V124_TAKEN: &str = "着手した";
+/// as it stood at v127.
+const V127_TAKEN: &str = "着手した";
 
-/// Where the line out of the draft's entry by [`V124_TAKEN`] goes, on the automation's own picture — a
+/// Where the line out of the draft's entry by [`V127_TAKEN`] goes, on the automation's own picture — a
 /// placement of the same automation, or `None` where no such line goes on to one.
 fn taken_goes_to_in_draft(tx: &Transaction<'_>, automation_id: i64, entry: i64) -> Result<Option<i64>> {
     Ok(tx
@@ -1541,7 +1568,7 @@ fn taken_goes_to_in_draft(tx: &Transaction<'_>, automation_id: i64, entry: i64) 
                AND x.name = ?3 \
                AND EXISTS (SELECT 1 FROM automation_placement p WHERE p.id = e.to_id AND p.automation_id = ?1) \
              ORDER BY e.order_key, e.id LIMIT 1",
-            rusqlite::params![automation_id, entry, V124_TAKEN],
+            rusqlite::params![automation_id, entry, V127_TAKEN],
             |r| r.get(0),
         )
         .optional()?)
@@ -1560,7 +1587,7 @@ fn taken_goes_to_in_version(tx: &Transaction<'_>, edges: &str, entry: i64) -> Re
         let exit: Option<String> = tx
             .query_row("SELECT name FROM automation_exit WHERE id = ?1", [exit_id], |r| r.get(0))
             .optional()?;
-        if exit.as_deref() == Some(V124_TAKEN) {
+        if exit.as_deref() == Some(V127_TAKEN) {
             return Ok(Some(to_id));
         }
     }
@@ -1626,6 +1653,23 @@ fn give_each_role_a_headcount(ctx: &Ctx<'_>) -> Result<()> {
                 rusqlite::params![serde_json::Value::Array(roles).to_string(), version_id],
             )?;
         }
+    }
+    Ok(())
+}
+
+/// v124: `task.made_in_run_step_id`, the step execution a task was filed in. NULL on every row already
+/// there: no task said which step filed it until now, and nothing kept elsewhere can be matched back.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Nullable with no default, which
+/// is what lets a column carrying a key be added in place — so a store that never ran an automation
+/// is moved by adding an empty column and nothing else.
+fn let_a_task_say_which_step_filed_it(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "task")?.iter().any(|c| c == "made_in_run_step_id") {
+        tx.execute_batch(
+            "ALTER TABLE task ADD COLUMN made_in_run_step_id BIGINT REFERENCES automation_run_step(id) \
+                 ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
     }
     Ok(())
 }
@@ -1768,6 +1812,18 @@ fn let_a_launch_hold_its_runs(ctx: &Ctx<'_>) -> Result<()> {
         )?;
         let launch = tx.last_insert_rowid();
         tx.execute("UPDATE automation_run SET launch_id = ?1 WHERE id = ?2", rusqlite::params![launch, u.run])?;
+    }
+    Ok(())
+}
+
+/// v126: `automation_run_step.exit_code`, what the program of an agent's step that failed its run
+/// exited with.
+///
+/// **Only where it is not there yet.** A store whose table was created in the live shape already has it.
+fn let_a_step_keep_its_exit_code(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run_step")?.iter().any(|c| c == "exit_code") {
+        tx.execute_batch("ALTER TABLE automation_run_step ADD COLUMN exit_code BIGINT;")?;
     }
     Ok(())
 }
@@ -11885,7 +11941,7 @@ mod tests {
             )
             .unwrap();
 
-        // Stop at v102: v124 gives every automation with no role one.
+        // Stop at v102: v127 gives every automation with no role one.
         run(&engine, &dir, steps_through(102), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(engine.format_version().unwrap(), 102);
@@ -12339,6 +12395,34 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v126: a step written before the step kept no exit code, and a step can keep one.
+    #[test]
+    fn a_step_written_before_v126_kept_no_exit_code() {
+        let dir = scratch("run-step-exit-code");
+        let engine = store_at(&dir, 125);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'failed');
+                 INSERT INTO automation_run_def (id, run_id, name, prompt) VALUES (1, 1, 'one', 'p');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, seq, status) VALUES (1, 1, 1, 1, 'failed');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let code: Option<i64> = engine
+            .conn()
+            .query_row("SELECT exit_code FROM automation_run_step WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(code, None, "a step from before kept no exit code");
+        engine.conn().execute("UPDATE automation_run_step SET exit_code = 1 WHERE id = 1", []).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v113: an automation written before the step is not waiting for a task, and the column admits only
     /// an instant.
     #[test]
@@ -12413,6 +12497,32 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v124: every task already written says it was filed in no step, and the new column takes a step
+    /// execution from then on.
+    #[test]
+    fn a_task_written_before_v124_was_filed_in_no_step() {
+        let dir = scratch("task-made-in-run-step");
+        let engine = store_at(&dir, 123);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, project_id) VALUES (1, 'look', 1);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let step = |engine: &StoreEngine| -> Option<i64> {
+            engine.conn().query_row("SELECT made_in_run_step_id FROM task WHERE id = 1", [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(step(&engine), None, "no task said which step filed it before");
+        let tasks: i64 = engine.conn().query_row("SELECT COUNT(*) FROM task", [], |r| r.get(0)).unwrap();
+        assert_eq!(tasks, 1, "the task is kept as it was");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v122: every trigger already written counts its condition's tasks whatever their role, as it did,
     /// and the new column takes a role of the automation from then on.
     #[test]
@@ -12466,7 +12576,7 @@ mod tests {
             ))
             .unwrap();
 
-        // Stop at v123: v124 gives the automation with no role one, in its version too.
+        // Stop at v123: v127 gives the automation with no role one, in its version too.
         run(&engine, &dir, steps_through(123), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(engine.format_version().unwrap(), 123);
@@ -12504,14 +12614,14 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v124: an automation with no role is given one — named after it, of one, starting where the line
+    /// v127: an automation with no role is given one — named after it, of one, starting where the line
     /// out of its entry's way out for a task taken goes — in the draft and in its newest saved version,
     /// which the draft still reads as. One that has a role keeps its own, and a version of it that holds
     /// none is given a role under an id no row is given later.
     #[test]
-    fn every_automation_written_before_v124_has_a_role() {
+    fn every_automation_written_before_v127_has_a_role() {
         let dir = scratch("automation-born-role");
-        let engine = store_at(&dir, 123);
+        let engine = store_at(&dir, 126);
         let at = "2026-11-07T00:00:00Z";
         engine
             .conn()
@@ -12591,15 +12701,49 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v124 on a store with no automation writes nothing: no role is made.
+    /// v127 on a store with no automation writes nothing: no role is made.
     #[test]
-    fn a_store_with_no_automation_gets_no_role_at_v124() {
+    fn a_store_with_no_automation_gets_no_role_at_v127() {
         let dir = scratch("automation-born-role-empty");
-        let engine = store_at(&dir, 123);
+        let engine = store_at(&dir, 126);
         run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
         assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         let n: i64 = engine.conn().query_row("SELECT COUNT(*) FROM automation_role", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v125: a store from before it seeks a run's steps and its copy of the automation by `run_id`,
+    /// rather than scanning both tables for every run it reads. (The open already lays the indexes down
+    /// from `schema::EXTRA_SQL`; the step is what moves the version, as at v28.)
+    #[test]
+    fn a_runs_steps_and_def_are_indexed_by_run_from_v125() {
+        let dir = scratch("automation-run-indexes");
+        let engine = store_at(&dir, 124);
+        let indexed = |name: &str| -> i64 {
+            engine
+                .conn()
+                .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?1", [name], |r| {
+                    r.get(0)
+                })
+                .unwrap()
+        };
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(indexed("automation_run_step_by_run"), 1);
+        assert_eq!(indexed("automation_run_def_by_run"), 1);
+        let plan = |sql: &str| -> String {
+            let mut stmt = engine.conn().prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+            let rows = stmt.query_map([], |r| r.get::<_, String>(3)).unwrap();
+            rows.map(|r| r.unwrap()).collect::<Vec<_>>().join("\n")
+        };
+        let steps = plan("SELECT id FROM automation_run_step WHERE run_id = 1 ORDER BY seq, id");
+        assert!(steps.contains("automation_run_step_by_run"), "a run's steps are sought by run: {steps}");
+        assert!(!steps.contains("TEMP B-TREE"), "and come back in order without a sort: {steps}");
+        let def = plan("SELECT id FROM automation_run_def WHERE run_id = 1");
+        assert!(def.contains("automation_run_def_by_run"), "a run's copy is sought by run: {def}");
         std::fs::remove_dir_all(&dir).ok();
     }
 

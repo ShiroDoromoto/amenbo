@@ -792,8 +792,8 @@ export function roundsOf(run: Say, live: readonly AutomationRunCardDto[], roles:
 
 /**
  * **The bar over a run's terminal**: the way back to the roles, whose round this is and what step it
- * is on, the other rounds of the same automation, and — where a step that may wait for a person turned
- * the pane (`byStep`) — the line that says so.
+ * is on — said to have failed where the run failed on it — the other rounds of the same automation,
+ * and — where a step that may wait for a person turned the pane (`byStep`) — the line that says so.
  */
 export function RunTermBar({ run, project, byStep, onBack, onGoTo }: {
   run: Say;
@@ -820,7 +820,11 @@ export function RunTermBar({ run, project, byStep, onBack, onGoTo }: {
           <span className="runterm__task">
             {run.task === null ? name : `${name} ・ ${run.task.ref} ${run.task.title}`}
           </span>
-          {run.step !== "" && <span className="runterm__step">{run.step}</span>}
+          {run.step !== "" && (
+            <span className="runterm__step">
+              {run.state?.status === "failed" ? tf("auto.run.stepFailed", { step: run.step }) : run.step}
+            </span>
+          )}
         </span>
       </div>
       {rounds.length > 0 && (
@@ -851,4 +855,36 @@ export function RunTermBar({ run, project, byStep, onBack, onGoTo }: {
       )}
     </div>
   );
+}
+
+/**
+ * **How a failed round's terminal ended**, as the lines written under what it left to be read: that its
+ * program ended — with the code it ended with, where that was heard — and where Amenbo filed the
+ * failure. They are the terminal's last lines (`../talk/terminal` `mountTail`), on the terminal face of a
+ * failed run only, the one a person opens from the task the round was filed as
+ * (`../screens/TaskDetailPane`).
+ */
+export function useRoundFellLines(run: Say | null, project: number, code: number | null): string[] {
+  const roles = useProjectRoles(project);
+  return useMemo(() => {
+    if (run === null) return [];
+    const ended = code === null ? t("face.endedNoCode") : tf("face.endedCode", { code: String(code) });
+    const filed = filedInTerminal(run, roles);
+    return filed === null ? [ended] : [ended, filed];
+  }, [run, roles, code]);
+}
+
+/**
+ * **Where Amenbo filed a failed round, as its terminal's last line says it** — to the role it was filed
+ * to, to a person, or to neither where that role is gone. Null where the run filed nothing. It is read
+ * off the round's incident alone, not off the role cards: a round of an automation that gives it no
+ * role has no card, and is filed all the same.
+ */
+function filedInTerminal(run: Say, roles: readonly TaskRoleDto[]): string | null {
+  const incident = run.round?.incident;
+  if (incident === undefined) return null;
+  const to = incident.role === null ? undefined : roles.find((role) => role.id === incident.role);
+  if (to !== undefined) return tf("auto.run.term.filedRole", { to: to.name });
+  if (incident.person) return t("auto.run.term.filedPerson");
+  return t("auto.run.term.filed");
 }

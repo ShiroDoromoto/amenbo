@@ -55,6 +55,10 @@ pub struct AutomationFile {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RoleFile {
     pub name: String,
+    /// How many are in it. A file written before headcounts were carried reads as
+    /// [`crate::model::DEFAULT_ROLE_HEADCOUNT`]; the import checks it as any other headcount written.
+    #[serde(default = "crate::model::default_role_headcount")]
+    pub headcount: u32,
     pub icon: Option<String>,
     /// The placement its round starts at, by its place in `placements`.
     pub entry: Option<usize>,
@@ -313,6 +317,7 @@ pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
             .iter()
             .map(|r| RoleFile {
                 name: r.name.clone(),
+                headcount: r.headcount,
                 icon: r.icon.clone(),
                 entry: r.entry_placement_id.and_then(at),
                 agent: r.agent.clone(),

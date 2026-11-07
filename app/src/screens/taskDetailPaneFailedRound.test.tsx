@@ -1,16 +1,19 @@
 // @vitest-environment jsdom
 // The way from a task a failed round was filed as to the terminal the round fell in: the run's pane is
-// gone to, turned to its terminal (`../shell/RunPicture`).
+// gone to, turned to its terminal (`../shell/RunPicture`) — whatever the run stands at, an acknowledged
+// failure that has left the "running" tab included.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutomationRunCardDto } from "../bindings/bindings";
 
-const hoisted = vi.hoisted(() => ({ live: [] as AutomationRunCardDto[] }));
+/** The runs whose failed round each task was filed as, by the task — what the host answers
+ *  `automation_run_of_incident` with. */
+const hoisted = vi.hoisted(() => ({ filed: new Map<number, AutomationRunCardDto>() }));
 
 vi.mock("../core/automations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../core/automations")>()),
-  useLiveRuns: () => hoisted.live,
+  useRunOfIncident: (taskId: number) => hoisted.filed.get(taskId) ?? null,
 }));
 
 import { TaskDetailPane } from "./TaskDetailPane";
@@ -26,10 +29,10 @@ let container: HTMLDivElement;
 let root: Root;
 
 /** A failed run whose round was filed as the task `task`. */
-const failedRun = (run: number, task: number): AutomationRunCardDto => ({
+const failedRun = (run: number, task: number, acknowledged = false): AutomationRunCardDto => ({
   run, project: 1, projectName: "P", automation: 3, automationName: "Nightly", status: "failed",
   pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, waiting: false, waitsForRoom: false,
-  stepsDone: 2, passes: [], reportWithheld: [], acknowledged: false,
+  stepsDone: 2, passes: [], reportWithheld: [], acknowledged,
   incident: { id: task, ref: `AMB-T-${task}`, title: `Task ${task}`, person: true },
 } as AutomationRunCardDto);
 
@@ -51,7 +54,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  hoisted.live = [];
+  hoisted.filed = new Map();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -65,7 +68,7 @@ afterEach(() => {
 describe("the task a failed round was filed as", () => {
   it("goes to the run's pane, turned to its terminal", async () => {
     const id = (await addTask(1, "障害"))!;
-    hoisted.live = [failedRun(81, id)];
+    hoisted.filed.set(id, failedRun(81, id));
     const went: Array<[number, number]> = [];
     await open(id, (project, run) => went.push([project, run]));
     expect(container.textContent).toContain(t("auto.run.failedRound"));
@@ -74,9 +77,20 @@ describe("the task a failed round was filed as", () => {
     expect(faceOf(81)).toBe("terminal");
   });
 
+  it("goes there just the same once the failure has been acknowledged", async () => {
+    const id = (await addTask(1, "確認済みの障害"))!;
+    hoisted.filed.set(id, failedRun(84, id, true));
+    const went: Array<[number, number]> = [];
+    await open(id, (project, run) => went.push([project, run]));
+    expect(container.textContent).toContain(t("auto.run.failedRound"));
+    await act(async () => press()!.click());
+    expect(went).toEqual([[1, 84]]);
+    expect(faceOf(84)).toBe("terminal");
+  });
+
   it("offers nothing on a task no failed round was filed as", async () => {
     const id = (await addTask(1, "ふつうのタスク"))!;
-    hoisted.live = [failedRun(82, id + 1000), { ...failedRun(83, id), status: "running" }];
+    hoisted.filed.set(id + 1000, failedRun(82, id + 1000));
     await open(id, () => {});
     expect(press()).toBeUndefined();
   });

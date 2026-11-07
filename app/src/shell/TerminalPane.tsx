@@ -39,7 +39,7 @@ import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
 import { RunActs } from "./RunActs";
 import { BuiltinCard } from "./BuiltinCard";
-import { RunRoles, RunTermBar, type ViewPin } from "./RunPicture";
+import { RunRoles, RunTermBar, useRoundFellLines, type ViewPin } from "./RunPicture";
 import { faceOf, keepFace, onTerminalShown, showTerminalOf, type Face } from "./runFaces";
 import { RunOverCard, RunPausedCard } from "./RunBody";
 import { useBoxNumber } from "../screens/boxNumber";
@@ -117,7 +117,7 @@ const pins = new Map<number, ViewPin>();
  */
 function Pane({
   frame, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
-  inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, tail = null, onGrab, onStretch,
+  inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, tail = null, tailCode = null, onGrab, onStretch,
   size, onSize,
   on,
 }: PaneProps & {
@@ -138,6 +138,9 @@ function Pane({
   // And why, for the few endings Amenbo had a hand in and the screen cannot own up to
   // (`../talk/terminal`). Null for every other ending, which is nearly all of them.
   const [stopped, setStopped] = useState<string | null>(null);
+  // What the program exited with, as the pane heard it close — said on a failed run's terminal, under
+  // what it left (`useRoundFellLines`). Null before it ends, and where it could not be asked.
+  const [exitCode, setExitCode] = useState<number | null>(null);
   // The session running here, while one is. It is what the way out names, and it is null at exactly
   // the two moments there is nothing to end: before a terminal has opened, and after one has closed.
   const [live, setLive] = useState<string | null>(null);
@@ -262,6 +265,11 @@ function Pane({
   // state is null until it is first read, and that is not over.
   const over =
     run?.state?.status === "completed" || run?.state?.status === "failed" || run?.state?.status === "canceled";
+  // Failed — the run whose terminal says how it ended and where the failure was filed, as its last
+  // lines (`useRoundFellLines`): under the screen kept from it, which stands in for the terminal once
+  // its program has ended — an agent wipes its screen as it ends, and what it wiped is in the kept one.
+  const fell = run?.state?.status === "failed";
+  const fellLines = useRoundFellLines(fell ? run : null, project, exitCode ?? tailCode);
   // Where a run's pane sends the reader on the ledger — the shell's in one window, the host's across two.
   const ledger = useRefNav();
   // The tab an over run is listed on: a failure waits on "running" until somebody acknowledges it.
@@ -524,6 +532,7 @@ function Pane({
       closed: (session, code, noWayBack) => {
         plate.closed();
         setEnded(true);
+        setExitCode(code);
         // What the program was is taken off the pane a line below, so why it stopped is settled here
         // while the two are still together.
         setStopped(whyItStopped(inPaneRef.current, code, noWayBack));
@@ -1103,10 +1112,12 @@ function Pane({
         )}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}
-        {/* **A script's tail, kept on the run** (`tail`), in place of either card below: it is what the
-            step wrote, and the row and the band already say how the run stands. */}
+        {/* **A step's tail, kept on the run** (`tail`), in place of either card below: it is what the
+            step left to be read, and the row and the band already say how the run stands. */}
+        {/* **A failed round's terminal says how it ended** (`./RunPicture`), as the last lines under the
+            tail kept from it: its program ending, and where the failure was filed. */}
         {run !== null && !running && tail !== null ? (
-          <SavedTail tail={tail} />
+          <SavedTail tail={tail} after={fell ? fellLines : []} />
         ) : run !== null && over && !running ? (
           <RunOverCard
             run={run}
@@ -1124,7 +1135,11 @@ function Pane({
                   {stopped !== null && ` ${t(stopped)}`}
                 </span>
               )}
-              <div className="workspace__face" ref={paneRef} />
+              {/* The terminal a failed round fell in, its program ended: the screen kept from it in
+                  its place, which still has what the program wiped as it ended, and how it ended
+                  under that. The terminal stays mounted out of sight for its pane to take down. */}
+              {ended && fell && <SavedTail tail={tail ?? ""} after={fellLines} />}
+              <div className="workspace__face" ref={paneRef} hidden={ended && fell} />
             </>
           )
           // Not on a run's pane (`AMB-T-5667`): a terminal opened there would be an ordinary session
@@ -1265,11 +1280,16 @@ type PaneProps = {
    */
   builtin?: BuiltinRun | null;
   /**
-   * **What the run's last step wrote, where it was a script** (`AMB-D-1016`) — kept on the run, and
-   * drawn where its terminal would be on a pane come back with the app: that terminal went down with
-   * it. Null everywhere else.
+   * **What the run's last step left to be read** — what a script printed (`AMB-D-1016`), or the screen
+   * an agent's step had as it failed the run — kept on the run, and drawn where its terminal would be
+   * on a pane come back with the app or opened again: that terminal is gone. On a failed run it is also
+   * drawn in place of the terminal it fell in once that terminal's program has ended. Null everywhere
+   * else.
    */
   tail?: string | null;
+  /** What the program of the step that left {@link PaneProps.tail} exited with, where that was kept
+   *  beside it. Null everywhere else. */
+  tailCode?: number | null;
   /** True for the slot that puts a terminal up without being asked — the one the face comes up with,
    *  and the one a person has just pressed the way in on. */
   autoStart: boolean;
@@ -1447,14 +1467,17 @@ function sameValue(a: unknown, b: unknown): boolean {
   return ka.every((k) => Object.prototype.hasOwnProperty.call(y, k) && sameValue(x[k], y[k]));
 }
 
-/** A script step's tail, drawn read-only on a terminal of its own that runs nothing (`../talk/terminal`). */
-function SavedTail({ tail }: { tail: string }) {
+/** A step's tail kept on the run, drawn read-only on a terminal of its own that runs nothing (`../talk/terminal`). */
+function SavedTail({ tail, after = [] }: { tail: string; after?: readonly string[] }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Drawn again only when what it says changes: the lines are worked out afresh on every update of
+  // the run, and an emulator mounted again on each would flicker.
+  const said = after.join("\n");
   useEffect(() => {
     const host = ref.current;
     if (host === null) return;
-    return mountTail(host, tail);
-  }, [tail]);
+    return mountTail(host, tail, said === "" ? [] : said.split("\n"));
+  }, [tail, said]);
   return (
     <div className="workspace__face">
       <div className="workspace__pane" ref={ref} />

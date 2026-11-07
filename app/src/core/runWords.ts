@@ -154,10 +154,12 @@ export function runSayOf(run: AutomationRunCardDto | undefined): Say | null {
 
 /**
  * **The round a run is in now** (`../shell/RunPicture`), as a part of its {@link Say}: nothing where
- * it has begun none — or has not been read yet.
+ * it has begun none and filed no failure — or has not been read yet.
  */
 export function roundOf(run: AutomationRunCardDto | undefined): { round?: Round } {
-  if (run === undefined || (run.role === undefined && run.roleStartedAt === undefined)) return {};
+  if (run === undefined || (run.role === undefined && run.roleStartedAt === undefined && run.incident === undefined)) {
+    return {};
+  }
   return {
     round: {
       role: run.role ?? null,

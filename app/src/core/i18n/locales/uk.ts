@@ -639,6 +639,8 @@ export const uk: Translation = {
     "quit.confirmNotAll": "Завершити Amenbo? Усі відкриті термінали завершаться. Розмови повернуться під час наступного запуску, окрім панелей із {names}. Те, що в них виконувалося, теж не повернеться.",
 
     "face.ended": "Програму в цьому терміналі завершено.",
+    "face.endedCode": "Процес завершився (код виходу {code}).",
+    "face.endedNoCode": "Процес завершився.",
 
     "face.endedGeminiUnset": "Для Gemini CLI не задано спосіб автентифікації. Вказаний шлях належить лише цій панелі й зникне разом із нею — задати його потрібно у вашому власному ~/.gemini/settings.json.",
     "face.noWayBack": "Цю розмову більше не відкрити.",
@@ -1490,6 +1492,10 @@ export const uk: Translation = {
     "auto.run.viewList": "Список",
     "auto.run.backToRoles": "← Назад до ролей",
     "auto.run.otherRounds": "Інші кола:",
+    "auto.run.stepFailed": "{step} (збій)",
+    "auto.run.term.filedRole": "Amenbo завів задачу про збій для {to}.",
+    "auto.run.term.filedPerson": "Amenbo завів задачу про збій для людини.",
+    "auto.run.term.filed": "Amenbo завів задачу про збій.",
     "auto.run.roundTerminal": "Термінал: {name}",
     "auto.run.roundTerminalOf": "Термінал: {name} ({which})",
     "auto.run.turnedForStep": "Цей крок потребує вашого введення, тому панель перемкнулася на термінал: {role}.",

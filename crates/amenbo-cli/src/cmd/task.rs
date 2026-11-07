@@ -16,7 +16,7 @@ use crate::cmd::guard::guard_ai_task_delete;
 use crate::cmd::labels::{decision_label, task_label};
 use crate::cmd::place::made_in_line;
 use crate::cmd::outbox::{emit_event, emit_unblocks, newly_ready_or_warn};
-use crate::cmd::place::{default_bound_folder, made_in, project_or_bound, resolve_bound_folder, resolve_dim_pairs};
+use crate::cmd::place::{default_bound_folder, made_in, made_in_run_step, project_or_bound, resolve_bound_folder, resolve_dim_pairs};
 use crate::cmd::premise::{attach_comments_since, attach_premise_change, comments_since_when, premise_change, premise_change_lines, premise_change_when, warn_comments_since, warn_if_premise_added_to_reserved, warn_premise_change};
 use crate::output::{confirm, count_header, human, print_json, warn_body, write_envelope, CliError, Flags};
 
@@ -71,11 +71,13 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             };
             // Read before the create and handed to it, never read inside it (`AMB-D-897`).
             let made_in = made_in(store);
+            let made_in_run_step_id = made_in_run_step();
             let t = store.add_task_with_dimensions(ops::task::NewTask {
                 title, project_id: Some(project_id), due, start, priority, notes,
                 created_by_kind: Some(flags.facet()?), at_binding_id,
                 made_in,
                 role_id: role,
+                made_in_run_step_id,
             }, &dimension_values).map_err(CliError::from)?;
             // And the pane it was typed in is told, where it was typed in one (`AMB-D-897`). Left
             // after the create rather than with it: what the band under the pane counts is a task

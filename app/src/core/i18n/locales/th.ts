@@ -626,6 +626,8 @@ export const th: Translation = {
     "quit.confirmNotAll": "ออกจาก Amenbo ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง บทสนทนาจะกลับมาในการเปิดครั้งถัดไป ยกเว้นบานหน้าต่างที่รัน {names} สิ่งที่กำลังทำงานอยู่ก็จะไม่กลับมาเช่นกัน",
 
     "face.ended": "โปรแกรมในเทอร์มินัลนี้จบการทำงานแล้ว",
+    "face.endedCode": "โปรเซสสิ้นสุดแล้ว (รหัสออก {code})",
+    "face.endedNoCode": "โปรเซสสิ้นสุดแล้ว",
 
     "face.endedGeminiUnset": "Gemini CLI ยังไม่ได้ตั้งค่าวิธียืนยันตัวตน เส้นทางที่แสดงเป็นของแผงนี้เท่านั้นและจะถูกลบไปพร้อมกัน — ไฟล์ที่ต้องตั้งค่าคือ ~/.gemini/settings.json ของคุณเอง",
     "face.noWayBack": "เปิดบทสนทนานี้อีกไม่ได้แล้ว",
@@ -1474,6 +1476,10 @@ export const th: Translation = {
     "auto.run.viewList": "รายการ",
     "auto.run.backToRoles": "← กลับไปที่บทบาท",
     "auto.run.otherRounds": "รอบอื่น:",
+    "auto.run.stepFailed": "{step} (ล้มเหลว)",
+    "auto.run.term.filedRole": "Amenbo แจ้งปัญหาเป็นงานไปที่ {to} แล้ว",
+    "auto.run.term.filedPerson": "Amenbo แจ้งปัญหาเป็นงานไปที่บุคคลแล้ว",
+    "auto.run.term.filed": "Amenbo แจ้งปัญหาเป็นงานแล้ว",
     "auto.run.roundTerminal": "เทอร์มินัลของ {name}",
     "auto.run.roundTerminalOf": "เทอร์มินัลของ {name} ({which})",
     "auto.run.turnedForStep": "ขั้นตอนนี้ต้องการข้อมูลจากคุณ จึงสลับไปที่เทอร์มินัลของ {role}",

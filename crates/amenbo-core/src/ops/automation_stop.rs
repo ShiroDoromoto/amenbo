@@ -363,6 +363,7 @@ fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &
             at_binding_id: None,
             made_in: None,
             role_id,
+            made_in_run_step_id: None,
         },
     )?;
     if let Some(project_id) = project_id {
@@ -989,6 +990,64 @@ pub fn step_ended(tx: &WriteTx<'_>, run_step_id: i64) -> Result<Option<Ended>> {
         return Ok(None);
     }
     ended(tx, run, Ending::Failed(AutomationStoppedReason::Crashed)).map(Some)
+}
+
+/// **Keep what an agent's step had on its terminal as its run failed**, on the step
+/// ([`crate::model::AutomationRunStep::output_tail`]) — so the round that fell can still be read from
+/// the task it was filed as once its terminal is gone: closed with its pane, or with the app.
+///
+/// `screen` is the terminal's screen as it stood, one row per line. The ends of its lines and the
+/// empty rows under the last one are taken off, and only its last
+/// [`crate::ops::automation_script::TAIL_BYTES`] are kept. `code` is what the step's program exited
+/// with, where it ended by itself and that was heard — kept beside the screen
+/// ([`crate::model::AutomationRunStep::exit_code`]), so the terminal can say how its program ended
+/// once it is gone.
+///
+/// It answers whether it wrote. It writes nothing where the run did not fail — a step's terminal is
+/// also ended by the next step taking its place, and by a run completed or canceled — where the step
+/// is not the run's last, where it is still under way, or where the step already keeps a tail: a
+/// script's is what its program printed, written as it ended (`AMB-D-1016`).
+pub fn keep_failed_screen(tx: &WriteTx<'_>, run_step_id: i64, screen: &str, code: Option<i64>) -> Result<bool> {
+    let Some(step) = read::automation_run_step(tx.conn(), run_step_id)? else { return Ok(false) };
+    if step.status == AutomationRunStepStatus::Running || !step.output_tail.is_empty() {
+        return Ok(false);
+    }
+    let Some(run) = read::automation_run(tx.conn(), step.run_id)? else { return Ok(false) };
+    if run.status != AutomationRunStatus::Failed {
+        return Ok(false);
+    }
+    let latest = read::automation_run_steps_of(tx.conn(), run.id)?.last().map(|one| one.id);
+    if latest != Some(step.id) {
+        return Ok(false);
+    }
+    let kept = screen_as_kept(screen);
+    if kept.is_empty() {
+        return Ok(false);
+    }
+    let mut after = step.clone();
+    after.output_tail = kept;
+    after.exit_code = code;
+    after.updated_at = Timestamp::now();
+    crate::ops::emit_update(tx, record::automation_run_step(&step), record::automation_run_step(&after))?;
+    Ok(true)
+}
+
+/// A terminal's screen as [`keep_failed_screen`] keeps it: each line without the spaces after its
+/// text, no empty rows under the last line, and its last
+/// [`crate::ops::automation_script::TAIL_BYTES`] at most, cut where a character begins.
+fn screen_as_kept(screen: &str) -> String {
+    let lines: Vec<&str> = screen.lines().map(str::trim_end).collect();
+    let mut text = lines.join("\n");
+    text.truncate(text.trim_end().len());
+    let cap = crate::ops::automation_script::TAIL_BYTES;
+    if text.len() <= cap {
+        return text;
+    }
+    let mut from = text.len() - cap;
+    while !text.is_char_boundary(from) {
+        from += 1;
+    }
+    text[from..].to_string()
 }
 
 /// **The runs this machine was in the middle of when it last shut down.**
@@ -2300,5 +2359,74 @@ mod tests {
             stop(tx, run.id, Ending::Canceled).expect("force-cancel");
             assert!(cancel(tx, run.id).is_err(), "a run that is over has nothing to cancel");
         });
+    }
+
+    /// **A failed round is reached from the task it was filed as**, whatever has become of its run
+    /// since: an acknowledged failure has left the "running" tab, and the task is still the way back.
+    #[test]
+    fn the_round_a_task_was_filed_as_is_read_from_the_task() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, first.run_step.id);
+            step_ended(tx, first.run_step.id).expect("step ended").expect("a run to end");
+            let filed = filed_for(tx, run.id, task);
+
+            let round = read::automation_run_task_of_incident(tx.conn(), filed.id).expect("read").expect("the round");
+            assert_eq!(round.run_id, run.id);
+
+            acknowledge(tx, run.id, ActorKind::Ai).expect("acknowledge");
+            let round = read::automation_run_task_of_incident(tx.conn(), filed.id).expect("read").expect("the round");
+            assert_eq!(round.run_id, run.id, "an acknowledged failure is still reached");
+
+            assert!(read::automation_run_task_of_incident(tx.conn(), task).expect("read").is_none(), "the round's own task was filed as nothing");
+        });
+    }
+
+    /// **An agent's step that failed its run keeps its terminal's screen**, so the round can be read
+    /// once the terminal is gone — and only that step, only once, and only where the run failed.
+    #[test]
+    fn a_failed_agent_step_keeps_its_terminal_screen() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            a_task_in_hand(tx, p.project, first.run_step.id);
+            let screen = "uploading v2.4.0   \nError: upload failed (HTTP 503)\n\n   \n";
+            assert!(!keep_failed_screen(tx, first.run_step.id, screen, None).expect("keep"), "a step under way keeps nothing");
+
+            step_ended(tx, first.run_step.id).expect("step ended").expect("a run to end");
+            assert!(keep_failed_screen(tx, first.run_step.id, screen, Some(1)).expect("keep"));
+            assert_eq!(step_row(tx, first.run_step.id).output_tail, "uploading v2.4.0\nError: upload failed (HTTP 503)");
+            assert_eq!(step_row(tx, first.run_step.id).exit_code, Some(1), "what its program exited with is kept beside it");
+            assert!(!keep_failed_screen(tx, first.run_step.id, "later", None).expect("keep"), "what it kept stays");
+            assert!(!keep_failed_screen(tx, first.run_step.id + 1000, screen, None).expect("keep"), "no such step");
+        });
+    }
+
+    /// A step whose run went on, or ended otherwise than failing, keeps nothing.
+    #[test]
+    fn a_step_whose_run_did_not_fail_keeps_no_screen() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            a_task_in_hand(tx, p.project, first.run_step.id);
+            done(tx, first.run_step.id, None, "Looked at it.").expect("done");
+            assert!(!keep_failed_screen(tx, first.run_step.id, "on screen", None).expect("keep"), "the run went on");
+            stop(tx, run.id, Ending::Canceled).expect("cancel");
+            assert!(!keep_failed_screen(tx, first.run_step.id, "on screen", None).expect("keep"), "canceled, not failed");
+            assert_eq!(step_row(tx, first.run_step.id).output_tail, "");
+        });
+    }
+
+    #[test]
+    fn a_screen_is_kept_from_its_end() {
+        let long = format!("{}\nlast line", "あ".repeat(crate::ops::automation_script::TAIL_BYTES));
+        let kept = screen_as_kept(&long);
+        assert!(kept.len() <= crate::ops::automation_script::TAIL_BYTES);
+        assert!(kept.ends_with("\nlast line"));
+        assert_eq!(screen_as_kept("\n  \n"), "");
     }
 }

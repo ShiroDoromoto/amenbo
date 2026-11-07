@@ -635,6 +635,8 @@ export const fr: Translation = {
     "quit.confirmNotAll": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, sauf dans les volets qui font tourner {names}. Ce qu'elles exécutaient ne revient pas non plus.",
 
     "face.ended": "Le programme de ce terminal s'est arrêté.",
+    "face.endedCode": "Le processus s'est terminé (code de sortie {code}).",
+    "face.endedNoCode": "Le processus s'est terminé.",
 
     "face.endedGeminiUnset": "Aucune méthode d'authentification n'est définie pour Gemini CLI. Le chemin indiqué appartient à ce volet et disparaît avec lui — celui à modifier est votre propre ~/.gemini/settings.json.",
     "face.noWayBack": "Cette conversation ne peut plus être ouverte.",
@@ -1485,6 +1487,10 @@ export const fr: Translation = {
     "auto.run.viewList": "Liste",
     "auto.run.backToRoles": "← Retour aux rôles",
     "auto.run.otherRounds": "Autres tours :",
+    "auto.run.stepFailed": "{step} (échec)",
+    "auto.run.term.filedRole": "Amenbo a signalé l'échec à {to} sous forme de tâche.",
+    "auto.run.term.filedPerson": "Amenbo a signalé l'échec à une personne sous forme de tâche.",
+    "auto.run.term.filed": "Amenbo a signalé l'échec sous forme de tâche.",
     "auto.run.roundTerminal": "Terminal de {name}",
     "auto.run.roundTerminalOf": "Terminal de {name} ({which})",
     "auto.run.turnedForStep": "Cette étape attend votre saisie : le volet est passé au terminal de {role}.",

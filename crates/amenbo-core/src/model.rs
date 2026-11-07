@@ -426,6 +426,11 @@ pub struct Task {
     /// it. `None` is a task with no role, which is every task unless someone named one.
     #[serde(default)]
     pub role_id: Option<i64>,
+    /// The step execution of an automation run this task was filed in ([`AutomationRunStep`]), by its
+    /// id — which run it was is read off that step. `None` is every task filed outside a run. Written at
+    /// the create and never rewritten.
+    #[serde(default)]
+    pub made_in_run_step_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -1760,7 +1765,7 @@ pub const DEFAULT_ROLE_HEADCOUNT: u32 = 1;
 /// (`ops::automation`), not by the store, so changing it needs no migration.
 pub const MAX_ROLE_HEADCOUNT: u32 = 10;
 
-fn default_role_headcount() -> u32 {
+pub(crate) fn default_role_headcount() -> u32 {
     DEFAULT_ROLE_HEADCOUNT
 }
 
@@ -3028,7 +3033,8 @@ pub struct AutomationRunStep {
     pub report_withheld: bool,
     /// The last of what a script step wrote to its standard output and its standard error, in the order
     /// it was written and without its escape sequences, kept so a failed run can be read (`AMB-D-1016`).
-    /// Empty on every step that is not a script.
+    /// An agent's step that failed its run keeps its terminal's screen as it stood instead
+    /// ([`crate::ops::automation_stop::keep_failed_screen`]). Empty on every other step.
     #[serde(default)]
     pub output_tail: String,
     pub status: AutomationRunStepStatus,
@@ -3036,6 +3042,12 @@ pub struct AutomationRunStep {
     pub started_at: Option<Timestamp>,
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
+    /// **What the program in an agent's step exited with**, kept beside its screen
+    /// ([`AutomationRunStep::output_tail`]) where the step failed its run by the program ending on its
+    /// own and the code was heard ([`crate::ops::automation_stop::keep_failed_screen`]). `None` on
+    /// every other step.
+    #[serde(default)]
+    pub exit_code: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

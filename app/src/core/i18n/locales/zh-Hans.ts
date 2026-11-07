@@ -623,6 +623,8 @@ export const zhHans: Translation = {
     "quit.confirmNotAll": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，但跑着 {names} 的窗格不会。正在跑的东西也不会。",
 
     "face.ended": "此终端中的程序已退出。",
+    "face.endedCode": "进程已结束（退出代码 {code}）",
+    "face.endedNoCode": "进程已结束。",
 
     "face.endedGeminiUnset": "Gemini CLI 尚未设置身份验证方式。它给出的路径只属于此窗格，会随之丢弃——要设置的是你自己的 ~/.gemini/settings.json。",
     "face.noWayBack": "这段对话已经打不开了。",
@@ -1475,6 +1477,10 @@ export const zhHans: Translation = {
     "auto.run.viewList": "列表",
     "auto.run.backToRoles": "← 返回角色视图",
     "auto.run.otherRounds": "其他轮次：",
+    "auto.run.stepFailed": "{step}（失败）",
+    "auto.run.term.filedRole": "Amenbo 已将故障任务提交给{to}。",
+    "auto.run.term.filedPerson": "Amenbo 已将故障任务提交给人员。",
+    "auto.run.term.filed": "Amenbo 已提交故障任务。",
     "auto.run.roundTerminal": "{name}的终端",
     "auto.run.roundTerminalOf": "{name}的终端（{which}）",
     "auto.run.turnedForStep": "此步骤需要你的输入，因此已切换到{role}的终端。",

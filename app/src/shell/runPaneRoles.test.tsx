@@ -29,6 +29,7 @@ import { t, tf } from "../core/i18n";
 import {
   attnOf, cardsFit, filedLine, fitOf, handsAway, handsOf, noticeOf, roleCards, roundsOf, silenceOf, unseenOf, type RoleCard,
 } from "./RunPicture";
+import { showTerminalOf } from "./runFaces";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -738,6 +739,18 @@ describe("the terminal of a round", () => {
     await act(async () => faces()[1]!.click());
     await pane({ ...RUNNING, run: 63, interactive: true });
     expect(notice()).toBeNull();
+  });
+
+  // The way in from the task a failed round was filed as (`../screens/TaskDetailPane`): the pane comes
+  // up on the round's terminal, says the step it fell on, and says nothing about a step turning it.
+  it("says the step a failed round fell on, where it was opened from the task it was filed as", async () => {
+    roles = [role(12, "Bob")];
+    showTerminalOf(67);
+    await pane({ ...RUNNING, run: 67, step: "upload the release", state: FAILED.state });
+    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+    expect(container.querySelector(".runterm__step")?.textContent)
+      .toBe(tf("auto.run.stepFailed", { step: "upload the release" }));
+    expect(notice(), "the reader opened it, no step turned it").toBeNull();
   });
 
   it("puts the other rounds of the automation on the bar, and goes to one when it is pressed", async () => {

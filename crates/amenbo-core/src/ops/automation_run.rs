@@ -528,7 +528,8 @@ pub struct Launcher<'a> {
 /// what its entry does not read is refused rather than left lying on the run where nothing reads it
 /// ([`entry_reads`]).
 ///
-/// A trigger hands its task over the same way, as the title and notes it says ([`fire`]).
+/// A trigger hands its task over the same way, as the title and notes it says, with the role the task is
+/// worked under and its own name for the line the task's timeline gets ([`fire`]).
 ///
 /// Nothing handed is the default, and a launch that hands nothing starts as it always has.
 #[derive(Clone, Debug, Default)]
@@ -544,6 +545,12 @@ pub struct HandedAtLaunch {
     pub notes: Option<String>,
     /// Its classification, as (axis, value) by name, in the order handed.
     pub classification: Vec<(String, String)>,
+    /// The role it is worked under, one of the automation's own — handed by a trigger
+    /// ([`crate::model::AutomationTrigger::role_id`]). `None` for none.
+    pub role_id: Option<i64>,
+    /// The name of the trigger that hands it, which the task's timeline names it by once it is filed
+    /// ([`crate::activity_log::event::task_filed_by_trigger`]). `None` where a person launched the run.
+    pub trigger: Option<String>,
 }
 
 impl HandedAtLaunch {
@@ -573,6 +580,12 @@ pub struct HandedTask {
     /// One `axis=value` a line — the shape the built-in's input for a chosen classification reads.
     #[serde(default)]
     pub classification: Option<String>,
+    /// The role the task is worked under ([`HandedAtLaunch::role_id`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role_id: Option<i64>,
+    /// The name of the trigger that handed it ([`HandedAtLaunch::trigger`]), or `None` for a person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger: Option<String>,
 }
 
 impl HandedTask {
@@ -1455,7 +1468,8 @@ fn hands_on_taken(def: &ActionDef, exit_id: i64) -> bool {
 
 /// **Whether this way out goes where the task's role starts** rather than along a line, where the
 /// automation's roles say where that is ([`by_role`]): the way out of the built-in that takes a task
-/// which hands it on. A task the run files itself and takes has no role, so it walks the line drawn.
+/// which hands it on. A task the run files itself and takes walks the line drawn, even one a trigger
+/// files under a role.
 fn goes_by_role(def: &ActionDef, exit_id: i64) -> bool {
     def.steps.iter().any(|s| s.builtin.as_deref() == Some(TAKE_TASK.key)) && hands_on_taken(def, exit_id)
 }
@@ -1734,7 +1748,7 @@ pub enum Started {
     Run(AutomationRun),
     /// **Its entry would wait for a task with none to take**, so no run was made and the automation
     /// waits for one instead ([`Automation::waits_for_task_since`]).
-    Waits(Automation),
+    Waits(Box<Automation>),
 }
 
 impl Started {
@@ -1878,7 +1892,9 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 ///    that says nothing it can file is an error, as a launch refused is.
 /// 3. **The run.** A launch like any other ([`launch_handing`]), of the newest saved version, the task
 ///    handed to its entry as a person's would be — so it is the entry, the built-in that files a task,
-///    that files it. What `by` says is passed on as it stands.
+///    that files it. What `by` says is passed on as it stands. The task is handed with the trigger's
+///    role and name too: the entry files it under that role, and leaves a line in its timeline naming
+///    the trigger ([`crate::activity_log::event::task_filed_by_trigger`]).
 ///
 /// **A time it decides no leaves nothing**: no task, no run, and `next_at` where it was, so the next
 /// look asks again. A launch refused by its checks is an error, and the transaction it is written in
@@ -1912,7 +1928,13 @@ pub fn fire(
             None => return Ok(None),
         },
     };
-    let handed = HandedAtLaunch { title: Some(title), notes: Some(notes), ..Default::default() };
+    let handed = HandedAtLaunch {
+        title: Some(title),
+        notes: Some(notes),
+        role_id: trigger.role_id,
+        trigger: Some(trigger.name.clone()),
+        ..Default::default()
+    };
     let run = launch_handing(tx, automation_id, by, &handed, ReadsFrom::Saved)?;
     let mut after = before.clone();
     after.trigger = Some(crate::model::AutomationTrigger { next_at: trigger.when.after(now), ..trigger });
@@ -2438,7 +2460,7 @@ fn launch_asking(
                 &e.cfg,
             )?;
             if waits {
-                return Ok(Started::Waits(mark_waiting(tx, automation)?));
+                return Ok(Started::Waits(Box::new(mark_waiting(tx, automation)?)));
             }
         }
     }
@@ -2698,6 +2720,8 @@ fn entry_reads(
                 title: title.to_string(),
                 notes: handed.notes().map(str::to_string),
                 classification,
+                role_id: handed.role_id,
+                trigger: handed.trigger.clone(),
             }))
         }
         false if handed.for_a_task() => {

@@ -897,7 +897,15 @@ name: string,
 /**
  * Whether the step may stop and ask a person (`automation_action_step.interactive`).
  */
-interactive: boolean, agent?: string, 
+interactive: boolean, 
+/**
+ * Whether a program runs the step in place of an agent (`AMB-D-1016`).
+ */
+script: boolean, 
+/**
+ * Whether the step is a built-in, which Amenbo itself carries out (`AMB-D-964`).
+ */
+builtin: boolean, agent?: string, 
 /**
  * Absent leaves the agent's own default model.
  */

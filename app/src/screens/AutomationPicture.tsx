@@ -61,13 +61,14 @@
 // sight — the box a run stopped at arrives picked from its pane (`AMB-T-5594`), and a band over the
 // screen can push it out of view. It stops moving once the reader's own hand has moved the screen,
 // so a reader scrolling away from the box that stays picked is not pulled back.
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   edgeWord,
   exitWord,
   layOut,
   openWord,
   pictureOrder,
+  stepKindWord,
   ACTION_BOUNDARY,
   ERROR_EXIT,
   TAKES_INSET,
@@ -600,7 +601,12 @@ export function AutomationPicture({
               {node.boxId === startId && (
                 <span className="autopic__entry">{t("auto.pic.entry")}</span>
               )}
-              <span className="autopic__nodename">{node.name}</span>
+              {/* On a role's picture every box is an action, and says so before its name, the two
+                  small and muted as one label, as the mock heads its box. */}
+              {round !== undefined && <span className="autopic__actionword">{t("auto.pic.actionWord")}</span>}
+              <span className={round !== undefined ? "autopic__nodename autopic__nodename--action" : "autopic__nodename"}>
+                {node.name}
+              </span>
               {node.unfed.length > 0 && (
                 <span
                   className="autopic__unfed"
@@ -626,12 +632,32 @@ export function AutomationPicture({
               )}
             </span>
             {graph?.boundary !== undefined && <CardIo words={ioWords(node.boxId)} />}
-            {/* The steps inside the action, on a role's picture, in place of its library. Else which
+            {/* The steps inside the action, on a role's picture, in place of its library: one card
+                each, its name over its kind, with an arrow between two (`stepKind`). Else which
                 library the action standing here comes from, on an automation's picture — a
                 built-in's is Amenbo's own, though it is kept on the device's shelf. */}
             {node.steps !== undefined && node.steps.length > 0 ? (
-              <span className="autopic__nodesub" title={node.steps.join("\n")}>
-                <span className="autopic__steps">{node.steps.join(" → ")}</span>
+              <span className="autopic__steps">
+                {node.steps.map((step, nth) => {
+                  const kind = stepKindWord(step);
+                  return (
+                    <Fragment key={nth}>
+                      {nth > 0 && (
+                        <span className="autopic__steparrow" aria-hidden="true">
+                          →
+                        </span>
+                      )}
+                      <span
+                        className={`autopic__step autopic__step--${step.kind}`}
+                        style={{ width: `${step.w}px` }}
+                        title={`${step.name}\n${kind}`}
+                      >
+                        <span className="autopic__stepname">{step.name}</span>
+                        <span className="autopic__stepkind">{kind}</span>
+                      </span>
+                    </Fragment>
+                  );
+                })}
               </span>
             ) : node.global !== undefined && placedForYou?.has(node.boxId) === true ? (
               <span className="autopic__nodesub" title={t("auto.pic.placedForYouWhy")}>

@@ -259,8 +259,8 @@ describe("the panel of one spot", () => {
       placements: [
         spot({
           steps: [
-            { stepId: 11, name: "取る", interactive: false, agent: "claude-code", model: "opus" },
-            { stepId: 12, name: "見直す", interactive: false },
+            { stepId: 11, name: "取る", interactive: false, script: false, builtin: false, agent: "claude-code", model: "opus" },
+            { stepId: 12, name: "見直す", interactive: false, script: false, builtin: false },
           ],
         }),
       ],

@@ -1436,15 +1436,33 @@ button.feed__target:hover { color: var(--c-accent); }
 /* What a step takes in and hands on, on an action's picture — a line each, cut short where it runs out. */
 .autopic__io { display: flex; flex-direction: column; align-items: stretch; gap: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autopic__iopart { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* On a role's picture: the steps inside an action, in order on one line, cut short where it runs out. */
-.autopic__steps {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: var(--fs-xs); color: var(--c-text);
+/* On a role's picture: "Action ·" and the action's name, small, muted and bold as one label, as the mock
+   heads its box. */
+.autopic__actionword, .autopic__nodename--action { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--c-text-muted); }
+.autopic__actionword { flex: none; }
+/* On a role's picture: the steps inside an action, in order, one card each with an arrow between two,
+   going on to the next row where they do not fit. Each card is drawn as wide as the layout measured it
+   (`stepCardW`), and the layout sizes the box for the rows they take (`roundSize`), so its numbers
+   follow these: the line heights, the arrow's width and the gap. The kind goes on to the next line
+   where it does not fit in the card, as the mock's does, so what a step overrode is never cut. */
+.autopic__steps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; margin: 2px 0 4px; }
+.autopic__step {
+  display: flex; flex: none; flex-direction: column; gap: 1px; min-width: 0; max-width: 170px; box-sizing: border-box;
+  padding: 4px 8px; border: 1px solid var(--c-rule); border-radius: var(--r-sm);
+  background: var(--c-bg-pic) var(--c-bg); font-size: var(--fs-xs); line-height: 1.4; color: var(--c-text);
 }
-/* A line going back, drawn as a loop under the box it goes back to — in the colour a line going back is. */
-.autopic__loop { font-size: var(--fs-xs); color: var(--c-stop); }
+.autopic__stepname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 17px; }
+.autopic__stepkind { font-size: 11px; line-height: 16px; color: var(--c-text-muted); overflow-wrap: anywhere; }
+/* A step that chose its own agent or model says what, in the AI's colour; a script's kind is set in
+   the code face. */
+.autopic__step--own .autopic__stepkind { color: var(--c-ai); font-weight: var(--fw-medium); }
+.autopic__step--script .autopic__stepkind { font-family: var(--font-mono); }
+.autopic__steparrow { flex: none; width: 14px; align-self: center; text-align: center; font-size: 14px; line-height: 18px; color: var(--c-text-faint); }
+/* A line going back, drawn as a loop under the box it goes back to — in the heed colour, as the mock
+   draws it. */
+.autopic__loop { font-size: 11px; line-height: 16px; color: var(--c-heed); }
 .autopic__loop .autopic__iopart { min-width: 0; }
-.autopic__loopmark { color: var(--c-stop); }
+.autopic__loopmark { color: var(--c-heed); }
 /* A role's round in one row inside one frame, as the mock draws it: what it receives, the picture of
    its actions, and whom it hands on to, from left to right with an arrow between each. The row never
    wraps: a wrapped row left an arrow at the end of a line pointing at nothing. The picture comes

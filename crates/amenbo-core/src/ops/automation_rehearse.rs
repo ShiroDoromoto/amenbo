@@ -226,8 +226,8 @@ fn stand_in(
             AutomationPortKind::TaskTake => {
                 let task = made_up(tx, run, def)?;
                 automation_report::take(tx, run_step_id, task)?;
-                // A made-up task names no role, so its round is put under the first role the run starts a
-                // round of, and the walk goes on where that role starts.
+                // A made-up task names no role, so its round is put under the role the run is a seat of,
+                // and the walk goes on where that role starts.
                 if let Some(role) = automation_run::roles_started(tx.conn(), run.id)?.first() {
                     automation_report::put_under(tx, run_step_id, *role)?;
                 }

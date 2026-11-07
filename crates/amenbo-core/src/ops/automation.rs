@@ -2789,7 +2789,9 @@ pub fn role_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationR
 }
 
 /// Take a role out of its automation. The placement its round started at stays on the picture, and the
-/// tasks worked under it are left with no role. Where failed rounds were filed to it, the automation is
+/// tasks worked under it are left with no role, and so are the runs that are seats of it
+/// (`automation_run.role_id` is `SET NULL`) — one still under way then takes what its copies start, as a
+/// run with no role does ([`crate::ops::automation_run::roles_started`]). Where failed rounds were filed to it, the automation is
 /// left with nobody to file them to, which the launch check refuses until somebody says again.
 ///
 /// **The last role is not taken out**: an automation always has at least one. Its name and the rest can

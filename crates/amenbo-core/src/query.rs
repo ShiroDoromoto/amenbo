@@ -134,7 +134,7 @@ pub struct Filter {
     pub commit: Option<String>,
     /// **The roles a task is to be worked under** — tasks whose `role_id` is one of these. Set
     /// structurally, as [`Filter::text`] is, never from the grammar: the built-in that takes a task
-    /// narrows by the roles its run starts rounds of
+    /// narrows by the role its run is a seat of
     /// ([`crate::ops::automation_run::roles_started`]), which a task with no role is never among, and a
     /// trigger's condition by the role it names ([`crate::model::TriggerCondition::role_id`]).
     pub roles: Option<Vec<i64>>,

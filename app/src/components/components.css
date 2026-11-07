@@ -1445,14 +1445,32 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__loop { font-size: var(--fs-xs); color: var(--c-stop); }
 .autopic__loop .autopic__iopart { min-width: 0; }
 .autopic__loopmark { color: var(--c-stop); }
-/* Over and under a role's round: where it receives its task from, and whom it hands on to. Dashed,
-   as the mock draws them: they stand for something outside the round, not a box on it. */
+/* A role's round in one row inside one frame, as the mock draws it: what it receives, the picture of
+   its actions, and whom it hands on to, from left to right with an arrow between each. The row never
+   wraps: a wrapped row left an arrow at the end of a line pointing at nothing. The picture comes
+   first: it takes its own width, and the two ends grow into what is left, up to their own. Where the
+   row is too narrow, the ends give way first, their words wrapping down to their heading on one
+   line, and only then does the picture narrow and scroll across inside it. On the build screen the
+   row is given the screen's whole width before that (`.actbuild__body--stacked`). */
+.autopic__flow {
+  display: flex; align-items: stretch; gap: 10px;
+  padding: var(--s-4); background: var(--c-sunken-pic) var(--c-sunken);
+  border: 1px solid var(--c-rule); border-radius: var(--r-md);
+}
+.autopic__flow > .autopic { flex: 0 1 auto; min-width: 160px; }
+.autopic__flowarrow { align-self: center; color: var(--c-text-faint); font-size: 14px; }
+/* Either end of a role's round: where it receives its task from, and whom it hands on to. Dashed, as
+   the mock draws them: they stand for something outside the round, not a box on it. */
 .autopic__end {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: var(--s-1) var(--s-2); border: 1px dashed var(--c-edge); border-radius: var(--r-md);
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  flex: 1 1 0; min-width: min-content; max-width: 180px; padding: 8px 10px;
+  border: 1px dashed var(--c-edge); border-radius: var(--r-md);
   font-size: var(--fs-xs); color: var(--c-text-muted);
 }
-.autopic__endwords { color: var(--c-text); font-weight: 600; }
+/* An end gives way down to its heading on one line, and no further: what it says under that wraps
+   anywhere, so a long name does not hold the end wider than its heading. */
+.autopic__endhead { align-self: flex-start; white-space: nowrap; }
+.autopic__endwords { color: var(--c-text); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
 .autopic__roundempty { font-size: var(--fs-md); color: var(--c-text-muted); }
 /* A box that takes the next task, said over its top-right — where a stretch begins. */
 .autopic__takes {
@@ -2069,6 +2087,13 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoside__trigger:hover { background: var(--c-hover); }
 .autoside__when { color: var(--c-text-muted); }
 .autoside__what { font-weight: var(--fw-medium); }
+/* The same, where the picked role's round does not fit the middle beside the two sides
+   (`useStacked` in `../screens/AutomationBuildScreen`): the round then has the screen's whole width. */
+.actbuild__body--stacked { flex-direction: column; }
+.actbuild__body--stacked > .autoroles { flex-basis: auto; border-inline-end: 0; border-block-end: var(--border-w) var(--border-style) var(--c-rule); }
+.actbuild__body--stacked > .autoside { flex-basis: auto; border-inline-start: 0; border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
+.actbuild__body--stacked .autoroles__list { flex-direction: row; flex-wrap: wrap; }
+.actbuild__body--stacked .autoroles__row { width: auto; }
 @container actbody (max-width: 40rem) {
   .actbuild__body { flex-direction: column; }
   .autoroles { flex-basis: auto; border-inline-end: 0; border-block-end: var(--border-w) var(--border-style) var(--c-rule); }
@@ -2102,6 +2127,9 @@ button.feed__target:hover { color: var(--c-accent); }
    inside `.main`'s (`AMB-T-5514`). With no height cap there is nothing to scroll down to here; `.main`
    is the one scroll that goes down. */
 .actbuild__canvas .autopic { max-height: none; align-self: stretch; overflow-y: hidden; }
+/* A role's round takes the whole width of the place, so a picture wider than it scrolls inside its
+   frame. */
+.actbuild__canvas > .autopic__flow { align-self: stretch; }
 /* The picture stands in the middle of the place it is drawn in, as the mock has it; a picture wider
    than the place scrolls from its left edge as before. */
 .actbuild__canvas .autopic__sheet { margin-inline: auto; }

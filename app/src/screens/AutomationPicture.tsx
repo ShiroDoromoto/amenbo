@@ -41,11 +41,17 @@
 // opening its panel, and still no line crosses the picture. An action's box on a role's picture says
 // the same of the action, each input with the number of the box it comes from.
 //
-// **On the build screen it draws one role's round** (`automationGraph` with a role): "receives" over
-// the picture — the automation's start, or the roles that hand this one its task — then the actions
-// the round passes through, each with its steps inside it, and "hands on" under it — the roles it hands
-// on to, or none where it ends at done. A line going back is no line there but a loop under the box it
-// goes back to, saying which box and which way out it comes back from.
+// **On the build screen it draws one role's round** (`automationGraph` with a role), in one row from
+// left to right inside one frame: "receives" — the automation's start, or the roles that hand this one
+// its task — then the actions the round passes through, each with its steps inside it, laid out across
+// (`layOutAcross`), and "hands on" — the roles it hands on to, or none where it ends at done — with an
+// arrow between each of them. The row never wraps: in a frame too narrow the words of the two ends
+// wrap first, down to their heading on one line, and only then does the picture scroll across inside
+// it. Each box is as big as what it says (`roundSize`), so the actions of a round are seen side by
+// side. How wide the row has to be for the whole picture to be seen is told to the screen
+// (`onRowNeeds`, `rowNeeds`), which gives the row the screen's whole width where the middle of its
+// three places is narrower. A line going back is no line there but a loop under the box it goes back
+// to, saying which box and which way out it comes back from.
 //
 // **It scrolls, and it does nothing else.** No zoom, and no folding a stretch away by hand: an
 // automation is tens of steps, and a picture with a state of its own is one more thing to put back
@@ -54,7 +60,7 @@
 // sight — the box a run stopped at arrives picked from its pane (`AMB-T-5594`), and a band over the
 // screen can push it out of view. It stops moving once the reader's own hand has moved the screen,
 // so a reader scrolling away from the box that stays picked is not pulled back.
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   edgeWord,
   exitWord,
@@ -91,11 +97,11 @@ function CardIo({ words }: { words: { takes?: string; hands?: string } }) {
   );
 }
 
-/** Over or under a role's round: what it receives, or what it hands on to — the heading, and the words. */
+/** Either end of a role's round: what it receives, or what it hands on to — the heading, and the words. */
 function RoundEnd({ head, words }: { head: string; words: string }) {
   return (
     <div className="autopic__end">
-      <span>{head}</span>
+      <span className="autopic__endhead">{head}</span>
       <span className="autopic__endwords">{words}</span>
     </div>
   );
@@ -186,6 +192,32 @@ function Legend({ inAction, inRound }: { inAction: boolean; inRound: boolean }) 
   );
 }
 
+/**
+ * How wide a role's row (`.autopic__flow`) has to be for its picture to be seen whole, without
+ * scrolling across: its frame, the gaps and arrows, the picture at its own width, and the two ends at
+ * their narrowest — the ends give way before the picture does, down to their heading on one line.
+ */
+function rowNeeds(flow: HTMLElement): number {
+  const px = (value: string) => Number.parseFloat(value) || 0;
+  const style = getComputedStyle(flow);
+  let needs =
+    px(style.paddingLeft) + px(style.paddingRight) + px(style.borderLeftWidth) + px(style.borderRightWidth) +
+    px(style.columnGap) * Math.max(0, flow.children.length - 1);
+  for (const child of Array.from(flow.children)) {
+    if (!(child instanceof HTMLElement)) continue;
+    const own = getComputedStyle(child);
+    if (child.classList.contains("autopic")) needs += child.scrollWidth + px(own.borderLeftWidth) + px(own.borderRightWidth);
+    else if (child.classList.contains("autopic__end")) {
+      const head = child.querySelector<HTMLElement>(".autopic__endhead");
+      needs +=
+        (head?.offsetWidth ?? 0) +
+        px(own.paddingLeft) + px(own.paddingRight) + px(own.borderLeftWidth) + px(own.borderRightWidth);
+    }
+    else needs += child.offsetWidth;
+  }
+  return Math.ceil(needs);
+}
+
 export function AutomationPicture({
   graph,
   insertLabel,
@@ -196,6 +228,7 @@ export function AutomationPicture({
   onOpenExit,
   onPickPart,
   selectedPart,
+  onRowNeeds,
 }: {
   graph: PicGraph | null;
   /**
@@ -225,6 +258,9 @@ export function AutomationPicture({
   onPickPart?: (part: "in" | "out") => void;
   /** Which of the action's two frames the panel is showing, if either. */
   selectedPart?: "in" | "out";
+  /** How wide a role's row has to be for its picture to be seen whole (`rowNeeds`), told each time it
+   *  is laid out again. Only a role's round has the row. */
+  onRowNeeds?: (width: number) => void;
 }) {
   // Arrowheads are looked up by id, and two pictures on one page must not answer for each other's.
   const ids = useId();
@@ -232,6 +268,26 @@ export function AutomationPicture({
   // Laid out again only when the graph changes: a draw that leaves it as it was keeps the layout it had.
   const picture = useMemo(() => layOut(graph), [graph]);
   const round = graph?.round;
+  const flowRef = useRef<HTMLDivElement | null>(null);
+  // **A role's sheet is as wide as what is drawn on it.** The layout sizes the sheet from estimates of
+  // how wide its words are, and a press or name drawn a few pixels wider than estimated stood past the
+  // sheet's right edge: the picture then scrolled across by those few pixels with nothing hidden. The
+  // reach of what is drawn is measured once laid out, and the sheet widened to it.
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const [reach, setReach] = useState<{ of: typeof picture; width: number } | null>(null);
+  const sheetW = reach !== null && reach.of === picture ? reach.width : picture.width;
+  useLayoutEffect(() => {
+    const sheet = sheetRef.current;
+    if (round === undefined || sheet === null) return;
+    const width = Math.ceil(sheet.scrollWidth);
+    setReach(width > picture.width ? { of: picture, width } : null);
+  }, [picture, round]);
+  // Told again once the sheet is widened to what is drawn on it, so the screen makes room for that too.
+  useEffect(() => {
+    const flow = flowRef.current;
+    // A picture with no row — an empty one, or not a role's — needs nothing of the screen.
+    onRowNeeds?.(flow === null ? 0 : rowNeeds(flow));
+  }, [picture, sheetW, onRowNeeds]);
   // What a card says it takes in and hands on — a step's on an action's picture, an action's on a
   // role's — each input with the number of the box that hands it its value, or the action's own input.
   // On a role's picture that box may be on another role's round, and is numbered as the whole
@@ -341,294 +397,309 @@ export function AutomationPicture({
   // Where a run opens: the automation's start, which on a role's picture need not be where the round starts.
   const startId = round?.whole.entryId ?? graph?.entryId;
 
-  return (
-    <>
-      {round !== undefined && <RoundEnd head={t("auto.pic.receives")} words={receivesWords(round)} />}
-      <div className="autopic">
-        <div
-          className="autopic__sheet"
-          style={{ width: `${picture.width}px`, height: `${picture.height}px` }}
+  const drawing = (
+    <div className="autopic">
+      <div
+        className="autopic__sheet"
+        ref={sheetRef}
+        style={{ width: `${sheetW}px`, height: `${picture.height}px` }}
+      >
+        <svg
+          className="autopic__lines"
+          width={sheetW}
+          height={picture.height}
+          aria-hidden="true"
         >
-          <svg
-            className="autopic__lines"
-            width={picture.width}
-            height={picture.height}
-            aria-hidden="true"
-          >
-            <defs>
-              {HEADS.map((kind) => (
-                <marker
-                  key={kind}
-                  id={`${ids}-${kind}`}
-                  viewBox="0 0 10 10"
-                  refX={9}
-                  refY={5}
-                  markerWidth={6}
-                  markerHeight={6}
-                  orient="auto"
-                >
-                  <path className={`autopic__arrow autopic__arrow--${kind}`} d="M0 0 L10 5 L0 10 z" />
-                </marker>
-              ))}
-            </defs>
-            {picture.laps.map((lap) => (
-              <rect
-                key={lap.headBoxId}
-                className="autopic__lap"
-                x={lap.x}
-                y={lap.y}
-                width={lap.w}
-                height={lap.h}
-                rx={8}
-              />
+          <defs>
+            {HEADS.map((kind) => (
+              <marker
+                key={kind}
+                id={`${ids}-${kind}`}
+                viewBox="0 0 10 10"
+                refX={9}
+                refY={5}
+                markerWidth={6}
+                markerHeight={6}
+                orient="auto"
+              >
+                <path className={`autopic__arrow autopic__arrow--${kind}`} d="M0 0 L10 5 L0 10 z" />
+              </marker>
             ))}
-            {picture.lines.map((line) => {
-              const drawn = [
-                "autopic__line",
-                line.back ? "autopic__line--back" : "",
-                line.leaves ? "autopic__line--leaves" : "",
-                line.open === true ? "autopic__line--open" : "",
-                line.tone !== undefined ? `autopic__line--${line.tone}` : "",
-              ]
-                .filter((one) => one !== "")
-                .join(" ");
-              // The line in from the action's top mark is no edge, and puts no box in. A piece of a lane
-              // only one edge runs along yet is that edge's, and brings up its `+`.
-              const edgeId = line.key.startsWith("edge-")
-                ? Number(line.key.slice("edge-".length))
-                : line.carries?.length === 1
-                  ? line.carries[0]
-                  : undefined;
-              return (
-                <g key={line.key}>
-                  <title>{edgeWord(line)}</title>
-                  <polyline
-                    className={drawn}
-                    points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                    // Into the box it goes to. A line that goes nowhere ends in its words instead, and one
-                    // that joins others on its lane ends there.
-                    markerEnd={line.points.length > 2 && line.joins !== true ? head(headOf(line)) : undefined}
-                  />
-                  {/* Last in the group, so it lies over the line it traces. */}
-                  {edgeId !== undefined && (
-                    <polyline
-                      className="autopic__hit"
-                      points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
-                      onMouseEnter={() => setNear(edgeId)}
-                      onMouseLeave={() => setNear((was) => (was === edgeId ? null : was))}
-                    />
-                  )}
-                  {edgeWord(line) !== "" && (
-                    <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
-                      {edgeWord(line)}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </svg>
-
+          </defs>
           {picture.laps.map((lap) => (
-            <span
+            <rect
               key={lap.headBoxId}
-              className="autopic__lapword"
-              style={{ left: `${lap.x + 8}px`, top: `${lap.y}px` }}
+              className="autopic__lap"
+              x={lap.x}
+              y={lap.y}
+              width={lap.w}
+              height={lap.h}
+              rx={8}
+            />
+          ))}
+          {picture.lines.map((line) => {
+            const drawn = [
+              "autopic__line",
+              line.back ? "autopic__line--back" : "",
+              line.leaves ? "autopic__line--leaves" : "",
+              line.open === true ? "autopic__line--open" : "",
+              line.tone !== undefined ? `autopic__line--${line.tone}` : "",
+            ]
+              .filter((one) => one !== "")
+              .join(" ");
+            // The line in from the action's top mark is no edge, and puts no box in. A piece of a lane
+            // only one edge runs along yet is that edge's, and brings up its `+`.
+            const edgeId = line.key.startsWith("edge-")
+              ? Number(line.key.slice("edge-".length))
+              : line.carries?.length === 1
+                ? line.carries[0]
+                : undefined;
+            return (
+              <g key={line.key}>
+                <title>{edgeWord(line)}</title>
+                <polyline
+                  className={drawn}
+                  points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                  // Into the box it goes to. A line that goes nowhere ends in its words instead, and one
+                  // that joins others on its lane ends there.
+                  markerEnd={line.points.length > 2 && line.joins !== true ? head(headOf(line)) : undefined}
+                />
+                {/* Last in the group, so it lies over the line it traces. */}
+                {edgeId !== undefined && (
+                  <polyline
+                    className="autopic__hit"
+                    points={line.points.map((p) => `${p.x},${p.y}`).join(" ")}
+                    onMouseEnter={() => setNear(edgeId)}
+                    onMouseLeave={() => setNear((was) => (was === edgeId ? null : was))}
+                  />
+                )}
+                {edgeWord(line) !== "" && (
+                  <text className="autopic__word" x={line.at.x} y={line.at.y} textAnchor={line.align}>
+                    {edgeWord(line)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+
+        {picture.laps.map((lap) => (
+          <span
+            key={lap.headBoxId}
+            className="autopic__lapword"
+            style={{ left: `${lap.x + 8}px`, top: `${lap.y}px` }}
+          >
+            {t("auto.pic.lap")}
+          </span>
+        ))}
+
+        {/* The action itself: its input, a frame over everything, and its output, a frame under
+            everything holding each way out it is left by. Pressing either opens it in the panel. */}
+        {picture.outFrame !== undefined && (
+          <button
+            type="button"
+            className={selectedPart === "out" ? "autopic__frame autopic__frame--on" : "autopic__frame"}
+            style={{
+              left: `${picture.outFrame.x}px`,
+              top: `${picture.outFrame.y}px`,
+              width: `${picture.outFrame.w}px`,
+              height: `${picture.outFrame.h}px`,
+            }}
+            aria-pressed={selectedPart === "out"}
+            disabled={onPickPart === undefined}
+            onClick={() => onPickPart?.("out")}
+          >
+            <span className="autopic__frametitle">{t("auto.pic.actionOut")}</span>
+          </button>
+        )}
+        {picture.marks.map((mark) =>
+          mark.kind === "in" ? (
+            <button
+              key={mark.key}
+              type="button"
+              className={selectedPart === "in" ? "autopic__frame autopic__frame--in autopic__frame--on" : "autopic__frame autopic__frame--in"}
+              style={{
+                left: `${mark.x}px`,
+                top: `${mark.y}px`,
+                width: `${mark.w}px`,
+                height: `${mark.h}px`,
+              }}
+              aria-pressed={selectedPart === "in"}
+              disabled={onPickPart === undefined}
+              onClick={() => onPickPart?.("in")}
             >
-              {t("auto.pic.lap")}
+              <span className="autopic__frametitle">{t("auto.pic.actionIn")}</span>
+              <span className="autopic__frameline">{inputsLine(mark)}</span>
+            </button>
+          ) : (
+            <span
+              key={mark.key}
+              className={mark.exitName === ERROR_EXIT ? "autopic__mark autopic__mark--error" : "autopic__mark"}
+              style={{
+                left: `${mark.x}px`,
+                top: `${mark.y}px`,
+                width: `${mark.w}px`,
+                height: `${mark.h}px`,
+              }}
+            >
+              <span className="autopic__markname">{markWord(mark)}</span>
+              {mark.ports.length > 0 && (
+                <span className="autopic__markports">{mark.ports.map((one) => one.name).join("・")}</span>
+              )}
+            </span>
+          ),
+        )}
+
+        {/* Over the top-right of a box that takes the next task, outside it: inside, the name and
+            its second line have the width, and the top-left is where lines come in. It ends short of
+            the corner, where the line in from the right margin lands. */}
+        {picture.nodes
+          .filter((node) => node.takes === true)
+          .map((node) => (
+            <span
+              key={`takes-${node.boxId}`}
+              className="autopic__takes"
+              style={{ left: `${node.x + node.w - TAKES_INSET}px`, top: `${node.y}px` }}
+            >
+              {t("auto.step.takesTask")}
             </span>
           ))}
-
-          {/* The action itself: its input, a frame over everything, and its output, a frame under
-              everything holding each way out it is left by. Pressing either opens it in the panel. */}
-          {picture.outFrame !== undefined && (
-            <button
-              type="button"
-              className={selectedPart === "out" ? "autopic__frame autopic__frame--on" : "autopic__frame"}
-              style={{
-                left: `${picture.outFrame.x}px`,
-                top: `${picture.outFrame.y}px`,
-                width: `${picture.outFrame.w}px`,
-                height: `${picture.outFrame.h}px`,
-              }}
-              aria-pressed={selectedPart === "out"}
-              disabled={onPickPart === undefined}
-              onClick={() => onPickPart?.("out")}
-            >
-              <span className="autopic__frametitle">{t("auto.pic.actionOut")}</span>
-            </button>
-          )}
-          {picture.marks.map((mark) =>
-            mark.kind === "in" ? (
-              <button
-                key={mark.key}
-                type="button"
-                className={selectedPart === "in" ? "autopic__frame autopic__frame--in autopic__frame--on" : "autopic__frame autopic__frame--in"}
-                style={{
-                  left: `${mark.x}px`,
-                  top: `${mark.y}px`,
-                  width: `${mark.w}px`,
-                  height: `${mark.h}px`,
-                }}
-                aria-pressed={selectedPart === "in"}
-                disabled={onPickPart === undefined}
-                onClick={() => onPickPart?.("in")}
-              >
-                <span className="autopic__frametitle">{t("auto.pic.actionIn")}</span>
-                <span className="autopic__frameline">{inputsLine(mark)}</span>
-              </button>
-            ) : (
-              <span
-                key={mark.key}
-                className={mark.exitName === ERROR_EXIT ? "autopic__mark autopic__mark--error" : "autopic__mark"}
-                style={{
-                  left: `${mark.x}px`,
-                  top: `${mark.y}px`,
-                  width: `${mark.w}px`,
-                  height: `${mark.h}px`,
-                }}
-              >
-                <span className="autopic__markname">{markWord(mark)}</span>
-                {mark.ports.length > 0 && (
-                  <span className="autopic__markports">{mark.ports.map((one) => one.name).join("・")}</span>
-                )}
-              </span>
-            ),
-          )}
-
-          {/* Over the top-right of a box that takes the next task, outside it: inside, the name and
-              its second line have the width, and the top-left is where lines come in. It ends short of
-              the corner, where the line in from the right margin lands. */}
-          {picture.nodes
-            .filter((node) => node.takes === true)
-            .map((node) => (
-              <span
-                key={`takes-${node.boxId}`}
-                className="autopic__takes"
-                style={{ left: `${node.x + node.w - TAKES_INSET}px`, top: `${node.y}px` }}
-              >
-                {t("auto.step.takesTask")}
-              </span>
-            ))}
-          {picture.nodes.map((node) => (
-            <button
-              key={node.boxId}
-              ref={node.boxId === selectedBoxId ? pickedRef : undefined}
-              type="button"
-              className={[
-                "autopic__node",
-                node.unfed.length > 0 ? "autopic__node--unfed" : "",
-                node.empty === true ? "autopic__node--empty" : "",
-                node.draft === true ? "autopic__node--draft" : "",
-                node.boxId === selectedBoxId ? "autopic__node--on" : "",
-              ]
-                .filter((one) => one !== "")
-                .join(" ")}
-              style={{
-                left: `${node.x}px`,
-                top: `${node.y}px`,
-                width: `${node.w}px`,
-                height: `${node.h}px`,
-              }}
-              aria-pressed={node.boxId === selectedBoxId}
-              disabled={onPickBox === undefined}
-              onClick={() => onPickBox?.(node.boxId)}
-            >
-              <span className="autopic__nodehead">
-                {/* The number a list naming the boxes calls this one by (`pictureOrder`). */}
-                {node.no !== undefined && <span className="autopic__no">{node.no}</span>}
-                {/* Where a run opens. It is drawn on the box rather than worked out from the picture:
-                    the walk starts here, so a reader looking at two disconnected stretches has no
-                    other way to tell which of them a launch enters by. */}
-                {node.boxId === startId && (
-                  <span className="autopic__entry">{t("auto.pic.entry")}</span>
-                )}
-                <span className="autopic__nodename">{node.name}</span>
-                {node.unfed.length > 0 && (
-                  <span
-                    className="autopic__unfed"
-                    title={tf("auto.pic.unfed", { names: listLabel([...node.unfed]) })}
-                    aria-label={tf("auto.pic.unfed", { names: listLabel([...node.unfed]) })}
-                  >
-                    <Icon name="warning" />
-                    {node.unfed.length}
-                  </span>
-                )}
-                {node.empty === true && <span className="autopic__emptymark">{t("auto.pic.emptyMark")}</span>}
-                {node.draft === true && <span className="autopic__draftmark">{t("chip.draft")}</span>}
-                {node.behind !== undefined && (
-                  <span
-                    className="autopic__behindmark"
-                    title={tf("auto.pic.behind", { version: node.behind.version, latest: node.behind.latest })}
-                  >
-                    {tf("auto.pic.behindMark", { version: node.behind.version })}
-                  </span>
-                )}
-                {placedForYou?.has(node.boxId) === true && (
-                  <span className="autopic__formark">{t("auto.pic.placedForYou")}</span>
-                )}
-              </span>
-              {graph?.boundary !== undefined && <CardIo words={ioWords(node.boxId)} />}
-              {/* The steps inside the action, on a role's picture, in place of its library. Else which
-                  library the action standing here comes from, on an automation's picture — a
-                  built-in's is Amenbo's own, though it is kept on the device's shelf. */}
-              {node.steps !== undefined && node.steps.length > 0 ? (
-                <span className="autopic__nodesub" title={node.steps.join("\n")}>
-                  <span className="autopic__steps">{node.steps.join(" → ")}</span>
-                </span>
-              ) : node.global !== undefined && placedForYou?.has(node.boxId) === true ? (
-                <span className="autopic__nodesub" title={t("auto.pic.placedForYouWhy")}>
-                  <span className="autopic__lib">{t("auto.pic.placedForYouWhy")}</span>
-                </span>
-              ) : node.global !== undefined && (
-                <span className="autopic__nodesub">
-                  <span className="autopic__lib">
-                    {node.builtin !== undefined
-                      ? t("auto.actions.reachBuiltin")
-                      : t(node.global ? "auto.actions.reachGlobal" : "auto.actions.reachProject")}
-                  </span>
+        {picture.nodes.map((node) => (
+          <button
+            key={node.boxId}
+            ref={node.boxId === selectedBoxId ? pickedRef : undefined}
+            type="button"
+            className={[
+              "autopic__node",
+              node.unfed.length > 0 ? "autopic__node--unfed" : "",
+              node.empty === true ? "autopic__node--empty" : "",
+              node.draft === true ? "autopic__node--draft" : "",
+              node.boxId === selectedBoxId ? "autopic__node--on" : "",
+            ]
+              .filter((one) => one !== "")
+              .join(" ")}
+            style={{
+              left: `${node.x}px`,
+              top: `${node.y}px`,
+              width: `${node.w}px`,
+              height: `${node.h}px`,
+            }}
+            aria-pressed={node.boxId === selectedBoxId}
+            disabled={onPickBox === undefined}
+            onClick={() => onPickBox?.(node.boxId)}
+          >
+            <span className="autopic__nodehead">
+              {/* The number a list naming the boxes calls this one by (`pictureOrder`). */}
+              {node.no !== undefined && <span className="autopic__no">{node.no}</span>}
+              {/* Where a run opens. It is drawn on the box rather than worked out from the picture:
+                  the walk starts here, so a reader looking at two disconnected stretches has no
+                  other way to tell which of them a launch enters by. */}
+              {node.boxId === startId && (
+                <span className="autopic__entry">{t("auto.pic.entry")}</span>
+              )}
+              <span className="autopic__nodename">{node.name}</span>
+              {node.unfed.length > 0 && (
+                <span
+                  className="autopic__unfed"
+                  title={tf("auto.pic.unfed", { names: listLabel([...node.unfed]) })}
+                  aria-label={tf("auto.pic.unfed", { names: listLabel([...node.unfed]) })}
+                >
+                  <Icon name="warning" />
+                  {node.unfed.length}
                 </span>
               )}
-              {round !== undefined && <CardIo words={ioWords(node.boxId)} />}
-              {node.returns !== undefined && (
-                <span className="autopic__nodesub autopic__loop" title={returnsWords(node)}>
-                  <span className="autopic__iopart">{returnsWords(node)}</span>
+              {node.empty === true && <span className="autopic__emptymark">{t("auto.pic.emptyMark")}</span>}
+              {node.draft === true && <span className="autopic__draftmark">{t("chip.draft")}</span>}
+              {node.behind !== undefined && (
+                <span
+                  className="autopic__behindmark"
+                  title={tf("auto.pic.behind", { version: node.behind.version, latest: node.behind.latest })}
+                >
+                  {tf("auto.pic.behindMark", { version: node.behind.version })}
                 </span>
               )}
-            </button>
-          ))}
+              {placedForYou?.has(node.boxId) === true && (
+                <span className="autopic__formark">{t("auto.pic.placedForYou")}</span>
+              )}
+            </span>
+            {graph?.boundary !== undefined && <CardIo words={ioWords(node.boxId)} />}
+            {/* The steps inside the action, on a role's picture, in place of its library. Else which
+                library the action standing here comes from, on an automation's picture — a
+                built-in's is Amenbo's own, though it is kept on the device's shelf. */}
+            {node.steps !== undefined && node.steps.length > 0 ? (
+              <span className="autopic__nodesub" title={node.steps.join("\n")}>
+                <span className="autopic__steps">{node.steps.join(" → ")}</span>
+              </span>
+            ) : node.global !== undefined && placedForYou?.has(node.boxId) === true ? (
+              <span className="autopic__nodesub" title={t("auto.pic.placedForYouWhy")}>
+                <span className="autopic__lib">{t("auto.pic.placedForYouWhy")}</span>
+              </span>
+            ) : node.global !== undefined && (
+              <span className="autopic__nodesub">
+                <span className="autopic__lib">
+                  {node.builtin !== undefined
+                    ? t("auto.actions.reachBuiltin")
+                    : t(node.global ? "auto.actions.reachGlobal" : "auto.actions.reachProject")}
+                </span>
+              </span>
+            )}
+            {round !== undefined && <CardIo words={ioWords(node.boxId)} />}
+            {node.returns !== undefined && (
+              <span className="autopic__nodesub autopic__loop" title={returnsWords(node)}>
+                <span className="autopic__iopart">{returnsWords(node)}</span>
+              </span>
+            )}
+          </button>
+        ))}
 
-          {picture.inserts.map((insert) => (
-            <button
-              key={insert.edgeId}
-              type="button"
-              className={insert.edgeId === near || around.has(insert.edgeId) ? "autopic__plus autopic__plus--near" : "autopic__plus"}
-              style={{ left: `${insert.x}px`, top: `${insert.y}px` }}
-              aria-label={insertLabel ?? t("auto.pic.insert")}
-              disabled={onInsert === undefined}
-              onClick={() => onInsert?.(insert.edgeId)}
-            >
-              <Icon name="plus" />
-            </button>
-          ))}
-          {picture.opens.map((open) => (
-            <button
-              key={`open-${open.boxId}-${open.exitName}`}
-              type="button"
-              className="autopic__open"
-              style={{ left: `${open.x}px`, top: `${open.y}px` }}
-              disabled={onOpenExit === undefined}
-              onClick={() => onOpenExit?.({ boxId: open.boxId, exitName: open.exitName })}
-            >
-              {openWord(graph?.boundary !== undefined)}
-            </button>
-          ))}
-        </div>
+        {picture.inserts.map((insert) => (
+          <button
+            key={insert.edgeId}
+            type="button"
+            className={insert.edgeId === near || around.has(insert.edgeId) ? "autopic__plus autopic__plus--near" : "autopic__plus"}
+            style={{ left: `${insert.x}px`, top: `${insert.y}px` }}
+            aria-label={insertLabel ?? t("auto.pic.insert")}
+            disabled={onInsert === undefined}
+            onClick={() => onInsert?.(insert.edgeId)}
+          >
+            <Icon name="plus" />
+          </button>
+        ))}
+        {picture.opens.map((open) => (
+          <button
+            key={`open-${open.boxId}-${open.exitName}`}
+            type="button"
+            className="autopic__open"
+            style={{ left: `${open.x}px`, top: `${open.y}px` }}
+            disabled={onOpenExit === undefined}
+            onClick={() => onOpenExit?.({ boxId: open.boxId, exitName: open.exitName })}
+          >
+            {openWord(graph?.boundary !== undefined)}
+          </button>
+        ))}
       </div>
-      {round !== undefined && (
-        <RoundEnd
-          head={t("auto.pic.handsOn")}
-          words={round.handsTo.length === 0 ? t("auto.pic.handsNone") : listLabel([...round.handsTo])}
-        />
+    </div>
+  );
+
+  return (
+    <>
+      {round === undefined ? (
+        drawing
+      ) : (
+        <div className="autopic__flow" ref={flowRef}>
+          <RoundEnd head={t("auto.pic.receives")} words={receivesWords(round)} />
+          <span className="autopic__flowarrow" aria-hidden="true">
+            →
+          </span>
+          {drawing}
+          <span className="autopic__flowarrow" aria-hidden="true">
+            →
+          </span>
+          <RoundEnd
+            head={t("auto.pic.handsOn")}
+            words={round.handsTo.length === 0 ? t("auto.pic.handsNone") : listLabel([...round.handsTo])}
+          />
+        </div>
       )}
       {/* Under the picture rather than on its sheet, so it stays in view however far it is scrolled. */}
       <Legend inAction={graph?.boundary !== undefined} inRound={round !== undefined} />

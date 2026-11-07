@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-// An automation's first trigger, written on its dialog. The trigger writes and the confirm are stubbed;
+// An automation's trigger, written on its dialog. The trigger writes and the confirm are stubbed;
 // every field, chip and press runs for real.
 //
 // What these guard: **a new trigger starts as one that files every hour, and the save sends what was
-// typed** as a trigger added; **a trigger already written opens as it stands and goes back unchanged**,
-// rewritten under its id, the others left alone; **"while fewer
+// typed** as a trigger added; **the trigger it is opened on opens as it stands and goes back
+// unchanged**, rewritten under its id, the others left alone; **"while fewer
 // than N tasks match" always carries its condition, and "when a script says so" its script**, while
 // with the other kinds each is sent only when asked for; **the note and the preview say what will be
 // filed** — its title, role, who works it and the trigger's name; **a refusal is drawn and the dialog
@@ -65,8 +65,16 @@ const written: AutomationTriggerDto = {
 
 const page = () => document.body;
 
-async function draw(automation: AutomationDetailDto, onSaved = vi.fn(), onClose = vi.fn()) {
-  await act(async () => root.render(createElement(AutomationTrigger, { automation, onSaved, onClose })));
+/** Draws the dialog, opened on `trigger`, or on a new one without it. */
+async function draw(
+  automation: AutomationDetailDto,
+  trigger?: AutomationTriggerDto,
+  onSaved = vi.fn(),
+  onClose = vi.fn(),
+) {
+  await act(async () =>
+    root.render(createElement(AutomationTrigger, { automation, trigger, onSaved, onClose })),
+  );
   return { onSaved, onClose };
 }
 
@@ -202,7 +210,7 @@ describe("the dialog", () => {
   });
 
   it("opens a trigger already written as it stands", async () => {
-    await draw(detail(written));
+    await draw(detail(written), written);
     expect((box(t("auto.trigger.name")) as HTMLInputElement).value).toBe("Top up the reviews");
     expect(buttonNamed(t("auto.trigger.whenIdle"))?.getAttribute("aria-pressed")).toBe("true");
     expect(tick(t("auto.trigger.counted"))?.checked).toBe(true);
@@ -212,12 +220,13 @@ describe("the dialog", () => {
     expect(buttonNamed("Bob")?.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("rewrites the first trigger under its id, leaving the others", async () => {
+  it("rewrites the trigger it is opened on under its id, leaving the others", async () => {
     const other: AutomationTriggerDto = { ...written, id: 32, name: "Daily check" };
-    await draw(detail(written, other));
-    await type(box(t("auto.trigger.name")), "Top up the reviews again");
+    await draw(detail(written, other), other);
+    expect((box(t("auto.trigger.name")) as HTMLInputElement).value).toBe("Daily check");
+    await type(box(t("auto.trigger.name")), "Daily check again");
     await press(buttonNamed(t("auto.trigger.save")));
-    expect(hoisted.update).toHaveBeenCalledWith(31, expect.objectContaining({ name: "Top up the reviews again" }));
+    expect(hoisted.update).toHaveBeenCalledWith(32, expect.objectContaining({ name: "Daily check again" }));
     expect(hoisted.add).not.toHaveBeenCalled();
   });
 
@@ -249,7 +258,7 @@ describe("the dialog", () => {
   });
 
   it("says what is recorded, under the trigger's name", async () => {
-    await draw(detail(written));
+    await draw(detail(written), written);
     expect(page().querySelector("[data-note=recorded]")?.textContent).toBe(
       tf("auto.trigger.recorded", { name: "Top up the reviews" }),
     );
@@ -283,15 +292,24 @@ describe("the dialog", () => {
   });
 
   it("removes a trigger already written once the reader confirms", async () => {
-    const { onClose } = await draw(detail(written));
+    const { onClose } = await draw(detail(written), written);
     await press(buttonNamed(t("auto.trigger.remove")));
     expect(hoisted.confirm).toHaveBeenCalledWith(tf("auto.trigger.removeConfirm", { name: "Top up the reviews" }));
     expect(hoisted.remove).toHaveBeenCalledWith(31);
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("offers no removal while there is no trigger", async () => {
-    await draw(detail());
+  it("adds a new one when opened on none, even with others written", async () => {
+    await draw(detail(written));
+    expect((box(t("auto.trigger.name")) as HTMLInputElement).value).toBe("");
+    await type(box(t("auto.trigger.taskTitle")), "Check the reports");
+    await press(buttonNamed(t("auto.trigger.save")));
+    expect(hoisted.add).toHaveBeenCalledWith(7, expect.objectContaining({ name: "" }));
+    expect(hoisted.update).not.toHaveBeenCalled();
+  });
+
+  it("offers no removal while opened on a new one", async () => {
+    await draw(detail(written));
     expect(buttonNamed(t("auto.trigger.remove"))).toBeUndefined();
   });
 });

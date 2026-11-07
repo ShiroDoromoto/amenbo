@@ -2,11 +2,12 @@
 // What the automation holds as a whole, down the build screen's right. The writes are stubbed; every
 // press and pulldown runs for real.
 //
-// What these guard: **the column holds two boxes — who failures are filed to, and the trigger — and
+// What these guard: **the column holds two boxes — who failures are filed to, and the triggers — and
 // no count of runs at once**; **who failures are filed to is required, offers the automation's roles
-// and the person, and writes the one picked**; **the trigger is offered to add while there is none,
-// and drawn — what it files, when and under which role — once there is one, each opening the
-// trigger's dialog**; and **a refusal is drawn in core's words**.
+// and the person, and writes the one picked**; **every trigger is listed in order — when, what it
+// files and under which role, the wait in the largest unit it divides into and the condition by what
+// it counts — and a press opens the dialog on that one**; **"+ Add a trigger" is
+// always there, and opens the dialog on a new one**; and **a refusal is drawn in core's words**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,7 +31,7 @@ vi.mock("../core/automations", () => ({
 }));
 vi.mock("../core/dialog", () => ({ confirmDialog: () => Promise.resolve(false) }));
 
-import { t, tf } from "../core/i18n";
+import { statusLabel, t, tf } from "../core/i18n";
 import { AutomationSettings } from "./AutomationSettings";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -138,25 +139,94 @@ describe("who failures are filed to", () => {
   });
 });
 
-describe("the trigger", () => {
-  it("is offered to add while there is none, and the press opens its dialog", async () => {
+const other: AutomationTriggerDto = {
+  id: 32,
+  enabled: true,
+  name: "Daily check",
+  when: { kind: "idle" },
+  condition: { filter: "status:todo", below: 3 },
+  task: { kind: "file", path: "/Users/alice/next.md" },
+  nextAt: "2026-11-07T00:00:00Z",
+};
+
+/** The dialog's first box, which holds the trigger's name. */
+const nameBox = () => dialog()!.querySelector("input")!;
+
+describe("the triggers", () => {
+  it("say there are none, and offer to add one, whose press opens a new trigger's dialog", async () => {
     await render();
     expect(container.textContent).toContain(t("auto.side.triggerNone"));
+    expect(container.querySelector(".autoside__trigger")).toBeNull();
     expect(dialog()).toBeNull();
     await press(button(t("auto.side.triggerAdd")));
     expect(dialog()).not.toBeNull();
+    expect(nameBox().value).toBe("");
+    expect(button(t("auto.trigger.remove"))).toBeUndefined();
   });
 
-  it("draws the one written — its name, when, what it files and its role — and opens it on a press", async () => {
-    await render({ ...automation, triggers: [written] });
-    const drawn = container.querySelector<HTMLButtonElement>(".autoside__trigger")!;
-    expect(drawn.textContent).toContain("Top up the reviews");
-    expect(drawn.textContent).toContain(tf("auto.side.every", { minutes: 30 }));
-    expect(drawn.textContent).toContain("Look at the reviews");
-    expect(drawn.textContent).toContain(tf("auto.side.triggerRole", { role: "Bob" }));
-    expect(button(t("auto.side.triggerAdd"))).toBeUndefined();
-    await press(drawn);
-    expect(dialog()).not.toBeNull();
+  it("are listed in order, each by when, what it files and its role", async () => {
+    await render({ ...automation, triggers: [written, other] });
+    const drawn = Array.from(container.querySelectorAll<HTMLButtonElement>(".autoside__trigger"));
+    expect(drawn).toHaveLength(2);
+    expect(drawn[0]!.querySelector(".autoside__when")!.textContent).toBe(tf("auto.side.every", { minutes: 30 }));
+    expect(drawn[0]!.querySelector(".autoside__what")!.textContent).toBe("Look at the reviews");
+    expect(drawn[0]!.textContent).toContain(tf("auto.side.triggerRole", { role: "Bob" }));
+    expect(drawn[1]!.querySelector(".autoside__when")!.textContent).toBe(
+      `${t("auto.trigger.whenIdle")} ・ ${tf("auto.side.belowOf", { what: statusLabel("todo"), below: 3 })}`,
+    );
+    expect(drawn[1]!.querySelector(".autoside__what")!.textContent).toBe("/Users/alice/next.md");
+    expect(drawn[1]!.textContent).toContain(t("auto.side.triggerRoleNone"));
+    expect(container.textContent).not.toContain(t("auto.side.triggerNone"));
+  });
+
+  it("give the wait in days or hours where the minutes divide into them", async () => {
+    const every = (id: number, minutes: number): AutomationTriggerDto => ({
+      ...written,
+      id,
+      when: { kind: "every", minutes },
+    });
+    await render({ ...automation, triggers: [every(41, 1440), every(42, 120), every(43, 90)] });
+    const whens = Array.from(container.querySelectorAll(".autoside__when")).map((one) => one.textContent);
+    expect(whens).toEqual([
+      tf("auto.side.everyDays", { days: 1 }),
+      tf("auto.side.everyHours", { hours: 2 }),
+      tf("auto.side.every", { minutes: 90 }),
+    ]);
+  });
+
+  it("name what the condition counts — the filter's values and the role — or count every task", async () => {
+    const counting = (id: number, condition: AutomationTriggerDto["condition"]): AutomationTriggerDto => ({
+      ...other,
+      id,
+      when: { kind: "tasks" },
+      condition,
+    });
+    await render({
+      ...automation,
+      triggers: [
+        counting(51, { filter: "status:todo,in_progress", roleId: 1, below: 3 }),
+        counting(52, { filter: "", below: 2 }),
+      ],
+    });
+    const whens = Array.from(container.querySelectorAll(".autoside__when")).map((one) => one.textContent);
+    expect(whens).toEqual([
+      tf("auto.side.belowOf", { what: `${statusLabel("todo")}/${statusLabel("in_progress")} Alice`, below: 3 }),
+      tf("auto.side.below", { below: 2 }),
+    ]);
+  });
+
+  it("keep offering to add one however many there are", async () => {
+    await render({ ...automation, triggers: [written, other] });
+    await press(button(t("auto.side.triggerAdd")));
+    expect(nameBox().value).toBe("");
+  });
+
+  it("open the dialog on the one pressed", async () => {
+    await render({ ...automation, triggers: [written, other] });
+    const drawn = Array.from(container.querySelectorAll<HTMLButtonElement>(".autoside__trigger"));
+    await press(drawn[1]);
+    expect(nameBox().value).toBe("Daily check");
+    expect(button(t("auto.trigger.remove"))).toBeDefined();
   });
 });
 

@@ -47,9 +47,8 @@
 //! pause still waits for the action under way, a cancel is still for a paused run only, and a run
 //! paused before its next task is still copied down afresh when picked up (`AMB-D-1002`, `AMB-D-1015`).
 //! Only that launch's runs are touched, never another launch's (`AMB-D-1019`). A paused launch starts no
-//! run until it is picked up again. **A launch ends** once no run of it is under way, its automation
-//! is not waiting for a task to start one on, and no incident filed to a role waits in it for a run it
-//! can start ([`settle_launch`]), or where a person cancels or stops it.
+//! run until it is picked up again. **A launch ends only where a person cancels or stops it**: one with
+//! no run under way stays open, and starts a run in a role's free seat once a task turns up for it.
 //!
 //! **A crash is told to core, or read at startup.** A step's program that ends before its step has
 //! reported is seen by the app that started it, which says so here ([`step_ended`], `AMB-D-961`). An
@@ -162,9 +161,8 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// nobody. It fails instead, with [`AutomationStoppedReason::LeftTaskOpen`], and the task is handed back
 /// as any failure's is.
 ///
-/// **The launch it was started in ends with it** where it was the last of that launch under way and
-/// nothing waits to start another — no task, and no incident the launch can start a run for
-/// ([`settle_launch`]).
+/// **The launch it was started in stays open**, even where it was the last of that launch under way:
+/// a launch ends only where a person stops it ([`stop_launch`], [`cancel_launch`]).
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
     // Read before the stretch is closed below: whether it was already ended is what says the run
     // handed its task back on the way.
@@ -191,7 +189,6 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
         false => None,
     };
     close_stretch(tx, stretch.as_ref(), now, incident)?;
-    settle_launch(tx, after.launch_id)?;
     Ok(Ended { run: after })
 }
 
@@ -770,43 +767,6 @@ fn set_launch_status(
     after.updated_at = now;
     crate::ops::emit_update(tx, record::automation_launch(&before), record::automation_launch(&after))?;
     Ok(after)
-}
-
-/// **End a launch nothing more will come of** — one not ended yet, with no run under way, whose
-/// automation is not waiting for a task: the run started once one turns up would join it
-/// ([`crate::ops::automation_run::start_waiting`]). Anything else is left as it stands. `None` is a run
-/// that belongs to no launch.
-///
-/// **A launch an incident has reached stays running** where it can be given a run to take it: a
-/// failed round's task waits in it for a role ([`crate::ops::automation_run::incidents_waiting_in_launch`]),
-/// and a run would be started now ([`crate::ops::automation_run::tops_up`]). The incident is the
-/// launch's to work, and the run started for it joins the launch. A launch that cannot start one ends
-/// as before, so it is never left running with nothing to come of it.
-pub(crate) fn settle_launch(tx: &WriteTx<'_>, launch_id: Option<i64>) -> Result<()> {
-    let Some(launch_id) = launch_id else { return Ok(()) };
-    let Some(before) = read::automation_launch(tx.conn(), launch_id)? else { return Ok(()) };
-    if before.status == AutomationLaunchStatus::Ended
-        || !read::automation_launch_run_ids_under_way(tx.conn(), launch_id)?.is_empty()
-    {
-        return Ok(());
-    }
-    let waiting = read::automation(tx.conn(), before.automation_id)?.is_some_and(|a| a.waits_for_task_since.is_some());
-    if waiting {
-        return Ok(());
-    }
-    if !crate::ops::automation_run::incidents_waiting_in_launch(tx.conn(), launch_id)?.is_empty()
-        && crate::ops::automation_run::tops_up(tx.conn(), launch_id)?
-    {
-        return Ok(());
-    }
-    set_launch_status(tx, before, AutomationLaunchStatus::Ended)?;
-    Ok(())
-}
-
-/// [`settle_launch`] for the launch standing for an automation — where its wait has just been ended.
-pub(crate) fn settle_standing_launch(tx: &WriteTx<'_>, automation_id: i64) -> Result<()> {
-    let standing = read::automation_launch_standing(tx.conn(), automation_id)?;
-    settle_launch(tx, standing.map(|launch| launch.id))
 }
 
 /// **Pause a launch** — ask each of its runs still going to pause ([`pause`]), and start no run in it

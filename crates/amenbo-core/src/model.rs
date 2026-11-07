@@ -2486,9 +2486,9 @@ pub struct AutomationVersion {
 /// Where one launch of an automation stands — the runs it started side by side, taken together
 /// ([`AutomationLaunch`]).
 ///
-/// `Running` keeps its runs topped up to the automation's headcount while there are tasks
-/// to take. `Paused` starts no run: a person paused it, and each run under way was asked to pause too.
-/// `Ended` is over — no run of it is under way and none is started in it again.
+/// `Running` starts a run into a role's free seat while that role has a task to take, and stays so with
+/// no run under way. `Paused` starts no run: a person paused it, and each run under way was asked to
+/// pause too. `Ended` is over — a person stopped it, and no run is started in it again.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AutomationLaunchStatus {
@@ -2519,17 +2519,16 @@ impl AutomationLaunchStatus {
 
 /// **One launch of an automation — the runs it starts side by side, taken as one.**
 ///
-/// A person launches an automation once, and the launch runs up to the automation's headcount
-/// ([`crate::ops::automation_run::headcount`]) at once while there are tasks to take: where one run
+/// A person launches an automation once, and the launch runs as many runs of each role at once as that
+/// role's headcount ([`crate::ops::automation_run::seats`]) while it has tasks to take: where one run
 /// ends, the next is started in the same launch ([`crate::ops::automation_run::top_up`]). A run one
 /// of its triggers starts, or one started once a task turns up for an automation waiting on one, joins
 /// the launch standing; where none is standing, it opens one. An automation has at most one launch that has not ended.
 ///
 /// Pausing, picking up and stopping a launch acts on each run under way in it
-/// ([`crate::ops::automation_stop::pause_launch`] and the ops beside it). It ends once no run of it is
-/// under way and nothing is waiting to start one — no task, and no failed round's task filed to a role
-/// ([`crate::ops::automation_run::incidents_waiting_in_launch`]) while a run can still be started in it
-/// — or where a person stopped it.
+/// ([`crate::ops::automation_stop::pause_launch`] and the ops beside it). It stays open with no run under
+/// way, and ends only where a person stops it ([`crate::ops::automation_stop::stop_launch`],
+/// [`crate::ops::automation_stop::cancel_launch`]).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationLaunch {
     pub id: i64,

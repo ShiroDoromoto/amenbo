@@ -2008,8 +2008,11 @@ button.feed__target:hover { color: var(--c-accent); }
 .actport--error { --tone: var(--c-stop); color: var(--c-stop); border-style: dashed; background: none; }
 /* The roles down the left of the build screen, and what is built for the picked one beside them
    (`../screens/AutomationRoles`). Narrow is the screen's own width, not the window's, for the reason
-   `autoruns` gives: the list then goes across the top and its rows stand side by side. */
-.actbuild__body { container: actbody / inline-size; display: flex; align-items: stretch; }
+   `autoruns` gives: the list then goes across the top and its rows stand side by side. The frame is
+   the container and the body the row inside it, since a container query only reaches what is inside
+   the container, never the container itself. */
+.actbuild__frame { container: actbody / inline-size; }
+.actbuild__body { display: flex; align-items: stretch; }
 .actbuild__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .autoroles {
   flex: 0 0 200px; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
@@ -2025,9 +2028,38 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoroles__name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: var(--fw-medium); }
 .autoroles__count { font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autoroles__add { align-self: flex-start; }
+/* What the automation holds as a whole, down the right (`../screens/AutomationSettings`). Narrow, it
+   goes under the middle the way the roles go over it. */
+.autoside {
+  flex: 0 0 240px; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3);
+  background: var(--c-sunken-pic) var(--c-sunken); border-inline-start: var(--border-w) var(--border-style) var(--c-rule);
+}
+.autoside__group { display: flex; flex-direction: column; gap: var(--s-1); }
+.autoside__group > select { min-width: 0; }
+.autoside__stepline { display: flex; align-items: center; gap: var(--s-2); }
+.autoside__stepper {
+  display: inline-flex; align-items: center;
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
+}
+.autoside__stepper > button {
+  width: 28px; height: 26px; font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
+}
+.autoside__stepper > button:hover:not(:disabled) { background: var(--c-hover); }
+.autoside__stepper > button:disabled { color: var(--c-text-faint); cursor: default; }
+.autoside__stepper > output { min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
+.autoside__add { align-self: flex-start; }
+.autoside__trigger {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--s-2);
+  font: inherit; color: inherit; text-align: start; cursor: pointer; overflow-wrap: anywhere;
+  background: var(--c-bg-pic) var(--c-bg); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+}
+.autoside__trigger:hover { background: var(--c-hover); }
+.autoside__when { font-weight: var(--fw-medium); }
+.autoside__what { font-size: var(--fs-md); }
 @container actbody (max-width: 40rem) {
   .actbuild__body { flex-direction: column; }
   .autoroles { flex-basis: auto; border-inline-end: 0; border-block-end: var(--border-w) var(--border-style) var(--c-rule); }
+  .autoside { flex-basis: auto; border-inline-start: 0; border-block-start: var(--border-w) var(--border-style) var(--c-rule); }
   .autoroles__list { flex-direction: row; flex-wrap: wrap; }
   .autoroles__row { width: auto; }
 }

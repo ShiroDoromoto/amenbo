@@ -3536,6 +3536,10 @@ pub struct AutomationDetailDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) trigger: Option<AutomationTriggerDto>,
+    /// Who a failed round is filed to. Absent while nobody is chosen, which the launch check refuses.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) failures_to: Option<AutomationFailuresToDto>,
     /// **The automation's roles, in the order they are defined in.** A placement names the one whose
     /// round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
     /// (`AutomationCarrierDto::chosen_at`).
@@ -4069,6 +4073,41 @@ impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTr
             AutomationTriggerTaskInputDto::Fixed { title, notes } => NewTriggerTask::Fixed { title, notes },
             AutomationTriggerTaskInputDto::File { path } => NewTriggerTask::File { path },
             AutomationTriggerTaskInputDto::Script { script } => NewTriggerTask::Script(script.into()),
+        }
+    }
+}
+
+/// **Who a failed round of an automation is filed to** — the wire form of
+/// [`amenbo_core::model::FailuresTo`]: `human` for the person, `role` for a role of the same
+/// automation. It is read and written in the same form.
+#[derive(Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum AutomationFailuresToDto {
+    Human,
+    Role {
+        #[serde(rename = "roleId")]
+        #[ts(type = "number")]
+        role_id: i64,
+    },
+}
+
+impl From<amenbo_core::model::FailuresTo> for AutomationFailuresToDto {
+    fn from(to: amenbo_core::model::FailuresTo) -> Self {
+        use amenbo_core::model::FailuresTo;
+        match to {
+            FailuresTo::Human => AutomationFailuresToDto::Human,
+            FailuresTo::Role { role_id } => AutomationFailuresToDto::Role { role_id },
+        }
+    }
+}
+
+impl From<AutomationFailuresToDto> for amenbo_core::model::FailuresTo {
+    fn from(to: AutomationFailuresToDto) -> Self {
+        use amenbo_core::model::FailuresTo;
+        match to {
+            AutomationFailuresToDto::Human => FailuresTo::Human,
+            AutomationFailuresToDto::Role { role_id } => FailuresTo::Role { role_id },
         }
     }
 }

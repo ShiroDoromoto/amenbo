@@ -94,6 +94,11 @@
 // draft like the rest. Under the picture, each step of the round with the agent and model that carry
 // it out, the ones a step chose for itself marked (`./AutomationRoleCarriers`).
 //
+// **What the automation holds as a whole stands down the right** (`./AutomationSettings`): how many
+// of its runs may go at once, who a failed round is filed to, and its trigger, which opens its own
+// dialog (`./AutomationTrigger`). They are about none of the roles in particular, so they stand beside
+// the left and the middle rather than in either.
+//
 // **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
 // saved, or the version saved last and when. A write still marks the field it came from.
 import { useEffect, useMemo, useState } from "react";
@@ -108,6 +113,7 @@ import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationActionOver } from "./AutomationActionOver";
 import { AutomationHeldBy } from "./AutomationHeldBy";
 import { useSaved } from "./AutomationSaved";
+import { AutomationSettings } from "./AutomationSettings";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 import { AutomationTestPane, useAutomationTestRun } from "./AutomationTestPane";
 import type { WhereTo } from "./automationParts";
@@ -456,44 +462,47 @@ export function AutomationBuildScreen({
         />
       )}
 
-      <div className="actbuild__body">
-        {automation !== null && (
-          <AutomationRoleList
-            automation={automation}
-            pickedId={role?.id ?? null}
-            onPick={setRoleId}
-            onAdded={setAddedAt}
-          />
-        )}
-        <div className="actbuild__main">
-          {automation !== null && role !== undefined && (
-            <AutomationRoleHead key={role.id} automation={automation} role={role} onRemoved={() => setRoleId(null)} />
-          )}
-          <div className="actbuild__canvashead">
-            <span className="actbuild__sec">{t("auto.build.picture")}</span>
-          </div>
-          <div className="actbuild__canvas">
-            <AutomationPicture
-              graph={roundGraph}
-              selectedBoxId={testing !== null ? test.marked : pressed?.id}
-              placedForYou={forYou}
-              onPickBox={(box) => setShowing({ kind: "box", id: box })}
-              onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
-              onOpenExit={({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })}
+      <div className="actbuild__frame">
+        <div className="actbuild__body">
+          {automation !== null && (
+            <AutomationRoleList
+              automation={automation}
+              pickedId={role?.id ?? null}
+              onPick={setRoleId}
+              onAdded={setAddedAt}
             />
-            {automation !== null && automation.placements.length === 0 && (
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
-              >
-                {t("auto.pic.first")}
-              </button>
+          )}
+          <div className="actbuild__main">
+            {automation !== null && role !== undefined && (
+              <AutomationRoleHead key={role.id} automation={automation} role={role} onRemoved={() => setRoleId(null)} />
+            )}
+            <div className="actbuild__canvashead">
+              <span className="actbuild__sec">{t("auto.build.picture")}</span>
+            </div>
+            <div className="actbuild__canvas">
+              <AutomationPicture
+                graph={roundGraph}
+                selectedBoxId={testing !== null ? test.marked : pressed?.id}
+                placedForYou={forYou}
+                onPickBox={(box) => setShowing({ kind: "box", id: box })}
+                onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
+                onOpenExit={({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })}
+              />
+              {automation !== null && automation.placements.length === 0 && (
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
+                >
+                  {t("auto.pic.first")}
+                </button>
+              )}
+            </div>
+            {automation !== null && role !== undefined && (
+              <AutomationRoleCarriers automation={automation} graph={roundGraph} />
             )}
           </div>
-          {automation !== null && role !== undefined && (
-            <AutomationRoleCarriers automation={automation} graph={roundGraph} />
-          )}
+          {automation !== null && <AutomationSettings automation={automation} />}
         </div>
       </div>
 

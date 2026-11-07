@@ -4640,6 +4640,8 @@ pub struct AutomationRunIncidentDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     pub(crate) r#ref: String,
+    /// The task's title.
+    pub(crate) title: String,
     /// The role it was filed to, by its id. Absent where it went to a person, and where the role has
     /// since been taken off the task.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -4647,6 +4649,41 @@ pub struct AutomationRunIncidentDto {
     pub(crate) role: Option<i64>,
     /// Whether it went to a person — the human assignee rather than a role.
     pub(crate) person: bool,
+}
+
+/// **One failed round's task waiting in a launch for the role it was filed to**
+/// ([`amenbo_core::ops::automation_run::LaunchIncident`]) — what makes that role's card in the run's
+/// pane read "an incident has reached it", with or without a round of the role under way. A role's
+/// incidents counted are the number on its card.
+#[derive(Serialize, TS, Clone, PartialEq)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchIncidentDto {
+    /// The task the round was filed as, by its id.
+    #[ts(type = "number")]
+    pub(crate) task: i64,
+    /// The task's reference.
+    pub(crate) task_ref: String,
+    /// The task's title.
+    pub(crate) title: String,
+    /// The role it was filed to, by its id.
+    #[ts(type = "number")]
+    pub(crate) role: i64,
+    /// The role of the round that failed, by its id — where the line to `role` is drawn from. Absent
+    /// where the round had none, and where it has since been taken out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) from_role: Option<i64>,
+    /// The run whose round failed, by its id.
+    #[ts(type = "number")]
+    pub(crate) run: i64,
+    /// The round that failed, by its id (`automation_run_task`).
+    #[ts(type = "number")]
+    pub(crate) run_task: i64,
+    /// When the round failed and was filed, as RFC 3339.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) filed_at: Option<String>,
 }
 
 /// **One task a round of a run passed to another role** — the role of the round that filed it, the

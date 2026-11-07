@@ -1419,6 +1419,77 @@ mod tests {
         });
     }
 
+    /// Launch it, let the entry take a task, and fail the run there.
+    fn failed_in_a_launch(tx: &WriteTx<'_>, automation: &Automation) -> (AutomationRun, i64) {
+        let run = launched(tx, automation);
+        let launch = run.launch_id.expect("a launch");
+        open_entry(tx, &run);
+        let failed = automation_stop::Ending::Failed(AutomationStoppedReason::Crashed);
+        automation_stop::stop(tx, run.id, failed).expect("fail it");
+        (run, launch)
+    }
+
+    /// **A failed round filed to a role reaches its launch as that role's incident** — the task, the role
+    /// it was filed to, the round and role it came from, and when. The launch stays running for it, the
+    /// run started for it takes it, and it waits no longer. Another launch has none.
+    #[test]
+    fn a_round_filed_to_a_role_reaches_its_launch_as_that_roles_incident() {
+        use crate::model::{AutomationLaunchStatus, FailuresTo};
+        use crate::ops::automation_run::{incidents_waiting_in_launch, top_up, LaunchIncident};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
+            let to = Some(Some(FailuresTo::Role { role_id: reviewer }));
+            automation::update(tx, automation.id, None, None, None, None, to).expect("to the reviewer");
+            let built = for_ai(tx, "to build", project, None);
+            under(tx, built, builder);
+
+            let (run, launch) = failed_in_a_launch(tx, &automation);
+            let round = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("the round");
+            let filed = round.incident_task_id.expect("the round was filed");
+            assert_eq!(
+                incidents_waiting_in_launch(tx.conn(), launch).expect("incidents"),
+                vec![LaunchIncident {
+                    task_id: filed,
+                    role_id: reviewer,
+                    run_id: run.id,
+                    run_task_id: round.id,
+                    from_role_id: Some(builder),
+                    filed_at: round.ended_at,
+                }],
+            );
+            assert_eq!(launch_of(tx, launch).status, AutomationLaunchStatus::Running, "the launch stays for it");
+
+            let (other, _) = picture(tx, project);
+            let elsewhere = launched(tx, &other).launch_id.expect("a launch");
+            assert!(incidents_waiting_in_launch(tx.conn(), elsewhere).expect("incidents").is_empty());
+
+            let next = top_up(tx, launch, &launcher()).expect("top up").expect("a run for the incident");
+            open_entry(tx, &next);
+            assert_eq!(status(tx, filed), TaskStatus::InProgress, "the reviewer's round takes it");
+            assert!(incidents_waiting_in_launch(tx.conn(), launch).expect("incidents").is_empty());
+        });
+    }
+
+    /// **A failed round filed to a person is no incident of a role**, and the launch ends with its last
+    /// run as before.
+    #[test]
+    fn a_round_filed_to_a_person_is_no_incident_of_a_role() {
+        use crate::ops::automation_run::incidents_waiting_in_launch;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [(builder, _), _]) = by_role(tx, project);
+            let built = for_ai(tx, "to build", project, None);
+            under(tx, built, builder);
+
+            let (run, launch) = failed_in_a_launch(tx, &automation);
+            let round = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("the round");
+            assert!(round.incident_task_id.is_some(), "filed to the person");
+            assert!(incidents_waiting_in_launch(tx.conn(), launch).expect("incidents").is_empty());
+            assert_eq!(launch_of(tx, launch).status, crate::model::AutomationLaunchStatus::Ended);
+        });
+    }
+
     /// **A start of an automation whose entry would wait opens the launch the run joins later**, and a
     /// person ending the wait ends it.
     #[test]

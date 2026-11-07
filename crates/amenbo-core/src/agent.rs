@@ -1990,7 +1990,7 @@ fn all_commands() -> Value {
         // in rather than by a number anybody types back. Nothing here refuses an unfinished
         // automation; the launch check does. What is written goes into a draft, and `save` and
         // `action-save` make it the version a launch reads (`AMB-D-1015`).
-        cmd("automation add", "Creates an automation: a name and what it is for. What every step is told before its own prompt is not one of its fields — it is the same sentence on every automation, so Amenbo writes it at each launch. It starts with nothing placed on it, no entry and, unless --failures-to names a person, nobody to file a failed round to, none of which is refused here: the launch check is where an unfinished one is caught. Prints the id the place commands take.",
+        cmd("automation add", "Creates an automation: a name and what it is for. What every step is told before its own prompt is not one of its fields — it is the same sentence on every automation, so Amenbo writes it at each launch. It starts with nothing placed on it, no entry, one role named after it (`<name>の係`, 1 in it, starting nowhere — an automation always has at least one role) and, unless --failures-to names a person, nobody to file a failed round to, none of which is refused here: the launch check is where an unfinished one is caught. Prints the id the place commands take.",
             json!([{ "name": "--name <str>", "help": "what this automation is called", "required": true },
                    { "name": "--notes <text>", "help": "what it is for, in Markdown (`-` reads stdin)" },
                    { "name": "--failures-to human", "help": "file a failed round to a person (a role is chosen later with `automation update`)" },
@@ -2320,7 +2320,7 @@ fn all_commands() -> Value {
                    { "name": "--model <str>", "help": "the model beside the agent (--clear-model for the agent's own default)" },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation role-update 5 --agent codex --model gpt-5", "amenbo automation role-update 5 --headcount 3", "amenbo automation role-update 5 --clear-entry"])),
-        cmd("automation role-rm", "Takes a role out of its automation. The placement its round started at stays on the picture. Confirms unless --yes.",
+        cmd("automation role-rm", "Takes a role out of its automation. The placement its round started at stays on the picture. The last role of an automation is refused as invalid — an automation always has at least one; change it with `automation role-update` instead. Confirms unless --yes.",
             json!([{ "name": "<id>", "help": "role id", "required": true },
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation role-rm 5 --yes"])),

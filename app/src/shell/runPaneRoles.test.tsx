@@ -327,6 +327,12 @@ describe("roleCards", () => {
     expect(got.idle).toEqual([]);
   });
 
+  it("draws a round under no role as one card named after the automation, its roles on the bar", () => {
+    const got = roleCards({ ...RUNNING, round: { role: null, startedAt: null } }, [role(2, "Nightlyの係")]);
+    expect(got.cards).toEqual([{ role: null, name: "Nightly", icon: "robot", state: "running" }]);
+    expect(got.idle.map((one) => one.id)).toEqual([2]);
+  });
+
   it("draws no card while the run waits for its next task", () => {
     const got = roleCards({ ...RUNNING, state: { ...RUNNING.state!, waiting: true } }, [role(2, "B")]);
     expect(got.cards).toEqual([]);

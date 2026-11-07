@@ -1451,7 +1451,164 @@ pub const STEPS: &[Step] = &[
         // **Left NULL on every row already there.** No code a program exited with was kept before this.
         apply: Apply::Custom(let_a_step_keep_its_exit_code),
     },
+    Step {
+        to: 127,
+        name: "give every automation with no role one role, of one, starting where its entry's line for a task taken goes",
+        // **Seeded from what is there**, in the draft and in the newest saved version alike. The role is
+        // named after its automation, holds one, and starts at the placement the line out of the entry's
+        // way out for a task taken (`V127_TAKEN`) goes to — nowhere where there is no such line. No task
+        // is touched.
+        apply: Apply::Custom(give_every_automation_a_role),
+    },
 ];
+
+/// v127: **every automation has at least one role** from here on, so one that has none is given one —
+/// named after it as `ops::automation::born_role` names one, one in it, with no icon, agent or model.
+/// The draft gets the row, and the newest saved version, where it holds no role, gets the same role in
+/// its JSON: a draft that read as its newest version before this still does
+/// (`ops::automation::unsaved`).
+///
+/// **Where its round starts** is the placement the line out of the entry's [`V127_TAKEN`] goes to — the
+/// way out of the built-in that takes a task, once it has taken one — read off the draft for the row
+/// and off the version's own entry and lines for its copy. An entry with no such line (one that files a
+/// task, or no entry at all) leaves the role starting nowhere.
+///
+/// Where the draft already has a role and only the version holds none, the version's role is given an id
+/// no row has had, and the id is taken off the table's sequence, so no role written later is given it.
+///
+/// **Only the automation tables are read and written.** A store with no automation reads one empty table
+/// and writes nothing.
+fn give_every_automation_a_role(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let now = crate::time::Timestamp::now().to_rfc3339_z();
+    let mut automations: Vec<(i64, String, Option<i64>)> = Vec::new();
+    {
+        let mut stmt = tx.prepare("SELECT id, name, entry_placement_id FROM automation ORDER BY id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        for row in rows {
+            automations.push(row?);
+        }
+    }
+    for (automation_id, name, entry) in automations {
+        let name = format!("{name}の係");
+        let has_role: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM automation_role WHERE automation_id = ?1)",
+            [automation_id],
+            |r| r.get(0),
+        )?;
+        let mut drafted = None;
+        if !has_role {
+            let starts = match entry {
+                Some(entry) => taken_goes_to_in_draft(tx, automation_id, entry)?,
+                None => None,
+            };
+            tx.execute(
+                "INSERT INTO automation_role (automation_id, name, icon, entry_placement_id, agent, model, \
+                     order_key, headcount, created_at, updated_at) \
+                 VALUES (?1, ?2, NULL, ?3, NULL, NULL, 'm', 1, ?4, ?4)",
+                rusqlite::params![automation_id, name, starts, now],
+            )?;
+            drafted = Some(tx.last_insert_rowid());
+        }
+
+        let latest: Option<(i64, Option<i64>, String, String)> = tx
+            .query_row(
+                "SELECT id, entry_placement_id, edges, roles FROM automation_version WHERE automation_id = ?1 \
+                 ORDER BY version DESC LIMIT 1",
+                [automation_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .optional()?;
+        let Some((version_id, version_entry, edges, roles)) = latest else { continue };
+        let holds_none = roles.is_empty()
+            || serde_json::from_str::<Vec<serde_json::Value>>(&roles).is_ok_and(|roles| roles.is_empty());
+        if !holds_none {
+            continue;
+        }
+        let role_id = match drafted {
+            Some(id) => id,
+            None => an_unused_role_id(tx)?,
+        };
+        let starts = match version_entry {
+            Some(entry) => taken_goes_to_in_version(tx, &edges, entry)?,
+            None => None,
+        };
+        let role = serde_json::json!([{
+            "id": role_id,
+            "automation_id": automation_id,
+            "name": name,
+            "headcount": 1,
+            "icon": null,
+            "entry_placement_id": starts,
+            "agent": null,
+            "model": null,
+            "order_key": "m",
+            "created_at": now,
+            "updated_at": now,
+        }]);
+        tx.execute(
+            "UPDATE automation_version SET roles = ?1 WHERE id = ?2",
+            rusqlite::params![role.to_string(), version_id],
+        )?;
+    }
+    Ok(())
+}
+
+/// The name of the way out of the built-in that takes a task which it leaves by once it has taken one,
+/// as it stood at v127.
+const V127_TAKEN: &str = "着手した";
+
+/// Where the line out of the draft's entry by [`V127_TAKEN`] goes, on the automation's own picture — a
+/// placement of the same automation, or `None` where no such line goes on to one.
+fn taken_goes_to_in_draft(tx: &Transaction<'_>, automation_id: i64, entry: i64) -> Result<Option<i64>> {
+    Ok(tx
+        .query_row(
+            "SELECT e.to_id FROM automation_edge e JOIN automation_exit x ON x.id = e.exit_id \
+             WHERE e.owner_kind = 'automation' AND e.owner_id = ?1 AND e.from_id = ?2 AND e.ends = 'go' \
+               AND x.name = ?3 \
+               AND EXISTS (SELECT 1 FROM automation_placement p WHERE p.id = e.to_id AND p.automation_id = ?1) \
+             ORDER BY e.order_key, e.id LIMIT 1",
+            rusqlite::params![automation_id, entry, V127_TAKEN],
+            |r| r.get(0),
+        )
+        .optional()?)
+}
+
+/// [`taken_goes_to_in_draft`], off the lines a saved version holds. A way out is named by its row, so
+/// its name is read from there; a line whose way out is gone since leads nowhere.
+fn taken_goes_to_in_version(tx: &Transaction<'_>, edges: &str, entry: i64) -> Result<Option<i64>> {
+    let Ok(edges) = serde_json::from_str::<Vec<serde_json::Value>>(edges) else { return Ok(None) };
+    for edge in edges {
+        let field = |key: &str| edge.get(key).and_then(serde_json::Value::as_i64);
+        if field("from_id") != Some(entry) || edge.get("ends").and_then(serde_json::Value::as_str) != Some("go") {
+            continue;
+        }
+        let (Some(exit_id), Some(to_id)) = (field("exit_id"), field("to_id")) else { continue };
+        let exit: Option<String> = tx
+            .query_row("SELECT name FROM automation_exit WHERE id = ?1", [exit_id], |r| r.get(0))
+            .optional()?;
+        if exit.as_deref() == Some(V127_TAKEN) {
+            return Ok(Some(to_id));
+        }
+    }
+    Ok(None)
+}
+
+/// **An id for a role no row has had**, taken off `automation_role`'s sequence so no role written later
+/// is given it — the way a row inserted and deleted would leave the sequence.
+fn an_unused_role_id(tx: &Transaction<'_>) -> Result<i64> {
+    let id: i64 = tx.query_row(
+        "SELECT MAX(COALESCE((SELECT MAX(id) FROM automation_role), 0), \
+                    COALESCE((SELECT seq FROM sqlite_sequence WHERE name = 'automation_role'), 0)) + 1",
+        [],
+        |r| r.get(0),
+    )?;
+    let moved = tx.execute("UPDATE sqlite_sequence SET seq = ?1 WHERE name = 'automation_role'", [id])?;
+    if moved == 0 {
+        tx.execute("INSERT INTO sqlite_sequence (name, seq) VALUES ('automation_role', ?1)", [id])?;
+    }
+    Ok(id)
+}
 
 /// v123: `automation_role.headcount`, how many are in a role, `1` on every row already there — and
 /// `automation.max_concurrent_runs` gone, since how many tasks go at once is the roles' headcount now.
@@ -11784,9 +11941,10 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v102: v127 gives every automation with no role one.
+        run(&engine, &dir, steps_through(102), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 102);
         let roles: String = engine
             .conn()
             .query_row("SELECT roles FROM automation_version WHERE automation_id = 1", [], |r| r.get(0))
@@ -12418,9 +12576,10 @@ mod tests {
             ))
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v123: v127 gives the automation with no role one, in its version too.
+        run(&engine, &dir, steps_through(123), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 123);
         let headcount: i64 =
             engine.conn().query_row("SELECT headcount FROM automation_role WHERE id = 1", [], |r| r.get(0)).unwrap();
         assert_eq!(headcount, 1);
@@ -12452,6 +12611,105 @@ mod tests {
             .conn()
             .execute("INSERT INTO automation_role (automation_id, name, headcount) VALUES (1, 'さくら', 10)", [])
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v127: an automation with no role is given one — named after it, of one, starting where the line
+    /// out of its entry's way out for a task taken goes — in the draft and in its newest saved version,
+    /// which the draft still reads as. One that has a role keeps its own, and a version of it that holds
+    /// none is given a role under an id no row is given later.
+    #[test]
+    fn every_automation_written_before_v127_has_a_role() {
+        let dir = scratch("automation-born-role");
+        let engine = store_at(&dir, 126);
+        let at = "2026-11-07T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, project_id, name, builtin, builtin_version, order_key)
+                 VALUES (1, NULL, 'タスクに着手する', 'take_task', 1, 'm'), (2, 1, '実装', NULL, NULL, 'n');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key)
+                 VALUES (1, 'action', 1, '着手できるタスクが無い', 'm'), (2, 'action', 1, '着手した', 'n');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '計画から起票（amenbo）', 'm', '{at}', '{at}'), (2, 1, '開発', 'n', '{at}', '{at}'),
+                        (3, 1, '役割あり', 'o', '{at}', '{at}');
+                 INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, updated_at)
+                 VALUES (1, 2, 1, 'm', '{at}', '{at}'), (2, 2, 2, 'n', '{at}', '{at}');
+                 UPDATE automation SET entry_placement_id = 1 WHERE id = 2;
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, order_key, created_at, updated_at)
+                 VALUES (1, 'automation', 2, 1, 1, NULL, 'done', 'm', '{at}', '{at}'),
+                        (2, 'automation', 2, 1, 2, 2, 'go', 'n', '{at}', '{at}');
+                 INSERT INTO automation_role (id, automation_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 3, 'さくら', 'm', '{at}', '{at}');
+                 INSERT INTO automation_version (id, automation_id, version, entry_placement_id, placements, cfgs, placement_steps, edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, NULL, '[]', '[]', '[]', '[]', '[]', '[]', '{at}', '{at}'),
+                        (2, 2, 1, 1, '[]', '[]', '[]', '[{{\"from_id\":1,\"exit_id\":2,\"to_id\":2,\"ends\":\"go\"}}]', '[]', '[]', '{at}', '{at}'),
+                        (3, 3, 1, NULL, '[]', '[]', '[]', '[]', '[]', '[]', '{at}', '{at}');"
+            ))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let roles = |automation: i64| -> Vec<(i64, String, i64, Option<i64>)> {
+            let mut stmt = engine
+                .conn()
+                .prepare(
+                    "SELECT id, name, headcount, entry_placement_id FROM automation_role \
+                     WHERE automation_id = ?1 ORDER BY id",
+                )
+                .unwrap();
+            stmt.query_map([automation], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect()
+        };
+        let saved = |id: i64| -> serde_json::Value {
+            let roles: String = engine
+                .conn()
+                .query_row("SELECT roles FROM automation_version WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap();
+            serde_json::from_str(&roles).unwrap()
+        };
+
+        let planned = roles(1);
+        assert_eq!(planned.len(), 1, "one role");
+        assert_eq!((planned[0].1.as_str(), planned[0].2, planned[0].3), ("計画から起票（amenbo）の係", 1, None));
+        assert_eq!(saved(1)[0]["id"], serde_json::json!(planned[0].0), "the version holds the same role");
+        assert_eq!(saved(1)[0]["name"], serde_json::json!("計画から起票（amenbo）の係"));
+        assert!(
+            !crate::ops::automation::unsaved(engine.conn(), 1).unwrap(),
+            "the draft still reads as its newest version"
+        );
+
+        let developing = roles(2);
+        assert_eq!(developing.len(), 1);
+        assert_eq!(developing[0].3, Some(2), "the round starts where the 着手した line goes");
+        assert_eq!(saved(2)[0]["entry_placement_id"], serde_json::json!(2), "and so it does in the version");
+        assert_eq!(saved(2)[0]["headcount"], serde_json::json!(1));
+
+        assert_eq!(roles(3), vec![(1, "さくら".to_string(), 1, None)], "a role already there is kept alone");
+        let reserved = saved(3)[0]["id"].as_i64().expect("an id");
+        assert!(roles(1).iter().chain(&roles(2)).chain(&roles(3)).all(|r| r.0 != reserved), "no row has it");
+        engine
+            .conn()
+            .execute("INSERT INTO automation_role (automation_id, name) VALUES (3, '山田')", [])
+            .unwrap();
+        let later: i64 = engine.conn().query_row("SELECT MAX(id) FROM automation_role", [], |r| r.get(0)).unwrap();
+        assert!(later > reserved, "a role written later is not given it");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v127 on a store with no automation writes nothing: no role is made.
+    #[test]
+    fn a_store_with_no_automation_gets_no_role_at_v127() {
+        let dir = scratch("automation-born-role-empty");
+        let engine = store_at(&dir, 126);
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let n: i64 = engine.conn().query_row("SELECT COUNT(*) FROM automation_role", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0);
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -1401,7 +1401,7 @@ pub fn automation_role_move(
 
 /// **Take a role out of its automation** ([`amenbo_core::ops::automation::role_delete`]). The
 /// placement its round started at stays on the picture, and the tasks worked under it are left with
-/// no role.
+/// no role. The last role is not taken out — core's refusal, passed on.
 #[tauri::command]
 pub fn automation_role_remove(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -3568,7 +3568,8 @@ mod tests {
     /// **The four role doors write through core and read back on the detail.** A role is added with
     /// its agent and model or with a headcount, renamed and given another headcount, reordered against
     /// another, has its agent cleared — the model going with it — and is taken away. A model with no
-    /// agent and a role that is not there are core's refusals, passed on rather than reworded.
+    /// agent, a role that is not there and the last role taken out are core's refusals, passed on rather
+    /// than reworded.
     #[test]
     fn roles_are_added_edited_reordered_and_removed() {
         let _env = env_guard();
@@ -3597,31 +3598,34 @@ mod tests {
         );
         let names = |roles: &[AutomationRoleDto]| roles.iter().map(|r| r.name.clone()).collect::<Vec<_>>();
         let listed = roles();
-        assert_eq!(names(&listed), ["Alice", "Bob"]);
-        let (alice, bob) = (listed[0].id, listed[1].id);
-        assert_eq!((listed[0].agent.as_deref(), listed[0].model.as_deref()), (Some("claude"), Some("opus")));
-        assert_eq!((listed[0].headcount, listed[1].headcount), (1, 2), "one in a role unless given");
+        assert_eq!(names(&listed), ["Devの係", "Alice", "Bob"], "after the one it was born with");
+        let (born, alice, bob) = (listed[0].id, listed[1].id, listed[2].id);
+        assert_eq!((listed[1].agent.as_deref(), listed[1].model.as_deref()), (Some("claude"), Some("opus")));
+        assert_eq!((listed[1].headcount, listed[2].headcount), (1, 2), "one in a role unless given");
 
         automation_role_move(bob, "before".into(), Some(alice)).unwrap();
-        assert_eq!(names(&roles()), ["Bob", "Alice"]);
+        assert_eq!(names(&roles()), ["Devの係", "Bob", "Alice"]);
         assert!(automation_role_move(bob, "before".into(), None).is_err(), "before needs an anchor");
         assert!(automation_role_move(bob, "middle".into(), None).is_err());
 
         automation_role_edit(bob, Some("Carol".into()), Some(3), None, Some(true), None, None, None, None, None, None).unwrap();
         automation_role_edit(alice, None, None, None, None, None, None, None, Some(true), None, None).unwrap();
         let listed = roles();
-        assert_eq!(names(&listed), ["Carol", "Alice"]);
-        assert_eq!(listed[0].icon, None, "the clear takes the icon away");
-        assert_eq!(listed[0].headcount, 3);
-        assert_eq!((listed[1].agent.as_deref(), listed[1].model.as_deref()), (None, None), "the model goes with the agent");
+        assert_eq!(names(&listed), ["Devの係", "Carol", "Alice"]);
+        assert_eq!(listed[1].icon, None, "the clear takes the icon away");
+        assert_eq!(listed[1].headcount, 3);
+        assert_eq!((listed[2].agent.as_deref(), listed[2].model.as_deref()), (None, None), "the model goes with the agent");
         assert!(
             automation_role_edit(alice, None, None, None, None, None, None, None, None, Some("opus".into()), None).is_err(),
             "a model with no agent is refused on an edit too"
         );
 
         automation_role_remove(bob).unwrap();
-        assert_eq!(names(&roles()), ["Alice"]);
+        assert_eq!(names(&roles()), ["Devの係", "Alice"]);
         assert!(automation_role_remove(bob).is_err(), "a role that is gone is not found");
+        automation_role_remove(alice).unwrap();
+        assert!(automation_role_remove(born).is_err(), "the last role is not taken out");
+        assert_eq!(names(&roles()), ["Devの係"]);
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

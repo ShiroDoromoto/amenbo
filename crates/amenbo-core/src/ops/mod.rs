@@ -216,32 +216,23 @@ pub(crate) mod test_support {
     }
 
     /// **Let an automation have as many runs going at once as one role may hold**
-    /// ([`crate::model::MAX_ROLE_HEADCOUNT`]), for a test that stands several side by side. An automation
-    /// with no role has room for one.
+    /// ([`crate::model::MAX_ROLE_HEADCOUNT`]), for a test that stands several side by side.
     pub(crate) fn room_for_runs(tx: &WriteTx<'_>, automation_id: i64) {
         room_for(tx, automation_id, crate::model::MAX_ROLE_HEADCOUNT);
     }
 
     /// **Let an automation have `n` runs going at once** — its roles' headcount added up to `n`. Its first
-    /// role is given what the others leave of `n`, or a role with no way of working is made to hold `n`
-    /// where it has none, and where a version of it is saved the draft is saved again, since the runs
-    /// under way are measured against the newest saved version
-    /// ([`crate::ops::automation_run::headcount`]).
+    /// role (every automation has one) is given what the others leave of `n`, and where a version of it is
+    /// saved the draft is saved again, since the runs under way are measured against the newest saved
+    /// version ([`crate::ops::automation_run::headcount`]).
     pub(crate) fn room_for(tx: &WriteTx<'_>, automation_id: i64, n: u32) {
-        use crate::ops::automation::{role_add, role_update, version_add, NewRole, RoleChange};
+        use crate::ops::automation::{role_update, version_add, RoleChange};
         let roles = crate::store_engine::read::automation_roles_of(tx.conn(), automation_id).expect("read roles");
-        match roles.split_first() {
-            Some((first, others)) => {
-                let rest: u32 = others.iter().map(|r| r.headcount).sum();
-                let headcount = n.checked_sub(rest).filter(|h| *h >= 1).expect("the other roles leave room");
-                role_update(tx, first.id, RoleChange { headcount: Some(headcount), ..RoleChange::default() })
-                    .expect("set the headcount");
-            }
-            None => {
-                role_add(tx, automation_id, NewRole { name: "席".into(), headcount: Some(n), ..NewRole::default() })
-                    .expect("a role to hold the runs");
-            }
-        }
+        let (first, others) = roles.split_first().expect("an automation always has a role");
+        let rest: u32 = others.iter().map(|r| r.headcount).sum();
+        let headcount = n.checked_sub(rest).filter(|h| *h >= 1).expect("the other roles leave room");
+        role_update(tx, first.id, RoleChange { headcount: Some(headcount), ..RoleChange::default() })
+            .expect("set the headcount");
         if crate::store_engine::read::automation_version_latest(tx.conn(), automation_id).expect("read").is_some() {
             version_add(tx, automation_id).expect("save the headcount");
         }

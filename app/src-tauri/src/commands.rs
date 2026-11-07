@@ -7768,7 +7768,11 @@ pub(crate) mod tests {
         let roles = project_roles(project_id).unwrap();
         let names: Vec<(&str, &str)> =
             roles.iter().map(|r| (r.name.as_str(), r.automation_name.as_str())).collect();
-        assert_eq!(names, [("実装係", "開発"), ("レビュー係", "開発")], "in the order they are defined in");
+        assert_eq!(
+            names,
+            [("開発の係", "開発"), ("実装係", "開発"), ("レビュー係", "開発")],
+            "in the order they are defined in, the one it was born with first"
+        );
         assert!(project_roles(bare).unwrap().is_empty(), "a project with no automation has no role");
 
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().expect("task");

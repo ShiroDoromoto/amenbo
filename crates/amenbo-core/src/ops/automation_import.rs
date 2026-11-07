@@ -69,7 +69,9 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
     // Where a failed round is filed is the automation's, and a file does not carry it: the new
     // automation names nobody until somebody says. How many runs go at once comes in with the roles.
     let new = NewAutomation { name: file.name.clone(), notes: file.notes.clone(), failures_to: None };
-    let automation = automation::add(tx, project_id, new)?;
+    // Born with no role: the file's roles are its roles, and only a file with none (one written before
+    // roles existed) leaves it the role an automation is born with, so that it has one.
+    let automation = automation::add_with_no_role(tx, project_id, new)?;
     let mut placed: Vec<Placed> = Vec::new();
     for placement in &file.placements {
         let (action_id, steps, builtin) = match &placement.stands_on {
@@ -140,6 +142,9 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
             model: role.model.clone(),
         };
         automation::role_add(tx, automation.id, new)?;
+    }
+    if file.roles.is_empty() {
+        automation::role_add(tx, automation.id, automation::born_role(&automation))?;
     }
     read::automation(tx.conn(), automation.id)?
         .ok_or_else(|| Error::not_found(format!("automation '{}' not found", automation.id)))
@@ -426,10 +431,14 @@ mod tests {
             let actions_before = count(tx, "automation_action");
             let roles_before = count(tx, "automation_role");
             let imported = import(tx, into, &parse(&text).expect("parse")).expect("import");
-            assert_eq!(count(tx, "automation_role"), roles_before + 2, "the roles come in as new");
+            assert_eq!(count(tx, "automation_role"), roles_before + 3, "the roles come in as new, the one it was born with among them");
             let roles = read::automation_roles_of(tx.conn(), imported.id).expect("roles");
             let headcounts: Vec<(&str, u32)> = roles.iter().map(|r| (r.name.as_str(), r.headcount)).collect();
-            assert_eq!(headcounts, [("レビュー", 2), ("実装", 1)], "each role comes in with its headcount");
+            assert_eq!(
+                headcounts,
+                [("1件やりきるの係", 1), ("レビュー", 2), ("実装", 1)],
+                "each role comes in with its headcount"
+            );
             assert_eq!((imported.project_id, imported.name.as_str()), (into, "1件やりきる"));
             assert!(read::automation_version_latest(tx.conn(), imported.id).expect("read").is_none(), "not saved");
             assert!(automation::unsaved(tx.conn(), imported.id).expect("unsaved"), "left being written");

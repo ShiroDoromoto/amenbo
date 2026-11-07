@@ -14,9 +14,11 @@
 // keeps its `carrier` for the launch check and the pane; the table is for the steps an agent works
 // through on its own, and leaves this one out as the mock does (`AMB-D-1121`).
 //
-// **The ● is the row's, not a cell's.** Where a step was chosen at is one place for the agent and its
-// model together (`AutomationChosenAtDto`, `AMB-D-865`), so a step that chose for itself marks both.
-// The words for where each was chosen are the GUI's (`AMB-D-396`).
+// **The ● is a cell's, not the row's.** A step that chose for itself is marked only in the column it set
+// apart from what it falls back to (`agentByStep`, `modelByStep`): one that took the role's agent and
+// another model marks the model alone. A marked cell is in the AI's colour; a cell that falls back, to
+// the role's default or Amenbo's, is muted and shows the value it fell back to. The words for where
+// each was chosen are the GUI's (`AMB-D-396`).
 import { t } from "../core/i18n";
 import { pictureOrder, type PicGraph } from "./automationLayout";
 import { useAgents } from "./automationPanel";
@@ -57,7 +59,16 @@ export function AutomationRoleCarriers({
   const rows = roleCarrierRows(automation, graph);
   if (rows.length === 0) return null;
   const agentLabel = (id: string) => agents.find((one) => one.id === id)?.label ?? id;
-  const mark = <span className="autocarriers__mark" title={t("auto.build.carrierByStep")}> ●</span>;
+  const cell = (value: string, byStep: boolean) => (
+    <td className={byStep ? "autocarriers__cell--step" : "autocarriers__cell--fallen"}>
+      {value}
+      {byStep && (
+        <span className="autocarriers__mark" title={t("auto.build.carrierByStep")}>
+          {" ●"}
+        </span>
+      )}
+    </td>
+  );
   return (
     <div className="autocarriers">
       <table className="autocarriers__table">
@@ -69,22 +80,13 @@ export function AutomationRoleCarriers({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
-            const byStep = row.carrier.chosenAt.kind === "step";
-            return (
-              <tr key={`${row.placementId}-${row.stepId}`} className={byStep ? "autocarriers__row--step" : undefined}>
-                <td>{row.name}</td>
-                <td>
-                  {agentLabel(row.carrier.agent)}
-                  {byStep && mark}
-                </td>
-                <td>
-                  {row.carrier.model ?? t("auto.step.modelDefault")}
-                  {byStep && mark}
-                </td>
-              </tr>
-            );
-          })}
+          {rows.map((row) => (
+            <tr key={`${row.placementId}-${row.stepId}`}>
+              <td>{row.name}</td>
+              {cell(agentLabel(row.carrier.agent), row.carrier.agentByStep)}
+              {cell(row.carrier.model ?? t("auto.step.modelDefault"), row.carrier.modelByStep)}
+            </tr>
+          ))}
         </tbody>
       </table>
       <p className="autocarriers__hint">{t("auto.build.carrierHint")}</p>

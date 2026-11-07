@@ -75,24 +75,58 @@ function detail(): AutomationDetailDto {
           interactive: false,
           agent: "claude-code",
           model: "haiku",
-          carrier: { agent: "claude-code", model: "haiku", chosenAt: { kind: "step" } },
+          // The role's agent written down again, and a model of its own: only the model is the step's.
+          carrier: {
+            agent: "claude-code",
+            model: "haiku",
+            chosenAt: { kind: "step" },
+            agentByStep: false,
+            modelByStep: true,
+          },
         },
       ]),
       placement(2, 1, [
-        { stepId: 21, name: "Write it", interactive: false, carrier: { agent: "claude-code", model: "opus", chosenAt: { kind: "role", roleId: 1 } } },
+        {
+          stepId: 21,
+          name: "Write it",
+          interactive: false,
+          carrier: {
+            agent: "claude-code",
+            model: "opus",
+            chosenAt: { kind: "role", roleId: 1 },
+            agentByStep: false,
+            modelByStep: false,
+          },
+        },
         // A script step: no agent carries it out, so it has no carrier.
         { stepId: 22, name: "Run the tests", interactive: false },
-        { stepId: 23, name: "Ask Amenbo", interactive: false, carrier: { agent: "gemini", chosenAt: { kind: "amenbo" } } },
+        {
+          stepId: 23,
+          name: "Ask Amenbo",
+          interactive: false,
+          carrier: { agent: "gemini", chosenAt: { kind: "amenbo" }, agentByStep: false, modelByStep: false },
+        },
         // A step that asks a person: an agent opens it, but it is not a row.
         {
           stepId: 24,
           name: "Pick a plan",
           interactive: true,
-          carrier: { agent: "claude-code", model: "opus", chosenAt: { kind: "role", roleId: 1 } },
+          carrier: {
+            agent: "claude-code",
+            model: "opus",
+            chosenAt: { kind: "role", roleId: 1 },
+            agentByStep: false,
+            modelByStep: false,
+          },
         },
       ]),
       placement(3, 2, [
-        { stepId: 31, name: "Review", interactive: false, carrier: { agent: "codex", chosenAt: { kind: "role", roleId: 2 } } },
+        {
+          stepId: 31,
+          name: "Review",
+          interactive: false,
+          carrier: { agent: "codex", chosenAt: { kind: "role", roleId: 2 }, agentByStep: false, modelByStep: false },
+        },
       ]),
     ],
     edges: [{ id: 5, fromId: 2, exitName: "完了", toId: 1, ends: "go" }],
@@ -139,13 +173,22 @@ describe("the steps of a role's round", () => {
 });
 
 describe("the table", () => {
-  it("marks the agent and model of a step that chose for itself, and says how they are decided", async () => {
+  it("marks only the cell a step set apart for itself, and says how they are decided", async () => {
     await draw(detail(), 1);
     const default_ = t("auto.step.modelDefault");
     expect(cells()).toEqual([
       ["Write it", "claude-code", "opus"],
       ["Ask Amenbo", "gemini", default_],
-      ["Read the diff", "claude-code ●", "haiku ●"],
+      ["Read the diff", "claude-code", "haiku ●"],
+    ]);
+    const kinds = [...container.querySelectorAll("tbody tr")].map((row) =>
+      [...row.querySelectorAll("td")].slice(1).map((cell) => cell.className),
+    );
+    const fallen = "autocarriers__cell--fallen";
+    expect(kinds).toEqual([
+      [fallen, fallen],
+      [fallen, fallen],
+      [fallen, "autocarriers__cell--step"],
     ]);
     expect([...container.querySelectorAll("th")].map((one) => one.textContent)).toEqual([
       t("auto.build.carrierStep"),

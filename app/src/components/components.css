@@ -2120,7 +2120,10 @@ button.feed__target:hover { color: var(--c-accent); }
   text-align: start; padding: 4px 6px; border-block-end: var(--border-w) var(--border-style) var(--c-rule);
 }
 .autocarriers__table th { color: var(--c-text-muted); font-weight: var(--fw-medium); }
-.autocarriers__row--step td:not(:first-child) { color: var(--c-accent); }
+/* A cell the step set apart is in the AI's colour; a cell that falls back to the role's or Amenbo's
+   default is muted. */
+.autocarriers__cell--step { color: var(--c-ai); font-weight: var(--fw-medium); }
+.autocarriers__cell--fallen { color: var(--c-text-muted); }
 .autocarriers__hint { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The panel fills the right pane (`.rightpane`), which holds the border, the ground and the one scroll.
    The head stays at the top of that scroll, so the close is in reach under a long body. */

@@ -519,7 +519,15 @@ export type AutomationCarrierDto = { agent: string,
 /**
  * Absent leaves the agent's own default model.
  */
-model?: string, chosenAt: AutomationChosenAtDto, };
+model?: string, chosenAt: AutomationChosenAtDto, 
+/**
+ * Is the agent the step's own, set apart from what it falls back to? The build screen marks it ●.
+ */
+agentByStep: boolean, 
+/**
+ * Is the model the step's own, set apart from what it falls back to? The build screen marks it ●.
+ */
+modelByStep: boolean, };
 
 /**
  * **A setting, and the answer written for it while building.** An action declares and the placement

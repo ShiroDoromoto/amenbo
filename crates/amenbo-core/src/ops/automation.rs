@@ -1407,7 +1407,8 @@ pub enum NewTriggerTask {
 /// `script` with none is refused; it is not run here. What the task says is refused the same way: a
 /// file not named by its full path, and a program that writes it as a script is; neither is read or
 /// run here, so one missing now is only found out when the task is filed. A role that is not this
-/// automation's own is refused. Taking triggers away from an automation that has none writes nothing.
+/// automation's own is refused, whether the task is to be worked under it or the condition counts the
+/// tasks worked under it. Taking triggers away from an automation that has none writes nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     if before.triggers.is_empty() && trigger.is_none() {
@@ -1532,7 +1533,7 @@ fn checked_trigger(
     let script = script.map(checked_script).transpose()?;
     let condition = match condition {
         None => None,
-        Some(TriggerCondition { filter, below }) => {
+        Some(TriggerCondition { filter, role_id: counted_role_id, below }) => {
             if below == 0 {
                 return Err(Error::invalid(
                     "a trigger's condition files a task while fewer than N tasks match, N being 1 or more, not 0",
@@ -1544,8 +1545,17 @@ fn checked_trigger(
                     "a trigger's condition counts the tasks of its own automation's project, so it names no `project:`",
                 ));
             }
-            crate::query::count(tx.conn(), crate::reach::Reach::binding(automation.project_id), &filter)?;
-            Some(TriggerCondition { filter, below })
+            if let Some(counted) = counted_role_id {
+                if live_role(tx, counted)?.automation_id != automation.id {
+                    return Err(Error::invalid(format!(
+                        "role '{counted}' belongs to another automation, so this one's trigger cannot count the \
+                         tasks worked under it"
+                    )));
+                }
+            }
+            let roles: Vec<i64> = counted_role_id.into_iter().collect();
+            crate::query::count(tx.conn(), crate::reach::Reach::binding(automation.project_id), &filter, &roles)?;
+            Some(TriggerCondition { filter, role_id: counted_role_id, below })
         }
     };
     let task = match task {
@@ -2755,13 +2765,18 @@ pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 }
 
 /// Where a role that is about to go is the one some of its automation's triggers file tasks under, have
-/// each of them file them under none. `automation_trigger.role_id` is `RESTRICT`, so this goes before the
-/// role's row does. Each trigger keeps its `next_at`.
+/// each of them file them under none; and where it is the one a trigger's condition counts the tasks of,
+/// have it count them whatever their role — the tasks worked under it are left with no role, so counting
+/// them under it would find none. `automation_trigger.role_id` and `condition_role_id` are `RESTRICT`, so
+/// this goes before the role's row does. Each trigger keeps its `next_at`.
 fn take_role_off_triggers(tx: &WriteTx<'_>, role: &AutomationRole) -> Result<()> {
     let now = Timestamp::now();
+    let let_go = |of: Option<i64>| of.filter(|id| *id != role.id);
     for id in read::automation_trigger_ids_with_role(tx.conn(), role.id)? {
         let before = live_trigger(tx, id)?;
-        let after = AutomationTrigger { role_id: None, updated_at: now, ..before.clone() };
+        let condition =
+            before.condition.clone().map(|c| TriggerCondition { role_id: let_go(c.role_id), ..c });
+        let after = AutomationTrigger { role_id: let_go(before.role_id), condition, updated_at: now, ..before.clone() };
         emit_update(tx, record::automation_trigger(&before), record::automation_trigger(&after))?;
     }
     Ok(())
@@ -4478,7 +4493,7 @@ mod tests {
             assert_ne!(read_back.id, trigger.id, "the one written stands in place of the one before");
             assert_eq!(only(set), Some(read_back));
 
-            let below = |filter: &str, below: u32| Some(TriggerCondition { filter: filter.into(), below });
+            let below = |filter: &str, below: u32| Some(TriggerCondition { filter: filter.into(), role_id: None, below });
             let counted = NewTrigger { condition: below(" status:todo,in_progress ", 3), ..hourly("見る") };
             let set = trigger_set(tx, automation.id, Some(counted)).expect("an every with a condition");
             let read_back = only(live_automation(tx, automation.id).expect("read")).expect("kept");

@@ -3506,7 +3506,7 @@ mod tests {
         let full = json(AutomationTrigger {
             role_id: Some(7),
             when: TriggerWhen::Tasks,
-            condition: Some(TriggerCondition { filter: "status:todo".into(), below: 3 }),
+            condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 3 }),
             script: Some(script.clone()),
             task: TriggerTask::Script { script },
             ..base.clone()
@@ -3572,7 +3572,7 @@ mod tests {
             "task": { "kind": "script", "script": { "program": "/bin/write" } },
         }));
         assert_eq!((full.name.as_str(), full.role_id, full.when), ("整える", Some(4), TriggerWhen::Script));
-        assert_eq!(full.condition, Some(TriggerCondition { filter: "status:todo".into(), below: 2 }));
+        assert_eq!(full.condition, Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }));
         assert_eq!(
             full.script,
             Some(NewScript { program: "/bin/ask".into(), args: vec!["a b".into()], timeout_minutes: Some(3) }),
@@ -3658,7 +3658,7 @@ mod tests {
         .unwrap();
         let read_back = trigger().expect("rewritten");
         assert!(matches!(read_back.when, AutomationTriggerWhenDto::Tasks));
-        assert_eq!(read_back.condition, Some(AutomationTriggerConditionDto { filter: "status:todo".into(), below: 2 }));
+        assert_eq!(read_back.condition, Some(AutomationTriggerConditionDto { filter: "status:todo".into(), role_id: None, below: 2 }));
 
         automation_trigger_set(automation_id, None).unwrap();
         assert!(trigger().is_none(), "taken away");

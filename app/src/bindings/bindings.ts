@@ -1382,9 +1382,15 @@ exit: string, };
 
 /**
  * **The tasks a trigger looks at before it files one** ([`amenbo_core::model::TriggerCondition`]): it
- * files one only while fewer than `below` tasks of the project match `filter`.
+ * files one only while fewer than `below` tasks of the project match `filter` — and, where `roleId`
+ * is given, are worked under that role.
  */
-export type AutomationTriggerConditionDto = { filter: string, below: number, };
+export type AutomationTriggerConditionDto = { filter: string, 
+/**
+ * The role of the same automation the tasks counted are worked under. Absent to count them
+ * whatever their role.
+ */
+roleId?: number, below: number, };
 
 /**
  * **An automation's trigger** — the wire form of [`amenbo_core::model::AutomationTrigger`]: whether

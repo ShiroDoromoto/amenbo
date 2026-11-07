@@ -1950,11 +1950,11 @@ pub struct TriggersDue {
 
 /// **Which triggers are due at `now`** — the first part of each, asked of every enabled trigger of an
 /// automation that may be started by one ([`read::automations_triggered`]), which leaves out a stopped
-/// one. One whose automation's runs under way say no ([`has_room`]), or whose condition does not hold
-/// ([`condition_holds`]), is not due: it would decide not to file a task, so a look need not open a
-/// write to hear it say so. One with a script — one that asks whether to file a task, or one that
-/// writes what it says — is put in `ask` rather than `due`: its program may run for hours, so it is not
-/// run here. It writes nothing: [`fire`] asks all of it again, in the transaction it writes in.
+/// one. One held back ([`TriggerHeld`]) — by its automation's runs under way, or by its condition — is
+/// not due: it would decide not to file a task, so a look need not open a write to hear it say so. One
+/// with a script — one that asks whether to file a task, or one that writes what it says — is put in
+/// `ask` rather than `due`: its program may run for hours, so it is not run here. It writes nothing:
+/// [`fire`] asks all of it again, in the transaction it writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
@@ -1966,11 +1966,15 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
         };
         for trigger in enabled() {
             if trigger.next_at <= now {
-                // A condition that no longer reads (an axis it names gone since) is left for `fire` to
-                // refuse, as a launch refused is, rather than stopping every other trigger on this look.
-                if has_room(&trigger.when, under_way, automation.max_concurrent_runs)
-                    && !paused
-                    && condition_holds(conn, automation.project_id, trigger).unwrap_or(true)
+                // Its tasks are counted only once nothing else holds it back. A condition that no longer
+                // reads (an axis it names gone since) is left for `fire` to refuse, as a launch refused
+                // is, rather than stopping every other trigger on this look.
+                let held_by = |condition: Option<&ConditionCount>| {
+                    held(&automation, trigger, under_way, paused, condition, now)
+                };
+                if held_by(None).is_none()
+                    && condition_count(conn, automation.project_id, trigger)
+                        .map_or(true, |condition| held_by(condition.as_ref()).is_none())
                 {
                     match TriggerScripts::of(trigger) {
                         Some(scripts) => found.ask.push((trigger.id, scripts)),
@@ -1988,14 +1992,15 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// **Fire one trigger of an automation** at `now`: decide whether to file a task, write what it says,
 /// and start a run of the automation on it — `Some(run)` when it did, `None` when it decided not to.
 ///
-/// 1. **Whether to file one.** Not before the trigger's `next_at`, not while the launch standing is
-///    paused, and not while the automation's runs under way say no ([`has_room`]): an `every` or a
-///    `tasks` waits while the automation has its most runs under way (`max_concurrent_runs`), where a
-///    task filed would have no run to go to, and an `idle` waits until it has none at all. Nor while its
-///    condition does not hold ([`condition_holds`]). One with a script files one only where `said` was
-///    heard from those very scripts — the ones [`ask_trigger`] ran outside this write — so one rewritten
-///    since they were asked files nothing. A trigger not enabled files none, nor does one of an archived
-///    automation, a stopped one or one kept for export only, nor one taken away since it was found due.
+/// 1. **Whether to file one.** Not while anything holds it back ([`TriggerHeld`]): not before the
+///    trigger's `next_at`, not while the launch standing is paused, and not while the automation's runs
+///    under way say no: an `every` or a `tasks` waits while the automation has its most runs under way
+///    (`max_concurrent_runs`), where a task filed would have no run to go to, and an `idle` waits until
+///    it has none at all. Nor while its condition does not hold. One with a script files one only where
+///    `said` was heard from those very scripts — the ones [`ask_trigger`] ran outside this write — so one
+///    rewritten since they were asked files nothing. A trigger not enabled files none, nor does one of an
+///    archived automation, a stopped one or one kept for export only, nor one taken away since it was
+///    found due.
 /// 2. **What it says** ([`crate::model::TriggerTask`]): the title and notes written on the trigger, the
 ///    ones read from its file now ([`task_from_file`]), or the ones its program wrote in `said`. A file
 ///    that says nothing it can file is an error, as a launch refused is.
@@ -2022,14 +2027,13 @@ pub fn fire(
     let automation_id = trigger.automation_id;
     let automation =
         read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
-    if !trigger.enabled || automation.archived || automation.stopped || automation.export_only || now < trigger.next_at
-    {
+    let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?.len();
+    let paused = launch_paused(tx.conn(), automation_id)?;
+    if held(&automation, &trigger, under_way, paused, None, now).is_some() {
         return Ok(None);
     }
-    let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
-    if !has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs)
-        || launch_paused(tx.conn(), automation_id)?
-        || !condition_holds(tx.conn(), automation.project_id, &trigger)?
+    let condition = condition_count(tx.conn(), automation.project_id, &trigger)?;
+    if held(&automation, &trigger, under_way, paused, condition.as_ref(), now).is_some()
         || TriggerScripts::of(&trigger).is_some_and(|scripts| said.map(|said| &said.scripts) != Some(&scripts))
     {
         return Ok(None);
@@ -2374,12 +2378,171 @@ fn has_room(when: &crate::model::TriggerWhen, under_way: usize, max: u32) -> boo
     }
 }
 
-/// **Whether a trigger's condition lets it file a task** — fewer than `below` tasks of the automation's
-/// project (`project_id`) matching its filter. One with no condition always does.
-fn condition_holds(conn: &Connection, project_id: i64, trigger: &crate::model::AutomationTrigger) -> Result<bool> {
-    let Some(condition) = &trigger.condition else { return Ok(true) };
-    let matched = crate::query::count(conn, crate::reach::Reach::binding(project_id), &condition.filter)?;
-    Ok(matched < condition.below as usize)
+/// **The tasks a trigger's condition counts, as they stand now** ([`crate::model::TriggerCondition`]):
+/// how many of the automation's tasks match it, and the count it files a task below.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct ConditionCount {
+    /// The tasks of the automation's project that match its filter — and, where it names a role, are
+    /// worked under that role.
+    pub matched: usize,
+    /// It files a task only while `matched` is below this.
+    pub below: u32,
+}
+
+impl ConditionCount {
+    /// Whether the condition lets the trigger file a task: fewer than `below` match.
+    pub fn holds(&self) -> bool {
+        self.matched < self.below as usize
+    }
+}
+
+/// **Why a trigger files no task now** ([`TriggerCheck::held`]) — the first of these, in this order,
+/// that holds it back. None of them is written down anywhere: a time a trigger decides no leaves
+/// nothing ([`fire`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TriggerHeld {
+    /// It is not enabled.
+    Disabled,
+    /// Its automation starts no run: it is archived, stopped, or kept for export only.
+    NotStartable,
+    /// The automation's launch standing is paused.
+    Paused,
+    /// Its condition does not hold: as many tasks as it says, or more, match.
+    Condition,
+    /// It is not asked again before `next_at` — a minute after it was written or last filed one, or
+    /// for an `every`, its minutes.
+    NotYet { next_at: Timestamp },
+    /// The automation's runs under way leave it no room ([`has_room`]): an `idle` waits until none is,
+    /// the others while `under_way` is as many as `max`.
+    NoRoom { under_way: usize, max: u32 },
+}
+
+/// **The first thing that holds `trigger` back at `now`** ([`TriggerHeld`]), or `None` where nothing
+/// does — `under_way` being its automation's runs under way and `paused` whether its launch standing is
+/// paused. Its condition is weighed only where it is handed counted: `None` leaves it out, for a reader
+/// that counts the tasks only once nothing cheaper has said no.
+fn held(
+    automation: &Automation,
+    trigger: &crate::model::AutomationTrigger,
+    under_way: usize,
+    paused: bool,
+    condition: Option<&ConditionCount>,
+    now: Timestamp,
+) -> Option<TriggerHeld> {
+    if !trigger.enabled {
+        Some(TriggerHeld::Disabled)
+    } else if automation.archived || automation.stopped || automation.export_only {
+        Some(TriggerHeld::NotStartable)
+    } else if paused {
+        Some(TriggerHeld::Paused)
+    } else if condition.is_some_and(|condition| !condition.holds()) {
+        Some(TriggerHeld::Condition)
+    } else if now < trigger.next_at {
+        Some(TriggerHeld::NotYet { next_at: trigger.next_at })
+    } else if !has_room(&trigger.when, under_way, automation.max_concurrent_runs) {
+        Some(TriggerHeld::NoRoom { under_way, max: automation.max_concurrent_runs })
+    } else {
+        None
+    }
+}
+
+/// **Count the tasks a trigger's condition looks at** (`project_id` being its automation's) — `None`
+/// where it has no condition.
+fn condition_count(
+    conn: &Connection,
+    project_id: i64,
+    trigger: &crate::model::AutomationTrigger,
+) -> Result<Option<ConditionCount>> {
+    let Some(condition) = &trigger.condition else { return Ok(None) };
+    let roles: Vec<i64> = condition.role_id.into_iter().collect();
+    let matched = crate::query::count(conn, crate::reach::Reach::binding(project_id), &condition.filter, &roles)?;
+    Ok(Some(ConditionCount { matched, below: condition.below }))
+}
+
+/// **Whether a trigger would file a task now, and what holds it back** ([`trigger_check`]) — what a
+/// person setting one up reads beside it: how many tasks its condition counts, and why it waits.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct TriggerCheck {
+    pub trigger_id: i64,
+    /// The tasks its condition counts now — `None` where it has no condition.
+    pub condition: Option<ConditionCount>,
+    /// What holds it back now — `None` where nothing does, and it would file a task on the next look,
+    /// its programs saying so where it has any.
+    pub held: Option<TriggerHeld>,
+    /// Whether it runs programs before it files one ([`TriggerScripts::of`]) — which this does not run.
+    pub runs_programs: bool,
+}
+
+/// **Ask one trigger whether it would file a task at `now`, writing nothing** — every part [`fire`]
+/// asks but its programs: whether it is enabled, whether its automation starts a run, whether the
+/// launch standing is paused, how many tasks its condition counts, whether it is due, and whether the
+/// runs under way leave it room. Its programs may run for hours, so they are left to [`trigger_try`].
+pub fn trigger_check(conn: &Connection, trigger_id: i64, now: Timestamp) -> Result<TriggerCheck> {
+    let trigger = read::automation_trigger(conn, trigger_id)?.ok_or_else(|| not_found("automation trigger", trigger_id))?;
+    let automation =
+        read::automation(conn, trigger.automation_id)?.ok_or_else(|| not_found("automation", trigger.automation_id))?;
+    let under_way = read::automation_run_ids_under_way(conn, automation.id)?.len();
+    let paused = launch_paused(conn, automation.id)?;
+    let condition = condition_count(conn, automation.project_id, &trigger)?;
+    Ok(TriggerCheck {
+        trigger_id,
+        held: held(&automation, &trigger, under_way, paused, condition.as_ref(), now),
+        condition,
+        runs_programs: TriggerScripts::of(&trigger).is_some(),
+    })
+}
+
+/// **What a trigger's own parts said, tried now** ([`trigger_try`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TriggerTried {
+    /// Its condition does not hold, so nothing further was asked.
+    Condition,
+    /// The program it asks first said not to file one.
+    ProgramSaidNo,
+    /// It could say nothing that can be filed — a program said neither, or the file could not be read
+    /// — `why` in a sentence.
+    SaidNothing { why: String },
+    /// It would file a task saying this.
+    Files { title: String, notes: String },
+}
+
+/// **Try a trigger, filing nothing** — its condition as `check` counted it ([`trigger_check`]), then
+/// the program it asks first, then what the task would say: the title and notes written on it, the file
+/// read now ([`task_from_file`]), or what its program writes ([`ask_trigger`]). It answers whether the
+/// trigger's own parts would file a task now, and with what, leaving out what holds it back from
+/// outside them (`check.held`, which the caller reads beside it), so a trigger written a moment ago
+/// can be tried before it is first due. Its programs run as a look runs them, stopped at their timeout
+/// or once `stop` answers `true`, so it is run outside any write; it writes nothing to the store.
+pub fn trigger_try(
+    trigger: &crate::model::AutomationTrigger,
+    check: &TriggerCheck,
+    stop: impl FnMut() -> bool,
+) -> TriggerTried {
+    if check.condition.is_some_and(|condition| !condition.holds()) {
+        return TriggerTried::Condition;
+    }
+    let said = match TriggerScripts::of(trigger) {
+        None => None,
+        Some(scripts) => match ask_trigger(&scripts, stop) {
+            Ok(Some(said)) => Some(said),
+            Ok(None) => return TriggerTried::ProgramSaidNo,
+            Err(why) => return TriggerTried::SaidNothing { why },
+        },
+    };
+    let (title, notes) = match &trigger.task {
+        crate::model::TriggerTask::Fixed { title, notes } => (title.clone(), notes.clone()),
+        crate::model::TriggerTask::File { path } => match task_from_file(path) {
+            Ok(said) => said,
+            Err(why) => return TriggerTried::SaidNothing { why },
+        },
+        crate::model::TriggerTask::Script { .. } => match said.and_then(|said| said.wrote) {
+            Some(wrote) => wrote,
+            None => return TriggerTried::SaidNothing { why: "the program that writes the task wrote nothing".into() },
+        },
+    };
+    TriggerTried::Files { title, notes }
 }
 
 /// The version of the `output.json` a trigger's script writes.

@@ -554,13 +554,16 @@ pub(super) fn automation_trigger_row(r: &Row) -> rusqlite::Result<AutomationTrig
         ("script", None) => TriggerWhen::Script,
         (kind, minutes) => return Err(bad(format!("bad trigger when {kind:?} with minutes {minutes:?}"))),
     };
-    let condition = match (get(r, C.condition_filter)?, get(r, C.condition_below)?) {
-        (None, None) => None,
-        (Some(filter), Some(below)) => Some(TriggerCondition {
+    let condition = match (get(r, C.condition_filter)?, get(r, C.condition_below)?, get(r, C.condition_role_id)?) {
+        (None, None, None) => None,
+        (Some(filter), Some(below), role_id) => Some(TriggerCondition {
             filter,
+            role_id,
             below: u32::try_from(below).map_err(|_| bad(format!("bad condition_below {below}")))?,
         }),
-        (filter, below) => return Err(bad(format!("bad trigger condition {filter:?} below {below:?}"))),
+        (filter, below, role_id) => {
+            return Err(bad(format!("bad trigger condition {filter:?} below {below:?} role {role_id:?}")))
+        }
     };
     if when == TriggerWhen::Tasks && condition.is_none() {
         return Err(bad("a tasks trigger with no condition".to_string()));

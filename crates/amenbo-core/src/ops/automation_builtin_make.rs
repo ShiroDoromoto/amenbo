@@ -92,7 +92,8 @@ pub const DECISIONS: &str = "リンクする決定";
 /// The setting that names the folder it is worked in — one of this project's linked folders. Left
 /// empty, it is the project's one folder, if it has just one ([`folder`]).
 pub const FOLDER: &str = "作業フォルダ";
-/// The setting that says who it is given to.
+/// The setting that says who it is given to. Left at its "none", a task a trigger files is the AI's all the
+/// same: nobody asked for it by hand, and it is worked in a round of this automation.
 pub const ASSIGNEE: &str = "担当";
 /// The setting that says how urgent it is.
 pub const PRIORITY: &str = "優先度";
@@ -210,9 +211,13 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     }
     with_time_axis(conn, project_id, &mut values)?;
     refusal(carry, &values, if takes { &depends_on } else { &[] })?;
+    // A task a trigger files is one nobody asked for by hand, worked in a round of this automation, so
+    // it is the AI's where the setting gives it to nobody.
+    let by_trigger = handed.as_ref().is_some_and(|h| h.trigger.is_some());
     let assignee = match choice(carry, ASSIGNEE)?.as_deref() {
         Some(HUMAN) => Some(ActorKind::Human),
         Some(AI) => Some(ActorKind::Ai),
+        _ if by_trigger => Some(ActorKind::Ai),
         _ => None,
     };
     let priority = match choice(carry, PRIORITY)?.as_deref() {
@@ -1966,6 +1971,7 @@ mod tests {
             let run = fire(tx, trigger_id, &by, kept.next_at, None).expect("fire").expect("a run");
             let filed = filed_first(tx, &run, &make);
             assert_eq!(filed.role_id, Some(role.id), "filed under the trigger's role");
+            assert_eq!(filed.assignee_kind, Some(ActorKind::Ai), "the AI's, the entry giving it to nobody");
             let lines = named(tx);
             assert_eq!(lines.len(), 1, "one line: {lines:?}");
             assert_eq!(lines[0].task, Some(filed.id));
@@ -2049,7 +2055,7 @@ mod tests {
                 name: String::new(),
                 role_id: None,
                 when: TriggerWhen::Tasks,
-                condition: Some(TriggerCondition { filter: "status:todo".into(), below: 2 }),
+                condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "足りなければ起こす".into(), notes: String::new() },
             };
@@ -2089,6 +2095,142 @@ mod tests {
             assert!(triggers_due(tx.conn(), due).expect("ask").due.is_empty(), "due on the clock, but two todo");
             assert!(fire(tx, trigger_id, &by, due, None).expect("fire").is_none());
             assert_eq!(next_at(tx), due);
+        });
+    }
+
+    /// A task of `project` worked under `role_id`, its creation finished.
+    fn mk_task_under(tx: &WriteTx<'_>, title: &str, project: i64, role_id: i64) -> i64 {
+        let new = NewTask {
+            title: title.into(),
+            project_id: Some(project),
+            due: None,
+            start: None,
+            priority: None,
+            notes: String::new(),
+            created_by_kind: None,
+            at_binding_id: None,
+            role_id: Some(role_id),
+            made_in: None,
+        };
+        let added = task::add(tx, new).expect("a task");
+        task::finish_creating(tx, added.id, ActorKind::Ai).expect("finished").id
+    }
+
+    /// **A condition that names a role counts only the tasks worked under it** — "fewer than 2 todo
+    /// under this role" holds with one there, however many another role has. A role of another automation
+    /// is refused, and once the role goes, the condition counts every role's tasks again.
+    #[test]
+    fn a_condition_naming_a_role_counts_only_the_tasks_worked_under_it() {
+        use crate::model::{TriggerCondition, TriggerWhen};
+        use crate::ops::automation_run::{trigger_check, ConditionCount};
+        with_tx(|tx| {
+            let (automation, _, project) = entry(tx);
+            let new_role = |name: &str| automation::NewRole { name: name.into(), ..Default::default() };
+            let research = automation::role_add(tx, automation.id, new_role("調査係")).expect("a role");
+            let design = automation::role_add(tx, automation.id, new_role("設計係")).expect("another");
+            mk_task_under(tx, "調べる", project, research.id);
+            mk_task_under(tx, "描く", project, design.id);
+            mk_task_under(tx, "もう一枚描く", project, design.id);
+            let trigger = |counted: Option<i64>| automation::NewTrigger {
+                name: "調査の残りを補う".into(),
+                role_id: Some(research.id),
+                when: TriggerWhen::Tasks,
+                condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: counted, below: 2 }),
+                script: None,
+                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: String::new() },
+            };
+
+            let other = automation::add(
+                tx,
+                project,
+                NewAutomation { name: "other".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() },
+            )
+            .expect("another automation");
+            let theirs = automation::role_add(tx, other.id, new_role("保守係")).expect("their role");
+            let refused = automation::trigger_set(tx, automation.id, Some(trigger(Some(theirs.id))));
+            assert!(matches!(refused, Err(Error::Invalid(_))), "another automation's role is refused: {refused:?}");
+
+            let set = automation::trigger_set(tx, automation.id, Some(trigger(Some(research.id)))).expect("trigger");
+            let written = set.triggers[0].clone();
+            let kept = read::automation_trigger(tx.conn(), written.id).expect("read").expect("there");
+            assert_eq!(kept.condition.as_ref().and_then(|c| c.role_id), Some(research.id), "read back as written");
+            let counted = |tx: &WriteTx<'_>| trigger_check(tx.conn(), written.id, kept.next_at).expect("check").condition;
+            assert_eq!(counted(tx), Some(ConditionCount { matched: 1, below: 2 }), "only 調査係's todo");
+
+            let everyone = automation::trigger_set(tx, automation.id, Some(trigger(None))).expect("every role");
+            let check = trigger_check(tx.conn(), everyone.triggers[0].id, everyone.triggers[0].next_at).expect("check");
+            assert_eq!(check.condition, Some(ConditionCount { matched: 3, below: 2 }), "every role's todo");
+
+            let set = automation::trigger_set(tx, automation.id, Some(trigger(Some(research.id)))).expect("trigger");
+            let id = set.triggers[0].id;
+            automation::role_delete(tx, research.id).expect("the role goes");
+            let after = read::automation_trigger(tx.conn(), id).expect("read").expect("there");
+            assert_eq!(after.role_id, None, "it files its task under no role");
+            assert_eq!(after.condition.as_ref().map(|c| c.role_id), Some(None), "and counts every role's tasks");
+            assert_eq!(after.condition.as_ref().map(|c| c.below), Some(2), "below the same count");
+        });
+    }
+
+    /// **A trigger is checked and tried without anything written** — the check counts its condition and
+    /// says what holds it back now: not due yet, then no room while a run is under way, and nothing once
+    /// it is due with room; a trigger not enabled is held back by that first. Trying it says what the
+    /// task would say, or that the condition does not hold, and files nothing.
+    #[test]
+    fn a_trigger_is_checked_and_tried_without_anything_written() {
+        use crate::model::{AutomationTrigger, TriggerCondition, TriggerWhen};
+        use crate::ops::automation_run::{trigger_check, trigger_try, ConditionCount, TriggerHeld, TriggerTried};
+        use crate::ops::test_support::mk_task_in;
+        use crate::time::Timestamp;
+        with_tx(|tx| {
+            let (automation, _, project) = entry(tx);
+            let trigger = automation::NewTrigger {
+                name: "調査の残りを補う".into(),
+                role_id: None,
+                when: TriggerWhen::Idle,
+                condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
+                script: None,
+                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into() },
+            };
+            let written = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].clone();
+            mk_task_in(tx, "待っている", Some(project));
+            let check = |tx: &WriteTx<'_>, at: Timestamp| trigger_check(tx.conn(), written.id, at).expect("check");
+            let early = Timestamp(written.next_at.0 - chrono::Duration::seconds(1));
+
+            let now = check(tx, early);
+            assert_eq!(now.condition, Some(ConditionCount { matched: 1, below: 2 }));
+            assert_eq!(now.held, Some(TriggerHeld::NotYet { next_at: written.next_at }), "written a moment ago");
+            assert!(!now.runs_programs);
+            let tried = trigger_try(&written, &now, || false);
+            assert_eq!(
+                tried,
+                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into() },
+                "tried before it is first due",
+            );
+            assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty(), "no run");
+
+            assert_eq!(check(tx, written.next_at).held, None, "due, with no run under way");
+            let run = launch_with(tx, &automation, &titled("人が渡した")).expect("a run");
+            assert_eq!(
+                check(tx, written.next_at).held,
+                Some(TriggerHeld::NoRoom { under_way: 1, max: automation.max_concurrent_runs }),
+                "an idle waits for no run to be under way",
+            );
+            assert_eq!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read"), vec![run.id]);
+
+            mk_task_in(tx, "もう一つ", Some(project));
+            let full = check(tx, written.next_at);
+            assert_eq!(full.condition.map(|c| c.holds()), Some(false), "two todo, not below 2 — the run's own task is in progress");
+            assert_eq!(full.held, Some(TriggerHeld::Condition), "the condition before the room");
+            assert_eq!(trigger_try(&written, &full, || false), TriggerTried::Condition);
+
+            let off = AutomationTrigger { enabled: false, ..written.clone() };
+            crate::ops::emit_update(
+                tx,
+                crate::store_engine::record::automation_trigger(&written),
+                crate::store_engine::record::automation_trigger(&off),
+            )
+            .expect("switched off");
+            assert_eq!(check(tx, written.next_at).held, Some(TriggerHeld::Disabled));
         });
     }
 

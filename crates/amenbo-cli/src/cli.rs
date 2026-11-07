@@ -1926,6 +1926,11 @@ pub enum AutomationCmd {
         /// how few tasks matching --if-tasks let it file one (1 or more)
         #[arg(long, value_name = "N", requires = "if_tasks", value_parser = clap::value_parser!(u32).range(1..))]
         fewer_than: Option<u32>,
+        /// count only the tasks matching --if-tasks that are worked under this role — the id
+        /// `automation role-list` shows, of one of this automation's own roles. Left out, it counts them
+        /// whatever their role
+        #[arg(long, value_name = "ROLE_ID", requires = "if_tasks")]
+        if_tasks_role: Option<i64>,
         /// file a task only once this program, by its full path, says so: it writes
         /// {"version":1,"file":true} (or false) to the file named in AMENBO_OUTPUT, and its exit code says
         /// only whether it ran to the end. On its own, with no --every, --when-idle or --if-tasks, it is
@@ -1973,7 +1978,7 @@ pub enum AutomationCmd {
         #[arg(long, value_name = "ROLE_ID")]
         role: Option<i64>,
         /// take the trigger away
-        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
+        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "if_tasks_role", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
         off: bool,
     },
     /// Stop an automation from starting new rounds, or let it start them again with --off. While it is

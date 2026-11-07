@@ -426,6 +426,11 @@ pub struct Task {
     /// it. `None` is a task with no role, which is every task unless someone named one.
     #[serde(default)]
     pub role_id: Option<i64>,
+    /// The step execution of an automation run this task was filed in ([`AutomationRunStep`]), by its
+    /// id — which run it was is read off that step. `None` is every task filed outside a run. Written at
+    /// the create and never rewritten.
+    #[serde(default)]
+    pub made_in_run_step_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -1752,18 +1757,16 @@ pub const DEFAULT_EXPECTED_MINUTES: i64 = 10;
 /// The longest a step's expected time may be written as, in minutes: six hours, as a script's timeout.
 pub const MAX_EXPECTED_MINUTES: i64 = 360;
 
-/// How many runs of an automation may be going at once when nobody has said otherwise: one.
-pub const DEFAULT_MAX_CONCURRENT_RUNS: u32 = 1;
+/// How many a role of an automation has when nobody has said otherwise: one ([`AutomationRole::headcount`]).
+pub const DEFAULT_ROLE_HEADCOUNT: u32 = 1;
 
-/// **The most an automation's `max_concurrent_runs` may be written as.** Every run going at once holds
-/// an agent's terminal open in the app, and with no cap the terminals pile up until the app stops
-/// answering. The number is a placeholder, not a measurement: nobody has yet measured how many
-/// terminals the app keeps answering with. The store's `CHECK` on `automation.max_concurrent_runs`
-/// spells the same number (`store_engine::schema`).
-pub const MAX_CONCURRENT_RUNS_LIMIT: u32 = 4;
+/// **The most a role's headcount may be written as** ([`AutomationRole::headcount`]). It is there to
+/// turn away a number that cannot be meant, and it is checked where the headcount is written
+/// (`ops::automation`), not by the store, so changing it needs no migration.
+pub const MAX_ROLE_HEADCOUNT: u32 = 10;
 
-fn default_max_concurrent_runs() -> u32 {
-    DEFAULT_MAX_CONCURRENT_RUNS
+fn default_role_headcount() -> u32 {
+    DEFAULT_ROLE_HEADCOUNT
 }
 
 /// **The action itself, standing on its own picture** — what an [`AutomationWire`] names at the end
@@ -1853,14 +1856,9 @@ pub struct Automation {
     pub entry_placement_id: Option<i64>,
     #[serde(default)]
     pub archived: bool,
-    /// How many runs of this automation may be going at once: from 1 up to
-    /// [`MAX_CONCURRENT_RUNS_LIMIT`], [`DEFAULT_MAX_CONCURRENT_RUNS`] until somebody changes it. There
-    /// is no "no limit". Like `archived`, it is the automation's, not part of a saved version.
-    #[serde(default = "default_max_concurrent_runs")]
-    pub max_concurrent_runs: u32,
     /// **Where a round that fails is filed** — a person, or one of this automation's own roles. `None`
     /// while nobody has said; launching without one is refused at the launch check, as launching with
-    /// no entry is. Like `max_concurrent_runs`, it is the automation's, not part of a saved version.
+    /// no entry is. Like `archived`, it is the automation's, not part of a saved version.
     #[serde(default)]
     pub failures_to: Option<FailuresTo>,
     /// **A definition from before automations had roles, kept only to be written out.** Set on every
@@ -1984,8 +1982,8 @@ pub enum TriggerWhen {
     /// Every `minutes` minutes, counted from when the trigger was written and then from each task it
     /// filed.
     Every { minutes: u32 },
-    /// Whenever the automation has no run under way (`running` or `paused`) — counted, like
-    /// `max_concurrent_runs`, over every run of it, whoever started it. It still waits
+    /// Whenever the automation has no run under way (`running` or `paused`) — counted, like the most
+    /// runs it may have going, over every run of it, whoever started it. It still waits
     /// [`MIN_TRIGGER_EVERY_MINUTES`] after it is written and after each task it files, so a run that
     /// ends at once is not followed by another on every look.
     Idle,
@@ -2201,11 +2199,16 @@ pub struct AutomationPlacementStep {
 /// ([`crate::ops::automation_run::Launcher::default_agent`]). A placement more than one round reaches
 /// takes the first of those roles in the order they are defined in. `model` is named only beside an
 /// agent and comes with it, and `None` leaves the agent's own default.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AutomationRole {
     pub id: i64,
     pub automation_id: i64,
     pub name: String,
+    /// **How many are in it** — how many tasks under this role may be under way at once. From 1 up
+    /// to [`MAX_ROLE_HEADCOUNT`], [`DEFAULT_ROLE_HEADCOUNT`] until somebody changes it. It is part of
+    /// the role, so a saved version keeps it; one saved without it reads as the default.
+    #[serde(default = "default_role_headcount")]
+    pub headcount: u32,
     /// The icon it is drawn with, by the name the GUI knows it under, or `None` for none chosen.
     #[serde(default)]
     pub icon: Option<String>,
@@ -2222,6 +2225,24 @@ pub struct AutomationRole {
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+impl Default for AutomationRole {
+    fn default() -> Self {
+        AutomationRole {
+            id: 0,
+            automation_id: 0,
+            name: String::new(),
+            headcount: DEFAULT_ROLE_HEADCOUNT,
+            icon: None,
+            entry_placement_id: None,
+            agent: None,
+            model: None,
+            order_key: String::new(),
+            created_at: Timestamp::default(),
+            updated_at: Timestamp::default(),
+        }
+    }
 }
 
 /// **A setting, declared by an action and answered where it is placed.** The action's row is the
@@ -2411,7 +2432,7 @@ pub struct AutomationVersion {
 /// Where one launch of an automation stands — the runs it started side by side, taken together
 /// ([`AutomationLaunch`]).
 ///
-/// `Running` keeps its runs topped up to the automation's `max_concurrent_runs` while there are tasks
+/// `Running` keeps its runs topped up to the automation's headcount while there are tasks
 /// to take. `Paused` starts no run: a person paused it, and each run under way was asked to pause too.
 /// `Ended` is over — no run of it is under way and none is started in it again.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -2444,11 +2465,11 @@ impl AutomationLaunchStatus {
 
 /// **One launch of an automation — the runs it starts side by side, taken as one.**
 ///
-/// A person launches an automation once, and the launch runs up to the automation's
-/// `max_concurrent_runs` at once while there are tasks to take: where one run ends, the next is started
-/// in the same launch ([`crate::ops::automation_run::top_up`]). A run one of its triggers starts, or one started
-/// once a task turns up for an automation waiting on one, joins the launch standing; where none is
-/// standing, it opens one. An automation has at most one launch that has not ended.
+/// A person launches an automation once, and the launch runs up to the automation's headcount
+/// ([`crate::ops::automation_run::headcount`]) at once while there are tasks to take: where one run
+/// ends, the next is started in the same launch ([`crate::ops::automation_run::top_up`]). A run one
+/// of its triggers starts, or one started once a task turns up for an automation waiting on one, joins
+/// the launch standing; where none is standing, it opens one. An automation has at most one launch that has not ended.
 ///
 /// Pausing, picking up and stopping a launch acts on each run under way in it
 /// ([`crate::ops::automation_stop::pause_launch`] and the ops beside it). It ends once no run of it is
@@ -2474,7 +2495,7 @@ pub struct AutomationLaunch {
 /// Where one run of one automation stands (`AMB-D-955`).
 ///
 /// `Running` is where every launch begins, so a launch never waits (`AMB-D-947`): one past the
-/// automation's `max_concurrent_runs` is refused rather than queued. `Paused` keeps the place. The
+/// automation's headcount is refused rather than queued. `Paused` keeps the place. The
 /// three ends say what happened rather than how it was reached: `Completed` is the picture run out —
 /// for a run that goes round once per task, the entry finding no task left to take — `Failed` is a run
 /// that could not get there, and `Canceled` is a person who said stop.

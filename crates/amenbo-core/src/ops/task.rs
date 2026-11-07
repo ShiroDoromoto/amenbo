@@ -84,6 +84,10 @@ pub struct NewTask {
     /// The role this task is worked under, by its id — one of the roles an automation of the task's own
     /// project defines. Left unset, the task has no role.
     pub role_id: Option<i64>,
+    /// The step execution of an automation run this was filed in, or `None` for a task filed outside
+    /// every run. Stated by the caller for the reason `made_in` is. An id that names no step is
+    /// written as `None`: it came off an environment this store did not set.
+    pub made_in_run_step_id: Option<i64>,
 }
 
 /// Create a task. **There are two read-then-writes here** — the conversational sequence number
@@ -115,6 +119,12 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
     };
 
     checked_role(tx, project_id, input.role_id)?;
+    // A step that is not there is dropped rather than refused: filing a task inside a step is never
+    // refused (`AMB-D-1011`), and an id the environment carried from another store's run must not stop it.
+    let made_in_run_step_id = match input.made_in_run_step_id {
+        Some(step) if read::automation_run_step(tx.conn(), step)?.is_some() => Some(step),
+        _ => None,
+    };
 
     let task = Task {
         id,
@@ -139,6 +149,7 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
         order_key,
         at_binding_id: input.at_binding_id,
         role_id: input.role_id,
+        made_in_run_step_id,
         created_at: now,
         updated_at: now,
     };
@@ -752,6 +763,7 @@ mod tests {
                 created_by_kind: None,
                 at_binding_id: None,
                 role_id: None,
+                made_in_run_step_id: None,
                 made_in: None,
             },
         )
@@ -797,6 +809,7 @@ mod tests {
                     created_by_kind: None,
                     at_binding_id: None,
                     role_id: None,
+                    made_in_run_step_id: None,
                     made_in: None,
                 },
             )
@@ -1518,6 +1531,7 @@ mod tests {
                         created_by_kind: None,
                         at_binding_id: None,
                         role_id: None,
+                        made_in_run_step_id: None,
                         made_in: None,
                     },
                 )
@@ -1597,6 +1611,7 @@ mod tests {
                         created_by_kind: None,
                         at_binding_id: None,
                         role_id: None,
+                        made_in_run_step_id: None,
                         made_in: None,
                     },
                 )
@@ -1646,6 +1661,7 @@ mod tests {
                 created_by_kind: None,
                 at_binding_id: None,
                 role_id: None,
+                made_in_run_step_id: None,
                 made_in: None,
             },
         )
@@ -1757,6 +1773,7 @@ mod tests {
                         created_by_kind: None,
                         at_binding_id: None,
                         role_id: None,
+                        made_in_run_step_id: None,
                         made_in: None,
                     },
                 )
@@ -1795,6 +1812,7 @@ mod tests {
                     created_by_kind: None,
                     at_binding_id: None,
                     role_id: None,
+                    made_in_run_step_id: None,
                     made_in: None,
                 },
             )
@@ -1942,6 +1960,7 @@ mod tests {
                 created_by_kind: None,
                 at_binding_id: None,
                 role_id: None,
+                made_in_run_step_id: None,
                 made_in: Some(MadeIn {
                     pane: pane.to_string(),
                     pane_name: Some("移行を書いている窓".into()),

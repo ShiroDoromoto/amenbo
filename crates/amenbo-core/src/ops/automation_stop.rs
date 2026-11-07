@@ -363,6 +363,7 @@ fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &
             at_binding_id: None,
             made_in: None,
             role_id,
+            made_in_run_step_id: None,
         },
     )?;
     if let Some(project_id) = project_id {
@@ -1532,7 +1533,7 @@ mod tests {
             )
             .expect("a role");
             let to = Some(Some(crate::model::FailuresTo::Role { role_id: role.id }));
-            automation::update(tx, p.automation.id, None, None, None, None, to).expect("to the role");
+            automation::update(tx, p.automation.id, None, None, None, to).expect("to the role");
             let run = a_run(tx, &p.automation);
             let first = opened(tx, &run, &p.first);
             let task = a_task_in_hand(tx, p.project, first.run_step.id);

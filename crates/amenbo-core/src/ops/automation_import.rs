@@ -132,6 +132,7 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         let entry_placement_id = role.entry.map(|place| at(place).map(|p| p.id)).transpose()?;
         let new = NewRole {
             name: role.name.clone(),
+            headcount: None,
             icon: role.icon.clone(),
             entry_placement_id,
             agent: role.agent.clone(),
@@ -368,6 +369,7 @@ mod tests {
         automation::placement_step_set(tx, first.id, step, "claude", Some("opus")).expect("choose");
         let reviewer = NewRole {
             name: "レビュー".into(),
+            headcount: None,
             icon: Some("eye".into()),
             entry_placement_id: Some(second.id),
             agent: Some("codex".into()),

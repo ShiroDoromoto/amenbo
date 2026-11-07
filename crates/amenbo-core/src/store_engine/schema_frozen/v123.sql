@@ -252,7 +252,6 @@ CREATE TABLE IF NOT EXISTS automation (
     notes TEXT NOT NULL DEFAULT '',
     entry_placement_id BIGINT REFERENCES automation_placement(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     archived BOOLEAN NOT NULL DEFAULT 0 CHECK(archived IN (0, 1)),
-    max_concurrent_runs BIGINT NOT NULL DEFAULT 1 CHECK(max_concurrent_runs >= 1 AND max_concurrent_runs <= 4),
     failures_to_kind TEXT CHECK(failures_to_kind IN ('human', 'role')),
     failures_to_role_id BIGINT REFERENCES automation_role(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     export_only BOOLEAN NOT NULL DEFAULT 0 CHECK(export_only IN (0, 1)),
@@ -311,6 +310,7 @@ CREATE TABLE IF NOT EXISTS automation_role (
     agent TEXT,
     model TEXT,
     order_key TEXT NOT NULL DEFAULT '',
+    headcount BIGINT NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
@@ -530,7 +530,6 @@ CREATE TABLE IF NOT EXISTS automation_run_step (
     status TEXT NOT NULL DEFAULT '' CHECK(status IN ('', 'running', 'done', 'failed', 'stopped')),
     started_at TEXT CHECK(started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-    exit_code BIGINT,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );

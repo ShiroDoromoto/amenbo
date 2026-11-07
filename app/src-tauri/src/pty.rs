@@ -2498,9 +2498,11 @@ pub fn open_step(
 ///
 /// **No shell is put in front of it.** The program is started by its path and handed its arguments each
 /// as one, with the variables `prepared` names and none of a pane's own: it is no agent, so it has no
-/// session to speak through, no pane to name and no step of its own to report (`STEP_ENV`). Its output
-/// takes the road an agent's does — the run's frame, the same size, the same window — and stdout and
-/// stderr arrive on it as one stream, in the order they were written.
+/// session to speak through, no pane to name and no step of its own to report (`STEP_ENV`). The run and
+/// the step it was started for are among what `prepared` names, for a task it files to say where it was
+/// filed (`amenbo_core::session::RUN_STEP_VAR`). Its output takes the road an agent's does — the run's
+/// frame, the same size, the same window — and stdout and stderr arrive on it as one stream, in the
+/// order they were written.
 ///
 /// **Its ending is the caller's to write down** (`crate::automation`), so nothing is said here when it
 /// ends by itself: `step_program_ended` is for an agent that never reported, and a script never does.

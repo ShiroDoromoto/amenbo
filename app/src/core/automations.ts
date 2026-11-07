@@ -126,21 +126,12 @@ export async function importAutomation(projectId: number, src: string): Promise<
 }
 
 /**
- * The most `maxConcurrentRuns` may be set at — core's `MAX_CONCURRENT_RUNS_LIMIT`
- * (`amenbo_core::model`), which refuses anything past it.
- */
-export const MAX_CONCURRENT_RUNS = 4;
-
-/**
- * **Rename an automation, rewrite its notes, put it out of the way, set how many of its runs may be
- * going at once, or choose who a failed round is filed to.** Only what is passed is written.
+ * **Rename an automation, rewrite its notes, put it out of the way, or choose who a failed round is
+ * filed to.** Only what is passed is written.
  *
  * Archiving takes nothing away and stops nothing already running. It keeps a definition nobody
  * launches any more out of a reader's way, and the row stays in the list with the mark on it —
  * which is what the list draws, rather than dropping the row.
- *
- * `maxConcurrentRuns` is the most at, from 1 up to `MAX_CONCURRENT_RUNS`; left out, it is kept. There
- * is no lifting it. A launch past it is refused rather than queued.
  *
  * `failuresTo` is the person or a role of this automation. There is no choosing nobody: a launch is
  * refused without one, so it only ever moves from one to another.
@@ -151,7 +142,6 @@ export async function editAutomation(
     name?: string;
     notes?: string;
     archived?: boolean;
-    maxConcurrentRuns?: number;
     failuresTo?: AutomationFailuresToDto;
   },
 ): Promise<void> {
@@ -161,7 +151,6 @@ export async function editAutomation(
     name: patch.name ?? null,
     notes: patch.notes ?? null,
     archived: patch.archived ?? null,
-    maxConcurrentRuns: patch.maxConcurrentRuns ?? null,
     failuresTo: patch.failuresTo ?? null,
   });
 }
@@ -1413,8 +1402,8 @@ export async function pauseBeforeNextTask(run: number): Promise<void> {
  * **Pick a paused run up again** — one paused at the end of an action from the way out its last step
  * left through, on the copy it launched with; one paused before its next task from the entry of the
  * automation as it stands now (`AMB-D-1015`). It opens a terminal on the spot rather than waiting
- * (`AMB-D-947`): a paused run already counts toward `max_concurrent_runs`, so picking it up is never
- * refused for it.
+ * (`AMB-D-947`): a paused run already counts toward its automation's roles' headcount, so picking it up is
+ * never refused for it.
  *
  * Refused for a run that is not paused, which is the answer a reader gets rather than nothing
  * happening: the row they pressed was drawn from a picture that has since moved.

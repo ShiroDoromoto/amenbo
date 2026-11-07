@@ -306,6 +306,16 @@ pub(crate) fn made_in(store: &Store) -> Option<MadeIn> {
     Some(made_in)
 }
 
+/// The step of an automation run this command was typed in, as a create takes it, or `None` outside
+/// every run. Read off the environment here and handed to the create, never read inside it
+/// (`AMB-D-897`).
+///
+/// An AI step's terminal names its step in [`amenbo_core::session::STEP_VAR`]. A script step's program is
+/// started without that one, and names its step in [`amenbo_core::session::RUN_STEP_VAR`] instead.
+pub(crate) fn made_in_run_step() -> Option<i64> {
+    env::automation_step().or_else(env::run_step)
+}
+
 /// What the pane `pane` is called, or `None` where the row cannot say.
 ///
 /// **A name that cannot be read costs the name and nothing else**: the id and the way back still go

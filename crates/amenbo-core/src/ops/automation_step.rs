@@ -1331,6 +1331,7 @@ mod tests {
                 at_binding_id: at.filter(|_| at_second),
                 made_in: None,
                 role_id: None,
+                made_in_run_step_id: None,
             },
         )
         .expect("add task")

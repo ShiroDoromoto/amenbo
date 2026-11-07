@@ -564,11 +564,6 @@ export type AutomationDetailDto = { id: number, projectId: number, name: string,
  */
 entryPlacementId?: number, archived: boolean, 
 /**
- * How many runs of it may be going at once, from 1 up to the cap. One launch runs up to it side by
- * side, and a start past it is refused.
- */
-maxConcurrentRuns: number, 
-/**
  * **What files a task on its own and starts a run with it**, every one of the automation's
  * triggers in the order they are written in. Empty for an automation only a person starts.
  */
@@ -924,6 +919,10 @@ export type AutomationPortDto = { name: string, kind: "value" | "file" | "task_t
  * steps fall back to where no step chose one (`AMB-D-960`).
  */
 export type AutomationRoleDto = { id: number, name: string, 
+/**
+ * How many are in it — how many of its tasks may be under way at once, from 1 up to the cap.
+ */
+headcount: number, 
 /**
  * The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
  */

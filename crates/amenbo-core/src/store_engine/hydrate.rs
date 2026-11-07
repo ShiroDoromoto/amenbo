@@ -211,6 +211,7 @@ pub(super) fn task_row(r: &Row) -> rusqlite::Result<Task> {
         order_key: get(r, C.order_key)?,
         at_binding_id: get(r, C.at_binding_id)?,
         role_id: get(r, C.role_id)?,
+        made_in_run_step_id: get(r, C.made_in_run_step_id)?,
         created_at,
         updated_at,
     })
@@ -617,10 +618,6 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         notes: get(r, C.notes)?,
         entry_placement_id: get(r, C.entry_placement_id)?,
         archived: get(r, C.archived)?,
-        max_concurrent_runs: {
-            let n: i64 = get(r, C.max_concurrent_runs)?;
-            u32::try_from(n).map_err(|_| bad(format!("bad max_concurrent_runs {n}")))?
-        },
         failures_to: failures_to(get(r, C.failures_to_kind)?, get(r, C.failures_to_role_id)?)?,
         export_only: get(r, C.export_only)?,
         triggers: Vec::new(),
@@ -672,6 +669,10 @@ pub(super) fn automation_role_row(r: &Row) -> rusqlite::Result<AutomationRole> {
         agent: get(r, C.agent)?,
         model: get(r, C.model)?,
         order_key: get(r, C.order_key)?,
+        headcount: {
+            let n: i64 = get(r, C.headcount)?;
+            u32::try_from(n).map_err(|_| bad(format!("bad headcount {n}")))?
+        },
         created_at,
         updated_at,
     })
@@ -1121,6 +1122,7 @@ mod tests {
                 // Left `None`: a `Database` carries no automation, so there is no role here for the key to
                 // name. The column is round-tripped by the ops tests, against a role that exists.
                 role_id: None,
+                made_in_run_step_id: None,
                 created_at: now,
                 updated_at: now,
             }],

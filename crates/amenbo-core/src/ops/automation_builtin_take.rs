@@ -1333,14 +1333,15 @@ mod tests {
 
     /// **One launch keeps its runs going side by side, up to its most, while there are tasks to take.**
     /// A run is added only once every run of the launch has taken its task, it joins the same launch
-    /// and is started by whoever pressed it, and a most raised while the launch runs makes room at once.
+    /// and is started by whoever pressed it, and a headcount raised and saved while the launch runs
+    /// makes room at once.
     #[test]
     fn one_launch_tops_up_to_its_most_while_there_are_tasks() {
         use crate::ops::automation_run::{launches_to_top_up, top_up};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = picture(tx, project);
-            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
+            crate::ops::test_support::room_for(tx, automation.id, 2);
             for title in ["one", "two", "three", "four"] {
                 for_ai(tx, title, project, None);
             }
@@ -1362,7 +1363,7 @@ mod tests {
             assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(), "two is its most");
             assert!(top_up(tx, launch, &launcher()).expect("top up").is_none(), "nothing is written");
 
-            automation::update(tx, automation.id, None, None, None, Some(3), None).expect("room for three");
+            crate::ops::test_support::room_for(tx, automation.id, 3);
             let third = top_up(tx, launch, &launcher()).expect("top up").expect("a third run");
             assert_eq!(third.launch_id, Some(launch));
             assert_eq!(
@@ -1380,7 +1381,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = picture(tx, project);
-            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
+            crate::ops::test_support::room_for(tx, automation.id, 2);
 
             let run = launched(tx, &automation);
             let launch = run.launch_id.expect("a launch");
@@ -1440,7 +1441,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
             let to = Some(Some(FailuresTo::Role { role_id: reviewer }));
-            automation::update(tx, automation.id, None, None, None, None, to).expect("to the reviewer");
+            automation::update(tx, automation.id, None, None, None, to).expect("to the reviewer");
             let built = for_ai(tx, "to build", project, None);
             under(tx, built, builder);
 
@@ -1517,7 +1518,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = picture(tx, project);
-            automation::update(tx, automation.id, None, None, None, Some(3), None).expect("room for three");
+            crate::ops::test_support::room_for(tx, automation.id, 3);
             let tasks: Vec<i64> = ["one", "two", "three"].iter().map(|t| for_ai(tx, t, project, None)).collect();
 
             let first = launched(tx, &automation);

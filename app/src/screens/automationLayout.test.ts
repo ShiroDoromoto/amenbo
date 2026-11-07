@@ -86,7 +86,6 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     name: "Morning round",
     notes: "",
     archived: false,
-    maxConcurrentRuns: 1,
     triggers: [],
     roles: [],
     placements: [],
@@ -2285,10 +2284,10 @@ describe("one role's round, as the build screen draws it", () => {
   // Research hands Design its task; Design writes, checks, goes back to writing on "again", and hands
   // Build the rest. What Design writes takes the notes Research wrote, by a wire from its box.
   const roles = [
-    { id: 10, name: "Research", entryPlacementId: 1, passes: [] },
-    { id: 20, name: "Design", entryPlacementId: 2, passes: [] },
-    { id: 30, name: "Build", entryPlacementId: 5, passes: [] },
-    { id: 40, name: "Upkeep", passes: [] },
+    { id: 10, name: "Research", headcount: 1, entryPlacementId: 1, passes: [] },
+    { id: 20, name: "Design", headcount: 1, entryPlacementId: 2, passes: [] },
+    { id: 30, name: "Build", headcount: 1, entryPlacementId: 5, passes: [] },
+    { id: 40, name: "Upkeep", headcount: 1, passes: [] },
   ];
   const automation: AutomationDetailDto = {
     id: 7,
@@ -2297,7 +2296,6 @@ describe("one role's round, as the build screen draws it", () => {
     notes: "",
     entryPlacementId: 1,
     archived: false,
-    maxConcurrentRuns: 1,
     triggers: [],
     roles,
     placements: [

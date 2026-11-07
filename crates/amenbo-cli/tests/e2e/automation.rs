@@ -557,39 +557,37 @@ fn the_listing_counts_the_placements_and_keeps_an_archived_one() {
     assert_eq!(after["automations"][0]["automation"]["archived"], serde_json::json!(true));
 }
 
-/// The most runs an automation may have going at once is 1 until `update` sets it, and an update that
-/// leaves it out keeps it. It runs from 1 to the cap: zero and anything past the cap are refused, and
-/// there is no lifting it.
+/// How many are in a role is 1 until it is said, and an update that leaves it out keeps it. It runs
+/// from 1 to the cap: zero and anything past the cap are refused, and the role is left as it was.
 #[test]
-fn an_update_sets_the_most_runs_at_once_between_one_and_the_cap() {
+fn a_role_holds_one_to_the_cap() {
     let cli = Cli::new();
     let (_, a, _, _) = an_automation(&cli);
 
-    let shown = cli.json(&["automation", "show", &a, "--json"]);
-    assert_eq!(shown["automation"]["max_concurrent_runs"], serde_json::json!(1), "one by default: {shown}");
+    let added = cli.json(&["automation", "role-add", &a, "--name", "Alice", "--json"]);
+    let role = id_of(&added, "automation_role");
+    assert_eq!(added["automation_role"]["headcount"], serde_json::json!(1), "one by default: {added}");
     let (text, _) = cli.run(&["automation", "show", &a]);
-    assert!(text.contains("at most 1 run(s) at once"), "{text}");
+    assert!(text.contains(&format!("role {role}  Alice  1 in it")), "{text}");
 
-    let set = cli.json(&["automation", "update", &a, "--max-concurrent-runs", "2", "--json"]);
-    assert_eq!(set["automation"]["max_concurrent_runs"], serde_json::json!(2), "{set}");
-    let (text, _) = cli.run(&["automation", "show", &a]);
-    assert!(text.contains("at most 2 run(s) at once"), "{text}");
+    let set = cli.json(&["automation", "role-update", &role, "--headcount", "2", "--json"]);
+    assert_eq!(set["automation_role"]["headcount"], serde_json::json!(2), "{set}");
+    let kept = cli.json(&["automation", "role-update", &role, "--name", "Bob", "--json"]);
+    assert_eq!(kept["automation_role"]["headcount"], serde_json::json!(2), "{kept}");
 
-    let kept = cli.json(&["automation", "update", &a, "--name", "Renamed", "--json"]);
-    assert_eq!(kept["automation"]["max_concurrent_runs"], serde_json::json!(2), "{kept}");
+    let cap = amenbo_core::model::MAX_ROLE_HEADCOUNT;
+    let capped = cli.json(&["automation", "role-update", &role, "--headcount", &cap.to_string(), "--json"]);
+    assert_eq!(capped["automation_role"]["headcount"], serde_json::json!(cap), "{capped}");
 
-    let cap = amenbo_core::model::MAX_CONCURRENT_RUNS_LIMIT;
-    let capped = cli.json(&["automation", "update", &a, "--max-concurrent-runs", &cap.to_string(), "--json"]);
-    assert_eq!(capped["automation"]["max_concurrent_runs"], serde_json::json!(cap), "{capped}");
-
-    let (_, code) = cli.run_err(&["automation", "update", &a, "--max-concurrent-runs", "0"]);
+    let (_, code) = cli.run_err(&["automation", "role-update", &role, "--headcount", "0"]);
     assert_ne!(code, 0, "zero is refused");
-    let (_, code) = cli.run_err(&["automation", "update", &a, "--max-concurrent-runs", &(cap + 1).to_string()]);
+    let (_, code) = cli.run_err(&["automation", "role-update", &role, "--headcount", &(cap + 1).to_string()]);
     assert_ne!(code, 0, "past the cap is refused");
-    let (_, code) = cli.run_err(&["automation", "update", &a, "--no-max-concurrent-runs"]);
-    assert_ne!(code, 0, "there is no lifting it");
-    let after = cli.json(&["automation", "show", &a, "--json"]);
-    assert_eq!(after["automation"]["max_concurrent_runs"], serde_json::json!(cap), "a refused update changes nothing: {after}");
+    let (_, code) = cli.run_err(&["automation", "role-add", &a, "--name", "Carol", "--headcount", "0"]);
+    assert_ne!(code, 0, "a role is not born with zero");
+    let listed = cli.json(&["automation", "role-list", &a, "--json"]);
+    assert_eq!(listed["count"].as_u64(), Some(1), "{listed}");
+    assert_eq!(listed["roles"][0]["headcount"], serde_json::json!(cap), "a refused update changes nothing: {listed}");
 }
 
 /// `automation stop` stops an automation, `show` says so, and `--off` lets it start new rounds again.
@@ -1338,6 +1336,13 @@ fn saved(cli: &Cli, a: &str) {
     cli.json(&["automation", "save", a, "--json"]);
 }
 
+/// Let the automation have two runs going at once: a role of two, saved, since the runs under way are
+/// measured against its newest saved version.
+fn room_for_two(cli: &Cli, a: &str) {
+    cli.json(&["automation", "role-add", a, "--name", "Alice", "--headcount", "2", "--json"]);
+    saved(cli, a);
+}
+
 /// [`a_launchable`], with the placement of its entry handed back too, and a task for it to take only
 /// where one is asked for.
 fn a_picture(cli: &Cli, with_task: bool) -> (String, String, String, String) {
@@ -1439,7 +1444,7 @@ fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _) = a_saved_launchable(&cli);
-    cli.json(&["automation", "update", &a, "--max-concurrent-runs", "2", "--json"]);
+    room_for_two(&cli, &a);
     let own = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     let other = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     // No watch opens a step here, so the run's first one — the built-in that takes a task — is opened
@@ -1481,6 +1486,51 @@ fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
     }
 
     cli.json(&["automation", "cancel", &own, "--force", "--json"]);
+}
+
+/// **A task filed inside a step says which step it was filed in** — in an AI step's terminal, which
+/// names its step in `AMENBO_AUTOMATION_STEP`, and in a script step's program, which names it in
+/// `AMENBO_RUN_STEP` instead. Filed outside every run, or under a step this store has no row for, it
+/// says none, and the filing is not refused for it.
+#[test]
+fn a_task_filed_inside_a_step_remembers_the_step() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_saved_launchable(&cli);
+    let run: i64 = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run").parse().unwrap();
+    let open = || amenbo_core::Store::open_at(amenbo_core::config::Paths::at(cli.home.clone())).expect("the store");
+    // No watch opens a step here, so the run's first one is opened on the store, as the app's watch would.
+    let step = {
+        let mut store = open();
+        let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| d.entry).expect("an entry");
+        match store.automation_step_open(run, entry.id, None).expect("open") {
+            amenbo_core::ops::automation_step::Opened::Carried { run_step_id, .. } => run_step_id,
+            _ => panic!("the entry takes a task and is carried out"),
+        }
+    };
+    let p = cli.a_project();
+    let step_text = step.to_string();
+    let filed = |env: &[(&str, &str)], title: &str| -> i64 {
+        let t = cli.json_env(env, &["task", "add", "--title", title, "--project", &p, "--json"]);
+        id_str(&t["task"]["id"]).parse().unwrap()
+    };
+    let by_agent = filed(&[("AMENBO_AUTOMATION_STEP", &step_text)], "AI のステップで立てた");
+    let by_script = filed(&[("AMENBO_RUN", &run.to_string()), ("AMENBO_RUN_STEP", &step_text)], "スクリプトで立てた");
+    let outside = cli.json(&["task", "add", "--title", "外で立てた", "--project", &p, "--json"]);
+    let outside: i64 = id_str(&outside["task"]["id"]).parse().unwrap();
+    let unknown = filed(&[("AMENBO_RUN_STEP", "999999")], "知らないステップで立てた");
+
+    let store = open();
+    let made_in = |id: i64| store.task(id).expect("read").expect("the task").made_in_run_step_id;
+    assert_eq!(made_in(by_agent), Some(step), "an AI step's terminal names its step");
+    assert_eq!(made_in(by_script), Some(step), "a script step's program names its step");
+    assert_eq!(made_in(outside), None, "a terminal outside every run names none");
+    assert_eq!(made_in(unknown), None, "a step this store has no row for is dropped");
+    let steps = store.automation_run_steps(run).expect("read");
+    assert!(steps.iter().any(|s| s.id == step), "the run is read off the step");
+    drop(store);
+
+    cli.json(&["automation", "cancel", &run.to_string(), "--force", "--json"]);
 }
 
 /// **Only a failure is waiting to be seen** (`AMB-D-989`): a run a person stopped needs nobody, so
@@ -1548,7 +1598,7 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
     );
     cli.json(&["automation", "action-update", &action, "--one-at-a-time", "on", "--json"]);
     saved_with_its_action(&cli, &a, &placement);
-    cli.json(&["automation", "update", &a, "--max-concurrent-runs", "2", "--json"]);
+    room_for_two(&cli, &a);
     let first = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     let project = cli.json(&["automation", "run-show", &first, "--json"])["run"]["project_id"].to_string();
     let t = id_str(&cli.json(&["task", "add", "--title", "two", "--project", &project, "--json"])["task"]["id"]);
@@ -1867,7 +1917,7 @@ fn a_role_is_defined_listed_changed_and_taken_out() {
     let (shown, code) = cli.run(&["automation", "show", &a]);
     assert_eq!(code, 0, "{shown}");
     assert!(
-        shown.contains(&format!("role {role}  レビュー  icon eye  starts at placement {placement}  agent codex (gpt-5)")),
+        shown.contains(&format!("role {role}  レビュー  1 in it  icon eye  starts at placement {placement}  agent codex (gpt-5)")),
         "{shown}"
     );
 

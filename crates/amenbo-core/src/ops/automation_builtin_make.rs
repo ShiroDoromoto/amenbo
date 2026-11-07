@@ -241,6 +241,7 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
             at_binding_id,
             made_in: None,
             role_id,
+            made_in_run_step_id: Some(carry.run_step.id),
         },
     )?;
     if let Some(trigger) = handed.as_ref().and_then(|h| h.trigger.as_deref()) {
@@ -1813,6 +1814,7 @@ mod tests {
                 assert!(matches!(next, Next::Step(_)), "the run goes on: {next:?}");
                 let (filed, exit) = handed(tx, run_step_id);
                 assert_eq!(exit, way_out(tx, run_step_id, MADE_AND_TAKEN));
+                assert_eq!(filed.made_in_run_step_id, Some(run_step_id), "the task says which step filed it");
                 filed
             }
             other => panic!("the entry is carried out, not {other:?}"),
@@ -1907,7 +1909,7 @@ mod tests {
         use crate::ops::automation_run::{fire, triggers_due};
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
-            automation::update(tx, automation.id, None, None, None, Some(4), None).expect("room for more");
+            crate::ops::test_support::room_for(tx, automation.id, 4);
             let trigger = automation::NewTrigger {
                 name: "毎時".into(),
                 role_id: None,
@@ -2028,7 +2030,7 @@ mod tests {
         use crate::time::Timestamp;
         with_tx(|tx| {
             let (automation, make, _) = entry(tx);
-            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
+            crate::ops::test_support::room_for(tx, automation.id, 2);
             let trigger = automation::NewTrigger {
                 name: String::new(),
                 role_id: None,
@@ -2083,7 +2085,7 @@ mod tests {
         use crate::ops::test_support::mk_task_in;
         with_tx(|tx| {
             let (automation, _, project) = entry(tx);
-            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
+            crate::ops::test_support::room_for(tx, automation.id, 2);
             let trigger = automation::NewTrigger {
                 name: String::new(),
                 role_id: None,
@@ -2120,7 +2122,7 @@ mod tests {
 
             // Laid on an `every`, it holds the clock back too.
             let hourly = automation::NewTrigger { when: TriggerWhen::Every { minutes: 60 }, ..trigger };
-            automation::update(tx, automation.id, None, None, None, Some(4), None).expect("room for more");
+            crate::ops::test_support::room_for(tx, automation.id, 4);
             let trigger_id = automation::trigger_set(tx, automation.id, Some(hourly)).expect("an every with a condition").triggers[0].id;
             let due = next_at(tx);
             mk_task_in(tx, "三つ目", Some(project));
@@ -2143,6 +2145,7 @@ mod tests {
             created_by_kind: None,
             at_binding_id: None,
             role_id: Some(role_id),
+            made_in_run_step_id: None,
             made_in: None,
         };
         let added = task::add(tx, new).expect("a task");
@@ -2245,7 +2248,7 @@ mod tests {
             let run = launch_with(tx, &automation, &titled("人が渡した")).expect("a run");
             assert_eq!(
                 check(tx, written.next_at).held,
-                Some(TriggerHeld::NoRoom { under_way: 1, max: automation.max_concurrent_runs }),
+                Some(TriggerHeld::NoRoom { under_way: 1, max: 1 }),
                 "an idle waits for no run to be under way",
             );
             assert_eq!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read"), vec![run.id]);

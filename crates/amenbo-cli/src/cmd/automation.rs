@@ -503,6 +503,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             when_idle,
             if_tasks,
             fewer_than,
+            if_tasks_role,
             if_script,
             script_args,
             script_timeout_minutes,
@@ -542,7 +543,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 return Ok(0);
             }
             let condition = match (if_tasks, fewer_than) {
-                (Some(filter), Some(below)) => Some(TriggerCondition { filter, below }),
+                (Some(filter), Some(below)) => Some(TriggerCondition { filter, role_id: if_tasks_role, below }),
                 // clap asks for both or neither.
                 _ => None,
             };
@@ -1618,9 +1619,12 @@ fn render_automation(
 /// filed a task.
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
-    let fewer = trigger.condition.as_ref().map(|c| match c.filter.as_str() {
-        "" => format!("fewer than {} task(s) are in its project", c.below),
-        filter => format!("fewer than {} task(s) match \"{filter}\"", c.below),
+    let fewer = trigger.condition.as_ref().map(|c| {
+        let of_role = c.role_id.map(|role| format!(" under role {role}")).unwrap_or_default();
+        match c.filter.as_str() {
+            "" => format!("fewer than {} task(s){of_role} are in its project", c.below),
+            filter => format!("fewer than {} task(s){of_role} match \"{filter}\"", c.below),
+        }
     });
     let says = trigger.script.as_ref().map(|s| format!("\"{}\" says so", s.program));
     let (when, next) = match trigger.when {

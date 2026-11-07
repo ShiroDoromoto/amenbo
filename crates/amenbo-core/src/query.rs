@@ -135,7 +135,8 @@ pub struct Filter {
     /// **The roles a task is to be worked under** — tasks whose `role_id` is one of these. Set
     /// structurally, as [`Filter::text`] is, never from the grammar: the built-in that takes a task
     /// narrows by the roles its run starts rounds of
-    /// ([`crate::ops::automation_run::roles_started`]), which a task with no role is never among.
+    /// ([`crate::ops::automation_run::roles_started`]), which a task with no role is never among, and a
+    /// trigger's condition by the role it names ([`crate::model::TriggerCondition::role_id`]).
     pub roles: Option<Vec<i64>>,
 }
 
@@ -692,9 +693,15 @@ pub(crate) fn any_in_roles(
 
 /// **How many tasks match this `task list` filter** — one count, with no ids and no order: what a
 /// trigger's condition asks ([`crate::model::TriggerCondition`]). The filter is read, and the reach
-/// folded in, exactly as [`list`] does it.
-pub fn count(conn: &rusqlite::Connection, reach: crate::reach::Reach, filter_expr: &str) -> Result<usize> {
-    let (filter, project_id, today) = filtered(conn, reach, filter_expr, &[])?;
+/// folded in, exactly as [`list`] does it, and only the tasks worked under one of `roles` are counted
+/// ([`Filter::roles`]) — every task where `roles` is empty.
+pub fn count(
+    conn: &rusqlite::Connection,
+    reach: crate::reach::Reach,
+    filter_expr: &str,
+    roles: &[i64],
+) -> Result<usize> {
+    let (filter, project_id, today) = filtered(conn, reach, filter_expr, roles)?;
     crate::store_engine::task_count(conn, &bare_query(reach, project_id, &filter, today))
         .map_err(crate::error::engine_on(conn))
 }

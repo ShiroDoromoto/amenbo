@@ -2021,13 +2021,18 @@ impl TriggerWhen {
 }
 
 /// **The tasks a trigger looks at before it files one** ([`AutomationTrigger::condition`]): it files
-/// one only while fewer than `below` tasks of the automation's project match `filter`. So a trigger
-/// keeps a queue topped up rather than piling tasks onto one nobody is working through.
+/// one only while fewer than `below` tasks of the automation's project match `filter` — and, where it
+/// names a role, are worked under that role. So a trigger keeps a queue topped up rather than piling
+/// tasks onto one nobody is working through.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TriggerCondition {
     /// What `task list --filter` takes, read inside the automation's project — so it may not name a
     /// `project:` of its own. Empty counts every task of the project.
     pub filter: String,
+    /// The role the tasks counted are worked under — one of the same automation's own
+    /// ([`AutomationRole`]) — or `None` to count them whatever their role.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role_id: Option<i64>,
     /// It files a task only while fewer than this many match: 1 or more.
     pub below: u32,
 }

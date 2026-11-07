@@ -1408,7 +1408,30 @@ pub const STEPS: &[Step] = &[
         // the build screen.
         apply: Apply::Custom(let_a_pass_say_which_spot_filed_it),
     },
+    Step {
+        to: 122,
+        name: "add automation_trigger.condition_role_id, the role of the tasks a trigger's condition counts",
+        // **Seeded with nothing.** No condition named a role before this, so each counts its tasks
+        // whatever their role, as it did.
+        apply: Apply::Custom(let_a_condition_count_one_role),
+    },
 ];
+
+/// v122: `automation_trigger.condition_role_id`, the role the tasks a trigger's condition counts are
+/// worked under. NULL on every row already there: a condition counted every role's tasks until now.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Nullable with no default, which
+/// is what lets a column carrying a key be added in place.
+fn let_a_condition_count_one_role(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_trigger")?.iter().any(|c| c == "condition_role_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation_trigger ADD COLUMN condition_role_id BIGINT REFERENCES automation_role(id) \
+                 ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    Ok(())
+}
 
 /// v119: `automation_trigger`, an automation's triggers, one row each — and the `automation.trigger_*`
 /// columns that held the one trigger an automation had, gone.
@@ -12172,6 +12195,36 @@ mod tests {
         assert_eq!(launches, 2, "one launch per run under way");
         let refused = engine.conn().execute("UPDATE automation_launch SET status = 'waiting' WHERE id = 1", []);
         assert!(refused.is_err(), "only running, paused and ended are admitted");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v122: every trigger already written counts its condition's tasks whatever their role, as it did,
+    /// and the new column takes a role of the automation from then on.
+    #[test]
+    fn a_condition_written_before_v122_counts_every_role() {
+        let dir = scratch("automation-trigger-condition-role");
+        let engine = store_at(&dir, 121);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_role (id, automation_id, name) VALUES (1, 1, 'reviewer');
+                 INSERT INTO automation_trigger (id, automation_id, enabled, when_kind, condition_filter, \
+                     condition_below, task_kind, task_title, task_notes, next_at, order_key) \
+                 VALUES (1, 1, 1, 'tasks', 'status:todo', 3, 'fixed', 'look', '', '2026-11-07T00:00:00Z', 'm');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let role = |engine: &StoreEngine| -> Option<i64> {
+            engine.conn().query_row("SELECT condition_role_id FROM automation_trigger WHERE id = 1", [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(role(&engine), None, "no condition named a role before");
+        engine.conn().execute("UPDATE automation_trigger SET condition_role_id = 1 WHERE id = 1", []).unwrap();
+        assert_eq!(role(&engine), Some(1));
         std::fs::remove_dir_all(&dir).ok();
     }
 

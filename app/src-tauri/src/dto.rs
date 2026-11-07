@@ -4047,24 +4047,30 @@ impl From<AutomationTriggerWhenDto> for amenbo_core::model::TriggerWhen {
 }
 
 /// **The tasks a trigger looks at before it files one** ([`amenbo_core::model::TriggerCondition`]): it
-/// files one only while fewer than `below` tasks of the project match `filter`.
+/// files one only while fewer than `below` tasks of the project match `filter` — and, where `roleId`
+/// is given, are worked under that role.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationTriggerConditionDto {
     pub(crate) filter: String,
+    /// The role of the same automation the tasks counted are worked under. Absent to count them
+    /// whatever their role.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) role_id: Option<i64>,
     pub(crate) below: u32,
 }
 
 impl From<amenbo_core::model::TriggerCondition> for AutomationTriggerConditionDto {
     fn from(c: amenbo_core::model::TriggerCondition) -> Self {
-        AutomationTriggerConditionDto { filter: c.filter, below: c.below }
+        AutomationTriggerConditionDto { filter: c.filter, role_id: c.role_id, below: c.below }
     }
 }
 
 impl From<AutomationTriggerConditionDto> for amenbo_core::model::TriggerCondition {
     fn from(c: AutomationTriggerConditionDto) -> Self {
-        amenbo_core::model::TriggerCondition { filter: c.filter, below: c.below }
+        amenbo_core::model::TriggerCondition { filter: c.filter, role_id: c.role_id, below: c.below }
     }
 }
 

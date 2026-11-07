@@ -817,7 +817,9 @@ fn one_trigger_is_rewritten_switched_and_taken_away_by_its_id() {
 
 /// **A trigger is named and files its task under one of its automation's roles**: `--name` and
 /// `--role` are read back by `show`, both left out leave it blank and under no role, another
-/// automation's role is refused, and neither goes beside `--rm`, `--on` or `--off`.
+/// automation's role is refused, and neither goes beside `--rm`, `--on` or `--off`. Its condition
+/// counts the tasks of one of those roles with `--if-tasks-role`, which is refused for another
+/// automation's role, with no `--if-tasks`, and beside `--off`.
 #[test]
 fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     let cli = Cli::new();
@@ -848,10 +850,31 @@ fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     assert_ne!(code, 0, "another automation's role is refused: {err}");
     assert!(err.contains("belongs to another automation"), "{err}");
 
+    let counted = cli.json(&[
+        "automation", "trigger", &a, "--when-idle", "--if-tasks", "status:todo", "--fewer-than", "3", "--if-tasks-role", &role,
+        "--role", &role, "--title", "Look over the inbox", "--json",
+    ]);
+    let condition = &counted["automation_trigger"]["condition"];
+    assert_eq!(id_str(&condition["role_id"]), role, "{counted}");
+    assert_eq!(condition["below"], serde_json::json!(3), "{counted}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(
+        text.contains(&format!("whenever none of its runs is under way while fewer than 3 task(s) under role {role} match \"status:todo\"")),
+        "{text}"
+    );
+    let (err, code) = cli.run_err(&[
+        "automation", "trigger", &a, "--when-idle", "--if-tasks", "status:todo", "--fewer-than", "3", "--if-tasks-role", &theirs,
+        "--title", "x", "--json",
+    ]);
+    assert_ne!(code, 0, "another automation's role is refused for the condition too: {err}");
+    assert!(err.contains("belongs to another automation"), "{err}");
+
     for wrong in [
         vec!["automation", "trigger", "--trigger", named.as_str(), "--off", "--name", "Inbox"],
         vec!["automation", "trigger", "--trigger", named.as_str(), "--on", "--role", role.as_str()],
         vec!["automation", "trigger", "--trigger", named.as_str(), "--rm", "--role", role.as_str()],
+        vec!["automation", "trigger", a.as_str(), "--when-idle", "--if-tasks-role", role.as_str(), "--title", "x"],
+        vec!["automation", "trigger", "--trigger", named.as_str(), "--off", "--if-tasks-role", role.as_str()],
     ] {
         let (_, code) = cli.run_err(&wrong);
         assert_ne!(code, 0, "{wrong:?} is refused");

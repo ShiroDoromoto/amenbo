@@ -1963,8 +1963,15 @@ pub enum AutomationCmd {
         /// unless given)
         #[arg(long, value_name = "MINUTES", requires = "task_from_script", conflicts_with_all = ["title", "notes", "task_from_file"])]
         task_script_timeout_minutes: Option<i64>,
+        /// what the trigger is called, as the timeline of a task it files names it (blank unless given)
+        #[arg(long)]
+        name: Option<String>,
+        /// the role the task it files is worked under — the id `automation role-list` shows, of one of
+        /// this automation's own roles. Left out, it files the task under no role
+        #[arg(long, value_name = "ROLE_ID")]
+        role: Option<i64>,
         /// take the trigger away
-        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes"])]
+        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
         off: bool,
     },
     /// Stop an automation from starting new rounds, or let it start them again with --off. While it is

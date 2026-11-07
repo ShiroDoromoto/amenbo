@@ -511,6 +511,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             task_from_script,
             task_script_args,
             task_script_timeout_minutes,
+            name,
+            role,
             off,
         } => {
             use amenbo_core::model::{TriggerCondition, TriggerWhen};
@@ -543,18 +545,14 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (None, None, None) => None,
             };
             let trigger = match (off, when, task) {
-                (false, Some(when), Some(task)) => {
-                    // The CLI writes no name or role: the trigger is called blank and files
-                    // its task under no role.
-                    Some(amenbo_core::ops::automation::NewTrigger {
-                        name: String::new(),
-                        role_id: None,
-                        when,
-                        condition,
-                        script,
-                        task,
-                    })
-                }
+                (false, Some(when), Some(task)) => Some(amenbo_core::ops::automation::NewTrigger {
+                    name: name.unwrap_or_default(),
+                    role_id: role,
+                    when,
+                    condition,
+                    script,
+                    task,
+                }),
                 // clap asks for a when and one of --title, --task-from-file and --task-from-script unless
                 // --off is given, and refuses them beside it.
                 _ => None,
@@ -1601,9 +1599,9 @@ fn render_automation(
     }
 }
 
-/// What an automation's trigger does, the tasks it looks at and the program it asks first, the task it
-/// files (or the file or program that says it), and when it is next asked (for an `idle`, a `tasks` or
-/// a `script`, the soonest it may be).
+/// What an automation's trigger is called and does, the tasks it looks at and the program it asks
+/// first, the task it files (or the file or program that says it) and the role it files it under, and
+/// when it is next asked (for an `idle`, a `tasks` or a `script`, the soonest it may be).
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
     let fewer = trigger.condition.as_ref().map(|c| match c.filter.as_str() {
@@ -1627,7 +1625,12 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
         TriggerTask::File { path } => format!("the task \"{path}\" says"),
         TriggerTask::Script { script } => format!("the task \"{}\" writes", script.program),
     };
-    format!("starts a run on its own {when}, filing {task} — {next} {}", trigger.next_at.to_rfc3339_z())
+    let called = match trigger.name.as_str() {
+        "" => String::new(),
+        name => format!(" as \"{name}\""),
+    };
+    let under = trigger.role_id.map(|role| format!(" under role {role}")).unwrap_or_default();
+    format!("starts a run on its own{called} {when}, filing {task}{under} — {next} {}", trigger.next_at.to_rfc3339_z())
 }
 
 /// An automation Amenbo is waiting on a task for: since when, what for, and how to stop it.
